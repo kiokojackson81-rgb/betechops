@@ -60,7 +60,7 @@ model Shop {
   attendants Attendant[]
   orders     Order[]
 
-  @@unique([name, location])
+  @@unique([name, location], name: "name_location")
 }
 
 model Attendant {
