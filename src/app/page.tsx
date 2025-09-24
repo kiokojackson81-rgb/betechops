@@ -1,4 +1,5 @@
 // src/app/page.tsx
+// BetechOps professional home page with live metrics
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
