@@ -103,6 +103,7 @@ model Order {
   updatedAt      DateTime      @updatedAt
 
   items          OrderItem[]
+  auditLogs      AuditLog[]
 
   @@index([shopId])
   @@index([attendantId])
@@ -123,4 +124,19 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String   // e.g. "attendant:cuid" or "admin:cuid"
+  action    String   // e.g. "PRODUCT_SET_BUYING_PRICE", "RETURN_SUBMITTED"
+  orderId   String?  // optional reference to order
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  details   Json?    // flexible field for action-specific data
+  createdAt DateTime @default(now())
+
+  @@index([actor])
+  @@index([action])
+  @@index([orderId])
+  @@index([createdAt])
 }
