@@ -58,7 +58,7 @@ export async function GET() {
       select: { quantity: true, product: { select: { actualPrice: true } } },
     });
 
-    const buyingThisWeek = orderItems.reduce((sum: number, it: any) => {
+    const buyingThisWeek = orderItems.reduce((sum: number, it: { quantity: number; product: { actualPrice: number } | null }) => {
       const cost = (it.product?.actualPrice ?? 0) * it.quantity;
       return sum + cost;
     }, 0);
@@ -88,7 +88,7 @@ export async function GET() {
     };
 
     return NextResponse.json(payload, { status: 200 });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("summary error:", e);
     return NextResponse.json({ error: "Failed to build summary" }, { status: 500 });
   }

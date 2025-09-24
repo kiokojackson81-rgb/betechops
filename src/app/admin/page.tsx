@@ -21,7 +21,7 @@ async function getStats() {
   };
 }
 
-function StatCard(props: { title: string; value: string | number; Icon: React.ComponentType<any>; sub?: string }) {
+function StatCard(props: { title: string; value: string | number; Icon: React.ComponentType<{ className?: string }>; sub?: string }) {
   const { title, value, Icon, sub } = props;
   return (
     <div className="rounded-2xl border border-white/10 bg-[var(--card,#23272f)] p-5">
