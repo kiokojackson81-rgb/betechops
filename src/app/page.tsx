@@ -18,9 +18,9 @@ type MoneyLike =
 /** =========================
  * Helpers: robust fetchers
  * ======================= */
-async function fetchJsonWithTimeout<T>(url: string, ms = 6000): Promise<T> {
+async function fetchJsonWithTimeout<T = unknown>(url: string, timeoutMs = 5000): Promise<T | null> {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), ms);
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const r = await fetch(url, { cache: "no-store", signal: controller.signal });
     if (!r.ok) throw new Error(`${url} -> ${r.status}`);
@@ -34,11 +34,12 @@ async function fetchJsonWithTimeout<T>(url: string, ms = 6000): Promise<T> {
 async function tryCounts(paths: string[]): Promise<number> {
   for (const p of paths) {
     try {
-      const j = (await fetchJsonWithTimeout<CountLike>(p)) as any;
+      const j = await fetchJsonWithTimeout<CountLike>(p);
       if (typeof j === "number" && Number.isFinite(j)) return j;
       if (j && typeof j === "object") {
-        for (const k of ["count", "total", "value"]) {
-          if (typeof j[k] === "number" && Number.isFinite(j[k])) return j[k];
+        const obj = j as { count?: number; total?: number; value?: number };
+        for (const k of ["count", "total", "value"] as const) {
+          if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) return obj[k]!;
         }
       }
     } catch {
@@ -52,11 +53,12 @@ async function tryCounts(paths: string[]): Promise<number> {
 async function tryMoney(paths: string[]): Promise<number> {
   for (const p of paths) {
     try {
-      const j = (await fetchJsonWithTimeout<MoneyLike>(p)) as any;
+      const j = await fetchJsonWithTimeout<MoneyLike>(p);
       if (typeof j === "number" && Number.isFinite(j)) return j;
       if (j && typeof j === "object") {
-        for (const k of ["total", "amount", "revenue", "sales", "value"]) {
-          if (typeof j[k] === "number" && Number.isFinite(j[k])) return j[k];
+        const obj = j as { total?: number; amount?: number; revenue?: number; sales?: number; value?: number };
+        for (const k of ["total", "amount", "revenue", "sales", "value"] as const) {
+          if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) return obj[k]!;
         }
       }
     } catch {

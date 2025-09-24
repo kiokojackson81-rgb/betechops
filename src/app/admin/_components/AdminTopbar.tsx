@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 /** Resilient fetch helpers */
-async function jFetch<T = any>(url: string, ms = 6000): Promise<T | null> {
+async function jFetch<T = unknown>(url: string, ms = 6000): Promise<T | null> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
@@ -22,11 +22,12 @@ async function jFetch<T = any>(url: string, ms = 6000): Promise<T | null> {
 
 async function tryCount(paths: string[]): Promise<number> {
   for (const p of paths) {
-    const j: any = await jFetch(p);
+    const j: unknown = await jFetch(p);
     if (j == null) continue;
     if (typeof j === "number") return j;
+    const response = j as Record<string, unknown>;
     for (const k of ["count", "total", "value", "waiting", "pending"]) {
-      if (typeof j?.[k] === "number") return j[k];
+      if (typeof response?.[k] === "number") return response[k];
     }
   }
   return 0;
