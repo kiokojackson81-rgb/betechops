@@ -36,11 +36,12 @@ function buildWhere(q: string | undefined) {
 export default async function ReturnsPage({
   searchParams,
 }: {
-  searchParams?: { page?: string; q?: string; size?: string };
+  searchParams?: Promise<{ page?: string; q?: string; size?: string }>;
 }) {
-  const page = Math.max(1, Number(searchParams?.page || 1));
-  const size = Math.min(50, Math.max(1, Number(searchParams?.size || PAGE_SIZE_DEFAULT)));
-  const q = (searchParams?.q || "").trim() || undefined;
+  const params = await searchParams;
+  const page = Math.max(1, Number(params?.page || 1));
+  const size = Math.min(50, Math.max(1, Number(params?.size || PAGE_SIZE_DEFAULT)));
+  const q = (params?.q || "").trim() || undefined;
 
   const where = buildWhere(q);
 
