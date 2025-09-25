@@ -188,13 +188,13 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/attendant"
+              href="/attendant/login"
               className="rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
             >
               Attendant Login
             </Link>
             <Link
-              href="/admin"
+              href="/admin/login"
               className="rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
             >
               Admin Login
