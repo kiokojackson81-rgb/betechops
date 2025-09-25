@@ -167,8 +167,11 @@ model ApiCredential {
   id        String   @id @default(cuid())
   scope     String   // "GLOBAL" or "SHOP:<shopId>"
   apiBase   String
-  apiKey    String
-  apiSecret String
+  apiKey    String?
+  apiSecret String?
+  issuer    String?
+  clientId  String?
+  refreshToken String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -176,6 +179,12 @@ model ApiCredential {
   shopId String?
   shop   Shop? @relation(fields: [shopId], references: [id])
   @@unique([scope, shopId])
+}
+
+model Config {
+  key   String  @id         // e.g., "commission_window", "admin_emails"
+  json  Json
+  updatedAt DateTime @updatedAt
 }
 
 // Minimal ingest table for Jumia orders

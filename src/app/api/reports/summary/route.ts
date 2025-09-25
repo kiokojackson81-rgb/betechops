@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
+import { getSalesToday, getPendingPricingCount, getReturnsWaitingPickup } from "@/lib/jumia";
 
 /**
  * Week window (Mon 00:00 → Sun 23:59) in Africa/Nairobi without adding deps.
@@ -68,12 +69,16 @@ export async function GET() {
     // Profit (gross)
     const profitThisWeek = revenueThisWeek - buyingThisWeek;
 
-    // Returns waiting pickup:
-    // If you track returns as OrderStatus=RETURNED, count them for this week.
-    // Adjust if you later add a dedicated Returns model/status.
-    // The schema used here doesn't include a RETURNED status by default.
-    // If you track returns differently, replace this with the appropriate query.
-    const returnsWaitingPickup = 0;
+    // Jumia-derived metrics (sales today, pending pricing, returns waiting pickup)
+    const [salesTodayAgg, pendingPricingAgg, returnsWaitingPickupAgg] = await Promise.all([
+      getSalesToday(),
+      getPendingPricingCount(),
+      getReturnsWaitingPickup(),
+    ]);
+
+    const salesToday = (salesTodayAgg && typeof salesTodayAgg.total === 'number') ? salesTodayAgg.total : 0;
+    const pendingPricing = (pendingPricingAgg && typeof pendingPricingAgg.count === 'number') ? pendingPricingAgg.count : 0;
+    const returnsWaitingPickup = (returnsWaitingPickupAgg && typeof returnsWaitingPickupAgg.count === 'number') ? returnsWaitingPickupAgg.count : 0;
 
     const payload = {
       products,
@@ -84,6 +89,8 @@ export async function GET() {
       buyingThisWeek,
       profitThisWeek,
       returnsWaitingPickup,
+      salesToday,
+      pendingPricing,
     };
 
     return NextResponse.json(payload, { status: 200 });

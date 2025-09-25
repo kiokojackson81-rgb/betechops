@@ -1,24 +1,49 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 const SCOPE = "GLOBAL";
 
 export async function GET() {
-  const found = await prisma.apiCredential.findFirst({ where: { scope: SCOPE }});
+  const c = await prisma.apiCredential.findFirst({ where: { scope: SCOPE } });
   return NextResponse.json({
-    apiBase: found?.apiBase || process.env.JUMIA_API_BASE || "",
-    apiKey:  found?.apiKey  || process.env.JUMIA_API_KEY  || "",
-    apiSecret: found?.apiSecret || process.env.JUMIA_API_SECRET || "",
+    apiBase: c?.apiBase ?? process.env.JUMIA_API_BASE ?? "",
+    issuer: c?.issuer ?? process.env.JUMIA_OIDC_ISSUER ?? "",
+    clientId: c?.clientId ?? process.env.JUMIA_CLIENT_ID ?? "",
+    refreshToken: c?.refreshToken ? "********" : "",
   });
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  const b = (await req.json()) as Record<string, unknown>;
+
+  const apiBase = String(b.apiBase ?? "");
+  const issuer = String(b.issuer ?? "");
+  const clientId = String(b.clientId ?? "");
+  const refreshTokenRaw = b.refreshToken ? String(b.refreshToken) : undefined;
+  const refreshToken = refreshTokenRaw && refreshTokenRaw !== "********" ? refreshTokenRaw : undefined;
+
   const existing = await prisma.apiCredential.findFirst({ where: { scope: SCOPE } });
   if (existing) {
-    await prisma.apiCredential.update({ where: { id: existing.id }, data: { apiBase: body.apiBase, apiKey: body.apiKey, apiSecret: body.apiSecret } });
+    const updateData = {
+      apiBase,
+      issuer,
+      clientId,
+      ...(refreshToken ? { refreshToken } : {}),
+    };
+    await prisma.apiCredential.update({ where: { id: existing.id }, data: updateData });
   } else {
-    await prisma.apiCredential.create({ data: { scope: SCOPE, apiBase: body.apiBase, apiKey: body.apiKey, apiSecret: body.apiSecret } });
+    const createData = {
+      scope: SCOPE,
+      apiBase,
+      apiKey: "",
+      apiSecret: "",
+      issuer,
+      clientId,
+      ...(refreshToken ? { refreshToken } : {}),
+    };
+    await prisma.apiCredential.create({ data: createData });
   }
+
   return NextResponse.json({ ok: true });
 }
