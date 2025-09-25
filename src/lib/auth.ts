@@ -2,6 +2,12 @@ import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 import { authOptions } from "@/lib/nextAuth";
 
+// ADMIN_EMAILS: comma-separated list of emails that should be treated as ADMIN
+export const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "kiokojackson81@gmail.com")
+  .split(",")
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+
 /**
  * Small helper to return the server session in server components/pages.
  */

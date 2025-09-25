@@ -12,13 +12,13 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    // signIn: upsert user and force ADMIN for the configured ADMIN_EMAIL
+    // signIn: upsert user and force ADMIN for any configured ADMIN_EMAILS
     async signIn({ user }: { user: { email?: string; name?: string | null; image?: string | null } }) {
-      const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase();
+      const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
       const email = (user.email || "").toLowerCase();
       if (!email) return false;
       try {
-        if (email === ADMIN_EMAIL) {
+        if (ADMIN_EMAILS.includes(email)) {
           // Force ADMIN
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (prisma as any).user.upsert({
@@ -59,13 +59,13 @@ export const authOptions = {
           dbUser = await (prisma as any).user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true, email: true } });
         }
 
-        // If DB present, use stored role. If not, fallback to ADMIN_EMAIL env var check.
+        // If DB present, use stored role. If not, fallback to ADMIN_EMAILS env var check.
         if (dbUser?.role) {
           t.role = dbUser.role;
         } else {
-          const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase();
+          const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           const tokenEmail = (t.email || "").toLowerCase();
-          t.role = t.role ?? (tokenEmail && tokenEmail === ADMIN_EMAIL ? "ADMIN" : "ATTENDANT");
+          t.role = t.role ?? (tokenEmail && ADMIN_EMAILS.includes(tokenEmail) ? "ADMIN" : "ATTENDANT");
         }
       } catch {
         t.role = t.role ?? "ATTENDANT";
