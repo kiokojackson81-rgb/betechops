@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_EMAILS } from "@/lib/auth";
 
 export const authOptions = {
   providers: [
@@ -14,11 +15,11 @@ export const authOptions = {
   callbacks: {
     // signIn: upsert user and force ADMIN for any configured ADMIN_EMAILS
     async signIn({ user }: { user: { email?: string; name?: string | null; image?: string | null } }) {
-      const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const emails = ADMIN_EMAILS;
       const email = (user.email || "").toLowerCase();
       if (!email) return false;
       try {
-        if (ADMIN_EMAILS.includes(email)) {
+        if (emails.includes(email)) {
           // Force ADMIN
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (prisma as any).user.upsert({
@@ -44,33 +45,41 @@ export const authOptions = {
     },
 
     // jwt: attach DB role to token (lookup by sub (id) or email)
-    async jwt({ token }: { token: unknown }) {
-      // Narrow token to a manipulable shape
-      const t = token as { sub?: string; email?: string; role?: string };
+    async jwt({ token, user }: { token: unknown; user?: { email?: string } }) {
+      // ensure email is set on token when user logs in
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (user?.email) (token as any).email = user.email;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const email = ((token as any)?.email || "").toLowerCase();
+
+      // If it's the owner email, force ADMIN in the token (no DB needed)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (email === "kiokojackson81@gmail.com") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).role = "ADMIN";
+        return token as unknown as JWT;
+      }
+
+      // Otherwise, best-effort fetch from DB; fall back to ATTENDANT if it fails
       try {
-        // Prefer lookup by Prisma id (sub), fallback to email if available
-        let dbUser: { role?: string; email?: string } | null = null;
+  let dbUser: { role?: string } | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const t = token as { sub?: string; email?: string; role?: string };
         if (t.sub) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          dbUser = await (prisma as any).user.findUnique({ where: { id: t.sub }, select: { role: true, email: true } });
+          dbUser = await (prisma as any).user.findUnique({ where: { id: t.sub }, select: { role: true } });
         }
         if (!dbUser && t.email) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          dbUser = await (prisma as any).user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true, email: true } });
+          dbUser = await (prisma as any).user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true } });
         }
-
-        // If DB present, use stored role. If not, fallback to ADMIN_EMAILS env var check.
-        if (dbUser?.role) {
-          t.role = dbUser.role;
-        } else {
-          const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-          const tokenEmail = (t.email || "").toLowerCase();
-          t.role = t.role ?? (tokenEmail && ADMIN_EMAILS.includes(tokenEmail) ? "ADMIN" : "ATTENDANT");
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).role = dbUser?.role || "ATTENDANT";
       } catch {
-        t.role = t.role ?? "ATTENDANT";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).role = "ATTENDANT";
       }
-      return t as unknown as JWT;
+      return token as unknown as JWT;
     },
 
     // session: expose role from token
