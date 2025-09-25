@@ -61,6 +61,8 @@ model Shop {
 
   // Jumia API credentials for this shop (optional)
   apiConfig ShopApiConfig?
+  // multiple credentials (optional)
+  apiCredentials ApiCredential[]
 
   // relations
   orders Order[]
@@ -158,4 +160,34 @@ model AttendantCommission {
   user   User             @relation(fields: [userId], references: [id])
   period CommissionPeriod @relation(fields: [periodId], references: [id])
   shop   Shop?            @relation(fields: [shopId], references: [id])
+}
+
+// API credentials for external services (global or shop-scoped)
+model ApiCredential {
+  id        String   @id @default(cuid())
+  scope     String   // "GLOBAL" or "SHOP:<shopId>"
+  apiBase   String
+  apiKey    String
+  apiSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // optional: limit which shop this applies to
+  shopId String?
+  shop   Shop? @relation(fields: [shopId], references: [id])
+  @@unique([scope, shopId])
+}
+
+// Minimal ingest table for Jumia orders
+model JumiaOrder {
+  id           String   @id @default(cuid())
+  externalId   String   @unique
+  orderNumber  String
+  status       String
+  totalAmount  Float
+  buyingAmount Float     @default(0)
+  customerName String?
+  shopId       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
