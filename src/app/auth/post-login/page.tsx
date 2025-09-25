@@ -3,11 +3,11 @@ import { redirect } from "next/navigation";
 
 export default async function PostLogin() {
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = session?.user?.role as string | undefined;
   if (!session || !role) {
     // No session? Send to the generic attendant login
     redirect("/attendant/login");
   }
-  if (role === "ADMIN") redirect("/admin");
-  redirect("/attendant");
+  if (role === "ADMIN") return redirect("/admin");
+  return redirect("/attendant");
 }

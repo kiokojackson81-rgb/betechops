@@ -1,15 +1,16 @@
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
+import type { Session } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 /**
  * Small helper to return the server session in server components/pages.
  */
-export async function auth() {
-  return await getServerSession(authOptions as any);
+export async function auth(): Promise<Session | null> {
+  return await getServerSession(authOptions);
 }
-// Simple auth helper for audit logging
+
+// Simple auth helper for audit logging (placeholder until we wire real audit/session data)
 export function getSession() {
-  // For now, return a default session. This can be enhanced later with real auth
   return {
     id: "default-attendant",
     role: "attendant",

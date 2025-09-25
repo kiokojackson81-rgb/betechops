@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 type PendingItem = {
   id: string;
@@ -43,7 +43,7 @@ export default function AttendantDashboard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
@@ -56,9 +56,9 @@ export default function AttendantDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [q]);
 
-  useEffect(() => { refresh(); }, [q]); // Re-run when search query changes
+  useEffect(() => { refresh(); }, [refresh]); // Re-run when refresh identity changes
 
   const totals = (() => {
     const totalPending = rows.length;
