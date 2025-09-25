@@ -220,25 +220,22 @@ export default function Home() {
             Live visibility into pickups, pricing, and sales. Quick access to admin
             and attendant portals.
           </p>
-          <div className="mt-7 flex items-center justify-center gap-3">
-            <button
-              onClick={() => signIn("google", { callbackUrl: "/auth/post-login" })}
-              className="rounded-2xl bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300"
-            >
-              Login with Google
-            </button>
-            <Link
-              href="/admin"
-              className="rounded-2xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10"
-            >
-              Admin Portal
-            </Link>
-            <Link
-              href="/attendant"
-              className="rounded-2xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10"
-            >
-              Attendant Portal
-            </Link>
+          <div className="mt-7 flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link
+                href="/admin/login"
+                className="rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold hover:bg-white/10"
+              >
+                Admin Portal
+              </Link>
+
+              <Link
+                href="/attendant/login"
+                className="rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold hover:bg-white/10"
+              >
+                Attendant Portal
+              </Link>
+            </div>
           </div>
         </section>
 
