@@ -16,6 +16,20 @@ export default function ClientRedirect() {
       return;
     }
     const role = (session.user as LocalUser)?.role || "ATTENDANT";
+    // Read intended param from URL. If present, prefer it (but validate against role)
+    const params = new URLSearchParams(window.location.search);
+    const intended = params.get("intended");
+    if (intended === "admin" && role === "ADMIN") {
+      router.replace("/admin");
+      return;
+    }
+    if (intended === "attendant") {
+      // If intended is attendant, allow redirect to attendant regardless of role
+      router.replace("/attendant");
+      return;
+    }
+
+    // Default: role-based routing
     if (role === "ADMIN") router.replace("/admin");
     else router.replace("/attendant");
   }, [session, status, router]);
