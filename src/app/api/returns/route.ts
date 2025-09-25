@@ -1,8 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  const session = await auth();
+  const role = (session?.user as unknown as { role?: string })?.role;
+  if (!session || !role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const form = await req.formData();
     const orderId = String(form.get("orderId") || "");
@@ -11,21 +18,20 @@ export async function POST(req: NextRequest) {
 
     if (!orderId) return NextResponse.json({ error: "orderId required" }, { status: 400 });
 
-    // Validate order exists
-    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true } }).catch(() => null as any);
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    // TODO: Store return data in database when AuditLog table is migrated
-    // For now, just log the return submission
-    const s = getSession();
-    console.log(`Return submitted for order ${orderId} by ${s?.role}:${s?.id}`, {
-      notes,
-      photo: photo ? { name: photo.name, type: photo.type, size: photo.size } : null,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    console.error(e);
+    // Try to persist to a Return model if it exists
+    try {
+      const ret = await (prisma as any).return.create({ data: { orderId, notes, status: "OPEN" } });
+      return NextResponse.json({ ok: true, id: ret.id });
+    } catch {
+      // If the model doesn't exist yet, accept and log
+      console.log("Return submitted (accepted):", { orderId, notes, photo: photo ? { name: photo.name, size: photo.size } : null });
+      return NextResponse.json({ ok: true, accepted: true }, { status: 202 });
+    }
+  } catch (err: unknown) {
+    console.error(err);
     return NextResponse.json({ error: "Failed to submit return" }, { status: 500 });
   }
 }

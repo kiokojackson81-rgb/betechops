@@ -7,7 +7,7 @@ async function getStats() {
   const [products, shops, attendants, orders, revenueAgg] = await Promise.all([
     prisma.product.count(),
     prisma.shop.count(),
-    prisma.attendant.count(),
+    prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
     prisma.order.count(),
     prisma.order.aggregate({ _sum: { paidAmount: true } }),
   ]);

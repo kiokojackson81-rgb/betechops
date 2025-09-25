@@ -8,150 +8,154 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  ADMIN
+  SUPERVISOR
+  ATTENDANT
+}
+
 enum OrderStatus {
   PENDING
-  CONFIRMED
+  PROCESSING
   FULFILLED
-  CANCELLED
-  RETURNED
+  COMPLETED
+  CANCELED
 }
 
 enum PaymentStatus {
   UNPAID
   PARTIAL
   PAID
-  REFUNDED
 }
 
-model Product {
-  id             String      @id @default(cuid())
-  sku            String      @unique
-  name           String
-  category       String
-  brand          String?
-  image          String?
-  actualPrice    Float
-  sellingPrice   Float
-  jumiaPrice     Float?
-  profitMargin   Float?
-  inStock        Boolean     @default(true)
-  stockQuantity  Int         @default(0)
-  minStockLevel  Int         @default(5)
-  isActive       Boolean     @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  orders         OrderItem[]
-
-  @@index([category])
-  @@index([name])
-}
-
-model Shop {
-  id         String      @id @default(cuid())
-  name       String
-  location   String
-  phone      String?
-  email      String?
-  isActive   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  attendants Attendant[]
-  orders     Order[]
-
-  @@unique([name, location], name: "name_location")
-}
-
-model Attendant {
-  id          String   @id @default(cuid())
-  name        String
-  email       String   @unique
-  phone       String?
-  shopId      String
-  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  orders      Order[]
-  lastLoginAt DateTime?
-
-  @@index([shopId])
-  @@index([email])
-}
-
-// User model for auth & role management. We keep it separate from Attendant so
-// admins and other users can be managed independently.
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
   image     String?
-  role      String
+  role      Role     @default(ATTENDANT)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([email])
+  // many-to-many: what shops an attendant/supervisor manages
+  managedShops Shop[] @relation("ManagedBy")
+
+  // relations
+  orders Order[]
+  attendantCommissions AttendantCommission[]
+}
+
+model Shop {
+  id        String   @id @default(cuid())
+  name      String
+  location  String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // manager assignments
+  managers User[] @relation("ManagedBy")
+
+  // Jumia API credentials for this shop (optional)
+  apiConfig ShopApiConfig?
+
+  // relations
+  orders Order[]
+  attendantCommissions AttendantCommission[]
+}
+
+model ShopApiConfig {
+  id        String   @id @default(cuid())
+  shopId    String   @unique
+  platform  String   @default("JUMIA")
+  apiKey    String
+  apiSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+}
+
+model Product {
+  id              String  @id @default(cuid())
+  sku             String  @unique
+  name            String
+  category        String
+  sellingPrice    Float
+  lastBuyingPrice Float?
+  minStockLevel   Int      @default(5)
+  stockQuantity   Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orders OrderItem[]
 }
 
 model Order {
-  id             String        @id @default(cuid())
-  orderNumber    String        @unique
-  customerId     String?
-  customerName   String
-  customerPhone  String?
-  customerEmail  String?
-  shopId         String
-  shop           Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  attendantId    String?
-  attendant      Attendant?    @relation(fields: [attendantId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  status         OrderStatus   @default(PENDING)
-  totalAmount    Float
-  paidAmount     Float         @default(0)
-  paymentStatus  PaymentStatus @default(UNPAID)
-  paymentMethod  String?
-  notes          String?
-  deliveryAddress String?
-  deliveryDate   DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String   @id @default(cuid())
+  orderNumber   String   @unique
+  customerName  String
+  shopId        String
+  attendantId   String?
+  status        OrderStatus @default(PENDING)
+  totalAmount   Float
+  paidAmount    Float      @default(0)
+  paymentStatus PaymentStatus @default(UNPAID)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  items          OrderItem[]
-  auditLogs      AuditLog[]
-
-  @@index([shopId])
-  @@index([attendantId])
-  @@index([status])
-  @@index([paymentStatus])
-  @@index([createdAt])
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  attendant User?    @relation(fields: [attendantId], references: [id])
+  items     OrderItem[]
 }
-
 model OrderItem {
-  id         String  @id @default(cuid())
-  orderId    String
-  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  productId  String
-  product    Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  quantity   Int
-  price      Float   // unit price used in the order at the time
-  subtotal   Float
+  id           String  @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Int
+  sellingPrice Float
 
-  @@index([orderId])
-  @@index([productId])
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 }
 
-model AuditLog {
+/// Commission configuration and snapshots
+model CommissionPeriod {
   id        String   @id @default(cuid())
-  actor     String   // e.g. "attendant:cuid" or "admin:cuid"
-  action    String   // e.g. "PRODUCT_SET_BUYING_PRICE", "RETURN_SUBMITTED"
-  orderId   String?  // optional reference to order
-  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  details   Json?    // flexible field for action-specific data
-  createdAt DateTime @default(now())
+  name      String                    // e.g., "Aug 24 → Sep 24"
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  @@index([actor])
-  @@index([action])
-  @@index([orderId])
-  @@index([createdAt])
+  tiers CommissionTier[]
+  attendantCommissions AttendantCommission[]
+}
+
+model CommissionTier {
+  id         String   @id @default(cuid())
+  periodId   String
+  minSales   Float    // inclusive
+  maxSales   Float    // inclusive
+  payoutFlat Float    // flat KES payout for hitting a band
+
+  period CommissionPeriod @relation(fields: [periodId], references: [id])
+}
+
+model AttendantCommission {
+  id        String   @id @default(cuid())
+  userId    String
+  periodId  String
+  shopId    String?     // null means aggregate across assigned shops
+  sales     Float
+  payout    Float
+  computedAt DateTime   @default(now())
+
+  user   User             @relation(fields: [userId], references: [id])
+  period CommissionPeriod @relation(fields: [periodId], references: [id])
+  shop   Shop?            @relation(fields: [shopId], references: [id])
 }

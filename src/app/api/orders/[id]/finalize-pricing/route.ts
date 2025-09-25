@@ -16,7 +16,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
       include: {
         items: {
           select: {
-            id: true, quantity: true, price: true, subtotal: true,
+            id: true, quantity: true, sellingPrice: true,
             product: { select: { sellingPrice: true } },
           },
         },
@@ -24,17 +24,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     });
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    const total = order.items.reduce((sum: number, it: { quantity: number; price?: number | null; subtotal?: number | null; product?: { sellingPrice?: number | null } | null }) => {
-      const unit = typeof it.price === "number" ? it.price : (it.product?.sellingPrice ?? 0);
-      const sub = typeof it.subtotal === "number" ? it.subtotal : unit * it.quantity;
-      return sum + sub;
+    const total = order.items.reduce((sum: number, it: { quantity: number; sellingPrice?: number | null; product?: { sellingPrice?: number | null } | null }) => {
+      const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : (it.product?.sellingPrice ?? 0);
+      return sum + unit * it.quantity;
     }, 0);
 
     const updated = await prisma.order.update({
       where: { id },
       data: {
         totalAmount: total,
-        status: "CONFIRMED",
+        status: "PROCESSING",
         updatedAt: new Date(),
       },
     });

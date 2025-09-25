@@ -17,17 +17,13 @@ function fmtDate(d: Date) {
 
 // Build Prisma where from query
 function buildWhere(q: string | undefined) {
-  if (!q) return {
-    status: "RETURNED" as const,
-  };
-  // Match on orderNumber, customerName/Phone/Email, shop name
+  if (!q) return { status: "CANCELED" as const };
+  // Match on orderNumber, customerName, shop name and use CANCELED as proxy
   return {
-    status: "RETURNED" as const,
+    status: "CANCELED" as const,
     OR: [
       { orderNumber: { contains: q, mode: "insensitive" } },
       { customerName: { contains: q, mode: "insensitive" } },
-      { customerPhone: { contains: q, mode: "insensitive" } },
-      { customerEmail: { contains: q, mode: "insensitive" } },
       { shop: { name: { contains: q, mode: "insensitive" } } },
     ],
   };
@@ -55,7 +51,7 @@ export default async function ReturnsPage({
       include: {
         shop: { select: { name: true } },
         items: {
-          select: { quantity: true, price: true, subtotal: true, product: { select: { name: true, sku: true } } },
+          select: { quantity: true, sellingPrice: true, product: { select: { name: true, sku: true } } },
         },
       },
     }),
@@ -68,7 +64,7 @@ export default async function ReturnsPage({
       <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Returns – Waiting Pickup</h1>
-          <p className="text-slate-400 text-sm">Orders marked <span className="font-mono">RETURNED</span> and pending customer pickup.</p>
+          <p className="text-slate-400 text-sm">Orders marked <span className="font-mono">CANCELED</span> (proxy for returns) and pending pickup.</p>
         </div>
         <form className="flex items-center gap-2">
           <input

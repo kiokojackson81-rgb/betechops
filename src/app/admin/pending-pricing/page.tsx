@@ -48,7 +48,7 @@ export default async function PendingPricingPage({
       include: {
         shop: { select: { name: true } },
         items: {
-          select: { quantity: true, price: true, subtotal: true, product: { select: { name: true, sku: true, sellingPrice: true } } },
+          select: { quantity: true, sellingPrice: true, product: { select: { name: true, sku: true, sellingPrice: true } } },
         },
       },
     }),
@@ -59,12 +59,11 @@ export default async function PendingPricingPage({
   // Compute derived totals
   const calcTotals = (items: unknown[]) => {
     const qty = items.reduce((n: number, it: unknown) => n + (it as { quantity: number }).quantity, 0);
-    // If `subtotal` missing, fallback to product.sellingPrice * qty
+    // Compute subtotal from sellingPrice (item.sellingPrice || product.sellingPrice)
     const subtotal = items.reduce((sum: number, it: unknown) => {
-      const item = it as { quantity: number; subtotal?: number; product?: { sellingPrice?: number } };
-      const fallback = (item.product?.sellingPrice ?? 0) * item.quantity;
-      const val = typeof item.subtotal === "number" ? item.subtotal : fallback;
-      return sum + val;
+      const item = it as { quantity: number; sellingPrice?: number; product?: { sellingPrice?: number } };
+      const unit = (item.sellingPrice ?? item.product?.sellingPrice ?? 0);
+      return sum + unit * item.quantity;
     }, 0);
     return { qty, subtotal };
   };

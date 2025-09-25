@@ -12,7 +12,7 @@ export default async function PendingPricingDetail({ params }: { params: Promise
       shop: { select: { name: true } },
       items: {
         select: {
-          id: true, quantity: true, price: true, subtotal: true,
+          id: true, quantity: true, sellingPrice: true,
           product: { select: { name: true, sku: true, sellingPrice: true } },
         },
       },
@@ -29,9 +29,9 @@ export default async function PendingPricingDetail({ params }: { params: Promise
   }
 
   // compute estimated totals
-  const rows = order.items.map((it: { id: string; quantity: number; price?: number | null; subtotal?: number | null; product?: { name?: string | null; sku?: string | null; sellingPrice?: number | null } | null }) => {
-    const unit = typeof it.price === "number" ? it.price : (it.product?.sellingPrice ?? 0);
-    const sub  = typeof it.subtotal === "number" ? it.subtotal : unit * it.quantity;
+  const rows = order.items.map((it: { id: string; quantity: number; sellingPrice?: number | null; product?: { name?: string | null; sku?: string | null; sellingPrice?: number | null } | null }) => {
+    const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : (it.product?.sellingPrice ?? 0);
+    const sub  = unit * it.quantity;
     return { ...it, unit, sub };
   });
   const total = rows.reduce((s: number, it: { sub: number }) => s + it.sub, 0);

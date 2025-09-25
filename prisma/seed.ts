@@ -3,27 +3,21 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create Shop
-  const shop = await prisma.shop.upsert({
-    where: { name_location: { name: "Main Shop", location: "Nairobi CBD" } },
-    update: {},
-    create: {
-      name: "Main Shop",
-      location: "Nairobi CBD",
-      phone: "+254722151083",
-      email: "shop@betech.co.ke",
-    },
-  });
+  // Create Shop (find or create)
+  let shop = await prisma.shop.findFirst({ where: { name: "Main Shop", location: "Nairobi CBD" } });
+  if (!shop) {
+    shop = await prisma.shop.create({ data: { name: "Main Shop", location: "Nairobi CBD", phone: "+254722151083", email: "shop@betech.co.ke" } });
+  }
 
-  // Create Attendant
-  const attendant = await prisma.attendant.upsert({
+  // Create User as an attendant
+  const attendant = await prisma.user.upsert({
     where: { email: "attendant@betech.co.ke" },
     update: {},
     create: {
-      name: "Default Attendant",
       email: "attendant@betech.co.ke",
-      phone: "+254700000000",
-      shopId: shop.id,
+      name: "Default Attendant",
+      role: "ATTENDANT",
+      isActive: true,
     },
   });
 
@@ -35,10 +29,8 @@ async function main() {
       sku: "BAT-100AH",
       name: "100Ah Solar Battery",
       category: "Battery",
-      brand: "Starmax",
-      actualPrice: 10000,
       sellingPrice: 12000,
-      profitMargin: 2000,
+      lastBuyingPrice: 10000,
       stockQuantity: 10,
     },
   });

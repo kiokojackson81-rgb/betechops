@@ -16,8 +16,8 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
       attendant: { select: { name: true, email: true } },
       items: {
         select: {
-          id: true, quantity: true, price: true, subtotal: true,
-          product: { select: { name: true, sku: true, sellingPrice: true, actualPrice: true } },
+          id: true, quantity: true, sellingPrice: true,
+          product: { select: { name: true, sku: true, sellingPrice: true, lastBuyingPrice: true } },
         },
       },
     },
@@ -33,8 +33,8 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
   }
 
   const qty = order.items.reduce((n: number, it: { quantity: number }) => n + it.quantity, 0);
-  const total = order.items.reduce((sum: number, it: { quantity: number; subtotal?: number | null; price?: number | null; product?: { sellingPrice?: number | null } | null }) => sum + (typeof it.subtotal === "number" ? it.subtotal : (it.price ?? it.product?.sellingPrice ?? 0) * it.quantity), 0);
-  const cost  = order.items.reduce((sum: number, it: { quantity: number; product?: { actualPrice?: number | null } | null }) => sum + ((it.product?.actualPrice ?? 0) * it.quantity), 0);
+  const total = order.items.reduce((sum: number, it: { quantity: number; sellingPrice?: number | null; product?: { sellingPrice?: number | null } | null }) => sum + ((it.sellingPrice ?? it.product?.sellingPrice ?? 0) * it.quantity), 0);
+  const cost  = order.items.reduce((sum: number, it: { quantity: number; product?: { lastBuyingPrice?: number | null } | null }) => sum + ((it.product?.lastBuyingPrice ?? 0) * it.quantity), 0);
   const gross = total - cost;
 
   return (
@@ -51,7 +51,7 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Customer</div>
           <div className="mt-1 font-medium">{order.customerName}</div>
-          <div className="text-slate-400 text-sm">{order.customerPhone || order.customerEmail || "—"}</div>
+          <div className="text-slate-400 text-sm">{order.customerName || "—"}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Shop</div>
@@ -73,9 +73,9 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {order.items.map((it: { id: string; quantity: number; price?: number | null; subtotal?: number | null; product?: { name?: string | null; sku?: string | null; sellingPrice?: number | null } | null }) => {
-              const unit = (it.price ?? it.product?.sellingPrice ?? 0);
-              const sub  = typeof it.subtotal === "number" ? it.subtotal : unit * it.quantity;
+            {order.items.map((it: { id: string; quantity: number; sellingPrice?: number | null; product?: { name?: string | null; sku?: string | null; sellingPrice?: number | null } | null }) => {
+              const unit = (it.sellingPrice ?? it.product?.sellingPrice ?? 0);
+              const sub  = unit * it.quantity;
               return (
                 <tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
                   <td>{it.product?.name || "—"}</td>

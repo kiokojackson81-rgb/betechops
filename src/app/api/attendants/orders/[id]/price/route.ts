@@ -24,10 +24,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const productInOrder = order.items.some((it: { productId?: string | null }) => it.productId === productId);
     if (!productInOrder) return NextResponse.json({ error: "Product not in this order" }, { status: 400 });
 
-    // Update product.actualPrice as the "lastBuyingPrice"
+    // Update product.lastBuyingPrice
     const updated = await prisma.product.update({
       where: { id: productId },
-      data: { actualPrice: lastBuyingPrice },
+      data: { lastBuyingPrice: lastBuyingPrice },
     });
 
     // TODO: Add audit logging when AuditLog table is migrated

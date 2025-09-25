@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Role } from "@prisma/client";
 
 /**
  * Week window (Mon 00:00 → Sun 23:59) in Africa/Nairobi without adding deps.
@@ -37,10 +38,11 @@ export async function GET() {
     const { startUTC, endUTC } = getThisWeekRangeNairobi();
 
     // Parallel simple counts
+    const roles = [Role.ATTENDANT, Role.SUPERVISOR, Role.ADMIN];
     const [products, shops, attendants, orders] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
-      prisma.attendant.count(),
+      prisma.user.count({ where: { role: { in: roles } } }),
       prisma.order.count(),
     ]);
 
@@ -55,11 +57,11 @@ export async function GET() {
     // Sum(Product.actualPrice * OrderItem.quantity) for items whose parent order was created this week
     const orderItems = await prisma.orderItem.findMany({
       where: { order: { createdAt: { gte: startUTC, lt: endUTC } } },
-      select: { quantity: true, product: { select: { actualPrice: true } } },
+      select: { quantity: true, product: { select: { lastBuyingPrice: true } } },
     });
 
-    const buyingThisWeek = orderItems.reduce((sum: number, it: { quantity: number; product: { actualPrice: number } | null }) => {
-      const cost = (it.product?.actualPrice ?? 0) * it.quantity;
+    const buyingThisWeek = orderItems.reduce((sum: number, it) => {
+      const cost = (it.product?.lastBuyingPrice ?? 0) * it.quantity;
       return sum + cost;
     }, 0);
 
@@ -69,12 +71,9 @@ export async function GET() {
     // Returns waiting pickup:
     // If you track returns as OrderStatus=RETURNED, count them for this week.
     // Adjust if you later add a dedicated Returns model/status.
-    const returnsWaitingPickup = await prisma.order.count({
-      where: {
-        status: "RETURNED",
-        createdAt: { gte: startUTC, lt: endUTC },
-      },
-    });
+    // The schema used here doesn't include a RETURNED status by default.
+    // If you track returns differently, replace this with the appropriate query.
+    const returnsWaitingPickup = 0;
 
     const payload = {
       products,
