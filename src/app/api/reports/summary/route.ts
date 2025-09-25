@@ -96,6 +96,19 @@ export async function GET() {
     return NextResponse.json(payload, { status: 200 });
   } catch (e: unknown) {
     console.error("summary error:", e);
-    return NextResponse.json({ error: "Failed to build summary" }, { status: 500 });
+    // Return a safe shape so dashboard remains functional even when summary build fails
+    return NextResponse.json({
+      products: 0,
+      shops: 0,
+      attendants: 0,
+      orders: 0,
+      revenueThisWeek: 0,
+      buyingThisWeek: 0,
+      profitThisWeek: 0,
+      returnsWaitingPickup: 0,
+      salesToday: 0,
+      pendingPricing: 0,
+      error: e instanceof Error ? e.message : String(e),
+    }, { status: 200 });
   }
 }

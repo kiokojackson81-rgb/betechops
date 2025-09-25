@@ -19,6 +19,8 @@ async function getAccessToken(): Promise<string> {
     client_id: clientId,
     refresh_token: refreshToken,
   });
+  const clientSecret = process.env.JUMIA_CLIENT_SECRET;
+  if (clientSecret) body.set("client_secret", clientSecret);
 
   const r = await fetch(`${issuer}/protocol/openid-connect/token`, {
     method: "POST",
