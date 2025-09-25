@@ -11,16 +11,16 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const role = (token as any)?.role ?? (token as any)?.user?.role;
 
-  // Admin routes (except /admin/login) require ADMIN
-  if (path.startsWith("/admin") && !path.startsWith("/admin/login")) {
+  // Admin routes (allow /admin/login, guard everything else incl. /admin root)
+  if (path.startsWith("/admin") && path !== "/admin/login") {
     if (role !== "ADMIN") {
       url.pathname = "/admin/login";
       return NextResponse.redirect(url);
     }
   }
 
-  // Attendant routes (except /attendant/login) require ATTENDANT or ADMIN
-  if (path.startsWith("/attendant") && !path.startsWith("/attendant/login")) {
+  // Attendant routes (allow /attendant/login, guard everything else incl. /attendant root)
+  if (path.startsWith("/attendant") && path !== "/attendant/login") {
     if (role !== "ADMIN" && role !== "ATTENDANT") {
       url.pathname = "/attendant/login";
       return NextResponse.redirect(url);
@@ -31,5 +31,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/attendant/:path*"],
+  // 🔴 Include the ROOT paths so /admin and /attendant are guarded too
+  matcher: ["/admin", "/admin/:path*", "/attendant", "/attendant/:path*"],
 };
