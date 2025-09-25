@@ -1,13 +1,16 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 
 import ClientRedirect from "./ClientRedirect";
 
-export default async function PostLogin({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+export default async function PostLogin(props: unknown) {
+  const { searchParams } = props as { searchParams?: Record<string, string | string[] | undefined> };
+
   const session = await auth();
   const role = session?.user?.role as string | undefined;
-  const intended = Array.isArray(searchParams?.intended) ? searchParams?.intended[0] : (searchParams?.intended as string | undefined);
+  const intended = Array.isArray(searchParams?.intended)
+    ? searchParams?.intended[0]
+    : (searchParams?.intended as string | undefined);
 
   // If we have a server-side session and role, validate and redirect.
   if (session && role) {

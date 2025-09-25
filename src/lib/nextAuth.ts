@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import NextAuth from "next-auth/next";
+import type { Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 
@@ -19,6 +20,7 @@ export const authOptions = {
       try {
         if (email === ADMIN_EMAIL) {
           // Force ADMIN
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (prisma as any).user.upsert({
             where: { email },
             update: { role: "ADMIN", isActive: true },
@@ -28,6 +30,7 @@ export const authOptions = {
         }
 
         // Default: ATTENDANT
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (prisma as any).user.upsert({
           where: { email },
           update: { role: "ATTENDANT", isActive: true },
@@ -41,35 +44,42 @@ export const authOptions = {
     },
 
     // jwt: attach DB role to token (lookup by sub (id) or email)
-    async jwt({ token }: { token: any }) {
+    async jwt({ token }: { token: unknown }) {
+      // Narrow token to a manipulable shape
+      const t = token as { sub?: string; email?: string; role?: string };
       try {
         // Prefer lookup by Prisma id (sub), fallback to email if available
-        let dbUser: any = null;
-        if (token.sub) {
-          dbUser = await (prisma as any).user.findUnique({ where: { id: token.sub }, select: { role: true, email: true } });
+        let dbUser: { role?: string; email?: string } | null = null;
+        if (t.sub) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          dbUser = await (prisma as any).user.findUnique({ where: { id: t.sub }, select: { role: true, email: true } });
         }
-        if (!dbUser && token.email) {
-          dbUser = await (prisma as any).user.findUnique({ where: { email: (token.email as string).toLowerCase() }, select: { role: true, email: true } });
+        if (!dbUser && t.email) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          dbUser = await (prisma as any).user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true, email: true } });
         }
 
         // If DB present, use stored role. If not, fallback to ADMIN_EMAIL env var check.
         if (dbUser?.role) {
-          token.role = dbUser.role;
+          t.role = dbUser.role;
         } else {
           const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase();
-          const tokenEmail = (token.email || "").toLowerCase();
-          token.role = token.role ?? (tokenEmail && tokenEmail === ADMIN_EMAIL ? "ADMIN" : "ATTENDANT");
+          const tokenEmail = (t.email || "").toLowerCase();
+          t.role = t.role ?? (tokenEmail && tokenEmail === ADMIN_EMAIL ? "ADMIN" : "ATTENDANT");
         }
       } catch {
-        token.role = token.role ?? "ATTENDANT";
+        t.role = t.role ?? "ATTENDANT";
       }
-      return token;
+      return t as unknown as JWT;
     },
 
     // session: expose role from token
-    async session({ session, token }: { session: any; token: any }) {
-      (session.user as any).role = token.role ?? "ATTENDANT";
-      return session;
+    async session({ session, token }: { session: unknown; token: unknown }) {
+      const s = session as { user?: Record<string, unknown> };
+      const t = token as { role?: string };
+      if (!s.user) s.user = {};
+      (s.user as { role?: string }).role = t.role ?? "ATTENDANT";
+      return s as unknown as Session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.SECRET || "",
