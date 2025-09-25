@@ -40,12 +40,26 @@ export const authOptions = {
       }
     },
 
-    // jwt: attach DB role to token
+    // jwt: attach DB role to token (lookup by sub (id) or email)
     async jwt({ token }: { token: any }) {
-      if (!token.sub) return token;
       try {
-        const dbUser = await (prisma as any).user.findUnique({ where: { id: token.sub }, select: { role: true } });
-        token.role = dbUser?.role ?? "ATTENDANT";
+        // Prefer lookup by Prisma id (sub), fallback to email if available
+        let dbUser: any = null;
+        if (token.sub) {
+          dbUser = await (prisma as any).user.findUnique({ where: { id: token.sub }, select: { role: true, email: true } });
+        }
+        if (!dbUser && token.email) {
+          dbUser = await (prisma as any).user.findUnique({ where: { email: (token.email as string).toLowerCase() }, select: { role: true, email: true } });
+        }
+
+        // If DB present, use stored role. If not, fallback to ADMIN_EMAIL env var check.
+        if (dbUser?.role) {
+          token.role = dbUser.role;
+        } else {
+          const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase();
+          const tokenEmail = (token.email || "").toLowerCase();
+          token.role = token.role ?? (tokenEmail && tokenEmail === ADMIN_EMAIL ? "ADMIN" : "ATTENDANT");
+        }
       } catch {
         token.role = token.role ?? "ATTENDANT";
       }
