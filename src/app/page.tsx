@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 
 /** =========================
  * Types
@@ -220,9 +221,15 @@ export default function Home() {
             and attendant portals.
           </p>
           <div className="mt-7 flex items-center justify-center gap-3">
+            <button
+              onClick={() => signIn("google", { callbackUrl: "/auth/post-login" })}
+              className="rounded-2xl bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300"
+            >
+              Login with Google
+            </button>
             <Link
               href="/admin"
-              className="rounded-2xl bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300"
+              className="rounded-2xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10"
             >
               Admin Portal
             </Link>
