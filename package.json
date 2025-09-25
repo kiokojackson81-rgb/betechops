@@ -11,6 +11,7 @@
   "prisma:generate": "prisma generate",
   "prisma:migrate": "prisma migrate deploy",
   "postinstall": "npm run prisma:generate"
+  ,"set-admin": "node scripts/set-admin.js"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
