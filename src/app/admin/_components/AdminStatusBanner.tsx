@@ -1,5 +1,6 @@
 // Server component: shows a small operational status banner for Admin
 import { AlertTriangle, Info } from "lucide-react";
+import { headers } from "next/headers";
 
 type Health = {
   status: string;
@@ -14,18 +15,16 @@ type Health = {
 
 export default async function AdminStatusBanner() {
   let health: Health | null = null;
+  // Construct absolute origin from headers to satisfy Node fetch
+  const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const origin = host ? `${proto}://${host}` : "";
   try {
-    const r = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/health`, { cache: "no-store" });
-    // In most cases we’re on the same origin; fallback to relative if absolute fails
-    if (!r.ok) throw new Error(`health ${r.status}`);
-    health = (await r.json()) as Health;
+    const r = await fetch(`${origin}/api/health`, { cache: "no-store" });
+    if (r.ok) health = (await r.json()) as Health;
   } catch {
-    try {
-      const r2 = await fetch(`/api/health`, { cache: "no-store" });
-      if (r2.ok) health = (await r2.json()) as Health;
-    } catch {
-      // ignore
-    }
+    // ignore
   }
 
   if (!health) {

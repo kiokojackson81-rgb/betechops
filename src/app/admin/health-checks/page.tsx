@@ -1,4 +1,6 @@
 
+import { computeHealth } from "@/lib/health";
+
 async function fetchJson(path: string) {
   try {
     const r = await fetch(path, { cache: "no-store" });
@@ -10,12 +12,13 @@ async function fetchJson(path: string) {
 }
 
 export default async function AdminHealthChecks() {
-  const [health, oidc, oidcTest] = await Promise.all([
-    fetchJson("/api/health"),
+  // Use server-side helper for health to avoid URL parsing issues
+  const healthPayload = await computeHealth();
+  const [oidc, oidcTest, jumiaDiag] = await Promise.all([
     fetchJson("/api/debug/oidc"),
     fetchJson("/api/debug/oidc?test=true"),
+    fetchJson("/api/debug/jumia"),
   ]);
-  const jumiaDiag = await fetchJson("/api/debug/jumia");
 
   const Section = ({ title, payload }: { title: string; payload: unknown }) => (
     <section className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -29,7 +32,7 @@ export default async function AdminHealthChecks() {
       <h1 className="text-2xl font-semibold">Operational Checks</h1>
       <p className="text-slate-400">Quick diagnostics for DB and Jumia OIDC integration.</p>
       <div className="grid gap-4 md:grid-cols-2">
-        <Section title="API /health" payload={health} />
+        <Section title="API /health" payload={{ ok: true, status: 200, data: healthPayload }} />
         <Section title="OIDC env /api/debug/oidc" payload={oidc} />
         <Section title="OIDC token test /api/debug/oidc?test=true" payload={oidcTest} />
         <Section title="Jumia connectivity /api/debug/jumia" payload={jumiaDiag} />
