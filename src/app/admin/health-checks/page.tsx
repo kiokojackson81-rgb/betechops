@@ -1,9 +1,15 @@
 
 import { computeHealth } from "@/lib/health";
+import { headers } from "next/headers";
 
 async function fetchJson(path: string) {
   try {
-    const r = await fetch(path, { cache: "no-store" });
+    const h = await headers();
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+    const origin = host ? `${proto}://${host}` : "";
+    const url = path.startsWith("http") ? path : `${origin}${path}`;
+    const r = await fetch(url, { cache: "no-store" });
     const data = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, data };
   } catch (e) {
