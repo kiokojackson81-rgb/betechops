@@ -1,15 +1,34 @@
 import { noStoreJson, requireRole, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { recomputeProfit } from "@/lib/profitRecompute";
+import { z } from "zod";
 
 export async function POST(req: Request) {
   const auth = await requireRole(["ADMIN"]);
   if (!auth.ok) return auth.res;
-  const rows = await req.json().catch(() => [] as any[]);
-  if (!Array.isArray(rows) || rows.length === 0) return noStoreJson({ error: "body must be an array of settlement rows" }, { status: 400 });
+  const Row = z.object({
+    shopId: z.string(),
+    orderId: z.string().optional().nullable(),
+    orderItemId: z.string().optional().nullable(),
+    kind: z.enum(["item_price", "commission", "shipping_fee", "refund", "penalty"]).or(z.string()),
+    amount: z.number(),
+    ref: z.string().optional().nullable(),
+    postedAt: z.string(),
+  });
+  const body = await req.json().catch(() => []);
+  const rowsParse = z.array(Row).safeParse(body);
+  if (!rowsParse.success || rowsParse.data.length === 0) return noStoreJson({ error: "Invalid rows" }, { status: 400 });
+  const rows = rowsParse.data;
   const actorId = await getActorId();
   let inserted = 0;
+  let minAt: Date | null = null;
+  let maxAt: Date | null = null;
+  const shops = new Set<string>();
   for (const r of rows) {
-    if (!r.shopId || !r.kind || r.amount == null || !r.postedAt) continue;
+    shops.add(r.shopId);
+    const postedAt = new Date(r.postedAt);
+    if (!minAt || postedAt < minAt) minAt = postedAt;
+    if (!maxAt || postedAt > maxAt) maxAt = postedAt;
     const row = await (prisma as any).settlementRow.create({
       data: {
         shopId: r.shopId,
@@ -18,13 +37,20 @@ export async function POST(req: Request) {
         kind: String(r.kind),
         amount: Number(r.amount),
         ref: r.ref || null,
-        postedAt: new Date(r.postedAt),
+        postedAt,
         raw: r,
       },
     });
     inserted++;
     if (actorId) await (prisma as any).actionLog.create({ data: { actorId, entity: "SettlementRow", entityId: row.id, action: "IMPORT", before: null, after: row } });
   }
-  // TODO: trigger profit recompute for the affected period/shopId(s)
-  return noStoreJson({ ok: true, inserted });
+  // Trigger recompute per shop for affected window
+  const from = minAt || new Date();
+  const to = maxAt || new Date();
+  const results: Record<string, number> = {};
+  for (const shopId of shops) {
+    const { snapshots } = await recomputeProfit({ from, to, shopId, actorId });
+    results[shopId] = snapshots;
+  }
+  return noStoreJson({ ok: true, inserted, recompute: { from, to, results } });
 }
