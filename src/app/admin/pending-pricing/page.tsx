@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveShopScopeForServer } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 
 const PAGE_SIZE_DEFAULT = 10;
 
@@ -44,21 +45,29 @@ export default async function PendingPricingPage({
     ? ({ ...whereBase, shopId: { in: scope.shopIds } })
     : whereBase;
 
-  const [total, rows] = await Promise.all([
-    prisma.order.count({ where }),
-    prisma.order.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * size,
-      take: size,
-      include: {
-        shop: { select: { name: true } },
-        items: {
-          select: { quantity: true, sellingPrice: true, product: { select: { name: true, sku: true, sellingPrice: true } } },
+  let degraded = false;
+  let total = 0;
+  let rows: unknown[] = [];
+  try {
+    [total, rows] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * size,
+        take: size,
+        include: {
+          shop: { select: { name: true } },
+          items: {
+            select: { quantity: true, sellingPrice: true, product: { select: { name: true, sku: true, sellingPrice: true } } },
+          },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
+  } catch (e) {
+    console.error("PendingPricingPage DB error:", e);
+    degraded = true;
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / size));
 
@@ -94,6 +103,16 @@ export default async function PendingPricingPage({
           <button className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10">Apply</button>
         </form>
       </header>
+
+      {degraded && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-yellow-200">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-medium">Database is unavailable or misconfigured.</p>
+            <p className="text-sm opacity-90">Showing 0 results. Check DATABASE_URL and migrations. See Admin → Health Checks.</p>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="w-full text-sm">
