@@ -13,12 +13,12 @@ Before you deploy on Vercel
 
 Important note about SQLite
 
-- The local dev `.env` uses SQLite (DATABASE_URL=file:./prisma/dev.db). SQLite is not suitable for Vercel since serverless functions have an ephemeral filesystem.
-- For production on Vercel you MUST use a hosted database (Postgres, MySQL, Planetscale, etc.).
+- This repo is configured for Postgres in production. Ensure `DATABASE_URL` uses a `postgresql://` scheme.
+- Local SQLite is no longer used by default; any `dev.db` is ignored. Use a local Postgres if you want dev parity.
 
 Database migrations and seeding
 
-- Use `npx prisma migrate deploy` to run migrations in CI (Vercel build won't run migrations automatically). Your CI or deployment pipeline should run migrations before starting the app.
+- CI uses `npx prisma migrate deploy` (see `.github/workflows/prisma-and-vercel.yml`).
 - If you need to seed data, run `node prisma/seed.js` once against the production DB (be careful not to overwrite production data).
 
 Recommended workflow
@@ -28,7 +28,13 @@ Recommended workflow
    - `npx prisma generate`
    - `npx prisma migrate deploy`
    - optionally `node prisma/seed.js` (if you need initial data)
-3. Deploy the Next.js app to Vercel. The `postinstall` script in package.json already runs `prisma generate` on install.
+3. Deploy the Next.js app to Vercel. The `postinstall` script runs `prisma generate` on install.
+
+Jumia configuration
+
+- You can configure Jumia OIDC/API either via env vars (JUMIA_*) or via the API:
+   - GET/POST `/api/settings/jumia` stores credentials in `ApiCredential(scope="GLOBAL")`.
+   - Diagnostics: `/api/debug/oidc?test=true` to verify refresh-token exchange.
 
 Troubleshooting
 

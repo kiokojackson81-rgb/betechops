@@ -1,0 +1,27 @@
+name: Seed Live Database (manual)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run seed script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node prisma/seed.js

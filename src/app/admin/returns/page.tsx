@@ -1,5 +1,7 @@
 // src/app/admin/returns/page.tsx
 import { prisma } from "@/lib/prisma";
+import { resolveShopScopeForServer } from "@/lib/scope";
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 
 const PAGE_SIZE_DEFAULT = 10;
@@ -16,17 +18,16 @@ function fmtDate(d: Date) {
 }
 
 // Build Prisma where from query
-function buildWhere(q: string | undefined) {
-  if (!q) return { status: "CANCELED" as const };
-  // Match on orderNumber, customerName, shop name and use CANCELED as proxy
+function buildWhere(q: string | undefined): Prisma.OrderWhereInput {
+  if (!q) return { status: "CANCELED" };
   return {
-    status: "CANCELED" as const,
+    status: "CANCELED",
     OR: [
-      { orderNumber: { contains: q, mode: "insensitive" } },
-      { customerName: { contains: q, mode: "insensitive" } },
-      { shop: { name: { contains: q, mode: "insensitive" } } },
+      { orderNumber: { contains: q } },
+      { customerName: { contains: q } },
+      { shop: { is: { name: { contains: q } } } },
     ],
-  };
+  } satisfies Prisma.OrderWhereInput;
 }
 
 export default async function ReturnsPage({
@@ -35,11 +36,15 @@ export default async function ReturnsPage({
   searchParams?: Promise<{ page?: string; q?: string; size?: string }>;
 }) {
   const params = await searchParams;
+  const scope = await resolveShopScopeForServer();
   const page = Math.max(1, Number(params?.page || 1));
   const size = Math.min(50, Math.max(1, Number(params?.size || PAGE_SIZE_DEFAULT)));
   const q = (params?.q || "").trim() || undefined;
 
-  const where = buildWhere(q);
+  const whereBase = buildWhere(q);
+  const where = (scope.shopIds && scope.shopIds.length > 0)
+    ? ({ ...whereBase, shopId: { in: scope.shopIds } })
+    : whereBase;
 
   const [total, rows] = await Promise.all([
     prisma.order.count({ where }),
@@ -70,7 +75,7 @@ export default async function ReturnsPage({
           <input
             name="q"
             defaultValue={q || ""}
-            placeholder="Search order #, name, phone, shop…"
+            placeholder="Search order #, name, shop…"
             className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:bg-white/10"
           />
           <select name="size" defaultValue={String(size)} className="rounded-xl bg-white/5 border border-white/10 px-2 py-2 text-sm">
@@ -95,14 +100,13 @@ export default async function ReturnsPage({
           </thead>
           <tbody className="divide-y divide-white/10">
             {rows.map((o: unknown) => {
-              const order = o as { id: string; orderNumber: string; customerName: string; customerPhone?: string; customerEmail?: string; createdAt: Date; paidAmount: number; shop?: { name?: string }; items: { quantity: number }[] };
+              const order = o as { id: string; orderNumber: string; customerName: string; createdAt: Date; paidAmount: number; shop?: { name?: string }; items: { quantity: number }[] };
               const itemsCount = order.items.reduce((n: number, it: { quantity: number }) => n + it.quantity, 0);
               return (
                 <tr key={order.id} className="[&>td]:px-3 [&>td]:py-3">
                   <td className="font-mono">{order.orderNumber}</td>
                   <td>
                     <div className="font-medium">{order.customerName}</div>
-                    <div className="text-slate-400">{order.customerPhone || order.customerEmail || "—"}</div>
                   </td>
                   <td>{order.shop?.name || "—"}</td>
                   <td>{itemsCount}</td>

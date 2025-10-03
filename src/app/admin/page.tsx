@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 
-export const revalidate = 0; // always fetch fresh data
+// Opt out of prerendering; this page hits the DB
+export const dynamic = "force-dynamic";
 
 async function getStats() {
   const [products, shops, attendants, orders, revenueAgg] = await Promise.all([

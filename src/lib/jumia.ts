@@ -1,4 +1,65 @@
-const cache: { accessToken?: string; exp?: number } = {};
+import { prisma } from "@/lib/prisma";
+
+type Cache = {
+  accessToken?: string;
+  exp?: number;
+  cfg?: (Config & { loadedAt: number });
+};
+const cache: Cache = {};
+
+type Config = {
+  issuer?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  apiBase?: string;
+  endpoints?: {
+    salesToday?: string;            // e.g., '/reports/sales?range=today'
+    pendingPricing?: string;        // e.g., '/orders?status=pending-pricing'
+    returnsWaitingPickup?: string;  // e.g., '/returns?status=waiting-pickup'
+  };
+};
+
+async function loadConfig(): Promise<Config> {
+  const now = Date.now();
+  if (cache.cfg && now - cache.cfg.loadedAt < 5 * 60_000) return cache.cfg;
+
+  // Prefer env if present
+  let cfg: Config = {
+    issuer: process.env.JUMIA_OIDC_ISSUER,
+    clientId: process.env.JUMIA_CLIENT_ID,
+    clientSecret: process.env.JUMIA_CLIENT_SECRET,
+    refreshToken: process.env.JUMIA_REFRESH_TOKEN,
+    apiBase: process.env.JUMIA_API_BASE,
+    endpoints: {
+      salesToday: process.env.JUMIA_EP_SALES_TODAY,
+      pendingPricing: process.env.JUMIA_EP_PENDING_PRICING,
+      returnsWaitingPickup: process.env.JUMIA_EP_RETURNS_WAITING_PICKUP,
+    },
+  };
+
+  const missing = !cfg.issuer || !cfg.clientId || !cfg.refreshToken || !cfg.apiBase;
+  if (missing) {
+    try {
+      const row = await prisma.apiCredential.findFirst({ where: { scope: "GLOBAL" } });
+      if (row) {
+        cfg = {
+          issuer: cfg.issuer || row.issuer || undefined,
+          clientId: cfg.clientId || row.clientId || undefined,
+          clientSecret: cfg.clientSecret || row.apiSecret || undefined,
+          refreshToken: cfg.refreshToken || row.refreshToken || undefined,
+          apiBase: cfg.apiBase || row.apiBase || undefined,
+          endpoints: cfg.endpoints,
+        };
+      }
+    } catch {
+      // ignore DB errors in diagnostics; rely on env-only
+    }
+  }
+
+  cache.cfg = { ...cfg, loadedAt: now };
+  return cfg;
+}
 
 /**
  * Get an access token using your long-lived REFRESH TOKEN.
@@ -10,34 +71,50 @@ async function getAccessToken(): Promise<string> {
     return cache.accessToken;
   }
 
-  const issuer = process.env.JUMIA_OIDC_ISSUER!;
-  const clientId = process.env.JUMIA_CLIENT_ID!;
-  const refreshToken = process.env.JUMIA_REFRESH_TOKEN!;
-
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    client_id: clientId,
-    refresh_token: refreshToken,
-  });
-  const clientSecret = process.env.JUMIA_CLIENT_SECRET;
-  if (clientSecret) body.set("client_secret", clientSecret);
-
-  const r = await fetch(`${issuer}/protocol/openid-connect/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    cache: "no-store",
-  });
-
-  if (!r.ok) {
-    const msg = await r.text().catch(() => r.statusText);
-    throw new Error(`OIDC token fetch failed: ${r.status} ${msg}`);
+  const { issuer, clientId, clientSecret, refreshToken } = await loadConfig();
+  if (!issuer || !clientId) {
+    throw new Error("Missing Jumia OIDC config (issuer/clientId)");
   }
 
-  const j = await r.json();
-  cache.accessToken = j.access_token;
-  cache.exp = now + (Number(j.expires_in || 300) * 1000);
-  return cache.accessToken!;
+  // Priority: refresh_token if present, else client_credentials
+  const doToken = async (body: URLSearchParams) => {
+    const r = await fetch(`${issuer}/protocol/openid-connect/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      cache: "no-store",
+    });
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      console.error("OIDC token fetch failed:", r.status, msg);
+      throw new Error(`OIDC token fetch failed: ${r.status} ${msg}`);
+    }
+    const j = await r.json();
+    cache.accessToken = j.access_token;
+    cache.exp = now + (Number(j.expires_in || 300) * 1000);
+    return cache.accessToken!;
+  };
+
+  if (refreshToken) {
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: clientId,
+      refresh_token: refreshToken,
+    });
+    if (clientSecret) body.set("client_secret", clientSecret);
+    return doToken(body);
+  }
+
+  // client_credentials fallback
+  if (!clientSecret) {
+    throw new Error("Missing refresh token and clientSecret for client_credentials flow");
+  }
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  return doToken(body);
 }
 
 /**
@@ -45,7 +122,8 @@ async function getAccessToken(): Promise<string> {
  * Usage: await jumiaFetch("/some/endpoint?param=1")
  */
 export async function jumiaFetch(path: string, init: RequestInit = {}) {
-  const apiBase = process.env.JUMIA_API_BASE!;
+  const { apiBase } = await loadConfig();
+  if (!apiBase) throw new Error("Missing Jumia API base (apiBase)");
   const token = await getAccessToken();
   const url = `${apiBase}${path}`;
   const bodyPresent = Boolean((init as RequestInit).body);
@@ -58,6 +136,7 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
   const r = await fetch(url, { ...init, headers, cache: "no-store" });
   if (!r.ok) {
     const msg = await r.text().catch(() => r.statusText);
+    console.error("Jumia API error:", r.status, msg, "path:", path);
     throw new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
   }
   return r.json().catch(() => ({}));
@@ -67,23 +146,75 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
 
 // Sales today (normalize to { total })
 export async function getSalesToday() {
-  // Example: adjust endpoint/params to your API
-  const j = await jumiaFetch(`/reports/sales?range=today`);
-  const total = j?.total ?? j?.amount ?? 0;
+  const { endpoints } = await loadConfig();
+  const path = endpoints?.salesToday || "/reports/sales?range=today";
+  const j = await jumiaFetch(path);
+  // Normalize: support common shapes { total } or { amount } or nested { data: { total } }
+  const total = Number(
+    j?.total ?? j?.amount ?? j?.data?.total ?? j?.data?.amount ?? 0
+  );
   return { total: Number(total) };
 }
 
 // Orders pending pricing (normalize to { count })
 export async function getPendingPricingCount() {
-  const j = await jumiaFetch(`/orders?status=pending-pricing`);
-  const count = Array.isArray(j?.items) ? j.items.length : Number(j?.count ?? 0);
+  const { endpoints } = await loadConfig();
+  const path = endpoints?.pendingPricing || "/orders?status=pending-pricing";
+  const j = await jumiaFetch(path);
+  // Normalize: list-based or count field or nested shapes
+  const count = Array.isArray(j?.items)
+    ? j.items.length
+    : Array.isArray(j?.data)
+      ? j.data.length
+      : Number(j?.count ?? j?.data?.count ?? 0);
   return { count };
 }
 
 // Returns waiting pickup (normalize to { count })
 export async function getReturnsWaitingPickup() {
-  const j = await jumiaFetch(`/returns?status=waiting-pickup`);
-  const count = Array.isArray(j?.items) ? j.items.length : Number(j?.count ?? 0);
+  const { endpoints } = await loadConfig();
+  const path = endpoints?.returnsWaitingPickup || "/returns?status=waiting-pickup";
+  const j = await jumiaFetch(path);
+  const count = Array.isArray(j?.items)
+    ? j.items.length
+    : Array.isArray(j?.data)
+      ? j.data.length
+      : Number(j?.count ?? j?.data?.count ?? 0);
   return { count };
+}
+
+/**
+ * Non-secret OIDC diagnostics. Does not return tokens or secrets.
+ * If test=true, it will attempt a refresh_token exchange and report success and TTL.
+ */
+export async function diagnoseOidc(opts?: { test?: boolean }) {
+  const cfg = await loadConfig();
+  const issuer = cfg.issuer || process.env.JUMIA_OIDC_ISSUER || "";
+  const res: {
+    issuer: string;
+    clientIdSet: boolean;
+    hasClientSecret: boolean;
+    hasRefreshToken: boolean;
+    test?: { ok: boolean; expiresIn?: number; error?: string };
+  } = {
+    issuer,
+    clientIdSet: Boolean(cfg.clientId || process.env.JUMIA_CLIENT_ID),
+    hasClientSecret: Boolean(cfg.clientSecret || process.env.JUMIA_CLIENT_SECRET),
+    hasRefreshToken: Boolean(cfg.refreshToken || process.env.JUMIA_REFRESH_TOKEN),
+  };
+
+  if (opts?.test) {
+    try {
+      await getAccessToken();
+      const now = Date.now();
+      const expiresIn = cache.exp ? Math.max(0, Math.floor((cache.exp - now) / 1000)) : undefined;
+      res.test = { ok: true, expiresIn };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.test = { ok: false, error: msg };
+    }
+  }
+
+  return res;
 }
 

@@ -1,10 +1,11 @@
-name: Prisma Deploy
+name: "ARCHIVED: Prisma Deploy (use Primary pipeline)"
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches:
-      - branch-3
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Archived workflow. Use 'Primary: Migrate and Deploy to Vercel'."
+        required: false
 
 jobs:
   migrate:
@@ -19,40 +20,6 @@ jobs:
         run: npm ci
       - name: Install Prisma
         run: npm install prisma --no-save
-      - name: Run migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
-      - name: Generate client
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma generate
-name: Prisma Deploy
-
-on:
-  workflow_dispatch: {}
-  push:
-    branches:
-      - branch-3
-
-jobs:
-  migrate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install deps
-        run: npm ci
-      - name: Install Prisma
-        run: npm install prisma --no-save
-      - name: Run migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
-      - name: Generate client
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma generate
+      - name: Archive notice
+        run: |
+          echo "This workflow is archived. Use 'Primary: Migrate and Deploy to Vercel'."

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
 import { getSalesToday, getPendingPricingCount, getReturnsWaitingPickup } from "@/lib/jumia";
+import { resolveShopScope } from "@/lib/scope";
 
 /**
  * Week window (Mon 00:00 → Sun 23:59) in Africa/Nairobi without adding deps.
@@ -36,20 +37,27 @@ function getThisWeekRangeNairobi() {
 
 export async function GET() {
   try {
+    const scope = await resolveShopScope();
     const { startUTC, endUTC } = getThisWeekRangeNairobi();
 
     // Parallel simple counts
     const roles = [Role.ATTENDANT, Role.SUPERVISOR, Role.ADMIN];
+    const shopWhere = scope.shopIds && scope.shopIds.length > 0 ? { id: { in: scope.shopIds } } : undefined;
+    const orderWhere = scope.shopIds && scope.shopIds.length > 0 ? { shopId: { in: scope.shopIds } } : undefined;
+    const userWhere = scope.shopIds && scope.shopIds.length > 0
+      ? { role: { in: roles }, managedShops: { some: { id: { in: scope.shopIds } } } }
+      : { role: { in: roles } };
+
     const [products, shops, attendants, orders] = await Promise.all([
       prisma.product.count(),
-      prisma.shop.count(),
-      prisma.user.count({ where: { role: { in: roles } } }),
-      prisma.order.count(),
+      prisma.shop.count({ where: shopWhere }),
+      prisma.user.count({ where: userWhere }),
+      prisma.order.count({ where: orderWhere }),
     ]);
 
     // Revenue this week: sum of paidAmount for orders created this week
     const revenueAgg = await prisma.order.aggregate({
-      where: { createdAt: { gte: startUTC, lt: endUTC } },
+      where: { createdAt: { gte: startUTC, lt: endUTC }, ...(orderWhere || {}) },
       _sum: { paidAmount: true },
     });
     const revenueThisWeek = revenueAgg._sum.paidAmount ?? 0;
@@ -57,7 +65,7 @@ export async function GET() {
     // Buying this week:
     // Sum(Product.actualPrice * OrderItem.quantity) for items whose parent order was created this week
     const orderItems = await prisma.orderItem.findMany({
-      where: { order: { createdAt: { gte: startUTC, lt: endUTC } } },
+      where: { order: { createdAt: { gte: startUTC, lt: endUTC }, ...(orderWhere || {}) } },
       select: { quantity: true, product: { select: { lastBuyingPrice: true } } },
     });
 
