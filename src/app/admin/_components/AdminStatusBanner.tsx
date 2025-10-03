@@ -16,7 +16,7 @@ type Health = {
 export default async function AdminStatusBanner() {
   let health: Health | null = null;
   // Construct absolute origin from headers to satisfy Node fetch
-  const h = headers();
+  const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "https";
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const origin = host ? `${proto}://${host}` : "";
