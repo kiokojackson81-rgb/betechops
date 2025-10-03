@@ -44,6 +44,13 @@ model User {
   // relations
   orders Order[]
   attendantCommissions AttendantCommission[]
+  // ops back-relations
+  commissionEarnings CommissionEarning[]
+  returnsCreated ReturnCase[] @relation("ReturnCreatedBy")
+  returnsApproved ReturnCase[] @relation("ReturnApprovedBy")
+  returnPickups ReturnPickup[] @relation("PickupAssignee")
+  evidenceTaken ReturnEvidence[] @relation("EvidenceTaker")
+  actionLogs ActionLog[]
 }
 
 model Shop {
@@ -67,6 +74,11 @@ model Shop {
   // relations
   orders Order[]
   attendantCommissions AttendantCommission[]
+  // ops back-relations
+  costCatalogs CostCatalog[]
+  settlementRows SettlementRow[]
+  returnCases ReturnCase[]
+  commissionRules CommissionRule[]
 }
 
 model ShopApiConfig {
@@ -113,6 +125,9 @@ model Order {
   shop      Shop     @relation(fields: [shopId], references: [id])
   attendant User?    @relation(fields: [attendantId], references: [id])
   items     OrderItem[]
+  // ops back-relations
+  settlementRows SettlementRow[]
+  returnCases ReturnCase[]
 }
 model OrderItem {
   id           String  @id @default(cuid())
@@ -123,6 +138,13 @@ model OrderItem {
 
   order   Order   @relation(fields: [orderId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+  // ops back-relations
+  orderCosts OrderCost[]
+  settlementRows SettlementRow[]
+  profitSnapshots ProfitSnapshot[]
+  commissionEarnings CommissionEarning[]
+  returnAdjustments ReturnAdjustment[]
+  returnCases ReturnCase[]
 }
 
 /// Commission configuration and snapshots
@@ -332,7 +354,7 @@ model ReturnPickup {
   createdAt     DateTime @default(now())
 
   returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
-  assignee   User       @relation(fields: [assignedTo], references: [id])
+  assignee   User       @relation("PickupAssignee", fields: [assignedTo], references: [id])
 }
 
 model ReturnEvidence {
@@ -347,7 +369,7 @@ model ReturnEvidence {
   createdAt    DateTime @default(now())
 
   returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
-  taker     User        @relation(fields: [takenBy], references: [id])
+  taker     User        @relation("EvidenceTaker", fields: [takenBy], references: [id])
 }
 
 model ReturnAdjustment {
