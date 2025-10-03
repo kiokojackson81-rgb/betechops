@@ -15,6 +15,7 @@ export default async function AdminHealthChecks() {
     fetchJson("/api/debug/oidc"),
     fetchJson("/api/debug/oidc?test=true"),
   ]);
+  const jumiaDiag = await fetchJson("/api/debug/jumia");
 
   const Section = ({ title, payload }: { title: string; payload: unknown }) => (
     <section className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -31,6 +32,7 @@ export default async function AdminHealthChecks() {
         <Section title="API /health" payload={health} />
         <Section title="OIDC env /api/debug/oidc" payload={oidc} />
         <Section title="OIDC token test /api/debug/oidc?test=true" payload={oidcTest} />
+        <Section title="Jumia connectivity /api/debug/jumia" payload={jumiaDiag} />
       </div>
     </div>
   );
