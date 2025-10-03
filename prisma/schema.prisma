@@ -200,3 +200,179 @@ model JumiaOrder {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
+
+/// --- Ops extensions ---
+
+model CostCatalog {
+  id            String   @id @default(cuid())
+  sku           String
+  shopId        String?     // null = global cost
+  cost          Decimal  @db.Decimal(12,2)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop Shop? @relation(fields: [shopId], references: [id])
+
+  @@index([sku, shopId, effectiveFrom])
+}
+
+model OrderCost {
+  id          String   @id @default(cuid())
+  orderItemId String
+  unitCost    Decimal  @db.Decimal(12,2)
+  costSource  String   // 'catalog' | 'override'
+  createdAt   DateTime @default(now())
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model SettlementRow {
+  id          String   @id @default(cuid())
+  shopId      String
+  orderId     String?
+  orderItemId String?
+  kind        String   // 'item_price','commission','shipping_fee','refund','penalty',...
+  amount      Decimal  @db.Decimal(12,2)
+  ref         String?
+  postedAt    DateTime
+  raw         Json
+  createdAt   DateTime @default(now())
+
+  shop      Shop      @relation(fields: [shopId], references: [id])
+  order     Order?    @relation(fields: [orderId], references: [id])
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id])
+
+  @@index([shopId, postedAt])
+  @@index([orderId, orderItemId])
+}
+
+model ProfitSnapshot {
+  id          String   @id @default(cuid())
+  orderItemId String
+  revenue     Decimal  @db.Decimal(12,2)
+  fees        Decimal  @db.Decimal(12,2)
+  shipping    Decimal  @db.Decimal(12,2)
+  refunds     Decimal  @db.Decimal(12,2)
+  unitCost    Decimal  @db.Decimal(12,2)
+  qty         Int
+  profit      Decimal  @db.Decimal(12,2)
+  computedAt  DateTime @default(now())
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model CommissionRule {
+  id            String  @id @default(cuid())
+  scope         String  // 'shop'|'sku'|'category'|'global'
+  shopId        String?
+  sku           String?
+  category      String?
+  type          String  // 'percent_profit'|'percent_gross'|'flat_per_item'
+  rateDecimal   Decimal @db.Decimal(6,4)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  shop Shop? @relation(fields: [shopId], references: [id])
+
+  @@index([scope, shopId, sku, category, effectiveFrom])
+}
+
+model CommissionEarning {
+  id          String   @id @default(cuid())
+  staffId     String
+  orderItemId String
+  basis       String   // 'profit'|'gross'|'flat'
+  qty         Int
+  amount      Decimal  @db.Decimal(12,2)
+  status      String   // 'pending'|'approved'|'reversed'
+  calcDetail  Json
+  createdAt   DateTime @default(now())
+
+  staff     User      @relation(fields: [staffId], references: [id])
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model ReturnCase {
+  id          String   @id @default(cuid())
+  shopId      String
+  orderId     String
+  orderItemId String?
+  reasonCode  String
+  status      String   // 'requested'|'approved'|'pickup_scheduled'|'picked_up'|'received'|'resolved'|'rejected'
+  resolution  String?  // 'refund'|'replacement'|'repair'|'deny'
+  createdBy   String
+  approvedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop      Shop      @relation(fields: [shopId], references: [id])
+  order     Order     @relation(fields: [orderId], references: [id])
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id])
+  creator   User      @relation("ReturnCreatedBy", fields: [createdBy], references: [id])
+  approver  User?     @relation("ReturnApprovedBy", fields: [approvedBy], references: [id])
+  pickups   ReturnPickup[]
+  evidence  ReturnEvidence[]
+  adjustments ReturnAdjustment[]
+
+  @@index([shopId, status])
+}
+
+model ReturnPickup {
+  id            String   @id @default(cuid())
+  returnCaseId  String
+  scheduledAt   DateTime
+  carrier       String
+  tracking      String?
+  assignedTo    String   // staffId
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
+  assignee   User       @relation(fields: [assignedTo], references: [id])
+}
+
+model ReturnEvidence {
+  id           String   @id @default(cuid())
+  returnCaseId String
+  type         String   // 'photo'|'video'|'signature'|'document'
+  uri          String
+  sha256       String
+  takenBy      String
+  takenAt      DateTime
+  geo          Json?
+  createdAt    DateTime @default(now())
+
+  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
+  taker     User        @relation(fields: [takenBy], references: [id])
+}
+
+model ReturnAdjustment {
+  id             String   @id @default(cuid())
+  returnCaseId   String
+  orderItemId    String
+  amount         Decimal  @db.Decimal(12,2)
+  commissionImpact String // 'none'|'reverse'|'reduce'
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
+  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id])
+}
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  entity    String   // e.g., 'ReturnCase','Order','CommissionRule'
+  entityId  String
+  action    String   // e.g., 'CREATE','UPDATE','APPROVE','STATE_CHANGE'
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+  @@index([entity, entityId])
+}
