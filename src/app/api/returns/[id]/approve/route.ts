@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { resolveShopScope } from "@/lib/scope";
@@ -5,7 +6,8 @@ import { guardTransition } from "@/lib/returns";
 // session is provided by requireRole; no need to import auth directly
 import { Role } from "@prisma/client";
 
-export async function PATCH(_req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const authz = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!authz.ok) return authz.res;
 
@@ -14,7 +16,7 @@ export async function PATCH(_req: Request, { params }: { params: { id: string } 
   const actor = email ? await prisma.user.findUnique({ where: { email }, select: { id: true, role: true } }) : null;
   if (!actor) return noStoreJson({ error: "Actor not found" }, { status: 401 });
 
-  const ret = await (prisma as any).returnCase.findUnique({ where: { id: params.id }, include: { evidence: true } });
+  const ret = await (prisma as any).returnCase.findUnique({ where: { id }, include: { evidence: true } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
 
   // Scope check for non-admins

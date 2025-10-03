@@ -1,15 +1,17 @@
+import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { resolveShopScope } from "@/lib/scope";
 import { guardTransition } from "@/lib/returns";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const authz = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!authz.ok) return authz.res;
   const { scheduledAt, carrier, tracking, assignedTo, notes } = await req.json().catch(() => ({} as any));
   if (!scheduledAt || !carrier || !assignedTo) return noStoreJson({ error: "scheduledAt, carrier, assignedTo required" }, { status: 400 });
 
-  const ret = await (prisma as any).returnCase.findUnique({ where: { id: params.id } });
+  const ret = await (prisma as any).returnCase.findUnique({ where: { id } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
 
   const scope = await resolveShopScope();
@@ -22,9 +24,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const before = ret;
   const pickup = await (prisma as any).returnPickup.create({
-    data: { returnCaseId: params.id, scheduledAt: new Date(scheduledAt), carrier, tracking: tracking || null, assignedTo, notes: notes || null },
+    data: { returnCaseId: id, scheduledAt: new Date(scheduledAt), carrier, tracking: tracking || null, assignedTo, notes: notes || null },
   });
-  const updated = await (prisma as any).returnCase.update({ where: { id: params.id }, data: { status: "pickup_scheduled" } });
-  await (prisma as any).actionLog.create({ data: { actorId: assignedTo, entity: "ReturnCase", entityId: params.id, action: "PICKUP_SCHEDULED", before, after: { ...updated, pickupId: pickup.id } } });
-  return noStoreJson({ ok: true, id: params.id, status: updated.status, pickupId: pickup.id });
+  const updated = await (prisma as any).returnCase.update({ where: { id }, data: { status: "pickup_scheduled" } });
+  await (prisma as any).actionLog.create({ data: { actorId: assignedTo, entity: "ReturnCase", entityId: id, action: "PICKUP_SCHEDULED", before, after: { ...updated, pickupId: pickup.id } } });
+  return noStoreJson({ ok: true, id, status: updated.status, pickupId: pickup.id });
 }
