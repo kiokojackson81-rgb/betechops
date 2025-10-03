@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export type Role = "ADMIN" | "SUPERVISOR" | "ATTENDANT";
 
@@ -16,4 +17,16 @@ export function noStoreJson(data: unknown, init?: ResponseInit) {
   const res = NextResponse.json(data, init);
   res.headers.set("Cache-Control", "no-store");
   return res;
+}
+
+export async function getActorId(): Promise<string | null> {
+  try {
+    const session = await auth();
+    const email = (session?.user as { email?: string } | undefined)?.email?.toLowerCase() || "";
+    if (!email) return null;
+    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    return user?.id || null;
+  } catch {
+    return null;
+  }
 }
