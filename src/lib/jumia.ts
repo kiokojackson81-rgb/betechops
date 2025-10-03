@@ -13,6 +13,7 @@ type Config = {
   clientSecret?: string;
   refreshToken?: string;
   apiBase?: string;
+  tokenUrl?: string; // optional explicit token endpoint override
   endpoints?: {
     salesToday?: string;            // e.g., '/reports/sales?range=today'
     pendingPricing?: string;        // e.g., '/orders?status=pending-pricing'
@@ -31,6 +32,7 @@ async function loadConfig(): Promise<Config> {
     clientSecret: process.env.JUMIA_CLIENT_SECRET,
     refreshToken: process.env.JUMIA_REFRESH_TOKEN,
     apiBase: process.env.JUMIA_API_BASE,
+    tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL,
     endpoints: {
       salesToday: process.env.JUMIA_EP_SALES_TODAY,
       pendingPricing: process.env.JUMIA_EP_PENDING_PRICING,
@@ -102,7 +104,46 @@ async function getAccessToken(): Promise<string> {
       refresh_token: refreshToken,
     });
     if (clientSecret) body.set("client_secret", clientSecret);
-    return doToken(body);
+
+    // Determine candidate token endpoints (explicit override, then derived from issuer with/without /auth)
+    const candidates: string[] = [];
+    const { tokenUrl } = await loadConfig();
+    if (tokenUrl) candidates.push(tokenUrl);
+    if (issuer) {
+      const primary = `${issuer.replace(/\/?$/, "")}/protocol/openid-connect/token`;
+      candidates.push(primary);
+      if (issuer.includes("/auth/realms/")) {
+        const altIssuer = issuer.replace("/auth/realms/", "/realms/");
+        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
+      } else if (issuer.includes("/realms/")) {
+        const altIssuer = issuer.replace("/realms/", "/auth/realms/");
+        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
+      }
+    }
+
+    let lastErr: unknown;
+    for (const url of candidates) {
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+          cache: "no-store",
+        });
+        if (!r.ok) {
+          const msg = await r.text().catch(() => r.statusText);
+          lastErr = new Error(`OIDC token fetch failed: ${r.status} ${msg} (endpoint: ${url})`);
+          continue;
+        }
+        const j = await r.json();
+        cache.accessToken = j.access_token;
+        cache.exp = now + (Number(j.expires_in || 300) * 1000);
+        return cache.accessToken!;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || "OIDC token fetch failed"));
   }
 
   // client_credentials fallback
@@ -195,6 +236,7 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
     clientIdSet: boolean;
     hasClientSecret: boolean;
     hasRefreshToken: boolean;
+    tokenEndpoint?: string[];
     test?: { ok: boolean; expiresIn?: number; error?: string };
   } = {
     issuer,
@@ -205,6 +247,22 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
 
   if (opts?.test) {
     try {
+      // build the same candidate list we would use in getAccessToken
+      const candidates: string[] = [];
+      if (cfg.tokenUrl) candidates.push(cfg.tokenUrl);
+      const issuer0 = cfg.issuer || process.env.JUMIA_OIDC_ISSUER || "";
+      if (issuer0) {
+        const primary = `${issuer0.replace(/\/?$/, "")}/protocol/openid-connect/token`;
+        candidates.push(primary);
+        if (issuer0.includes("/auth/realms/")) {
+          const altIssuer = issuer0.replace("/auth/realms/", "/realms/");
+          candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
+        } else if (issuer0.includes("/realms/")) {
+          const altIssuer = issuer0.replace("/realms/", "/auth/realms/");
+          candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
+        }
+      }
+      res.tokenEndpoint = candidates;
       await getAccessToken();
       const now = Date.now();
       const expiresIn = cache.exp ? Math.max(0, Math.floor((cache.exp - now) / 1000)) : undefined;
