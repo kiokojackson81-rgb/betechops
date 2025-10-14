@@ -4,6 +4,8 @@ type Cache = {
   accessToken?: string;
   exp?: number;
   cfg?: (Config & { loadedAt: number });
+  tokenEndpoints?: string[];
+  tokenEndpointsLoadedAt?: number;
 };
 const cache: Cache = {};
 
@@ -73,56 +75,15 @@ async function getAccessToken(): Promise<string> {
     return cache.accessToken;
   }
 
-  const { issuer, clientId, clientSecret, refreshToken } = await loadConfig();
+  const { issuer, clientId, clientSecret, refreshToken, tokenUrl } = await loadConfig();
   if (!issuer || !clientId) {
     throw new Error("Missing Jumia OIDC config (issuer/clientId)");
   }
 
-  // Priority: refresh_token if present, else client_credentials
-  const doToken = async (body: URLSearchParams) => {
-    const r = await fetch(`${issuer}/protocol/openid-connect/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      cache: "no-store",
-    });
-    if (!r.ok) {
-      const msg = await r.text().catch(() => r.statusText);
-      console.error("OIDC token fetch failed:", r.status, msg);
-      throw new Error(`OIDC token fetch failed: ${r.status} ${msg}`);
-    }
-    const j = await r.json();
-    cache.accessToken = j.access_token;
-    cache.exp = now + (Number(j.expires_in || 300) * 1000);
-    return cache.accessToken!;
-  };
-
-  if (refreshToken) {
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: clientId,
-      refresh_token: refreshToken,
-    });
-    if (clientSecret) body.set("client_secret", clientSecret);
-
-    // Determine candidate token endpoints (explicit override, then derived from issuer with/without /auth)
-    const candidates: string[] = [];
-    const { tokenUrl } = await loadConfig();
-    if (tokenUrl) candidates.push(tokenUrl);
-    if (issuer) {
-      const primary = `${issuer.replace(/\/?$/, "")}/protocol/openid-connect/token`;
-      candidates.push(primary);
-      if (issuer.includes("/auth/realms/")) {
-        const altIssuer = issuer.replace("/auth/realms/", "/realms/");
-        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
-      } else if (issuer.includes("/realms/")) {
-        const altIssuer = issuer.replace("/realms/", "/auth/realms/");
-        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
-      }
-    }
-
+  const endpoints = await resolveTokenEndpoints({ issuer, tokenUrl });
+  const fetchToken = async (body: URLSearchParams) => {
     let lastErr: unknown;
-    for (const url of candidates) {
+    for (const url of endpoints) {
       try {
         const r = await fetch(url, {
           method: "POST",
@@ -139,11 +100,21 @@ async function getAccessToken(): Promise<string> {
         cache.accessToken = j.access_token;
         cache.exp = now + (Number(j.expires_in || 300) * 1000);
         return cache.accessToken!;
-      } catch (e) {
-        lastErr = e;
+      } catch (err) {
+        lastErr = err;
       }
     }
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || "OIDC token fetch failed"));
+  };
+
+  if (refreshToken) {
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: clientId,
+      refresh_token: refreshToken,
+    });
+    if (clientSecret) body.set("client_secret", clientSecret);
+    return fetchToken(body);
   }
 
   // client_credentials fallback
@@ -155,7 +126,78 @@ async function getAccessToken(): Promise<string> {
     client_id: clientId,
     client_secret: clientSecret,
   });
-  return doToken(body);
+  return fetchToken(body);
+}
+
+function normalizeUrl(url: string) {
+  return url.trim().replace(/\/+$|$/, "");
+}
+
+async function resolveTokenEndpoints({ issuer, tokenUrl }: { issuer: string; tokenUrl?: string }) {
+  const now = Date.now();
+  if (cache.tokenEndpoints && cache.tokenEndpointsLoadedAt && now - cache.tokenEndpointsLoadedAt < 60 * 60_000) {
+    return cache.tokenEndpoints;
+  }
+
+  const candidates = new Set<string>();
+  if (tokenUrl) {
+    candidates.add(normalizeUrl(tokenUrl));
+  }
+
+  const issuerCandidates = await discoverTokenEndpoints(issuer).catch(() => [] as string[]);
+  issuerCandidates.forEach((url) => candidates.add(normalizeUrl(url)));
+
+  if (candidates.size === 0) {
+    throw new Error("Could not resolve Jumia OIDC token endpoint");
+  }
+
+  cache.tokenEndpoints = Array.from(candidates);
+  cache.tokenEndpointsLoadedAt = now;
+  return cache.tokenEndpoints;
+}
+
+async function discoverTokenEndpoints(issuer: string): Promise<string[]> {
+  const urls = new Set<string>();
+  const normalizedIssuer = normalizeUrl(issuer);
+
+  const wellKnownCandidates = [
+    `${normalizedIssuer}/.well-known/openid-configuration`,
+  ];
+
+  if (normalizedIssuer.includes("/auth/realms/")) {
+    const altIssuer = normalizedIssuer.replace("/auth/realms/", "/realms/");
+    wellKnownCandidates.push(`${altIssuer}/.well-known/openid-configuration`);
+  } else if (normalizedIssuer.includes("/realms/")) {
+    const altIssuer = normalizedIssuer.replace("/realms/", "/auth/realms/");
+    wellKnownCandidates.push(`${altIssuer}/.well-known/openid-configuration`);
+  }
+
+  for (const url of wellKnownCandidates) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json().catch(() => null);
+      const tokenEndpoint = j?.token_endpoint;
+      if (typeof tokenEndpoint === "string" && tokenEndpoint.trim()) {
+        urls.add(tokenEndpoint.trim());
+        break;
+      }
+    } catch {
+      // ignore and continue to other candidates
+    }
+  }
+
+  const primary = `${normalizedIssuer}/protocol/openid-connect/token`;
+  urls.add(primary);
+  if (normalizedIssuer.includes("/auth/realms/")) {
+    const altIssuer = normalizedIssuer.replace("/auth/realms/", "/realms/");
+    urls.add(`${altIssuer}/protocol/openid-connect/token`);
+  } else if (normalizedIssuer.includes("/realms/")) {
+    const altIssuer = normalizedIssuer.replace("/realms/", "/auth/realms/");
+    urls.add(`${altIssuer}/protocol/openid-connect/token`);
+  }
+
+  return Array.from(urls);
 }
 
 /**
