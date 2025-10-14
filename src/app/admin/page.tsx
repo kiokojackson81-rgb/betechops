@@ -1,10 +1,25 @@
 import { prisma } from "@/lib/prisma";
+import { summarizeDbError } from "@/lib/db-diagnostics";
 import { Package, Store, Users, Receipt, Wallet, AlertTriangle } from "lucide-react";
 
 // Opt out of prerendering; this page hits the DB
 export const dynamic = "force-dynamic";
 
-async function getStats() {
+type Stats = {
+  products: number;
+  shops: number;
+  attendants: number;
+  orders: number;
+  revenue: number;
+};
+
+type DegradedStats = Stats & {
+  _degraded: true;
+  _error?: string | null;
+  _hasDatabaseUrl?: boolean;
+};
+
+async function getStats(): Promise<Stats | DegradedStats> {
   try {
     const [products, shops, attendants, orders, revenueAgg] = await Promise.all([
       prisma.product.count(),
@@ -32,7 +47,9 @@ async function getStats() {
       revenue: 0,
       // mark that data is degraded
       _degraded: true as const,
-    } as unknown as { products: number; shops: number; attendants: number; orders: number; revenue: number; _degraded?: true };
+      _error: summarizeDbError(e),
+      _hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    } satisfies DegradedStats;
   }
 }
 
@@ -57,13 +74,16 @@ function StatCard(props: { title: string; value: string | number; Icon: React.Co
 export default async function AdminDashboard() {
   const stats = await getStats();
   const { products, shops, attendants, orders, revenue } = stats;
+  const isDegraded = "_degraded" in stats;
+  const dbError = isDegraded ? stats._error : null;
+  const hasDatabaseUrl = isDegraded ? stats._hasDatabaseUrl : undefined;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold">Admin Dashboard</h1>
         <p className="mt-2 text-slate-300">Live metrics from your Prisma database.</p>
-        {"_degraded" in stats && (
+        {isDegraded && (
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-yellow-200">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
@@ -71,6 +91,18 @@ export default async function AdminDashboard() {
               <p className="text-sm opacity-90">
                 Counts are shown as 0 for now. Verify DATABASE_URL and run migrations. See Admin → Health Checks.
               </p>
+              {hasDatabaseUrl === false && (
+                <p className="mt-2 text-sm">
+                  Hint: the <code className="bg-white/10 px-1 py-0.5 rounded">DATABASE_URL</code> environment variable is not set in
+                  this deployment.
+                </p>
+              )}
+              {dbError ? (
+                <p className="mt-2 text-xs opacity-90">
+                  Last Prisma error:
+                  <code className="ml-1 rounded bg-white/10 px-1 py-0.5 text-[0.75rem]">{dbError}</code>
+                </p>
+              ) : null}
             </div>
           </div>
         )}
