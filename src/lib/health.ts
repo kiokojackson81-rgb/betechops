@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { summarizeDbError } from "@/lib/db-diagnostics";
 
 export type HealthPayload = {
   status: "ok";
@@ -8,17 +9,20 @@ export type HealthPayload = {
   hasDatabaseUrl: boolean;
   dbScheme: string | null;
   dbHost: string | null;
+  dbError: string | null;
   timestamp: string;
 };
 
 export async function computeHealth(): Promise<HealthPayload> {
   let productCount = 0;
   let dbOk = false;
+  let dbError: string | null = null;
   try {
     productCount = await prisma.product.count();
     dbOk = true;
   } catch (e) {
     console.error("computeHealth prisma error:", e);
+    dbError = summarizeDbError(e);
   }
 
   const authReady = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.NEXTAUTH_SECRET);
@@ -44,6 +48,7 @@ export async function computeHealth(): Promise<HealthPayload> {
     hasDatabaseUrl: Boolean(dbUrl),
     dbScheme,
     dbHost,
+    dbError,
     timestamp: new Date().toISOString(),
   };
 }

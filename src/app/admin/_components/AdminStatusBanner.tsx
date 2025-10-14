@@ -1,6 +1,7 @@
 // Server component: shows a small operational status banner for Admin
 import { AlertTriangle, Info } from "lucide-react";
 import { headers } from "next/headers";
+import { ReactNode } from "react";
 
 type Health = {
   status: string;
@@ -11,6 +12,7 @@ type Health = {
   hasDatabaseUrl?: boolean;
   dbScheme?: string | null;
   dbHost?: string | null;
+  dbError?: string | null;
 };
 
 export default async function AdminStatusBanner() {
@@ -35,8 +37,22 @@ export default async function AdminStatusBanner() {
     );
   }
 
-  const issues: string[] = [];
-  if (!health.dbOk) issues.push("Database not reachable or migrations not applied");
+  const issues: ReactNode[] = [];
+  if (health.hasDatabaseUrl === false) {
+    issues.push("DATABASE_URL env var is not configured");
+  }
+  if (!health.dbOk) {
+    if (health.dbError) {
+      issues.push(
+        <span>
+          Database error:
+          <code className="block text-xs mt-1 rounded bg-white/10 px-2 py-1 text-yellow-100">{health.dbError}</code>
+        </span>,
+      );
+    } else {
+      issues.push("Database not reachable or migrations not applied");
+    }
+  }
   if (!health.authReady) issues.push("NextAuth env vars not set (NEXTAUTH_SECRET, Google client)");
 
   if (issues.length === 0) {
