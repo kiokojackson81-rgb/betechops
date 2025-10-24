@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
+import type { ReturnStatus } from '@/lib/returns';
 import { prisma } from "@/lib/prisma";
 import { guardTransition } from "@/lib/returns";
 import { getEvidencePolicy } from "@/lib/config";
@@ -8,14 +9,15 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   const { id } = await context.params;
   const authz = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!authz.ok) return authz.res;
-  const { to, category, evidence } = await req.json().catch(() => ({} as any));
+  const body = (await req.json().catch(() => ({}))) as { to?: string; category?: string; evidence?: unknown[] };
+  const { to, category, evidence } = body;
   if (!to) return noStoreJson({ error: "to required" }, { status: 400 });
   const ret = await prisma.returnCase.findUnique({ where: { id }, include: { evidence: true } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
   const policy = await getEvidencePolicy();
-  const can = guardTransition(ret.status as any, String(to) as any, {
-    role: (authz.role as any),
-    evidence: evidence || ret.evidence,
+  const can = guardTransition(ret.status as unknown as ReturnStatus, String(to) as unknown as ReturnStatus, {
+    role: String(authz.role) as 'ADMIN' | 'SUPERVISOR' | 'ATTENDANT',
+    evidence: (evidence as any) || (ret.evidence as any),
     category: category || undefined,
     policy,
     received: ret.status === "received" || String(to) === "resolved",

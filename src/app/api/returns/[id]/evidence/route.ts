@@ -11,7 +11,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const authz = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!authz.ok) return authz.res;
-  const { type, uri, sha256, takenAt, geo } = await req.json().catch(() => ({} as any));
+  const body = (await req.json().catch(() => ({}))) as { type?: string; uri?: string; sha256?: string; takenAt?: string; geo?: unknown };
+  const { type, uri, sha256, takenAt, geo } = body;
   if (!type || !uri || !takenAt) return noStoreJson({ error: "type, uri, takenAt required" }, { status: 400 });
   const ret = await prisma.returnCase.findUnique({ where: { id } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });

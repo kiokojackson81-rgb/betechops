@@ -12,6 +12,7 @@
   "prisma:migrate": "prisma migrate deploy",
   "postinstall": "npm run prisma:generate"
   ,"set-admin": "node scripts/set-admin.js"
+    ,"test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",

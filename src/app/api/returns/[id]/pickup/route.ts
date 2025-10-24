@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
+import type { ReturnStatus } from '@/lib/returns';
 import { prisma } from "@/lib/prisma";
 import { resolveShopScope } from "@/lib/scope";
 import { guardTransition } from "@/lib/returns";
@@ -8,18 +9,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const authz = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!authz.ok) return authz.res;
-  const { scheduledAt, carrier, tracking, assignedTo, notes } = await req.json().catch(() => ({} as any));
+  const body = (await req.json().catch(() => ({}))) as { scheduledAt?: string; carrier?: string; tracking?: string; assignedTo?: string; notes?: string };
+  const { scheduledAt, carrier, tracking, assignedTo, notes } = body;
   if (!scheduledAt || !carrier || !assignedTo) return noStoreJson({ error: "scheduledAt, carrier, assignedTo required" }, { status: 400 });
 
   const ret = await prisma.returnCase.findUnique({ where: { id } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
 
   const scope = await resolveShopScope();
-  if (scope.role !== "ADMIN" as any && scope.shopIds && !scope.shopIds.includes(ret.shopId)) {
+  if (String(scope.role) !== "ADMIN" && scope.shopIds && !scope.shopIds.includes(ret.shopId)) {
     return noStoreJson({ error: "Forbidden" }, { status: 403 });
   }
-
-  const can = guardTransition(ret.status as any, "pickup_scheduled", { role: (scope.role as any) });
+  const can = guardTransition(ret.status as unknown as ReturnStatus, "pickup_scheduled", { role: String(scope.role) as 'ADMIN' | 'SUPERVISOR' | 'ATTENDANT' });
   if (!can.ok) return noStoreJson({ error: can.reason }, { status: 400 });
 
   const before = ret;

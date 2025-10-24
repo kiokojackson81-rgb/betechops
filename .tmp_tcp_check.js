@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const net = require('net');
 const host = '127.0.0.1';
 const port = parseInt(process.env.PORT || '3001', 10);

@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import UserPicker from './UserPicker';
 
-type ShopSummary = { id: string; name: string; platform?: string };
+type ShopSummary = { id: string; name: string; platform?: string; assignedUser?: { id: string; label: string } };
 
 export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
-  const [shops] = useState<ShopSummary[]>(initial || []);
+  const [shops, setShops] = useState<ShopSummary[]>(initial || []);
   const [openAssign, setOpenAssign] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<{ id: string; label: string } | null>(null);
   const [roleAtShop, setRoleAtShop] = useState<string>('ATTENDANT');
@@ -14,6 +14,8 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
     const res = await fetch(`/api/shops/${shopId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, roleAtShop }) });
     const j = await res.json();
     if (res.ok) {
+      // optimistic UI update: set assigned user locally
+      setShops((prev) => prev.map((p) => p.id === shopId ? { ...p, assignedUser: { id: userId, label: selectedUser?.label ?? '' } } : p));
       alert('Assigned');
       setOpenAssign(null);
       setSelectedUser(null);
@@ -29,6 +31,7 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
           <div>
             <div className="font-medium">{s.name}</div>
             <div className="text-sm text-slate-500">{s.platform}</div>
+            {s.assignedUser && <div className="text-sm text-slate-600">Assigned: {s.assignedUser.label}</div>}
           </div>
           <div>
             <button className="mr-2 px-2 py-1 border" onClick={() => setOpenAssign(s.id)}>Assign</button>
