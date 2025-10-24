@@ -30,7 +30,7 @@ export default function AdminShopsClient({ initial }: { initial: ShopSummary[] }
   <ShopForm onCreatedAction={(j: { id: string; name: string; platform?: string }) => onShopCreated({ id: j.id, name: j.name, platform: j.platform ?? undefined })} />
         <div className="mt-4">
           <h3 className="font-semibold">Create Attendant</h3>
-          <AttendantForm shops={shops.map(s => ({ id: s.id, name: s.name }))} onCreatedAction={(u: { id: string; email?: string; name?: string }) => onAttendantCreated(u)} />
+          <AttendantForm shops={shops.map(s => ({ id: s.id, name: s.name }))} onCreatedAction={(u: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }) => onAttendantCreated(u, assigned)} />
         </div>
       </div>
       <div className="p-4 border rounded">

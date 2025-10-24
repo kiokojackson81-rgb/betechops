@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 
-export default function AttendantForm({ shops, onCreatedAction }: { shops: Array<{ id: string; name: string }>; onCreatedAction?: (u: { id: string; email?: string; name?: string }) => void }) {
+export default function AttendantForm({ shops, onCreatedAction }: { shops: Array<{ id: string; name: string }>; onCreatedAction?: (u: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }) => void }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
@@ -27,9 +27,7 @@ export default function AttendantForm({ shops, onCreatedAction }: { shops: Array
       setEmail(''); setName(''); setShopId('');
       showToast('Attendant created', 'success');
       if (onCreatedAction) {
-        onCreatedAction(user);
-      } else if (typeof window !== 'undefined') {
-        window.location.reload();
+        onCreatedAction(user, shopId ? { shopId, roleAtShop } : undefined);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

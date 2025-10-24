@@ -1,9 +1,10 @@
 "use client";
 import React, { useState } from 'react';
+import { showToast } from '@/lib/ui/toast';
 
 type Shop = { id: string; name: string; platform?: string };
 
-export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: Shop) => void }) {
+export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: { id: string; name: string; platform?: string }) => void }) {
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('JUMIA');
   const [credentials, setCredentials] = useState('{}');
@@ -19,12 +20,10 @@ export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: Sh
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'failed');
       // If a parent provided a callback, call it to let the parent update UI in-place.
-      // Otherwise fall back to a full reload for compatibility.
-      if (onCreatedAction) {
-        onCreatedAction(j as Shop);
-      } else if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
+      // Clear the form and show a toast for good UX.
+      setName(''); setPlatform('JUMIA'); setCredentials('{}');
+      showToast('Shop created', 'success');
+      if (onCreatedAction) onCreatedAction(j as { id: string; name: string; platform?: string });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);
