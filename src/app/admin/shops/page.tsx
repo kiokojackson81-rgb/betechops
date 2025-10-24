@@ -1,9 +1,7 @@
 import React from 'react';
 import ShopForm from './_components/ShopForm';
-import dynamic from 'next/dynamic';
+import ShopsList from './_components/ShopsList';
 import { prisma } from '@/lib/prisma';
-
-const ShopsList = dynamic(() => import('./_components/ShopsList'), { ssr: false });
 
 export default async function Page() {
   const shops = await prisma.shop.findMany({ orderBy: { createdAt: 'desc' } });

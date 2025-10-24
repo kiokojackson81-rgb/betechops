@@ -1,6 +1,5 @@
 import React from 'react';
-import dynamic from 'next/dynamic';
-const ReturnPickForm = dynamic(() => import('./_components/ReturnPickForm'), { ssr: false });
+import ReturnPickForm from './_components/ReturnPickForm';
 import { prisma } from '@/lib/prisma';
 
 export default async function Page({ params }: { params: { id: string } }) {
