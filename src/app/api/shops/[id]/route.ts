@@ -3,11 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { encryptJsonForStorage } from '@/lib/crypto/secure-json';
 import { requireRole } from '@/lib/api';
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole('ADMIN');
   if (!auth.ok) return auth.res;
-
-  const { id } = params;
+  const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const { name, isActive, credentials } = body as any;
 
@@ -20,10 +19,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   return NextResponse.json(shop);
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole(['ADMIN', 'SUPERVISOR']);
   if (!auth.ok) return auth.res;
-  const shop = await prisma.shop.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const shop = await prisma.shop.findUnique({ where: { id } });
   if (!shop) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   // do not return credentialsEncrypted
   const { credentialsEncrypted, ...rest } = shop as any;
