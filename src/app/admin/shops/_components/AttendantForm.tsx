@@ -23,10 +23,14 @@ export default function AttendantForm({ shops, onCreatedAction }: { shops: Array
         const j2 = await r2.json();
         if (!r2.ok) throw new Error(j2?.error || 'assign failed');
       }
-      // Notify the user and refresh the page to show the new attendant.
+      // Notify the user and let a parent update the UI in-place if available.
       setEmail(''); setName(''); setShopId('');
       showToast('Attendant created', 'success');
-      if (typeof window !== 'undefined') window.location.reload();
+      if (onCreatedAction) {
+        onCreatedAction(user);
+      } else if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);
