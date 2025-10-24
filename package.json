@@ -13,7 +13,8 @@
     "postinstall": "npm run prisma:generate",
     "set-admin": "node scripts/set-admin.js",
     "test": "jest --passWithNoTests",
-    "test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js"
+    "test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js",
+    "smoke:local": "node scripts/smoke/test-apis.js"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
