@@ -3,6 +3,7 @@ import { noStoreJson, requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { resolveShopScope } from "@/lib/scope";
 import { guardTransition } from "@/lib/returns";
+import type { ReturnStatus } from "@/lib/returns";
 // session is provided by requireRole; no need to import auth directly
 import { Role } from "@prisma/client";
 
@@ -25,7 +26,7 @@ export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: 
     return noStoreJson({ error: "Forbidden" }, { status: 403 });
   }
 
-  const can = guardTransition(ret.status as any, "approved", { role: (actor.role as any) });
+  const can = guardTransition(ret.status as unknown as ReturnStatus, "approved", { role: (actor.role as unknown) as 'ADMIN' | 'SUPERVISOR' | 'ATTENDANT' });
   if (!can.ok) return noStoreJson({ error: can.reason }, { status: 400 });
 
   const before = ret;

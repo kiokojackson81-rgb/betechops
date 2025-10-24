@@ -6,8 +6,8 @@ export async function POST(request: Request) {
   const auth = await requireRole('ADMIN');
   if (!auth.ok) return auth.res;
 
-  const body = await request.json().catch(() => ({}));
-  const { shopId, day } = body as any;
+  const body = (await request.json().catch(() => ({}))) as { shopId?: string; day?: string };
+  const { shopId, day } = body;
   if (!shopId || !day) return NextResponse.json({ error: 'shopId and day required' }, { status: 400 });
 
   // Compute reconciliation for the given day

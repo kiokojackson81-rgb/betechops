@@ -21,7 +21,7 @@ export function encryptJson(obj: unknown): { payload: string } {
   return { payload };
 }
 
-export function decryptJson(payloadObj: { payload: string }): any {
+export function decryptJson(payloadObj: { payload: string }): unknown {
   const key = getKey();
   const buf = Buffer.from(payloadObj.payload, "base64");
   const iv = buf.slice(0, 12);

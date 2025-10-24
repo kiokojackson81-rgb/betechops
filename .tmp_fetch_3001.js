@@ -15,7 +15,7 @@ async function run() {
       try {
         const json = JSON.parse(text);
         console.log(JSON.stringify(json, null, 2));
-      } catch (e) {
+      } catch {
         console.log('RESPONSE_TEXT:');
         console.log(text);
       }

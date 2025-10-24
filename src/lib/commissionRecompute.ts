@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { pickRule, computeCommission } from "@/lib/commissions";
+import type { Prisma } from '@prisma/client';
 
 type Window = { from: Date; to: Date };
 
@@ -36,13 +37,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   });
 
   // Collect shopIds present for rule pre-filtering
-  const shopIds = Array.from(
-    new Set(
-      snapshots
-        .map((s: any) => s.orderItem?.order?.shopId)
-        .filter(Boolean)
-    )
-  ) as string[];
+  const shopIds = Array.from(new Set(snapshots.map(s => s.orderItem?.order?.shopId).filter(Boolean))) as string[];
 
   // Fetch CommissionRules overlapping the window; we'll filter by scope in-memory
   const rules = await prisma.commissionRule.findMany({
@@ -76,13 +71,13 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
     qty: number;
     amount: number;
     status: string;
-    calcDetail: any;
+    calcDetail: Prisma.InputJsonValue;
     createdAt: Date;
   };
 
   const earnings: EarningRow[] = [];
 
-  for (const s of snapshots as any[]) {
+  for (const s of snapshots) {
     const order = s.orderItem?.order;
     const product = s.orderItem?.product;
     const staffId = order?.attendantId as string | null;
@@ -97,12 +92,12 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
       at: new Date(s.computedAt),
     };
 
-    const rule = pickRule(rules as any[], basis);
+  const rule = pickRule(rules as unknown as import('./commissions').Rule[], basis);
     if (!rule) continue;
-    const { amount, detail } = computeCommission(rule as any, basis);
+  const { amount, detail } = computeCommission(rule as unknown as import('./commissions').Rule, basis);
     if (!amount) continue;
 
-    const basisKind = (rule as any).type === "percent_profit" ? "profit" : (rule as any).type === "percent_gross" ? "gross" : "flat";
+  const basisKind = rule.type === "percent_profit" ? "profit" : rule.type === "percent_gross" ? "gross" : "flat";
 
     earnings.push({
       staffId,
@@ -134,7 +129,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   }
 
   let reversed = 0;
-  for (const adj of adjustments as any[]) {
+  for (const adj of adjustments) {
     if (adj.commissionImpact !== "reverse") continue;
     const itemId = adj.orderItemId as string;
     const order = adj.orderItem?.order;

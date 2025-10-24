@@ -7,7 +7,7 @@ function sign(appSecret: string, body: string, ts: number) {
   return crypto.createHash('md5').update(appSecret + body + String(ts)).digest('hex');
 }
 
-export async function kmFetch(shopCreds: ShopCreds, path: string, payload: any) {
+export async function kmFetch(shopCreds: ShopCreds, path: string, payload: unknown) {
   const ts = Date.now();
   const body = JSON.stringify(payload ?? {});
   const s = sign(shopCreds.appSecret, body, ts);
@@ -27,7 +27,7 @@ export async function fetchOrders(shopCreds: ShopCreds, opts?: { since?: string 
   const j = await kmFetch(shopCreds, path, payload);
   // Map array
   const items = Array.isArray(j?.data) ? j.data : j?.orders || [];
-  return items.map((r: any) => normalizeFromKilimall(r, shopCreds.appId));
+  return (items as unknown[]).map((r: unknown) => normalizeFromKilimall(r, shopCreds.appId));
 }
 
 export async function fetchPayouts(shopCreds: ShopCreds, opts?: { day?: string }) {

@@ -1,7 +1,7 @@
 import { syncOrdersJob, syncPayoutsJob, returnsSlaJob, commissionCalcJob, priceLearnerJob } from './jobs/syncJobs';
 
 export async function runAllJobs() {
-  const out: Record<string, any> = {};
+  const out: Record<string, unknown> = {};
   out.syncOrders = await syncOrdersJob();
   out.syncPayouts = await syncPayoutsJob();
   out.returnsSla = await returnsSlaJob();

@@ -10,9 +10,9 @@ export async function GET(request: Request) {
   const shopId = url.searchParams.get('shopId') || undefined;
   const day = url.searchParams.get('day') || undefined;
 
-  const where: any = {};
-  if (shopId) where.shopId = shopId;
-  if (day) where.day = new Date(day);
+  const where: Record<string, unknown> = {};
+  if (shopId) (where as Record<string, unknown>).shopId = shopId;
+  if (day) (where as Record<string, unknown>).day = new Date(day);
 
   const rows = await prisma.reconciliation.findMany({ where, include: { shop: true } });
   const discrepancies = await prisma.discrepancy.findMany({ where: shopId ? { shopId } : undefined });

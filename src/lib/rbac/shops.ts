@@ -9,7 +9,7 @@ export async function requireShopAccess(opts: { shopId: string; minRole?: 'ATTEN
 
   // get session directly for non-admin flows
   const session = await auth();
-  const email = String((session as any)?.user?.email || '').toLowerCase();
+  const email = String(((session as unknown) as { user?: { email?: string } })?.user?.email || '').toLowerCase();
   if (!email) return { ok: false as const, res: { error: 'Unauthorized' } };
 
   const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });

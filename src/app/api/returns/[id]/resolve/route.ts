@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     adjId = adj.id;
   }
   const updated = await prisma.returnCase.update({ where: { id }, data: { status: "resolved", resolution } });
-  const actorId = (authz.session as any)?.user?.id || '';
+  const actorId = (((authz.session as unknown) as { user?: { id?: string } })?.user?.id) || '';
   await prisma.actionLog.create({ data: { actorId, entity: "ReturnCase", entityId: id, action: "RESOLVE", before, after: { ...updated, adjustmentId: adjId } } });
   return noStoreJson({ ok: true, id, status: updated.status, adjustmentId: adjId });
 }

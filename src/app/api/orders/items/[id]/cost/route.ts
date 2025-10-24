@@ -6,7 +6,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   const { id } = await context.params;
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
-  const { unitCost } = await req.json().catch(() => ({} as any));
+  const body = (await req.json().catch(() => ({} as unknown))) as { unitCost?: number | string };
+  const { unitCost } = body;
   if (unitCost == null) return noStoreJson({ error: "unitCost required" }, { status: 400 });
   const row = await prisma.orderCost.create({ data: { orderItemId: id, unitCost: Number(unitCost), costSource: "override" } });
   const actorId = await getActorId();

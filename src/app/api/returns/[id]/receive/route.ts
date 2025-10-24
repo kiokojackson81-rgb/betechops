@@ -10,7 +10,7 @@ export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: 
   if (!authz.ok) return authz.res;
   const ret = await prisma.returnCase.findUnique({ where: { id } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
-  const actorId = (authz.session as any)?.user?.id || '';
+  const actorId = (((authz.session as unknown) as { user?: { id?: string } })?.user?.id) || '';
   const can = guardTransition(ret.status as unknown as ReturnStatus, "received", { role: String(authz.role) as 'ADMIN' | 'SUPERVISOR' | 'ATTENDANT' });
   if (!can.ok) return noStoreJson({ error: can.reason }, { status: 400 });
   const before = ret;

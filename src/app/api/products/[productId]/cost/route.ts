@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireShopAccess } from '@/lib/rbac/shops';
 import { getActorId } from '@/lib/api';
-import { Prisma } from '@prisma/client';
+import type { PriceSource } from '@prisma/client';
 
 export async function POST(request: Request, { params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
@@ -14,6 +14,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!access.ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
   const actorId = await getActorId();
-  const pc = await prisma.productCost.create({ data: { productId, price: price?.toString() ?? '0', source: (source ?? 'MANUAL') as unknown as any, byUserId: actorId } });
+  const pc = await prisma.productCost.create({ data: { productId, price: price?.toString() ?? '0', source: (String(source ?? 'MANUAL') as unknown) as PriceSource, byUserId: actorId } });
   return NextResponse.json(pc, { status: 201 });
 }

@@ -277,9 +277,9 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
 }
 
 // --- New: marketplace-specific normalized fetchers ---
-import { normalizeFromJumia } from './connectors/normalize';
+import { normalizeFromJumia, type NormalizedOrder } from './connectors/normalize';
 
-export async function fetchOrdersForShop(shopId: string, opts?: { since?: string }) {
+export async function fetchOrdersForShop(shopId: string, opts?: { since?: string }): Promise<NormalizedOrder[]> {
   // Load shop credentials from DB or env
   const cfg = await loadConfig();
   // Prefer per-shop ApiCredential lookup when available (caller may pass shop-specific credential retrieval later)
@@ -288,7 +288,7 @@ export async function fetchOrdersForShop(shopId: string, opts?: { since?: string
     const j = await jumiaFetch(path + (opts?.since ? `?since=${encodeURIComponent(opts.since)}` : ''));
     // map results array to normalized orders
     const arr = Array.isArray(j?.items) ? j.items : j?.data || [];
-    return arr.map((r: any) => normalizeFromJumia(r, shopId));
+  return arr.map((r: unknown) => normalizeFromJumia(r, shopId));
   } catch (e) {
     throw e;
   }

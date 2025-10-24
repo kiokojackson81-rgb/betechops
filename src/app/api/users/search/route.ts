@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(users);
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "search_failed" }, { status: 500 });
   }
 }

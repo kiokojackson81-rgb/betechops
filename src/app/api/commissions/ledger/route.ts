@@ -1,5 +1,6 @@
 import { noStoreJson, requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from '@prisma/client';
 import { z } from "zod";
 
 export async function GET(req: Request) {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
   if (!parsed.success) return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   const { shopId, staffId, from, to, status, page, size } = parsed.data;
 
-  const where: any = {};
+  const where: Prisma.CommissionEarningWhereInput = {};
   if (status) where.status = status;
   if (staffId) where.staffId = staffId;
   if (from || to) where.createdAt = { gte: from, lte: to };

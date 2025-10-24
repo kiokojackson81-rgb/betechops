@@ -11,7 +11,7 @@ export default async function Page() {
       <div className="grid grid-cols-2 gap-6">
         <div className="p-4 border rounded">
           <h2 className="font-semibold">Create Shop</h2>
-          <ShopForm onCreatedAction={(s: unknown) => window.location.reload()} />
+          <ShopForm onCreatedAction={() => window.location.reload()} />
         </div>
         <div className="p-4 border rounded">
           <h2 className="font-semibold">Existing Shops</h2>

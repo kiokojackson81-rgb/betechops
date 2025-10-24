@@ -14,52 +14,62 @@ export type NormalizedOrder = {
   }>;
 };
 
-export function normalizeFromJumia(raw: any, shopId: string): NormalizedOrder {
+export function normalizeFromJumia(raw: unknown, shopId: string): NormalizedOrder {
   // Minimal defensive mapping. Real mapping should be expanded to match Jumia payload.
-  const items = (raw.items || raw.orderItems || []).map((it: any) => ({
-    externalSku: it.sku || it.spu || String(it.product_sku || it.sku || ""),
-    title: it.title || it.name || "",
-    qty: Number(it.quantity || it.qty || 1),
-    salePrice: Number(it.price || it.selling_price || 0),
-    fees: {
-      commission: Number(it.commission || it.fee || 0),
-      shipping: Number(it.shipping || 0),
-      tax: Number(it.tax || 0),
-    },
-  }));
+  const rawObj = (raw || {}) as Record<string, unknown>;
+  const itemsArr = (rawObj.items || rawObj.orderItems || []) as unknown[];
+  const items = itemsArr.map((it: unknown) => {
+    const obj = (it || {}) as Record<string, unknown>;
+    return {
+      externalSku: (obj.sku as string) || (obj.spu as string) || String(obj.product_sku || obj.sku || ""),
+      title: (obj.title as string) || (obj.name as string) || "",
+      qty: Number(obj.quantity ?? obj.qty ?? 1),
+      salePrice: Number(obj.price ?? obj.selling_price ?? 0),
+      fees: {
+        commission: Number(obj.commission ?? obj.fee ?? 0),
+        shipping: Number(obj.shipping ?? 0),
+        tax: Number(obj.tax ?? 0),
+      },
+    };
+  });
 
   return {
     platform: 'JUMIA',
     shopId,
-    externalOrderId: String(raw.externalId || raw.orderId || raw.order_number || raw.orderNumber),
-    status: raw.status || raw.order_status || "",
-    buyer: { name: raw.buyer_name || raw.customerName, phone: raw.buyer_phone || raw.customerPhone },
-    orderedAt: raw.createdAt || raw.ordered_at || new Date().toISOString(),
+    externalOrderId: String(rawObj.externalId || rawObj.orderId || rawObj.order_number || rawObj.orderNumber),
+    status: (rawObj.status as string) || (rawObj.order_status as string) || "",
+  buyer: { name: (rawObj.buyer_name as string) || (rawObj.customerName as string), phone: (rawObj.buyer_phone as string) || (rawObj.customerPhone as string) },
+    orderedAt: (rawObj.createdAt as string) || (rawObj.ordered_at as string) || new Date().toISOString(),
     items,
   };
 }
 
-export function normalizeFromKilimall(raw: any, shopId: string): NormalizedOrder {
+export function normalizeFromKilimall(raw: unknown, shopId: string): NormalizedOrder {
   // Minimal mapping for Kilimall; expand as needed to match Kilimall response structure.
-  const items = (raw.items || raw.order_items || []).map((it: any) => ({
-    externalSku: it.sku || it.spu || String(it.product_sku || ""),
-    title: it.title || it.name || "",
-    qty: Number(it.quantity || it.qty || 1),
-    salePrice: Number(it.price || it.price_total || 0),
-    fees: {
-      commission: Number(it.commission || 0),
-      shipping: Number(it.shipping || 0),
-      tax: Number(it.tax || 0),
-    },
-  }));
+  const rawObj = (raw || {}) as Record<string, unknown>;
+  const itemsArr = (rawObj.items || rawObj.order_items || []) as unknown[];
+  const items = itemsArr.map((it: unknown) => {
+    const obj = (it || {}) as Record<string, unknown>;
+    return {
+      externalSku: (obj.sku as string) || (obj.spu as string) || String(obj.product_sku || ""),
+      title: (obj.title as string) || (obj.name as string) || "",
+      qty: Number(obj.quantity ?? obj.qty ?? 1),
+      salePrice: Number(obj.price ?? obj.price_total ?? 0),
+      fees: {
+        commission: Number(obj.commission ?? 0),
+        shipping: Number(obj.shipping ?? 0),
+        tax: Number(obj.tax ?? 0),
+      },
+    };
+  });
 
   return {
     platform: 'KILIMALL',
     shopId,
-    externalOrderId: String(raw.order_id || raw.externalOrderId || raw.trade_no || raw.order_no),
-    status: raw.status || raw.order_status || "",
-    buyer: { name: raw.buyer?.name || raw.customerName, phone: raw.buyer?.phone || raw.customerPhone },
-    orderedAt: raw.created_at || raw.ordered_at || new Date().toISOString(),
+    externalOrderId: String(rawObj.order_id || rawObj.externalOrderId || rawObj.trade_no || rawObj.order_no),
+    status: (rawObj.status as string) || (rawObj.order_status as string) || "",
+  buyer: { name: ((rawObj.buyer as Record<string, unknown>)?.name as string) || (rawObj.customerName as string), phone: ((rawObj.buyer as Record<string, unknown>)?.phone as string) || (rawObj.customerPhone as string) },
+    orderedAt: (rawObj.created_at as string) || (rawObj.ordered_at as string) || new Date().toISOString(),
     items,
   };
 }
