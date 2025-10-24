@@ -1,7 +1,4 @@
 import React from 'react';
-import ShopForm from './_components/ShopForm';
-import AttendantForm from './_components/AttendantForm';
-import ShopsList from './_components/ShopsList';
 import ApiCredentialsManager from './_components/ApiCredentialsManager';
 import AdminShopsClient from './_components/AdminShopsClient';
 import { prisma } from '@/lib/prisma';
