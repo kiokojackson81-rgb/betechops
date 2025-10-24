@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from 'next/link';
 
 type Snap = { revenueToday: number; ordersToday: number; avgOrder: number; lowStockCount: number; openReturns: number };
 
@@ -42,8 +43,8 @@ export default function ShopSnapshot({ shopId }: { shopId?: string }) {
           <Tile label="Today’s Revenue" value={money(data.revenueToday)} />
           <Tile label="Orders Processed" value={n(data.ordersToday)} />
           <Tile label="Avg Order Value" value={money(data.avgOrder)} />
-          <Tile label="Low Stock Items" value={<a href="/attendant/stock-low" className="underline underline-offset-2">{n(data.lowStockCount)}</a>} />
-          <Tile label="Open Returns" value={<a href="/attendant/returns" className="underline underline-offset-2">{n(data.openReturns)}</a>} />
+          <Tile label="Low Stock Items" value={<Link href="/attendant/stock-low" className="underline underline-offset-2">{n(data.lowStockCount)}</Link>} />
+          <Tile label="Open Returns" value={<Link href="/attendant/returns" className="underline underline-offset-2">{n(data.openReturns)}</Link>} />
         </div>
       )}
     </section>

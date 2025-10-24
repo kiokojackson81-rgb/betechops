@@ -1,7 +1,9 @@
 "use client";
 import React, { useState } from 'react';
 
-export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: any) => void }) {
+type Shop = { id: string; name: string; platform?: string };
+
+export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: Shop) => void }) {
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('JUMIA');
   const [credentials, setCredentials] = useState('{}');
@@ -13,7 +15,7 @@ export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: an
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch('/api/shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, platform, credentials: JSON.parse(credentials) }) });
+  const res = await fetch('/api/shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, platform, credentials: JSON.parse(credentials) }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'failed');
       onCreatedAction?.(j);

@@ -33,8 +33,9 @@ export default function ReturnPickForm({ id, shopId }: { id: string; shopId: str
         if (!evRes.ok) throw new Error(ev.error || 'evidence save failed');
       }
       alert('Uploaded');
-    } catch (err: any) {
-      alert(String(err?.message || err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(msg);
     } finally { setBusy(false); }
   }
 

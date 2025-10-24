@@ -1,8 +1,10 @@
 "use client";
 import React, { useState } from 'react';
 
-export default function ShopsList({ initial }: { initial: any[] }) {
-  const [shops, setShops] = useState(initial || []);
+type ShopSummary = { id: string; name: string; platform?: string };
+
+export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
+  const [shops] = useState<ShopSummary[]>(initial || []);
   const [openAssign, setOpenAssign] = useState<string | null>(null);
 
   async function assign(shopId: string, userId: string, roleAtShop: string) {

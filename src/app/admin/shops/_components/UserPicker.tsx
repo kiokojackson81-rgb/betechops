@@ -15,7 +15,7 @@ export default function UserPicker({ onSelect, placeholder }: { onSelect: (u: { 
         const j = await res.json();
         setResults(j || []);
         setOpen(true);
-      } catch (e) {
+      } catch {
         setResults([]);
       }
     }, 300);
