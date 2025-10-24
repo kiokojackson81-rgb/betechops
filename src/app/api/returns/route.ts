@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -19,7 +18,7 @@ export async function POST(req: Request) {
 
     if (!orderId) return NextResponse.json({ error: "orderId required" }, { status: 400 });
 
-  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, shopId: true } }).catch(() => null as any);
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, shopId: true } }).catch(() => null);
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
     // Enforce scope for non-admins: order.shopId must be in managed shops

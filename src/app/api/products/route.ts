@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -14,9 +13,9 @@ export async function GET(req: Request) {
         { sku: { contains: q } },
       ],
     },
-    select: { id: true, name: true, sku: true, sellingPrice: true, lastBuyingPrice: true } as any,
+    select: { id: true, name: true, sku: true, sellingPrice: true, lastBuyingPrice: true },
     take: 10,
-  }).catch(() => [] as any);
+  }).catch(() => []);
 
   return NextResponse.json(products);
 }

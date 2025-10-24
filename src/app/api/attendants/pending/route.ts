@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -12,12 +12,11 @@ export async function GET(req: Request) {
   const q = (url.searchParams.get("q") || "").trim();
   const take = Math.min(50, Math.max(1, Number(url.searchParams.get("take") || 20)));
 
-  const where: any = { status: { in: ["PENDING", "PROCESSING"] } };
+  const where: Prisma.OrderWhereInput = { status: { in: ["PENDING", "PROCESSING"] } };
   if (q) {
     where.OR = [
       { orderNumber: { contains: q, mode: "insensitive" } },
-      { customerName: { contains: q, mode: "insensitive" } },
-      { customerPhone: { contains: q, mode: "insensitive" } },
+  { customerName: { contains: q, mode: "insensitive" } },
       { shop: { name: { contains: q, mode: "insensitive" } } },
     ];
   }
@@ -28,17 +27,17 @@ export async function GET(req: Request) {
     take,
     include: {
       shop: { select: { name: true } },
-      items: true,
+      items: { include: { product: { select: { lastBuyingPrice: true, sellingPrice: true } } } },
     },
   });
 
-  const rows = (rowsRaw as any[]).map((o) => {
-    const itemsCount = (o.items || []).reduce((acc: number, x: any) => acc + (x.quantity ?? 0), 0);
-    const sellingTotal = (o.items || []).reduce((acc: number, x: any) => {
-      const sp = (x.sellingPrice ?? x.product?.sellingPrice ?? 0) * (x.quantity ?? 0);
+  const rows = rowsRaw.map((o) => {
+    const itemsCount = (o.items || []).reduce((acc: number, x) => acc + (x.quantity ?? 0), 0);
+    const sellingTotal = (o.items || []).reduce((acc: number, x) => {
+      const sp = ((x.sellingPrice ?? x.product?.sellingPrice ?? 0) as number) * (x.quantity ?? 0);
       return acc + sp;
     }, 0);
-    const hasBuyingPrice = (o.items || []).every((x: any) => typeof x.product?.lastBuyingPrice === "number");
+    const hasBuyingPrice = (o.items || []).every((x) => typeof x.product?.lastBuyingPrice === "number");
     return {
       id: o.id,
       orderNumber: o.orderNumber,

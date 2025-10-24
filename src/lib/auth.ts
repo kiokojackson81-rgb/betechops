@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 import { authOptions } from "@/lib/nextAuth";
 
+// `NextAuthOptions` type may vary between next-auth versions; use a local alias
+// to avoid accidental type imports that don't exist in some versions.
+
 // ADMIN_EMAILS: comma-separated list of emails that should be treated as ADMIN
 export const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "kiokojackson81@gmail.com")
   .split(",")

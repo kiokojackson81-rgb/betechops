@@ -13,14 +13,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!userId || !roleAtShop) return NextResponse.json({ error: 'userId and roleAtShop required' }, { status: 400 });
 
   // validate roleAtShop to match Prisma enum
-  const allowed = new Set(['ATTENDANT', 'SUPERVISOR']);
-  if (!allowed.has(roleAtShop as string)) return NextResponse.json({ error: 'invalid roleAtShop' }, { status: 400 });
+  const allowed = new Set<ShopRoleAtShop>(['ATTENDANT', 'SUPERVISOR']);
+  if (!allowed.has(roleAtShop as ShopRoleAtShop)) return NextResponse.json({ error: 'invalid roleAtShop' }, { status: 400 });
   const role = roleAtShop as ShopRoleAtShop;
 
+  // use upsert with the compound unique index (userId, shopId)
   const up = await prisma.userShop.upsert({
     where: { userId_shopId: { userId, shopId } },
-  create: { userId, shopId, roleAtShop: role },
-  update: { roleAtShop: role },
+    create: { userId, shopId, roleAtShop: role },
+    update: { roleAtShop: role },
   });
-  return NextResponse.json(up, { status: 201 });
+
+  // return the created/updated assignment and basic user info
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } });
+  return NextResponse.json({ ok: true, assignment: up, user }, { status: 200 });
 }
