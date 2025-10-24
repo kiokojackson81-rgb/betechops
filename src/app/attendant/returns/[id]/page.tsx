@@ -2,8 +2,8 @@ import React from 'react';
 import ReturnPickForm from './_components/ReturnPickForm';
 import { prisma } from '@/lib/prisma';
 
-export default async function Page({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const ret = await prisma.returnCase.findUnique({ where: { id }, include: { evidence: true, order: true } });
   if (!ret) return <div className="p-6">Return not found</div>;
   return (
