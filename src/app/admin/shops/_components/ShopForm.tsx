@@ -19,8 +19,9 @@ export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: Sh
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'failed');
       onCreatedAction?.(j);
-    } catch (e: any) {
-      setErr(String(e?.message || e));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErr(msg);
     } finally { setBusy(false); }
   }
 
