@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
+import { useShopsActionsSafe } from './ShopsActionsContext';
 
 type AttendantProps = {
   shops: { id: string; name: string }[];
@@ -14,6 +15,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
   const [roleAtShop, setRoleAtShop] = useState('ATTENDANT');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const actions = useShopsActionsSafe();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,14 +33,8 @@ export default function AttendantForm({ shops }: AttendantProps) {
       // Notify the user and let a parent update the UI in-place if available.
       setEmail(''); setName(''); setShopId('');
       showToast('Attendant created', 'success');
-      // Notify parent via context if available (provider optional).
-      try {
-        const { useShopsActions } = require('./ShopsActionsContext');
-        const actions = useShopsActions();
-        actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
-      } catch (e) {
-        // no provider — noop
-      }
+  // Notify parent via context if available (provider optional).
+  actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);

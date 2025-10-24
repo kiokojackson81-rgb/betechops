@@ -1,8 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
-
-type Shop = { id: string; name: string; platform?: string };
+import { useShopsActionsSafe } from './ShopsActionsContext';
 
 export default function ShopForm() {
   const [name, setName] = useState('');
@@ -10,8 +9,9 @@ export default function ShopForm() {
   const [credentials, setCredentials] = useState('{}');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const actions = useShopsActionsSafe();
 
-      async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
@@ -23,15 +23,12 @@ export default function ShopForm() {
       // Clear the form and show a toast for good UX.
       setName(''); setPlatform('JUMIA'); setCredentials('{}');
       showToast('Shop created', 'success');
-      // Notify parent via context if available (provider optional).
-      try {
-        // import hook at runtime to avoid circular import in server bundles
-        const { useShopsActions } = require('./ShopsActionsContext');
-        const actions = useShopsActions();
-        actions.onShopCreated(j as { id: string; name: string; platform?: string });
-      } catch (e) {
-        // no provider — noop
-      }
+      // Notify parent via context (safe hook returns no-op if provider missing)
+      type CreatedShop = { id: string; name: string; platform?: string };
+      const created = (j && typeof j === 'object' && 'shop' in j)
+        ? (j as { shop: CreatedShop }).shop
+        : (j as CreatedShop);
+      actions.onShopCreated(created);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);

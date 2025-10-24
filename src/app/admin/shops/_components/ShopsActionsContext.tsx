@@ -19,3 +19,17 @@ export function useShopsActions() {
   if (!v) throw new Error('useShopsActions must be used within ShopsActionsProvider');
   return v;
 }
+
+// A safe variant that returns no-op callbacks when the provider is absent.
+// This lets client components call it at top-level without having to
+// guard against missing providers at runtime.
+export function useShopsActionsSafe(): ShopsActions {
+  try {
+    return useShopsActions();
+  } catch {
+    return {
+      onShopCreated: () => {},
+      onAttendantCreated: () => {},
+    };
+  }
+}
