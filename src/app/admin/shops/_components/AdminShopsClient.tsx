@@ -5,22 +5,12 @@ import AttendantForm from './AttendantForm';
 import ShopsList from './ShopsList';
 import { showToast } from '@/lib/ui/toast';
 import { ShopsActionsProvider, ShopSummary as ShopSummaryType, ShopsActions } from './ShopsActionsContext';
+import { addShopToList, assignUserToShop } from './AdminShopsClient.helpers';
 
-type ShopSummary = { id: string; name: string; platform?: string; assignedUser?: { id: string; label: string; roleAtShop?: string } };
+export default function AdminShopsClient({ initial }: { initial: ShopSummaryType[] }) {
+  const [shops, setShops] = useState<ShopSummaryType[]>(initial || []);
 
-export function addShopToList(prev: ShopSummary[], s: ShopSummary): ShopSummary[] {
-  return [s, ...prev];
-}
-
-export function assignUserToShop(prev: ShopSummary[], user: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }): ShopSummary[] {
-  if (!assigned?.shopId) return prev;
-  return prev.map(p => p.id === assigned.shopId ? { ...p, assignedUser: { id: user.id, label: user.name ?? user.email ?? '', roleAtShop: assigned.roleAtShop } } : p);
-}
-
-export default function AdminShopsClient({ initial }: { initial: ShopSummary[] }) {
-  const [shops, setShops] = useState<ShopSummary[]>(initial || []);
-
-  function onShopCreated(s: ShopSummary) {
+  function onShopCreated(s: ShopSummaryType) {
     setShops(prev => addShopToList(prev, s));
     showToast('Shop created', 'success');
   }

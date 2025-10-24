@@ -1,4 +1,4 @@
-import { addShopToList, assignUserToShop } from '@/app/admin/shops/_components/AdminShopsClient';
+import { addShopToList, assignUserToShop } from '../../src/app/admin/shops/_components/AdminShopsClient.helpers';
 
 type ShopSummary = { id: string; name: string; platform?: string; assignedUser?: { id: string; label: string; roleAtShop?: string } };
 
