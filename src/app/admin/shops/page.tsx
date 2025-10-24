@@ -45,10 +45,10 @@ export default async function Page() {
       <div className="grid grid-cols-2 gap-6">
         <div className="p-4 border rounded">
           <h2 className="font-semibold">Create Shop</h2>
-          <ShopForm onCreatedAction={() => window.location.reload()} />
+          <ShopForm />
           <div className="mt-4">
             <h3 className="font-semibold">Create Attendant</h3>
-            <AttendantForm shops={shops.map(s => ({ id: s.id, name: s.name }))} onCreatedAction={() => window.location.reload()} />
+            <AttendantForm shops={shops.map(s => ({ id: s.id, name: s.name }))} />
           </div>
         </div>
         <div className="p-4 border rounded">

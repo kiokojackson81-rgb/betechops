@@ -16,9 +16,12 @@ export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: Sh
     setErr(null);
     try {
   const res = await fetch('/api/shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, platform, credentials: JSON.parse(credentials) }) });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || 'failed');
-      onCreatedAction?.(j);
+  const j = await res.json();
+  if (!res.ok) throw new Error(j?.error || 'failed');
+  // Reload the page to reflect created shop. Avoid passing event handlers from
+  // the server component into this client component to prevent serialization
+  // errors in Next.js.
+  if (typeof window !== 'undefined') window.location.reload();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);
