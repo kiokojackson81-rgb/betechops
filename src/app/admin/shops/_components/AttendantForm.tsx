@@ -2,7 +2,12 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 
-export default function AttendantForm({ shops, onCreatedAction }: { shops: Array<{ id: string; name: string }>; onCreatedAction?: (u: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }) => void }) {
+type AttendantProps = {
+  shops: { id: string; name: string }[];
+  onCreatedAction?: (u: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }) => void;
+};
+
+export default function AttendantForm({ shops, onCreatedAction }: AttendantProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
