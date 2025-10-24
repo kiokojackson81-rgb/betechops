@@ -4,7 +4,7 @@ import { showToast } from '@/lib/ui/toast';
 
 type Shop = { id: string; name: string; platform?: string };
 
-export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: { id: string; name: string; platform?: string }) => void }) {
+export default function ShopForm() {
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('JUMIA');
   const [credentials, setCredentials] = useState('{}');
@@ -23,7 +23,15 @@ export default function ShopForm({ onCreatedAction }: { onCreatedAction?: (s: { 
       // Clear the form and show a toast for good UX.
       setName(''); setPlatform('JUMIA'); setCredentials('{}');
       showToast('Shop created', 'success');
-      if (onCreatedAction) onCreatedAction(j as { id: string; name: string; platform?: string });
+      // Notify parent via context if available (provider optional).
+      try {
+        // import hook at runtime to avoid circular import in server bundles
+        const { useShopsActions } = require('./ShopsActionsContext');
+        const actions = useShopsActions();
+        actions.onShopCreated(j as { id: string; name: string; platform?: string });
+      } catch (e) {
+        // no provider — noop
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);

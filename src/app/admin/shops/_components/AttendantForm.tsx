@@ -7,7 +7,7 @@ type AttendantProps = {
   onCreatedAction?: (u: { id: string; email?: string; name?: string }, assigned?: { shopId?: string; roleAtShop?: string }) => void;
 };
 
-export default function AttendantForm({ shops, onCreatedAction }: AttendantProps) {
+export default function AttendantForm({ shops }: AttendantProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
@@ -31,8 +31,13 @@ export default function AttendantForm({ shops, onCreatedAction }: AttendantProps
       // Notify the user and let a parent update the UI in-place if available.
       setEmail(''); setName(''); setShopId('');
       showToast('Attendant created', 'success');
-      if (onCreatedAction) {
-        onCreatedAction(user, shopId ? { shopId, roleAtShop } : undefined);
+      // Notify parent via context if available (provider optional).
+      try {
+        const { useShopsActions } = require('./ShopsActionsContext');
+        const actions = useShopsActions();
+        actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
+      } catch (e) {
+        // no provider — noop
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
