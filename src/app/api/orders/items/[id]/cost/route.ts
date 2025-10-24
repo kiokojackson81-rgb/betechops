@@ -8,8 +8,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   if (!auth.ok) return auth.res;
   const { unitCost } = await req.json().catch(() => ({} as any));
   if (unitCost == null) return noStoreJson({ error: "unitCost required" }, { status: 400 });
-  const row = await (prisma as any).orderCost.create({ data: { orderItemId: id, unitCost: Number(unitCost), costSource: "override" } });
+  const row = await prisma.orderCost.create({ data: { orderItemId: id, unitCost: Number(unitCost), costSource: "override" } });
   const actorId = await getActorId();
-  if (actorId) await (prisma as any).actionLog.create({ data: { actorId, entity: "OrderCost", entityId: row.id, action: "OVERRIDE", before: null, after: row } });
+  if (actorId) await prisma.actionLog.create({ data: { actorId, entity: "OrderCost", entityId: row.id, action: "OVERRIDE", before: undefined, after: row } });
   return noStoreJson({ ok: true, id });
 }

@@ -1,8 +1,26 @@
-export default function ShopsPage() {
+import React from 'react';
+import ShopForm from './_components/ShopForm';
+import dynamic from 'next/dynamic';
+import { prisma } from '@/lib/prisma';
+
+const ShopsList = dynamic(() => import('./_components/ShopsList'), { ssr: false });
+
+export default async function Page() {
+  const shops = await prisma.shop.findMany({ orderBy: { createdAt: 'desc' } });
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-2">Shops</h1>
-      <p className="text-slate-300">This page will list and manage shops. Coming soon.</p>
+    <div className="space-y-4 p-6">
+      <h1 className="text-xl font-bold">Shops</h1>
+      <div className="grid grid-cols-2 gap-6">
+        <div className="p-4 border rounded">
+          <h2 className="font-semibold">Create Shop</h2>
+          <ShopForm onCreatedAction={(s: any) => window.location.reload()} />
+        </div>
+        <div className="p-4 border rounded">
+          <h2 className="font-semibold">Existing Shops</h2>
+          <ShopsList initial={shops} />
+        </div>
+      </div>
     </div>
   );
 }
+// page is a server component that renders the ShopForm and ShopsList (client)

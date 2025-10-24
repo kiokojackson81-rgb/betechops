@@ -18,6 +18,6 @@ export async function POST(req: Request) {
 
   const res = await recomputeCommissions({ shopId: shopId || undefined, window: { from, to } });
   const actorId = await getActorId();
-  await (prisma as any).actionLog.create({ data: { actorId: actorId || "", entity: "CommissionEarning", entityId: "batch", action: "RECOMPUTE", before: null, after: res } });
+  await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "CommissionEarning", entityId: "batch", action: "RECOMPUTE", before: undefined, after: res } });
   return noStoreJson({ ok: true, ...res });
 }

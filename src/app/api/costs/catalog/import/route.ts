@@ -24,9 +24,9 @@ export async function POST(req: Request) {
     const effectiveFrom = new Date(cols[idxFrom]);
     const effectiveTo = idxTo >= 0 && cols[idxTo] ? new Date(cols[idxTo]) : null;
     if (!sku || isNaN(cost) || isNaN(effectiveFrom.getTime())) continue;
-    const row = await (prisma as any).costCatalog.create({ data: { sku, shopId, cost, effectiveFrom, effectiveTo } });
+    const row = await prisma.costCatalog.create({ data: { sku, shopId, cost, effectiveFrom, effectiveTo } });
     created.push(i);
-    if (actorId) await (prisma as any).actionLog.create({ data: { actorId, entity: "CostCatalog", entityId: row.id, action: "IMPORT", before: null, after: row } });
+    if (actorId) await prisma.actionLog.create({ data: { actorId, entity: "CostCatalog", entityId: row.id, action: "IMPORT", before: undefined, after: row } });
   }
   return noStoreJson({ ok: true, created: created.length });
 }

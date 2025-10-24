@@ -4,7 +4,7 @@ import { computeProfit } from "@/lib/profit";
 export type RecomputeArgs = { from: Date; to: Date; shopId?: string | null; actorId?: string | null };
 
 export async function recomputeProfit({ from, to, shopId, actorId }: RecomputeArgs) {
-  const rows = await (prisma as any).settlementRow.findMany({
+  const rows = await prisma.settlementRow.findMany({
     where: { postedAt: { gte: from, lte: to }, ...(shopId ? { shopId } : {}), orderItemId: { not: null } },
   });
   if (!rows.length) return { snapshots: 0 };
@@ -16,13 +16,13 @@ export async function recomputeProfit({ from, to, shopId, actorId }: RecomputeAr
     byItem.get(id)!.push(r);
   }
   const itemIds = Array.from(byItem.keys());
-  const items = await (prisma as any).orderItem.findMany({
+  const items = await prisma.orderItem.findMany({
     where: { id: { in: itemIds } },
     include: { product: { select: { sku: true, category: true } }, order: { select: { shopId: true, createdAt: true } } },
   });
   const itemMap = new Map<string, any>(items.map((i: any) => [i.id, i]));
 
-  const overrides = await (prisma as any).orderCost.findMany({ where: { orderItemId: { in: itemIds } }, orderBy: { createdAt: "desc" } });
+  const overrides = await prisma.orderCost.findMany({ where: { orderItemId: { in: itemIds } }, orderBy: { createdAt: "desc" } });
   const latestOverride = new Map<string, any>();
   for (const oc of overrides) if (!latestOverride.has(oc.orderItemId)) latestOverride.set(oc.orderItemId, oc);
 
@@ -48,13 +48,13 @@ export async function recomputeProfit({ from, to, shopId, actorId }: RecomputeAr
     const oc = latestOverride.get(orderItemId);
     if (oc) unitCost = Number(oc.unitCost || 0);
     if (unitCost == null) {
-      const catShop = await (prisma as any).costCatalog.findFirst({
+      const catShop = await prisma.costCatalog.findFirst({
         where: { sku, shopId: shop, effectiveFrom: { lte: refDate }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: refDate } }] },
         orderBy: { effectiveFrom: "desc" },
       });
       if (catShop) unitCost = Number(catShop.cost || 0);
       if (unitCost == null) {
-        const catGlobal = await (prisma as any).costCatalog.findFirst({
+        const catGlobal = await prisma.costCatalog.findFirst({
           where: { sku, shopId: null, effectiveFrom: { lte: refDate }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: refDate } }] },
           orderBy: { effectiveFrom: "desc" },
         });
@@ -64,9 +64,9 @@ export async function recomputeProfit({ from, to, shopId, actorId }: RecomputeAr
     if (unitCost == null) unitCost = 0;
 
     const p = computeProfit({ sellPrice: sellPrice, qty, unitCost, settlement: { commission: [commission], penalty: [penalty], shipping_fee: [shipping_fee], refund: [refund] } });
-    const snap = await (prisma as any).profitSnapshot.create({ data: { orderItemId, revenue: p.revenue, fees: p.fees, shipping: p.shipping, refunds: p.refunds, unitCost: p.unitCost, qty: p.qty, profit: p.profit } });
+    const snap = await prisma.profitSnapshot.create({ data: { orderItemId, revenue: p.revenue, fees: p.fees, shipping: p.shipping, refunds: p.refunds, unitCost: p.unitCost, qty: p.qty, profit: p.profit } });
     snapshots++;
-    if (actorId) await (prisma as any).actionLog.create({ data: { actorId, entity: "ProfitSnapshot", entityId: snap.id, action: "RECOMPUTE", before: null, after: snap } });
+  if (actorId) await prisma.actionLog.create({ data: { actorId, entity: "ProfitSnapshot", entityId: snap.id, action: "RECOMPUTE", before: undefined, after: snap as any } });
   }
   return { snapshots };
 }

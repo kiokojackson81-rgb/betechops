@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const postedAt = new Date(r.postedAt);
     if (!minAt || postedAt < minAt) minAt = postedAt;
     if (!maxAt || postedAt > maxAt) maxAt = postedAt;
-    const row = await (prisma as any).settlementRow.create({
+    const row = await prisma.settlementRow.create({
       data: {
         shopId: r.shopId,
         orderId: r.orderId || null,
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       },
     });
     inserted++;
-    if (actorId) await (prisma as any).actionLog.create({ data: { actorId, entity: "SettlementRow", entityId: row.id, action: "IMPORT", before: null, after: row } });
+    if (actorId) await prisma.actionLog.create({ data: { actorId, entity: "SettlementRow", entityId: row.id, action: "IMPORT", before: undefined, after: row } });
   }
   // Trigger recompute per shop for affected window
   const from = minAt || new Date();

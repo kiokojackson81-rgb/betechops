@@ -276,3 +276,29 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
   return res;
 }
 
+// --- New: marketplace-specific normalized fetchers ---
+import { normalizeFromJumia } from './connectors/normalize';
+
+export async function fetchOrdersForShop(shopId: string, opts?: { since?: string }) {
+  // Load shop credentials from DB or env
+  const cfg = await loadConfig();
+  // Prefer per-shop ApiCredential lookup when available (caller may pass shop-specific credential retrieval later)
+  const path = cfg.endpoints?.pendingPricing || '/orders';
+  try {
+    const j = await jumiaFetch(path + (opts?.since ? `?since=${encodeURIComponent(opts.since)}` : ''));
+    // map results array to normalized orders
+    const arr = Array.isArray(j?.items) ? j.items : j?.data || [];
+    return arr.map((r: any) => normalizeFromJumia(r, shopId));
+  } catch (e) {
+    throw e;
+  }
+}
+
+export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string }) {
+  const cfg = await loadConfig();
+  const path = cfg.endpoints?.salesToday || '/reports/payouts';
+  const q = opts?.day ? `?day=${encodeURIComponent(opts.day)}` : '';
+  const j = await jumiaFetch(path + q);
+  return j;
+}
+

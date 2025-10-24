@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
     if (!orderId) return NextResponse.json({ error: "orderId required" }, { status: 400 });
 
-    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, shopId: true } }).catch(() => null as any);
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, shopId: true } }).catch(() => null as any);
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
     // Enforce scope for non-admins: order.shopId must be in managed shops
@@ -34,9 +34,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // Try to persist to a Return model if it exists
+    // Try to persist to a ReturnCase model
     try {
-      const ret = await (prisma as any).return.create({ data: { orderId, notes, status: "OPEN" } });
+      const me = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null;
+  const ret = await prisma.returnCase.create({ data: { orderId, shopId: order.shopId, reasonCode: "unknown", status: "requested", createdBy: me?.id || "" } });
       return NextResponse.json({ ok: true, id: ret.id });
     } catch {
       // If the model doesn't exist yet, accept and log

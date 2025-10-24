@@ -20,7 +20,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   const to = new Date(window.to);
 
   // Fetch relevant snapshots with orderItem->product and order relation
-  const snapshots = await (prisma as any).profitSnapshot.findMany({
+  const snapshots = await prisma.profitSnapshot.findMany({
     where: {
       computedAt: { gte: from, lte: to },
       orderItem: shopId ? { order: { shopId } } : undefined,
@@ -45,7 +45,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   ) as string[];
 
   // Fetch CommissionRules overlapping the window; we'll filter by scope in-memory
-  const rules = await (prisma as any).commissionRule.findMany({
+  const rules = await prisma.commissionRule.findMany({
     where: {
       AND: [
         { effectiveFrom: { lte: to } },
@@ -62,7 +62,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   });
 
   // Remove existing earnings in the window and scope to avoid duplicates
-  const delRes = await (prisma as any).commissionEarning.deleteMany({
+  const delRes = await prisma.commissionEarning.deleteMany({
     where: {
       createdAt: { gte: from, lte: to },
       orderItem: shopId ? { order: { shopId } } : undefined,
@@ -117,7 +117,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
   }
 
   // Handle return reversals within window: create negative entries for impacted items
-  const adjustments = await (prisma as any).returnAdjustment.findMany({
+  const adjustments = await prisma.returnAdjustment.findMany({
     where: {
       createdAt: { gte: from, lte: to },
       returnCase: shopId ? { shopId } : undefined,
@@ -157,7 +157,7 @@ export async function recomputeCommissions(input: RecomputeInput): Promise<Recom
 
   let created = 0;
   if (earnings.length) {
-    const res = await (prisma as any).commissionEarning.createMany({ data: earnings });
+    const res = await prisma.commissionEarning.createMany({ data: earnings });
     created = res.count || 0;
   }
 

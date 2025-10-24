@@ -26,14 +26,14 @@ export async function GET(req: Request) {
   if (shopId) where.orderItem = { order: { shopId } };
 
   const [items, total] = await Promise.all([
-    (prisma as any).commissionEarning.findMany({
+    prisma.commissionEarning.findMany({
       where,
       include: { orderItem: { include: { order: true, product: true } }, staff: true },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * size,
       take: size,
     }),
-    (prisma as any).commissionEarning.count({ where }),
+    prisma.commissionEarning.count({ where }),
   ]);
 
   return noStoreJson({ items, page, size, total });

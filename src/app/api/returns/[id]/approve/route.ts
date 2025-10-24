@@ -16,7 +16,7 @@ export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: 
   const actor = email ? await prisma.user.findUnique({ where: { email }, select: { id: true, role: true } }) : null;
   if (!actor) return noStoreJson({ error: "Actor not found" }, { status: 401 });
 
-  const ret = await (prisma as any).returnCase.findUnique({ where: { id }, include: { evidence: true } });
+  const ret = await prisma.returnCase.findUnique({ where: { id }, include: { evidence: true } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
 
   // Scope check for non-admins
@@ -29,7 +29,7 @@ export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: 
   if (!can.ok) return noStoreJson({ error: can.reason }, { status: 400 });
 
   const before = ret;
-  const updated = await (prisma as any).returnCase.update({ where: { id: ret.id }, data: { status: "approved", approvedBy: actor.id } });
-  await (prisma as any).actionLog.create({ data: { actorId: actor.id, entity: "ReturnCase", entityId: ret.id, action: "APPROVE", before, after: updated } });
+  const updated = await prisma.returnCase.update({ where: { id: ret.id }, data: { status: "approved", approvedBy: actor.id } });
+  await prisma.actionLog.create({ data: { actorId: actor.id, entity: "ReturnCase", entityId: ret.id, action: "APPROVE", before, after: updated } });
   return noStoreJson({ ok: true, id: ret.id, status: updated.status });
 }

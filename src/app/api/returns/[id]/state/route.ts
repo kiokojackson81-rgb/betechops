@@ -10,7 +10,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   if (!authz.ok) return authz.res;
   const { to, category, evidence } = await req.json().catch(() => ({} as any));
   if (!to) return noStoreJson({ error: "to required" }, { status: 400 });
-  const ret = await (prisma as any).returnCase.findUnique({ where: { id }, include: { evidence: true } });
+  const ret = await prisma.returnCase.findUnique({ where: { id }, include: { evidence: true } });
   if (!ret) return noStoreJson({ error: "Return not found" }, { status: 404 });
   const policy = await getEvidencePolicy();
   const can = guardTransition(ret.status as any, String(to) as any, {
@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   });
   if (!can.ok) return noStoreJson({ error: can.reason }, { status: 400 });
   const before = ret;
-  const updated = await (prisma as any).returnCase.update({ where: { id }, data: { status: String(to) } });
-  await (prisma as any).actionLog.create({ data: { actorId: (authz.session as any)?.user?.id || "", entity: "ReturnCase", entityId: id, action: "STATE", before, after: updated } });
+  const updated = await prisma.returnCase.update({ where: { id }, data: { status: String(to) } });
+  await prisma.actionLog.create({ data: { actorId: (authz.session as any)?.user?.id || "", entity: "ReturnCase", entityId: id, action: "STATE", before, after: updated } });
   return noStoreJson({ ok: true, id, status: updated.status });
 }

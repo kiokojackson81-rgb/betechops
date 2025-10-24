@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   const actorId = await getActorId();
   const data = parsed.data;
-  const created = await (prisma as any).commissionRule.create({
+  const created = await prisma.commissionRule.create({
     data: {
       scope: data.scope,
       shopId: data.scope === "shop" ? (data.shopId || null) : null,
@@ -33,6 +33,6 @@ export async function POST(req: Request) {
       createdBy: actorId || "unknown",
     },
   });
-  await (prisma as any).actionLog.create({ data: { actorId: actorId || "", entity: "CommissionRule", entityId: created.id, action: "CREATE", before: null, after: created } });
+  await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "CommissionRule", entityId: created.id, action: "CREATE", before: undefined, after: created } });
   return noStoreJson({ ok: true, rule: created }, { status: 201 });
 }
