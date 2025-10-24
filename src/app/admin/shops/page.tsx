@@ -6,14 +6,20 @@ import ApiCredentialsManager from './_components/ApiCredentialsManager';
 import { prisma } from '@/lib/prisma';
 
 export default async function Page() {
-  let shops = [] as any[];
+  type Shop = {
+    id: string;
+    name: string;
+    platform?: string | null;
+    userAssignments?: Array<{ user?: { id: string; name?: string | null; email?: string | null }; roleAtShop?: string | null }>;
+  };
+
+  let shops: Shop[] = [];
   try {
     shops = await prisma.shop.findMany({ orderBy: { createdAt: 'desc' }, include: { userAssignments: { include: { user: true } } } });
   } catch (e) {
     // Do not throw — render a friendly inline message so the admin layout stays usable
     // This protects against transient DB/network issues or when migrations are not applied.
     // The full error will be in server logs.
-    // eslint-disable-next-line no-console
     console.error('Admin shops page prisma error:', e);
     return (
       <div className="space-y-4 p-6">
@@ -47,7 +53,7 @@ export default async function Page() {
         </div>
         <div className="p-4 border rounded">
           <h2 className="font-semibold">Existing Shops</h2>
-          <ShopsList initial={shops.map(s => ({ id: s.id, name: s.name, platform: s.platform, assignedUser: s.userAssignments?.[0]?.user ? { id: s.userAssignments[0].user.id, label: s.userAssignments[0].user.name ?? s.userAssignments[0].user.email, roleAtShop: s.userAssignments?.[0]?.roleAtShop } : undefined }))} />
+          <ShopsList initial={shops.map(s => ({ id: s.id, name: s.name, platform: s.platform ?? undefined, assignedUser: s.userAssignments?.[0]?.user ? { id: s.userAssignments[0].user.id, label: (s.userAssignments[0].user.name ?? s.userAssignments[0].user.email) ?? '', roleAtShop: s.userAssignments?.[0]?.roleAtShop ?? undefined } : undefined }))} />
         </div>
       </div>
       <div className="mt-4 p-4 border rounded">
