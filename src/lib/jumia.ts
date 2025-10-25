@@ -26,13 +26,14 @@ async function loadConfig(): Promise<Config> {
   if (cache.cfg && now - cache.cfg.loadedAt < 5 * 60_000) return cache.cfg;
 
   // Prefer env if present
+  // Support both legacy JUMIA_* env vars and the more generic OIDC_* names
   let cfg: Config = {
-    issuer: process.env.JUMIA_OIDC_ISSUER,
-    clientId: process.env.JUMIA_CLIENT_ID,
-    clientSecret: process.env.JUMIA_CLIENT_SECRET,
-    refreshToken: process.env.JUMIA_REFRESH_TOKEN,
+    issuer: process.env.JUMIA_OIDC_ISSUER || process.env.OIDC_ISSUER,
+    clientId: process.env.JUMIA_CLIENT_ID || process.env.OIDC_CLIENT_ID,
+    clientSecret: process.env.JUMIA_CLIENT_SECRET || process.env.OIDC_CLIENT_SECRET,
+    refreshToken: process.env.JUMIA_REFRESH_TOKEN || process.env.OIDC_REFRESH_TOKEN,
     apiBase: process.env.JUMIA_API_BASE,
-    tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL,
+    tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL,
     endpoints: {
       salesToday: process.env.JUMIA_EP_SALES_TODAY,
       pendingPricing: process.env.JUMIA_EP_PENDING_PRICING,
@@ -240,9 +241,9 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
     test?: { ok: boolean; expiresIn?: number; error?: string };
   } = {
     issuer,
-    clientIdSet: Boolean(cfg.clientId || process.env.JUMIA_CLIENT_ID),
-    hasClientSecret: Boolean(cfg.clientSecret || process.env.JUMIA_CLIENT_SECRET),
-    hasRefreshToken: Boolean(cfg.refreshToken || process.env.JUMIA_REFRESH_TOKEN),
+    clientIdSet: Boolean(cfg.clientId || process.env.JUMIA_CLIENT_ID || process.env.OIDC_CLIENT_ID),
+    hasClientSecret: Boolean(cfg.clientSecret || process.env.JUMIA_CLIENT_SECRET || process.env.OIDC_CLIENT_SECRET),
+    hasRefreshToken: Boolean(cfg.refreshToken || process.env.JUMIA_REFRESH_TOKEN || process.env.OIDC_REFRESH_TOKEN),
   };
 
   if (opts?.test) {
