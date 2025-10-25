@@ -16,9 +16,9 @@ type Config = {
   apiBase?: string;
   tokenUrl?: string; // optional explicit token endpoint override
   endpoints?: {
-    salesToday?: string;            // e.g., '/reports/sales?range=today'
-    pendingPricing?: string;        // e.g., '/orders?status=pending-pricing'
-    returnsWaitingPickup?: string;  // e.g., '/returns?status=waiting-pickup'
+    salesToday?: string;            // e.g., '/orders?createdAfter=YYYY-MM-DD&createdBefore=YYYY-MM-DD'
+    pendingPricing?: string;        // e.g., '/orders?status=PENDING'
+    returnsWaitingPickup?: string;  // e.g., '/orders?status=RETURNED' or '/returns?status=waiting-pickup'
   };
 };
 
@@ -98,10 +98,10 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
   }
 
   const bases = [
-    'https://vendor-api.jumia.com/api',
     'https://vendor-api.jumia.com',
+    'https://vendor-api.jumia.com/api',
     'https://vendor-api.jumia.com/v1',
-    'https://vendor-api.jumia.com/v1/api',
+    'https://vendor-api.jumia.com/v2',
   ];
   const schemes = ['Bearer', 'Token', 'VcToken'];
 
@@ -112,7 +112,9 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
   for (const base of bases) {
     // if explicit base set, skip other bases
     for (const scheme of schemes) {
-      const url = `${base.replace(/\/$/, '')}/reports/sales?range=today`;
+  // probe a lightweight orders endpoint (the doc indicates /orders is the canonical resource)
+  const today = new Date().toISOString().slice(0, 10);
+  const url = `${base.replace(/\/$/, '')}/orders?createdAfter=${today}&createdBefore=${today}`;
       try {
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `${scheme} ${token}`;
@@ -182,40 +184,43 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
 // Sales today (normalize to { total })
 export async function getSalesToday() {
   const { endpoints } = await loadConfig();
-  const path = endpoints?.salesToday || "/reports/sales?range=today";
+  // Prefer explicit endpoint override; otherwise use /orders and count items for today
+  const today = new Date().toISOString().slice(0, 10);
+  const explicit = endpoints?.salesToday;
+  const path = explicit || `/orders?createdAfter=${today}&createdBefore=${today}`;
   const j = await jumiaFetch(path);
-  // Normalize: support common shapes { total } or { amount } or nested { data: { total } }
-  const total = Number(
-    j?.total ?? j?.amount ?? j?.data?.total ?? j?.data?.amount ?? 0
-  );
-  return { total: Number(total) };
+  // The Orders API returns { orders: [...] } per the doc
+  const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.data) ? j.data : [];
+  return { total: orders.length };
 }
 
 // Orders pending pricing (normalize to { count })
 export async function getPendingPricingCount() {
   const { endpoints } = await loadConfig();
-  const path = endpoints?.pendingPricing || "/orders?status=pending-pricing";
+  const explicit = endpoints?.pendingPricing;
+  const path = explicit || '/orders?status=PENDING';
   const j = await jumiaFetch(path);
-  // Normalize: list-based or count field or nested shapes
-  const count = Array.isArray(j?.items)
-    ? j.items.length
-    : Array.isArray(j?.data)
-      ? j.data.length
-      : Number(j?.count ?? j?.data?.count ?? 0);
-  return { count };
+  const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
+  return { count: orders.length };
 }
 
 // Returns waiting pickup (normalize to { count })
 export async function getReturnsWaitingPickup() {
   const { endpoints } = await loadConfig();
-  const path = endpoints?.returnsWaitingPickup || "/returns?status=waiting-pickup";
-  const j = await jumiaFetch(path);
-  const count = Array.isArray(j?.items)
-    ? j.items.length
-    : Array.isArray(j?.data)
-      ? j.data.length
-      : Number(j?.count ?? j?.data?.count ?? 0);
-  return { count };
+  const explicit = endpoints?.returnsWaitingPickup;
+  // Prefer explicit; otherwise check orders with RETURNED status or a /returns endpoint
+  const pathCandidates = explicit ? [explicit] : ['/orders?status=RETURNED', '/returns', '/returns?status=waiting-pickup'];
+  for (const p of pathCandidates) {
+    try {
+      const j = await jumiaFetch(p);
+      const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
+      return { count: arr.length };
+    } catch (e) {
+      // try next candidate
+      continue;
+    }
+  }
+  return { count: 0 };
 }
 
 /**
@@ -285,13 +290,17 @@ import { normalizeFromJumia, type NormalizedOrder } from './connectors/normalize
 export async function fetchOrdersForShop(shopId: string, opts?: { since?: string }): Promise<NormalizedOrder[]> {
   // Load shop credentials from DB or env
   const cfg = await loadConfig();
-  // Prefer per-shop ApiCredential lookup when available (caller may pass shop-specific credential retrieval later)
-  const path = cfg.endpoints?.pendingPricing || '/orders';
+  // Use /orders and allow since to be mapped to createdAfter
+  const pathBase = cfg.endpoints?.pendingPricing || '/orders';
+  let q = '';
+  if (opts?.since) {
+    // map since to createdAfter (ISO date expected)
+    q = `?createdAfter=${encodeURIComponent(opts.since)}`;
+  }
   try {
-    const j = await jumiaFetch(path + (opts?.since ? `?since=${encodeURIComponent(opts.since)}` : ''));
-    // map results array to normalized orders
-    const arr = Array.isArray(j?.items) ? j.items : j?.data || [];
-  return arr.map((r: unknown) => normalizeFromJumia(r, shopId));
+    const j = await jumiaFetch(pathBase + q);
+    const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : j?.data || [];
+    return arr.map((r: unknown) => normalizeFromJumia(r, shopId));
   } catch (e) {
     throw e;
   }
@@ -299,9 +308,9 @@ export async function fetchOrdersForShop(shopId: string, opts?: { since?: string
 
 export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string }) {
   const cfg = await loadConfig();
-  const path = cfg.endpoints?.salesToday || '/reports/payouts';
-  const q = opts?.day ? `?day=${encodeURIComponent(opts.day)}` : '';
-  const j = await jumiaFetch(path + q);
+  const pathBase = cfg.endpoints?.salesToday || '/payout-statement';
+  const q = opts?.day ? `?createdAfter=${encodeURIComponent(opts.day)}&page=1&size=50` : '?page=1&size=50';
+  const j = await jumiaFetch(pathBase + q);
   return j;
 }
 
