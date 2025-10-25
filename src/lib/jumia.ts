@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAccessTokenFromEnv } from '@/lib/oidc';
+import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo } from '@/lib/oidc';
 
 type Cache = {
   accessToken?: string;
@@ -70,8 +70,80 @@ async function loadConfig(): Promise<Config> {
  * We cache it in-memory on the server until ~60s before expiry.
  */
 async function getAccessToken(): Promise<string> {
-  // Delegate to the generic OIDC helper which reads OIDC_* env vars and caches tokens.
+  // Prefer the Jumia-specific refresh token minting when JUMIA_OIDC_TOKEN_URL is present
+  try {
+    if (process.env.JUMIA_OIDC_TOKEN_URL || process.env.JUMIA_REFRESH_TOKEN) {
+      return await getJumiaAccessToken();
+    }
+  } catch (e) {
+    // fall back to generic env-based flow
+    // eslint-disable-next-line no-console
+    console.error('getJumiaAccessToken failed, falling back to generic:', e instanceof Error ? e.message : String(e));
+  }
   return getAccessTokenFromEnv();
+}
+
+// Cached resolved detection
+let resolvedConfig: { base?: string; scheme?: string; tried?: boolean } | null = null;
+
+export async function resolveJumiaConfig(): Promise<{ base: string; scheme: string }> {
+  if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme) return { base: resolvedConfig.base, scheme: resolvedConfig.scheme } as { base: string; scheme: string };
+
+  // Respect explicit env first
+  const envBase = process.env.JUMIA_API_BASE;
+  const envScheme = process.env.JUMIA_AUTH_SCHEME;
+  if (envBase && envScheme) {
+    resolvedConfig = { base: envBase, scheme: envScheme, tried: true };
+    return { base: envBase, scheme: envScheme };
+  }
+
+  const bases = [
+    'https://vendor-api.jumia.com/api',
+    'https://vendor-api.jumia.com',
+    'https://vendor-api.jumia.com/v1',
+    'https://vendor-api.jumia.com/v1/api',
+  ];
+  const schemes = ['Bearer', 'Token', 'VcToken'];
+
+  // token for probing
+  let token = '';
+  try { token = await getAccessToken(); } catch (_) { token = '' }
+
+  for (const base of bases) {
+    // if explicit base set, skip other bases
+    for (const scheme of schemes) {
+      const url = `${base.replace(/\/$/, '')}/reports/sales?range=today`;
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `${scheme} ${token}`;
+        const r = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+        const text = await r.text().catch(() => '');
+        // success
+        if (r.status === 200) {
+          resolvedConfig = { base, scheme, tried: true };
+          return { base, scheme };
+        }
+        // If 401 and returned body indicates scheme invalid, try next scheme
+        if (r.status === 401 && /Authorization type is invalid/i.test(text)) {
+          continue; // try next scheme
+        }
+        // If not 404 and not 403, accept this base/scheme (token might be expired/invalid)
+        if (r.status !== 404 && r.status !== 403) {
+          resolvedConfig = { base, scheme, tried: true };
+          return { base, scheme };
+        }
+      } catch (e) {
+        // network error -> try next candidate
+        continue;
+      }
+    }
+  }
+
+  // final fallback: use env or first base with Bearer
+  const fallbackBase = envBase || 'https://vendor-api.jumia.com/api';
+  const fallbackScheme = envScheme || 'Bearer';
+  resolvedConfig = { base: fallbackBase, scheme: fallbackScheme, tried: true };
+  return { base: fallbackBase, scheme: fallbackScheme };
 }
 
 /**
@@ -80,22 +152,27 @@ async function getAccessToken(): Promise<string> {
  */
 export async function jumiaFetch(path: string, init: RequestInit = {}) {
   const cfg = await loadConfig();
-  const apiBase = process.env.JUMIA_API_BASE || cfg.apiBase || process.env.JUMIA_API_BASE;
-  if (!apiBase) throw new Error("Missing JUMIA_API_BASE. Set JUMIA_API_BASE=https://vendor-api.jumia.com/api in env for the JM shop");
+  const resolved = await resolveJumiaConfig();
+  const apiBase = process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base;
+  if (!apiBase) throw new Error("Missing JUMIA_API_BASE; cannot call Jumia API");
+  const scheme = process.env.JUMIA_AUTH_SCHEME || resolved.scheme || 'Bearer';
   const token = await getAccessToken();
-  const url = `${apiBase}${path}`;
+  const url = `${apiBase.replace(/\/$/, '')}${path}`;
   const bodyPresent = Boolean((init as RequestInit).body);
   const headers = {
     ...(init.headers as Record<string, string> | undefined),
-    Authorization: `Bearer ${token}`,
+    Authorization: `${scheme} ${token}`,
     "Content-Type": bodyPresent ? "application/json" : undefined,
   } as Record<string, string>;
 
   const r = await fetch(url, { ...init, headers, cache: "no-store" });
   if (!r.ok) {
     const msg = await r.text().catch(() => r.statusText);
-    console.error("Jumia API error:", r.status, msg, "path:", path);
-    throw new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
+    console.error("Jumia API error:", r.status, msg, "path:", path, "base:", apiBase, "scheme:", scheme);
+    const err: any = new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
+    err.status = r.status;
+    err.body = msg;
+    throw err;
   }
   return r.json().catch(() => ({}));
 }
@@ -180,10 +257,19 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
         }
       }
       res.tokenEndpoint = candidates;
-      await getAccessToken();
-      const now = Date.now();
-      const expiresIn = cache.exp ? Math.max(0, Math.floor((cache.exp - now) / 1000)) : undefined;
-      res.test = { ok: true, expiresIn };
+      // attempt to mint via the Jumia refresh flow (if configured)
+      try {
+        const token = await getJumiaAccessToken();
+        const info = getJumiaTokenInfo();
+        const now = Date.now();
+        const expiresIn = info.expiresAt ? Math.max(0, Math.floor((info.expiresAt - now) / 1000)) : undefined;
+        res.test = { ok: true, expiresIn };
+      } catch (e) {
+        // fall back to generic access token flow; we can't introspect the generic cache here reliably,
+        // so just attempt to mint and report success without TTL.
+        await getAccessToken();
+        res.test = { ok: true };
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       res.test = { ok: false, error: msg };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSalesToday, getPendingPricingCount, getReturnsWaitingPickup } from "@/lib/jumia";
+import { getSalesToday, getPendingPricingCount, getReturnsWaitingPickup, resolveJumiaConfig } from "@/lib/jumia";
 
 type Probe<T> = { ok: true; ms: number; data: T } | { ok: false; ms: number; error: string };
 
@@ -15,16 +15,18 @@ async function probe<T>(fn: () => Promise<T>): Promise<Probe<T>> {
 }
 
 export async function GET() {
-  const [salesToday, pendingPricing, returnsWaitingPickup] = await Promise.all([
+  const [salesToday, pendingPricing, returnsWaitingPickup, resolved] = await Promise.all([
     probe(() => getSalesToday()),
     probe(() => getPendingPricingCount()),
     probe(() => getReturnsWaitingPickup()),
+    resolveJumiaConfig().then((r) => ({ base: r.base, scheme: r.scheme })).catch(() => null),
   ]);
 
-  const ok = salesToday.ok || pendingPricing.ok || returnsWaitingPickup.ok;
+  const ok = (salesToday && salesToday.ok) || (pendingPricing && pendingPricing.ok) || (returnsWaitingPickup && returnsWaitingPickup.ok);
 
   return NextResponse.json({
     ok,
+    resolved,
     salesToday,
     pendingPricing,
     returnsWaitingPickup,
