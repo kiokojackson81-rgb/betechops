@@ -74,7 +74,13 @@ async function loadConfig(): Promise<Config> {
 async function getAccessToken(): Promise<string> {
   // Prefer the Jumia-specific refresh token minting when JUMIA_OIDC_TOKEN_URL is present
   try {
-    if (process.env.JUMIA_OIDC_TOKEN_URL || process.env.JUMIA_REFRESH_TOKEN) {
+    // If either the legacy JUMIA_* vars or the standard OIDC_* vars are present, use the Jumia/OIDC mint flow
+    if (
+      process.env.JUMIA_OIDC_TOKEN_URL ||
+      process.env.JUMIA_REFRESH_TOKEN ||
+      process.env.OIDC_TOKEN_URL ||
+      process.env.OIDC_REFRESH_TOKEN
+    ) {
       return await getJumiaAccessToken();
     }
   } catch (e) {
