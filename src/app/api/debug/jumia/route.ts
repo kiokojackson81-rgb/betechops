@@ -112,8 +112,4 @@ export async function GET(req: Request) {
   return NextResponse.json(responseBody);
 }
 
-// When ?probe=true is supplied, run an authenticated sweep of candidate endpoints and return lightweight results.
-export async function GET_probe() {
-  // kept for backward compatibility but not used directly by Next routing — we implement deep probe inside GET with query
-  return NextResponse.json({ ok: false, message: 'Use ?probe=true on GET to run deep probe' });
-}
+// NOTE: deep probe is implemented inside GET when ?probe=true; do not export non-standard route handlers.
