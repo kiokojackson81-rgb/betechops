@@ -15,8 +15,8 @@ async function probe<T>(fn: () => Promise<T>): Promise<Probe<T>> {
   }
 }
 
-export async function GET() {
-  const url = new URL((globalThis as any)?.location?.href || (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost'));
+export async function GET(req: Request) {
+  const url = new URL(req.url);
   const doDeepProbe = url.searchParams.get('probe') === 'true' || url.searchParams.get('deep') === 'true';
 
   const [salesToday, pendingPricing, returnsWaitingPickup, resolved] = await Promise.all([
