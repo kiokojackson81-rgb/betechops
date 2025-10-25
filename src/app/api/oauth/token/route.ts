@@ -1,13 +1,17 @@
 import { randomBytes } from 'crypto'
+import jwt from 'jsonwebtoken'
+import { prisma } from '@/lib/prisma'
 
 // POST /oauth/token
 // Accepts application/x-www-form-urlencoded body with:
 // - grant_type=refresh_token
 // - client_id
 // - refresh_token
-// If environment variables OAUTH_CLIENT_ID / OAUTH_REFRESH_TOKEN are set,
-// they are used to validate incoming values. On success returns JSON:
-// { access_token, token_type: 'Bearer', expires_in }
+// Behavior:
+// - If OAUTH_JWT_SECRET is set, issues a signed JWT access token (HS256).
+// - Otherwise returns an opaque random access_token.
+// - If an ApiCredential exists with clientId matching the provided client_id,
+//   the credential's refreshToken will be updated (rotation).
 export async function POST(req: Request) {
   const contentType = (req.headers.get('content-type') || '').toLowerCase()
 
@@ -39,30 +43,52 @@ export async function POST(req: Request) {
   }
 
   // Optional validation against environment variables. If the env var is not set
-  // we allow any value (useful for local/dev). This avoids hard failures when
-  // env is not configured, but in production you should set the expected values.
+  // we allow any value (useful for local/dev).
   const expectedClient = process.env.OAUTH_CLIENT_ID
-  const expectedRefresh = process.env.OAUTH_REFRESH_TOKEN
-
   if (expectedClient && client_id !== expectedClient) {
     return new Response(
       JSON.stringify({ error: 'invalid_client', error_description: 'client_id is invalid' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     )
   }
-  if (expectedRefresh && refresh_token !== expectedRefresh) {
-    return new Response(
-      JSON.stringify({ error: 'invalid_grant', error_description: 'refresh_token is invalid' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
+
+  // Persist/rotate refresh token into ApiCredential if a matching record exists.
+  try {
+    const cred = await prisma.apiCredential.findFirst({ where: { clientId: client_id } })
+    if (cred) {
+      // Update refreshToken if different (rotation) and record updatedAt automatically
+      if (cred.refreshToken !== refresh_token) {
+        await prisma.apiCredential.update({ where: { id: cred.id }, data: { refreshToken: refresh_token } })
+      }
+    }
+  } catch (err) {
+    // don't fail the token issuance if DB is unavailable; log server-side
+    // (avoid leaking errors in response)
+    // eslint-disable-next-line no-console
+    console.error('OAuth token route: failed to persist refresh token', err)
   }
 
-  // Generate an opaque access token. This is intentionally simple: an unguessable
-  // opaque string and an expires_in integer. If you need JWTs, replace this
-  // implementation with your signed token generator.
-  const token = randomBytes(28).toString('base64url')
+  const jwtSecret = process.env.OAUTH_JWT_SECRET
   const expiresIn = parseInt(process.env.OAUTH_EXPIRES_IN || '3600', 10)
 
+  if (jwtSecret) {
+    // Issue a JWT access token. Minimal claims: sub=client_id, iss optional
+    const now = Math.floor(Date.now() / 1000)
+    const payload = { sub: client_id }
+  const signOpts: any = { algorithm: 'HS256', expiresIn }
+  const token = jwt.sign(payload, jwtSecret, signOpts)
+
+    const body = {
+      access_token: token,
+      token_type: 'Bearer',
+      expires_in: expiresIn,
+    }
+
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  // Fallback: opaque token
+  const token = randomBytes(28).toString('base64url')
   const body = {
     access_token: token,
     token_type: 'Bearer',

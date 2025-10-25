@@ -17,6 +17,7 @@
     "smoke:local": "node scripts/smoke/test-apis.js"
   },
   "dependencies": {
+    "jsonwebtoken": "^9.0.0",
     "@prisma/client": "^6.16.2",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
