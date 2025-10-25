@@ -25,29 +25,53 @@ export async function GET(req: Request) {
   // candidate paths derived from Vendor API doc
   const today = new Date().toISOString().slice(0, 10);
   const candidatePaths = [
+    // core orders endpoints
     '/orders',
     `/orders?createdAfter=${today}&createdBefore=${today}`,
     '/orders?status=PENDING',
     '/orders?status=RETURNED',
+    '/orders?status=pending-pricing',
+    '/orders?limit=1',
     '/orders/items',
-    '/orders/shipment-providers',
     '/orders/pack',
     '/v2/orders/pack',
     '/orders/print-labels',
     '/orders/ready-to-ship',
+    '/orders/search?date=' + today,
+    // api/version prefixes
+    '/api/orders',
+    '/api/v1/orders',
+    '/api/v2/orders',
+    '/v1/api/orders',
+    '/seller/orders',
+    '/seller-api/orders',
+
+    // reports / payouts
+    '/reports/sales?range=today',
+    '/reports/sales?date=' + today,
+    '/reports/payouts?day=' + today,
     `/payout-statement?createdAfter=${today}&page=1&size=10`,
-    '/shops',
-    '/shops-of-master-shop',
+    '/payout-statement',
+    '/payouts',
+
+    // returns
+    '/returns',
+    '/returns?status=waiting-pickup',
+    '/returns?status=WAITING_PICKUP',
+
+    // catalog / feeds
     '/catalog/brands?page=1',
     '/catalog/categories?page=1',
     '/catalog/products?size=10',
     '/feeds/products/stock',
     '/feeds/products/price',
     '/feeds/products/create',
+
+    // misc
+    '/shops',
+    '/shops-of-master-shop',
     '/consignment-order',
     '/consignment-stock',
-    '/returns',
-    '/returns?status=waiting-pickup',
   ];
 
   // build bases: prefer resolved base then canonical + expanded list
@@ -89,9 +113,9 @@ export async function GET(req: Request) {
     let found = false;
     for (const base of bases) {
       const fullUrl = `${base}${p.startsWith('/') ? p : '/' + p}`;
-      // try unauthenticated first
+      // try unauthenticated first (ask for JSON)
       try {
-        const r = await fetch(fullUrl, { method: 'GET', cache: 'no-store' });
+        const r = await fetch(fullUrl, { method: 'GET', cache: 'no-store', headers: { Accept: 'application/json' } });
         const status = r.status;
         let preview = '';
         try { const txt = await r.text(); preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : ''; } catch {}
@@ -107,7 +131,7 @@ export async function GET(req: Request) {
       if (token) {
         for (const scheme of authSchemes) {
           try {
-            const headers: Record<string, string> = { Authorization: `${scheme} ${token}` };
+            const headers: Record<string, string> = { Authorization: `${scheme} ${token}`, Accept: 'application/json' };
             const r = await fetch(fullUrl, { method: 'GET', headers, cache: 'no-store' });
             const status = r.status;
             let preview = '';
