@@ -9,11 +9,12 @@ This file aggregates the commands and environment variables needed to run and de
 - FILE_STORAGE_BUCKET, FILE_STORAGE_REGION, FILE_STORAGE_KEY, FILE_STORAGE_SECRET — for file uploads (return evidence)
 
 Optional/global integration fallbacks (prefer per-shop credentials stored in DB)
-- JUMIA_API_BASE
-- JUMIA_OIDC_ISSUER
-- JUMIA_CLIENT_ID
-- JUMIA_CLIENT_SECRET
-- JUMIA_REFRESH_TOKEN
+- base_url (preferred canonical vendor API base for Jumia)
+- (legacy) JUMIA_API_BASE
+- OIDC_ISSUER or JUMIA_OIDC_ISSUER
+- OIDC_CLIENT_ID or JUMIA_CLIENT_ID
+- OIDC_CLIENT_SECRET or JUMIA_CLIENT_SECRET
+- OIDC_REFRESH_TOKEN or JUMIA_REFRESH_TOKEN
 - KILIMALL_API_BASE
 
 ## Development

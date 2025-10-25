@@ -5,10 +5,12 @@ Security first
 - Do not paste the old token into code, commits, or public chats.
 
 Required environment variables (Production)
-- JUMIA_OIDC_ISSUER=https://vendor-api.jumia.com/auth/realms/acl
-- JUMIA_CLIENT_ID=e6eca268-6f02-4db0-90d2-dc4cab0f265b
-- JUMIA_REFRESH_TOKEN=<PASTE_NEW_REFRESH_TOKEN_HERE>
-- JUMIA_API_BASE=https://vendor-api.jumia.com
+- base_url=https://vendor-api.jumia.com  # preferred canonical env name
+- (legacy) JUMIA_API_BASE=https://vendor-api.jumia.com  # supported but prefer `base_url`
+- OIDC_ISSUER or JUMIA_OIDC_ISSUER=https://vendor-api.jumia.com/auth/realms/acl
+- OIDC_CLIENT_ID or JUMIA_CLIENT_ID=e6eca268-6f02-4db0-90d2-dc4cab0f265b
+- OIDC_REFRESH_TOKEN or JUMIA_REFRESH_TOKEN=<PASTE_NEW_REFRESH_TOKEN_HERE>
+- (optional) JUMIA_OIDC_TOKEN_URL or OIDC_TOKEN_URL=https://vendor-api.jumia.com/protocol/openid-connect/token
 
 How to add via Vercel UI
 1. Open: https://vercel.com
@@ -37,7 +39,7 @@ How to add via Vercel CLI
    vercel env add JUMIA_REFRESH_TOKEN production
    # paste: <PASTE_NEW_REFRESH_TOKEN_HERE>
 
-   vercel env add JUMIA_API_BASE production
+   vercel env add base_url production
    # paste: https://vendor-api.jumia.com
 
 4. Redeploy by creating an empty commit and pushing:

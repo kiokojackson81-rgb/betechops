@@ -10,12 +10,13 @@ Set these in Vercel project settings (Environment Variables) and locally (e.g., 
 - DATABASE_URL: postgresql://<user>:<pass>@<host>/<db>?sslmode=require
 
 ## Jumia OIDC + API
-- JUMIA_API_BASE: https://vendor-api.jumia.com (example)
-- JUMIA_OIDC_ISSUER: https://vendor-api.jumia.com/realms/acl (or /auth/realms/acl)
-- JUMIA_CLIENT_ID: <client id>
-- JUMIA_CLIENT_SECRET: <client secret> (optional when using refresh_token but required for client_credentials)
-- JUMIA_REFRESH_TOKEN: <long-lived refresh token>
-- JUMIA_OIDC_TOKEN_URL: https://.../protocol/openid-connect/token (optional explicit override)
+- base_url: https://vendor-api.jumia.com (preferred canonical env name for vendor API base)
+- JUMIA_API_BASE: https://vendor-api.jumia.com (legacy; supported but prefer `base_url`)
+- OIDC_ISSUER or JUMIA_OIDC_ISSUER: https://vendor-api.jumia.com/realms/acl (or /auth/realms/acl)
+- OIDC_CLIENT_ID (preferred) or JUMIA_CLIENT_ID: <client id>
+- OIDC_CLIENT_SECRET (preferred) or JUMIA_CLIENT_SECRET: <client secret> (required for client_credentials)
+- OIDC_REFRESH_TOKEN (preferred) or JUMIA_REFRESH_TOKEN: <long-lived refresh token>
+- JUMIA_OIDC_TOKEN_URL or OIDC_TOKEN_URL: https://.../protocol/openid-connect/token (optional explicit override)
 
 Optional endpoint overrides if your vendor uses different paths:
 - JUMIA_EP_SALES_TODAY: /reports/sales?range=today
@@ -24,5 +25,5 @@ Optional endpoint overrides if your vendor uses different paths:
 
 ## Notes
 - Prefer Neon or another hosted Postgres with pooled connections. Keep `sslmode=require` in `DATABASE_URL` for Vercel.
-- If OIDC test fails with 404, set `JUMIA_OIDC_TOKEN_URL` explicitly to the token endpoint.
+- If OIDC test fails with 404, set `JUMIA_OIDC_TOKEN_URL` or `OIDC_TOKEN_URL` explicitly to the token endpoint (should be `/oauth/token` or the provider's token endpoint).
 - After editing envs, redeploy to apply.

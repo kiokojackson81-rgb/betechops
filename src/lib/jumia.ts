@@ -33,8 +33,10 @@ async function loadConfig(): Promise<Config> {
     clientId: process.env.JUMIA_CLIENT_ID || process.env.OIDC_CLIENT_ID,
     clientSecret: process.env.JUMIA_CLIENT_SECRET || process.env.OIDC_CLIENT_SECRET,
     refreshToken: process.env.JUMIA_REFRESH_TOKEN || process.env.OIDC_REFRESH_TOKEN,
-    apiBase: process.env.JUMIA_API_BASE,
-    tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL,
+  // Prefer canonical `base_url` for vendor base; fall back to legacy JUMIA_API_BASE for compatibility
+  apiBase: process.env.base_url || process.env.JUMIA_API_BASE,
+  // tokenUrl may be provided explicitly; discovery/defaulting happens in oidc helper
+  tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL,
     endpoints: {
       salesToday: process.env.JUMIA_EP_SALES_TODAY,
       pendingPricing: process.env.JUMIA_EP_PENDING_PRICING,
@@ -90,13 +92,15 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
   if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme) return { base: resolvedConfig.base, scheme: resolvedConfig.scheme } as { base: string; scheme: string };
 
   // Respect explicit env first
-  const envBase = process.env.JUMIA_API_BASE;
+  // Respect explicit canonical env first (base_url), then legacy JUMIA_API_BASE
+  const envBase = process.env.base_url || process.env.JUMIA_API_BASE;
   const envScheme = process.env.JUMIA_AUTH_SCHEME;
   if (envBase && envScheme) {
     resolvedConfig = { base: envBase, scheme: envScheme, tried: true };
     return { base: envBase, scheme: envScheme };
   }
 
+  // Candidate bases to probe. Keep /api and /v1 variants as probes but prefer bare vendor host.
   const bases = [
     'https://vendor-api.jumia.com',
     'https://vendor-api.jumia.com/api',
@@ -141,8 +145,8 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
     }
   }
 
-  // final fallback: use env or first base with Bearer
-  const fallbackBase = envBase || 'https://vendor-api.jumia.com/api';
+  // final fallback: prefer canonical env/base host without automatically appending `/api`
+  const fallbackBase = envBase || 'https://vendor-api.jumia.com';
   const fallbackScheme = envScheme || 'Bearer';
   resolvedConfig = { base: fallbackBase, scheme: fallbackScheme, tried: true };
   return { base: fallbackBase, scheme: fallbackScheme };
@@ -155,8 +159,9 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
 export async function jumiaFetch(path: string, init: RequestInit = {}) {
   const cfg = await loadConfig();
   const resolved = await resolveJumiaConfig();
-  const apiBase = process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base;
-  if (!apiBase) throw new Error("Missing JUMIA_API_BASE; cannot call Jumia API");
+  // Prefer canonical base_url env, then legacy JUMIA_API_BASE, then DB-config, then resolved probe
+  const apiBase = process.env.base_url || process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base;
+  if (!apiBase) throw new Error("Missing vendor base URL (process.env.base_url or JUMIA_API_BASE); cannot call Jumia API");
   const scheme = process.env.JUMIA_AUTH_SCHEME || resolved.scheme || 'Bearer';
   const token = await getAccessToken();
   const url = `${apiBase.replace(/\/$/, '')}${path}`;

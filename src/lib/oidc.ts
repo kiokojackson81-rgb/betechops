@@ -86,13 +86,16 @@ export function clearOidcCache() {
  * Caches token until expiresAt - 60s.
  */
 export async function getJumiaAccessToken(): Promise<string> {
-  const tokenUrl = process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL || "";
+  // Prefer explicit JUMIA_OIDC_TOKEN_URL, then generic OIDC token URL, then canonical fallback
+  const tokenUrl = process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL || 'https://vendor-api.jumia.com/oauth/token';
+  // Prefer standard OIDC env names, fall back to legacy JUMIA_CLIENT_ID
   const clientId = process.env.OIDC_CLIENT_ID || process.env.JUMIA_CLIENT_ID || "";
+  // Prefer standard OIDC env names
   const refreshToken = process.env.OIDC_REFRESH_TOKEN || process.env.JUMIA_REFRESH_TOKEN || "";
 
-  if (!tokenUrl) throw new Error("JUMIA_OIDC_TOKEN_URL is not set in env; cannot mint Jumia token");
-  if (!clientId) throw new Error("OIDC_CLIENT_ID is not set in env; cannot mint Jumia token");
-  if (!refreshToken) throw new Error("OIDC_REFRESH_TOKEN is not set in env; cannot mint Jumia token");
+  if (!tokenUrl) throw new Error("JUMIA_OIDC_TOKEN_URL or OIDC_TOKEN_URL must be set to mint a Jumia token");
+  if (!clientId) throw new Error("OIDC_CLIENT_ID (or JUMIA_CLIENT_ID) is not set in env; cannot mint Jumia token");
+  if (!refreshToken) throw new Error("OIDC_REFRESH_TOKEN (or JUMIA_REFRESH_TOKEN) is not set in env; cannot mint Jumia token");
 
   const now = Date.now();
   if (jumiaCache.token && jumiaCache.exp && now < (jumiaCache.exp - 60_000)) {

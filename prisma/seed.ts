@@ -46,10 +46,31 @@ async function main() {
 
     const existingCred = await prisma.apiCredential.findFirst({ where: { shopId: jmShop.id } });
     if (existingCred) {
-      await prisma.apiCredential.update({ where: { id: existingCred.id }, data: { apiBase: process.env.JUMIA_API_BASE || existingCred.apiBase, issuer: process.env.OIDC_ISSUER || existingCred.issuer, clientId: process.env.OIDC_CLIENT_ID || existingCred.clientId, refreshToken: process.env.OIDC_REFRESH_TOKEN || existingCred.refreshToken, apiSecret: process.env.OIDC_CLIENT_SECRET || existingCred.apiSecret } });
+      await prisma.apiCredential.update({
+        where: { id: existingCred.id },
+        data: {
+          // Prefer canonical base_url, fall back to legacy JUMIA_API_BASE
+          apiBase: process.env.base_url || process.env.JUMIA_API_BASE || existingCred.apiBase,
+          // OIDC env names preferred
+          issuer: process.env.OIDC_ISSUER || process.env.JUMIA_OIDC_ISSUER || existingCred.issuer,
+          clientId: process.env.OIDC_CLIENT_ID || process.env.JUMIA_CLIENT_ID || existingCred.clientId,
+          refreshToken: process.env.OIDC_REFRESH_TOKEN || process.env.JUMIA_REFRESH_TOKEN || existingCred.refreshToken,
+          apiSecret: process.env.OIDC_CLIENT_SECRET || process.env.JUMIA_CLIENT_SECRET || existingCred.apiSecret,
+        },
+      });
       console.log('Updated existing Jumia ApiCredential');
     } else {
-      await prisma.apiCredential.create({ data: { scope: `SHOP:${jmShop.id}`, apiBase: process.env.JUMIA_API_BASE || '', issuer: process.env.OIDC_ISSUER || '', clientId: process.env.OIDC_CLIENT_ID || '', refreshToken: process.env.OIDC_REFRESH_TOKEN || '', apiSecret: process.env.OIDC_CLIENT_SECRET || '', shopId: jmShop.id } });
+      await prisma.apiCredential.create({
+        data: {
+          scope: `SHOP:${jmShop.id}`,
+          apiBase: process.env.base_url || process.env.JUMIA_API_BASE || '',
+          issuer: process.env.OIDC_ISSUER || process.env.JUMIA_OIDC_ISSUER || '',
+          clientId: process.env.OIDC_CLIENT_ID || process.env.JUMIA_CLIENT_ID || '',
+          refreshToken: process.env.OIDC_REFRESH_TOKEN || process.env.JUMIA_REFRESH_TOKEN || '',
+          apiSecret: process.env.OIDC_CLIENT_SECRET || process.env.JUMIA_CLIENT_SECRET || '',
+          shopId: jmShop.id,
+        },
+      });
       console.log('Created Jumia ApiCredential for JM shop');
     }
   } catch (e) {

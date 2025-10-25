@@ -10,11 +10,13 @@ export async function GET() {
   if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const c = await prisma.apiCredential.findFirst({ where: { scope: SCOPE } });
   return NextResponse.json({
-    apiBase: c?.apiBase ?? process.env.JUMIA_API_BASE ?? "",
-    issuer: c?.issuer ?? process.env.JUMIA_OIDC_ISSUER ?? "",
-    clientId: c?.clientId ?? process.env.JUMIA_CLIENT_ID ?? "",
+    // Prefer canonical base_url env var; fall back to legacy JUMIA_API_BASE
+    apiBase: c?.apiBase ?? process.env.base_url ?? process.env.JUMIA_API_BASE ?? "",
+    issuer: c?.issuer ?? process.env.OIDC_ISSUER ?? process.env.JUMIA_OIDC_ISSUER ?? "",
+    // Prefer standard OIDC env name for client id
+    clientId: c?.clientId ?? process.env.OIDC_CLIENT_ID ?? process.env.JUMIA_CLIENT_ID ?? "",
     refreshToken: c?.refreshToken ? "********" : "",
-    hasClientSecret: Boolean(c?.apiSecret ?? process.env.JUMIA_CLIENT_SECRET),
+    hasClientSecret: Boolean(c?.apiSecret ?? process.env.OIDC_CLIENT_SECRET ?? process.env.JUMIA_CLIENT_SECRET),
   });
 }
 
