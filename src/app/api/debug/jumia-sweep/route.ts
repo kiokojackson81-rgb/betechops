@@ -50,11 +50,23 @@ export async function GET(req: Request) {
     '/returns?status=waiting-pickup',
   ];
 
-  // build bases: prefer resolved base then canonical list
+  // build bases: prefer resolved base then canonical + expanded list
   const resolved = await resolveJumiaConfig().catch(() => null);
   const bases: string[] = [];
   if (resolved?.base) bases.push(resolved.base.replace(/\/$/, ''));
-  for (const b of ['https://vendor-api.jumia.com', 'https://vendor-api.jumia.com/api', 'https://vendor-api.jumia.com/v1', 'https://vendor-api.jumia.com/v2']) {
+  const baseCandidates = [
+    'https://vendor-api.jumia.com',
+    'https://vendor-api.jumia.com/api',
+    'https://vendor-api.jumia.com/v1',
+    'https://vendor-api.jumia.com/v2',
+    'https://vendor-api.jumia.com/v3',
+    'https://api.jumia.com',
+    'https://api.jumia.com/v1',
+    // some tenants use subdomains or vendor prefixes
+    'https://api.vendor.jumia.com',
+    'https://vendor.jumia.com',
+  ];
+  for (const b of baseCandidates) {
     const bb = b.replace(/\/$/, '');
     if (!bases.includes(bb)) bases.push(bb);
   }
@@ -67,35 +79,53 @@ export async function GET(req: Request) {
     try { token = await getAccessTokenFromEnv(); } catch { token = ''; }
   }
 
-  const scheme = resolved?.scheme || 'Bearer';
+  // try multiple auth header schemes (do not return tokens)
+  const authSchemes = resolved?.scheme ? [resolved.scheme, 'Bearer', 'Token', 'VcToken'] : ['Bearer', 'Token', 'VcToken'];
 
   const results: SweepResult[] = [];
 
-  // For each path, try bases in order and stop at first 200
+  // For each path, try bases in order and for each base try multiple auth header schemes and also an unauthenticated attempt.
   for (const p of candidatePaths) {
     let found = false;
     for (const base of bases) {
-      const url = `${base}${p.startsWith('/') ? p : '/' + p}`;
+      const fullUrl = `${base}${p.startsWith('/') ? p : '/' + p}`;
+      // try unauthenticated first
       try {
-        const headers: Record<string, string> = {};
-        if (token) headers['Authorization'] = `${scheme} ${token}`;
-        const r = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+        const r = await fetch(fullUrl, { method: 'GET', cache: 'no-store' });
         const status = r.status;
         let preview = '';
-        try {
-          const txt = await r.text();
-          preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : '';
-        } catch {}
+        try { const txt = await r.text(); preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : ''; } catch {}
         const ok = r.ok && status === 200;
         results.push({ path: p, base, status, ok, preview: preview ? preview : undefined });
         if (ok) { found = true; break; }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        results.push({ path: p, status: 0, ok: false, error: msg });
+        results.push({ path: p, base, status: 0, ok: false, error: msg });
       }
+
+      // try each auth scheme (if we have a token)
+      if (token) {
+        for (const scheme of authSchemes) {
+          try {
+            const headers: Record<string, string> = { Authorization: `${scheme} ${token}` };
+            const r = await fetch(fullUrl, { method: 'GET', headers, cache: 'no-store' });
+            const status = r.status;
+            let preview = '';
+            try { const txt = await r.text(); preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : ''; } catch {}
+            const ok = r.ok && status === 200;
+            results.push({ path: p, base, status, ok, preview: preview ? preview : undefined });
+            if (ok) { found = true; break; }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            results.push({ path: p, base, status: 0, ok: false, error: msg });
+          }
+        }
+        if (found) break;
+      }
+      if (found) break;
     }
     // small delay to avoid hitting rate limits aggressively
-    await new Promise((res) => setTimeout(res, 250));
+    await new Promise((res) => setTimeout(res, 350));
   }
 
   return NextResponse.json({ ok: true, results, timestamp: new Date().toISOString() }, { status: 200 });
