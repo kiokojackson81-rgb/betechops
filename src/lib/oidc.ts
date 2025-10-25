@@ -49,7 +49,13 @@ export async function getAccessTokenFromEnv(): Promise<string> {
   const tokenEndpoint = disc.token_endpoint;
   if (!tokenEndpoint) throw new Error("discovery document did not contain token_endpoint");
 
-  let tokenResp: any;
+  interface TokenResponse {
+    access_token?: string;
+    expires_in?: number | string;
+    [k: string]: unknown;
+  }
+
+  let tokenResp: TokenResponse;
   if (refreshToken) {
     const body = new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken });
     if (clientSecret) body.set("client_secret", clientSecret);
@@ -60,8 +66,8 @@ export async function getAccessTokenFromEnv(): Promise<string> {
     tokenResp = await requestToken(tokenEndpoint, body);
   }
 
-  const expiresIn = Number(tokenResp.expires_in || 300);
-  cache[cacheKey] = { accessToken: tokenResp.access_token, exp: now + expiresIn * 1000 };
+  const expiresIn = Number(tokenResp.expires_in ?? 300);
+  cache[cacheKey] = { accessToken: String(tokenResp.access_token ?? ""), exp: now + expiresIn * 1000 };
   return cache[cacheKey].accessToken;
 }
 
@@ -69,4 +75,4 @@ export function clearOidcCache() {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 
-export default { getAccessTokenFromEnv, clearOidcCache };
+// Intentionally no default export to keep named exports explicit

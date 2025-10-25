@@ -1,11 +1,13 @@
 "use client";
+import confirmDialog from '@/lib/confirm';
+import toast from '@/lib/toast';
 
 export default function FinalizePricingButton({ orderId }: { orderId: string }) {
   const onClick = async () => {
-    const ok = confirm("Finalize pricing and set status = CONFIRMED?");
+    const ok = await confirmDialog("Finalize pricing and set status = CONFIRMED?");
     if (!ok) return;
     const r = await fetch(`/api/orders/${orderId}/finalize-pricing`, { method: "POST" });
-    if (!r.ok) { alert("Failed to finalize"); return; }
+    if (!r.ok) { toast("Failed to finalize", 'error'); return; }
     // Return to list
     window.location.href = "/admin/pending-pricing";
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import toast from '@/lib/toast';
 
 type OrderRow = {
   id: string;
@@ -72,7 +73,7 @@ export default function QueueList({ shopId }: { shopId?: string }) {
       if (!r.ok) throw new Error("pack error");
     } catch {
       setRows(prev);
-      alert("Failed to mark packed");
+      toast("Failed to mark packed", 'error');
     }
   };
 
@@ -88,7 +89,7 @@ export default function QueueList({ shopId }: { shopId?: string }) {
       if (!r.ok) throw new Error("payment error");
     } catch {
       setRows(prev);
-      alert("Failed to confirm payment");
+      toast("Failed to confirm payment", 'error');
     }
   };
 

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import toast from '@/lib/toast';
 
 async function sha256File(file: File) {
   const buf = await file.arrayBuffer();
@@ -12,7 +13,7 @@ export default function ReturnPickForm({ id, shopId }: { id: string; shopId: str
   const [busy, setBusy] = useState(false);
 
   async function handleUpload() {
-    if (!files.length) return alert('Select files');
+  if (!files.length) return toast('Select files', 'error');
     setBusy(true);
     try {
       for (const f of files) {
@@ -32,10 +33,10 @@ export default function ReturnPickForm({ id, shopId }: { id: string; shopId: str
         const ev = await evRes.json();
         if (!evRes.ok) throw new Error(ev.error || 'evidence save failed');
       }
-      alert('Uploaded');
+  toast('Uploaded', 'success');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(msg);
+  const msg = err instanceof Error ? err.message : String(err);
+  toast(msg, 'error');
     } finally { setBusy(false); }
   }
 

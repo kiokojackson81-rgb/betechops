@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import toast from '@/lib/toast';
 
 type Product = { id: string; name: string; sku: string; sellingPrice: number; lastBuyingPrice?: number };
 
@@ -33,7 +34,7 @@ export default function QuickPriceCard() {
   const save = async () => {
     if (!selected) return;
     const buying = Number(buy);
-    if (!Number.isFinite(buying) || buying <= 0) return alert("Enter a valid buying price > 0");
+  if (!Number.isFinite(buying) || buying <= 0) return toast("Enter a valid buying price > 0", 'error');
     const prev = selected.lastBuyingPrice;
 
     setSelected({ ...selected, lastBuyingPrice: buying });
@@ -44,10 +45,10 @@ export default function QuickPriceCard() {
         body: JSON.stringify({ productId: selected.id, lastBuyingPrice: buying }),
       });
       if (!r.ok) throw new Error("save error");
-      alert("Buying price saved");
+      toast("Buying price saved", 'success');
     } catch {
       setSelected({ ...selected, lastBuyingPrice: prev });
-      alert("Failed to save");
+      toast("Failed to save", 'error');
     }
   };
 

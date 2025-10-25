@@ -1,0 +1,11 @@
+---- https://vendor-api.jumia.com/auth/realms/acl/.well-known/openid-configuration ----
+Error Status: 404
+(no body)\n---- https://vendor-api.jumia.com/realms/acl/.well-known/openid-configuration ----
+Error Status: 404
+(no body)\n---- https://vendor-api.jumia.com/auth/realms/jumia/.well-known/openid-configuration ----
+Error Status: 404
+(no body)\n---- https://vendor-api.jumia.com/realms/jumia/.well-known/openid-configuration ----
+Error Status: 404
+(no body)\n---- https://vendor-api.jumia.com/.well-known/openid-configuration ----
+Error Status: 404
+(no body)\n

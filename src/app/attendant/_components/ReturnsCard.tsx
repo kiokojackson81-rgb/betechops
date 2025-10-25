@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import toast from '@/lib/toast';
 
 export default function ReturnsCard() {
   const [open, setOpen] = useState(false);
@@ -38,10 +39,10 @@ function ReturnModal({ onClose }: { onClose: () => void }) {
       if (fileRef.current?.files?.[0]) fd.append("photo", fileRef.current.files[0]);
       const r = await fetch("/api/returns", { method: "POST", body: fd });
       if (!r.ok) throw new Error("return error");
-      alert("Return submitted");
+      toast("Return submitted", 'success');
       onClose();
     } catch {
-      alert("Failed to submit return");
+      toast("Failed to submit return", 'error');
     } finally {
       setBusy(false);
     }

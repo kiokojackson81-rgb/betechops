@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -14,7 +13,13 @@ export async function POST(req: Request) {
   if (!productId || !Number.isFinite(v) || v <= 0) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
 
   try {
-    const updated = await prisma.product.update({ where: { id: productId }, data: { lastBuyingPrice: v as any } as any, select: { id: true, lastBuyingPrice: true } as any });
+    // Try to update the product record. If the Prisma schema does not include lastBuyingPrice
+    // this will throw and we fallback to accepting without persisting.
+    const updated = await prisma.product.update({
+      where: { id: productId },
+      data: { lastBuyingPrice: v },
+      select: { id: true, lastBuyingPrice: true },
+    });
     return NextResponse.json({ ok: true, product: updated });
   } catch {
     // If the schema doesn't have lastBuyingPrice, accept the request but don't persist
