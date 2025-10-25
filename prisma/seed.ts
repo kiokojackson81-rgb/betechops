@@ -36,6 +36,25 @@ async function main() {
   });
 
   console.log({ shop, attendant, product });
+
+  // Ensure JM (Jumia) shop exists and create per-shop ApiCredential linking to env values
+  try {
+    let jmShop = await prisma.shop.findFirst({ where: { name: "Jumia Shop" } });
+    if (!jmShop) {
+      jmShop = await prisma.shop.create({ data: { name: "Jumia Shop" } });
+    }
+
+    const existingCred = await prisma.apiCredential.findFirst({ where: { shopId: jmShop.id } });
+    if (existingCred) {
+      await prisma.apiCredential.update({ where: { id: existingCred.id }, data: { apiBase: process.env.JUMIA_API_BASE || existingCred.apiBase, issuer: process.env.OIDC_ISSUER || existingCred.issuer, clientId: process.env.OIDC_CLIENT_ID || existingCred.clientId, refreshToken: process.env.OIDC_REFRESH_TOKEN || existingCred.refreshToken, apiSecret: process.env.OIDC_CLIENT_SECRET || existingCred.apiSecret } });
+      console.log('Updated existing Jumia ApiCredential');
+    } else {
+      await prisma.apiCredential.create({ data: { scope: `SHOP:${jmShop.id}`, apiBase: process.env.JUMIA_API_BASE || '', issuer: process.env.OIDC_ISSUER || '', clientId: process.env.OIDC_CLIENT_ID || '', refreshToken: process.env.OIDC_REFRESH_TOKEN || '', apiSecret: process.env.OIDC_CLIENT_SECRET || '', shopId: jmShop.id } });
+      console.log('Created Jumia ApiCredential for JM shop');
+    }
+  } catch (e) {
+    console.warn('JM shop credential upsert skipped or failed:', e instanceof Error ? e.message : String(e));
+  }
 }
 
 main()

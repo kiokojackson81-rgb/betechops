@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAccessTokenFromEnv } from '@/lib/oidc';
 
 type Cache = {
   accessToken?: string;
@@ -69,94 +70,8 @@ async function loadConfig(): Promise<Config> {
  * We cache it in-memory on the server until ~60s before expiry.
  */
 async function getAccessToken(): Promise<string> {
-  const now = Date.now();
-  if (cache.accessToken && cache.exp && now < cache.exp - 60_000) {
-    return cache.accessToken;
-  }
-
-  const { issuer, clientId, clientSecret, refreshToken } = await loadConfig();
-  if (!issuer || !clientId) {
-    throw new Error("Missing Jumia OIDC config (issuer/clientId)");
-  }
-
-  // Priority: refresh_token if present, else client_credentials
-  const doToken = async (body: URLSearchParams) => {
-    const r = await fetch(`${issuer}/protocol/openid-connect/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      cache: "no-store",
-    });
-    if (!r.ok) {
-      const msg = await r.text().catch(() => r.statusText);
-      console.error("OIDC token fetch failed:", r.status, msg);
-      throw new Error(`OIDC token fetch failed: ${r.status} ${msg}`);
-    }
-    const j = await r.json();
-    cache.accessToken = j.access_token;
-    cache.exp = now + (Number(j.expires_in || 300) * 1000);
-    return cache.accessToken!;
-  };
-
-  if (refreshToken) {
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: clientId,
-      refresh_token: refreshToken,
-    });
-    if (clientSecret) body.set("client_secret", clientSecret);
-
-    // Determine candidate token endpoints (explicit override, then derived from issuer with/without /auth)
-    const candidates: string[] = [];
-    const { tokenUrl } = await loadConfig();
-    if (tokenUrl) candidates.push(tokenUrl);
-    if (issuer) {
-      const primary = `${issuer.replace(/\/?$/, "")}/protocol/openid-connect/token`;
-      candidates.push(primary);
-      if (issuer.includes("/auth/realms/")) {
-        const altIssuer = issuer.replace("/auth/realms/", "/realms/");
-        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
-      } else if (issuer.includes("/realms/")) {
-        const altIssuer = issuer.replace("/realms/", "/auth/realms/");
-        candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
-      }
-    }
-
-    let lastErr: unknown;
-    for (const url of candidates) {
-      try {
-        const r = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: body.toString(),
-          cache: "no-store",
-        });
-        if (!r.ok) {
-          const msg = await r.text().catch(() => r.statusText);
-          lastErr = new Error(`OIDC token fetch failed: ${r.status} ${msg} (endpoint: ${url})`);
-          continue;
-        }
-        const j = await r.json();
-        cache.accessToken = j.access_token;
-        cache.exp = now + (Number(j.expires_in || 300) * 1000);
-        return cache.accessToken!;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || "OIDC token fetch failed"));
-  }
-
-  // client_credentials fallback
-  if (!clientSecret) {
-    throw new Error("Missing refresh token and clientSecret for client_credentials flow");
-  }
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-  return doToken(body);
+  // Delegate to the generic OIDC helper which reads OIDC_* env vars and caches tokens.
+  return getAccessTokenFromEnv();
 }
 
 /**
@@ -164,8 +79,9 @@ async function getAccessToken(): Promise<string> {
  * Usage: await jumiaFetch("/some/endpoint?param=1")
  */
 export async function jumiaFetch(path: string, init: RequestInit = {}) {
-  const { apiBase } = await loadConfig();
-  if (!apiBase) throw new Error("Missing Jumia API base (apiBase)");
+  const cfg = await loadConfig();
+  const apiBase = process.env.JUMIA_API_BASE || cfg.apiBase || process.env.JUMIA_API_BASE;
+  if (!apiBase) throw new Error("Missing JUMIA_API_BASE. Set JUMIA_API_BASE=https://vendor-api.jumia.com/api in env for the JM shop");
   const token = await getAccessToken();
   const url = `${apiBase}${path}`;
   const bodyPresent = Boolean((init as RequestInit).body);
