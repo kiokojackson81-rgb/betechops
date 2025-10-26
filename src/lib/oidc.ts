@@ -87,7 +87,9 @@ export function clearOidcCache() {
  */
 export async function getJumiaAccessToken(): Promise<string> {
   // Prefer explicit JUMIA_OIDC_TOKEN_URL, then generic OIDC token URL, then canonical fallback
-  const tokenUrl = process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL || 'https://vendor-api.jumia.com/oauth/token';
+  // Per Jumia vendor API spec the token endpoint is exposed at /token
+  // Prefer explicit JUMIA_OIDC_TOKEN_URL, then generic OIDC token URL, then canonical fallback
+  const tokenUrl = process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL || 'https://vendor-api.jumia.com/token';
   // Prefer standard OIDC env names, fall back to legacy JUMIA_CLIENT_ID
   const clientId = process.env.OIDC_CLIENT_ID || process.env.JUMIA_CLIENT_ID || "";
   // Prefer standard OIDC env names

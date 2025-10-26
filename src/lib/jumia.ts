@@ -263,7 +263,9 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
       const issuer0 = cfg.issuer || process.env.JUMIA_OIDC_ISSUER || "";
       if (issuer0) {
         const primary = `${issuer0.replace(/\/?$/, "")}/protocol/openid-connect/token`;
-        candidates.push(primary);
+          candidates.push(primary);
+          // Some Jumia docs and older setups expose a simple /token endpoint (per vendor API spec)
+          candidates.push(`${issuer0.replace(/\/?$/, "")}/token`);
         if (issuer0.includes("/auth/realms/")) {
           const altIssuer = issuer0.replace("/auth/realms/", "/realms/");
           candidates.push(`${altIssuer.replace(/\/?$/, "")}/protocol/openid-connect/token`);
@@ -324,4 +326,85 @@ export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string 
   const j = await jumiaFetch(pathBase + q);
   return j;
 }
+
+/* ---- New: explicit wrapper functions for common vendor endpoints ---- */
+
+export async function getShops() {
+  // GET /shops
+  const j = await jumiaFetch('/shops');
+  return j?.shops || j || [];
+}
+
+export async function getShopsOfMasterShop() {
+  const j = await jumiaFetch('/shops-of-master-shop');
+  return j?.shops || j || [];
+}
+
+export async function getCatalogBrands(page = 1) {
+  const j = await jumiaFetch(`/catalog/brands?page=${encodeURIComponent(String(page))}`);
+  return j;
+}
+
+export async function getCatalogCategories(page = 1, attributeSetName?: string) {
+  const q = attributeSetName ? `?page=${encodeURIComponent(String(page))}&attributeSetName=${encodeURIComponent(attributeSetName)}` : `?page=${encodeURIComponent(String(page))}`;
+  const j = await jumiaFetch(`/catalog/categories${q}`);
+  return j;
+}
+
+export async function getCatalogProducts(opts?: { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string }) {
+  const params: string[] = [];
+  if (opts?.token) params.push(`token=${encodeURIComponent(opts.token)}`);
+  if (opts?.size) params.push(`size=${encodeURIComponent(String(opts.size))}`);
+  if (opts?.sids && opts.sids.length) params.push(`sids=${opts.sids.map(encodeURIComponent).join(',')}`);
+  if (opts?.categoryCode) params.push(`categoryCode=${encodeURIComponent(String(opts.categoryCode))}`);
+  if (opts?.sellerSku) params.push(`sellerSku=${encodeURIComponent(opts.sellerSku)}`);
+  if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
+  const q = params.length ? `?${params.join('&')}` : '';
+  const j = await jumiaFetch(`/catalog/products${q}`);
+  return j;
+}
+
+export async function postFeedProductsStock(payload: unknown) {
+  return await jumiaFetch('/feeds/products/stock', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function postFeedProductsPrice(payload: unknown) {
+  return await jumiaFetch('/feeds/products/price', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function postFeedProductsStatus(payload: unknown) {
+  return await jumiaFetch('/feeds/products/status', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function postFeedProductsCreate(payload: unknown) {
+  return await jumiaFetch('/feeds/products/create', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function postFeedProductsUpdate(payload: unknown) {
+  return await jumiaFetch('/feeds/products/update', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getFeedById(id: string) {
+  if (!id) throw new Error('feed id required');
+  return await jumiaFetch(`/feeds/${encodeURIComponent(id)}`);
+}
+
+export async function getOrders(opts?: { status?: string; createdAfter?: string; createdBefore?: string; token?: string; size?: number; country?: string; shopId?: string }) {
+  const params: string[] = [];
+  if (opts?.status) params.push(`status=${encodeURIComponent(opts.status)}`);
+  if (opts?.createdAfter) params.push(`createdAfter=${encodeURIComponent(opts.createdAfter)}`);
+  if (opts?.createdBefore) params.push(`createdBefore=${encodeURIComponent(opts.createdBefore)}`);
+  if (opts?.token) params.push(`token=${encodeURIComponent(opts.token)}`);
+  if (opts?.size) params.push(`size=${encodeURIComponent(String(opts.size))}`);
+  if (opts?.country) params.push(`country=${encodeURIComponent(opts.country)}`);
+  if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
+  const q = params.length ? `?${params.join('&')}` : '';
+  return await jumiaFetch(`/orders${q}`);
+}
+
+export async function getOrderItems(orderId: string) {
+  if (!orderId) throw new Error('orderId required');
+  return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`);
+}
+
 
