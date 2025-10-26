@@ -90,6 +90,8 @@ model User {
   
   // per-shop assignments
   userShops UserShop[]
+  // Shop assignments (supervisor/attendant)
+  assignments ShopAssignment[]
 }
 
 model Shop {
@@ -128,6 +130,8 @@ model Shop {
   userAssignments UserShop[]
   reconciliations Reconciliation[]
   discrepancies Discrepancy[]
+  // shop assignments for supervisors/attendants
+  assignments ShopAssignment[]
 }
 
 model ShopApiConfig {
@@ -461,6 +465,20 @@ model UserShop {
   shop       Shop           @relation(fields: [shopId], references: [id])
 
   @@unique([userId, shopId])
+}
+
+/// Assignment model for supervisors/attendants per shop
+model ShopAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  shopId    String
+  role      Role
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([userId, shopId, role])
 }
 
 model ProductCost {
