@@ -1,6 +1,8 @@
 import React from 'react';
 import AttendantHeader from '../_components/AttendantHeader';
 
+type OrdersResult = { shops?: unknown[]; orders?: unknown[]; error?: string };
+
 async function fetchOrdersAndKpis() {
   try {
     const [ordersRes, kpisRes] = await Promise.all([
@@ -10,9 +12,9 @@ async function fetchOrdersAndKpis() {
 
     const orders = ordersRes.ok ? await ordersRes.json() : { shops: [], orders: [] };
     const kpis = kpisRes.ok ? await kpisRes.json() : { queued: 0, todayPacked: 0, rts: 0 };
-    return { orders, kpis } as { orders: any; kpis: { queued: number; todayPacked: number; rts: number } };
+    return { orders: orders as OrdersResult, kpis: kpis as { queued: number; todayPacked: number; rts: number } };
   } catch (err) {
-    return { orders: { shops: [], orders: [] }, kpis: { queued: 0, todayPacked: 0, rts: 0 }, error: String(err) };
+    return { orders: { shops: [], orders: [] } as OrdersResult, kpis: { queued: 0, todayPacked: 0, rts: 0 }, error: String(err) };
   }
 }
 
