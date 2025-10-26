@@ -133,20 +133,21 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
   if (!res.ok) incFulfillmentFailures(1);
   observeFulfillmentLatency(took);
   // persist audit to DB (best-effort)
-  try {
-    await prisma.fulfillmentAudit.create({
-      data: {
-        idempotencyKey: key,
-        shopId,
-        orderId,
-        status: res.status,
-        ok: Boolean(res.ok),
-        payload: toStore.payload,
-        s3Bucket: (toStore.payload?._labelStored as any)?.bucket ?? null,
-        s3Key: (toStore.payload?._labelStored as any)?.key ?? null,
-      },
-    });
-  } catch (err) {
+    try {
+      await prisma.fulfillmentAudit.create({
+        data: {
+          idempotencyKey: key,
+          shopId,
+          orderId,
+          action: 'FULFILL',
+          status: res.status,
+          ok: Boolean(res.ok),
+          payload: toStore.payload,
+          s3Bucket: (toStore.payload?._labelStored as any)?.bucket ?? null,
+          s3Key: (toStore.payload?._labelStored as any)?.key ?? null,
+        },
+      });
+    } catch (err) {
     logger.warn({ err, shopId, orderId }, 'failed to persist FulfillmentAudit');
   }
 

@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       // persist audit (best-effort)
       try {
         const auditKey = `${idempotencyKey}:${Date.now()}`;
-        await (prisma as any).fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, status: 1, ok: true, payload: { actor, result } } });
+  await (prisma as any).fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result } } });
       } catch (e) {
         console.warn('failed to persist fulfillment audit', e);
       }

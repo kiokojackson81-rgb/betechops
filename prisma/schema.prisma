@@ -537,6 +537,7 @@ model FulfillmentAudit {
   shopId         String
   orderId        String
   status         Int
+  action         String?
   ok             Boolean
   payload        Json
   s3Bucket       String?
