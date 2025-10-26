@@ -556,7 +556,7 @@ export async function* jumiaPaginator(
   fetcher: (p: string) => Promise<any> = jumiaFetch
 ) {
   let token = initialParams['token'] || initialParams['nextToken'] || '';
-  let params = { ...initialParams };
+  const params = { ...initialParams };
   // ensure token param not duplicated in query string builder below
   delete params.token;
   delete params.nextToken;
