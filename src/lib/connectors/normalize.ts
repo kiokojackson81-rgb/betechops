@@ -14,6 +14,12 @@ export type NormalizedOrder = {
   }>;
 };
 
+// TODO(copilot): Extend normalizeFromJumia(order) to include:
+// - shopIds[] (if orders can belong to multiple shops)
+// - number (order number), totals (totalAmount, currency), deliveryOption
+// - pendingSince (first seen pending timestamp)
+// - preserve raw timestamps as UTC in a `raw` field for troubleshooting
+
 export function normalizeFromJumia(raw: unknown, shopId: string): NormalizedOrder {
   // Minimal defensive mapping. Real mapping should be expanded to match Jumia payload.
   const rawObj = (raw || {}) as Record<string, unknown>;

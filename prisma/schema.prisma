@@ -112,6 +112,9 @@ model Shop {
   // multiple credentials (optional)
   apiCredentials ApiCredential[]
 
+  // fulfillment audit records
+  fulfillmentAudits FulfillmentAudit[]
+
   // relations
   orders Order[]
   attendantCommissions AttendantCommission[]
@@ -508,4 +511,21 @@ model Discrepancy {
   createdAt DateTime         @default(now())
 
   shop      Shop             @relation(fields: [shopId], references: [id])
+}
+
+model FulfillmentAudit {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  shopId         String
+  orderId        String
+  status         Int
+  ok             Boolean
+  payload        Json
+  s3Bucket       String?
+  s3Key          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+  @@index([shopId, orderId])
 }

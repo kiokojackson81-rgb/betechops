@@ -5,10 +5,41 @@
  * - Uses token_endpoint from discovery to request tokens
  * - Caches token in-memory until expiry
  */
+// TODO(copilot): Add persistent token cache (Redis) behind getJumiaAccessToken()
+// 1) If process.env.REDIS_URL -> use it to store { accessToken, exp } under key `jumia:token`
+// 2) Refresh 5 minutes before expiry; fall back to in-memory if Redis unavailable
+// 3) Emit metrics: jumia_token_refresh_total{result="ok|fail"}
+
 const cache: Record<string, { accessToken: string; exp: number }> = {};
 
 // Simple per-Jumia cache for the refresh token flow
 const jumiaCache: { token?: string; exp?: number; tokenUrl?: string } = {};
+
+// Optional Redis-backed token cache (lazy init). Only used when process.env.REDIS_URL is set.
+let redisClient: any | null = null;
+let redisAvailable = false;
+
+async function ensureRedis() {
+  if (!process.env.REDIS_URL) return null;
+  if (redisClient) return redisClient;
+  try {
+    // dynamic import to avoid hard dependency until runtime
+    const mod = await import('ioredis');
+    const Redis = mod.default || mod;
+    redisClient = new Redis(process.env.REDIS_URL as string);
+    // basic ping to confirm connectivity
+    await redisClient.ping();
+    redisAvailable = true;
+    return redisClient;
+  } catch (e) {
+    // If Redis is unavailable, fall back to in-memory cache
+    // eslint-disable-next-line no-console
+    console.error('Jumia Redis initialization failed, falling back to in-memory token cache');
+    redisClient = null;
+    redisAvailable = false;
+    return null;
+  }
+}
 
 async function fetchDiscovery(issuer: string) {
   const url = `${issuer.replace(/\/?$/, "")}/.well-known/openid-configuration`;
@@ -100,8 +131,38 @@ export async function getJumiaAccessToken(): Promise<string> {
   if (!refreshToken) throw new Error("OIDC_REFRESH_TOKEN (or JUMIA_REFRESH_TOKEN) is not set in env; cannot mint Jumia token");
 
   const now = Date.now();
+
+  // 1) check in-memory cache first (fast-path)
   if (jumiaCache.token && jumiaCache.exp && now < (jumiaCache.exp - 60_000)) {
     return jumiaCache.token;
+  }
+
+  // 2) If REDIS_URL configured, try Redis before minting a new token
+  try {
+    const r = await ensureRedis();
+    if (r && redisAvailable) {
+      try {
+        const raw = await r.get('jumia:token');
+        if (raw) {
+          const parsed = JSON.parse(raw as string);
+          const access = String(parsed.access || parsed.accessToken || parsed.token || '');
+          const exp = Number(parsed.exp || parsed.expiresAt || 0);
+          if (access && exp && now < (exp - 60_000)) {
+            // populate in-memory cache and return
+            jumiaCache.token = access;
+            jumiaCache.exp = exp;
+            jumiaCache.tokenUrl = tokenUrl;
+            return access;
+          }
+        }
+      } catch (e) {
+        // redis read failed -> continue to mint new token
+        // eslint-disable-next-line no-console
+        console.error('Jumia Redis read failed; will mint new token');
+      }
+    }
+  } catch (e) {
+    // ignore Redis failures; proceed with minting and fallback to in-memory
   }
 
   const body = new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken });
@@ -135,6 +196,23 @@ export async function getJumiaAccessToken(): Promise<string> {
   jumiaCache.token = access;
   jumiaCache.exp = now + expiresIn * 1000;
   jumiaCache.tokenUrl = tokenUrl;
+
+  // Persist to Redis (best-effort). Store token and absolute expiry.
+  (async () => {
+    try {
+      const r = await ensureRedis();
+      if (r && redisAvailable) {
+        const payload = JSON.stringify({ access: access, exp: jumiaCache.exp });
+        // set with TTL a bit shorter than expiry to allow refresh window
+        const ttl = Math.max(30, Math.floor(expiresIn) - 10);
+        await r.set('jumia:token', payload, 'EX', ttl);
+      }
+    } catch (err) {
+      // Non-fatal: log and continue
+      // eslint-disable-next-line no-console
+      console.error('Failed to persist Jumia token to Redis; continuing with in-memory cache');
+    }
+  })();
   return access;
 }
 

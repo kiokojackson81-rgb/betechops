@@ -8,6 +8,16 @@ type Cache = {
 };
 const cache: Cache = {};
 
+// TODO(copilot): Add p-limit request queue to enforce 4 rps (~200 rpm) caps across all Jumia calls
+// - Implement a shared queue (p-limit or Bottleneck) used by jumiaFetch
+// - Surface queue metrics: inFlight, pending, avgLatency (expose via src/lib/metrics.ts)
+// - Retry logic: for 429 and 5xx return codes use exponential backoff with jitter
+// - Honor Retry-After header when present
+
+// TODO(copilot): Add listShops() cached in memory for 10m and getOrdersForAllShops({status,countries,since})
+// - Fan-out across shops with concurrency bounded by the rate-limiter
+// - Flatten and return normalized orders with shopId attached
+
 type Config = {
   issuer?: string;
   clientId?: string;
@@ -71,7 +81,7 @@ async function loadConfig(): Promise<Config> {
  * Get an access token using your long-lived REFRESH TOKEN.
  * We cache it in-memory on the server until ~60s before expiry.
  */
-async function getAccessToken(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   // Prefer the Jumia-specific refresh token minting when JUMIA_OIDC_TOKEN_URL is present
   try {
     // If either the legacy JUMIA_* vars or the standard OIDC_* vars are present, use the Jumia/OIDC mint flow
@@ -178,17 +188,142 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
     "Content-Type": bodyPresent ? "application/json" : undefined,
   } as Record<string, string>;
 
-  const r = await fetch(url, { ...init, headers, cache: "no-store" });
-  if (!r.ok) {
-    const msg = await r.text().catch(() => r.statusText);
-    console.error("Jumia API error:", r.status, msg, "path:", path, "base:", apiBase, "scheme:", scheme);
-    const err: any = new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
-    err.status = r.status;
-    err.body = msg;
-    throw err;
-  }
-  return r.json().catch(() => ({}));
+  // Use the shared rate-limited queue to perform the request with retries
+  const attempt = async () => {
+    const start = Date.now();
+    const r = await fetch(url, { ...init, headers, cache: "no-store" });
+    const latency = Date.now() - start;
+    _recordLatency(latency);
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      const err: any = new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
+      err.status = r.status;
+      err.body = msg;
+      throw err;
+    }
+    try {
+      return await r.json();
+    } catch {
+      return {};
+    }
+  };
+
+  return _rateLimiter.scheduleWithRetry(attempt);
 }
+
+/* --- Simple in-process rate limiter + retry/backoff --- */
+
+type TaskFn<T> = () => Promise<T>;
+
+const DEFAULT_RPS = 4; // 4 requests per second
+const MIN_INTERVAL_MS = Math.floor(1000 / DEFAULT_RPS);
+
+const _metrics = {
+  inFlight: 0,
+  pending: 0,
+  totalRequests: 0,
+  totalRetries: 0,
+  totalLatencyMs: 0,
+  latencyCount: 0,
+};
+
+function _recordLatency(ms: number) {
+  _metrics.totalLatencyMs += ms;
+  _metrics.latencyCount += 1;
+}
+
+export function getJumiaQueueMetrics() {
+  return {
+    inFlight: _metrics.inFlight,
+    pending: _metrics.pending,
+    totalRequests: _metrics.totalRequests,
+    totalRetries: _metrics.totalRetries,
+    avgLatencyMs: _metrics.latencyCount ? Math.round(_metrics.totalLatencyMs / _metrics.latencyCount) : 0,
+  };
+}
+
+const _rateLimiter = (() => {
+  // queue of tasks
+  const q: Array<() => void> = [];
+  let lastExec = 0;
+
+  async function worker() {
+    if (q.length === 0) return;
+    const now = Date.now();
+    const since = now - lastExec;
+    const wait = Math.max(0, MIN_INTERVAL_MS - since);
+    if (wait > 0) {
+      await new Promise((res) => setTimeout(res, wait));
+    }
+    lastExec = Date.now();
+    const fn = q.shift();
+    if (fn) fn();
+    // continue if tasks remain
+    if (q.length > 0) {
+      // schedule next without blocking
+      void worker();
+    }
+  }
+
+  async function schedule<T>(fn: TaskFn<T>): Promise<T> {
+    _metrics.pending += 1;
+    _metrics.totalRequests += 1;
+    return new Promise<T>((resolve, reject) => {
+      const wrapped = () => {
+        _metrics.pending -= 1;
+        _metrics.inFlight += 1;
+        // run the fn
+        fn()
+          .then((v) => {
+            _metrics.inFlight -= 1;
+            resolve(v);
+          })
+          .catch((e) => {
+            _metrics.inFlight -= 1;
+            reject(e);
+          });
+      };
+      q.push(wrapped);
+      // start worker if this is the only queued task
+      if (q.length === 1) void worker();
+    });
+  }
+
+  async function scheduleWithRetry<T>(fn: TaskFn<T>, opts?: { retries?: number; baseDelayMs?: number }): Promise<T> {
+    const retries = opts?.retries ?? 4;
+    const baseDelay = opts?.baseDelayMs ?? 500;
+    let attempt = 0;
+
+    const runAttempt = async (): Promise<T> => {
+      try {
+        return await schedule(fn);
+      } catch (err: any) {
+        attempt += 1;
+        const status = err?.status ?? 0;
+        // retry only on 429 or 5xx
+        if (attempt <= retries && (status === 429 || status >= 500)) {
+          _metrics.totalRetries += 1;
+          // honor Retry-After if present in err.body (best-effort parsing)
+          let retryAfterMs = 0;
+          try {
+            const bodyText = String(err.body || '');
+            const m = bodyText.match(/Retry-After:\s*(\d+)/i);
+            if (m) retryAfterMs = Number(m[1]) * 1000;
+          } catch {}
+          const jitter = Math.floor(Math.random() * 200);
+          const delay = retryAfterMs || Math.pow(2, attempt) * baseDelay + jitter;
+          await new Promise((res) => setTimeout(res, delay));
+          return runAttempt();
+        }
+        throw err;
+      }
+    };
+
+    return runAttempt();
+  }
+
+  return { schedule, scheduleWithRetry };
+})();
 
 /* ---- Example helpers (replace paths with your real ones) ---- */
 
@@ -405,6 +540,62 @@ export async function getOrders(opts?: { status?: string; createdAfter?: string;
 export async function getOrderItems(orderId: string) {
   if (!orderId) throw new Error('orderId required');
   return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`);
+}
+
+/**
+ * Async paginator for endpoints that use `token`/`nextToken` style pagination.
+ * Yields each page's raw response. Caller can map/normalize items as needed.
+ * Behavior:
+ * - Accepts a `pathBase` (e.g. `/orders`) and initial query params as a Record
+ * - Uses `token` query param for subsequent pages when `nextToken` is returned
+ * - On 401 it will attempt one token refresh via `getAccessToken()` and retry once.
+ */
+export async function* jumiaPaginator(
+  pathBase: string,
+  initialParams: Record<string, string> = {},
+  fetcher: (p: string) => Promise<any> = jumiaFetch
+) {
+  let token = initialParams['token'] || initialParams['nextToken'] || '';
+  let params = { ...initialParams };
+  // ensure token param not duplicated in query string builder below
+  delete params.token;
+  delete params.nextToken;
+
+  let retriedOn401 = false;
+
+  while (true) {
+    const qParts: string[] = [];
+    for (const [k, v] of Object.entries(params)) {
+      qParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    }
+    if (token) qParts.push(`token=${encodeURIComponent(token)}`);
+    const q = qParts.length ? `?${qParts.join('&')}` : '';
+
+    try {
+  const page = await fetcher(`${pathBase}${q}`);
+      yield page;
+
+      // determine next token from common fields
+      token = page?.nextToken || page?.token || page?.next || '';
+      if (!token) break; // no more pages
+      // continue loop to fetch next page
+    } catch (e: any) {
+      // if unauthorized, try refreshing token once and retry
+      const status = e?.status ?? 0;
+      if ((status === 401 || /unauthorized/i.test(String(e?.message || ''))) && !retriedOn401) {
+        retriedOn401 = true;
+        // attempt to refresh token cache and retry
+        try {
+          await getAccessToken();
+          // continue to retry fetch in next loop iteration (no token change here)
+          continue;
+        } catch (inner) {
+          throw e; // original error
+        }
+      }
+      throw e;
+    }
+  }
 }
 
 
