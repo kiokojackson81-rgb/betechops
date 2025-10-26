@@ -4,6 +4,7 @@ import "../globals.css";
 import AdminTopbar from "./_components/AdminTopbar";
 import AdminErrorBoundary from "./error-boundary";
 import AdminStatusBanner from "./_components/AdminStatusBanner";
+import AttendantHeader from "../(admin)/_components/AttendantHeader";
 
 export const metadata: Metadata = {
   title: "Jumia Ops – Admin",
@@ -22,6 +23,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <AdminStatusBanner />
       </div>
       <AdminErrorBoundary>
+        {/* Attendant header with KPIs */}
+        <div className="px-3">
+          <AttendantHeader />
+        </div>
         <main className="min-h-screen">{children}</main>
       </AdminErrorBoundary>
     </div>
