@@ -1,7 +1,7 @@
 // app/api/jumia/proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { makeJumiaFetch } from "../../../../../lib/jumia";
+import { makeJumiaFetch } from "@/lib/jumia";
 
 export const dynamic = "force-dynamic";
 

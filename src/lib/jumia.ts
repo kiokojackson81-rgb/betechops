@@ -32,6 +32,63 @@ type Config = {
   };
 };
 
+/* --- Per-shop client helper --- */
+type JumiaClientOpts = { apiBase: string; clientId: string; refreshToken: string };
+type ClientToken = { accessToken?: string; exp?: number };
+const _clientTokenMem: Record<string, ClientToken> = {};
+
+async function _mintAccessTokenForClient({ apiBase, clientId, refreshToken }: JumiaClientOpts): Promise<string> {
+  const k = `jumia-client:${clientId}`;
+  const hit = _clientTokenMem[k];
+  const now = Math.floor(Date.now() / 1000);
+  if (hit?.accessToken && hit.exp && hit.exp - 60 > now) return hit.accessToken;
+
+  // token endpoint commonly lives at the origin + /token
+  const url = `${new URL(apiBase).origin}/token`;
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+  });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`mint token for client failed: ${r.status} ${text}`);
+  }
+  const j = (await r.json()) as { access_token: string; expires_in?: number };
+  _clientTokenMem[k] = { accessToken: j.access_token, exp: now + (j.expires_in ?? 12 * 3600) };
+  return j.access_token;
+}
+
+export function makeJumiaFetch(opts: JumiaClientOpts) {
+  return async function jumiaFetch(path: string, init: RequestInit = {}) {
+    const token = await _mintAccessTokenForClient(opts);
+    const base = opts.apiBase.replace(/\/+$/, '');
+    const url = `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+    const r = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.headers as Record<string, string> | undefined),
+        'Content-Type': (init && (init as RequestInit).body) ? 'application/json' : 'application/json',
+      },
+      cache: 'no-store',
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new Error(`Jumia ${init.method || 'GET'} ${path} failed: ${r.status} ${t}`);
+    }
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return r.json();
+    if (ct.includes('application/pdf') || ct.includes('octet-stream')) {
+      const b = await r.arrayBuffer();
+      return { _binary: Buffer.from(b).toString('base64'), contentType: ct };
+    }
+    const text = await r.text();
+    try { return JSON.parse(text); } catch { return text; }
+  };
+}
+
 async function loadConfig(): Promise<Config> {
   const now = Date.now();
   if (cache.cfg && now - cache.cfg.loadedAt < 5 * 60_000) return cache.cfg;
