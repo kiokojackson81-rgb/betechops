@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const diag = await diagnoseOidc({ test });
 
   const tokenInfo = getJumiaTokenInfo();
-  const payload: any = {
+  const payload: Record<string, unknown> = {
     issuer: diag.issuer,
     clientIdSet: diag.clientIdSet,
     hasClientSecret: diag.hasClientSecret,

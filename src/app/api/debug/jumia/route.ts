@@ -28,7 +28,7 @@ export async function GET(req: Request) {
 
   const ok = (salesToday && salesToday.ok) || (pendingPricing && pendingPricing.ok) || (returnsWaitingPickup && returnsWaitingPickup.ok);
 
-  const responseBody: any = {
+  const responseBody: Record<string, unknown> = {
     ok,
     resolved,
     salesToday,
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
 
     const scheme = resolved?.scheme || 'Bearer';
 
-    const probeResults: Array<any> = [];
+  const probeResults: Array<Record<string, unknown>> = [];
     for (const base of bases) {
       for (const p of candidatePaths) {
         const url = `${base}${p.startsWith('/') ? p : '/' + p}`;

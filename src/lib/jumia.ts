@@ -253,7 +253,7 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
     _recordLatency(latency);
     if (!r.ok) {
       const msg = await r.text().catch(() => r.statusText);
-      const err: any = new Error(`Jumia ${path} failed: ${r.status} ${msg}`);
+      const err = new Error(`Jumia ${path} failed: ${r.status} ${msg}`) as ErrorWithMeta;
       err.status = r.status;
       err.body = msg;
       throw err;
@@ -271,6 +271,9 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
 /* --- Simple in-process rate limiter + retry/backoff --- */
 
 type TaskFn<T> = () => Promise<T>;
+
+// Error shape used to attach metadata from HTTP responses
+type ErrorWithMeta = Error & { status?: number; body?: string };
 
 const DEFAULT_RPS = 4; // 4 requests per second
 const MIN_INTERVAL_MS = Math.floor(1000 / DEFAULT_RPS);
@@ -354,16 +357,16 @@ const _rateLimiter = (() => {
     const runAttempt = async (): Promise<T> => {
       try {
         return await schedule(fn);
-      } catch (err: any) {
+      } catch (err: unknown) {
         attempt += 1;
-        const status = err?.status ?? 0;
+        const status = (err as { status?: number })?.status ?? 0;
         // retry only on 429 or 5xx
         if (attempt <= retries && (status === 429 || status >= 500)) {
           _metrics.totalRetries += 1;
           // honor Retry-After if present in err.body (best-effort parsing)
           let retryAfterMs = 0;
           try {
-            const bodyText = String(err.body || '');
+            const bodyText = String((err as { body?: unknown })?.body || '');
             const m = bodyText.match(/Retry-After:\s*(\d+)/i);
             if (m) retryAfterMs = Number(m[1]) * 1000;
           } catch {}
@@ -610,8 +613,8 @@ export async function getOrderItems(orderId: string) {
 export async function* jumiaPaginator(
   pathBase: string,
   initialParams: Record<string, string> = {},
-  fetcher: (p: string) => Promise<any> = jumiaFetch
-) {
+  fetcher: (p: string) => Promise<unknown> = jumiaFetch
+): AsyncGenerator<any, void, unknown> {
   let token = initialParams['token'] || initialParams['nextToken'] || '';
   const params = { ...initialParams };
   // ensure token param not duplicated in query string builder below
@@ -629,17 +632,18 @@ export async function* jumiaPaginator(
     const q = qParts.length ? `?${qParts.join('&')}` : '';
 
     try {
-  const page = await fetcher(`${pathBase}${q}`);
+  const page: any = await fetcher(`${pathBase}${q}`);
       yield page;
 
       // determine next token from common fields
       token = page?.nextToken || page?.token || page?.next || '';
       if (!token) break; // no more pages
       // continue loop to fetch next page
-    } catch (e: any) {
+    } catch (err) {
       // if unauthorized, try refreshing token once and retry
-      const status = e?.status ?? 0;
-      if ((status === 401 || /unauthorized/i.test(String(e?.message || ''))) && !retriedOn401) {
+      const status = (err as { status?: number })?.status ?? 0;
+      const msg = String((err as { message?: string })?.message || '');
+      if ((status === 401 || /unauthorized/i.test(msg)) && !retriedOn401) {
         retriedOn401 = true;
         // attempt to refresh token cache and retry
         try {
@@ -647,10 +651,10 @@ export async function* jumiaPaginator(
           // continue to retry fetch in next loop iteration (no token change here)
           continue;
         } catch (inner) {
-          throw e; // original error
+          throw err; // original error
         }
       }
-      throw e;
+      throw err;
     }
   }
 }
