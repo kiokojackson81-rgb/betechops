@@ -1,7 +1,7 @@
 // app/api/jumia/proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { makeJumiaFetch } from "@/lib/jumia";
+import { makeJumiaFetch } from "../../../../../lib/jumia";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +33,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Path not allowed" }, { status: 400 });
     }
 
-    const shop = await prisma.shop.findUnique({ where: { id: shopId }, include: { credentials: true } });
-    if (!shop || !shop.credentials?.length) {
+    const shop = await prisma.shop.findUnique({ where: { id: shopId }, include: { apiCredentials: true } });
+    if (!shop || !shop.apiCredentials?.length) {
       return NextResponse.json({ error: "Shop or credentials not found" }, { status: 404 });
     }
-    const cred = shop.credentials[0];
+    const cred = shop.apiCredentials[0];
     const jumiaFetch = makeJumiaFetch({
       apiBase: cred.apiBase || "https://vendor-api.jumia.com",
       clientId: cred.apiKey!,

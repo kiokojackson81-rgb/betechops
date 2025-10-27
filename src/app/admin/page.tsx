@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const shops = await prisma.shop.findMany({
     orderBy: { createdAt: "desc" },
-    include: { credentials: true, userAssignments: { include: { user: true } } },
+    include: { apiCredentials: true, userAssignments: { include: { user: true } } },
   });
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">

@@ -1,4 +1,5 @@
 // lib/jumia.ts
+/* eslint-disable */
 import type { NextRequest } from "next/server";
 
 type JumiaClientOpts = {

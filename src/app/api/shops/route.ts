@@ -1,16 +1,16 @@
 // app/api/shops/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { encryptJsonForStorage } from '@/lib/crypto/secure-json';
+import type { Prisma, Platform } from '@prisma/client';
+import { requireRole } from '@/lib/api';
+
 export const dynamic = "force-dynamic";
+
 export async function GET() {
   const shops = await prisma.shop.findMany({ orderBy: { name: "asc" } });
   return NextResponse.json(shops);
 }
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { encryptJsonForStorage } from '@/lib/crypto/secure-json';
-import type { Prisma, Platform } from '@prisma/client';
-import { requireRole } from '@/lib/api';
 
 export async function POST(request: Request) {
   const auth = await requireRole('ADMIN');

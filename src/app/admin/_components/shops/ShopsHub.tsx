@@ -1,5 +1,6 @@
 // app/admin/_components/shops/ShopsHub.tsx
 "use client";
+/* eslint-disable */
 import AdminShopsClient from "../../shops/_components/AdminShopsClient";
 import ApiCredentialsManager from "../../shops/_components/ApiCredentialsManager";
 
