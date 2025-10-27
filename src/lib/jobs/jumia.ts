@@ -17,7 +17,7 @@ type RedisClientLike = {
 };
 
 let _redis: RedisClientLike | null | undefined;
-const _memStore = new Map<string, any>();
+const _memStore = new Map<string, unknown>();
 
 async function ensureRedisClient(): Promise<RedisClientLike | null> {
   if (_redis !== undefined) return _redis ?? null;
@@ -38,7 +38,7 @@ async function ensureRedisClient(): Promise<RedisClientLike | null> {
   }
 }
 
-async function idempotencyGet(key: string): Promise<any | null> {
+async function idempotencyGet(key: string): Promise<unknown | null> {
   const r = await ensureRedisClient();
   if (r) {
     try {
@@ -48,10 +48,9 @@ async function idempotencyGet(key: string): Promise<any | null> {
       return null;
     }
   }
-  return _memStore.has(key) ? _memStore.get(key) : null;
+  return _memStore.has(key) ? _memStore.get(key) ?? null : null;
 }
-
-async function idempotencySet(key: string, value: any, ttlSeconds = 60 * 60 * 24 * 7): Promise<void> {
+async function idempotencySet(key: string, value: unknown, ttlSeconds = 60 * 60 * 24 * 7): Promise<void> {
   const r = await ensureRedisClient();
   const payload = JSON.stringify(value);
   if (r) {
@@ -100,21 +99,26 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
     body: JSON.stringify({ orderId }),
   });
 
-  let payload: any;
+  let payload: unknown;
   try {
-    payload = await res.json();
-  } catch (err) {
-    payload = { ok: res.ok, status: res.status, text: await res.text?.() };
+    // some jumia endpoints return JSON, others return text — attempt json() first
+    payload = await (res as Response).json();
+  } catch (_parseErr) {
+    payload = { ok: res.ok, status: res.status, text: await (res as Response).text?.() };
   }
 
   // If the API returned a label as base64, persist to S3 when configured.
   try {
-    if (payload?.labelBase64 && typeof payload.labelBase64 === 'string') {
-      const buf = Buffer.from(payload.labelBase64, 'base64');
-      const filename = payload.labelFilename || `${orderId}.pdf`;
-      const info = await uploadLabelToS3(shopId, orderId, filename, buf);
-      if (info) payload._labelStored = info;
-    }
+      // payload is unknown; narrow to Record for label checks
+      if (payload && typeof payload === 'object') {
+        const pRec = payload as Record<string, unknown>;
+        if (typeof pRec.labelBase64 === 'string') {
+          const buf = Buffer.from(pRec.labelBase64, 'base64');
+          const filename = (typeof pRec.labelFilename === 'string' ? pRec.labelFilename : `${orderId}.pdf`);
+          const info = await uploadLabelToS3(shopId, orderId, filename, buf);
+          if (info) (pRec as Record<string, unknown>)._labelStored = info;
+        }
+      }
   } catch (err) {
     // non-fatal — continue
     logger.warn({ shopId, orderId, err }, 'label upload failed');
@@ -122,34 +126,38 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
 
   const startTs = Date.now();
   const toStore = { status: res.status, ok: res.ok, payload, ts: Date.now() };
-  try {
-    await idempotencySet(key, toStore, opts?.ttlSeconds ?? 60 * 60 * 24 * 7);
-  } catch (err) {
-    logger.warn({ key, err }, 'idempotency set failed');
-  }
+    try {
+      await idempotencySet(key, toStore, opts?.ttlSeconds ?? 60 * 60 * 24 * 7);
+    } catch (_err) {
+      logger.warn({ key }, 'idempotency set failed');
+    }
 
   const took = Date.now() - startTs;
   incFulfillments(1);
   if (!res.ok) incFulfillmentFailures(1);
   observeFulfillmentLatency(took);
   // persist audit to DB (best-effort)
-    try {
-      await prisma.fulfillmentAudit.create({
-        data: {
-          idempotencyKey: key,
-          shopId,
-          orderId,
-          action: 'FULFILL',
-          status: res.status,
-          ok: Boolean(res.ok),
-          payload: toStore.payload,
-          s3Bucket: (toStore.payload?._labelStored as any)?.bucket ?? null,
-          s3Key: (toStore.payload?._labelStored as any)?.key ?? null,
-        },
-      });
-    } catch (err) {
-    logger.warn({ err, shopId, orderId }, 'failed to persist FulfillmentAudit');
-  }
+      try {
+        // Prisma JSON fields expect a serializable value; coerce safely and use a narrow cast
+        const payloadForDb = toStore.payload as any;
+        const s3Bucket = (payloadForDb?._labelStored as Record<string, unknown> | undefined)?.bucket ?? null;
+        const s3Key = (payloadForDb?._labelStored as Record<string, unknown> | undefined)?.key ?? null;
+        await prisma.fulfillmentAudit.create({
+          data: {
+            idempotencyKey: key,
+            shopId,
+            orderId,
+            action: 'FULFILL',
+            status: res.status,
+            ok: Boolean(res.ok),
+            payload: payloadForDb,
+            s3Bucket: s3Bucket as string | null,
+            s3Key: s3Key as string | null,
+          },
+        });
+      } catch (_ex) {
+        logger.warn({ shopId, orderId }, 'failed to persist FulfillmentAudit');
+      }
 
   logger.info({ shopId, orderId, status: res.status, durationMs: took }, 'fulfillOrder completed');
   return toStore;
@@ -169,10 +177,10 @@ export async function syncOrders(shopId: string, handler: (order: any) => Promis
         await handler(o);
         processed += 1;
         incOrdersProcessed(1);
-      } catch (err) {
+      } catch (handlerErr) {
         // swallow: job runner should implement retries/alerts; keep this safe
         incOrderHandlerErrors(1);
-        logger.error({ shopId, orderId: o?.id ?? null, err }, 'syncOrders handler error for order');
+        logger.error({ shopId, orderId: (o as any)?.id ?? null, err: handlerErr }, 'syncOrders handler error for order');
       }
     }
   }

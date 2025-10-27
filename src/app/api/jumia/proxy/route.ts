@@ -25,9 +25,18 @@ function isAllowed(path: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { shopId, method = "GET", path, query, payload } = body as {
-      shopId: string; method?: "GET"|"POST"|"PUT"|"PATCH"; path: string;
-      query?: Record<string,string|number|boolean>; payload?: any;
+    const {
+      shopId,
+      method = "GET",
+      path,
+      query,
+      payload,
+    } = body as {
+      shopId: string;
+      method?: "GET"|"POST"|"PUT"|"PATCH";
+      path: string;
+      query?: Record<string, string | number | boolean>;
+      payload?: unknown;
     };
     if (!path || !isAllowed(path)) {
       return NextResponse.json({ error: "Path not allowed" }, { status: 400 });
@@ -50,11 +59,12 @@ export async function POST(req: NextRequest) {
 
     const res = await jumiaFetch(urlPath, {
       method,
-      body: payload ? JSON.stringify(payload) : undefined,
+      body: payload !== undefined ? JSON.stringify(payload) : undefined,
     });
 
     return NextResponse.json(res);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Proxy error" }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg || "Proxy error" }, { status: 500 });
   }
 }
