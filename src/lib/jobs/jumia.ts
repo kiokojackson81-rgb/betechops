@@ -175,7 +175,14 @@ export async function syncOrders(shopId: string, handler: (order: unknown) => Pr
   };
   let processed = 0;
   for await (const page of jumiaPaginator('/orders', pageParams)) {
-    const orders = Array.isArray(page?.data) ? page.data : page?.orders ?? [];
+    // page is unknown from the paginator; narrow before accessing fields
+    let orders: unknown[] = [];
+    if (page && typeof page === 'object') {
+      const pRec = page as Record<string, unknown>;
+      if (Array.isArray(pRec.data)) orders = pRec.data as unknown[];
+      else if (Array.isArray(pRec.orders)) orders = pRec.orders as unknown[];
+      else if (Array.isArray(pRec.items)) orders = pRec.items as unknown[];
+    }
     for (const o of orders) {
       try {
         await handler(o);

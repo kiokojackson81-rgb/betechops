@@ -12,11 +12,11 @@ export async function getRedis() {
   if (client) return client;
   try {
     const mod = await import('ioredis');
-    const Redis = mod.default || mod;
-  // cast to PartialRedisLike to avoid tight dependency on ioredis types in this helper
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  client = new (Redis as any)(process.env.REDIS_URL as string) as PartialRedisLike;
-  await client.ping?.();
+    const RedisCtor = ((mod as unknown) as { default?: unknown }).default ?? (mod as unknown);
+    // instantiate with minimal typing and avoid `any` by casting via unknown to a constructor type
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    client = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
+    await client.ping?.();
     available = true;
     return client;
   } catch (err: unknown) {

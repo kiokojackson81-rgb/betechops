@@ -614,7 +614,7 @@ export async function* jumiaPaginator(
   pathBase: string,
   initialParams: Record<string, string> = {},
   fetcher: (p: string) => Promise<unknown> = jumiaFetch
-): AsyncGenerator<any, void, unknown> {
+): AsyncGenerator<unknown, void, unknown> {
   let token = initialParams['token'] || initialParams['nextToken'] || '';
   const params = { ...initialParams };
   // ensure token param not duplicated in query string builder below
@@ -632,11 +632,16 @@ export async function* jumiaPaginator(
     const q = qParts.length ? `?${qParts.join('&')}` : '';
 
     try {
-  const page: any = await fetcher(`${pathBase}${q}`);
+      const page: unknown = await fetcher(`${pathBase}${q}`);
       yield page;
 
-      // determine next token from common fields
-      token = page?.nextToken || page?.token || page?.next || '';
+      // determine next token from common fields by narrowing unknown
+      if (page && typeof page === 'object') {
+        const pRec = page as Record<string, unknown>;
+        token = String(pRec.nextToken ?? pRec.token ?? pRec.next ?? '');
+      } else {
+        token = '';
+      }
       if (!token) break; // no more pages
       // continue loop to fetch next page
     } catch (err) {
