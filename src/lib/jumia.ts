@@ -183,7 +183,7 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
 
   // token for probing
   let token = '';
-  try { token = await getAccessToken(); } catch (_) { token = '' }
+  try { token = await getAccessToken(); } catch { token = '' }
 
   for (const base of bases) {
     // if explicit base set, skip other bases
@@ -210,7 +210,7 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
           resolvedConfig = { base, scheme, tried: true };
           return { base, scheme };
         }
-      } catch (e) {
+      } catch {
         // network error -> try next candidate
         continue;
       }
@@ -420,7 +420,7 @@ export async function getReturnsWaitingPickup() {
       const j = await jumiaFetch(p);
       const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
       return { count: arr.length };
-    } catch (e) {
+    } catch {
       // try next candidate
       continue;
     }
@@ -471,12 +471,12 @@ export async function diagnoseOidc(opts?: { test?: boolean }) {
       res.tokenEndpoint = candidates;
       // attempt to mint via the Jumia refresh flow (if configured)
       try {
-        const token = await getJumiaAccessToken();
+        await getJumiaAccessToken();
         const info = getJumiaTokenInfo();
         const now = Date.now();
         const expiresIn = info.expiresAt ? Math.max(0, Math.floor((info.expiresAt - now) / 1000)) : undefined;
         res.test = { ok: true, expiresIn };
-      } catch (e) {
+      } catch {
         // fall back to generic access token flow; we can't introspect the generic cache here reliably,
         // so just attempt to mint and report success without TTL.
         await getAccessToken();
@@ -654,7 +654,7 @@ export async function* jumiaPaginator(
           await getAccessToken();
           // continue to retry fetch in next loop iteration (no token change here)
           continue;
-        } catch (inner) {
+        } catch {
           throw err; // original error
         }
       }
