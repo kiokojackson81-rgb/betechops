@@ -11,7 +11,8 @@ export async function GET() {
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
     return NextResponse.json({ queued, todayPacked, rts });
-  } catch (e: any) {
-    return new NextResponse(String(e?.message ?? e), { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return new NextResponse(msg, { status: 500 });
   }
 }

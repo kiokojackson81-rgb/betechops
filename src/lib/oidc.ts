@@ -16,7 +16,12 @@ const cache: Record<string, { accessToken: string; exp: number }> = {};
 const jumiaCache: { token?: string; exp?: number; tokenUrl?: string } = {};
 
 // Optional Redis-backed token cache (lazy init). Only used when process.env.REDIS_URL is set.
-let redisClient: any | null = null;
+type PartialRedisLike = {
+  ping?: () => Promise<string>;
+  get: (key: string) => Promise<string | null>;
+  set: (...args: unknown[]) => Promise<unknown>;
+};
+let redisClient: PartialRedisLike | null = null;
 let redisAvailable = false;
 
 async function ensureRedis() {
@@ -26,15 +31,17 @@ async function ensureRedis() {
     // dynamic import to avoid hard dependency until runtime
     const mod = await import('ioredis');
     const Redis = mod.default || mod;
-    redisClient = new Redis(process.env.REDIS_URL as string);
+    // assign minimal-typed client
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    redisClient = new (Redis as any)(process.env.REDIS_URL as string) as PartialRedisLike;
     // basic ping to confirm connectivity
-    await redisClient.ping();
+    await redisClient.ping?.();
     redisAvailable = true;
     return redisClient;
-  } catch (e) {
+  } catch (err: unknown) {
     // If Redis is unavailable, fall back to in-memory cache
     // eslint-disable-next-line no-console
-    console.error('Jumia Redis initialization failed, falling back to in-memory token cache');
+    console.error('Jumia Redis initialization failed, falling back to in-memory token cache:', err instanceof Error ? err.message : String(err));
     redisClient = null;
     redisAvailable = false;
     return null;
@@ -141,25 +148,25 @@ export async function getJumiaAccessToken(): Promise<string> {
   try {
     const r = await ensureRedis();
     if (r && redisAvailable) {
-      try {
-        const raw = await r.get('jumia:token');
-        if (raw) {
-          const parsed = JSON.parse(raw as string);
-          const access = String(parsed.access || parsed.accessToken || parsed.token || '');
-          const exp = Number(parsed.exp || parsed.expiresAt || 0);
-          if (access && exp && now < (exp - 60_000)) {
-            // populate in-memory cache and return
-            jumiaCache.token = access;
-            jumiaCache.exp = exp;
-            jumiaCache.tokenUrl = tokenUrl;
-            return access;
+          try {
+            const raw = await r.get('jumia:token');
+            if (raw) {
+              const parsed = JSON.parse(raw as string);
+              const access = String(parsed.access || parsed.accessToken || parsed.token || '');
+              const exp = Number(parsed.exp || parsed.expiresAt || 0);
+              if (access && exp && now < (exp - 60_000)) {
+                // populate in-memory cache and return
+                jumiaCache.token = access;
+                jumiaCache.exp = exp;
+                jumiaCache.tokenUrl = tokenUrl;
+                return access;
+              }
+            }
+          } catch (_err: unknown) {
+            // redis read failed -> continue to mint new token
+            // eslint-disable-next-line no-console
+            console.error('Jumia Redis read failed; will mint new token');
           }
-        }
-      } catch (e) {
-        // redis read failed -> continue to mint new token
-        // eslint-disable-next-line no-console
-        console.error('Jumia Redis read failed; will mint new token');
-      }
     }
   } catch (e) {
     // ignore Redis failures; proceed with minting and fallback to in-memory
@@ -205,7 +212,7 @@ export async function getJumiaAccessToken(): Promise<string> {
         const payload = JSON.stringify({ access: access, exp: jumiaCache.exp });
         // set with TTL a bit shorter than expiry to allow refresh window
         const ttl = Math.max(30, Math.floor(expiresIn) - 10);
-        await r.set('jumia:token', payload, 'EX', ttl);
+  await r.set?.('jumia:token', payload, 'EX', ttl);
       }
     } catch (err) {
       // Non-fatal: log and continue
