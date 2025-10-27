@@ -78,17 +78,45 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
           credentials: parsed.value ?? {},
         }),
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || "Create failed");
-      showToast("Shop created", "success");
+      async function readResponseSafely(res: Response) {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          try {
+            return await res.json();
+          } catch {
+            return null;
+          }
+        }
+        try {
+          const text = await res.text();
+          return { text } as unknown;
+        } catch {
+          return null;
+        }
+      }
+
+      const payload = await readResponseSafely(res as Response);
+
+      if (!res.ok) {
+        const payloadObj = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+        let msg = `HTTP ${res.status}`;
+        if (payloadObj) {
+          const maybeErr = payloadObj['error'] ?? payloadObj['message'];
+          if (typeof maybeErr === 'string') msg = maybeErr;
+          else if ('text' in payloadObj && typeof payloadObj['text'] === 'string') msg = payloadObj['text'] as string;
+        }
+        throw new Error(msg);
+      }
+
+      // success: prefer payload.shop or payload
+      const payloadObj = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+      const shopCandidate = payloadObj ? (('shop' in payloadObj ? payloadObj['shop'] : payloadObj) as unknown) : null;
+      showToast(`Shop created: ${(shopCandidate && typeof shopCandidate === 'object' && 'name' in (shopCandidate as Record<string, unknown>) ? String((shopCandidate as Record<string, unknown>)['name']) : name)}`, "success");
       setName("");
-      // keep credentials so user can reuse template for next shop
-      // Notify parent via context
-      type ShopSummary = { id: string; name: string; platform?: string };
-      const created = (j && typeof j === 'object' && 'shop' in (j as object))
-        ? (j as unknown as { shop?: ShopSummary }).shop
-        : (j as unknown as ShopSummary);
-      if (created) actions.onShopCreated(created);
+      if (shopCandidate && typeof shopCandidate === 'object' && 'id' in (shopCandidate as Record<string, unknown>)) {
+        const created = shopCandidate as { id: string; name: string; platform?: string };
+        actions.onShopCreated(created);
+      }
     } catch (err: unknown) {
       const msg = typeof err === 'object' && err !== null && 'message' in err ? String((err as { message?: unknown }).message ?? 'Create failed') : String(err ?? 'Create failed');
       showToast(msg, "error");

@@ -16,8 +16,13 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await requireRole('ADMIN');
   if (!auth.ok) return auth.res;
-  const body = (await request.json().catch(() => ({}))) as { name?: string; platform?: string; credentials?: unknown };
-  const { name, platform, credentials } = body;
+
+  try {
+    const body = (await request.json().catch(() => null)) as { name?: string; platform?: string; credentials?: unknown } | null;
+    if (!body) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    const { name, platform, credentials } = body;
 
   const CredSchema = z.object({
     platform: z.enum(["JUMIA", "KILIMALL"]).optional(),
@@ -38,12 +43,18 @@ export async function POST(request: Request) {
 
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
-  const parsed = CreateShopSchema.safeParse({ name, platform, credentials });
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+    const parsed = CreateShopSchema.safeParse({ name, platform, credentials });
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
 
-  const encrypted = parsed.data.credentials ? encryptJsonForStorage(parsed.data.credentials) : null;
-  const shop = await prisma.shop.create({ data: { name: parsed.data.name, platform: parsed.data.platform as Platform, credentialsEncrypted: encrypted as unknown as Prisma.InputJsonValue } });
-  return NextResponse.json({ shop }, { status: 201 });
+    const encrypted = parsed.data.credentials ? encryptJsonForStorage(parsed.data.credentials) : null;
+    const shop = await prisma.shop.create({ data: { name: parsed.data.name, platform: parsed.data.platform as Platform, credentialsEncrypted: encrypted as unknown as Prisma.InputJsonValue } });
+    return NextResponse.json({ shop }, { status: 201 });
+  } catch (e: unknown) {
+    // Ensure we always return JSON from this route (avoid HTML error pages)
+    const msg = typeof e === 'object' && e !== null && 'message' in e ? String((e as any).message) : String(e ?? 'Server error');
+    console.error("POST /api/shops failed:", e);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
