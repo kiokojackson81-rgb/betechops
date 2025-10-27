@@ -1,6 +1,4 @@
 // lib/jumia.ts
-/* eslint-disable */
-import type { NextRequest } from "next/server";
 
 type JumiaClientOpts = {
   apiBase: string;            // e.g. https://vendor-api.jumia.com
@@ -11,7 +9,7 @@ type JumiaClientOpts = {
 type TokenCache = { accessToken?: string; exp?: number };
 const mem: Record<string, TokenCache> = {};
 
-async function mintAccessToken({ apiBase, clientId, refreshToken }: JumiaClientOpts) {
+async function mintAccessToken({ apiBase, clientId, refreshToken }: JumiaClientOpts): Promise<string> {
   const k = `jumia:${clientId}`;
   const hit = mem[k];
   const now = Math.floor(Date.now() / 1000);
@@ -33,13 +31,13 @@ async function mintAccessToken({ apiBase, clientId, refreshToken }: JumiaClientO
     const j = await r.text();
     throw new Error(`OIDC mint token failed: ${r.status} ${j}`);
   }
-  const j = await r.json() as { access_token: string; expires_in: number };
+  const j = (await r.json()) as { access_token: string; expires_in?: number };
   mem[k] = { accessToken: j.access_token, exp: now + (j.expires_in ?? 12 * 3600) };
   return j.access_token;
 }
 
 export function makeJumiaFetch(opts: JumiaClientOpts) {
-  return async function jumiaFetch(path: string, init: RequestInit = {}) {
+  return async function jumiaFetch(path: string, init: RequestInit = {}): Promise<unknown> {
     const token = await mintAccessToken(opts);
     const base = opts.apiBase.replace(/\/+$/, "");
     const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
@@ -95,11 +93,11 @@ export function getJumiaClient(opts: JumiaClientOpts) {
       if (q.productSids?.length) q.productSids.forEach(s => p.append("productSids", s));
       return jf(`/catalog/stock?${p.toString()}`);
     },
-    createProducts: (payload: any) => jf("/feeds/products/create", { method: "POST", body: JSON.stringify(payload) }),
-    updateProducts: (payload: any) => jf("/feeds/products/update", { method: "POST", body: JSON.stringify(payload) }),
-    updatePrice: (payload: any) => jf("/feeds/products/price", { method: "POST", body: JSON.stringify(payload) }),
-    updateStock: (payload: any) => jf("/feeds/products/stock", { method: "POST", body: JSON.stringify(payload) }),
-    updateStatus: (payload: any) => jf("/feeds/products/status", { method: "POST", body: JSON.stringify(payload) }),
+  createProducts: (payload: unknown) => jf("/feeds/products/create", { method: "POST", body: JSON.stringify(payload) }),
+  updateProducts: (payload: unknown) => jf("/feeds/products/update", { method: "POST", body: JSON.stringify(payload) }),
+  updatePrice: (payload: unknown) => jf("/feeds/products/price", { method: "POST", body: JSON.stringify(payload) }),
+  updateStock: (payload: unknown) => jf("/feeds/products/stock", { method: "POST", body: JSON.stringify(payload) }),
+  updateStatus: (payload: unknown) => jf("/feeds/products/status", { method: "POST", body: JSON.stringify(payload) }),
     getFeedDetail: (id: string) => jf(`/feeds/${id}`),
     getOrders: (q: Record<string,string|number|boolean|undefined>) => {
       const p = new URLSearchParams();
@@ -119,12 +117,12 @@ export function getJumiaClient(opts: JumiaClientOpts) {
       const p = new URLSearchParams(); orderItemIds.forEach(id => p.append("orderItemId", id));
       return jf(`/orders/shipment-providers?${p.toString()}`);
     },
-    pack: (payload: any) => jf("/orders/pack", { method: "POST", body: JSON.stringify(payload) }),
-    packV2: (payload: any) => jf("/v2/orders/pack", { method: "POST", body: JSON.stringify(payload) }),
+  pack: (payload: unknown) => jf("/orders/pack", { method: "POST", body: JSON.stringify(payload) }),
+  packV2: (payload: unknown) => jf("/v2/orders/pack", { method: "POST", body: JSON.stringify(payload) }),
     readyToShip: (orderItemIds: string[]) => jf("/orders/ready-to-ship", { method: "POST", body: JSON.stringify({ orderItemIds }) }),
-    printLabels: (orderItemIds: string[]) => jf("/orders/print-labels", { method: "POST", body: JSON.stringify({ orderItemIds }) }),
-    consignmentCreate: (payload: any) => jf("/consignment-order", { method: "POST", body: JSON.stringify(payload) }),
-    consignmentUpdate: (poNumber: string, payload: any) => jf(`/consignment-order/${encodeURIComponent(poNumber)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  printLabels: (orderItemIds: string[]) => jf("/orders/print-labels", { method: "POST", body: JSON.stringify({ orderItemIds }) }),
+  consignmentCreate: (payload: unknown) => jf("/consignment-order", { method: "POST", body: JSON.stringify(payload) }),
+  consignmentUpdate: (poNumber: string, payload: unknown) => jf(`/consignment-order/${encodeURIComponent(poNumber)}`, { method: "PATCH", body: JSON.stringify(payload) }),
     consignmentStock: (q: { businessClientCode: string; sku: string }) =>
       jf(`/consignment-stock?businessClientCode=${encodeURIComponent(q.businessClientCode)}&sku=${encodeURIComponent(q.sku)}`),
     payoutStatements: (q: Record<string,string|number|boolean|undefined>) => {

@@ -1,10 +1,10 @@
 "use client";
-/* eslint-disable */
 import React, { useEffect, useState } from "react";
 
 type Shop = { id: string; name: string };
+type EndpointDef = { id: string; label: string; method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; path: string; description?: string };
 
-const ENDPOINTS = [
+const ENDPOINTS: EndpointDef[] = [
   { id: "orders", label: "Orders", method: "GET", path: "/orders", description: "List orders" },
   { id: "order-items", label: "Order Items", method: "GET", path: "/orders/items", description: "Get order items" },
   { id: "print-labels", label: "Print Labels", method: "POST", path: "/orders/print-labels", description: "Print labels (returns base64)" },
@@ -17,22 +17,22 @@ const ENDPOINTS = [
 export default function EndpointConsole() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopId, setShopId] = useState<string | null>(null);
-  const [endpoint, setEndpoint] = useState(ENDPOINTS[0]);
-  const [query, setQuery] = useState("");
-  const [payload, setPayload] = useState("{}");
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [endpoint, setEndpoint] = useState<EndpointDef>(ENDPOINTS[0]);
+  const [query, setQuery] = useState<string>("");
+  const [payload, setPayload] = useState<string>("{}");
+  const [result, setResult] = useState<unknown | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
       try {
         const r = await fetch('/api/shops');
         if (!r.ok) return;
-        const j = await r.json();
+        const j = (await r.json()) as Shop[];
         setShops(j || []);
         if (j && j.length) setShopId(j[0].id);
       } catch (e) {
-        // ignore
+        // ignore network errors for console
       }
     })();
   }, []);
@@ -50,7 +50,7 @@ export default function EndpointConsole() {
         }
       }
 
-      let parsedPayload: any = undefined;
+      let parsedPayload: unknown = undefined;
       if (payload && payload.trim()) {
         try { parsedPayload = JSON.parse(payload); } catch (e) { return setResult({ error: 'Invalid JSON payload' }); }
       }
@@ -61,9 +61,9 @@ export default function EndpointConsole() {
         body: JSON.stringify({ shopId, method: endpoint.method, path: endpoint.path, query: qObj, payload: parsedPayload }),
       });
       const j = await res.json();
-      setResult(j);
-    } catch (e: any) {
-      setResult({ error: e?.message || String(e) });
+      setResult(j as unknown);
+    } catch (err) {
+      setResult({ error: (err as Error)?.message || String(err) });
     } finally { setLoading(false); }
   }
 
