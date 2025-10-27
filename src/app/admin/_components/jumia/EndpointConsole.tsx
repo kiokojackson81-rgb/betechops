@@ -1,115 +1,160 @@
 "use client";
-import React, { useEffect, useState } from "react";
 
-type Shop = { id: string; name: string };
-type EndpointDef = { id: string; label: string; method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; path: string; description?: string };
+import { useMemo, useState, useEffect } from "react";
 
-const ENDPOINTS: EndpointDef[] = [
-  { id: "orders", label: "Orders", method: "GET", path: "/orders", description: "List orders" },
-  { id: "order-items", label: "Order Items", method: "GET", path: "/orders/items", description: "Get order items" },
-  { id: "print-labels", label: "Print Labels", method: "POST", path: "/orders/print-labels", description: "Print labels (returns base64)" },
-  { id: "catalog-products", label: "Catalog Products", method: "GET", path: "/catalog/products", description: "Search products" },
-  { id: "feeds-create", label: "Feeds Create", method: "POST", path: "/feeds/products/create", description: "Create feed" },
-  { id: "consignment-stock", label: "Consignment Stock", method: "GET", path: "/consignment-stock", description: "Check consignment stock" },
-  { id: "payout-statement", label: "Payout Statement", method: "GET", path: "/payout-statement", description: "Payouts" },
+type ShopOption = { id: string; name: string };
+type EndpointOption = { label: string; path: string };
+
+const DEFAULT_ENDPOINTS: EndpointOption[] = [
+  { label: "Orders", path: "/orders" },
+  { label: "Order Items", path: "/orders/items" },
+  { label: "Print Labels", path: "/orders/print-labels" },
+  { label: "Catalog Products", path: "/catalog/products" },
+  { label: "Create Feed", path: "/feeds/products/create" },
 ];
 
-export default function EndpointConsole() {
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [shopId, setShopId] = useState<string | null>(null);
-  const [endpoint, setEndpoint] = useState<EndpointDef>(ENDPOINTS[0]);
-  const [query, setQuery] = useState<string>("");
-  const [payload, setPayload] = useState<string>("{}");
+export default function EndpointConsole({ shops: initialShops, endpoints }: { shops?: ShopOption[]; endpoints?: EndpointOption[] }) {
+  const [shopId, setShopId] = useState("");
+  const [endpoint, setEndpoint] = useState(endpoints?.[0]?.path || DEFAULT_ENDPOINTS[0].path);
+  const [method, setMethod] = useState("GET");
+  const [queryStr, setQueryStr] = useState("");
+  const [payload, setPayload] = useState("{}");
+  const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<unknown | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [shops, setShops] = useState<ShopOption[]>(initialShops ?? []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch('/api/shops');
-        if (!r.ok) return;
-        const j = (await r.json()) as Shop[];
-        setShops(j || []);
-        if (j && j.length) setShopId(j[0].id);
-      } catch {
-        // ignore network errors for console
-      }
-    })();
-  }, []);
+    if (!initialShops) {
+      (async () => {
+        try {
+          const r = await fetch("/api/shops");
+          if (!r.ok) return;
+          const j = await r.json();
+          setShops(j || []);
+          if ((j || []).length) setShopId(j[0].id);
+        } catch {
+          // ignore
+        }
+      })();
+    } else if (initialShops.length) {
+      setShopId(initialShops[0].id);
+    }
+  }, [initialShops]);
+
+  const queryObj = useMemo(() => {
+    const out: Record<string, string> = {};
+    queryStr
+      .split(/\r?\n|&/g)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .forEach(line => {
+        const [k, ...rest] = line.split("=");
+        if (k) out[k.trim()] = rest.join("=")?.trim() ?? "";
+      });
+    return out;
+  }, [queryStr]);
+
+  function getErrorMessage(e: unknown) {
+    if (typeof e === 'string') return e;
+    if (e && typeof e === 'object' && 'message' in e) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (e as any).message || String(e);
+    }
+    return String(e);
+  }
 
   async function run() {
-    if (!shopId) return setResult({ error: 'Select a shop' });
-    setLoading(true); setResult(null);
+    setBusy(true);
+    setResult(null);
     try {
-      const qObj: Record<string, string> = {};
-      if (query.trim()) {
-        // parse simple key=value pairs separated by & or newlines
-        const parts = query.split(/[&\n]/).map(s => s.trim()).filter(Boolean);
-        for (const p of parts) {
-          const [k,v] = p.split('=').map(s=>s.trim()); if (k) qObj[k]=v||'';
-        }
+      let json: unknown = undefined;
+      if (method !== "GET" && method !== "DELETE" && payload.trim()) {
+        try { json = JSON.parse(payload); } catch { throw new Error("Invalid JSON payload"); }
       }
 
-      let parsedPayload: unknown = undefined;
-      if (payload && payload.trim()) {
-  try { parsedPayload = JSON.parse(payload); } catch { return setResult({ error: 'Invalid JSON payload' }); }
-      }
-
-      const res = await fetch('/api/jumia/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId, method: endpoint.method, path: endpoint.path, query: qObj, payload: parsedPayload }),
+      const res = await fetch("/api/jumia/console", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shopId: shopId || undefined, path: endpoint, method, query: queryObj, json }),
       });
       const j = await res.json();
       setResult(j as unknown);
-    } catch (err) {
-      setResult({ error: (err as Error)?.message || String(err) });
-    } finally { setLoading(false); }
+    } catch (e: unknown) {
+      setResult({ ok: false, error: getErrorMessage(e) } as unknown);
+    } finally {
+      setBusy(false);
+    }
   }
 
+  function reset() {
+    setQueryStr("");
+    setPayload("{}");
+    setResult(null);
+  }
+
+  const badge = (source?: string) =>
+    source === "SHOP" ? (
+      <span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-emerald-500/20 text-emerald-300">Using SHOP creds</span>
+    ) : source === "ENV" ? (
+      <span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-yellow-500/20 text-yellow-300">Using ENV fallback</span>
+    ) : null;
+
+  const endpointList = endpoints ?? DEFAULT_ENDPOINTS;
+  type ResultWithMeta = { _meta?: { authSource?: string; platform?: string; baseUrl?: string; path?: string }; status?: number };
+  const meta = (result as unknown as ResultWithMeta | null)?._meta;
+  const httpStatus = (result as unknown as ResultWithMeta | null)?.status;
+
   return (
-    <div className="rounded-xl border border-white/10 bg-[#23272f] p-4">
-      <h2 className="text-lg font-semibold mb-3">Jumia Endpoint Console</h2>
-      <div className="grid md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm text-slate-300">Shop</label>
-          <select value={shopId || ''} onChange={(e)=>setShopId(e.target.value)} className="w-full p-2 border">
-            <option value="">-- select shop --</option>
-            {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-slate-300">Endpoint</label>
-          <select value={endpoint.id} onChange={(e)=>setEndpoint(ENDPOINTS.find(en=>en.id===e.target.value) || ENDPOINTS[0])} className="w-full p-2 border">
-            {ENDPOINTS.map(en => <option key={en.id} value={en.id}>{en.label} — {en.path}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-slate-300">Method</label>
-          <input value={endpoint.method} readOnly className="w-full p-2 border bg-white/5" />
+    <div className="space-y-3">
+      <div className="grid lg:grid-cols-4 gap-3">
+        <select value={shopId} onChange={e=>setShopId(e.target.value)} className="border p-2">
+          <option value="">{`-- select shop --`}</option>
+          {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
+        <select value={endpoint} onChange={e=>setEndpoint(e.target.value)} className="border p-2">
+          {endpointList.map(ep => <option key={ep.path} value={ep.path}>{`${ep.label} — ${ep.path}`}</option>)}
+        </select>
+
+        <select value={method} onChange={e=>setMethod(e.target.value)} className="border p-2">
+          {["GET","POST","PUT","DELETE"].map(m => <option key={m}>{m}</option>)}
+        </select>
+
+        <div className="flex gap-2">
+          <button onClick={run} disabled={busy} className="px-3 py-2 bg-blue-600 text-white rounded">Run</button>
+          <button onClick={reset} className="px-3 py-2 rounded border">Reset</button>
         </div>
       </div>
 
-      <div className="mt-3 grid md:grid-cols-2 gap-3">
+      <div className="grid lg:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm text-slate-300">Query (key=value per line or &amp;)</label>
-          <textarea value={query} onChange={(e)=>setQuery(e.target.value)} rows={4} className="w-full p-2 border bg-white/5" />
+          <label className="block text-sm mb-1">Query (key=value per line or &)</label>
+          <textarea value={queryStr} onChange={e=>setQueryStr(e.target.value)} rows={8} className="w-full border p-2 font-mono text-sm" />
         </div>
         <div>
-          <label className="block text-sm text-slate-300">JSON payload (optional)</label>
-          <textarea value={payload} onChange={(e)=>setPayload(e.target.value)} rows={4} className="w-full p-2 border bg-white/5" />
+          <label className="block text-sm mb-1">JSON payload (optional)</label>
+          <textarea value={payload} onChange={e=>setPayload(e.target.value)} rows={8} className="w-full border p-2 font-mono text-sm" />
         </div>
       </div>
 
-      <div className="mt-3 flex gap-2">
-        <button onClick={run} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">{loading ? 'Running…' : 'Run'}</button>
-        <button onClick={()=>{ setQuery(''); setPayload('{}'); setResult(null); }} className="px-4 py-2 border rounded">Reset</button>
-      </div>
-
-      <div className="mt-4">
-        <h3 className="text-sm text-slate-300 mb-2">Result</h3>
-        <div className="rounded-md bg-black/60 p-3 max-h-[420px] overflow-auto text-xs">
-          <pre className="whitespace-pre-wrap break-words">{result ? JSON.stringify(result, null, 2) : 'No result yet'}</pre>
+      <div>
+        <label className="block text-sm mb-1">Result</label>
+        <div className="rounded bg-black/40 text-slate-200 p-3 font-mono text-sm overflow-auto">
+          {meta && (
+            <div className="mb-2">
+              <div className="flex items-center gap-2">
+                <span>Auth Source: <strong>{meta.authSource}</strong></span>
+                {badge(meta.authSource)}
+              </div>
+              <div className="opacity-75">
+                Platform: {meta.platform} • Base: {meta.baseUrl} • Path: {meta.path}
+              </div>
+              {httpStatus && <div className="opacity-75">HTTP Status: {httpStatus}</div>}
+            </div>
+          )}
+          <pre className="whitespace-pre-wrap break-words">
+            {JSON.stringify(result ?? { "No result yet": true }, null, 2)}
+          </pre>
         </div>
       </div>
     </div>
