@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import jwt from 'jsonwebtoken'
+import type { SignOptions } from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
 
 // POST /oauth/token
@@ -64,7 +65,6 @@ export async function POST(req: Request) {
   } catch (err) {
     // don't fail the token issuance if DB is unavailable; log server-side
     // (avoid leaking errors in response)
-    // eslint-disable-next-line no-console
     console.error('OAuth token route: failed to persist refresh token', err)
   }
 
@@ -73,10 +73,9 @@ export async function POST(req: Request) {
 
   if (jwtSecret) {
     // Issue a JWT access token. Minimal claims: sub=client_id, iss optional
-    const now = Math.floor(Date.now() / 1000)
     const payload = { sub: client_id }
-  const signOpts: any = { algorithm: 'HS256', expiresIn }
-  const token = jwt.sign(payload, jwtSecret, signOpts)
+  const signOpts = { algorithm: 'HS256', expiresIn } as SignOptions
+    const token = jwt.sign(payload, jwtSecret, signOpts)
 
     const body = {
       access_token: token,

@@ -151,9 +151,8 @@ export async function getAccessToken(): Promise<string> {
       return await getJumiaAccessToken();
     }
   } catch (e) {
-    // fall back to generic env-based flow
-    // eslint-disable-next-line no-console
-    console.error('getJumiaAccessToken failed, falling back to generic:', e instanceof Error ? e.message : String(e));
+  // fall back to generic env-based flow
+  console.error('getJumiaAccessToken failed, falling back to generic:', e instanceof Error ? e.message : String(e));
   }
   return getAccessTokenFromEnv();
 }

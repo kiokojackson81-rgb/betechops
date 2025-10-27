@@ -32,7 +32,6 @@ async function ensureRedis() {
   const mod = await import('ioredis');
   const RedisCtor = ((mod as unknown) as { default?: unknown }).default ?? (mod as unknown);
   // instantiate with minimal typing and avoid `any` by casting via unknown
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   redisClient = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
   // basic ping to confirm connectivity
   await redisClient.ping?.();
@@ -40,8 +39,7 @@ async function ensureRedis() {
     return redisClient;
   } catch (err: unknown) {
     // If Redis is unavailable, fall back to in-memory cache
-    // eslint-disable-next-line no-console
-    console.error('Jumia Redis initialization failed, falling back to in-memory token cache:', err instanceof Error ? err.message : String(err));
+  console.error('Jumia Redis initialization failed, falling back to in-memory token cache:', err instanceof Error ? err.message : String(err));
     redisClient = null;
     redisAvailable = false;
     return null;
@@ -164,7 +162,6 @@ export async function getJumiaAccessToken(): Promise<string> {
             }
           } catch {
             // redis read failed -> continue to mint new token
-            // eslint-disable-next-line no-console
             console.error('Jumia Redis read failed; will mint new token');
           }
     }
@@ -216,8 +213,7 @@ export async function getJumiaAccessToken(): Promise<string> {
       }
     } catch (err) {
       // Non-fatal: log and continue
-      // eslint-disable-next-line no-console
-      console.error('Failed to persist Jumia token to Redis; continuing with in-memory cache');
+      console.error('Failed to persist Jumia token to Redis; continuing with in-memory cache', err instanceof Error ? err.message : String(err));
     }
   })();
   return access;

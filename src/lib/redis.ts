@@ -13,16 +13,14 @@ export async function getRedis() {
   try {
     const mod = await import('ioredis');
     const RedisCtor = ((mod as unknown) as { default?: unknown }).default ?? (mod as unknown);
-    // instantiate with minimal typing and avoid `any` by casting via unknown to a constructor type
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    client = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
+  // instantiate with minimal typing and avoid `any` by casting via unknown to a constructor type
+  client = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
     await client.ping?.();
     available = true;
     return client;
   } catch (err: unknown) {
-    // fail-open
-    // eslint-disable-next-line no-console
-    console.warn('Redis not available:', err instanceof Error ? err.message : String(err));
+  // fail-open
+  console.warn('Redis not available:', err instanceof Error ? err.message : String(err));
     client = null;
     available = false;
     return null;
