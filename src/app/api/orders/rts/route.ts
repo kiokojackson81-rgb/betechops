@@ -26,7 +26,9 @@ export async function POST(req: Request) {
         if (cached) return NextResponse.json(JSON.parse(cached));
         await r.set(`lock:${idempotencyKey}`, '1', 'EX', 60, 'NX');
       }
-    } catch (e) {}
+    } catch {
+      // ignore redis failures
+    }
 
     try {
       // Call vendor API to mark RTS (best-effort)
@@ -46,7 +48,9 @@ export async function POST(req: Request) {
       try {
         const r = await getRedis();
         if (r) await r.set(`idempotency:${idempotencyKey}`, JSON.stringify({ ok: true, action, result }), 'EX', 60 * 60);
-      } catch (e) {}
+      } catch {
+        // ignore redis cache set errors
+      }
 
       return NextResponse.json({ ok: true, action, result });
     } catch (err: any) {

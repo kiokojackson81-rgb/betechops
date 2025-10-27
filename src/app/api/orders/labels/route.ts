@@ -26,14 +26,16 @@ export async function POST(req: Request) {
         if (cached) return NextResponse.json(JSON.parse(cached));
         await r.set(`lock:${idempotencyKey}`, '1', 'EX', 60, 'NX');
       }
-    } catch (e) {}
+    } catch {
+      // ignore redis failures
+    }
 
     try {
       // Best-effort: attempt to call vendor label endpoint
       let result: any;
       try {
         result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/label`, { method: 'POST', body: JSON.stringify({ shopId }) });
-      } catch (e) {
+      } catch {
         // simulate label generation
         result = { ok: true, labelUrl: null, note: 'simulated-label' };
       }
@@ -47,7 +49,9 @@ export async function POST(req: Request) {
       try {
         const r = await getRedis();
         if (r) await r.set(`idempotency:${idempotencyKey}`, JSON.stringify({ ok: true, action, result }), 'EX', 60 * 60);
-      } catch (e) {}
+      } catch {
+        // ignore redis caching errors
+      }
 
       return NextResponse.json({ ok: true, action, labelUrl: result?.labelUrl ?? null });
     } catch (err: any) {

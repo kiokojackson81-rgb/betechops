@@ -31,7 +31,7 @@ export default function EndpointConsole() {
         const j = (await r.json()) as Shop[];
         setShops(j || []);
         if (j && j.length) setShopId(j[0].id);
-      } catch (e) {
+      } catch {
         // ignore network errors for console
       }
     })();
@@ -52,7 +52,7 @@ export default function EndpointConsole() {
 
       let parsedPayload: unknown = undefined;
       if (payload && payload.trim()) {
-        try { parsedPayload = JSON.parse(payload); } catch (e) { return setResult({ error: 'Invalid JSON payload' }); }
+  try { parsedPayload = JSON.parse(payload); } catch { return setResult({ error: 'Invalid JSON payload' }); }
       }
 
       const res = await fetch('/api/jumia/proxy', {

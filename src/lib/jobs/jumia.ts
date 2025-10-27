@@ -32,7 +32,7 @@ async function ensureRedisClient(): Promise<RedisClientLike | null> {
     await client.ping();
     _redis = client as unknown as RedisClientLike;
     return _redis;
-  } catch (err) {
+  } catch {
     _redis = null;
     return null;
   }
@@ -44,7 +44,7 @@ async function idempotencyGet(key: string): Promise<unknown | null> {
     try {
       const v = await r.get(key);
       return v ? JSON.parse(v) : null;
-    } catch (_) {
+    } catch {
       return null;
     }
   }
@@ -57,7 +57,7 @@ async function idempotencySet(key: string, value: unknown, ttlSeconds = 60 * 60 
     try {
       await (r as any).set(key, payload, 'EX', ttlSeconds);
       return;
-    } catch (_) {
+    } catch {
       // fall through to mem
     }
   }
@@ -103,7 +103,7 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
   try {
     // some jumia endpoints return JSON, others return text — attempt json() first
     payload = await (res as Response).json();
-  } catch (_parseErr) {
+  } catch {
     payload = { ok: res.ok, status: res.status, text: await (res as Response).text?.() };
   }
 
@@ -128,7 +128,7 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
   const toStore = { status: res.status, ok: res.ok, payload, ts: Date.now() };
     try {
       await idempotencySet(key, toStore, opts?.ttlSeconds ?? 60 * 60 * 24 * 7);
-    } catch (_err) {
+    } catch {
       logger.warn({ key }, 'idempotency set failed');
     }
 
@@ -155,7 +155,7 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
             s3Key: s3Key as string | null,
           },
         });
-      } catch (_ex) {
+      } catch {
         logger.warn({ shopId, orderId }, 'failed to persist FulfillmentAudit');
       }
 

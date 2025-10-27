@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         // set a lock to prevent double execution (NX, short TTL)
         await r.set(`lock:${idempotencyKey}`, '1', 'EX', 60, 'NX');
       }
-    } catch (e) {
+    } catch {
       // continue without Redis
     }
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         if (r) {
           await r.set(`idempotency:${idempotencyKey}`, JSON.stringify(result), 'EX', 60 * 60);
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
 

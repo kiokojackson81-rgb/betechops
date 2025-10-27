@@ -1,7 +1,7 @@
 // src/app/admin/layout.tsx
 import React from "react";
 import Link from "next/link";
-import { Package, Store, Users, Receipt, Wallet, FileText, Truck, Layers, Settings } from "lucide-react";
+import { Package, Store, Receipt, FileText, Truck, Layers, Settings } from "lucide-react";
 import AdminStatusBanner from "./_components/AdminStatusBanner";
 import AdminTopbarBadges from "./_components/AdminTopbarBadges";
 import "./admin.css";

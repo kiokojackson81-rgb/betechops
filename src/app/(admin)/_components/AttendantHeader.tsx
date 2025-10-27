@@ -14,7 +14,7 @@ export default function AttendantHeader({ user }: { user?: { name?: string } }) 
         if (!res.ok) return;
         const data = await res.json();
         if (mounted) setKpis(data);
-      } catch (e) {
+      } catch {
         // ignore
       }
     }

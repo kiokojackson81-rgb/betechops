@@ -76,11 +76,11 @@ export async function GET(req: Request) {
 
     // get token for auth (do not return token value)
     let token = '';
-    try {
-      token = await getJumiaAccessToken();
-    } catch (e) {
-      try { token = await getAccessTokenFromEnv(); } catch { token = ''; }
-    }
+      try {
+        token = await getJumiaAccessToken();
+      } catch {
+        try { token = await getAccessTokenFromEnv(); } catch { token = ''; }
+      }
 
     const scheme = resolved?.scheme || 'Bearer';
 

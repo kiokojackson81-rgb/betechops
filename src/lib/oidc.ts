@@ -162,13 +162,13 @@ export async function getJumiaAccessToken(): Promise<string> {
                 return access;
               }
             }
-          } catch (_err: unknown) {
+          } catch {
             // redis read failed -> continue to mint new token
             // eslint-disable-next-line no-console
             console.error('Jumia Redis read failed; will mint new token');
           }
     }
-  } catch (e) {
+  } catch {
     // ignore Redis failures; proceed with minting and fallback to in-memory
   }
 

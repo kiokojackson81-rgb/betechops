@@ -99,7 +99,7 @@ export async function GET(req: Request) {
   let token = '';
   try {
     token = await getJumiaAccessToken();
-  } catch (e) {
+  } catch {
     try { token = await getAccessTokenFromEnv(); } catch { token = ''; }
   }
 
