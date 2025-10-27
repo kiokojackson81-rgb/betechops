@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ShopAuthSchema } from "@/lib/oidc";
 import { getJumiaAccessToken } from "@/lib/oidc";
 
-export async function POST(req: NextRequest, context: { params: { id: string } | Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const params = await context.params;
   const id = params.id;
 
