@@ -28,14 +28,14 @@ async function ensureRedis() {
   if (!process.env.REDIS_URL) return null;
   if (redisClient) return redisClient;
   try {
-    // dynamic import to avoid hard dependency until runtime
-    const mod = await import('ioredis');
-    const Redis = mod.default || mod;
-    // assign minimal-typed client
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    redisClient = new (Redis as any)(process.env.REDIS_URL as string) as PartialRedisLike;
-    // basic ping to confirm connectivity
-    await redisClient.ping?.();
+  // dynamic import to avoid hard dependency until runtime
+  const mod = await import('ioredis');
+  const RedisCtor = ((mod as unknown) as { default?: unknown }).default ?? (mod as unknown);
+  // instantiate with minimal typing and avoid `any` by casting via unknown
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  redisClient = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
+  // basic ping to confirm connectivity
+  await redisClient.ping?.();
     redisAvailable = true;
     return redisClient;
   } catch (err: unknown) {

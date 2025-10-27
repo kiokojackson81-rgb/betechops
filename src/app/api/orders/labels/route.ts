@@ -10,9 +10,14 @@ export async function POST(req: Request) {
     const { orderId, shopId } = body ?? {};
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const su: any = (session as any)?.user ?? {};
-    const actor = su.email || su.name || su.id || 'unknown';
+    const su = ((session as unknown as { user?: Record<string, unknown> })?.user ?? {}) as Record<string, unknown>;
+    const actor = typeof su.email === 'string'
+      ? su.email
+      : typeof su.name === 'string'
+        ? su.name
+        : typeof su.id === 'string'
+          ? su.id
+          : 'unknown';
 
     if (!orderId || !shopId) return NextResponse.json({ error: 'orderId and shopId required' }, { status: 400 });
 
@@ -32,12 +37,12 @@ export async function POST(req: Request) {
 
     try {
       // Best-effort: attempt to call vendor label endpoint
-      let result: any;
+  let result: unknown;
       try {
         result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/label`, { method: 'POST', body: JSON.stringify({ shopId }) });
       } catch {
         // simulate label generation
-        result = { ok: true, labelUrl: null, note: 'simulated-label' };
+        result = { ok: true, labelUrl: null, note: 'simulated-label' } as unknown;
       }
 
       try {
@@ -53,7 +58,10 @@ export async function POST(req: Request) {
         // ignore redis caching errors
       }
 
-      return NextResponse.json({ ok: true, action, labelUrl: result?.labelUrl ?? null });
+      // labelUrl may be present depending on vendor response shape
+      const labelUrl = (result && typeof result === 'object' && 'labelUrl' in result && (result as any).labelUrl) ? (result as any).labelUrl : null;
+
+      return NextResponse.json({ ok: true, action, labelUrl });
     } catch (err: any) {
       return new NextResponse(String(err?.message ?? err), { status: 500 });
     }

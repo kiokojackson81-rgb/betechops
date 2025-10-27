@@ -6,15 +6,20 @@ import * as jumia from '@/lib/jumia';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { orderId, shopId, userId } = body ?? {};
+  const body = await req.json();
+  const { orderId, shopId } = body ?? {};
     // Enforce auth
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   // session.user shape may vary; tolerate missing fields
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const su: any = (session as any)?.user ?? {};
-  const actor = su.email || su.name || su.id || 'unknown';
+  const su = ((session as unknown as { user?: Record<string, unknown> })?.user ?? {}) as Record<string, unknown>;
+  const actor = typeof su.email === 'string'
+    ? su.email
+    : typeof su.name === 'string'
+      ? su.name
+      : typeof su.id === 'string'
+        ? su.id
+        : 'unknown';
 
     if (!orderId || !shopId) return NextResponse.json({ error: 'orderId and shopId required' }, { status: 400 });
 
@@ -34,8 +39,8 @@ export async function POST(req: Request) {
       // continue without Redis
     }
 
-    // Call Jumia to perform pack action. If vendor has a specific endpoint, jumiaFetch will call it.
-    let result: any = { ok: false };
+  // Call Jumia to perform pack action. If vendor has a specific endpoint, jumiaFetch will call it.
+  let result: unknown = { ok: false };
     try {
       // Best-effort: call a vendor pack endpoint. This may be adapted to the real vendor API.
       try {
@@ -48,8 +53,7 @@ export async function POST(req: Request) {
 
       // persist audit (best-effort)
       try {
-        const auditKey = `${idempotencyKey}:${Date.now()}`;
-  await (prisma as any).fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result } } });
+        await prisma.fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result: result as any } } });
       } catch (e) {
         console.warn('failed to persist fulfillment audit', e);
       }
@@ -65,8 +69,8 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ ok: true, action, result });
-    } catch (err: any) {
-      return new NextResponse(String(err?.message ?? err), { status: 500 });
+    } catch (err: unknown) {
+      return new NextResponse(String((err as any)?.message ?? String(err)), { status: 500 });
     }
   } catch (err) {
     return new NextResponse(String(err), { status: 500 });

@@ -13,7 +13,7 @@ import { incOrdersProcessed, incOrderHandlerErrors, incFulfillments, incFulfillm
 
 type RedisClientLike = {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, mode?: string, ttl?: number): Promise<'OK' | null> | Promise<void>;
+  set(...args: unknown[]): Promise<unknown>;
 };
 
 let _redis: RedisClientLike | null | undefined;
@@ -167,8 +167,12 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
  * Iterate orders for a shop and call the provided handler for each order.
  * The handler can be async. Returns the number of orders processed.
  */
-export async function syncOrders(shopId: string, handler: (order: any) => Promise<void> | void, params?: Record<string, any>) {
-  const pageParams = { shopId, status: params?.status ?? 'PENDING', pageSize: params?.pageSize ?? 50 };
+export async function syncOrders(shopId: string, handler: (order: unknown) => Promise<void> | void, params?: Record<string, unknown>) {
+  const pageParams: Record<string, string> = {
+    shopId,
+    status: String(params?.status ?? 'PENDING'),
+    pageSize: String(params?.pageSize ?? 50),
+  };
   let processed = 0;
   for await (const page of jumiaPaginator('/orders', pageParams)) {
     const orders = Array.isArray(page?.data) ? page.data : page?.orders ?? [];

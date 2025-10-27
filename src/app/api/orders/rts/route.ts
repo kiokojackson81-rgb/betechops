@@ -10,9 +10,14 @@ export async function POST(req: Request) {
     const { orderId, shopId } = body ?? {};
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const su: any = (session as any)?.user ?? {};
-    const actor = su.email || su.name || su.id || 'unknown';
+    const su = ((session as unknown as { user?: Record<string, unknown> })?.user ?? {}) as Record<string, unknown>;
+    const actor = typeof su.email === 'string'
+      ? su.email
+      : typeof su.name === 'string'
+        ? su.name
+        : typeof su.id === 'string'
+          ? su.id
+          : 'unknown';
 
     if (!orderId || !shopId) return NextResponse.json({ error: 'orderId and shopId required' }, { status: 400 });
 
@@ -31,8 +36,8 @@ export async function POST(req: Request) {
     }
 
     try {
-      // Call vendor API to mark RTS (best-effort)
-      let result: any = {};
+  // Call vendor API to mark RTS (best-effort)
+  let result: unknown = {};
       try {
         result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/rts`, { method: 'POST', body: JSON.stringify({ shopId }) });
       } catch (e) {
@@ -53,8 +58,8 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ ok: true, action, result });
-    } catch (err: any) {
-      return new NextResponse(String(err?.message ?? err), { status: 500 });
+    } catch (err: unknown) {
+      return new NextResponse(String((err as any)?.message ?? String(err)), { status: 500 });
     }
   } catch (err) {
     return new NextResponse(String(err), { status: 500 });
