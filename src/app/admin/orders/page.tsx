@@ -39,7 +39,8 @@ async function getOrders(params: Search) {
   }>;
 }
 
-export default async function OrdersPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function OrdersPage(props: unknown) {
+  const searchParams: Record<string, string | string[] | undefined> = ((props as { searchParams?: Record<string, string | string[] | undefined> })?.searchParams) || {};
   const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const params: Search = {
     status: toStr(searchParams.status),
