@@ -39,13 +39,14 @@ export async function POST(req: Request) {
   // Call vendor API to mark RTS (best-effort)
   let result: unknown = {};
       try {
-        result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/rts`, { method: 'POST', body: JSON.stringify({ shopId }) });
-      } catch (e) {
+        const jf = (jumia as unknown as { jumiaFetch: (path: string, init?: RequestInit) => Promise<unknown> }).jumiaFetch;
+        result = await jf(`/orders/${encodeURIComponent(orderId)}/rts`, { method: 'POST', body: JSON.stringify({ shopId }) });
+      } catch {
         result = { ok: true, note: 'simulated-rts' };
       }
 
       try {
-  await (prisma as any).fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result } } });
+        await prisma.fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: JSON.parse(JSON.stringify({ actor, result })) } });
       } catch (e) {
         console.warn('failed to persist fulfillment audit', e);
       }
@@ -59,7 +60,8 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ ok: true, action, result });
     } catch (err: unknown) {
-      return new NextResponse(String((err as any)?.message ?? String(err)), { status: 500 });
+      const msg = err instanceof Error ? err.message : String(err);
+      return new NextResponse(String(msg), { status: 500 });
     }
   } catch (err) {
     return new NextResponse(String(err), { status: 500 });

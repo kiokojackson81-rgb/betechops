@@ -55,7 +55,7 @@ async function idempotencySet(key: string, value: unknown, ttlSeconds = 60 * 60 
   const payload = JSON.stringify(value);
   if (r) {
     try {
-      await (r as any).set(key, payload, 'EX', ttlSeconds);
+      await r.set(key, payload, 'EX', ttlSeconds);
       return;
     } catch {
       // fall through to mem
@@ -138,10 +138,18 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
   observeFulfillmentLatency(took);
   // persist audit to DB (best-effort)
       try {
-        // Prisma JSON fields expect a serializable value; coerce safely and use a narrow cast
-        const payloadForDb = toStore.payload as any;
-        const s3Bucket = (payloadForDb?._labelStored as Record<string, unknown> | undefined)?.bucket ?? null;
-        const s3Key = (payloadForDb?._labelStored as Record<string, unknown> | undefined)?.key ?? null;
+        // Prisma JSON fields expect a serializable value; coerce safely by serializing
+        const payloadForDb = toStore.payload as unknown;
+        let s3Bucket: string | null = null;
+        let s3Key: string | null = null;
+        if (payloadForDb && typeof payloadForDb === 'object') {
+          const pRec = payloadForDb as Record<string, unknown>;
+          const stored = pRec._labelStored as Record<string, unknown> | undefined;
+          if (stored) {
+            s3Bucket = typeof stored.bucket === 'string' ? stored.bucket : null;
+            s3Key = typeof stored.key === 'string' ? stored.key : null;
+          }
+        }
         await prisma.fulfillmentAudit.create({
           data: {
             idempotencyKey: key,
@@ -150,9 +158,9 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
             action: 'FULFILL',
             status: res.status,
             ok: Boolean(res.ok),
-            payload: payloadForDb,
-            s3Bucket: s3Bucket as string | null,
-            s3Key: s3Key as string | null,
+            payload: JSON.parse(JSON.stringify(payloadForDb)),
+            s3Bucket,
+            s3Key,
           },
         });
       } catch {
@@ -191,7 +199,8 @@ export async function syncOrders(shopId: string, handler: (order: unknown) => Pr
       } catch (handlerErr) {
         // swallow: job runner should implement retries/alerts; keep this safe
         incOrderHandlerErrors(1);
-        logger.error({ shopId, orderId: (o as any)?.id ?? null, err: handlerErr }, 'syncOrders handler error for order');
+  const orderIdVal = o && typeof o === 'object' && 'id' in (o as Record<string, unknown>) ? String((o as Record<string, unknown>).id) : null;
+  logger.error({ shopId, orderId: orderIdVal, err: handlerErr }, 'syncOrders handler error for order');
       }
     }
   }

@@ -18,7 +18,7 @@ async function runShop(shopId: string, options: RunOptions) {
   let attempt = 0;
   while (true) {
     try {
-      const processed = await syncOrders(shopId, async (_order: any) => {
+      const processed = await syncOrders(shopId, async (_order: unknown) => {
         return;
       });
       return { shopId, ok: true, processed };
@@ -35,7 +35,7 @@ async function runShop(shopId: string, options: RunOptions) {
 
 export async function runForShops(shopIds: string[], options: RunOptions = {}) {
   const concurrency = Math.max(1, options.concurrency ?? 2);
-  const results: Array<any> = [];
+  const results: Array<unknown> = [];
   const executing: Promise<void>[] = [];
 
   let inFlight = 0;

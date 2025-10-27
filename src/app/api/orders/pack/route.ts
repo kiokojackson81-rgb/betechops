@@ -44,16 +44,20 @@ export async function POST(req: Request) {
     try {
       // Best-effort: call a vendor pack endpoint. This may be adapted to the real vendor API.
       try {
-        result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/pack`, { method: 'POST', body: JSON.stringify({ shopId }) });
-      } catch (e) {
+        const jf = (jumia as unknown as { jumiaFetch: (path: string, init?: RequestInit) => Promise<unknown>; getOrderItems?: (orderId: string) => Promise<unknown> }).jumiaFetch;
+        result = await jf(`/orders/${encodeURIComponent(orderId)}/pack`, { method: 'POST', body: JSON.stringify({ shopId }) });
+      } catch {
         // If vendor pack endpoint is not available, attempt a read of order items to validate existence
-        await (jumia as any).getOrderItems(orderId).catch(() => null);
+        try {
+          const jmod = (jumia as unknown as { getOrderItems?: (orderId: string) => Promise<unknown> });
+          await jmod.getOrderItems?.(orderId).catch(() => null);
+        } catch {}
         result = { ok: true, note: 'simulated-pack' };
       }
 
       // persist audit (best-effort)
       try {
-        await prisma.fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result: result as any } } });
+        await prisma.fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: JSON.parse(JSON.stringify({ actor, result })) } });
       } catch (e) {
         console.warn('failed to persist fulfillment audit', e);
       }
@@ -70,7 +74,8 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ ok: true, action, result });
     } catch (err: unknown) {
-      return new NextResponse(String((err as any)?.message ?? String(err)), { status: 500 });
+      const msg = err instanceof Error ? err.message : String(err);
+      return new NextResponse(String(msg), { status: 500 });
     }
   } catch (err) {
     return new NextResponse(String(err), { status: 500 });

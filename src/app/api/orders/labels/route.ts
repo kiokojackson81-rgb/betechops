@@ -39,14 +39,15 @@ export async function POST(req: Request) {
       // Best-effort: attempt to call vendor label endpoint
   let result: unknown;
       try {
-        result = await (jumia as any).jumiaFetch(`/orders/${encodeURIComponent(orderId)}/label`, { method: 'POST', body: JSON.stringify({ shopId }) });
+        const jf = (jumia as unknown as { jumiaFetch: (path: string, init?: RequestInit) => Promise<unknown> }).jumiaFetch;
+        result = await jf(`/orders/${encodeURIComponent(orderId)}/label`, { method: 'POST', body: JSON.stringify({ shopId }) });
       } catch {
         // simulate label generation
         result = { ok: true, labelUrl: null, note: 'simulated-label' } as unknown;
       }
 
       try {
-  await (prisma as any).fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: { actor, result } } });
+        await prisma.fulfillmentAudit.create({ data: { idempotencyKey, orderId, shopId, action, status: 1, ok: true, payload: JSON.parse(JSON.stringify({ actor, result })) } });
       } catch (e) {
         console.warn('failed to persist fulfillment audit', e);
       }
@@ -59,11 +60,16 @@ export async function POST(req: Request) {
       }
 
       // labelUrl may be present depending on vendor response shape
-      const labelUrl = (result && typeof result === 'object' && 'labelUrl' in result && (result as any).labelUrl) ? (result as any).labelUrl : null;
+      let labelUrl: string | null = null;
+      if (result && typeof result === 'object') {
+        const p = result as Record<string, unknown>;
+        if (typeof p.labelUrl === 'string') labelUrl = p.labelUrl;
+      }
 
       return NextResponse.json({ ok: true, action, labelUrl });
-    } catch (err: any) {
-      return new NextResponse(String(err?.message ?? err), { status: 500 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return new NextResponse(String(msg), { status: 500 });
     }
   } catch (err) {
     return new NextResponse(String(err), { status: 500 });
