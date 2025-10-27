@@ -1,6 +1,6 @@
 import { syncOrders } from './jumia';
 import { logger } from '../log';
-import { incOrdersProcessed, incShopRuns, incShopRunFailures, gaugeShopsInProgress } from '../metrics';
+import { incShopRuns, incShopRunFailures, gaugeShopsInProgress } from '../metrics';
 
 export type RunOptions = {
   concurrency?: number;
@@ -18,7 +18,7 @@ async function runShop(shopId: string, options: RunOptions) {
   let attempt = 0;
   while (true) {
     try {
-      const processed = await syncOrders(shopId, async (_order: unknown) => {
+      const processed = await syncOrders(shopId, async () => {
         return;
       });
       return { shopId, ok: true, processed };
@@ -70,4 +70,5 @@ export async function runForShops(shopIds: string[], options: RunOptions = {}) {
   return results;
 }
 
-export default { runForShops };
+const runner = { runForShops };
+export default runner;

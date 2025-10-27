@@ -39,8 +39,20 @@ async function getOrders(params: Search) {
   }>;
 }
 
-export default async function OrdersPage({ searchParams }: { searchParams: Search }) {
-  const data = await getOrders(searchParams);
+export default async function OrdersPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+  const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const params: Search = {
+    status: toStr(searchParams.status),
+    country: toStr(searchParams.country),
+    shopId: toStr(searchParams.shopId),
+    dateFrom: toStr(searchParams.dateFrom),
+    dateTo: toStr(searchParams.dateTo),
+    q: toStr(searchParams.q),
+    nextToken: toStr(searchParams.nextToken),
+    size: toStr(searchParams.size),
+  };
+
+  const data = await getOrders(params);
 
   return (
     <div className="space-y-6">

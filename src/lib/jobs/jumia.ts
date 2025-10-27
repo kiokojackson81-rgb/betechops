@@ -207,7 +207,9 @@ export async function syncOrders(shopId: string, handler: (order: unknown) => Pr
   return processed;
 }
 
-export default {
+const jobs = {
   fulfillOrder,
   syncOrders,
 };
+
+export default jobs;

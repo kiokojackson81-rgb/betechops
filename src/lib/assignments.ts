@@ -24,4 +24,6 @@ export function can(user: { role: string }, action: string) {
   return map[action]?.includes(user.role) ?? false;
 }
 
-export default { getUserShops, upsertAssignments, can };
+const assignments = { getUserShops, upsertAssignments, can };
+
+export default assignments;
