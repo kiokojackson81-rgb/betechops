@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo } from '@/lib/oidc';
+import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson } from '@/lib/oidc';
 
 type Cache = {
   accessToken?: string;
@@ -229,42 +229,98 @@ export async function resolveJumiaConfig(): Promise<{ base: string; scheme: stri
  * Usage: await jumiaFetch("/some/endpoint?param=1")
  */
 export async function jumiaFetch(path: string, init: RequestInit = {}) {
+  // New: support passing per-shop auth via second param. Backwards-compatible with existing callers.
+  type FetchOpts = {
+    shopAuth?: ShopAuthJson;
+    shopCode?: string;
+  } & RequestInit;
+
+  function isFetchOpts(o: any): o is FetchOpts {
+    return o && (o.shopAuth !== undefined || o.shopCode !== undefined || o.headers !== undefined);
+  }
+
   const cfg = await loadConfig();
   const resolved = await resolveJumiaConfig();
+
+  // Detect whether caller passed FetchOpts (with shopAuth/shopCode) or plain RequestInit
+  const maybeOpts = (init as unknown) as FetchOpts;
+  const fetchOpts: FetchOpts = isFetchOpts(maybeOpts) ? maybeOpts : (init as FetchOpts);
+
   // Prefer canonical base_url env, then legacy JUMIA_API_BASE, then DB-config, then resolved probe
-  const apiBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base;
+  const apiBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base || resolveApiBase(fetchOpts.shopAuth);
   if (!apiBase) throw new Error("Missing vendor base URL (process.env.base_url or JUMIA_API_BASE); cannot call Jumia API");
-  const scheme = process.env.JUMIA_AUTH_SCHEME || resolved.scheme || 'Bearer';
-  const token = await getAccessToken();
-  const url = `${apiBase.replace(/\/$/, '')}${path}`;
-  const bodyPresent = Boolean((init as RequestInit).body);
-  const headers = {
-    ...(init.headers as Record<string, string> | undefined),
-    Authorization: `${scheme} ${token}`,
-    "Content-Type": bodyPresent ? "application/json" : undefined,
-  } as Record<string, string>;
+
+  // Use per-shop auth when provided; otherwise fall back to global access token
+  let accessToken: string;
+  let tokenMeta: { source?: string; platform?: string; tokenUrl?: string } | undefined;
+  try {
+    const tok = await (getJumiaAccessToken as any)(fetchOpts.shopAuth as any);
+    accessToken = (tok as any).access_token;
+    tokenMeta = (tok as any)._meta as any;
+  } catch (e) {
+    // Fall back to env-based flow if shopAuth failed
+    try {
+      const tok = await (getJumiaAccessToken as any)();
+      accessToken = (tok as any).access_token;
+      tokenMeta = (tok as any)._meta as any;
+    } catch {
+      // final fallback: older helper
+      const t = await getAccessToken();
+      accessToken = t;
+      tokenMeta = { source: 'ENV' };
+    }
+  }
+
+  const url = `${apiBase.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
+  const bodyPresent = Boolean((fetchOpts as RequestInit).body);
+  const headers = new Headers((fetchOpts.headers as HeadersInit) || {});
+  headers.set('Authorization', `Bearer ${accessToken}`);
+  if (bodyPresent) headers.set('Content-Type', 'application/json');
+  // Debug headers
+  if (tokenMeta?.source) headers.set('X-Auth-Source', String(tokenMeta.source));
+  if (tokenMeta?.platform) headers.set('X-Platform', String(tokenMeta.platform));
+  if (fetchOpts.shopCode) headers.set('X-Shop-Code', String(fetchOpts.shopCode));
 
   // Use the shared rate-limited queue to perform the request with retries
   const attempt = async () => {
     const start = Date.now();
-    const r = await fetch(url, { ...init, headers, cache: "no-store" });
+    const r = await fetch(url, { ...(fetchOpts as RequestInit), headers: Object.fromEntries(headers as any), cache: 'no-store' });
     const latency = Date.now() - start;
     _recordLatency(latency);
     if (!r.ok) {
       const msg = await r.text().catch(() => r.statusText);
-      const err = new Error(`Jumia ${path} failed: ${r.status} ${msg}`) as ErrorWithMeta;
+      console.error('[jumiaFetch] HTTP error', {
+        url,
+        status: r.status,
+        authSource: tokenMeta?.source,
+        platform: tokenMeta?.platform,
+        body: String(msg).slice(0, 400),
+      });
+      const err = new Error(`Jumia ${path} failed: ${r.status} ${String(msg)}`) as ErrorWithMeta;
       err.status = r.status;
-      err.body = msg;
+      err.body = String(msg);
       throw err;
     }
     try {
-      return await r.json();
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return await r.json();
+      return await r.text();
     } catch {
       return {};
     }
   };
 
   return _rateLimiter.scheduleWithRetry(attempt);
+}
+
+/** Resolve API base (keeps your existing logic but ensures a default). */
+export function resolveApiBase(shopAuth?: ShopAuthJson) {
+  return (
+    process.env.base_url ||
+    process.env.BASE_URL ||
+    process.env.JUMIA_API_BASE ||
+    'https://vendor-api.jumia.com'
+  );
 }
 
 /* --- Simple in-process rate limiter + retry/backoff --- */

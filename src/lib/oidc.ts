@@ -1,224 +1,142 @@
-/**
- * Minimal OIDC helper for client_credentials / refresh_token flows.
- * - Reads OIDC_XXX env vars
- * - Fetches discovery document from OIDC_ISSUER
- * - Uses token_endpoint from discovery to request tokens
- * - Caches token in-memory until expiry
- */
-// TODO(copilot): Add persistent token cache (Redis) behind getJumiaAccessToken()
-// 1) If process.env.REDIS_URL -> use it to store { accessToken, exp } under key `jumia:token`
-// 2) Refresh 5 minutes before expiry; fall back to in-memory if Redis unavailable
-// 3) Emit metrics: jumia_token_refresh_total{result="ok|fail"}
+import { z } from "zod";
 
-const cache: Record<string, { accessToken: string; exp: number }> = {};
-
-// Simple per-Jumia cache for the refresh token flow
-const jumiaCache: { token?: string; exp?: number; tokenUrl?: string } = {};
-
-// Optional Redis-backed token cache (lazy init). Only used when process.env.REDIS_URL is set.
-type PartialRedisLike = {
-  ping?: () => Promise<string>;
-  get: (key: string) => Promise<string | null>;
-  set: (...args: unknown[]) => Promise<unknown>;
+type AuthSource = "SHOP" | "ENV";
+type ShopAuth = {
+  platform?: "JUMIA" | "KILIMALL";
+  tokenUrl?: string;
+  clientId?: string;
+  refreshToken?: string;
 };
-let redisClient: PartialRedisLike | null = null;
-let redisAvailable = false;
 
-async function ensureRedis() {
-  if (!process.env.REDIS_URL) return null;
-  if (redisClient) return redisClient;
-  try {
-  // dynamic import to avoid hard dependency until runtime
-  const mod = await import('ioredis');
-  const RedisCtor = ((mod as unknown) as { default?: unknown }).default ?? (mod as unknown);
-  // instantiate with minimal typing and avoid `any` by casting via unknown
-  redisClient = (new (RedisCtor as unknown as { new (url: string): PartialRedisLike })(process.env.REDIS_URL as string)) as PartialRedisLike;
-  // basic ping to confirm connectivity
-  await redisClient.ping?.();
-    redisAvailable = true;
-    return redisClient;
-  } catch (err: unknown) {
-    // If Redis is unavailable, fall back to in-memory cache
-  console.error('Jumia Redis initialization failed, falling back to in-memory token cache:', err instanceof Error ? err.message : String(err));
-    redisClient = null;
-    redisAvailable = false;
-    return null;
+const redact = (s?: string, keep = 4) =>
+  !s ? "" : s.length <= keep ? "****" : `${s.slice(0, keep)}…REDACTED`;
+
+export type AccessToken = {
+  access_token: string;
+  expires_in?: number;
+  token_type?: string;
+  _meta?: { source: AuthSource; platform?: string; tokenUrl?: string };
+};
+
+// Unified token getter: prefers per-shop JSON, falls back to env.
+async function getJumiaAccessTokenWithMeta(
+  shopAuth?: ShopAuth
+): Promise<AccessToken> {
+  // 1) Resolve from shop JSON first
+  const fromShop = shopAuth?.clientId && shopAuth?.refreshToken;
+  const tokenUrl =
+    shopAuth?.tokenUrl ||
+    process.env.OIDC_TOKEN_URL ||
+    process.env.JUMIA_OIDC_TOKEN_URL ||
+    "https://vendor-api.jumia.com/token";
+
+  const clientId =
+    (fromShop ? shopAuth?.clientId : process.env.OIDC_CLIENT_ID) ||
+    process.env.JUMIA_CLIENT_ID;
+
+  const refreshToken =
+    (fromShop ? shopAuth?.refreshToken : process.env.OIDC_REFRESH_TOKEN) ||
+    process.env.JUMIA_REFRESH_TOKEN;
+
+  const source: AuthSource = fromShop ? "SHOP" : "ENV";
+
+  if (!clientId || !refreshToken) {
+    throw new Error(
+      "Missing credentials: neither per-shop JSON nor ENV provided clientId & refreshToken."
+    );
   }
-}
 
-async function fetchDiscovery(issuer: string) {
-  const url = `${issuer.replace(/\/?$/, "")}/.well-known/openid-configuration`;
-  const r = await fetch(url, { cache: "no-store" });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => r.statusText);
-    throw new Error(`Failed to fetch discovery document: ${r.status} ${txt} (url: ${url})`);
+  // Optional simple in-memory cache keyed by (source+clientId)
+  const cacheKey = `${source}:${clientId}`;
+  const now = Math.floor(Date.now() / 1000);
+  // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+  globalThis.__jumiaTokenCache ??= new Map<string, { token: AccessToken; exp: number }>();
+  // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+  const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }>;
+  const cached = cache.get(cacheKey);
+  if (cached && cached.exp > now + 60) {
+    return { ...cached.token, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
   }
-  return r.json();
-}
 
-async function requestToken(tokenUrl: string, body: URLSearchParams) {
-  const r = await fetch(tokenUrl, {
+  const body = new URLSearchParams({
+    client_id: clientId!,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken!,
+  });
+
+  const resp = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    cache: "no-store",
+    body,
   });
-  if (!r.ok) {
-    const msg = await r.text().catch(() => r.statusText);
-    throw new Error(`OIDC token fetch failed: ${r.status} ${msg} (endpoint: ${tokenUrl})`);
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    // Structured, safe log (never print full secrets)
+    console.error("[OIDC] token exchange FAILED", {
+      source,
+      tokenUrl,
+      platform: shopAuth?.platform ?? "JUMIA",
+      clientId: redact(clientId),
+      refreshToken: redact(refreshToken),
+      status: resp.status,
+      body: text.slice(0, 400),
+    });
+    throw new Error(`OIDC token exchange failed (${resp.status})`);
   }
-  return r.json();
+
+  const json = (await resp.json()) as AccessToken;
+  const exp = now + (json.expires_in ?? 3000);
+  cache.set(cacheKey, { token: json, exp });
+
+  // Helpful success log (still redacted)
+  console.info("[OIDC] token exchange OK", {
+    source,
+    tokenUrl,
+    platform: shopAuth?.platform ?? "JUMIA",
+    clientId: redact(clientId),
+    exp,
+  });
+
+  return { ...json, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
 }
 
+// Backwards-compatible wrapper:
+export async function getJumiaAccessToken(): Promise<string>;
+export async function getJumiaAccessToken(shopAuth?: ShopAuth): Promise<AccessToken>;
+export async function getJumiaAccessToken(shopAuth?: ShopAuth): Promise<any> {
+  if (shopAuth === undefined) {
+    const tok = (await getJumiaAccessTokenWithMeta(undefined)) as AccessToken;
+    return tok.access_token;
+  }
+  return await getJumiaAccessTokenWithMeta(shopAuth);
+}
+
+// Helper to build ShopAuth from DB/JSON credentials
+export const ShopAuthSchema = z.object({
+  platform: z.enum(["JUMIA", "KILIMALL"]).optional(),
+  tokenUrl: z.string().url().optional(),
+  clientId: z.string().min(3).optional(),
+  refreshToken: z.string().min(10).optional(),
+});
+export type ShopAuthJson = z.infer<typeof ShopAuthSchema>;
+
+// Backwards-compatible helpers used by other modules
 export async function getAccessTokenFromEnv(): Promise<string> {
-  const issuer = process.env.OIDC_ISSUER || "";
-  const clientId = process.env.OIDC_CLIENT_ID || "";
-  const clientSecret = process.env.OIDC_CLIENT_SECRET || "";
-  const refreshToken = process.env.OIDC_REFRESH_TOKEN || "";
-
-  if (!issuer || !clientId) throw new Error("OIDC_ISSUER and OIDC_CLIENT_ID must be set in env to obtain tokens");
-
-  const cacheKey = clientId;
-  const now = Date.now();
-  if (cache[cacheKey] && cache[cacheKey].exp && now < cache[cacheKey].exp - 60_000) {
-    return cache[cacheKey].accessToken;
-  }
-
-  const disc = await fetchDiscovery(issuer);
-  const tokenEndpoint = disc.token_endpoint;
-  if (!tokenEndpoint) throw new Error("discovery document did not contain token_endpoint");
-
-  interface TokenResponse {
-    access_token?: string;
-    expires_in?: number | string;
-    [k: string]: unknown;
-  }
-
-  let tokenResp: TokenResponse;
-  if (refreshToken) {
-    const body = new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken });
-    if (clientSecret) body.set("client_secret", clientSecret);
-    tokenResp = await requestToken(tokenEndpoint, body);
-  } else {
-    if (!clientSecret) throw new Error("OIDC_CLIENT_SECRET must be set for client_credentials flow");
-    const body = new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
-    tokenResp = await requestToken(tokenEndpoint, body);
-  }
-
-  const expiresIn = Number(tokenResp.expires_in ?? 300);
-  cache[cacheKey] = { accessToken: String(tokenResp.access_token ?? ""), exp: now + expiresIn * 1000 };
-  return cache[cacheKey].accessToken;
-}
-
-export function clearOidcCache() {
-  for (const k of Object.keys(cache)) delete cache[k];
-}
-
-// Intentionally no default export to keep named exports explicit
-
-/**
- * Mint an access token specifically for Jumia using the provided
- * JUMIA_OIDC_TOKEN_URL + OIDC_CLIENT_ID + OIDC_REFRESH_TOKEN.
- * Caches token until expiresAt - 60s.
- */
-export async function getJumiaAccessToken(): Promise<string> {
-  // Prefer explicit JUMIA_OIDC_TOKEN_URL, then generic OIDC token URL, then canonical fallback
-  // Per Jumia vendor API spec the token endpoint is exposed at /token
-  // Prefer generic OIDC_TOKEN_URL first (so platform-level envs win), then JUMIA_OIDC_TOKEN_URL, then canonical fallback
-  const tokenUrl = process.env.OIDC_TOKEN_URL || process.env.JUMIA_OIDC_TOKEN_URL || 'https://vendor-api.jumia.com/token';
-  // Prefer standard OIDC env names, fall back to legacy JUMIA_CLIENT_ID
-  const clientId = process.env.OIDC_CLIENT_ID || process.env.JUMIA_CLIENT_ID || "";
-  // Prefer standard OIDC env names
-  const refreshToken = process.env.OIDC_REFRESH_TOKEN || process.env.JUMIA_REFRESH_TOKEN || "";
-
-  if (!tokenUrl) throw new Error("JUMIA_OIDC_TOKEN_URL or OIDC_TOKEN_URL must be set to mint a Jumia token");
-  if (!clientId) throw new Error("OIDC_CLIENT_ID (or JUMIA_CLIENT_ID) is not set in env; cannot mint Jumia token");
-  if (!refreshToken) throw new Error("OIDC_REFRESH_TOKEN (or JUMIA_REFRESH_TOKEN) is not set in env; cannot mint Jumia token");
-
-  const now = Date.now();
-
-  // 1) check in-memory cache first (fast-path)
-  if (jumiaCache.token && jumiaCache.exp && now < (jumiaCache.exp - 60_000)) {
-    return jumiaCache.token;
-  }
-
-  // 2) If REDIS_URL configured, try Redis before minting a new token
-  try {
-    const r = await ensureRedis();
-    if (r && redisAvailable) {
-          try {
-            const raw = await r.get('jumia:token');
-            if (raw) {
-              const parsed = JSON.parse(raw as string);
-              const access = String(parsed.access || parsed.accessToken || parsed.token || '');
-              const exp = Number(parsed.exp || parsed.expiresAt || 0);
-              if (access && exp && now < (exp - 60_000)) {
-                // populate in-memory cache and return
-                jumiaCache.token = access;
-                jumiaCache.exp = exp;
-                jumiaCache.tokenUrl = tokenUrl;
-                return access;
-              }
-            }
-          } catch {
-            // redis read failed -> continue to mint new token
-            console.error('Jumia Redis read failed; will mint new token');
-          }
-    }
-  } catch {
-    // ignore Redis failures; proceed with minting and fallback to in-memory
-  }
-
-  const body = new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken });
-
-  const r = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-    cache: "no-store",
-  });
-
-  const txt = await r.text().catch(() => "");
-  if (!r.ok) {
-    // redact secrets from the error message
-    const preview = txt.length > 400 ? txt.slice(0, 400) + "..." : txt;
-    throw new Error(`Jumia token endpoint returned ${r.status}: ${preview}`);
-  }
-
-  let tokenResp: { access_token?: string; expires_in?: number | string } = {};
-  try {
-    tokenResp = JSON.parse(txt || "{}");
-  } catch {
-    // if not JSON, surface raw body (already captured above)
-    throw new Error(`Jumia token response parse failed; body: ${txt}`);
-  }
-
-  const access = String(tokenResp.access_token || "");
-  const expiresIn = Number(tokenResp.expires_in ?? 300);
-  if (!access) throw new Error("Jumia token response did not include access_token");
-
-  jumiaCache.token = access;
-  jumiaCache.exp = now + expiresIn * 1000;
-  jumiaCache.tokenUrl = tokenUrl;
-
-  // Persist to Redis (best-effort). Store token and absolute expiry.
-  (async () => {
-    try {
-      const r = await ensureRedis();
-      if (r && redisAvailable) {
-        const payload = JSON.stringify({ access: access, exp: jumiaCache.exp });
-        // set with TTL a bit shorter than expiry to allow refresh window
-        const ttl = Math.max(30, Math.floor(expiresIn) - 10);
-  await r.set?.('jumia:token', payload, 'EX', ttl);
-      }
-    } catch (err) {
-      // Non-fatal: log and continue
-      console.error('Failed to persist Jumia token to Redis; continuing with in-memory cache', err instanceof Error ? err.message : String(err));
-    }
-  })();
-  return access;
+  // Prefer the standard env-based flow: call getJumiaAccessToken with no shopAuth
+  const tokAny = await (getJumiaAccessToken as any)();
+  if (typeof tokAny === 'string') return tokAny;
+  return (tokAny as AccessToken).access_token;
 }
 
 export function getJumiaTokenInfo() {
-  return { tokenUrl: jumiaCache.tokenUrl || process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL, expiresAt: jumiaCache.exp };
+  // Try to pick a cached entry if available
+  // @ts-expect-error - access global cache if present
+  const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }> | undefined;
+  if (cache && cache.size > 0) {
+    for (const [k, v] of cache.entries()) {
+      return { tokenUrl: v.token._meta?.tokenUrl || process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL, expiresAt: v.exp * 1000 };
+    }
+  }
+  return { tokenUrl: process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL, expiresAt: undefined };
 }
