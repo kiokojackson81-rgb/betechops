@@ -346,6 +346,15 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
       if (dec) raw = dec;
       else return undefined; // cannot decrypt without key
     }
+    // Normalize common alias keys from various imports
+    if (raw && typeof raw === 'object') {
+      const r: any = raw;
+      if (r.client_id && !r.clientId) r.clientId = r.client_id;
+      if (r.refresh_token && !r.refreshToken) r.refreshToken = r.refresh_token;
+      if (r.base_url && !r.apiBase) r.apiBase = r.base_url;
+      if (r.api_base && !r.apiBase) r.apiBase = r.api_base;
+      raw = r;
+    }
     let parsed: any = {};
     try { parsed = ShopAuthSchema.partial().parse(raw || {}); } catch { parsed = {}; }
     if (!parsed.platform) parsed.platform = (shop as any).platform || 'JUMIA';
