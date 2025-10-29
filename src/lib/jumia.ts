@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson } from '@/lib/oidc';
+import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson, ShopAuthSchema } from '@/lib/oidc';
+import { decryptJson } from '@/lib/crypto/secure-json';
 
 type Cache = {
   accessToken?: string;
@@ -334,6 +335,37 @@ export function resolveApiBase(shopAuth?: ShopAuthJson) {
   );
 }
 
+/** Load per-shop credentials (if any). Returns normalized ShopAuthJson or undefined. */
+export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | undefined> {
+  try {
+    const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { platform: true, credentialsEncrypted: true, apiConfig: true } });
+    if (!shop) return undefined;
+    let raw: any = (shop as any).credentialsEncrypted ?? (shop as any).apiConfig ?? undefined;
+    if (raw && (raw as any).payload) {
+      const dec = decryptJson(raw as { payload: string });
+      if (dec) raw = dec;
+      else return undefined; // cannot decrypt without key
+    }
+    let parsed: any = {};
+    try { parsed = ShopAuthSchema.partial().parse(raw || {}); } catch { parsed = {}; }
+    if (!parsed.platform) parsed.platform = (shop as any).platform || 'JUMIA';
+    return parsed as ShopAuthJson;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Load the first active JUMIA shop's credentials as a default. */
+export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
+  try {
+    const shop = await prisma.shop.findFirst({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
+    if (!shop) return undefined;
+    return await loadShopAuthById(shop.id);
+  } catch {
+    return undefined;
+  }
+}
+
 /* --- Simple in-process rate limiter + retry/backoff --- */
 
 type TaskFn<T> = () => Promise<T>;
@@ -456,11 +488,12 @@ const _rateLimiter = (() => {
 // Sales today (normalize to { total })
 export async function getSalesToday() {
   const { endpoints } = await loadConfig();
+  const shopAuth = await loadDefaultShopAuth();
   // Prefer explicit endpoint override; otherwise use /orders and count items for today
   const today = new Date().toISOString().slice(0, 10);
   const explicit = endpoints?.salesToday;
   const path = explicit || `/orders?createdAfter=${today}&createdBefore=${today}`;
-  const j = await jumiaFetch(path);
+  const j = await jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
   // The Orders API returns { orders: [...] } per the doc
   const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.data) ? j.data : [];
   return { total: orders.length };
@@ -469,9 +502,10 @@ export async function getSalesToday() {
 // Orders pending pricing (normalize to { count })
 export async function getPendingPricingCount() {
   const { endpoints } = await loadConfig();
+  const shopAuth = await loadDefaultShopAuth();
   const explicit = endpoints?.pendingPricing;
   const path = explicit || '/orders?status=PENDING';
-  const j = await jumiaFetch(path);
+  const j = await jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
   const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
   return { count: orders.length };
 }
@@ -479,12 +513,13 @@ export async function getPendingPricingCount() {
 // Returns waiting pickup (normalize to { count })
 export async function getReturnsWaitingPickup() {
   const { endpoints } = await loadConfig();
+  const shopAuth = await loadDefaultShopAuth();
   const explicit = endpoints?.returnsWaitingPickup;
   // Prefer explicit; otherwise check orders with RETURNED status or a /returns endpoint
   const pathCandidates = explicit ? [explicit] : ['/orders?status=RETURNED', '/returns', '/returns?status=waiting-pickup'];
   for (const p of pathCandidates) {
     try {
-      const j = await jumiaFetch(p);
+  const j = await jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any));
       const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
       return { count: arr.length };
     } catch {
@@ -572,7 +607,8 @@ export async function fetchOrdersForShop(shopId: string, opts?: { since?: string
     q = `?createdAfter=${encodeURIComponent(opts.since)}`;
   }
   try {
-    const j = await jumiaFetch(pathBase + q);
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+  const j = await jumiaFetch(pathBase + q, shopAuth ? ({ shopAuth } as any) : ({} as any));
     const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : j?.data || [];
     return arr.map((r: unknown) => normalizeFromJumia(r, shopId));
   } catch (e) {
@@ -584,7 +620,8 @@ export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string 
   const cfg = await loadConfig();
   const pathBase = cfg.endpoints?.salesToday || '/payout-statement';
   const q = opts?.day ? `?createdAfter=${encodeURIComponent(opts.day)}&page=1&size=50` : '?page=1&size=50';
-  const j = await jumiaFetch(pathBase + q);
+  const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+  const j = await jumiaFetch(pathBase + q, shopAuth ? ({ shopAuth } as any) : ({} as any));
   return j;
 }
 
@@ -660,12 +697,14 @@ export async function getOrders(opts?: { status?: string; createdAfter?: string;
   if (opts?.country) params.push(`country=${encodeURIComponent(opts.country)}`);
   if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
   const q = params.length ? `?${params.join('&')}` : '';
-  return await jumiaFetch(`/orders${q}`);
+  const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  return await jumiaFetch(`/orders${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
 }
 
 export async function getOrderItems(orderId: string) {
   if (!orderId) throw new Error('orderId required');
-  return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`);
+  const shopAuth = await loadDefaultShopAuth();
+  return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
 }
 
 /**

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jumiaFetch } from '@/lib/jumia';
+import { jumiaFetch, loadShopAuthById, loadDefaultShopAuth } from '@/lib/jumia';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
   const path = query ? `orders?${query}` : 'orders';
 
   try {
-    const data = await jumiaFetch(path, { method: 'GET' });
+  const shopAuth = qs.shopId ? await loadShopAuthById(qs.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
     return NextResponse.json(data);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
