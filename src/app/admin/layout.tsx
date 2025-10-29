@@ -13,6 +13,7 @@ const NAV = [
   { href: "/admin/shops", label: "Shops & Staff", icon: Store },
   { href: "/admin/orders", label: "Orders", icon: Package },
   { href: "/admin/returns", label: "Returns", icon: Truck },
+  { href: "/admin/returns/jumia", label: "Jumia Returns", icon: Truck },
   { href: "/admin/catalog", label: "Catalog", icon: Layers },
   { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
