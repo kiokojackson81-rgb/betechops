@@ -1,5 +1,6 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
+import { getCatalogProductsCountQuick } from "@/lib/jumia";
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 
@@ -9,13 +10,17 @@ type Stats = { products: number; shops: number; attendants: number; orders: numb
 
 async function getStats(): Promise<Stats> {
   try {
-    const [products, shops, attendants, orders, revenueAgg] = await Promise.all([
+    const [dbProducts, shops, attendants, orders, revenueAgg, vendorCount] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
       prisma.order.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
+      // vendor products quick count (bounded)
+      getCatalogProductsCountQuick({ limitPages: 3, size: 100, timeMs: 6000 }).catch(() => ({ total: 0 } as any)),
     ]);
+    // Prefer vendor count when available; fallback to DB
+    const products = (vendorCount as any)?.total ?? dbProducts;
     return { products, shops, attendants, orders, revenue: (revenueAgg._sum.paidAmount ?? 0) };
   } catch {
     return { products: 0, shops: 0, attendants: 0, orders: 0, revenue: 0, _degraded: true as const };

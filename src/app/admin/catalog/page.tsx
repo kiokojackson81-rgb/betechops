@@ -27,8 +27,21 @@ export default async function CatalogPage({
     withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode }), 8000, {} as any),
   ]).catch(() => [{}, {}] as any);
 
-  const categories = Array.isArray((cats as any)?.items) ? (cats as any).items : Array.isArray((cats as any)?.data) ? (cats as any).data : [];
-  const rawProducts = Array.isArray((prods as any)?.items) ? (prods as any).items : Array.isArray((prods as any)?.data) ? (prods as any).data : [];
+  // Normalize vendor response shapes (prefer official keys, fallback to older aliases)
+  const categories = Array.isArray((cats as any)?.categories)
+    ? (cats as any).categories
+    : Array.isArray((cats as any)?.items)
+    ? (cats as any).items
+    : Array.isArray((cats as any)?.data)
+    ? (cats as any).data
+    : [];
+  const rawProducts = Array.isArray((prods as any)?.products)
+    ? (prods as any).products
+    : Array.isArray((prods as any)?.items)
+    ? (prods as any).items
+    : Array.isArray((prods as any)?.data)
+    ? (prods as any).data
+    : [];
 
   const nextToken = String((prods as any)?.nextToken ?? (prods as any)?.token ?? (prods as any)?.next ?? "");
   const products = statusFilter
@@ -48,7 +61,13 @@ export default async function CatalogPage({
       {} as any
     );
     for await (const page of jumiaPaginator('/catalog/products', { size: String(size), ...(token ? { token } : {}) }, fetcher)) {
-      const arr = Array.isArray((page as any)?.items) ? (page as any).items : Array.isArray((page as any)?.data) ? (page as any).data : [];
+      const arr = Array.isArray((page as any)?.products)
+        ? (page as any).products
+        : Array.isArray((page as any)?.items)
+        ? (page as any).items
+        : Array.isArray((page as any)?.data)
+        ? (page as any).data
+        : [];
       for (const it of arr) {
         total += 1; scanned += 1;
         const st = String((it as any).status || (it as any).itemStatus || 'unknown').toLowerCase();

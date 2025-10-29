@@ -782,4 +782,42 @@ export async function* jumiaPaginator(
   }
 }
 
+/**
+ * Quick vendor product counter with safety caps to avoid long-running scans.
+ * - Scans up to `limitPages` pages or `timeMs`, whichever comes first.
+ * - Uses page `size` when fetching.
+ * Returns { total, byStatus, approx } where approx=true when cut short.
+ */
+export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000 }: { limitPages?: number; size?: number; timeMs?: number } = {}) {
+  const start = Date.now();
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+  const fetcher = async (p: string) =>
+    await Promise.race([
+      jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))) as unknown as Promise<unknown>,
+    ]);
+
+  let pages = 0;
+  for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+    const arr = Array.isArray((page as any)?.products)
+      ? (page as any).products
+      : Array.isArray((page as any)?.items)
+      ? (page as any).items
+      : Array.isArray((page as any)?.data)
+      ? (page as any).data
+      : [];
+    for (const it of arr) {
+      total += 1;
+      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      byStatus[st] = (byStatus[st] || 0) + 1;
+    }
+    pages += 1;
+    if (pages >= limitPages || Date.now() - start > timeMs) break;
+  }
+  const approx = pages >= limitPages || Date.now() - start > timeMs;
+  return { total, byStatus, approx };
+}
+
 
