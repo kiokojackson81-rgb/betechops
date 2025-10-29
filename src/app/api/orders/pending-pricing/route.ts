@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getPendingPricingCount } from "@/lib/jumia";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const { count } = await getPendingPricingCount();
@@ -10,3 +12,4 @@ export async function GET() {
     return NextResponse.json({ count: 0, error: msg }, { status: 200 });
   }
 }
+ 
