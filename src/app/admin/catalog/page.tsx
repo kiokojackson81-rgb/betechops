@@ -8,6 +8,14 @@ export default async function CatalogPage({
   searchParams?: Promise<{ token?: string; size?: string; sellerSku?: string; categoryCode?: string; status?: string }>;
 }) {
   const sp = (await searchParams) || {};
+
+  // Small helper to bound long vendor calls so the page never hangs
+  const withTimeout = async <T,>(p: Promise<T>, ms = 8000, fallback: T | (() => T) = (undefined as unknown as T)): Promise<T> => {
+    return await Promise.race<Promise<T>>([
+      p,
+      new Promise<T>((resolve) => setTimeout(() => resolve(typeof fallback === 'function' ? (fallback as any)() : fallback), ms)),
+    ]);
+  };
   const size = Math.min(100, Math.max(1, Number(sp.size || 20)));
   const sellerSku = (sp.sellerSku || "").trim() || undefined;
   const categoryCode = sp.categoryCode ? Number(sp.categoryCode) : undefined;
@@ -15,8 +23,8 @@ export default async function CatalogPage({
   const statusFilter = (sp.status || "").trim().toLowerCase() || undefined;
 
   const [cats, prods] = await Promise.all([
-    getCatalogCategories(1),
-    getCatalogProducts({ size, token, sellerSku, categoryCode }),
+    withTimeout(getCatalogCategories(1), 8000, {} as any),
+    withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode }), 8000, {} as any),
   ]).catch(() => [{}, {}] as any);
 
   const categories = Array.isArray((cats as any)?.items) ? (cats as any).items : Array.isArray((cats as any)?.data) ? (cats as any).data : [];
@@ -31,9 +39,14 @@ export default async function CatalogPage({
   const limit = Math.min(500, size * 5);
   let total = 0; const byStatus: Record<string, number> = {};
   try {
+    const start = Date.now();
     const shopAuth = await loadDefaultShopAuth();
-    let scanned = 0;
-    const fetcher = async (p: string) => await jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    let scanned = 0; let pages = 0;
+    const fetcher = async (p: string) => await withTimeout(
+      jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
+      8000,
+      {} as any
+    );
     for await (const page of jumiaPaginator('/catalog/products', { size: String(size), ...(token ? { token } : {}) }, fetcher)) {
       const arr = Array.isArray((page as any)?.items) ? (page as any).items : Array.isArray((page as any)?.data) ? (page as any).data : [];
       for (const it of arr) {
@@ -42,7 +55,9 @@ export default async function CatalogPage({
         byStatus[st] = (byStatus[st] || 0) + 1;
         if (scanned >= limit) break;
       }
-      if (scanned >= limit) break;
+      pages += 1;
+      // stop after a few pages or if time exceeded to avoid hanging render
+      if (scanned >= limit || pages >= 3 || (Date.now() - start) > 15000) break;
     }
   } catch {}
 
