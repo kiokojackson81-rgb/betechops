@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getCatalogCategories, getCatalogProducts } from "@/lib/jumia";
+import { getCatalogCategories, getCatalogProducts, jumiaFetch, loadDefaultShopAuth, jumiaPaginator } from "@/lib/jumia";
 
 export default async function CatalogPage({
   searchParams,
@@ -26,6 +26,28 @@ export default async function CatalogPage({
   const products = statusFilter
     ? rawProducts.filter((p: any) => String(p.status || p.itemStatus || "").toLowerCase().includes(statusFilter))
     : rawProducts;
+
+  // Compute summary counters (limited scan for performance)
+  const limit = Math.min(500, size * 5);
+  let total = 0; const byStatus: Record<string, number> = {};
+  try {
+    const shopAuth = await loadDefaultShopAuth();
+    let scanned = 0;
+    const fetcher = async (p: string) => await jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    for await (const page of jumiaPaginator('/catalog/products', { size: String(size), ...(token ? { token } : {}) }, fetcher)) {
+      const arr = Array.isArray((page as any)?.items) ? (page as any).items : Array.isArray((page as any)?.data) ? (page as any).data : [];
+      for (const it of arr) {
+        total += 1; scanned += 1;
+        const st = String((it as any).status || (it as any).itemStatus || 'unknown').toLowerCase();
+        byStatus[st] = (byStatus[st] || 0) + 1;
+        if (scanned >= limit) break;
+      }
+      if (scanned >= limit) break;
+    }
+  } catch {}
+
+  const active = (byStatus['active'] || 0);
+  const inactive = (byStatus['disabled'] || 0) + (byStatus['inactive'] || 0) + (byStatus['blocked'] || 0);
 
   const qs = (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams();
@@ -80,6 +102,14 @@ export default async function CatalogPage({
       </section>
 
       <section>
+        {/* Summary */}
+        <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-400">Total scanned</div><div className="text-xl font-semibold">{total}</div></div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-400">Active</div><div className="text-xl font-semibold">{active}</div></div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-400">Inactive</div><div className="text-xl font-semibold">{inactive}</div></div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-400">Statuses</div><div className="text-sm">{Object.entries(byStatus).map(([k,v]) => <span key={k} className="mr-2">{k}:{v}</span>)}</div></div>
+        </div>
+
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-medium">Products</h2>
           <div className="text-xs text-slate-400">

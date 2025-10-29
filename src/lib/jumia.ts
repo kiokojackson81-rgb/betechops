@@ -649,13 +649,15 @@ export async function getShopsOfMasterShop() {
 }
 
 export async function getCatalogBrands(page = 1) {
-  const j = await jumiaFetch(`/catalog/brands?page=${encodeURIComponent(String(page))}`);
+  const shopAuth = await loadDefaultShopAuth();
+  const j = await jumiaFetch(`/catalog/brands?page=${encodeURIComponent(String(page))}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
   return j;
 }
 
 export async function getCatalogCategories(page = 1, attributeSetName?: string) {
   const q = attributeSetName ? `?page=${encodeURIComponent(String(page))}&attributeSetName=${encodeURIComponent(attributeSetName)}` : `?page=${encodeURIComponent(String(page))}`;
-  const j = await jumiaFetch(`/catalog/categories${q}`);
+  const shopAuth = await loadDefaultShopAuth();
+  const j = await jumiaFetch(`/catalog/categories${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
   return j;
 }
 
@@ -668,7 +670,8 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   if (opts?.sellerSku) params.push(`sellerSku=${encodeURIComponent(opts.sellerSku)}`);
   if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
   const q = params.length ? `?${params.join('&')}` : '';
-  const j = await jumiaFetch(`/catalog/products${q}`);
+  const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
   return j;
 }
 
