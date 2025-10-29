@@ -30,6 +30,16 @@ const eslintConfig = [
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
+      // Guard against server-side relative fetches to /api/... which break in production
+      // Prefer absUrl('/api/...') in server components
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector: "CallExpression[callee.name='fetch'][arguments.0.value=/^\\/api\\//]",
+          message:
+            "Use absUrl('/api/...') for server-side fetches to avoid Invalid URL in production.",
+        },
+      ],
     },
   },
 ];
