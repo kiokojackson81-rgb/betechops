@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import EndpointConsole from "@/app/admin/_components/jumia/EndpointConsole";
+import FeedLookup from "@/app/admin/_components/FeedLookup";
 
 const ENDPOINTS = [
   { label: "Create Products", path: "/feeds/products/create" },
@@ -15,6 +16,7 @@ export default function FeedsConsolePage() {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Products Feeds Console</h1>
+      <FeedLookup />
       <p className="text-sm text-slate-400">
         Use this console to call Jumia Products feeds. Pick the shop, endpoint, and supply payload or query params.
         For GET /feeds/{'{'}id{'}'}, set the endpoint to /feeds/your-feed-id and use the Query box if needed.

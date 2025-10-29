@@ -788,8 +788,14 @@ export async function* jumiaPaginator(
  * - Uses page `size` when fetching.
  * Returns { total, byStatus, approx } where approx=true when cut short.
  */
-export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000 }: { limitPages?: number; size?: number; timeMs?: number } = {}) {
-  const start = Date.now();
+// in-memory TTL cache for quick counts
+let _prodCountCache: { value: { total: number; byStatus: Record<string, number>; approx: boolean }; ts: number } | null = null;
+
+export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000, ttlMs = 60_000 }: { limitPages?: number; size?: number; timeMs?: number; ttlMs?: number } = {}) {
+  const now = Date.now();
+  if (_prodCountCache && now - _prodCountCache.ts < ttlMs) return _prodCountCache.value;
+
+  const start = now;
   const byStatus: Record<string, number> = {};
   let total = 0;
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
@@ -817,7 +823,8 @@ export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100,
     if (pages >= limitPages || Date.now() - start > timeMs) break;
   }
   const approx = pages >= limitPages || Date.now() - start > timeMs;
-  return { total, byStatus, approx };
+  _prodCountCache = { value: { total, byStatus, approx }, ts: Date.now() };
+  return _prodCountCache.value;
 }
 
 
