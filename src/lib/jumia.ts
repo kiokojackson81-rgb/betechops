@@ -160,10 +160,17 @@ export async function getAccessToken(): Promise<string> {
 // Cached resolved detection
 let resolvedConfig: { base?: string; scheme?: string; tried?: boolean } | null = null;
 
-export async function resolveJumiaConfig(): Promise<{ base: string; scheme: string }> {
-  if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme) return { base: resolvedConfig.base, scheme: resolvedConfig.scheme } as { base: string; scheme: string };
+export async function resolveJumiaConfig(ctx?: { shopAuth?: ShopAuthJson | null; baseHint?: string | null }): Promise<{ base: string; scheme: string }> {
+  if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme && !ctx) return { base: resolvedConfig.base, scheme: resolvedConfig.scheme } as { base: string; scheme: string };
 
-  // Respect explicit env first
+  // Prefer shop-specific base if provided in context
+  const shopBase = (ctx?.shopAuth as any)?.apiBase || (ctx?.shopAuth as any)?.base_url || ctx?.baseHint || undefined;
+  if (shopBase) {
+    const scheme = process.env.JUMIA_AUTH_SCHEME || 'Bearer';
+    return { base: shopBase, scheme };
+  }
+
+  // Respect explicit env next
   // Respect explicit canonical env first (base_url), then legacy JUMIA_API_BASE
   const envBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE;
   const envScheme = process.env.JUMIA_AUTH_SCHEME;
@@ -240,14 +247,16 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
   }
 
   const cfg = await loadConfig();
-  const resolved = await resolveJumiaConfig();
+  const resolved = await resolveJumiaConfig({ shopAuth: (init as any)?.shopAuth ?? undefined });
 
   // Detect whether caller passed FetchOpts (with shopAuth/shopCode) or plain RequestInit
   const maybeOpts = (init as unknown) as FetchOpts;
   const fetchOpts: FetchOpts = isFetchOpts(maybeOpts) ? maybeOpts : (init as FetchOpts);
 
-  // Prefer canonical base_url env, then legacy JUMIA_API_BASE, then DB-config, then resolved probe
-  const apiBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || cfg.apiBase || resolved.base || resolveApiBase(fetchOpts.shopAuth);
+  // Prefer per-shop base first (when provided), then canonical env, then DB-config, then resolved probe
+  const shopBase = (fetchOpts.shopAuth as any)?.apiBase || (fetchOpts.shopAuth as any)?.base_url;
+  const envBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE;
+  const apiBase = shopBase || envBase || cfg.apiBase || resolved.base || resolveApiBase(fetchOpts.shopAuth);
   if (!apiBase) throw new Error("Missing vendor base URL (process.env.base_url or JUMIA_API_BASE); cannot call Jumia API");
 
   // Use per-shop auth when provided; otherwise fall back to global access token
@@ -316,6 +325,8 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
 /** Resolve API base (keeps your existing logic but ensures a default). */
 export function resolveApiBase(shopAuth?: ShopAuthJson) {
   return (
+    (shopAuth as any)?.apiBase ||
+    (shopAuth as any)?.base_url ||
     process.env.base_url ||
     process.env.BASE_URL ||
     process.env.JUMIA_API_BASE ||
