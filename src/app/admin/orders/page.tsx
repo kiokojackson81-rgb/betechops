@@ -1,5 +1,6 @@
 import OrdersFilters from './_components/OrdersFilters';
 import OrdersTable from './_components/OrdersTable';
+import { absUrl, withParams } from '@/lib/abs-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,9 +29,18 @@ type Row = {
 };
 
 async function getOrders(params: Search) {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => v && qs.append(k, v));
-  const res = await fetch(`/api/orders?${qs.toString()}`, { cache: 'no-store' });
+  const base = await absUrl('/api/orders');
+  const url = withParams(base, {
+    status: params.status,
+    country: params.country,
+    shopId: params.shopId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    q: params.q,
+    nextToken: params.nextToken,
+    size: params.size,
+  });
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load orders');
   return res.json() as Promise<{
     orders?: Array<Record<string, unknown>>;
