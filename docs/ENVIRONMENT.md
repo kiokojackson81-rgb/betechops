@@ -7,7 +7,8 @@ Set these in Vercel project settings (Environment Variables) and locally (e.g., 
 - NEXTAUTH_SECRET: <random strong secret>
 - GOOGLE_CLIENT_ID: <oauth client id>
 - GOOGLE_CLIENT_SECRET: <oauth client secret>
-- DATABASE_URL: postgresql://<user>:<pass>@<host>/<db>?sslmode=require
+- DATABASE_URL: postgresql://<user>:<pass>@<pooled-host>/<db>?sslmode=require&pgbouncer=true&connection_limit=1&pool_timeout=30
+- DIRECT_URL: postgresql://<user>:<pass>@<direct-host>/<db>?sslmode=require
 
 ## Jumia OIDC + API
 - base_url: https://vendor-api.jumia.com (preferred canonical env name for vendor API base)
@@ -24,6 +25,6 @@ Optional endpoint overrides if your vendor uses different paths:
 - JUMIA_EP_RETURNS_WAITING_PICKUP: /returns?status=waiting-pickup
 
 ## Notes
-- Prefer Neon or another hosted Postgres with pooled connections. Keep `sslmode=require` in `DATABASE_URL` for Vercel.
+- Prefer Neon or another hosted Postgres with pooled connections. Keep `sslmode=require` and enable PgBouncer flags in `DATABASE_URL` for Vercel. Provide `DIRECT_URL` for migrations.
 - If OIDC test fails with 404, set `JUMIA_OIDC_TOKEN_URL` or `OIDC_TOKEN_URL` explicitly to the token endpoint (should be `/oauth/token` or the provider's token endpoint).
 - After editing envs, redeploy to apply.
