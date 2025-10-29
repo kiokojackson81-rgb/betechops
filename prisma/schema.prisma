@@ -101,7 +101,7 @@ model Shop {
   phone     String?
   email     String?
   isActive  Boolean  @default(true)
-  platform  Platform @default(JUMIA) @db.Enum("Platform")
+  platform  Platform @default(JUMIA)
   credentialsEncrypted Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
