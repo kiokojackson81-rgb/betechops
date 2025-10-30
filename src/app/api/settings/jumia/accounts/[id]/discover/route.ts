@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { JumiaClient } from "@/lib/jumia/client";
@@ -14,7 +14,8 @@ async function requireAdmin() {
   }
 }
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+// Next 15 route handlers may pass params as a Promise in TS types – support both
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     await requireAdmin();
   } catch (res) {
@@ -22,7 +23,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     throw res;
   }
 
-  const accountId = params?.id;
+  const resolved = (params instanceof Promise) ? await params : params;
+  const accountId = resolved?.id;
   if (!accountId) {
     return NextResponse.json({ error: "Missing account id" }, { status: 400 });
   }
