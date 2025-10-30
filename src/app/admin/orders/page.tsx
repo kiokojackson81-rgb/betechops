@@ -164,12 +164,12 @@ export default async function OrdersPage(props: unknown) {
     size: toStr(searchParams.size),
   };
 
-  const useSynced = (params.status ?? '').toUpperCase() === 'PENDING';
+  const prefersSynced = (params.status ?? '').toUpperCase() === 'PENDING';
 
   let usedDefaultFrom = false;
   let usedDefaultTo = false;
 
-  if (!useSynced) {
+  if (!prefersSynced) {
     if (!params.dateFrom) {
       try {
         const [firstOrder, firstShop] = await Promise.all([
@@ -196,17 +196,29 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  const [legacyShops, syncedShops] = await Promise.all([
-    prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.jumiaShop.findMany({
+  const legacyShopsPromise = prisma.shop.findMany({
+    where: { isActive: true, platform: 'JUMIA' },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  let syncedShops: Array<{ id: string; name: string; account: { label: string | null } | null }> = [];
+  let syncBootstrapError: unknown = null;
+  try {
+    syncedShops = await prisma.jumiaShop.findMany({
       select: {
         id: true,
         name: true,
         account: { select: { label: true } },
       },
       orderBy: { name: 'asc' },
-    }),
-  ]);
+    });
+  } catch (error) {
+    syncBootstrapError = error;
+    console.error('[orders.page] Failed to load Jumia account directory', error);
+  }
+
+  const legacyShops = await legacyShopsPromise;
 
   const shopOptions = [
     ...legacyShops.map((shop) => ({ id: shop.id, name: shop.name })),
@@ -216,12 +228,24 @@ export default async function OrdersPage(props: unknown) {
   let rows: Row[] = [];
   let nextToken: string | null = null;
   let isLastPage = true;
+  let showingSynced = prefersSynced && !syncBootstrapError;
+  let syncFallbackMessage: string | null = syncBootstrapError
+    ? 'Cached pending orders are not initialized yet. Showing live data until the next sync completes.'
+    : null;
 
-  if (useSynced) {
-    rows = await fetchSyncedRows(params);
-    nextToken = null;
-    isLastPage = true;
-  } else {
+  if (prefersSynced && showingSynced) {
+    try {
+      rows = await fetchSyncedRows(params);
+      nextToken = null;
+      isLastPage = true;
+    } catch (error) {
+      console.error('[orders.page] Failed to load cached pending orders, falling back to live API', error);
+      showingSynced = false;
+      syncFallbackMessage = 'Cached pending orders are temporarily unavailable. Showing live data instead.';
+    }
+  }
+
+  if (!showingSynced) {
     const data = await fetchRemoteOrders(params);
     rows = (data.orders || []) as unknown as Row[];
     nextToken = data.nextToken ?? null;
@@ -234,11 +258,14 @@ export default async function OrdersPage(props: unknown) {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
           <p className="text-slate-300">
-            {useSynced
+            {showingSynced
               ? 'Showing cached PENDING orders synced from Jumia accounts. Filters apply instantly.'
               : 'Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.'}
           </p>
-          {(!useSynced && (usedDefaultFrom || usedDefaultTo)) && (
+          {syncFallbackMessage && (
+            <p className="text-xs text-amber-400 mt-1">{syncFallbackMessage}</p>
+          )}
+          {(!showingSynced && (usedDefaultFrom || usedDefaultTo)) && (
             <p className="text-xs text-slate-400 mt-1">
               Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.
             </p>
@@ -263,3 +290,4 @@ export default async function OrdersPage(props: unknown) {
     </div>
   );
 }
+
