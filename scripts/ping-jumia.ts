@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { decryptJson } from "../src/lib/crypto/secure-json.ts";
+import { decryptJson } from "../src/lib/crypto/secure-json";
 
 const prisma = new PrismaClient();
 

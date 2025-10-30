@@ -35,7 +35,8 @@ const eslintConfig = [
       "no-restricted-syntax": [
         "warn",
         {
-          selector: "CallExpression[callee.name='fetch'][arguments.0.value=/^\\/api\\//]",
+          // Use attribute starts-with (^=) to avoid regex literal parsing issues in some environments
+          selector: "CallExpression[callee.name='fetch'][arguments.0.value^='/api/']",
           message:
             "Use absUrl('/api/...') for server-side fetches to avoid Invalid URL in production.",
         },

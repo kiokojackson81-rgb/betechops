@@ -1,7 +1,7 @@
 import { PrismaClient, Platform } from "@prisma/client";
-import { fetchOrdersForShop } from "../src/lib/jumia.ts";
-import { fetchOrders as kmFetchOrders } from "../src/lib/connectors/kilimall.ts";
-import { decryptJson } from "../src/lib/crypto/secure-json.ts";
+import { fetchOrdersForShop } from "../src/lib/jumia";
+import { fetchOrders as kmFetchOrders } from "../src/lib/connectors/kilimall";
+import { decryptJson } from "../src/lib/crypto/secure-json";
 
 const prisma = new PrismaClient();
 
