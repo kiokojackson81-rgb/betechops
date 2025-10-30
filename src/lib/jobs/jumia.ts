@@ -62,7 +62,10 @@ async function idempotencySet(key: string, value: unknown, ttlSeconds = 60 * 60 
     }
   }
   _memStore.set(key, value);
-  setTimeout(() => _memStore.delete(key), ttlSeconds * 1000).unref?.();
+  // In tests, avoid long-lived timers that can cause Jest to hang
+  if (process.env.NODE_ENV !== 'test') {
+    setTimeout(() => _memStore.delete(key), ttlSeconds * 1000).unref?.();
+  }
 }
 
 function s3Client(): S3Client | null {

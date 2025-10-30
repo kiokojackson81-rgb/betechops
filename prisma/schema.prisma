@@ -134,6 +134,52 @@ model Shop {
   assignments ShopAssignment[]
 }
 
+model JumiaAccount {
+  id           String      @id @default(cuid())
+  label        String
+  clientId     String
+  refreshToken String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  shops        JumiaShop[]
+}
+
+model JumiaShop {
+  id                      String       @id
+  name                    String
+  accountId               String
+  lastOrdersUpdatedBefore DateTime?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  account                 JumiaAccount @relation(fields: [accountId], references: [id])
+  orders                  JumiaOrder[]
+
+  @@index([accountId])
+}
+
+model JumiaOrder {
+  id                String    @id
+  number            Int?
+  status            String
+  hasMultipleStatus Boolean?
+  pendingSince      String?
+  totalItems        Int?
+  packedItems       Int?
+  countryCode       String?
+  isPrepayment      Boolean?
+  createdAtJumia    DateTime?
+  updatedAtJumia    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shopId            String
+  shop              JumiaShop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, status])
+}
+
 model ShopApiConfig {
   id        String   @id @default(cuid())
   shopId    String   @unique
@@ -263,19 +309,6 @@ model Config {
 }
 
 // Minimal ingest table for Jumia orders
-model JumiaOrder {
-  id           String   @id @default(cuid())
-  externalId   String   @unique
-  orderNumber  String
-  status       String
-  totalAmount  Float
-  buyingAmount Float     @default(0)
-  customerName String?
-  shopId       String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-}
-
 /// --- Ops extensions ---
 
 model CostCatalog {
@@ -548,3 +581,5 @@ model FulfillmentAudit {
   shop Shop @relation(fields: [shopId], references: [id])
   @@index([shopId, orderId])
 }
+
+

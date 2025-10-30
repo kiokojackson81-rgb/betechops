@@ -159,46 +159,53 @@ CREATE TABLE "public"."Config" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."JumiaOrder" (
+CREATE TABLE "public"."JumiaAccount" (
     "id" TEXT NOT NULL,
-    "externalId" TEXT NOT NULL,
-    "orderNumber" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "totalAmount" DOUBLE PRECISION NOT NULL,
-    "buyingAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "customerName" TEXT,
-    "shopId" TEXT,
+    "label" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "refreshToken" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "JumiaOrder_pkey" PRIMARY KEY ("id")
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "JumiaAccount_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "public"."_ManagedBy" (
-    "A" TEXT NOT NULL,
-    "B" TEXT NOT NULL,
+CREATE TABLE "public"."JumiaShop" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "lastOrdersUpdatedBefore" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "JumiaShop_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "JumiaShop_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "public"."JumiaAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
 
-    CONSTRAINT "_ManagedBy_AB_pkey" PRIMARY KEY ("A","B")
+-- CreateTable
+CREATE TABLE "public"."JumiaOrder" (
+    "id" TEXT NOT NULL,
+    "number" INTEGER,
+    "status" TEXT NOT NULL,
+    "hasMultipleStatus" BOOLEAN,
+    "pendingSince" TEXT,
+    "totalItems" INTEGER,
+    "packedItems" INTEGER,
+    "countryCode" TEXT,
+    "isPrepayment" BOOLEAN,
+    "createdAtJumia" TIMESTAMP(3),
+    "updatedAtJumia" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "shopId" TEXT NOT NULL,
+    CONSTRAINT "JumiaOrder_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "JumiaOrder_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "public"."JumiaShop"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
+CREATE INDEX "JumiaShop_accountId_idx" ON "public"."JumiaShop"("accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ShopApiConfig_shopId_key" ON "public"."ShopApiConfig"("shopId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Product_sku_key" ON "public"."Product"("sku");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Order_orderNumber_key" ON "public"."Order"("orderNumber");
-
--- CreateIndex
-CREATE UNIQUE INDEX "ApiCredential_scope_shopId_key" ON "public"."ApiCredential"("scope", "shopId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "JumiaOrder_externalId_key" ON "public"."JumiaOrder"("externalId");
+CREATE INDEX "JumiaOrder_shopId_status_idx" ON "public"."JumiaOrder"("shopId", "status");
 
 -- CreateIndex
 CREATE INDEX "_ManagedBy_B_index" ON "public"."_ManagedBy"("B");
@@ -238,4 +245,5 @@ ALTER TABLE "public"."_ManagedBy" ADD CONSTRAINT "_ManagedBy_A_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "public"."_ManagedBy" ADD CONSTRAINT "_ManagedBy_B_fkey" FOREIGN KEY ("B") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 

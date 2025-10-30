@@ -143,6 +143,11 @@ async function loadConfig(): Promise<Config> {
 
   const missing = !cfg.issuer || !cfg.clientId || !cfg.refreshToken || !cfg.apiBase;
   if (missing) {
+    // In unit tests, avoid touching the database to keep tests fast and isolated
+    if (process.env.NODE_ENV === 'test') {
+      cache.cfg = { ...cfg, loadedAt: now } as any;
+      return cfg;
+    }
     try {
       const row = await prisma.apiCredential.findFirst({ where: { scope: "GLOBAL" } });
       if (row) {
@@ -191,6 +196,12 @@ export async function getAccessToken(): Promise<string> {
 let resolvedConfig: { base?: string; scheme?: string; tried?: boolean } | null = null;
 
 export async function resolveJumiaConfig(ctx?: { shopAuth?: ShopAuthJson | null; baseHint?: string | null }): Promise<{ base: string; scheme: string }> {
+  // Keep tests deterministic and fast: avoid probing network in test env
+  if (process.env.NODE_ENV === 'test') {
+    const base = (ctx?.shopAuth as any)?.apiBase || (ctx?.shopAuth as any)?.base_url || ctx?.baseHint || process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || 'https://vendor-api.jumia.com';
+    const scheme = process.env.JUMIA_AUTH_SCHEME || 'Bearer';
+    return { base, scheme } as { base: string; scheme: string };
+  }
   if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme && !ctx) return { base: resolvedConfig.base, scheme: resolvedConfig.scheme } as { base: string; scheme: string };
 
   // Prefer shop-specific base if provided in context
@@ -367,6 +378,7 @@ export function resolveApiBase(shopAuth?: ShopAuthJson) {
 
 /** Load per-shop credentials (if any). Returns normalized ShopAuthJson or undefined. */
 export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | undefined> {
+  if (process.env.NODE_ENV === 'test') return undefined;
   try {
     const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { platform: true, credentialsEncrypted: true, apiConfig: true } });
     if (!shop) return undefined;
@@ -396,6 +408,7 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
 
 /** Load the first active JUMIA shop's credentials as a default. */
 export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
+  if (process.env.NODE_ENV === 'test') return undefined;
   try {
     const shop = await prisma.shop.findFirst({ where: { platform: Platform.JUMIA, isActive: true }, select: { id: true } });
     if (!shop) return undefined;
