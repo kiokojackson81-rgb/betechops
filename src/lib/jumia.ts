@@ -85,15 +85,18 @@ export function makeJumiaFetch(opts: JumiaClientOpts) {
     const token = await _mintAccessTokenForClient(opts);
     const base = opts.apiBase.replace(/\/+$/, '');
     const url = `${base}${path.startsWith('/') ? '' : '/'}${path}`;
-    const r = await fetch(url, {
+    const headers = new Headers(init.headers as HeadersInit | undefined);
+    headers.set('Authorization', `Bearer ${token}`);
+    const hasBody = init.body !== undefined && init.body !== null;
+    if (hasBody && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
+    const reqInit: RequestInit = {
       ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init.headers as Record<string, string> | undefined),
-        'Content-Type': (init && (init as RequestInit).body) ? 'application/json' : 'application/json',
-      },
-      cache: 'no-store',
-    });
+      headers,
+      cache: init.cache ?? 'no-store',
+    };
+    const r = await fetch(url, reqInit);
     if (!r.ok) {
       const t = await r.text().catch(() => '');
       throw new Error(`Jumia ${init.method || 'GET'} ${path} failed: ${r.status} ${t}`);
@@ -276,15 +279,40 @@ export async function resolveJumiaConfig(ctx?: { shopAuth?: ShopAuthJson | null;
  * Wrapper to call Jumia API with Authorization header.
  * Usage: await jumiaFetch("/some/endpoint?param=1")
  */
-export async function jumiaFetch(path: string, init: RequestInit = {}) {
+type TokenMeta = { source?: string; platform?: string; tokenUrl?: string };
+
+function _unwrapAccessToken(value: unknown, defaults: TokenMeta = {}): { token: string; meta: TokenMeta } {
+  if (typeof value === 'string') {
+    const merged: TokenMeta = { ...defaults };
+    if (!merged.source) merged.source = 'ENV';
+    return { token: value, meta: merged };
+  }
+  if (value && typeof value === 'object' && typeof (value as any).access_token === 'string') {
+    const meta = { ...defaults, ...(typeof (value as any)._meta === 'object' ? (value as any)._meta : {}) } as TokenMeta;
+    return { token: (value as any).access_token as string, meta };
+  }
+  throw new Error('Invalid token payload returned from getJumiaAccessToken');
+}
+
+export async function jumiaFetch(
+  path: string,
+  init: RequestInit & { shopAuth?: ShopAuthJson; shopCode?: string; rawResponse?: boolean } = {}
+) {
   // New: support passing per-shop auth via second param. Backwards-compatible with existing callers.
   type FetchOpts = {
     shopAuth?: ShopAuthJson;
     shopCode?: string;
+    rawResponse?: boolean;
   } & RequestInit;
 
   function isFetchOpts(o: any): o is FetchOpts {
-    return o && (o.shopAuth !== undefined || o.shopCode !== undefined || o.headers !== undefined);
+    return (
+      o &&
+      (o.shopAuth !== undefined ||
+        o.shopCode !== undefined ||
+        o.headers !== undefined ||
+        o.rawResponse !== undefined)
+    );
   }
 
   const cfg = await loadConfig();
@@ -293,6 +321,7 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
   // Detect whether caller passed FetchOpts (with shopAuth/shopCode) or plain RequestInit
   const maybeOpts = (init as unknown) as FetchOpts;
   const fetchOpts: FetchOpts = isFetchOpts(maybeOpts) ? maybeOpts : (init as FetchOpts);
+  const rawResponse = Boolean((fetchOpts as any)?.rawResponse);
 
   // Prefer per-shop base first (when provided), then canonical env, then DB-config, then resolved probe
   const shopBase = (fetchOpts.shopAuth as any)?.apiBase || (fetchOpts.shopAuth as any)?.base_url;
@@ -302,17 +331,22 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
 
   // Use per-shop auth when provided; otherwise fall back to global access token
   let accessToken: string;
-  let tokenMeta: { source?: string; platform?: string; tokenUrl?: string } | undefined;
+  let tokenMeta: TokenMeta = {};
   try {
     const tok = await (getJumiaAccessToken as any)(fetchOpts.shopAuth as any);
-    accessToken = (tok as any).access_token;
-    tokenMeta = (tok as any)._meta as any;
+    const resolvedTok = _unwrapAccessToken(tok, {
+      source: fetchOpts.shopAuth ? 'SHOP' : undefined,
+      platform: (fetchOpts.shopAuth as any)?.platform,
+    });
+    accessToken = resolvedTok.token;
+    tokenMeta = resolvedTok.meta;
   } catch (e) {
     // Fall back to env-based flow if shopAuth failed
     try {
       const tok = await (getJumiaAccessToken as any)();
-      accessToken = (tok as any).access_token;
-      tokenMeta = (tok as any)._meta as any;
+      const resolvedTok = _unwrapAccessToken(tok, { source: 'ENV' });
+      accessToken = resolvedTok.token;
+      tokenMeta = resolvedTok.meta;
     } catch {
       // final fallback: older helper
       const t = await getAccessToken();
@@ -322,19 +356,28 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
   }
 
   const url = `${apiBase.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
-  const bodyPresent = Boolean((fetchOpts as RequestInit).body);
+  const bodyPresent = fetchOpts.body !== undefined && fetchOpts.body !== null;
   const headers = new Headers((fetchOpts.headers as HeadersInit) || {});
   headers.set('Authorization', `Bearer ${accessToken}`);
-  if (bodyPresent) headers.set('Content-Type', 'application/json');
+  if (bodyPresent && !headers.has('Content-Type') && !(fetchOpts.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
   // Debug headers
   if (tokenMeta?.source) headers.set('X-Auth-Source', String(tokenMeta.source));
   if (tokenMeta?.platform) headers.set('X-Platform', String(tokenMeta.platform));
   if (fetchOpts.shopCode) headers.set('X-Shop-Code', String(fetchOpts.shopCode));
 
+  const { shopAuth: _sa, shopCode: _sc, rawResponse: _rr, headers: _unusedHeaders, ...rest } = fetchOpts;
+  const requestInit: RequestInit = {
+    ...rest,
+    headers,
+    cache: rest.cache ?? 'no-store',
+  };
+
   // Use the shared rate-limited queue to perform the request with retries
   const attempt = async () => {
     const start = Date.now();
-    const r = await fetch(url, { ...(fetchOpts as RequestInit), headers: Object.fromEntries(headers as any), cache: 'no-store' });
+    const r = await fetch(url, requestInit);
     const latency = Date.now() - start;
     _recordLatency(latency);
     if (!r.ok) {
@@ -351,12 +394,25 @@ export async function jumiaFetch(path: string, init: RequestInit = {}) {
       err.body = String(msg);
       throw err;
     }
+    if (rawResponse) return r;
+
+    const contentType = (typeof r.headers?.get === 'function' ? r.headers.get('content-type') : '') || '';
+    if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
+      const b = await r.arrayBuffer();
+      return { _binary: Buffer.from(b).toString('base64'), contentType };
+    }
     try {
-      // Favor JSON when available; tests may omit headers
-      if (typeof (r as any).json === 'function') return await (r as any).json();
+      if (typeof r.clone === 'function' && typeof r.json === 'function') {
+        return await r.clone().json();
+      }
     } catch {}
     try {
-      if (typeof (r as any).text === 'function') return await (r as any).text();
+      if (typeof r.json === 'function') {
+        return await r.json();
+      }
+    } catch {}
+    try {
+      if (typeof r.text === 'function') return await r.text();
     } catch {}
     return {} as any;
   };

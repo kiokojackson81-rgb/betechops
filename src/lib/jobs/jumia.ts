@@ -96,18 +96,20 @@ export async function fulfillOrder(shopId: string, orderId: string, opts?: { ttl
 
   const path = process.env.JUMIA_FULFILL_ENDPOINT || `/orders/fulfill?orderId=${encodeURIComponent(orderId)}`;
 
-  const res = await jumiaFetch(path, {
+  const res = (await jumiaFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId }),
-  });
+    rawResponse: true,
+  })) as Response;
 
   let payload: unknown;
   try {
-    // some jumia endpoints return JSON, others return text — attempt json() first
-    payload = await (res as Response).json();
+    // some jumia endpoints return JSON, others return text - attempt json() first
+    payload = await res.clone().json();
   } catch {
-    payload = { ok: res.ok, status: res.status, text: await (res as Response).text?.() };
+    const text = await res.text().catch(() => '');
+    payload = text ? { text } : {};
   }
 
   // If the API returned a label as base64, persist to S3 when configured.
