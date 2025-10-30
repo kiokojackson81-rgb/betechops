@@ -4,7 +4,9 @@ import { resolveShopScopeForServer } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import AutoRefresh from "@/app/_components/AutoRefresh";
 
+export const dynamic = "force-dynamic";
 const PAGE_SIZE_DEFAULT = 10;
 
 function fmtKsh(n: number) {
@@ -80,18 +82,21 @@ export default async function ReturnsPage({
           <h1 className="text-2xl font-semibold">Returns – Waiting Pickup</h1>
           <p className="text-slate-400 text-sm">Orders marked <span className="font-mono">CANCELED</span> (proxy for returns) and pending pickup.</p>
         </div>
-        <form className="flex items-center gap-2">
-          <input
-            name="q"
-            defaultValue={q || ""}
-            placeholder="Search order #, name, shop…"
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:bg-white/10"
-          />
-          <select name="size" defaultValue={String(size)} className="rounded-xl bg-white/5 border border-white/10 px-2 py-2 text-sm">
-            {[10, 20, 30, 50].map(n => <option key={n} value={n}>{n}/page</option>)}
-          </select>
-          <button className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10">Apply</button>
-        </form>
+        <div className="flex items-center gap-3">
+          <AutoRefresh storageKey="autoRefreshReturns" intervalMs={60000} defaultEnabled={true} />
+          <form className="flex items-center gap-2">
+            <input
+              name="q"
+              defaultValue={q || ""}
+              placeholder="Search order #, name, shop…"
+              className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:bg-white/10"
+            />
+            <select name="size" defaultValue={String(size)} className="rounded-xl bg-white/5 border border-white/10 px-2 py-2 text-sm">
+              {[10, 20, 30, 50].map(n => <option key={n} value={n}>{n}/page</option>)}
+            </select>
+            <button className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10">Apply</button>
+          </form>
+        </div>
       </header>
 
       {degraded && (

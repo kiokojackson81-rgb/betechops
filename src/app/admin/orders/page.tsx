@@ -2,6 +2,7 @@ import OrdersFilters from './_components/OrdersFilters';
 import OrdersTable from './_components/OrdersTable';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
+import AutoRefresh from '@/app/_components/AutoRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,12 +98,15 @@ export default async function OrdersPage(props: unknown) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
-        <p className="text-slate-300">Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.</p>
-        {(usedDefaultFrom || usedDefaultTo) && (
-          <p className="text-xs text-slate-400 mt-1">Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.</p>
-        )}
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
+          <p className="text-slate-300">Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.</p>
+          {(usedDefaultFrom || usedDefaultTo) && (
+            <p className="text-xs text-slate-400 mt-1">Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.</p>
+          )}
+        </div>
+        <div className="pt-1"><AutoRefresh storageKey="autoRefreshOrders" intervalMs={60000} defaultEnabled={true} /></div>
       </div>
 
       <OrdersFilters shops={shops} />
