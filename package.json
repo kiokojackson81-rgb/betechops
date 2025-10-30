@@ -29,7 +29,6 @@
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
     "next-auth": "^4.24.11",
-    "p-limit": "^5.0.0",
     "pino": "^8.0.0",
     "prisma": "^6.16.2",
     "prom-client": "^14.0.0",

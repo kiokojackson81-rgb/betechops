@@ -1,6 +1,28 @@
 import { prisma } from "@/lib/prisma";
 import { JumiaClient } from "@/lib/jumia/client";
-import pLimit from "p-limit";
+// Lightweight in-file concurrency limiter to avoid bundling issues with p-limit
+function createLimiter<T>(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    active--;
+    const fn = queue.shift();
+    if (fn) fn();
+  };
+
+  return async (task: () => Promise<T>): Promise<T> => {
+    if (active >= concurrency) {
+      await new Promise<void>((resolve) => queue.push(resolve));
+    }
+    active++;
+    try {
+      return await task();
+    } finally {
+      next();
+    }
+  };
+}
 import { addDays, format } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
 
@@ -26,7 +48,7 @@ export async function syncAllAccountsPendingOrders() {
     return [];
   }
 
-  const limiter = pLimit(LIMIT_RPS);
+  const limiter = createLimiter<SyncResult>(LIMIT_RPS);
   const tasks: Array<Promise<SyncResult>> = [];
 
   for (const account of accounts) {

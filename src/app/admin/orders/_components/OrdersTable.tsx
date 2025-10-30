@@ -11,6 +11,7 @@ type Row = {
   updatedAt?: string;
   deliveryOption?: string;
   totalItems?: number;
+  packedItems?: number;
   totalAmountLocal?: { currency: string; value: number };
   country?: { code: string; name: string };
   shopIds?: string[];
@@ -80,11 +81,15 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: { rows: Row
               <td className="px-3 py-2 font-medium">{r.number ?? r.id}</td>
               <td className="px-3 py-2">
                 <span className="px-2 py-0.5 rounded-md border border-white/10 bg-white/5">{r.status}</span>
-                {r.pendingSince && <span className="ml-2 text-xs opacity-70">• {r.pendingSince}</span>}
+                {r.pendingSince && <span className="ml-2 text-xs opacity-70">- {r.pendingSince}</span>}
               </td>
               <td className="px-3 py-2">{new Date(r.createdAt).toLocaleString()}</td>
               <td className="px-3 py-2">{r.deliveryOption || '-'}</td>
-              <td className="px-3 py-2">{r.totalItems ?? '-'}</td>
+              <td className="px-3 py-2">
+                {typeof r.packedItems === 'number' && typeof r.totalItems === 'number'
+                  ? `${r.packedItems}/${r.totalItems}`
+                  : r.totalItems ?? '-'}
+              </td>
               <td className="px-3 py-2">{r.totalAmountLocal ? `${r.totalAmountLocal.currency} ${r.totalAmountLocal.value.toLocaleString()}` : '-'}</td>
               <td className="px-3 py-2">{r.country?.code ?? '-'}</td>
               <td className="px-3 py-2">{r.shopIds?.[0] ?? '-'}</td>
@@ -111,3 +116,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: { rows: Row
     </div>
   );
 }
+
+
+
+

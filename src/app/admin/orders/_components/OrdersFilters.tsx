@@ -17,7 +17,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   }, [pathname, router, sp]);
 
   const values = useMemo(() => ({
-    status: sp.get('status') || '',
+    status: sp.get('status') || 'PENDING',
     country: sp.get('country') || '',
     shopId: sp.get('shopId') || 'ALL',
     dateFrom: sp.get('dateFrom') || '',
@@ -29,8 +29,8 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   return (
     <div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4">
       <div className="grid md:grid-cols-6 gap-3">
-        <select value={values.status} onChange={e=>set('status', e.target.value || undefined)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
-          <option value="">All Status</option>
+        <select value={values.status} onChange={e=>set('status', e.target.value)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+          <option value="ALL">All Status</option>
           {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
@@ -53,7 +53,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
         <select value={values.size} onChange={e=>set('size', e.target.value)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           {[25,50,100].map(n => <option key={n} value={n}>{n} / page</option>)}
         </select>
-        <button onClick={()=>{['status','country','dateFrom','dateTo','q','size','nextToken'].forEach(k=>set(k, undefined)); set('shopId','ALL');}}
+        <button onClick={()=>{['country','dateFrom','dateTo','q','size','nextToken'].forEach(k=>set(k, undefined)); set('status','PENDING'); set('shopId','ALL');}}
                 className="px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10">
           Reset
         </button>
