@@ -28,11 +28,10 @@ export type Row = {
   pendingSince?: string;
   createdAt: string;
   updatedAt?: string;
-  deliveryOption?: string;
   totalItems?: number;
   packedItems?: number;
   totalAmountLocal?: { currency: string; value: number };
-  country?: { code: string; name: string };
+  shopName?: string;
   shopIds?: string[];
   isPrepayment?: boolean;
 };
@@ -141,11 +140,87 @@ async function fetchSyncedRows(params: Search): Promise<Row[]> {
       updatedAt: updated?.toISOString?.(),
       totalItems: order.totalItems ?? undefined,
       packedItems: order.packedItems ?? undefined,
-      country: order.countryCode ? { code: order.countryCode, name: order.countryCode } : undefined,
-      shopIds: [shopLabel],
+      shopName: shopLabel ?? undefined,
+      shopIds: shopLabel ? [shopLabel] : undefined,
       isPrepayment: order.isPrepayment ?? undefined,
     } satisfies Row;
   });
+}
+
+function normalizeApiOrder(raw: Record<string, unknown>): Row {
+  const fallbackId = Math.random().toString(36).slice(2);
+  const id = String(raw.id ?? raw.orderId ?? raw.order_id ?? raw.number ?? raw.orderNumber ?? fallbackId);
+  const number =
+    raw.number ??
+    raw.orderNumber ??
+    raw.order_number ??
+    raw.displayOrderId ??
+    raw.orderId ??
+    raw.id;
+  const createdRaw =
+    raw.createdAt ??
+    raw.created_at ??
+    raw.created ??
+    raw.dateCreated ??
+    raw.created_at_utc ??
+    raw.orderedAt ??
+    raw.ordered_at;
+  const updatedRaw =
+    raw.updatedAt ??
+    raw.updated_at ??
+    raw.updated ??
+    raw.dateUpdated ??
+    raw.lastUpdated ??
+    raw.updated_at_utc;
+
+  const createdAt = createdRaw ? new Date(createdRaw as string).toISOString() : new Date().toISOString();
+  const updatedAt = updatedRaw ? new Date(updatedRaw as string).toISOString() : undefined;
+
+  const totalAmount =
+    (raw.totalAmountLocalCurrency && raw.totalAmountLocalValue
+      ? { currency: String(raw.totalAmountLocalCurrency), value: Number(raw.totalAmountLocalValue) }
+      : undefined) ??
+    (raw.totalAmountCurrency && raw.totalAmount
+      ? { currency: String(raw.totalAmountCurrency), value: Number(raw.totalAmount) }
+      : undefined) ??
+    (raw.totalAmountLocal as Row['totalAmountLocal']);
+
+  const packedItems =
+    raw.packedItems ??
+    raw.packed_items ??
+    raw.packed_qty ??
+    raw.fulfilledQuantity ??
+    raw.fulfilled_quantity;
+  const totalItems =
+    raw.totalItems ??
+    raw.total_items ??
+    raw.totalQuantity ??
+    raw.total_quantity ??
+    raw.itemsTotal ??
+    raw.items_total;
+
+  const shopObject = typeof raw.shop === 'object' && raw.shop !== null ? (raw.shop as Record<string, unknown>) : null;
+  const shopNameCandidate =
+    (raw.shopName as string | undefined) ??
+    (raw.shop_label as string | undefined) ??
+    (shopObject?.name as string | undefined) ??
+    (Array.isArray(raw.shopIds) ? (raw.shopIds.find((s) => typeof s === 'string') as string | undefined) : undefined) ??
+    (typeof raw.shopId === 'string' ? raw.shopId : undefined);
+
+  return {
+    id,
+    number: number ? String(number) : undefined,
+    status: raw.status ? String(raw.status) : undefined,
+    pendingSince: raw.pendingSince ? String(raw.pendingSince) : undefined,
+    createdAt,
+    updatedAt,
+    totalItems: totalItems !== undefined ? Number(totalItems) : undefined,
+    packedItems: packedItems !== undefined ? Number(packedItems) : undefined,
+    totalAmountLocal: totalAmount as Row['totalAmountLocal'],
+    shopName: shopNameCandidate,
+    shopIds: Array.isArray(raw.shopIds) ? raw.shopIds.filter((s) => typeof s === 'string') as string[] : undefined,
+    isPrepayment: typeof raw.isPrepayment === 'boolean' ? raw.isPrepayment : undefined,
+  };
 }
 
 export default async function OrdersPage(props: unknown) {
@@ -247,7 +322,7 @@ export default async function OrdersPage(props: unknown) {
 
   if (!showingSynced) {
     const data = await fetchRemoteOrders(params);
-    rows = (data.orders || []) as unknown as Row[];
+    rows = (data.orders || []).map((order) => normalizeApiOrder(order as Record<string, unknown>));
     nextToken = data.nextToken ?? null;
     isLastPage = !!data.isLastPage;
   }

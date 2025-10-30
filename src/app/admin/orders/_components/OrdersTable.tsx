@@ -9,11 +9,10 @@ type Row = {
   pendingSince?: string;
   createdAt: string;
   updatedAt?: string;
-  deliveryOption?: string;
   totalItems?: number;
   packedItems?: number;
   totalAmountLocal?: { currency: string; value: number };
-  country?: { code: string; name: string };
+  shopName?: string;
   shopIds?: string[];
   isPrepayment?: boolean;
 };
@@ -64,17 +63,15 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: { rows: Row
             <th className="px-3 py-2">Order #</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Created</th>
-            <th className="px-3 py-2">Delivery</th>
             <th className="px-3 py-2">Items</th>
             <th className="px-3 py-2">Total</th>
-            <th className="px-3 py-2">Country</th>
             <th className="px-3 py-2">Shop</th>
             <th className="px-3 py-2">Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
-            <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">No orders found.</td></tr>
+            <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No orders found.</td></tr>
           )}
           {rows.map(r => (
             <tr key={r.id} className="border-t border-white/5">
@@ -84,15 +81,13 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: { rows: Row
                 {r.pendingSince && <span className="ml-2 text-xs opacity-70">- {r.pendingSince}</span>}
               </td>
               <td className="px-3 py-2">{new Date(r.createdAt).toLocaleString()}</td>
-              <td className="px-3 py-2">{r.deliveryOption || '-'}</td>
               <td className="px-3 py-2">
                 {typeof r.packedItems === 'number' && typeof r.totalItems === 'number'
                   ? `${r.packedItems}/${r.totalItems}`
                   : r.totalItems ?? '-'}
               </td>
               <td className="px-3 py-2">{r.totalAmountLocal ? `${r.totalAmountLocal.currency} ${r.totalAmountLocal.value.toLocaleString()}` : '-'}</td>
-              <td className="px-3 py-2">{r.country?.code ?? '-'}</td>
-              <td className="px-3 py-2">{r.shopIds?.[0] ?? '-'}</td>
+              <td className="px-3 py-2">{r.shopName ?? r.shopIds?.[0] ?? '-'}</td>
               <td className="px-3 py-2">
                 <div className="flex gap-2">
                   <button className="px-2 py-1 rounded border border-white/10 hover:bg-white/10"
