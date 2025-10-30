@@ -186,7 +186,8 @@ export default function Home() {
 
   useEffect(() => {
     let ignore = false;
-    (async () => {
+
+    const run = async () => {
       try {
         const [c1, c2, pending] = await Promise.all([
           tryCounts(pickupPaths),
@@ -205,9 +206,13 @@ export default function Home() {
           setPendingAll(0);
         }
       }
-    })();
+    };
+
+    void run();
+    const interval = setInterval(run, 60_000);
     return () => {
       ignore = true;
+      clearInterval(interval);
     };
   }, [pickupPaths, pricingPaths, pendingPaths]);
 
