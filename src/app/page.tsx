@@ -9,7 +9,15 @@ import Link from "next/link";
  * Types
  * ======================= */
 type CountLike =
-  | { count?: number; total?: number; value?: number }
+  | {
+      count?: number;
+      total?: number;
+      value?: number;
+      pendingAll?: number;
+      queued?: number;
+      orders?: unknown;
+      items?: unknown;
+    }
   | number;
 
 type MoneyLike =
@@ -39,8 +47,16 @@ async function tryCounts(paths: string[]): Promise<number> {
       if (Array.isArray(j)) return j.length;
       if (typeof j === "number" && Number.isFinite(j)) return j;
       if (j && typeof j === "object") {
-        const obj = j as { count?: number; total?: number; value?: number; orders?: unknown; items?: unknown };
-        for (const k of ["count", "total", "value"] as const) {
+        const obj = j as {
+          count?: number;
+          total?: number;
+          value?: number;
+          pendingAll?: number;
+          queued?: number;
+          orders?: unknown;
+          items?: unknown;
+        };
+        for (const k of ["count", "total", "value", "pendingAll", "queued"] as const) {
           if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) return obj[k]!;
         }
         if (Array.isArray(obj.orders)) return obj.orders.length;
@@ -143,7 +159,7 @@ export default function Home() {
     []
   );
   const pendingPaths = useMemo(
-    () => ["/api/orders?status=PENDING&shopId=ALL", "/api/orders/pending-pricing"],
+    () => ["/api/metrics/kpis", "/api/orders?status=PENDING&shopId=ALL", "/api/orders/pending-pricing"],
     []
   );
 
