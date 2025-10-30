@@ -702,8 +702,8 @@ export async function getCatalogCategories(page = 1, attributeSetName?: string) 
   return j;
 }
 
-export async function getCatalogProducts(opts?: { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string }) {
-  const o = { ...(opts || {}) } as { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string };
+export async function getCatalogProducts(opts?: { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string; createdAtFrom?: string; createdAtTo?: string }) {
+  const o = { ...(opts || {}) } as { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string; createdAtFrom?: string; createdAtTo?: string };
   // Auto-inject first shopId if caller didn't specify
   if (!o.shopId) {
     try {
@@ -719,6 +719,8 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   if (o.sids && o.sids.length) params.push(`sids=${o.sids.map(encodeURIComponent).join(',')}`);
   if (o.categoryCode) params.push(`categoryCode=${encodeURIComponent(String(o.categoryCode))}`);
   if (o.sellerSku) params.push(`sellerSku=${encodeURIComponent(o.sellerSku)}`);
+  if (o.createdAtFrom) params.push(`createdAtFrom=${encodeURIComponent(o.createdAtFrom)}`);
+  if (o.createdAtTo) params.push(`createdAtTo=${encodeURIComponent(o.createdAtTo)}`);
   if (o.shopId) params.push(`shopId=${encodeURIComponent(o.shopId)}`);
   const q = params.length ? `?${params.join('&')}` : '';
   const shopAuth = o.shopId ? await loadShopAuthById(o.shopId).catch(() => undefined) : await loadDefaultShopAuth();
@@ -791,6 +793,79 @@ export async function getOrderItems(orderId: string) {
   if (!orderId) throw new Error('orderId required');
   const shopAuth = await loadDefaultShopAuth();
   return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+}
+
+/** Catalog: attribute set details by id */
+export async function getCatalogAttributeSet(id: string) {
+  if (!id) throw new Error('attribute set id required');
+  const shopAuth = await loadDefaultShopAuth();
+  return await jumiaFetch(`/catalog/attribute-sets/${encodeURIComponent(id)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+}
+
+/** Catalog: stock pages (global stock per product). Supports token/size/productSids */
+export async function getCatalogStock(opts?: { token?: string; size?: number; productSids?: string[] }) {
+  const o = { ...(opts || {}) } as { token?: string; size?: number; productSids?: string[] };
+  const params: string[] = [];
+  if (o.token) params.push(`token=${encodeURIComponent(o.token)}`);
+  if (o.size) params.push(`size=${encodeURIComponent(String(o.size))}`);
+  if (o.productSids && o.productSids.length) params.push(`productSids=${o.productSids.map(encodeURIComponent).join(',')}`);
+  const q = params.length ? `?${params.join('&')}` : '';
+  const shopAuth = await loadDefaultShopAuth();
+  return await jumiaFetch(`/catalog/stock${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+}
+
+/** Orders: shipment providers for one or more order items */
+export async function getShipmentProviders(orderItemIds: string | string[]) {
+  const ids = Array.isArray(orderItemIds) ? orderItemIds : [orderItemIds];
+  if (!ids.length) throw new Error('orderItemIds required');
+  const qs = ids.map((id) => `orderItemId=${encodeURIComponent(id)}`).join('&');
+  const shopAuth = await loadDefaultShopAuth();
+  return await jumiaFetch(`/orders/shipment-providers?${qs}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+}
+
+/** Orders: cancel items */
+export async function postOrdersCancel(payload: unknown) {
+  return await jumiaFetch('/orders/cancel', { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+/** Orders: pack (v1) */
+export async function postOrdersPack(payload: unknown) {
+  return await jumiaFetch('/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Orders: pack (v2) */
+export async function postOrdersPackV2(payload: unknown) {
+  return await jumiaFetch('/v2/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Orders: ready to ship */
+export async function postOrdersReadyToShip(payload: unknown) {
+  return await jumiaFetch('/orders/ready-to-ship', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Orders: print labels */
+export async function postOrdersPrintLabels(payload: unknown) {
+  return await jumiaFetch('/orders/print-labels', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Consignment: create order */
+export async function postConsignmentOrder(payload: unknown) {
+  return await jumiaFetch('/consignment-order', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Consignment: update order */
+export async function patchConsignmentOrder(purchaseOrderNumber: string, payload: unknown) {
+  if (!purchaseOrderNumber) throw new Error('purchaseOrderNumber required');
+  return await jumiaFetch(`/consignment-order/${encodeURIComponent(purchaseOrderNumber)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+/** Consignment: stock lookup */
+export async function getConsignmentStock(params: { businessClientCode: string; sku: string }) {
+  const { businessClientCode, sku } = params || ({} as any);
+  if (!businessClientCode || !sku) throw new Error('businessClientCode and sku are required');
+  const q = `businessClientCode=${encodeURIComponent(businessClientCode)}&sku=${encodeURIComponent(sku)}`;
+  const shopAuth = await loadDefaultShopAuth();
+  return await jumiaFetch(`/consignment-stock?${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
 }
 
 /**

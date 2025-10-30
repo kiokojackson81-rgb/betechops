@@ -1,4 +1,4 @@
-import { getShops, getCatalogProducts } from '../../src/lib/jumia';
+import { getShops, getCatalogProducts, getShipmentProviders } from '../../src/lib/jumia';
 
 // Spy and mock oidc token functions to avoid network calls
 const oidc = require('../../src/lib/oidc');
@@ -56,5 +56,24 @@ describe('Jumia wrappers', () => {
     const res = await getCatalogProducts({ size: 5 });
     expect(res.products).toBeDefined();
     expect(res.products[0].id).toBe('p1');
+  });
+
+  test('getShipmentProviders builds orderItemId[] query correctly', async () => {
+    const ids = ['oi1', 'oi2'];
+    const mockResp = { providers: ['SPX', 'Jumia'] };
+    (global as any).fetch = jest.fn().mockImplementation(async (url: string) => {
+      expect(url).toContain('/orders/shipment-providers');
+      // both ids should appear
+      expect(url).toContain('orderItemId=oi1');
+      expect(url).toContain('orderItemId=oi2');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => mockResp,
+      };
+    });
+
+    const res = await getShipmentProviders(ids);
+    expect(res.providers).toBeDefined();
   });
 });
