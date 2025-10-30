@@ -48,15 +48,21 @@ async function getStats(): Promise<Stats> {
     let pendingSynced = 0;
     let approxPending = false;
     try {
-      pendingSynced = await prisma.jumiaOrder.count({
-        where: {
-          OR: [
-            { status: { equals: "PENDING", mode: "insensitive" } },
-            { status: { contains: "PEND", mode: "insensitive" } },
-            { hasMultipleStatus: true },
-          ],
-        },
-      });
+      if (kpis && typeof (kpis as any)?.pendingAll === "number" && !(kpis as any)?.approx) {
+        pendingSynced = Number((kpis as any).pendingAll);
+      } else {
+        const pendingOrders = await fetch(
+          `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/orders?status=PENDING&shopId=ALL`,
+          { cache: "no-store" }
+        )
+          .then(async (r) => (r.ok ? await r.json() : null))
+          .catch(() => null);
+        if (pendingOrders && Array.isArray(pendingOrders.orders)) {
+          pendingSynced = pendingOrders.orders.length;
+        } else {
+          approxPending = true;
+        }
+      }
     } catch {
       approxPending = true;
     }
