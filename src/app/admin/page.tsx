@@ -1,29 +1,38 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
-import { getCatalogProductsCountQuick } from "@/lib/jumia";
+import { getCatalogProductsCountQuick, getCatalogProductsCountQuickForShop, getPendingOrdersCountQuickForShop } from "@/lib/jumia";
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-type Stats = { products: number; shops: number; attendants: number; orders: number; revenue: number } & Partial<{ _degraded: true }>;
+type Stats = { productsAll: number; shops: number; attendants: number; pendingAll: number; revenue: number; productsDb: number; returnsDb: number } & Partial<{ _degraded: true; approx: boolean }>;
 
 async function getStats(): Promise<Stats> {
   try {
-    const [dbProducts, shops, attendants, orders, revenueAgg, vendorCount] = await Promise.all([
+    const [dbProducts, shops, attendants, returnsDb, revenueAgg, vendorCount, shopList] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
-      prisma.order.count(),
+      prisma.returnCase.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
       // vendor products quick count (bounded)
       getCatalogProductsCountQuick({ limitPages: 3, size: 100, timeMs: 6000 }).catch(() => ({ total: 0 } as any)),
+      prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true } }),
     ]);
-    // Prefer vendor count when available; fallback to DB
-    const products = (vendorCount as any)?.total ?? dbProducts;
-    return { products, shops, attendants, orders, revenue: (revenueAgg._sum.paidAmount ?? 0) };
+    // Aggregate across all Jumia shops (bounded counters)
+    const perShop = await Promise.all(
+      shopList.map(async (s) => ({
+        prod: await getCatalogProductsCountQuickForShop({ shopId: s.id, limitPages: 2, size: 100, timeMs: 5000 }).catch(() => ({ total: 0, approx: true })),
+        pend: await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 2, size: 50, timeMs: 5000 }).catch(() => ({ total: 0, approx: true })),
+      }))
+    );
+    const productsAll = perShop.reduce((sum, r) => sum + (r.prod?.total || 0), 0) || (vendorCount as any)?.total || dbProducts;
+    const pendingAll = perShop.reduce((sum, r) => sum + (r.pend?.total || 0), 0);
+    const approx = perShop.some((r) => r.prod?.approx || r.pend?.approx);
+    return { productsAll, productsDb: dbProducts, shops, attendants, pendingAll, returnsDb, revenue: (revenueAgg._sum.paidAmount ?? 0), approx };
   } catch {
-    return { products: 0, shops: 0, attendants: 0, orders: 0, revenue: 0, _degraded: true as const };
+    return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true as const };
   }
 }
 
@@ -54,12 +63,14 @@ export default async function Overview() {
       )}
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card title="Products" value={s.products} Icon={Package} />
+        <Card title="Vendor Products (All)" value={s.productsAll} Icon={Package} sub={s.approx ? "Approx (bounded scan)" : undefined} />
         <Card title="Shops" value={s.shops} Icon={Store} />
         <Card title="Attendants" value={s.attendants} Icon={Users} />
-        <Card title="Orders" value={s.orders} Icon={Receipt} />
+        <Card title="Pending Orders (All)" value={s.pendingAll} Icon={Receipt} sub={s.approx ? "Approx (bounded scan)" : undefined} />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>
+
+      <div className="text-xs text-slate-400">Local DB: Products {s.productsDb}, Returns {s.returnsDb}</div>
 
       {/* Quick pivots */}
       <section className="grid lg:grid-cols-3 gap-4">

@@ -838,4 +838,63 @@ export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100,
   return _prodCountCache.value;
 }
 
+// Per-shop quick product counter
+export async function getCatalogProductsCountQuickForShop({ shopId, limitPages = 2, size = 100, timeMs = 6000 }: { shopId: string; limitPages?: number; size?: number; timeMs?: number }) {
+  const start = Date.now();
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  const fetcher = async (p: string) =>
+    await Promise.race([
+      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) } as any),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))) as unknown as Promise<unknown>,
+    ]);
+
+  let pages = 0;
+  for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+    const arr = Array.isArray((page as any)?.products)
+      ? (page as any).products
+      : Array.isArray((page as any)?.items)
+      ? (page as any).items
+      : Array.isArray((page as any)?.data)
+      ? (page as any).data
+      : [];
+    for (const it of arr) {
+      total += 1;
+      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      byStatus[st] = (byStatus[st] || 0) + 1;
+    }
+    pages += 1;
+    if (pages >= limitPages || Date.now() - start > timeMs) break;
+  }
+  const approx = pages >= limitPages || Date.now() - start > timeMs;
+  return { total, byStatus, approx };
+}
+
+// Quick pending orders counter per shop
+export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2, size = 50, timeMs = 6000 }: { shopId: string; limitPages?: number; size?: number; timeMs?: number }) {
+  const start = Date.now();
+  let total = 0;
+  const params: Record<string, string> = { status: 'PENDING', size: String(size), shopId };
+  const fetcher = async (p: string) =>
+    await Promise.race([
+      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) } as any),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))) as unknown as Promise<unknown>,
+    ]);
+  let pages = 0;
+  for await (const page of jumiaPaginator('/orders', params, fetcher)) {
+    const arr = Array.isArray((page as any)?.orders)
+      ? (page as any).orders
+      : Array.isArray((page as any)?.items)
+      ? (page as any).items
+      : Array.isArray((page as any)?.data)
+      ? (page as any).data
+      : [];
+    total += arr.length;
+    pages += 1;
+    if (pages >= limitPages || Date.now() - start > timeMs) break;
+  }
+  const approx = pages >= limitPages || Date.now() - start > timeMs;
+  return { total, approx };
+}
+
 
