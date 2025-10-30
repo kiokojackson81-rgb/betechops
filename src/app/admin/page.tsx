@@ -9,25 +9,63 @@ import KpisRefresher from "@/app/_components/KpisRefresher";
 
 export const dynamic = "force-dynamic";
 
-type Stats = { productsAll: number; shops: number; attendants: number; pendingAll: number; revenue: number; productsDb: number; returnsDb: number } & Partial<{ _degraded: true; approx: boolean }>;
+type Stats = {
+  productsAll: number;
+  shops: number;
+  attendants: number;
+  pendingAll: number;
+  revenue: number;
+  productsDb: number;
+  returnsDb: number;
+} & Partial<{ _degraded: true; approxProducts: boolean; approxPending: boolean }>;
 
 async function getStats(): Promise<Stats> {
   try {
-    const [dbProducts, shops, attendants, returnsDb, revenueAgg, kpis] = await Promise.all([
+    const [
+      dbProducts,
+      shops,
+      attendants,
+      returnsDb,
+      revenueAgg,
+      kpis,
+      pendingLegacy,
+    ] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
       prisma.returnCase.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
       // Fetch cross-shop KPIs via API (cached 6h)
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/metrics/kpis`, { cache: 'no-store' })
-        .then(async r => (r.ok ? (await r.json()) : null))
+      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/metrics/kpis`, { cache: "no-store" })
+        .then(async (r) => (r.ok ? await r.json() : null))
         .catch(() => null),
+      prisma.order.count({ where: { status: "PENDING" } }),
     ]);
+
     const productsAll = Number((kpis as any)?.productsAll ?? 0);
-    const pendingAll = Number((kpis as any)?.pendingAll ?? 0);
-    const approx = Boolean((kpis as any)?.approx);
-    return { productsAll, productsDb: dbProducts, shops, attendants, pendingAll, returnsDb, revenue: (revenueAgg._sum.paidAmount ?? 0), approx };
+    const approxProducts = Boolean((kpis as any)?.approx);
+
+    let pendingSynced = 0;
+    let approxPending = false;
+    try {
+      pendingSynced = await prisma.jumiaOrder.count({ where: { status: "PENDING" } });
+    } catch {
+      approxPending = true;
+    }
+
+    const pendingAll = pendingLegacy + pendingSynced;
+
+    return {
+      productsAll,
+      productsDb: dbProducts,
+      shops,
+      attendants,
+      pendingAll,
+      returnsDb,
+      revenue: revenueAgg._sum.paidAmount ?? 0,
+      approxProducts,
+      approxPending,
+    };
   } catch {
     return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true as const };
   }
@@ -55,7 +93,7 @@ export default async function Overview() {
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
       <AutoRefresh intervalMs={60_000} />
       {/* Trigger an exact refresh once if we only have approximate totals */}
-      {s.approx && <KpisRefresher enabled={true} />}
+      {(s.approxProducts || s.approxPending) && <KpisRefresher enabled={true} />}
       {"_degraded" in s && (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-yellow-200">
           DB unavailable or migrations missing. See Admin → Health Checks.
@@ -63,10 +101,10 @@ export default async function Overview() {
       )}
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card title="Vendor Products (All)" value={s.productsAll} Icon={Package} sub={s.approx ? "Approx (bounded scan)" : undefined} />
+        <Card title="Vendor Products (All)" value={s.productsAll} Icon={Package} sub={s.approxProducts ? "Approx (bounded scan)" : undefined} />
         <Card title="Shops" value={s.shops} Icon={Store} />
         <Card title="Attendants" value={s.attendants} Icon={Users} />
-        <Card title="Pending Orders (All)" value={s.pendingAll} Icon={Receipt} sub={s.approx ? "Approx (bounded scan)" : undefined} />
+        <Card title="Pending Orders (All)" value={s.pendingAll} Icon={Receipt} sub={s.approxPending ? "Synced count unavailable" : undefined} />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>
 
