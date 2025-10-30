@@ -44,7 +44,19 @@ export async function GET(req: NextRequest) {
         const arr = Array.isArray(p?.orders) ? p.orders : Array.isArray(p?.items) ? p.items : Array.isArray(p?.data) ? p.data : [];
         for (const it of arr) combined.push(it);
       }
-      return NextResponse.json({ orders: combined, nextToken: null, isLastPage: true });
+      // Stable sort by createdAt desc (fallbacks) to match Jumia ordering semantics
+      combined.sort((a: any, b: any) => {
+        const getTs = (x: any) => {
+          const v = x?.createdAt || x?.created_date || x?.created || x?.dateCreated;
+          const t = v ? new Date(v).getTime() : 0;
+          return isNaN(t) ? 0 : t;
+        };
+        return getTs(b) - getTs(a);
+      });
+      const pageSize = Math.max(1, Math.min(parseInt(qs.size || '50', 10) || 50, 100));
+      const page = combined.slice(0, pageSize);
+      // NOTE: For ALL shops aggregation, we currently return a single merged page (no composite cursor yet)
+      return NextResponse.json({ orders: page, nextToken: null, isLastPage: true });
     }
 
     const shopAuth = qs.shopId ? await loadShopAuthById(qs.shopId).catch(() => undefined) : await loadDefaultShopAuth();
