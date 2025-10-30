@@ -66,7 +66,7 @@ export default async function Overview() {
         <div className="rounded-xl border border-white/10 p-4 bg-[var(--panel,#121723)]">
           <h2 className="font-semibold mb-2">Today</h2>
           <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
-            <li><Link className="underline" href="/admin/orders?status=PENDING">Pending orders</Link></li>
+            <li><Link className="underline" href="/admin/orders?status=PENDING&shopId=ALL">Pending orders</Link></li>
             <li><Link className="underline" href="/admin/pending-pricing">Pending pricing</Link></li>
             <li><Link className="underline" href="/admin/returns">Returns waiting pickup</Link></li>
           </ul>
