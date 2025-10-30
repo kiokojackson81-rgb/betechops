@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCatalogProductsCountQuick, getCatalogProductsCountQuickForShop, getPendingOrdersCountQuickForShop } from "@/lib/jumia";
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
+import AutoRefresh from "@/app/_components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export default async function Overview() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
+      <AutoRefresh intervalMs={60_000} />
       {"_degraded" in s && (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-yellow-200">
           DB unavailable or migrations missing. See Admin → Health Checks.

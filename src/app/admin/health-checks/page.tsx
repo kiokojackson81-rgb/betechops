@@ -1,5 +1,6 @@
 
 import { computeHealth, computeShopsConnectivity } from "@/lib/health";
+import AutoRefresh from "@/app/_components/AutoRefresh";
 import { headers } from "next/headers";
 
 async function fetchJson(path: string) {
@@ -37,6 +38,7 @@ export default async function AdminHealthChecks() {
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Operational Checks</h1>
+      <AutoRefresh intervalMs={60_000} />
       <p className="text-slate-400">Quick diagnostics for DB and Jumia OIDC integration.</p>
       <div className="grid gap-4 md:grid-cols-2">
         <Section title="API /health" payload={{ ok: true, status: 200, data: healthPayload }} />
