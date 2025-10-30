@@ -1,5 +1,6 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
+import { absUrl } from "@/lib/abs-url";
 // Switch to API-based KPIs for cross-shop totals
 // Keep DB metrics local
 import Link from "next/link";
@@ -27,7 +28,6 @@ async function getStats(): Promise<Stats> {
       attendants,
       returnsDb,
       revenueAgg,
-      kpis,
       pendingLegacy,
     ] = await Promise.all([
       prisma.product.count(),
@@ -35,30 +35,36 @@ async function getStats(): Promise<Stats> {
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
       prisma.returnCase.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
-      // Fetch cross-shop KPIs via API (cached 6h)
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/metrics/kpis`, { cache: "no-store" })
-        .then(async (r) => (r.ok ? await r.json() : null))
-        .catch(() => null),
       prisma.order.count({ where: { status: "PENDING" } }),
     ]);
 
-    const productsAll = Number((kpis as any)?.productsAll ?? 0);
-    const approxProducts = Boolean((kpis as any)?.approx);
+    let kpis: any = null;
+    try {
+      const metricsUrl = await absUrl("/api/metrics/kpis");
+      const resp = await fetch(metricsUrl, { cache: "no-store" });
+      if (resp.ok) kpis = await resp.json();
+    } catch {
+      kpis = null;
+    }
+
+    const productsAll = Number(kpis?.productsAll ?? 0);
+    const approxProducts = Boolean(kpis?.approx);
 
     let pendingSynced = 0;
     let approxPending = false;
     try {
-      if (kpis && typeof (kpis as any)?.pendingAll === "number" && !(kpis as any)?.approx) {
-        pendingSynced = Number((kpis as any).pendingAll);
+      if (kpis && typeof kpis.pendingAll === "number" && !kpis.approx) {
+        pendingSynced = Number(kpis.pendingAll);
       } else {
-        const pendingOrders = await fetch(
-          `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/orders?status=PENDING&shopId=ALL`,
-          { cache: "no-store" }
-        )
-          .then(async (r) => (r.ok ? await r.json() : null))
-          .catch(() => null);
-        if (pendingOrders && Array.isArray(pendingOrders.orders)) {
-          pendingSynced = pendingOrders.orders.length;
+        const pendingUrl = await absUrl("/api/orders?status=PENDING&shopId=ALL");
+        const pendingResp = await fetch(pendingUrl, { cache: "no-store" });
+        if (pendingResp.ok) {
+          const pendingData = await pendingResp.json();
+          if (Array.isArray(pendingData?.orders)) {
+            pendingSynced = pendingData.orders.length;
+          } else {
+            approxPending = true;
+          }
         } else {
           approxPending = true;
         }
