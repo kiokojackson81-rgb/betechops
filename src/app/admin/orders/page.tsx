@@ -1,6 +1,7 @@
 import OrdersFilters from './_components/OrdersFilters';
 import OrdersTable from './_components/OrdersTable';
 import { absUrl, withParams } from '@/lib/abs-url';
+import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,30 @@ export default async function OrdersPage(props: unknown) {
     nextToken: toStr(searchParams.nextToken),
     size: toStr(searchParams.size),
   };
+
+  // Default window: from system start (earliest Order or Shop), but not older than 3 months
+  if (!params.dateFrom) {
+    try {
+      const [firstOrder, firstShop] = await Promise.all([
+        prisma.order.findFirst({ select: { createdAt: true }, orderBy: { createdAt: 'asc' } }).catch(() => null),
+        prisma.shop.findFirst({ select: { createdAt: true }, orderBy: { createdAt: 'asc' } }).catch(() => null),
+      ]);
+      const systemStart = firstOrder?.createdAt || firstShop?.createdAt || null;
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const startDate = new Date(Math.max(systemStart ? systemStart.getTime() : 0, threeMonthsAgo.getTime()));
+      // If we had neither systemStart nor 3 months ago (shouldn't happen), fall back to 3 months ago anyway
+      const iso = isNaN(startDate.getTime()) ? new Date(threeMonthsAgo).toISOString().slice(0, 10) : startDate.toISOString().slice(0, 10);
+      params.dateFrom = iso;
+    } catch {
+      const d = new Date(); d.setMonth(d.getMonth() - 3); params.dateFrom = d.toISOString().slice(0, 10);
+    }
+  }
+  // Default dateTo to today to keep the window bounded
+  if (!params.dateTo) {
+    const today = new Date().toISOString().slice(0, 10);
+    params.dateTo = today;
+  }
 
   const data = await getOrders(params);
 
