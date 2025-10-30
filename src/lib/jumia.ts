@@ -898,7 +898,7 @@ export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2
 }
 
 // Exact vendor product counter per shop (scans all pages with safety caps)
-export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 1000, timeMs = 120_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
+export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   let total = 0;
@@ -926,6 +926,52 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
     if (pages >= maxPages || Date.now() - start > timeMs) break;
   }
   const approx = pages >= maxPages || Date.now() - start > timeMs;
+  return { total, byStatus, approx };
+}
+
+// Exact product count across all shops under a master account (preferred for KPIs)
+export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
+  const start = Date.now();
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  // Try to gather sids for all shops in the account
+  let sids: string[] | undefined = undefined;
+  try {
+    const shops = await getShopsOfMasterShop().catch(() => [] as any[]);
+    const vals = Array.isArray(shops) ? shops : [];
+    const keys = ['sid', 'shopId', 'id'];
+    sids = vals.map((v: any) => String(v?.sid ?? v?.shopId ?? v?.id ?? '')).filter(Boolean);
+    if (!sids.length) sids = undefined;
+  } catch { sids = undefined; }
+
+  const params: Record<string, string> = { size: String(size) };
+  if (sids && sids.length) params['sids'] = sids.join(',');
+
+  const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+  const fetcher = async (p: string) =>
+    await Promise.race([
+      jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(45_000, timeMs))) as unknown as Promise<unknown>,
+    ]);
+
+  let pages = 0;
+  for await (const page of jumiaPaginator('/catalog/products', params, fetcher)) {
+    const arr = Array.isArray((page as any)?.products)
+      ? (page as any).products
+      : Array.isArray((page as any)?.items)
+      ? (page as any).items
+      : Array.isArray((page as any)?.data)
+      ? (page as any).data
+      : [];
+    for (const it of arr) {
+      total += 1;
+      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      byStatus[st] = (byStatus[st] || 0) + 1;
+    }
+    pages += 1;
+    if (Date.now() - start > timeMs) break;
+  }
+  const approx = Date.now() - start > timeMs;
   return { total, byStatus, approx };
 }
 

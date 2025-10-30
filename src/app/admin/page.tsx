@@ -6,6 +6,7 @@ import { updateKpisCache, updateKpisCacheExact } from "@/lib/jobs/kpis";
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
+import KpisRefresher from "@/app/_components/KpisRefresher";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,8 @@ export default async function Overview() {
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
       <AutoRefresh intervalMs={60_000} />
+      {/* Trigger an exact refresh once if we only have approximate totals */}
+      {s.approx && <KpisRefresher enabled={true} />}
       {"_degraded" in s && (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-yellow-200">
           DB unavailable or migrations missing. See Admin → Health Checks.
