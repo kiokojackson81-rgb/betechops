@@ -1,0 +1,17 @@
+{
+  "shops": [
+    {
+      "name": "JM Latest Collections",
+      "platform": "JUMIA",
+      "credentials": {
+        "apiBase": "https://vendor-api.jumia.com",
+        "base_url": "https://vendor-api.jumia.com",
+        "tokenUrl": "https://vendor-api.jumia.com/token",
+        "clientId": "YOUR_JUMIA_CLIENT_ID",
+        "refreshToken": "YOUR_LONG_LIVED_REFRESH_TOKEN",
+        "authType": "SELF_AUTHORIZATION",
+        "shopLabel": "JM Latest Collections"
+      }
+    }
+  ]
+}

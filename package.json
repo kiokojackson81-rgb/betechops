@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "postinstall": "npm run prisma:generate",
     "set-admin": "node scripts/set-admin.js",
+    "seed:shops": "node -r ts-node/register scripts/seed-shops.ts",
     "test": "jest --passWithNoTests",
     "test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js",
     "smoke:local": "node scripts/smoke/test-apis.js",
