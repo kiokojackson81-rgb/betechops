@@ -707,7 +707,8 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   // Auto-inject first shopId if caller didn't specify
   if (!o.shopId) {
     try {
-      o.shopId = await getFirstShopId();
+      // getFirstShopId() returns string | null; coerce null to undefined to satisfy type
+      o.shopId = (await getFirstShopId()) ?? undefined;
     } catch {
       // ignore; fall back to default shop auth
     }
