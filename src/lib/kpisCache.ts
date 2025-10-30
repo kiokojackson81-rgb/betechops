@@ -9,7 +9,8 @@ export type CrossShopKpis = {
 };
 
 const KEY = 'kpis:cross-shops';
-const TTL_SECONDS = 120;
+// Cache TTL for KPIs: 6 hours (as requested)
+const TTL_SECONDS = 6 * 60 * 60; // 21600
 
 let mem: CrossShopKpis | null = null;
 

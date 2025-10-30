@@ -667,9 +667,21 @@ export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string 
 /* ---- New: explicit wrapper functions for common vendor endpoints ---- */
 
 export async function getShops() {
-  // GET /shops
+  // GET /shops with simple in-memory caching to avoid repeated calls from UI
+  type ShopsCache = { ts: number; items: any[] };
+  const TTL_MS = 10 * 60_000; // 10 minutes
+  // hoist on module scope
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  if (!(global as any).__jumiaShopsCache) (global as any).__jumiaShopsCache = null as ShopsCache | null;
+  const now = Date.now();
+  const hit = (global as any).__jumiaShopsCache as ShopsCache | null;
+  if (hit && now - hit.ts < TTL_MS) return hit.items;
+
   const j = await jumiaFetch('/shops');
-  return j?.shops || j || [];
+  const items = j?.shops || j || [];
+  (global as any).__jumiaShopsCache = { ts: now, items } as ShopsCache;
+  return items;
 }
 
 export async function getShopsOfMasterShop() {
@@ -691,17 +703,48 @@ export async function getCatalogCategories(page = 1, attributeSetName?: string) 
 }
 
 export async function getCatalogProducts(opts?: { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string }) {
+  const o = { ...(opts || {}) } as { token?: string; size?: number; sids?: string[]; categoryCode?: number; sellerSku?: string; shopId?: string };
+  // Auto-inject first shopId if caller didn't specify
+  if (!o.shopId) {
+    try {
+      o.shopId = await getFirstShopId();
+    } catch {
+      // ignore; fall back to default shop auth
+    }
+  }
   const params: string[] = [];
-  if (opts?.token) params.push(`token=${encodeURIComponent(opts.token)}`);
-  if (opts?.size) params.push(`size=${encodeURIComponent(String(opts.size))}`);
-  if (opts?.sids && opts.sids.length) params.push(`sids=${opts.sids.map(encodeURIComponent).join(',')}`);
-  if (opts?.categoryCode) params.push(`categoryCode=${encodeURIComponent(String(opts.categoryCode))}`);
-  if (opts?.sellerSku) params.push(`sellerSku=${encodeURIComponent(opts.sellerSku)}`);
-  if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
+  if (o.token) params.push(`token=${encodeURIComponent(o.token)}`);
+  if (o.size) params.push(`size=${encodeURIComponent(String(o.size))}`);
+  if (o.sids && o.sids.length) params.push(`sids=${o.sids.map(encodeURIComponent).join(',')}`);
+  if (o.categoryCode) params.push(`categoryCode=${encodeURIComponent(String(o.categoryCode))}`);
+  if (o.sellerSku) params.push(`sellerSku=${encodeURIComponent(o.sellerSku)}`);
+  if (o.shopId) params.push(`shopId=${encodeURIComponent(o.shopId)}`);
   const q = params.length ? `?${params.join('&')}` : '';
-  const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  const shopAuth = o.shopId ? await loadShopAuthById(o.shopId).catch(() => undefined) : await loadDefaultShopAuth();
   const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
   return j;
+}
+
+// Helper: return first available shopId or null
+export async function getFirstShopId(): Promise<string | null> {
+  try {
+    const shops = await getShops();
+    return shops?.[0]?.id || shops?.[0]?.shopId || null;
+  } catch {
+    return null;
+  }
+}
+
+// Helper: fetch size=1 and infer total from metadata, fallback to array length
+export async function getCatalogProductTotals(shopId: string): Promise<{ total: number; approx: boolean }> {
+  const res = await getCatalogProducts({ size: 1, shopId: shopId || undefined });
+  const total =
+    (res && typeof res === 'object' && (res as any).total) ||
+    (res && typeof res === 'object' && (res as any).totalCount) ||
+    (res && typeof res === 'object' && (res as any).totalElements) ||
+    (Array.isArray((res as any)?.products) ? (res as any).products.length : 0);
+  const approx = !Boolean((res as any)?.total || (res as any)?.totalCount || (res as any)?.totalElements);
+  return { total: Number(total || 0), approx };
 }
 
 export async function postFeedProductsStock(payload: unknown) {

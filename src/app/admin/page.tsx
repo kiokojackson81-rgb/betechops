@@ -1,8 +1,7 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
-import { getCatalogProductsCountQuick, getCatalogProductsCountQuickForShop, getPendingOrdersCountQuickForShop } from "@/lib/jumia";
-import { readKpisCache } from "@/lib/kpisCache";
-import { updateKpisCache, updateKpisCacheExact } from "@/lib/jobs/kpis";
+// Switch to API-based KPIs for cross-shop totals
+// Keep DB metrics local
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
@@ -14,37 +13,20 @@ type Stats = { productsAll: number; shops: number; attendants: number; pendingAl
 
 async function getStats(): Promise<Stats> {
   try {
-    const [dbProducts, shops, attendants, returnsDb, revenueAgg, vendorCount, shopList, cached] = await Promise.all([
+    const [dbProducts, shops, attendants, returnsDb, revenueAgg, kpis] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
       prisma.returnCase.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
-      // vendor products quick count (bounded)
-      getCatalogProductsCountQuick({ limitPages: 3, size: 100, timeMs: 6000 }).catch(() => ({ total: 0 } as any)),
-      prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true } }),
-      readKpisCache().catch(() => null),
+      // Fetch cross-shop KPIs via API (cached 6h)
+      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/metrics/kpis`, { cache: 'no-store' })
+        .then(async r => (r.ok ? (await r.json()) : null))
+        .catch(() => null),
     ]);
-    // Prefer cached cross-shop totals when available; refresh cache in background if stale/missing
-    if (!cached) {
-      // fire and forget; do not await
-      void updateKpisCache().catch(() => undefined);
-    }
-    // If cached exists but is approximate, trigger an exact refresh in the background
-    if (cached?.approx) {
-      void updateKpisCacheExact().catch(() => undefined);
-    }
-    // Aggregate across all Jumia shops (bounded counters)
-    const perShop = await Promise.all(
-      shopList.map(async (s) => ({
-        prod: await getCatalogProductsCountQuickForShop({ shopId: s.id, limitPages: 2, size: 100, timeMs: 5000 }).catch(() => ({ total: 0, approx: true })),
-        pend: await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 2, size: 50, timeMs: 5000 }).catch(() => ({ total: 0, approx: true })),
-      }))
-    );
-    // If cache exists, use it; otherwise use bounded per-shop scans
-    const productsAll = (cached?.productsAll ?? 0) || perShop.reduce((sum, r) => sum + (r.prod?.total || 0), 0) || (vendorCount as any)?.total || dbProducts;
-    const pendingAll = (cached?.pendingAll ?? 0) || perShop.reduce((sum, r) => sum + (r.pend?.total || 0), 0);
-    const approx = Boolean(cached?.approx) || perShop.some((r) => r.prod?.approx || r.pend?.approx);
+    const productsAll = Number((kpis as any)?.productsAll ?? 0);
+    const pendingAll = Number((kpis as any)?.pendingAll ?? 0);
+    const approx = Boolean((kpis as any)?.approx);
     return { productsAll, productsDb: dbProducts, shops, attendants, pendingAll, returnsDb, revenue: (revenueAgg._sum.paidAmount ?? 0), approx };
   } catch {
     return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true as const };

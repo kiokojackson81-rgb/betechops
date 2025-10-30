@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getShopsOfMasterShop, jumiaFetch, loadDefaultShopAuth } from "@/lib/jumia";
+import { getShops, getShopsOfMasterShop, jumiaFetch, loadDefaultShopAuth, getCatalogProductTotals } from "@/lib/jumia";
 
 // GET /api/debug/jumia/products-count?shopName=JM%20Latest%20Collections
 //    or /api/debug/jumia/products-count?shopId=<prismaId>
@@ -35,10 +35,30 @@ export async function GET(req: Request) {
   const shopId = url.searchParams.get('shopId') || '';
   const sidsQ = url.searchParams.get('sids') || '';
   const all = url.searchParams.get('all') === 'true';
+  const force = url.searchParams.get('force') === 'true';
   const timeMs = Math.min(120_000, Math.max(5_000, Number(url.searchParams.get('timeMs') || 45_000)));
   const size = Math.min(500, Math.max(1, Number(url.searchParams.get('size') || 200)));
 
   try {
+    // Special case: aggregate across all shops when no identifiers are passed or all=true
+    if ((all || (!shopName && !shopId && !sidsQ))) {
+      // Fetch shops and compute totals concurrently with a soft cap
+      const shops = await getShops().catch(() => [] as any[]);
+      const list = Array.isArray(shops) ? shops : [];
+      const results = await Promise.all(
+        list.map(async (s: any) => {
+          try {
+            const totals = await getCatalogProductTotals(String(s.id || s.shopId || ''));
+            return { id: String(s.id || s.shopId || ''), name: String(s.name || s.shopName || ''), total: totals.total, approx: totals.approx };
+          } catch {
+            return { id: String(s.id || s.shopId || ''), name: String(s.name || s.shopName || ''), total: 0, approx: true, error: 'fetch_failed' };
+          }
+        })
+      );
+      const totalAll = results.reduce((acc, r) => acc + (Number(r.total) || 0), 0);
+      return NextResponse.json({ ok: true, by: 'all', shops: results, totalAll, approx: results.some(r => r.approx) });
+    }
+
     // Resolve SID(s)
     let sids: string[] | undefined = undefined;
     let matchedName: string | undefined = undefined;

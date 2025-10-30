@@ -15,13 +15,15 @@ const DEFAULT_ENDPOINTS: EndpointOption[] = [
 
 export default function EndpointConsole({ shops: initialShops, endpoints }: { shops?: ShopOption[]; endpoints?: EndpointOption[] }) {
   const [shopId, setShopId] = useState("");
-  const [endpoint, setEndpoint] = useState(endpoints?.[0]?.path || DEFAULT_ENDPOINTS[0].path);
+  // Default to Catalog Products endpoint
+  const [endpoint, setEndpoint] = useState(endpoints?.[0]?.path || "/catalog/products");
   const [method, setMethod] = useState("GET");
-  const [queryStr, setQueryStr] = useState("");
+  const [queryStr, setQueryStr] = useState("size=5");
   const [payload, setPayload] = useState("{}");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<unknown | null>(null);
   const [shops, setShops] = useState<ShopOption[]>(initialShops ?? []);
+  const [totalHint, setTotalHint] = useState<number | null>(null);
 
   useEffect(() => {
     if (!initialShops) {
@@ -66,6 +68,7 @@ export default function EndpointConsole({ shops: initialShops, endpoints }: { sh
   async function run() {
     setBusy(true);
     setResult(null);
+    setTotalHint(null);
     try {
       let json: unknown = undefined;
       if (method !== "GET" && method !== "DELETE" && payload.trim()) {
@@ -78,6 +81,13 @@ export default function EndpointConsole({ shops: initialShops, endpoints }: { sh
         body: JSON.stringify({ shopId: shopId || undefined, path: endpoint, method, query: queryObj, json }),
       });
       const j = await res.json();
+      // try to hint total from the response
+      try {
+        const data = (j as any)?.data;
+        const t = (data && typeof data === 'object' && ((data as any).total || (data as any).totalCount || (data as any).totalElements))
+          || (Array.isArray((data as any)?.products) ? (data as any).products.length : null);
+        if (typeof t === 'number') setTotalHint(Number(t));
+      } catch {}
       setResult(j as unknown);
     } catch (e: unknown) {
       setResult({ ok: false, error: getErrorMessage(e) } as unknown);
@@ -103,6 +113,21 @@ export default function EndpointConsole({ shops: initialShops, endpoints }: { sh
   type ResultWithMeta = { _meta?: { authSource?: string; platform?: string; baseUrl?: string; path?: string }; status?: number };
   const meta = (result as unknown as ResultWithMeta | null)?._meta;
   const httpStatus = (result as unknown as ResultWithMeta | null)?.status;
+
+  // When shop changes, default query to include shopId and size=5 and auto-run
+  useEffect(() => {
+    if (!shopId) return;
+    const parts = new URLSearchParams(queryStr.replace(/\n/g, '&'));
+    parts.set('shopId', shopId);
+    if (!parts.get('size')) parts.set('size', '5');
+    const qs = Array.from(parts.entries()).map(([k,v])=>`${k}=${v}`).join('&');
+    setQueryStr(qs);
+    // Auto-run when on catalog products
+    if (endpoint === '/catalog/products') {
+      run();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
 
   return (
     <div className="space-y-3">
@@ -150,6 +175,7 @@ export default function EndpointConsole({ shops: initialShops, endpoints }: { sh
                 Platform: {meta.platform} • Base: {meta.baseUrl} • Path: {meta.path}
               </div>
               {httpStatus && <div className="opacity-75">HTTP Status: {httpStatus}</div>}
+              {totalHint !== null && <div className="opacity-75">Total Count: {totalHint}</div>}
             </div>
           )}
           <pre className="whitespace-pre-wrap break-words">

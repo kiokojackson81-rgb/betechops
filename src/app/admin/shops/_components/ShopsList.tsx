@@ -14,6 +14,7 @@ type Probe =
 
 export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
   const [shops, setShops] = useState<ShopSummary[]>(initial || []);
+  const [prodTotals, setProdTotals] = useState<Record<string, { total: number; approx?: boolean }>>({});
   const [openAssign, setOpenAssign] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<{ id: string; label: string } | null>(null);
   const [roleAtShop, setRoleAtShop] = useState<string>('ATTENDANT');
@@ -54,6 +55,26 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
     }
   }
 
+  // Load product totals per shop (best-effort)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = shops || [];
+      for (const s of list) {
+        try {
+          const r = await fetch(`/api/debug/jumia/products-count?shopId=${encodeURIComponent(s.id)}&size=1`, { cache: 'no-store' });
+          const j = await r.json();
+          if (!cancelled && r.ok && j && typeof j.total === 'number') {
+            setProdTotals((prev) => ({ ...prev, [s.id]: { total: j.total, approx: Boolean(j.approx) } }));
+          }
+        } catch {
+          // ignore
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shops]);
+
   const badge = (p: Probe | undefined) => {
     if (!p || p.status === "idle") return null;
     if (p.status === "loading") return <span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-white/10">Testing…</span>;
@@ -77,6 +98,9 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
               {badge(probe[s.id])}
             </div>
             <div className="text-sm text-slate-500">{s.platform}</div>
+            <div className="text-sm text-slate-400">
+              Products: {prodTotals[s.id]?.total ?? '…'}{prodTotals[s.id]?.approx ? ' (approx)' : ''}
+            </div>
             {s.assignedUser && (
               <div className="text-sm text-slate-600">
                 Assigned: {s.assignedUser.label} {s.assignedUser.roleAtShop ? `({s.assignedUser.roleAtShop})` : ''}
