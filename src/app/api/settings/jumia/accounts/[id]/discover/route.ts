@@ -14,7 +14,7 @@ async function requireAdmin() {
   }
 }
 
-export async function POST(_request: NextRequest, context: { params: { id: string } }) {
+export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     await requireAdmin();
   } catch (res) {
@@ -22,7 +22,7 @@ export async function POST(_request: NextRequest, context: { params: { id: strin
     throw res;
   }
 
-  const accountId = context.params?.id;
+  const accountId = params?.id;
   if (!accountId) {
     return NextResponse.json({ error: "Missing account id" }, { status: 400 });
   }
