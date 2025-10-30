@@ -172,7 +172,6 @@ export default function Home() {
     return () => {
       ignore = true;
     };
-  }, [pickupPaths, pricingPaths, salesPaths]);
   }, [pickupPaths, pricingPaths, pendingPaths]);
 
   return (
