@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import UserPicker from './UserPicker';
 import ManageAssignments from './ManageAssignments';
 import { showToast } from '@/lib/ui/toast';
@@ -103,7 +103,7 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
             </div>
             {s.assignedUser && (
               <div className="text-sm text-slate-600">
-                Assigned: {s.assignedUser.label} {s.assignedUser.roleAtShop ? `({s.assignedUser.roleAtShop})` : ''}
+                Assigned: {s.assignedUser.label} {s.assignedUser.roleAtShop ? `(${s.assignedUser.roleAtShop})` : ''}
               </div>
             )}
           </div>
