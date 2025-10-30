@@ -2,7 +2,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCatalogProductsCountQuick, getCatalogProductsCountQuickForShop, getPendingOrdersCountQuickForShop } from "@/lib/jumia";
 import { readKpisCache } from "@/lib/kpisCache";
-import { updateKpisCache } from "@/lib/jobs/kpis";
+import { updateKpisCache, updateKpisCacheExact } from "@/lib/jobs/kpis";
 import Link from "next/link";
 import { Package, Store, Users, Receipt, Wallet } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
@@ -28,6 +28,10 @@ async function getStats(): Promise<Stats> {
     if (!cached) {
       // fire and forget; do not await
       void updateKpisCache().catch(() => undefined);
+    }
+    // If cached exists but is approximate, trigger an exact refresh in the background
+    if (cached?.approx) {
+      void updateKpisCacheExact().catch(() => undefined);
     }
     // Aggregate across all Jumia shops (bounded counters)
     const perShop = await Promise.all(

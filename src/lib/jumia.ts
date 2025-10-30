@@ -897,4 +897,36 @@ export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2
   return { total, approx };
 }
 
+// Exact vendor product counter per shop (scans all pages with safety caps)
+export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 1000, timeMs = 120_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
+  const start = Date.now();
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  const fetcher = async (p: string) =>
+    await Promise.race([
+      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) } as any),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(30_000, timeMs))) as unknown as Promise<unknown>,
+    ]);
+
+  let pages = 0;
+  for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+    const arr = Array.isArray((page as any)?.products)
+      ? (page as any).products
+      : Array.isArray((page as any)?.items)
+      ? (page as any).items
+      : Array.isArray((page as any)?.data)
+      ? (page as any).data
+      : [];
+    for (const it of arr) {
+      total += 1;
+      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      byStatus[st] = (byStatus[st] || 0) + 1;
+    }
+    pages += 1;
+    if (pages >= maxPages || Date.now() - start > timeMs) break;
+  }
+  const approx = pages >= maxPages || Date.now() - start > timeMs;
+  return { total, byStatus, approx };
+}
+
 
