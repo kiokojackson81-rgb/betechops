@@ -36,12 +36,15 @@ async function tryCounts(paths: string[]): Promise<number> {
   for (const p of paths) {
     try {
       const j = await fetchJsonWithTimeout<CountLike>(p);
+      if (Array.isArray(j)) return j.length;
       if (typeof j === "number" && Number.isFinite(j)) return j;
       if (j && typeof j === "object") {
-        const obj = j as { count?: number; total?: number; value?: number };
+        const obj = j as { count?: number; total?: number; value?: number; orders?: unknown; items?: unknown };
         for (const k of ["count", "total", "value"] as const) {
           if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) return obj[k]!;
         }
+        if (Array.isArray(obj.orders)) return obj.orders.length;
+        if (Array.isArray(obj.items)) return obj.items.length;
       }
     } catch {
       // try next
@@ -128,7 +131,7 @@ function Stat({
 export default function Home() {
   const [pickupCnt, setPickupCnt] = useState<number | null>(null);
   const [pricingCnt, setPricingCnt] = useState<number | null>(null);
-  const [salesToday, setSalesToday] = useState<number | null>(null);
+  const [pendingAll, setPendingAll] = useState<number | null>(null);
 
   // endpoints per spec
   const pickupPaths = useMemo(
@@ -139,8 +142,8 @@ export default function Home() {
     () => ["/api/orders/pending-pricing", "/api/reports/pending-pricing"],
     []
   );
-  const salesPaths = useMemo(
-    () => ["/api/reports/sales-today", "/api/reports/summary?range=today"],
+  const pendingPaths = useMemo(
+    () => ["/api/orders?status=PENDING&shopId=ALL", "/api/orders/pending-pricing"],
     []
   );
 
@@ -148,21 +151,21 @@ export default function Home() {
     let ignore = false;
     (async () => {
       try {
-        const [c1, c2, s1] = await Promise.all([
+        const [c1, c2, pending] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
-          tryMoney(salesPaths),
+          tryCounts(pendingPaths),
         ]);
         if (!ignore) {
           setPickupCnt(c1);
           setPricingCnt(c2);
-          setSalesToday(s1);
+          setPendingAll(pending);
         }
       } catch {
         if (!ignore) {
           setPickupCnt(0);
           setPricingCnt(0);
-          setSalesToday(0);
+          setPendingAll(0);
         }
       }
     })();
@@ -170,6 +173,7 @@ export default function Home() {
       ignore = true;
     };
   }, [pickupPaths, pricingPaths, salesPaths]);
+  }, [pickupPaths, pricingPaths, pendingPaths]);
 
   return (
     <div
@@ -251,12 +255,7 @@ export default function Home() {
               value={pricingCnt}
               tone="violet"
             />
-            <Stat
-              title="Today's Sales"
-              value={salesToday}
-              prefix="Ksh"
-              tone="pink"
-            />
+            <Stat title="Pending Orders (All)" value={pendingAll} tone="pink" />
           </div>
         </section>
 
