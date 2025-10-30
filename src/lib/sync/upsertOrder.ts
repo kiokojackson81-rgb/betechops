@@ -49,9 +49,30 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
     createdItems.push(oi as unknown);
   }
 
-  // Persist raw ingest for Jumia (if model exists)
+  // Persist minimal snapshot in JumiaOrder sync table when available
   try {
-    await p.jumiaOrder.upsert({ where: { externalId: externalOrderId }, create: { externalId: externalOrderId, orderNumber, status, totalAmount, shopId }, update: { status, totalAmount } });
+    await p.jumiaOrder.upsert({
+      where: { id: externalOrderId },
+      create: {
+        id: externalOrderId,
+        number: Number.isFinite(Number(orderNumber)) ? Number(orderNumber) : null,
+        status: status || "UNKNOWN",
+        hasMultipleStatus: false,
+        pendingSince: null,
+        totalItems: items.length,
+        packedItems: null,
+        countryCode: null,
+        isPrepayment: null,
+        createdAtJumia: new Date(orderedAt),
+        updatedAtJumia: new Date(orderedAt),
+        shopId: shopId,
+      },
+      update: {
+        status: status || "UNKNOWN",
+        totalItems: items.length,
+        updatedAtJumia: new Date(),
+      },
+    });
   } catch {
     // ignore if model not present or other issues
   }
