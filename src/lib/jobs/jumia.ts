@@ -5,11 +5,13 @@
  * - Exports `fulfillOrder` and `syncOrders`.
  */
 
-import { jumiaFetch, jumiaPaginator } from '../jumia';
+import { jumiaFetch, jumiaPaginator, loadShopAuthById } from '../jumia';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from '../log';
 import { prisma } from '../prisma';
 import { incOrdersProcessed, incOrderHandlerErrors, incFulfillments, incFulfillmentFailures, observeFulfillmentLatency } from '../metrics';
+import { normalizeFromJumia } from '../connectors/normalize';
+import { upsertNormalizedOrder, ensureReturnCaseForOrder } from '../sync/upsertOrder';
 
 type RedisClientLike = {
   get(key: string): Promise<string | null>;
@@ -212,9 +214,110 @@ export async function syncOrders(shopId: string, handler: (order: unknown) => Pr
   return processed;
 }
 
+function toIso(value: unknown): string | null {
+  if (!value) return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function pickLatest(current: string | null, next: string | null) {
+  if (!next) return current;
+  if (!current) return next;
+  return new Date(next).getTime() > new Date(current).getTime() ? next : current;
+}
+
+export async function syncReturnOrders(opts?: { shopId?: string; lookbackDays?: number }) {
+  const shopFilter = opts?.shopId
+    ? { id: opts.shopId }
+    : { platform: 'JUMIA', isActive: true };
+  const shops = await prisma.shop.findMany({ where: shopFilter, select: { id: true } });
+  const summary: Record<string, { processed: number; returnCases: number; cursor?: string }> = {};
+
+  for (const shop of shops) {
+    const shopId = shop.id;
+    const configKey = `jumia:return:${shopId}:cursor`;
+    const cfg = await prisma.config.findUnique({ where: { key: configKey } }).catch(() => null);
+    const updatedAfterCfg = (cfg?.json as { updatedAfter?: string } | null)?.updatedAfter;
+    let updatedAfter = updatedAfterCfg;
+    if (!updatedAfter) {
+      const lookbackDays = opts?.lookbackDays ?? 14;
+      const from = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+      updatedAfter = from.toISOString();
+    }
+
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const fetcher = (path: string) => jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    const params: Record<string, string> = { status: 'RETURNED,FAILED', size: '50' };
+    if (updatedAfter) params.updatedAfter = updatedAfter;
+
+    let processed = 0;
+    let ensured = 0;
+    let latestCursor: string | null = updatedAfterCfg ?? null;
+
+    try {
+      for await (const page of jumiaPaginator('/orders', params, fetcher)) {
+        const arr = Array.isArray((page as any)?.orders)
+          ? (page as any).orders
+          : Array.isArray((page as any)?.items)
+          ? (page as any).items
+          : Array.isArray((page as any)?.data)
+          ? (page as any).data
+          : [];
+        for (const raw of arr) {
+          processed += 1;
+          const rawObj = (raw || {}) as Record<string, unknown>;
+          if (!rawObj.id) continue;
+          if (!Array.isArray(rawObj.items) || rawObj.items.length === 0) {
+            try {
+              const itemsResp = await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(String(rawObj.id))}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+              if (itemsResp && typeof itemsResp === 'object' && Array.isArray((itemsResp as any).items)) {
+                rawObj.items = (itemsResp as any).items;
+              }
+            } catch (e) {
+              logger.warn({ shopId, orderId: rawObj.id, err: e }, 'failed to load order items for return sync');
+            }
+          }
+          const normalized = normalizeFromJumia(rawObj, shopId);
+          const upserted = await upsertNormalizedOrder(normalized);
+          const orderRecord = upserted.order
+            ?? (await prisma.order.findUnique({ where: { id: upserted.orderId }, select: { id: true, shopId: true } }));
+          if (!orderRecord) continue;
+          const createdAtVendor = toIso(rawObj.createdAt ?? rawObj.created_at);
+          const ensuredId = await ensureReturnCaseForOrder({
+            orderId: orderRecord.id,
+            shopId: orderRecord.shopId,
+            vendorStatus: normalized.status,
+            reasonCode: normalized.status,
+            vendorCreatedAt: createdAtVendor,
+            picked: false,
+          });
+          if (ensuredId) ensured += 1;
+          latestCursor = pickLatest(latestCursor, toIso(rawObj.updatedAt ?? rawObj.updated_at ?? rawObj.lastUpdatedAt));
+        }
+      }
+    } catch (err) {
+      logger.error({ shopId, err }, 'syncReturnOrders failed for shop');
+    }
+
+    if (latestCursor && latestCursor !== updatedAfterCfg) {
+      await prisma.config.upsert({
+        where: { key: configKey },
+        update: { json: { updatedAfter: latestCursor } },
+        create: { key: configKey, json: { updatedAfter: latestCursor } },
+      }).catch(() => null);
+    }
+
+    summary[shopId] = { processed, returnCases: ensured, cursor: latestCursor ?? undefined };
+  }
+
+  return summary;
+}
+
 const jobs = {
   fulfillOrder,
   syncOrders,
+  syncReturnOrders,
 };
 
 export default jobs;

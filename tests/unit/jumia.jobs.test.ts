@@ -1,4 +1,4 @@
-import { fulfillOrder, syncOrders } from '../../src/lib/jobs/jumia';
+import { fulfillOrder, syncOrders, syncReturnOrders } from '../../src/lib/jobs/jumia';
 import * as jumia from '../../src/lib/jumia';
 
 // Mock S3 client to avoid network calls
@@ -15,6 +15,7 @@ jest.mock('@aws-sdk/client-s3', () => {
 
 describe('jumia.jobs', () => {
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.resetAllMocks();
     // stub global fetch to avoid network calls for token endpoints
     const g: any = global;
@@ -56,5 +57,50 @@ describe('jumia.jobs', () => {
     });
     expect(processed).toBe(2);
     expect(calls).toEqual(['o1', 'o2']);
+  });
+
+  test('syncReturnOrders upserts return cases', async () => {
+    const prisma = require('../../src/lib/prisma').prisma;
+    jest.spyOn(prisma.shop, 'findMany').mockResolvedValue([{ id: 'shop-db' }]);
+    jest.spyOn(prisma.config, 'findUnique').mockResolvedValue(null);
+    jest.spyOn(prisma.config, 'upsert').mockResolvedValue({} as any);
+    jest.spyOn(prisma.order, 'findUnique').mockResolvedValue(null);
+
+    const upsertModule = require('../../src/lib/sync/upsertOrder');
+    jest.spyOn(upsertModule, 'upsertNormalizedOrder').mockResolvedValue({
+      orderId: 'order-local',
+      order: { id: 'order-local', shopId: 'shop-db' },
+      createdItems: [],
+    });
+    jest.spyOn(upsertModule, 'ensureReturnCaseForOrder').mockResolvedValue('rc1');
+
+    const normalizeModule = require('../../src/lib/connectors/normalize');
+    jest.spyOn(normalizeModule, 'normalizeFromJumia').mockReturnValue({
+      platform: 'JUMIA',
+      shopId: 'shop-db',
+      externalOrderId: 'ORD-100',
+      status: 'RETURNED',
+      orderedAt: new Date().toISOString(),
+      items: [
+        { externalSku: 'SKU-1', title: 'Test Item', qty: 1, salePrice: 100, fees: {} },
+      ],
+    });
+
+    jest.spyOn(jumia as any, 'loadShopAuthById').mockResolvedValue(undefined);
+    jest.spyOn(jumia as any, 'jumiaFetch').mockResolvedValue({ items: [] });
+    jest.spyOn(jumia as any, 'jumiaPaginator').mockImplementation(async function* () {
+      yield {
+        orders: [
+          { id: 'ORD-100', status: 'RETURNED', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-02T00:00:00Z', items: [] },
+        ],
+      };
+    });
+
+    const summary = await syncReturnOrders();
+    expect(summary).toHaveProperty('shop-db');
+    expect(upsertModule.upsertNormalizedOrder).toHaveBeenCalled();
+    expect(upsertModule.ensureReturnCaseForOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'order-local', shopId: 'shop-db' })
+    );
   });
 });

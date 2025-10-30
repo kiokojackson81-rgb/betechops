@@ -1,8 +1,15 @@
 import { noStoreJson, requireRole } from "@/lib/api";
+import { syncReturnOrders } from "@/lib/jobs/jumia";
 
 export async function POST() {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
-  // TODO: upsert new/updated orders since cursor per shop
-  return noStoreJson({ ok: true, accepted: true });
+
+  try {
+    const summary = await syncReturnOrders();
+    return noStoreJson({ ok: true, summary });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return noStoreJson({ ok: false, error: message }, { status: 500 });
+  }
 }
