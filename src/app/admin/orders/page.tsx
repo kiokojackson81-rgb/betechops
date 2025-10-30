@@ -106,7 +106,7 @@ export default async function OrdersPage(props: unknown) {
             <p className="text-xs text-slate-400 mt-1">Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.</p>
           )}
         </div>
-        <div className="pt-1"><AutoRefresh storageKey="autoRefreshOrders" intervalMs={60000} defaultEnabled={true} /></div>
+  <div className="pt-1"><AutoRefresh storageKey="autoRefreshOrders" intervalMs={10000} defaultEnabled={true} /></div>
       </div>
 
       <OrdersFilters shops={shops} />
