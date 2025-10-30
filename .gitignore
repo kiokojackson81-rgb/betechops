@@ -38,6 +38,9 @@ yarn-error.log*
 
 # local snapshots
 shops_page_live.html
+shops.local.json
+shops.*.local.json
+shops.secrets.json
 
 # vercel
 .vercel
