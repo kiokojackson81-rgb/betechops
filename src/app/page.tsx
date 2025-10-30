@@ -15,6 +15,8 @@ type CountLike =
       value?: number;
       pendingAll?: number;
       queued?: number;
+      approx?: boolean;
+      approxPending?: boolean;
       orders?: unknown;
       items?: unknown;
     }
@@ -53,14 +55,33 @@ async function tryCounts(paths: string[]): Promise<number> {
           value?: number;
           pendingAll?: number;
           queued?: number;
+          approx?: boolean;
+          approxPending?: boolean;
           orders?: unknown;
           items?: unknown;
         };
+        const approx = Boolean(obj.approx ?? obj.approxPending);
+        let candidate: number | null = null;
         for (const k of ["count", "total", "value", "pendingAll", "queued"] as const) {
-          if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) return obj[k]!;
+          if (typeof obj[k] === "number" && Number.isFinite(obj[k]!)) {
+            candidate = obj[k]!;
+            break;
+          }
         }
-        if (Array.isArray(obj.orders)) return obj.orders.length;
-        if (Array.isArray(obj.items)) return obj.items.length;
+        if (candidate !== null) {
+          if (candidate === 0 && approx) continue;
+          return candidate;
+        }
+        if (Array.isArray(obj.orders)) {
+          const len = obj.orders.length;
+          if (len === 0 && approx) continue;
+          return len;
+        }
+        if (Array.isArray(obj.items)) {
+          const len = obj.items.length;
+          if (len === 0 && approx) continue;
+          return len;
+        }
       }
     } catch {
       // try next
