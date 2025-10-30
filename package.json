@@ -19,17 +19,17 @@
     "run-jumia-sync": "node -r ts-node/register scripts/run-jumia-sync.ts"
   },
   "dependencies": {
-    "ioredis": "^5.3.2",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
-  "prom-client": "^14.0.0",
-  "pino": "^8.0.0",
     "@prisma/client": "^6.16.2",
+    "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.0",
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
     "next-auth": "^4.24.11",
+    "pino": "^8.0.0",
     "prisma": "^6.16.2",
+    "prom-client": "^14.0.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "zod": "^3.23.8"
@@ -48,6 +48,7 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

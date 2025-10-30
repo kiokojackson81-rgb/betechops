@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react';
 
 const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELLED","RETURNED","DISPUTED"];
 
-export default function OrdersFilters() {
+export default function OrdersFilters({ shops }: { shops: Array<{ id: string; name: string }> }) {
   const pathname = usePathname();
   const router = useRouter();
   const sp = useSearchParams();
@@ -19,7 +19,7 @@ export default function OrdersFilters() {
   const values = useMemo(() => ({
     status: sp.get('status') || '',
     country: sp.get('country') || '',
-    shopId: sp.get('shopId') || '',
+    shopId: sp.get('shopId') || 'ALL',
     dateFrom: sp.get('dateFrom') || '',
     dateTo: sp.get('dateTo') || '',
     q: sp.get('q') || '',
@@ -36,7 +36,12 @@ export default function OrdersFilters() {
 
         <input value={values.country} onChange={e=>set('country', e.target.value || undefined)} placeholder="Country (e.g. KE)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2" />
 
-        <input value={values.shopId} onChange={e=>set('shopId', e.target.value || undefined)} placeholder="Shop ID (optional)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2" />
+        <select value={values.shopId} onChange={e=>set('shopId', e.target.value || undefined)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+          <option value="ALL">All Jumia</option>
+          {shops.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
 
         <input type="date" value={values.dateFrom} onChange={e=>set('dateFrom', e.target.value || undefined)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2" />
         <input type="date" value={values.dateTo} onChange={e=>set('dateTo', e.target.value || undefined)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2" />
@@ -48,7 +53,7 @@ export default function OrdersFilters() {
         <select value={values.size} onChange={e=>set('size', e.target.value)} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           {[25,50,100].map(n => <option key={n} value={n}>{n} / page</option>)}
         </select>
-        <button onClick={()=>{['status','country','shopId','dateFrom','dateTo','q','size','nextToken'].forEach(k=>set(k, undefined));}}
+        <button onClick={()=>{['status','country','dateFrom','dateTo','q','size','nextToken'].forEach(k=>set(k, undefined)); set('shopId','ALL');}}
                 className="px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10">
           Reset
         </button>

@@ -1,11 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { getCatalogCategories, getCatalogProducts, jumiaFetch, loadDefaultShopAuth, jumiaPaginator } from "@/lib/jumia";
+import { getCatalogCategories, getCatalogProducts, jumiaFetch, loadDefaultShopAuth, jumiaPaginator, loadShopAuthById } from "@/lib/jumia";
+import { prisma } from "@/lib/prisma";
 
 export default async function CatalogPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ token?: string; size?: string; sellerSku?: string; categoryCode?: string; status?: string }>;
+  searchParams?: Promise<{ token?: string; size?: string; sellerSku?: string; categoryCode?: string; status?: string; shopId?: string }>;
 }) {
   const sp = (await searchParams) || {};
 
@@ -21,29 +22,46 @@ export default async function CatalogPage({
   const categoryCode = sp.categoryCode ? Number(sp.categoryCode) : undefined;
   const token = (sp.token || "").trim() || undefined;
   const statusFilter = (sp.status || "").trim().toLowerCase() || undefined;
+  const shopId = (sp.shopId || "ALL").toString();
 
-  const [cats, prods] = await Promise.all([
-    withTimeout(getCatalogCategories(1), 8000, {} as any),
-    withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode }), 8000, {} as any),
-  ]).catch(() => [{}, {}] as any);
-
-  // Normalize vendor response shapes (prefer official keys, fallback to older aliases)
-  const categories = Array.isArray((cats as any)?.categories)
-    ? (cats as any).categories
-    : Array.isArray((cats as any)?.items)
-    ? (cats as any).items
-    : Array.isArray((cats as any)?.data)
-    ? (cats as any).data
-    : [];
-  const rawProducts = Array.isArray((prods as any)?.products)
-    ? (prods as any).products
-    : Array.isArray((prods as any)?.items)
-    ? (prods as any).items
-    : Array.isArray((prods as any)?.data)
-    ? (prods as any).data
-    : [];
-
-  const nextToken = String((prods as any)?.nextToken ?? (prods as any)?.token ?? (prods as any)?.next ?? "");
+  let categories: any[] = [];
+  let rawProducts: any[] = [];
+  let nextToken = "";
+  if (shopId.toUpperCase() === "ALL") {
+    // Aggregate first page from each JUMIA shop to give a cross-shop view
+    const shops = await prisma.shop.findMany({ where: { isActive: true, platform: "JUMIA" }, select: { id: true, name: true } });
+    // categories: take from the first shop only to keep latency low
+    try { const c1 = await withTimeout(getCatalogCategories(1), 8000, {} as any); categories = Array.isArray((c1 as any)?.categories) ? (c1 as any).categories : Array.isArray((c1 as any)?.items) ? (c1 as any).items : Array.isArray((c1 as any)?.data) ? (c1 as any).data : []; } catch { categories = []; }
+    const pages = await Promise.all(shops.map(async (s) => {
+      try {
+        const j = await withTimeout(getCatalogProducts({ size, sellerSku, categoryCode, shopId: s.id }), 8000, {} as any);
+        const arr = Array.isArray(j?.products) ? j.products : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
+        return arr.map((p: any) => ({ ...p, _shop: s }));
+      } catch { return [] as any[]; }
+    }));
+    rawProducts = pages.flat();
+    nextToken = ""; // aggregated view: no unified token
+  } else {
+    const [cats, prods] = await Promise.all([
+      withTimeout(getCatalogCategories(1), 8000, {} as any),
+      withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode, shopId }), 8000, {} as any),
+    ]).catch(() => [{}, {}] as any);
+    categories = Array.isArray((cats as any)?.categories)
+      ? (cats as any).categories
+      : Array.isArray((cats as any)?.items)
+      ? (cats as any).items
+      : Array.isArray((cats as any)?.data)
+      ? (cats as any).data
+      : [];
+    rawProducts = Array.isArray((prods as any)?.products)
+      ? (prods as any).products
+      : Array.isArray((prods as any)?.items)
+      ? (prods as any).items
+      : Array.isArray((prods as any)?.data)
+      ? (prods as any).data
+      : [];
+    nextToken = String((prods as any)?.nextToken ?? (prods as any)?.token ?? (prods as any)?.next ?? "");
+  }
   const products = statusFilter
     ? rawProducts.filter((p: any) => String(p.status || p.itemStatus || "").toLowerCase().includes(statusFilter))
     : rawProducts;
@@ -53,7 +71,7 @@ export default async function CatalogPage({
   let total = 0; const byStatus: Record<string, number> = {};
   try {
     const start = Date.now();
-    const shopAuth = await loadDefaultShopAuth();
+  const shopAuth = shopId.toUpperCase() === "ALL" ? await loadDefaultShopAuth() : await (loadShopAuthById(shopId).catch(()=>undefined)) || await loadDefaultShopAuth();
     let scanned = 0; let pages = 0;
     const fetcher = async (p: string) => await withTimeout(
       jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
@@ -95,6 +113,14 @@ export default async function CatalogPage({
 
       {/* Filters */}
       <form className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs mb-1">Shop</label>
+          <select name="shopId" defaultValue={shopId} className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
+            <option value="ALL">All Jumia</option>
+            {(await prisma.shop.findMany({ where: { isActive: true, platform: "JUMIA" }, select: { id: true, name: true }, orderBy: { name: "asc" } }))
+              .map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs mb-1">Seller SKU</label>
           <input name="sellerSku" defaultValue={sellerSku || ""} className="rounded bg-white/5 border border-white/10 px-3 py-1.5" />
@@ -151,7 +177,7 @@ export default async function CatalogPage({
             {nextToken && (
               <a
                 className="ml-2 underline"
-                href={`/admin/catalog?${qs({ sellerSku, categoryCode, size, status: sp.status, token: nextToken })}`}
+                href={`/admin/catalog?${qs({ sellerSku, categoryCode, size, status: sp.status, token: nextToken, shopId })}`}
               >Next →</a>
             )}
           </div>
@@ -166,6 +192,7 @@ export default async function CatalogPage({
                   <th className="text-left px-3 py-2">SKU</th>
                   <th className="text-left px-3 py-2">Name</th>
                   <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Shop</th>
                 </tr>
               </thead>
               <tbody>
@@ -174,6 +201,7 @@ export default async function CatalogPage({
                     <td className="px-3 py-2 font-mono">{p.sellerSku || p.sku || p.sid || p.id || `SKU-${i+1}`}</td>
                     <td className="px-3 py-2">{p.name || p.title || p.productName || '-'}</td>
                     <td className="px-3 py-2 text-slate-400">{p.status || p.itemStatus || '-'}</td>
+                    <td className="px-3 py-2">{p._shop?.name || '-'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,15 +1,15 @@
 export const dynamic = "force-dynamic";
 
-import { jumiaFetch, loadDefaultShopAuth } from "@/lib/jumia";
+import { jumiaFetch, loadDefaultShopAuth, loadShopAuthById } from "@/lib/jumia";
+import { prisma } from "@/lib/prisma";
 
-async function fetchReturns({ token, size, status }: { token?: string; size?: number; status?: string }) {
+async function fetchReturns({ token, size, status, shopId }: { token?: string; size?: number; status?: string; shopId?: string }) {
   const qs = new URLSearchParams();
   if (token) qs.set("token", token);
   if (size) qs.set("size", String(size));
   if (status) qs.set("status", status);
   const q = qs.toString() ? `?${qs.toString()}` : "";
-
-  const shopAuth = await loadDefaultShopAuth();
+  const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
   // Try /returns first; fallback to /orders?status=RETURNED
   try {
     const j: any = await jumiaFetch(`/returns${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
@@ -29,14 +29,31 @@ async function fetchReturns({ token, size, status }: { token?: string; size?: nu
 export default async function JumiaReturnsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ token?: string; size?: string; status?: string }>;
+  searchParams?: Promise<{ token?: string; size?: string; status?: string; shopId?: string }>;
 }) {
   const sp = (await searchParams) || {};
   const size = Math.min(100, Math.max(1, Number(sp.size || 20)));
   const token = (sp.token || "").trim() || undefined;
   const status = (sp.status || "").trim() || undefined;
-
-  const { items, nextToken, pathUsed } = await fetchReturns({ token, size, status });
+  const shopId = (sp.shopId || "ALL").toString();
+  let items: any[] = []; let nextToken: string = ""; let pathUsed = "";
+  if (shopId.toUpperCase() === "ALL") {
+    const shops = await prisma.shop.findMany({ where: { isActive: true, platform: "JUMIA" }, select: { id: true, name: true } });
+    const pages = await Promise.all(shops.map(async (s) => {
+      try {
+        const r = await fetchReturns({ token: undefined, size, status, shopId: s.id });
+        // tag shop on items
+        const tagged = (r.items || []).map((x: any) => ({ ...x, _shop: s }));
+        return { items: tagged } as const;
+      } catch { return { items: [] } as const; }
+    }));
+    items = pages.flatMap((p) => p.items);
+    pathUsed = "/returns|/orders (per shop)";
+    nextToken = ""; // aggregated view has no unified next token
+  } else {
+    const r = await fetchReturns({ token, size, status, shopId });
+    items = r.items; nextToken = r.nextToken; pathUsed = r.pathUsed;
+  }
 
   const qs = (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams();
@@ -52,6 +69,14 @@ export default async function JumiaReturnsPage({
       </div>
 
       <form className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs mb-1">Shop</label>
+          <select name="shopId" defaultValue={shopId} className="rounded bg-white/5 border border-white/10 px-2 py-1.5">
+            <option value="ALL">All Jumia</option>
+            {(await prisma.shop.findMany({ where: { isActive: true, platform: "JUMIA" }, select: { id: true, name: true }, orderBy: { name: "asc" } }))
+              .map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs mb-1">Status</label>
           <input name="status" placeholder="RETURNED or waiting-pickup" defaultValue={sp.status || ""} className="rounded bg-white/5 border border-white/10 px-3 py-1.5" />
@@ -76,6 +101,7 @@ export default async function JumiaReturnsPage({
               <th className="text-left px-3 py-2">Customer</th>
               <th className="text-left px-3 py-2">Status</th>
               <th className="text-left px-3 py-2">Created</th>
+              <th className="text-left px-3 py-2">Shop</th>
             </tr>
           </thead>
           <tbody>
@@ -85,6 +111,7 @@ export default async function JumiaReturnsPage({
                 <td className="px-3 py-2">{it.customerName || it.buyerName || '-'}</td>
                 <td className="px-3 py-2 text-slate-400">{it.status || '-'}</td>
                 <td className="px-3 py-2">{it.createdAt || it.created || it.date || '-'}</td>
+                <td className="px-3 py-2">{it._shop?.name || '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -96,7 +123,7 @@ export default async function JumiaReturnsPage({
         {nextToken && (
           <a
             className="ml-2 underline"
-            href={`/admin/returns/jumia?${qs({ size, status, token: nextToken })}`}
+            href={`/admin/returns/jumia?${qs({ size, status, token: nextToken, shopId })}`}
           >Next →</a>
         )}
       </div>

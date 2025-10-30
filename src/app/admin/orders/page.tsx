@@ -65,6 +65,8 @@ export default async function OrdersPage(props: unknown) {
   };
 
   // Default window: from system start (earliest Order or Shop), but not older than 3 months
+  let usedDefaultFrom = false;
+  let usedDefaultTo = false;
   if (!params.dateFrom) {
     try {
       const [firstOrder, firstShop] = await Promise.all([
@@ -78,16 +80,19 @@ export default async function OrdersPage(props: unknown) {
       // If we had neither systemStart nor 3 months ago (shouldn't happen), fall back to 3 months ago anyway
       const iso = isNaN(startDate.getTime()) ? new Date(threeMonthsAgo).toISOString().slice(0, 10) : startDate.toISOString().slice(0, 10);
       params.dateFrom = iso;
+      usedDefaultFrom = true;
     } catch {
-      const d = new Date(); d.setMonth(d.getMonth() - 3); params.dateFrom = d.toISOString().slice(0, 10);
+      const d = new Date(); d.setMonth(d.getMonth() - 3); params.dateFrom = d.toISOString().slice(0, 10); usedDefaultFrom = true;
     }
   }
   // Default dateTo to today to keep the window bounded
   if (!params.dateTo) {
     const today = new Date().toISOString().slice(0, 10);
-    params.dateTo = today;
+    params.dateTo = today; usedDefaultTo = true;
   }
 
+  // Load active JUMIA shops for the selector
+  const shops = await prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
   const data = await getOrders(params);
 
   return (
@@ -95,9 +100,12 @@ export default async function OrdersPage(props: unknown) {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
         <p className="text-slate-300">Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.</p>
+        {(usedDefaultFrom || usedDefaultTo) && (
+          <p className="text-xs text-slate-400 mt-1">Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.</p>
+        )}
       </div>
 
-      <OrdersFilters />
+      <OrdersFilters shops={shops} />
 
       <OrdersTable
         rows={(data.orders || []) as unknown as Row[]}

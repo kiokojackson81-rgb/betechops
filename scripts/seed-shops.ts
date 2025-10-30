@@ -51,8 +51,19 @@ async function upsertShop(seed: ShopSeed) {
 
   const creds = seed.credentials || {};
   if (!creds || typeof creds !== "object") throw new Error(`Missing credentials for shop ${name}`);
-  if (!("tokenUrl" in creds) || !("clientId" in creds) || !("refreshToken" in creds)) {
-    throw new Error(`credentials.tokenUrl, credentials.clientId, and credentials.refreshToken are required for shop ${name}`);
+  // Validate by platform
+  if (platform === Platform.JUMIA) {
+    if (!("tokenUrl" in creds) || !("clientId" in creds) || !("refreshToken" in creds)) {
+      throw new Error(`credentials.tokenUrl, credentials.clientId, and credentials.refreshToken are required for shop ${name}`);
+    }
+  } else if (platform === Platform.KILIMALL) {
+    if (!("appId" in creds) || !("appSecret" in creds)) {
+      throw new Error(`credentials.appId and credentials.appSecret are required for Kilimall shop ${name}`);
+    }
+    // Ensure apiBase default for Kilimall if missing
+    if (!("apiBase" in creds)) {
+      (creds as any).apiBase = "https://openapi.kilimall.co.ke";
+    }
   }
 
   const credentialsEncrypted: Prisma.InputJsonValue = maybeEncrypt(creds);
