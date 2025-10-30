@@ -33,6 +33,24 @@ type Config = {
     returnsWaitingPickup?: string;  // e.g., '/orders?status=RETURNED' or '/returns?status=waiting-pickup'
   };
 };
+// Try to extract a numeric total from a vendor response object.
+function _extractTotal(obj: unknown): number | null {
+  if (!obj || typeof obj !== 'object') return null;
+  const seen = new Set<unknown>();
+  const q: unknown[] = [obj];
+  const keys = new Set(['total', 'totalCount', 'count', 'total_items', 'totalItems', 'recordsTotal', 'totalElements']);
+  while (q.length) {
+    const cur: any = q.shift();
+    if (!cur || typeof cur !== 'object') continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    for (const [k, v] of Object.entries(cur)) {
+      if (typeof v === 'number' && keys.has(k)) return v;
+      if (v && typeof v === 'object') q.push(v);
+    }
+  }
+  return null;
+}
 
 /* --- Per-shop client helper --- */
 type JumiaClientOpts = { apiBase: string; clientId: string; refreshToken: string };
@@ -902,9 +920,15 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   let total = 0;
+  const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+  const first = await jumiaFetch(`/catalog/products?size=1`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
+  const hinted = _extractTotal(first);
+  if (typeof hinted === 'number' && hinted >= 0) {
+    return { total: hinted, byStatus, approx: false };
+  }
   const fetcher = async (p: string) =>
     await Promise.race([
-      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) } as any),
+      jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
       new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(30_000, timeMs))) as unknown as Promise<unknown>,
     ]);
 
@@ -948,6 +972,13 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
   if (sids && sids.length) params['sids'] = sids.join(',');
 
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+  // Try fast path: ask for size=1 and read total from response metadata
+  const qfast = new URLSearchParams({ size: '1', ...(params.sids ? { sids: params.sids } : {}) }).toString();
+  const first = await jumiaFetch(`/catalog/products?${qfast}`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
+  const hinted = _extractTotal(first);
+  if (typeof hinted === 'number' && hinted >= 0) {
+    return { total: hinted, byStatus, approx: false };
+  }
   const fetcher = async (p: string) =>
     await Promise.race([
       jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
