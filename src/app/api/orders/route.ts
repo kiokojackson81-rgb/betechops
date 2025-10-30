@@ -75,11 +75,12 @@ export async function GET(req: NextRequest) {
               : Array.isArray((j as any)?.data)
               ? (j as any).data
               : [];
+            const annotated = arr.map((o: any) => (o && typeof o === 'object' ? { ...o, shopIds: (o?.shopIds?.length ? o.shopIds : [s.id]) } : o));
             st.token = String((j as any)?.nextToken ?? (j as any)?.token ?? '') || null;
             st.isLast = !st.token;
             // If cursor present, drop anything >= cursor (newer-or-equal)
             st.buf = cursor
-              ? arr.filter((it: any) => {
+              ? annotated.filter((it: any) => {
                   const ts = getTs(it);
                   if (ts < cursor!.ts) return true;
                   if (ts > cursor!.ts) return false;
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
                   const id = getId(it);
                   return (cursor!.id ? id.localeCompare(cursor!.id) < 0 : false);
                 })
-              : arr;
+              : annotated;
             // If we have a cursor and the buffer is still empty, try to advance pages until we cross the cursor or exhaust
             let safety = 0;
             while (cursor && st.buf.length === 0 && !st.isLast && safety < 5) {
@@ -101,9 +102,10 @@ export async function GET(req: NextRequest) {
                 : Array.isArray((j2 as any)?.data)
                 ? (j2 as any).data
                 : [];
+              const annotated2 = arr2.map((o: any) => (o && typeof o === 'object' ? { ...o, shopIds: (o?.shopIds?.length ? o.shopIds : [s.id]) } : o));
               st.token = String((j2 as any)?.nextToken ?? (j2 as any)?.token ?? '') || null;
               st.isLast = !st.token;
-              const filtered = arr2.filter((it: any) => {
+              const filtered = annotated2.filter((it: any) => {
                 const ts = getTs(it);
                 if (ts < cursor!.ts) return true;
                 if (ts > cursor!.ts) return false;
@@ -146,9 +148,10 @@ export async function GET(req: NextRequest) {
                   : Array.isArray((j as any)?.data)
                   ? (j as any).data
                   : [];
+                const annotated = arr.map((o: any) => (o && typeof o === 'object' ? { ...o, shopIds: (o?.shopIds?.length ? o.shopIds : [st.id]) } : o));
                 st.token = String((j as any)?.nextToken ?? (j as any)?.token ?? '') || null;
                 st.isLast = !st.token;
-                st.buf.push(...arr);
+                st.buf.push(...annotated);
               } catch {
                 st.isLast = true;
               }
@@ -185,8 +188,22 @@ export async function GET(req: NextRequest) {
     }
 
     const shopAuth = qs.shopId ? await loadShopAuthById(qs.shopId).catch(() => undefined) : await loadDefaultShopAuth();
-    const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
-    return NextResponse.json(data);
+    try {
+      const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+      return NextResponse.json(data);
+    } catch (e: any) {
+      // Some tenants error if shopId is supplied while the token is already scoped; retry without shopId.
+      const msg = e?.message ? String(e.message) : '';
+      const code = typeof e?.status === 'number' ? e.status : 0;
+      if (qs.shopId && (code === 400 || code === 422 || /\b(400|422)\b/.test(msg))) {
+        const q2 = new URLSearchParams(qs);
+        q2.delete('shopId');
+        const p2 = `orders?${q2.toString()}`;
+        const data2 = await jumiaFetch(p2, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+        return NextResponse.json(data2);
+      }
+      throw e;
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return new NextResponse(JSON.stringify({ error: msg }), { status: 500 });
