@@ -432,9 +432,18 @@ export function resolveApiBase(shopAuth?: ShopAuthJson) {
   );
 }
 
+// Cache per-shop credentials in-memory to survive temporary DB outages.
+// TTL keeps credentials fresh while avoiding frequent DB hits.
+const _shopAuthCache: Record<string, { auth: ShopAuthJson; ts: number }> = {};
+const SHOP_AUTH_TTL_MS = 6 * 60 * 60_000; // 6 hours
+
 /** Load per-shop credentials (if any). Returns normalized ShopAuthJson or undefined. */
 export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | undefined> {
   if (process.env.NODE_ENV === 'test') return undefined;
+  const cacheKey = String(shopId || '').trim();
+  const now = Date.now();
+  const hit = cacheKey && _shopAuthCache[cacheKey];
+  if (hit && now - hit.ts < SHOP_AUTH_TTL_MS) return hit.auth;
   // 0) Per-shop ENV override (no DB required)
   const fromEnv = (() => {
     const sid = String(shopId || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -457,6 +466,7 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
     if (clientId && refreshToken) {
       const out: ShopAuthJson = { platform: 'JUMIA', clientId, refreshToken };
       if (apiBase) (out as any).apiBase = apiBase;
+      if (cacheKey) _shopAuthCache[cacheKey] = { auth: out, ts: now };
       return out;
     }
     return undefined;
@@ -483,7 +493,9 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
     let parsed: any = {};
     try { parsed = ShopAuthSchema.partial().parse(raw || {}); } catch { parsed = {}; }
     if (!parsed.platform) parsed.platform = (shop as any).platform || 'JUMIA';
-    return parsed as ShopAuthJson;
+    const out = parsed as ShopAuthJson;
+    if (cacheKey) _shopAuthCache[cacheKey] = { auth: out, ts: now };
+    return out;
   } catch {
     // Final fallback to per-shop ENV (useful when DB is unavailable)
     const sid = String(shopId || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -494,6 +506,7 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
     if (clientId && refreshToken) {
       const out: ShopAuthJson = { platform: 'JUMIA', clientId, refreshToken };
       if (apiBase) (out as any).apiBase = apiBase;
+      if (cacheKey) _shopAuthCache[cacheKey] = { auth: out, ts: now };
       return out;
     }
     return undefined;
