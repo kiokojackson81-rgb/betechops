@@ -391,6 +391,14 @@ export async function jumiaFetch(
       const err = new Error(`Jumia ${path} failed: ${r.status} ${String(msg)}`) as ErrorWithMeta;
       err.status = r.status;
       err.body = String(msg);
+      // Propagate Retry-After header (seconds) to guide backoff when rate-limited
+      try {
+        const ra = typeof r.headers?.get === 'function' ? r.headers.get('retry-after') : null;
+        if (ra) {
+          const seconds = Number(ra);
+          if (!Number.isNaN(seconds) && seconds >= 0) err.retryAfterMs = seconds * 1000;
+        }
+      } catch {}
       throw err;
     }
     if (rawResponse) return r;
@@ -416,7 +424,27 @@ export async function jumiaFetch(
     return {} as any;
   };
 
-  return _rateLimiter.scheduleWithRetry(attempt);
+  // Coalesce concurrent identical GETs to avoid stampede on same URL
+  const method = String((requestInit as any)?.method || 'GET').toUpperCase();
+  const canCoalesce = method === 'GET' && String(tokenMeta?.source || '') !== 'SHOP';
+  const coalesceKey = canCoalesce ? `${method} ${url}` : '';
+  if (!coalesceKey) {
+    return _rateLimiter.scheduleWithRetry(attempt);
+  }
+  // simple global in-flight map
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  if (!(global as any).__jumiaInflight) (global as any).__jumiaInflight = new Map<string, Promise<unknown>>();
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const inflight: Map<string, Promise<unknown>> = (global as any).__jumiaInflight;
+  if (inflight.has(coalesceKey)) return inflight.get(coalesceKey) as Promise<any>;
+  const p = _rateLimiter.scheduleWithRetry(attempt);
+  inflight.set(coalesceKey, p as Promise<unknown>);
+  p.finally(() => {
+    try { inflight.delete(coalesceKey); } catch {}
+  });
+  return p;
 }
 
 /** Resolve API base (keeps your existing logic but ensures a default). */
@@ -478,9 +506,9 @@ export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
 type TaskFn<T> = () => Promise<T>;
 
 // Error shape used to attach metadata from HTTP responses
-type ErrorWithMeta = Error & { status?: number; body?: string };
+type ErrorWithMeta = Error & { status?: number; body?: string; retryAfterMs?: number };
 
-const DEFAULT_RPS = 4; // 4 requests per second
+const DEFAULT_RPS = 3; // lower global RPS to ease hitting vendor caps
 const MIN_INTERVAL_MS = Math.floor(1000 / DEFAULT_RPS);
 
 const _metrics = {
@@ -569,13 +597,15 @@ const _rateLimiter = (() => {
         if (attempt <= retries && (status === 429 || status >= 500)) {
           _metrics.totalRetries += 1;
           // honor Retry-After if present in err.body (best-effort parsing)
-          let retryAfterMs = 0;
-          try {
-            const bodyText = String((err as { body?: unknown })?.body || '');
-            const m = bodyText.match(/Retry-After:\s*(\d+)/i);
-            if (m) retryAfterMs = Number(m[1]) * 1000;
-          } catch {}
-          const jitter = Math.floor(Math.random() * 200);
+          let retryAfterMs = (err as ErrorWithMeta)?.retryAfterMs || 0;
+          if (!retryAfterMs) {
+            try {
+              const bodyText = String((err as { body?: unknown })?.body || '');
+              const m = bodyText.match(/Retry-After:\s*(\d+)/i);
+              if (m) retryAfterMs = Number(m[1]) * 1000;
+            } catch {}
+          }
+          const jitter = Math.floor(Math.random() * 250);
           const delay = retryAfterMs || Math.pow(2, attempt) * baseDelay + jitter;
           await new Promise((res) => setTimeout(res, delay));
           return runAttempt();
@@ -978,6 +1008,8 @@ export async function* jumiaPaginator(
         token = '';
       }
       if (!token) break; // no more pages
+      // small inter-page delay to avoid burst rate spikes
+      await new Promise((res) => setTimeout(res, 200));
       // continue loop to fetch next page
     } catch (err) {
       // if unauthorized, try refreshing token once and retry
