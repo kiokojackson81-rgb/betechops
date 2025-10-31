@@ -1015,13 +1015,35 @@ function normalizeKey(value: unknown): string {
 }
 
 function productStatusKey(it: Record<string, any>): string {
-  const raw = it?.status ?? it?.itemStatus ?? it?.productStatus ?? it?.state;
-  const normalized = normalizeKey(raw);
-  return normalized || 'unknown';
+  // Try common top-level fields first
+  let raw = it?.status ?? it?.itemStatus ?? it?.productStatus ?? it?.state ?? it?.listingStatus ?? it?.statusName;
+  let normalized = normalizeKey(raw);
+  if (normalized) return normalized;
+
+  // Some payloads expose status per-variation rather than at product level
+  try {
+    const vars = Array.isArray(it?.variations) ? (it.variations as any[]) : [];
+    for (const v of vars) {
+      raw = v?.status ?? v?.itemStatus ?? v?.productStatus ?? v?.state ?? v?.listingStatus ?? v?.statusName;
+      normalized = normalizeKey(raw);
+      if (normalized) return normalized;
+    }
+  } catch {}
+
+  // Some payloads namespace listing info
+  const listing = (it as any)?.listing || (it as any)?.product || (it as any)?.details;
+  if (listing && typeof listing === 'object') {
+    raw = (listing as any)?.status ?? (listing as any)?.itemStatus ?? (listing as any)?.state ?? (listing as any)?.listingStatus;
+    normalized = normalizeKey(raw);
+    if (normalized) return normalized;
+  }
+
+  return 'unknown';
 }
 
 function productQcStatusKey(it: Record<string, any>): string {
-  const raw =
+  // Try common top-level fields first
+  let raw =
     it?.qcStatus ??
     it?.qualityControl?.status ??
     it?.quality_control?.status ??
@@ -1032,8 +1054,28 @@ function productQcStatusKey(it: Record<string, any>): string {
     it?.qcstatus ??
     it?.qcStatusName ??
     it?.qc_status_name;
-  const normalized = normalizeKey(raw);
-  return normalized;
+  let normalized = normalizeKey(raw);
+  if (normalized) return normalized;
+
+  // Some payloads carry QC status at variation level
+  try {
+    const vars = Array.isArray(it?.variations) ? (it.variations as any[]) : [];
+    for (const v of vars) {
+      raw = v?.qcStatus ?? v?.qualityControl?.status ?? v?.quality_control?.status ?? v?.qc?.status ?? v?.qc_status ?? v?.qcStatusName ?? v?.qc_status_name;
+      normalized = normalizeKey(raw);
+      if (normalized) return normalized;
+    }
+  } catch {}
+
+  // As a last resort, some payloads expose a nested qc object elsewhere
+  const qc = (it as any)?.qc || (it as any)?.quality || (it as any)?.details;
+  if (qc && typeof qc === 'object') {
+    raw = (qc as any)?.status;
+    normalized = normalizeKey(raw);
+    if (normalized) return normalized;
+  }
+
+  return '';
 }
 
 export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000, ttlMs = 60_000 }: { limitPages?: number; size?: number; timeMs?: number; ttlMs?: number } = {}) {
