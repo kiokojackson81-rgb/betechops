@@ -54,29 +54,40 @@ export async function GET(req: Request) {
         const totals = await getCatalogProductsCountExactAll({ size, timeMs }).catch(() => null);
         if (totals) result = totals as typeof result;
       } else {
-        // quick path: sum quick counts per shop
+        // quick path: sum quick counts per shop; if no shops or zero totals, fallback to exact-all
         const shops = await getShops().catch(() => [] as any[]);
+        const shopList = Array.isArray(shops) ? shops : [];
         const counts = await Promise.allSettled(
-          (Array.isArray(shops) ? shops : []).map((s: any) =>
+          shopList.map((s: any) =>
             getCatalogProductsCountQuickForShop({ shopId: String(s.id || s.shopId || ""), limitPages: 4, size: Math.max(size, 50), timeMs }),
           ),
         );
         const byStatus: Record<string, number> = {};
         const byQcStatus: Record<string, number> = {};
         let total = 0;
-        let approx = false;
+        let approx = shopList.length === 0;
         for (const c of counts) {
           if (c.status === "fulfilled") {
             const v = c.value as any;
             total += Number(v?.total || 0);
             approx = approx || Boolean(v?.approx);
-            for (const [k, n] of Object.entries((v?.byStatus as Record<string, number>) || {})) byStatus[k] = (byStatus[k] || 0) + Number(n || 0);
-            for (const [k, n] of Object.entries((v?.byQcStatus as Record<string, number>) || {})) byQcStatus[k] = (byQcStatus[k] || 0) + Number(n || 0);
+            for (const [k, n] of Object.entries((v?.byStatus as Record<string, number>) || {})) byStatus[String(k).toLowerCase()] = (byStatus[String(k).toLowerCase()] || 0) + Number(n || 0);
+            for (const [k, n] of Object.entries((v?.byQcStatus as Record<string, number>) || {})) byQcStatus[String(k).toLowerCase()] = (byQcStatus[String(k).toLowerCase()] || 0) + Number(n || 0);
           } else {
             approx = true;
           }
         }
-        result = { total, approx, byStatus, byQcStatus };
+        // If we couldn't find shops or totals are zero, try an exact-all fallback once
+        if (shopList.length === 0 || total === 0) {
+          const fallback = await getCatalogProductsCountExactAll({ size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+          if (fallback) {
+            result = fallback as typeof result;
+          } else {
+            result = { total, approx: true, byStatus, byQcStatus };
+          }
+        } else {
+          result = { total, approx, byStatus, byQcStatus };
+        }
       }
     } else {
       if (!shopId) return NextResponse.json({ error: "shopId required (or set all=true)" }, { status: 400 });

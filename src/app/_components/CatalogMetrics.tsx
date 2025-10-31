@@ -1,24 +1,46 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Summary = { total: number; approx: boolean; byStatus: Record<string, number>; byQcStatus: Record<string, number> };
 
 const listingStatusAliases: Record<string, string[]> = {
   active: ["active", "enabled", "live"],
-  inactive: ["inactive", "disabled", "off"],
+  inactive: ["inactive", "disabled", "off", "blocked", "not_live", "not live"],
   deleted: ["deleted", "removed"],
-  pending: ["pending", "waiting_activation", "processing"],
+  pending: ["pending", "waiting_activation", "pending_activation", "activation_pending", "processing", "pending activation"],
 };
 const qcStatusAliases: Record<string, string[]> = {
   approved: ["approved", "qc_approved"],
   pending: ["pending", "qc_pending"],
-  not_ready_to_qc: ["not_ready_to_qc", "draft", "incomplete"],
+  not_ready_to_qc: ["not_ready_to_qc", "not ready to qc", "not-ready-to-qc", "draft", "incomplete"],
   rejected: ["rejected", "qc_rejected"],
 };
 
+function normalizeKey(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  return String(value).trim().toLowerCase();
+}
+
+function canonicalize(key: string): string {
+  return normalizeKey(key).replace(/[\s-]+/g, "_");
+}
+
+function normalizeMap(source: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(source || {})) {
+    const ck = canonicalize(k);
+    out[ck] = (out[ck] || 0) + Number(v || 0);
+  }
+  return out;
+}
+
 function bucketSum(source: Record<string, number>, keys: string[]): number {
+  const normalized = normalizeMap(source);
   let sum = 0;
-  for (const key of keys) sum += Number(source?.[key] || 0);
+  for (const key of keys) {
+    const variants = new Set<string>([canonicalize(key), normalizeKey(key)]);
+    for (const variant of variants) sum += Number(normalized?.[variant] || 0);
+  }
   return sum;
 }
 
@@ -47,7 +69,7 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
   const [loading, setLoading] = useState(false);
   const lastRefTs = useRef(0);
   const scheduled = useRef<ReturnType<typeof setTimeout> | null>(null);
-  async function refetch() {
+  const refetch = useCallback(async () => {
     try {
       setLoading(true);
       const qs = new URLSearchParams();
@@ -63,7 +85,7 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
     } finally {
       setLoading(false);
     }
-  }
+  }, [isAll, shopId, exact]);
 
   const cards = useMemo(() => {
     const listingMetrics = {
@@ -79,7 +101,7 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
       rejected: bucketSum(summary.byQcStatus, qcStatusAliases.rejected),
     };
     return [
-      { key: "total", label: "Total products", value: summary.total, tone: undefined },
+      { key: "total", label: "Total products", value: summary.total, tone: undefined as undefined | "positive" | "warning" | "danger" | "muted" },
       { key: "active", label: "Active", value: listingMetrics.active, tone: "positive" as const },
       { key: "inactive", label: "Inactive / Disabled", value: listingMetrics.inactive, tone: "muted" as const },
       { key: "qc-approved", label: "QC Approved", value: qcMetrics.approved, tone: "positive" as const },
@@ -108,7 +130,7 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
       window.removeEventListener("catalog:counts:refresh", handler);
       if (scheduled.current) clearTimeout(scheduled.current);
     };
-  }, [shopId, isAll, exact]);
+  }, [shopId, isAll, exact, refetch]);
 
   return (
     <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
