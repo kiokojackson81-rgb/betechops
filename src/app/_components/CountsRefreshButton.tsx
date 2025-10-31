@@ -23,7 +23,7 @@ export default function CountsRefreshButton({ shopId, exact }: { shopId: string;
           // ignore
         } finally {
           setLoading(false);
-          router.refresh();
+          try { window.dispatchEvent(new Event("catalog:counts:refresh")); } catch {}
         }
       }}
       className={`rounded border px-3 py-1 text-xs ${

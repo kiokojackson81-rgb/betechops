@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefreshEnabled", defaultEnabled = true }: { intervalMs?: number; storageKey?: string; defaultEnabled?: boolean }) {
+export default function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefreshEnabled", defaultEnabled = true, eventName = 'orders:refresh' }: { intervalMs?: number; storageKey?: string; defaultEnabled?: boolean; eventName?: string }) {
   const router = useRouter();
   const timer = useRef<NodeJS.Timeout | null>(null);
   const [enabled, setEnabled] = useState<boolean>(() => {
@@ -19,12 +19,12 @@ export default function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefr
       timer.current = setInterval(() => {
         try {
           const detail = { source: 'timer', ts: Date.now() } as const;
-          window.dispatchEvent(new CustomEvent('orders:refresh', { detail }));
+          window.dispatchEvent(new CustomEvent(eventName, { detail }));
         } catch {}
       }, Math.max(5000, intervalMs));
     }
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [enabled, intervalMs, router]);
+  }, [enabled, intervalMs, router, eventName]);
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, enabled ? "1" : "0"); } catch {}

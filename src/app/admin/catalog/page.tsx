@@ -4,6 +4,7 @@ import { getCatalogCategories, getCatalogProducts, getCatalogProductsCountQuickF
 import { headers } from "next/headers";
 import CountsRefreshButton from "@/app/_components/CountsRefreshButton";
 import CatalogMetrics from "@/app/_components/CatalogMetrics";
+import AutoRefresh from "@/app/_components/AutoRefresh";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_TIMEOUT = 8000;
@@ -642,6 +643,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
           <h2 className="text-lg font-semibold">Products</h2>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             {token ? <span>token: {token.slice(0, 6)}…</span> : null}
+            <AutoRefresh eventName="catalog:counts:refresh" storageKey="catalogAutoRefresh" intervalMs={60_000} />
             <a
               className={`rounded border px-3 py-1 text-xs ${
                 exact

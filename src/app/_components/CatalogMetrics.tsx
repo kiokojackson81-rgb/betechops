@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Summary = { total: number; approx: boolean; byStatus: Record<string, number>; byQcStatus: Record<string, number> };
 
@@ -45,6 +45,25 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
   const isAll = !shopId || shopId.toUpperCase() === "ALL";
   const [summary, setSummary] = useState<Summary>(initial);
   const [loading, setLoading] = useState(false);
+  const lastRefTs = useRef(0);
+  const scheduled = useRef<ReturnType<typeof setTimeout> | null>(null);
+  async function refetch() {
+    try {
+      setLoading(true);
+      const qs = new URLSearchParams();
+      if (isAll) qs.set("all", "true"); else qs.set("shopId", shopId);
+      if (exact) qs.set("exact", "true");
+      const res = await fetch(`/api/catalog/products-count?${qs.toString()}`, { cache: "no-store" });
+      if (res.ok) {
+        const j = (await res.json()) as Summary;
+        if (typeof j?.total === "number") setSummary({ total: j.total, approx: !!j.approx, byStatus: j.byStatus || {}, byQcStatus: j.byQcStatus || {} });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const cards = useMemo(() => {
     const listingMetrics = {
@@ -70,24 +89,25 @@ export default function CatalogMetrics({ initial, shopId, exact }: { initial: Su
   }, [summary]);
 
   useEffect(() => {
-    // Fetch latest (cached) counts once on mount
-    (async () => {
-      try {
-        setLoading(true);
-        const qs = new URLSearchParams();
-        if (isAll) qs.set("all", "true"); else qs.set("shopId", shopId);
-        if (exact) qs.set("exact", "true");
-        const res = await fetch(`/api/catalog/products-count?${qs.toString()}`, { cache: "no-store" });
-        if (res.ok) {
-          const j = (await res.json()) as Summary;
-          if (typeof j?.total === "number") setSummary({ total: j.total, approx: !!j.approx, byStatus: j.byStatus || {}, byQcStatus: j.byQcStatus || {} });
-        }
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
+    // Initial fetch
+    refetch();
+    // Listen for external refresh events
+    const handler = () => {
+      const now = Date.now();
+      // Debounce: coalesce events within ~1s window
+      if (now - lastRefTs.current < 1000) {
+        if (scheduled.current) clearTimeout(scheduled.current);
+        scheduled.current = setTimeout(() => { lastRefTs.current = Date.now(); void refetch(); }, 1000);
+        return;
       }
-    })();
+      lastRefTs.current = now;
+      void refetch();
+    };
+    window.addEventListener("catalog:counts:refresh", handler);
+    return () => {
+      window.removeEventListener("catalog:counts:refresh", handler);
+      if (scheduled.current) clearTimeout(scheduled.current);
+    };
   }, [shopId, isAll, exact]);
 
   return (
