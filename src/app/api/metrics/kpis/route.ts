@@ -37,14 +37,19 @@ export async function GET() {
       }
     }
 
+    // Ensure Pending Orders (All) reflects the live sum of all currently PENDING orders (no date window)
+    // If the cross-shop cache is cold/approx/zero, fall back to the local DB "queued" count.
+    const useDbFallback = ((cross.pendingAll ?? 0) === 0 || cross.approx) && queued > 0;
+    const pendingAllOut = useDbFallback ? queued : cross.pendingAll;
+
     return NextResponse.json({
       ok: true,
       queued,
       todayPacked,
       rts,
       productsAll: cross.productsAll,
-      pendingAll: cross.pendingAll,
-      approx: cross.approx ?? false,
+      pendingAll: pendingAllOut,
+      approx: useDbFallback ? true : (cross.approx ?? false),
       updatedAt: cross.updatedAt,
     });
   } catch (err: unknown) {
