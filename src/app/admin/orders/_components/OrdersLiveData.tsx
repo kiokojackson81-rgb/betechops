@@ -39,6 +39,8 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
   const [isLastPage, setIsLastPage] = useState<boolean>(initialIsLastPage ?? true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now());
   const busyRef = useRef<Promise<void> | null>(null);
+  const lastFetchTsRef = useRef<number>(0);
+  const MIN_INTERVAL_MS = 2500; // throttle refreshes to at most ~1 every 2.5s
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
@@ -53,9 +55,15 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
   }, [params.status, params.country, params.shopId, params.dateFrom, params.dateTo, params.q, params.size]);
 
   const fetchLatest = useCallback(async () => {
+    // Throttle: if a fetch ran very recently, skip
+    const now = Date.now();
+    if (now - lastFetchTsRef.current < MIN_INTERVAL_MS) {
+      return busyRef.current || Promise.resolve();
+    }
     if (busyRef.current) return busyRef.current;
     const p = (async () => {
       try {
+        lastFetchTsRef.current = Date.now();
         const res = await fetch(`/api/orders?${query}`, { cache: "no-store" });
         if (!res.ok) return; // keep existing data on error
         const data = await res.json();

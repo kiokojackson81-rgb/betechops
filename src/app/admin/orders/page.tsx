@@ -321,11 +321,11 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
+  // Defer live remote fetch to the client for faster initial paint when not using cached PENDING
   if (!showingSynced) {
-    const data = await fetchRemoteOrders(params);
-    rows = (data.orders || []).map((order) => normalizeApiOrder(order as Record<string, unknown>));
-    nextToken = data.nextToken ?? null;
-    isLastPage = !!data.isLastPage;
+    rows = [];
+    nextToken = null;
+    isLastPage = false;
   }
 
   return (
@@ -374,7 +374,8 @@ export default async function OrdersPage(props: unknown) {
           dateFrom: params.dateFrom,
           dateTo: params.dateTo,
           q: params.q,
-          size: params.size ?? '50',
+          // Smaller default page size when aggregating ALL shops to reduce initial payload
+          size: params.size ?? (params.shopId === 'ALL' ? '30' : '50'),
         }}
       />
     </div>
