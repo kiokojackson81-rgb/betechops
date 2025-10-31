@@ -789,7 +789,8 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   if (o.sellerSku) params.push(`sellerSku=${encodeURIComponent(o.sellerSku)}`);
   if (o.createdAtFrom) params.push(`createdAtFrom=${encodeURIComponent(o.createdAtFrom)}`);
   if (o.createdAtTo) params.push(`createdAtTo=${encodeURIComponent(o.createdAtTo)}`);
-  if (o.shopId) params.push(`shopId=${encodeURIComponent(o.shopId)}`);
+  // IMPORTANT: Do NOT pass our internal shopId as Jumia shopId param; use per-shop auth instead.
+  // Some vendor endpoints support a vendor 'sid' query, which we already support via `sids`.
   const q = params.length ? `?${params.join('&')}` : '';
   const shopAuth = o.shopId ? await loadShopAuthById(o.shopId).catch(() => undefined) : await loadDefaultShopAuth();
   const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
