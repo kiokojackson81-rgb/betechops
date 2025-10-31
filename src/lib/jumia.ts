@@ -435,33 +435,6 @@ export function resolveApiBase(shopAuth?: ShopAuthJson) {
 /** Load per-shop credentials (if any). Returns normalized ShopAuthJson or undefined. */
 export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | undefined> {
   if (process.env.NODE_ENV === 'test') return undefined;
-  // 0) Per-shop ENV override (no DB required)
-  const fromEnv = (() => {
-    const sid = String(shopId || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const pick = (...keys: string[]) => keys.map((k) => process.env[k]).find((v) => typeof v === 'string' && v.length > 0);
-    // Supported patterns (either side of the delimiter):
-    // - SHOP_<SHOPID>_JUMIA_CLIENT_ID / SHOP_<SHOPID>_JUMIA_REFRESH_TOKEN / SHOP_<SHOPID>_BASE_URL
-    // - JUMIA_CLIENT_ID__<SHOPID> / JUMIA_REFRESH_TOKEN__<SHOPID> / (JUMIA_API_BASE__<SHOPID> | BASE_URL__<SHOPID>)
-    const clientId = pick(`SHOP_${sid}_JUMIA_CLIENT_ID`, `JUMIA_CLIENT_ID__${sid}`, `OIDC_CLIENT_ID__${sid}`);
-    const refreshToken = pick(
-      `SHOP_${sid}_JUMIA_REFRESH_TOKEN`,
-      `JUMIA_REFRESH_TOKEN__${sid}`,
-      `OIDC_REFRESH_TOKEN__${sid}`,
-    );
-    const apiBase = pick(
-      `SHOP_${sid}_BASE_URL`,
-      `SHOP_${sid}_JUMIA_API_BASE`,
-      `JUMIA_API_BASE__${sid}`,
-      `BASE_URL__${sid}`,
-    );
-    if (clientId && refreshToken) {
-      const out: ShopAuthJson = { platform: 'JUMIA', clientId, refreshToken };
-      if (apiBase) (out as any).apiBase = apiBase;
-      return out;
-    }
-    return undefined;
-  })();
-  if (fromEnv) return fromEnv;
   try {
     const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { platform: true, credentialsEncrypted: true, apiConfig: true } });
     if (!shop) return undefined;
@@ -485,17 +458,6 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
     if (!parsed.platform) parsed.platform = (shop as any).platform || 'JUMIA';
     return parsed as ShopAuthJson;
   } catch {
-    // Final fallback to per-shop ENV (useful when DB is unavailable)
-    const sid = String(shopId || '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const pick = (...keys: string[]) => keys.map((k) => process.env[k]).find((v) => typeof v === 'string' && v.length > 0);
-    const clientId = pick(`SHOP_${sid}_JUMIA_CLIENT_ID`, `JUMIA_CLIENT_ID__${sid}`, `OIDC_CLIENT_ID__${sid}`);
-    const refreshToken = pick(`SHOP_${sid}_JUMIA_REFRESH_TOKEN`, `JUMIA_REFRESH_TOKEN__${sid}`, `OIDC_REFRESH_TOKEN__${sid}`);
-    const apiBase = pick(`SHOP_${sid}_BASE_URL`, `SHOP_${sid}_JUMIA_API_BASE`, `JUMIA_API_BASE__${sid}`, `BASE_URL__${sid}`);
-    if (clientId && refreshToken) {
-      const out: ShopAuthJson = { platform: 'JUMIA', clientId, refreshToken };
-      if (apiBase) (out as any).apiBase = apiBase;
-      return out;
-    }
     return undefined;
   }
 }

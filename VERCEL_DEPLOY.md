@@ -32,36 +32,9 @@ Recommended workflow
 
 Jumia configuration
 
-- You can configure Jumia OIDC/API either via env vars or via the API:
+- You can configure Jumia OIDC/API either via env vars (JUMIA_*) or via the API:
    - GET/POST `/api/settings/jumia` stores credentials in `ApiCredential(scope="GLOBAL")`.
    - Diagnostics: `/api/debug/oidc?test=true` to verify refresh-token exchange.
-
-Per-shop credentials via environment variables
-
-- When each shop has its own credentials, you can define shop-specific env vars instead of (or in addition to) DB-stored JSON. The loader first checks per-shop env, then the DB, then global env.
-- Supported patterns (SHOPID is the shop UUID; it will be uppercased and non-alphanumerics replaced with `_`):
-
-   - `SHOP_<SHOPID>_JUMIA_CLIENT_ID`
-   - `SHOP_<SHOPID>_JUMIA_REFRESH_TOKEN`
-   - Optional base URL: `SHOP_<SHOPID>_BASE_URL` or `SHOP_<SHOPID>_JUMIA_API_BASE`
-
-   Alternative suffix style:
-
-   - `JUMIA_CLIENT_ID__<SHOPID>`
-   - `JUMIA_REFRESH_TOKEN__<SHOPID>`
-   - Optional base URL: `JUMIA_API_BASE__<SHOPID>` or `BASE_URL__<SHOPID>`
-
-- Example:
-
-   - SHOP ID: `a1b2c3d4-e5f6-4aaa-9bbb-ccccdddd0000` → SID: `A1B2C3D4_E5F6_4AAA_9BBB_CCCCDDDD0000`
-   - Set:
-      - `SHOP_A1B2C3D4_E5F6_4AAA_9BBB_CCCCDDDD0000_JUMIA_CLIENT_ID=...`
-      - `SHOP_A1B2C3D4_E5F6_4AAA_9BBB_CCCCDDDD0000_JUMIA_REFRESH_TOKEN=...`
-      - (optional) `SHOP_A1B2C3D4_E5F6_4AAA_9BBB_CCCCDDDD0000_BASE_URL=https://vendor-api.jumia.com`
-
-- Validate per-shop credentials without DB:
-
-   - `GET /api/debug/oidc?test=true&shopId=<SHOPID>` → returns `shopMint.ok=true` if mint succeeds using per-shop env or DB.
 
 Troubleshooting
 
