@@ -225,12 +225,13 @@ function normalizeProduct(product: AnyRecord, shops: Map<string, string>): Norma
 
   const shopRef = asRecord(product._shop);
   const nestedShop = asRecord(product.shop);
-  const shopId = shopRef.id ?? nestedShop.id ?? product.shopId ?? nestedShop.sid ?? product.shopSid ?? nestedShop.shopId;
-  const shopName =
-    (typeof shopRef.name === "string" && shopRef.name) ||
-    (typeof nestedShop.name === "string" && nestedShop.name) ||
-    (shopId && shops.get(String(shopId))) ||
-    "-";
+  const shopIdRaw = shopRef.id ?? nestedShop.id ?? product.shopId ?? nestedShop.sid ?? product.shopSid ?? nestedShop.shopId;
+  const shopId = shopIdRaw !== undefined && shopIdRaw !== null ? String(shopIdRaw) : undefined;
+  const shopNameCandidate =
+    (typeof shopRef.name === "string" ? shopRef.name : undefined) ??
+    (typeof nestedShop.name === "string" ? nestedShop.name : undefined) ??
+    (shopId ? shops.get(shopId) : undefined);
+  const shopName = typeof shopNameCandidate === "string" ? shopNameCandidate : "-";
 
   return {
     key: String(product.id ?? product.sid ?? sellerSkuCandidate ?? Math.random().toString(16).slice(2)),
