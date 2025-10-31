@@ -122,7 +122,7 @@ export async function GET(req: Request) {
       }
     }
 
-    const payload = { ...result, updatedAt: new Date().toISOString() };
+  const payload = { ...result, updatedAt: new Date().toISOString() };
 
     try {
       const r = await getRedis();
@@ -131,7 +131,15 @@ export async function GET(req: Request) {
       // ignore redis errors
     }
 
-    return NextResponse.json(payload, { headers: { "x-cache": "miss" } });
+    // Help upstream caches (and Next/Vercel) keep this cheap to re-serve for a short window
+    // Quick path is already approximate and persisted; exact path also writes to DB for future hits
+    return NextResponse.json(payload, {
+      headers: {
+        "x-cache": "miss",
+        // Allow short-lived caching at the edge/CDN; clients can still force refresh via UI button
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 500 });

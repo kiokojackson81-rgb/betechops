@@ -356,18 +356,9 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
   }
 
   if (shopId.toUpperCase() === "ALL") {
-    const perShopProducts = await Promise.all(
-      shops.map(async (shop) => {
-        try {
-          const response = await withTimeout(getCatalogProducts({ size, sellerSku, categoryCode, shopId: shop.id }), DEFAULT_TIMEOUT);
-          const items = extractProducts(response);
-          return items.map((item: AnyRecord) => ({ ...item, _shop: shop }));
-        } catch {
-          return [] as AnyRecord[];
-        }
-      }),
-    );
-    rawProducts = perShopProducts.flat();
+    // Performance: Avoid fanning out product fetches across all shops on initial load.
+    // This significantly slows the page when many shops exist. Show only counters and categories for ALL.
+    rawProducts = [];
     nextToken = "";
   const fromApi = await fetchCountsFromApi(true, "", exact, exact ? Math.min(100, Math.max(size, 50)) : Math.min(100, Math.max(size, 50)));
     if (fromApi) {
@@ -667,7 +658,11 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
             ) : null}
           </div>
         </div>
-        {normalizedProducts.length === 0 ? (
+        {shopId.toUpperCase() === "ALL" ? (
+          <div className="text-sm text-slate-400">
+            Select a shop to view its product list. Aggregated products across all shops are skipped to keep the page fast.
+          </div>
+        ) : normalizedProducts.length === 0 ? (
           <p className="text-sm text-slate-400">No products match the current filters.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-white/10">
