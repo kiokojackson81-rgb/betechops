@@ -369,11 +369,11 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
     );
     rawProducts = perShopProducts.flat();
     nextToken = "";
-    const fromApi = await fetchCountsFromApi(true, "", exact, exact ? Math.max(size, 200) : Math.max(size, 100));
+  const fromApi = await fetchCountsFromApi(true, "", exact, exact ? Math.min(100, Math.max(size, 50)) : Math.min(100, Math.max(size, 50)));
     if (fromApi) {
       summary = fromApi;
     } else if (exact) {
-      const exactTotals = await (await import("@/lib/jumia")).getCatalogProductsCountExactAll({ size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY);
+  const exactTotals = await (await import("@/lib/jumia")).getCatalogProductsCountExactAll({ size: Math.min(100, Math.max(size, 50)) }).catch(() => EMPTY_SUMMARY);
       summary = exactTotals;
     } else {
       const counts = await Promise.allSettled(
@@ -405,7 +405,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
   } else {
     const [productsResponse, apiSummary] = await Promise.all([
       withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode, shopId }), DEFAULT_TIMEOUT).catch(() => undefined),
-      fetchCountsFromApi(false, shopId, exact, exact ? Math.max(size, 200) : Math.max(size, 100)),
+  fetchCountsFromApi(false, shopId, exact, exact ? Math.min(100, Math.max(size, 50)) : Math.min(100, Math.max(size, 50))),
     ]);
     rawProducts = extractProducts(productsResponse).map((item: AnyRecord) => ({
       ...item,
@@ -416,8 +416,8 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
       summary = apiSummary;
     } else {
       summary = await (exact
-        ? (await import("@/lib/jumia")).getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY)
-        : getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY));
+        ? (await import("@/lib/jumia")).getCatalogProductsCountExactForShop({ shopId, size: Math.min(100, Math.max(size, 50)) }).catch(() => EMPTY_SUMMARY)
+        : getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.min(100, Math.max(size, 50)), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY));
     }
   }
 

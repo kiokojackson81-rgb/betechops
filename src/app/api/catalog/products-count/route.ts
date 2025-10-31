@@ -25,7 +25,8 @@ export async function GET(req: Request) {
   const exact = exactFlag === "1" || exactFlag === "true" || exactFlag === "yes";
   const ttlMsRaw = Number(url.searchParams.get("ttlMs") || "");
   const ttlMs = Number.isFinite(ttlMsRaw) && ttlMsRaw > 0 ? Math.min(6 * 60 * 60_000, ttlMsRaw) : 30 * 60_000; // default 30 min, cap 6h
-  const size = Math.min(500, Math.max(1, Number(url.searchParams.get("size") || (exact ? 200 : 100))));
+  // Jumia API caps size at 100; clamp accordingly
+  const size = Math.min(100, Math.max(1, Number(url.searchParams.get("size") || 100)));
   const timeMs = Math.min(120_000, Math.max(5_000, Number(url.searchParams.get("timeMs") || (exact ? 60_000 : 12_000))));
 
   try {
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
         }
         // If we couldn't find shops or totals are zero, try an exact-all fallback once
         if (shopList.length === 0 || total === 0) {
-          const fallback = await getCatalogProductsCountExactAll({ size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+          const fallback = await getCatalogProductsCountExactAll({ size: Math.min(100, Math.max(size, 50)), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
           if (fallback) {
             result = fallback as typeof result;
           } else {

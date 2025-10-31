@@ -1181,7 +1181,7 @@ export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2
 }
 
 // Exact vendor product counter per shop (scans all pages with safety caps)
-export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
+export async function getCatalogProductsCountExactForShop({ shopId, size = 100, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   const byQcStatus: Record<string, number> = {};
@@ -1199,7 +1199,8 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
     ]);
 
   let pages = 0;
-  for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+  const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
+  for await (const page of jumiaPaginator('/catalog/products', { size: String(pageSize) }, fetcher)) {
     const arr = Array.isArray((page as any)?.products)
       ? (page as any).products
       : Array.isArray((page as any)?.items)
@@ -1223,7 +1224,7 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
 }
 
 // Exact product count across all shops under a master account (preferred for KPIs)
-export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
+export async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   const byQcStatus: Record<string, number> = {};
@@ -1238,7 +1239,8 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
     if (!sids.length) sids = undefined;
   } catch { sids = undefined; }
 
-  const params: Record<string, string> = { size: String(size) };
+  const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
+  const params: Record<string, string> = { size: String(pageSize) };
   if (sids && sids.length) params['sids'] = sids.join(',');
 
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);

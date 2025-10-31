@@ -84,7 +84,7 @@ function deriveExpanded(summary: Summary) {
 
 export async function computeAndStoreCountersForShop(shopId: string, opts?: { size?: number; timeMs?: number }) {
   if (!shopId) throw new Error("shopId required");
-  const exact = await getCatalogProductsCountExactForShop({ shopId, size: Math.max(50, opts?.size || 200), timeMs: Math.max(30_000, opts?.timeMs || 60_000) });
+  const exact = await getCatalogProductsCountExactForShop({ shopId, size: Math.min(100, Math.max(50, opts?.size || 100)), timeMs: Math.max(30_000, opts?.timeMs || 60_000) });
   const exp = deriveExpanded(exact);
   const now = new Date();
   const row = await prisma.catalogCounters.upsert({
@@ -141,7 +141,7 @@ export async function recomputeAllCounters() {
   // Aggregate using vendor exact-all when possible for better accuracy/latency
   let agg: Summary | null = null;
   try {
-    agg = await getCatalogProductsCountExactAll({ size: 200, timeMs: 60_000 });
+  agg = await getCatalogProductsCountExactAll({ size: 100, timeMs: 60_000 });
   } catch {
     agg = null;
   }
