@@ -1,5 +1,6 @@
 import OrdersFilters from './_components/OrdersFilters';
 import OrdersTable from './_components/OrdersTable';
+import OrdersLiveData from './_components/OrdersLiveData';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
@@ -361,7 +362,21 @@ export default async function OrdersPage(props: unknown) {
 
       <OrdersFilters shops={shopOptions} />
 
-      <OrdersTable rows={rows} nextToken={nextToken} isLastPage={isLastPage} />
+      {/* Client wrapper keeps last non-empty snapshot and updates on SSE/AutoRefresh events */}
+      <OrdersLiveData
+        initialRows={rows}
+        initialNextToken={nextToken}
+        initialIsLastPage={isLastPage}
+        params={{
+          status: params.status,
+          country: params.country,
+          shopId: params.shopId,
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
+          q: params.q,
+          size: params.size ?? '50',
+        }}
+      />
     </div>
   );
 }

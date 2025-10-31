@@ -17,7 +17,10 @@ export default function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefr
   useEffect(() => {
     if (enabled) {
       timer.current = setInterval(() => {
-        try { router.refresh(); } catch {}
+        try {
+          const detail = { source: 'timer', ts: Date.now() } as const;
+          window.dispatchEvent(new CustomEvent('orders:refresh', { detail }));
+        } catch {}
       }, Math.max(5000, intervalMs));
     }
     return () => { if (timer.current) clearInterval(timer.current); };

@@ -33,12 +33,11 @@ export default function OrdersSSE({ status, country, shopId, dateFrom, dateTo, i
     es.onerror = () => setLive('off');
     es.addEventListener('orders', (ev) => {
       try {
-        const data = ev instanceof MessageEvent ? ev.data : (ev as any).data;
-        // Optional: parse and inspect
-        // const j = JSON.parse(data);
-        // if (j?.type === 'orders:new') { ... }
+        // Broadcast a lightweight client event instead of full router.refresh to avoid flicker
+        const detail = { source: 'sse', ts: Date.now() } as const;
+        window.dispatchEvent(new CustomEvent('orders:refresh', { detail }));
       } catch {}
-      try { router.refresh(); } catch {}
+      // Avoid full page refresh here; OrdersLiveData listens for orders:refresh and fetches incrementally
     });
 
     return () => {
