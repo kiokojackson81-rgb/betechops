@@ -1,5 +1,6 @@
 import OrdersFilters from './_components/OrdersFilters';
 import OrdersTable from './_components/OrdersTable';
+import OrdersLiveData from './_components/OrdersLiveData';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
@@ -320,11 +321,11 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
+  // Defer live remote fetch to the client for faster initial paint when not using cached PENDING
   if (!showingSynced) {
-    const data = await fetchRemoteOrders(params);
-    rows = (data.orders || []).map((order) => normalizeApiOrder(order as Record<string, unknown>));
-    nextToken = data.nextToken ?? null;
-    isLastPage = !!data.isLastPage;
+    rows = [];
+    nextToken = null;
+    isLastPage = false;
   }
 
   return (
@@ -361,7 +362,22 @@ export default async function OrdersPage(props: unknown) {
 
       <OrdersFilters shops={shopOptions} />
 
-      <OrdersTable rows={rows} nextToken={nextToken} isLastPage={isLastPage} />
+      {/* Client wrapper keeps last non-empty snapshot and updates on SSE/AutoRefresh events */}
+      <OrdersLiveData
+        initialRows={rows}
+        initialNextToken={nextToken}
+        initialIsLastPage={isLastPage}
+        params={{
+          status: params.status,
+          country: params.country,
+          shopId: params.shopId,
+          dateFrom: params.dateFrom,
+          dateTo: params.dateTo,
+          q: params.q,
+          // Smaller default page size when aggregating ALL shops to reduce initial payload
+          size: params.size ?? (params.shopId === 'ALL' ? '30' : '50'),
+        }}
+      />
     </div>
   );
 }

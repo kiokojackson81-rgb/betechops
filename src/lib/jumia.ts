@@ -1006,7 +1006,35 @@ export async function* jumiaPaginator(
  * Returns { total, byStatus, approx } where approx=true when cut short.
  */
 // in-memory TTL cache for quick counts
-let _prodCountCache: { value: { total: number; byStatus: Record<string, number>; approx: boolean }; ts: number } | null = null;
+let _prodCountCache: { value: { total: number; byStatus: Record<string, number>; byQcStatus: Record<string, number>; approx: boolean }; ts: number } | null = null;
+
+function normalizeKey(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  const text = String(value).trim().toLowerCase();
+  return text;
+}
+
+function productStatusKey(it: Record<string, any>): string {
+  const raw = it?.status ?? it?.itemStatus ?? it?.productStatus ?? it?.state;
+  const normalized = normalizeKey(raw);
+  return normalized || 'unknown';
+}
+
+function productQcStatusKey(it: Record<string, any>): string {
+  const raw =
+    it?.qcStatus ??
+    it?.qualityControl?.status ??
+    it?.quality_control?.status ??
+    it?.qualityCheckStatus ??
+    it?.quality_control_status ??
+    it?.qc?.status ??
+    it?.qc_status ??
+    it?.qcstatus ??
+    it?.qcStatusName ??
+    it?.qc_status_name;
+  const normalized = normalizeKey(raw);
+  return normalized;
+}
 
 export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000, ttlMs = 60_000 }: { limitPages?: number; size?: number; timeMs?: number; ttlMs?: number } = {}) {
   const now = Date.now();
@@ -1014,6 +1042,7 @@ export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100,
 
   const start = now;
   const byStatus: Record<string, number> = {};
+  const byQcStatus: Record<string, number> = {};
   let total = 0;
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
   const fetcher = async (p: string) =>
@@ -1032,15 +1061,18 @@ export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100,
       ? (page as any).data
       : [];
     for (const it of arr) {
+      const item = it as Record<string, any>;
       total += 1;
-      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      const st = productStatusKey(item);
       byStatus[st] = (byStatus[st] || 0) + 1;
+      const qc = productQcStatusKey(item);
+      if (qc) byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
     }
     pages += 1;
     if (pages >= limitPages || Date.now() - start > timeMs) break;
   }
   const approx = pages >= limitPages || Date.now() - start > timeMs;
-  _prodCountCache = { value: { total, byStatus, approx }, ts: Date.now() };
+  _prodCountCache = { value: { total, byStatus, byQcStatus, approx }, ts: Date.now() };
   return _prodCountCache.value;
 }
 
@@ -1048,6 +1080,7 @@ export async function getCatalogProductsCountQuick({ limitPages = 3, size = 100,
 export async function getCatalogProductsCountQuickForShop({ shopId, limitPages = 2, size = 100, timeMs = 6000 }: { shopId: string; limitPages?: number; size?: number; timeMs?: number }) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
+  const byQcStatus: Record<string, number> = {};
   let total = 0;
   const fetcher = async (p: string) =>
     await Promise.race([
@@ -1065,15 +1098,18 @@ export async function getCatalogProductsCountQuickForShop({ shopId, limitPages =
       ? (page as any).data
       : [];
     for (const it of arr) {
+      const item = it as Record<string, any>;
       total += 1;
-      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      const st = productStatusKey(item);
       byStatus[st] = (byStatus[st] || 0) + 1;
+      const qc = productQcStatusKey(item);
+      if (qc) byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
     }
     pages += 1;
     if (pages >= limitPages || Date.now() - start > timeMs) break;
   }
   const approx = pages >= limitPages || Date.now() - start > timeMs;
-  return { total, byStatus, approx };
+  return { total, byStatus, byQcStatus, approx };
 }
 
 // Quick pending orders counter per shop
@@ -1107,12 +1143,13 @@ export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2
 export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
+  const byQcStatus: Record<string, number> = {};
   let total = 0;
   const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
   const first = await jumiaFetch(`/catalog/products?size=1`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
   const hinted = _extractTotal(first);
   if (typeof hinted === 'number' && hinted >= 0) {
-    return { total: hinted, byStatus, approx: false };
+    return { total: hinted, byStatus, byQcStatus, approx: false };
   }
   const fetcher = async (p: string) =>
     await Promise.race([
@@ -1130,21 +1167,25 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
       ? (page as any).data
       : [];
     for (const it of arr) {
+      const item = it as Record<string, any>;
       total += 1;
-      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      const st = productStatusKey(item);
       byStatus[st] = (byStatus[st] || 0) + 1;
+      const qc = productQcStatusKey(item);
+      if (qc) byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
     }
     pages += 1;
     if (pages >= maxPages || Date.now() - start > timeMs) break;
   }
   const approx = pages >= maxPages || Date.now() - start > timeMs;
-  return { total, byStatus, approx };
+  return { total, byStatus, byQcStatus, approx };
 }
 
 // Exact product count across all shops under a master account (preferred for KPIs)
 export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
+  const byQcStatus: Record<string, number> = {};
   let total = 0;
   // Try to gather sids for all shops in the account
   let sids: string[] | undefined = undefined;
@@ -1165,7 +1206,7 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
   const first = await jumiaFetch(`/catalog/products?${qfast}`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
   const hinted = _extractTotal(first);
   if (typeof hinted === 'number' && hinted >= 0) {
-    return { total: hinted, byStatus, approx: false };
+    return { total: hinted, byStatus, byQcStatus, approx: false };
   }
   const fetcher = async (p: string) =>
     await Promise.race([
@@ -1183,15 +1224,18 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
       ? (page as any).data
       : [];
     for (const it of arr) {
+      const item = it as Record<string, any>;
       total += 1;
-      const st = String((it as any)?.status || (it as any)?.itemStatus || 'unknown').toLowerCase();
+      const st = productStatusKey(item);
       byStatus[st] = (byStatus[st] || 0) + 1;
+      const qc = productQcStatusKey(item);
+      if (qc) byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
     }
     pages += 1;
     if (Date.now() - start > timeMs) break;
   }
   const approx = Date.now() - start > timeMs;
-  return { total, byStatus, approx };
+  return { total, byStatus, byQcStatus, approx };
 }
 
 
