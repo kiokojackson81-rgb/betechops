@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getCatalogCategories, getCatalogProducts, getCatalogProductsCountQuickForShop } from "@/lib/jumia";
+import { getCatalogCategories, getCatalogProducts, getCatalogProductsCountQuickForShop, getShops as getVendorShops } from "@/lib/jumia";
 import { headers } from "next/headers";
 import CountsRefreshButton from "@/app/_components/CountsRefreshButton";
 import CatalogMetrics from "@/app/_components/CatalogMetrics";
@@ -307,8 +307,9 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
   const categoryCode = sp.categoryCode ? Number(sp.categoryCode) : undefined;
   const token = (sp.token || "").trim() || undefined;
   const shopId = (sp.shopId || "ALL").toString();
-  const exactFlag = String(sp.exact || "").toLowerCase();
-  const exact = exactFlag === "1" || exactFlag === "true" || exactFlag === "yes";
+  // Default to exact counts unless explicitly disabled (to ensure accurate totals and breakdowns)
+  const exactFlag = String(sp.exact ?? "").toLowerCase();
+  const exact = exactFlag === "0" || exactFlag === "false" || exactFlag === "no" ? false : true;
 
   const rawStatus = normalize(sp.status);
   const rawQcStatus = normalize(sp.qcStatus);
@@ -319,14 +320,33 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
     listingStatusFilter = undefined;
   }
 
-  const [shops, categoriesResponse] = await Promise.all([
-    prisma.shop.findMany({
+  // Fetch shops with a DB-first strategy; if Prisma is unavailable (quota/connection),
+  // fall back to vendor API /shops to keep the Catalog usable during DB incidents.
+  let shops: { id: string; name: string }[] = [];
+  try {
+    shops = await prisma.shop.findMany({
       where: { isActive: true, platform: "JUMIA" },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
-    }),
-    withTimeout(getCatalogCategories(1), DEFAULT_TIMEOUT).catch(() => undefined),
-  ]);
+    });
+  } catch {
+    try {
+      const vshops = await getVendorShops().catch(() => [] as any[]);
+      const list = Array.isArray(vshops) ? vshops : [];
+      shops = list
+        .map((s: any) => ({
+          id: String(s?.id ?? s?.shopId ?? s?.sid ?? ""),
+          name: String(s?.name ?? s?.shopName ?? s?.code ?? s?.id ?? "Jumia Shop"),
+        }))
+        .filter((s) => s.id);
+      // sort by name for a stable UI
+      shops.sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      shops = [];
+    }
+  }
+
+  const categoriesResponse = await withTimeout(getCatalogCategories(1), DEFAULT_TIMEOUT).catch(() => undefined);
   const categories = extractCategories(categoriesResponse).slice(0, 18);
   const shopLookup = new Map(shops.map((shop) => [shop.id, shop.name]));
 

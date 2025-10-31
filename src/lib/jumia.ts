@@ -1188,11 +1188,8 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
   const byQcStatus: Record<string, number> = {};
   let total = 0;
   const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
-  const first = await jumiaFetch(`/catalog/products?size=1`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
-  const hinted = _extractTotal(first);
-  if (typeof hinted === 'number' && hinted >= 0) {
-    return { total: hinted, byStatus, byQcStatus, approx: false };
-  }
+  // We used to short-circuit on hinted totals, but that loses status/QC breakdowns.
+  // Always paginate to compute breakdowns exactly.
   const fetcher = async (p: string) =>
     await Promise.race([
       jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
@@ -1243,13 +1240,7 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
   if (sids && sids.length) params['sids'] = sids.join(',');
 
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
-  // Try fast path: ask for size=1 and read total from response metadata
-  const qfast = new URLSearchParams({ size: '1', ...(params.sids ? { sids: params.sids } : {}) }).toString();
-  const first = await jumiaFetch(`/catalog/products?${qfast}`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
-  const hinted = _extractTotal(first);
-  if (typeof hinted === 'number' && hinted >= 0) {
-    return { total: hinted, byStatus, byQcStatus, approx: false };
-  }
+  // Always paginate to compute breakdowns exactly; metadata-only totals miss breakdowns.
   const fetcher = async (p: string) =>
     await Promise.race([
       jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),

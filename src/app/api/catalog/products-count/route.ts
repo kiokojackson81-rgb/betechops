@@ -26,16 +26,38 @@ export async function GET(req: Request) {
   const ttlMs = Number.isFinite(ttlMsRaw) && ttlMsRaw > 0 ? Math.min(6 * 60 * 60_000, ttlMsRaw) : 30 * 60_000; // default 30 min, cap 6h
   const size = Math.min(500, Math.max(1, Number(url.searchParams.get("size") || (exact ? 200 : 100))));
   const timeMs = Math.min(120_000, Math.max(5_000, Number(url.searchParams.get("timeMs") || (exact ? 60_000 : 12_000))));
+  const forceFlag = (url.searchParams.get("force") || "").toLowerCase();
+  const force = forceFlag === "1" || forceFlag === "true" || forceFlag === "yes";
 
   try {
     const key = `catalog:counts:${all ? "ALL" : shopId || "UNKNOWN"}:${exact ? "exact" : "quick"}`;
     try {
       const r = await getRedis();
-      if (r && ttlMs > 0) {
+      if (!force && r && ttlMs > 0) {
         const hit = await r.get(key);
         if (hit) {
-          const payload = JSON.parse(hit);
-          return NextResponse.json(payload, { headers: { "x-cache": "hit" } });
+          // Validate cached payload. If totals > 0 but breakdowns are empty on a quick cache,
+          // recompute using exact strategy to populate breakdowns and refresh cache.
+          try {
+            const cached = JSON.parse(hit) as { total?: number; approx?: boolean; byStatus?: Record<string, number>; byQcStatus?: Record<string, number> };
+            const hasTotal = typeof cached?.total === 'number' && cached.total > 0;
+            const breakdownEmpty = !cached?.byStatus || Object.keys(cached.byStatus).length === 0;
+            const qcEmpty = !cached?.byQcStatus || Object.keys(cached.byQcStatus).length === 0;
+            if (!exact && hasTotal && breakdownEmpty && qcEmpty) {
+              // Bypass cache and compute an exact result to hydrate breakdowns
+              let fresh: any = null;
+              if (all) fresh = await getCatalogProductsCountExactAll({ size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+              else if (shopId) fresh = await getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+              if (fresh) {
+                const payload = { ...fresh, updatedAt: new Date().toISOString() };
+                try { await r.set(key, JSON.stringify(payload), 'EX', Math.max(1, Math.floor(ttlMs / 1000))); } catch {}
+                return NextResponse.json(payload, { headers: { 'x-cache': 'repaired' } });
+              }
+            }
+            return NextResponse.json(cached, { headers: { 'x-cache': 'hit' } });
+          } catch {
+            // fall through to recompute
+          }
         }
       }
     } catch {
@@ -49,7 +71,7 @@ export async function GET(req: Request) {
       byQcStatus: {},
     };
 
-    if (all) {
+  if (all) {
       if (exact) {
         const totals = await getCatalogProductsCountExactAll({ size, timeMs }).catch(() => null);
         if (totals) result = totals as typeof result;
@@ -62,10 +84,10 @@ export async function GET(req: Request) {
             getCatalogProductsCountQuickForShop({ shopId: String(s.id || s.shopId || ""), limitPages: 4, size: Math.max(size, 50), timeMs }),
           ),
         );
-        const byStatus: Record<string, number> = {};
-        const byQcStatus: Record<string, number> = {};
-        let total = 0;
-        let approx = shopList.length === 0;
+  const byStatus: Record<string, number> = {};
+  const byQcStatus: Record<string, number> = {};
+  let total = 0;
+  let approx = shopList.length === 0;
         for (const c of counts) {
           if (c.status === "fulfilled") {
             const v = c.value as any;
@@ -86,7 +108,19 @@ export async function GET(req: Request) {
             result = { total, approx: true, byStatus, byQcStatus };
           }
         } else {
-          result = { total, approx, byStatus, byQcStatus };
+          // If total > 0 but breakdowns are empty (some vendor payloads omit status/QC in quick scans),
+          // compute an exact-all fallback to populate breakdowns.
+          const breakdownEmpty = Object.keys(byStatus).length === 0 && Object.keys(byQcStatus).length === 0;
+          if (breakdownEmpty && total > 0) {
+            const fallback = await getCatalogProductsCountExactAll({ size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+            if (fallback) {
+              result = fallback as typeof result;
+            } else {
+              result = { total, approx, byStatus, byQcStatus };
+            }
+          } else {
+            result = { total, approx, byStatus, byQcStatus };
+          }
         }
       }
     } else {
@@ -96,7 +130,22 @@ export async function GET(req: Request) {
         if (totals) result = totals as typeof result;
       } else {
         const totals = await getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs }).catch(() => null);
-        if (totals) result = totals as typeof result;
+        if (totals) {
+          // If quick totals found but breakdowns are empty while total > 0, fallback to exact for this shop to compute breakdowns.
+          const byStatus = (totals as any).byStatus || {};
+          const byQcStatus = (totals as any).byQcStatus || {};
+          const breakdownEmpty = Object.keys(byStatus).length === 0 && Object.keys(byQcStatus).length === 0;
+          if (breakdownEmpty && (totals as any).total > 0) {
+            const exactTotals = await getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200), timeMs: Math.max(timeMs, 45_000) }).catch(() => null);
+            if (exactTotals) {
+              result = exactTotals as typeof result;
+            } else {
+              result = totals as typeof result;
+            }
+          } else {
+            result = totals as typeof result;
+          }
+        }
       }
     }
 

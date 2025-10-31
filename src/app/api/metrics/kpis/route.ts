@@ -8,9 +8,19 @@ export async function GET() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const queued = await prisma.jumiaOrder.count({ where: { status: 'PENDING' } });
-    const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
-    const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
+    // DB may be unavailable (e.g., quota exceeded). Degrade gracefully by returning zeros.
+    let queued = 0;
+    let todayPacked = 0;
+    let rts = 0;
+    try {
+      queued = await prisma.jumiaOrder.count({ where: { status: 'PENDING' } });
+    } catch {}
+    try {
+      todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
+    } catch {}
+    try {
+      rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
+    } catch {}
 
     // Cross-shop KPIs (cached 6h)
     let cross = await readKpisCache();
@@ -39,7 +49,8 @@ export async function GET() {
       updatedAt: cross.updatedAt,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return new NextResponse(msg, { status: 500 });
+    // Final safety: never crash this endpoint; surface degraded metrics instead
+    const fallback = { ok: true, queued: 0, todayPacked: 0, rts: 0, productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
+    return NextResponse.json(fallback, { status: 200 });
   }
 }
