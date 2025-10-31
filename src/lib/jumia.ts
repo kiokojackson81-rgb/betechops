@@ -374,6 +374,8 @@ export async function jumiaFetch(
   };
 
   // Use the shared rate-limited queue to perform the request with retries
+  // Identify per-key (per-shop) limiter key when provided by callers
+  const perKey = (fetchOpts as any)?.shopKey ? String((fetchOpts as any).shopKey) : '';
   const attempt = async () => {
     const start = Date.now();
     const r = await fetch(url, requestInit);
@@ -401,6 +403,19 @@ export async function jumiaFetch(
       } catch {}
       throw err;
     }
+    // On success, adapt per-key rate based on vendor hints if available
+    try {
+      const lim = r.headers?.get ? r.headers.get('x-ratelimit-limit') : null;
+      // Heuristic: if header present and looks like per-second limit up to 10, adapt per-key interval
+      if (perKey && lim) {
+        const n = Number(lim);
+        if (Number.isFinite(n) && n > 0 && n <= 10) {
+          const perMs = Math.ceil(1000 / n);
+          _rateLimiter.updatePerKeyMinInterval(perKey, perMs);
+        }
+      }
+    } catch {}
+
     if (rawResponse) return r;
 
     const contentType = (typeof r.headers?.get === 'function' ? r.headers.get('content-type') : '') || '';
@@ -429,7 +444,7 @@ export async function jumiaFetch(
   const canCoalesce = method === 'GET' && String(tokenMeta?.source || '') !== 'SHOP';
   const coalesceKey = canCoalesce ? `${method} ${url}` : '';
   if (!coalesceKey) {
-    return _rateLimiter.scheduleWithRetry(attempt);
+    return perKey ? _rateLimiter.schedulePerKey(perKey, attempt) : _rateLimiter.scheduleWithRetry(attempt);
   }
   // simple global in-flight map
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -439,7 +454,7 @@ export async function jumiaFetch(
   // @ts-ignore
   const inflight: Map<string, Promise<unknown>> = (global as any).__jumiaInflight;
   if (inflight.has(coalesceKey)) return inflight.get(coalesceKey) as Promise<any>;
-  const p = _rateLimiter.scheduleWithRetry(attempt);
+  const p = perKey ? _rateLimiter.schedulePerKey(perKey, attempt) : _rateLimiter.scheduleWithRetry(attempt);
   inflight.set(coalesceKey, p as Promise<unknown>);
   p.finally(() => {
     try { inflight.delete(coalesceKey); } catch {}
@@ -539,6 +554,10 @@ const _rateLimiter = (() => {
   // queue of tasks
   const q: Array<() => void> = [];
   let lastExec = 0;
+  // Per-key pacing state (e.g., per-shop)
+  type KeyState = { lastExec: number; minIntervalMs: number; tail: Promise<unknown> | null };
+  const perKey: Map<string, KeyState> = new Map();
+  const DEFAULT_PER_KEY_MIN_MS = 500; // ~2 rps per shop by default
 
   async function worker() {
     if (q.length === 0) return;
@@ -617,7 +636,34 @@ const _rateLimiter = (() => {
     return runAttempt();
   }
 
-  return { schedule, scheduleWithRetry };
+  // Serialize work per key and enforce min interval per key without blocking other keys
+  async function schedulePerKey<T>(key: string, fn: TaskFn<T>): Promise<T> {
+    if (!key) return schedule(fn);
+    const st: KeyState = perKey.get(key) || { lastExec: 0, minIntervalMs: DEFAULT_PER_KEY_MIN_MS, tail: null };
+    const prev = st.tail || Promise.resolve();
+    const run = prev.then(async () => {
+      const now = Date.now();
+      const wait = Math.max(0, st.minIntervalMs - (now - st.lastExec));
+      if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+      const out = await scheduleWithRetry(fn);
+      st.lastExec = Date.now();
+      return out;
+    });
+    // Keep tail to maintain serialization but swallow errors to not break the chain
+    st.tail = run.then(() => undefined).catch(() => undefined);
+    perKey.set(key, st);
+    return run as Promise<T>;
+  }
+
+  function updatePerKeyMinInterval(key: string, minIntervalMs: number) {
+    if (!key || !Number.isFinite(minIntervalMs) || minIntervalMs <= 0) return;
+    const st: KeyState = perKey.get(key) || { lastExec: 0, minIntervalMs: DEFAULT_PER_KEY_MIN_MS, tail: null };
+    // Choose the slower of the two (greater interval) to remain safe
+    st.minIntervalMs = Math.max(st.minIntervalMs, Math.floor(minIntervalMs));
+    perKey.set(key, st);
+  }
+
+  return { schedule, scheduleWithRetry, schedulePerKey, updatePerKeyMinInterval };
 })();
 
 /* ---- Example helpers (replace paths with your real ones) ---- */
@@ -823,7 +869,7 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   // Some vendor endpoints support a vendor 'sid' query, which we already support via `sids`.
   const q = params.length ? `?${params.join('&')}` : '';
   const shopAuth = o.shopId ? await loadShopAuthById(o.shopId).catch(() => undefined) : await loadDefaultShopAuth();
-  const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+  const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth, shopKey: o.shopId } as any) : ({} as any));
   return j;
 }
 
@@ -885,7 +931,7 @@ export async function getOrders(opts?: { status?: string; createdAfter?: string;
   if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
   const q = params.length ? `?${params.join('&')}` : '';
   const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
-  return await jumiaFetch(`/orders${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+  return await jumiaFetch(`/orders${q}`, shopAuth ? ({ shopAuth, shopKey: opts?.shopId } as any) : ({} as any));
 }
 
 export async function getOrderItems(orderId: string) {
@@ -1158,7 +1204,7 @@ export async function getCatalogProductsCountQuickForShop({ shopId, limitPages =
   let total = 0;
   const fetcher = async (p: string) =>
     await Promise.race([
-      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) } as any),
+      jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined), shopKey: shopId } as any),
       new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))) as unknown as Promise<unknown>,
     ]);
 
@@ -1220,14 +1266,14 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 100, 
   const byQcStatus: Record<string, number> = {};
   let total = 0;
   const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
-  const first = await jumiaFetch(`/catalog/products?size=1`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
+  const first = await jumiaFetch(`/catalog/products?size=1`, shopAuth ? ({ shopAuth, shopKey: shopId } as any) : ({} as any)).catch(() => null);
   const hinted = _extractTotal(first);
   if (typeof hinted === 'number' && hinted >= 0) {
     return { total: hinted, byStatus, byQcStatus, approx: false };
   }
   const fetcher = async (p: string) =>
     await Promise.race([
-      jumiaFetch(p, shopAuth ? ({ shopAuth } as any) : ({} as any)),
+      jumiaFetch(p, shopAuth ? ({ shopAuth, shopKey: shopId } as any) : ({} as any)),
       new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(30_000, timeMs))) as unknown as Promise<unknown>,
     ]);
 

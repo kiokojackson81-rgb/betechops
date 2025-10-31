@@ -18,6 +18,19 @@ export async function GET(req: NextRequest) {
   const query = new URLSearchParams(qs).toString();
   const path = query ? `orders?${query}` : 'orders';
 
+  // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  if (!(global as any).__ordersPendingCache) (global as any).__ordersPendingCache = new Map<string, { ts: number; data: any }>();
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const cacheMap: Map<string, { ts: number; data: any }> = (global as any).__ordersPendingCache;
+  const TTL_MS = 7000; // 7 seconds default
+
+  const isPending = (qs.status || '').toUpperCase() === 'PENDING';
+  const hasCursor = Boolean(qs.nextToken || (qs as any).token);
+  const cacheKey = isPending && !hasCursor ? `GET ${path}` : '';
+
   try {
     // Special scope: aggregate across all active JUMIA shops with composite pagination
     if ((qs.shopId || '').toUpperCase() === 'ALL') {
@@ -36,6 +49,17 @@ export async function GET(req: NextRequest) {
       };
 
       const pageSize = Math.max(1, Math.min(parseInt(qs.size || '50', 10) || 50, 100));
+
+      // Return cached response for ALL-shops PENDING (first page only)
+      if (cacheKey) {
+        const hit = cacheMap.get(cacheKey);
+        if (hit && Date.now() - hit.ts < TTL_MS) {
+          const res = NextResponse.json(hit.data);
+          res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
+          res.headers.set('X-Cache', 'HIT');
+          return res;
+        }
+      }
 
       // Decode cursor token, if any
       type Cursor = { ts: number; id?: string };
@@ -67,7 +91,7 @@ export async function GET(req: NextRequest) {
           try {
             // Prime first page
             const shopAuth = await loadShopAuthById(s.id).catch(() => undefined);
-            const j = await jumiaFetch(basePath, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+            const j = await jumiaFetch(basePath, shopAuth ? ({ method: 'GET', shopAuth, shopKey: s.id } as any) : ({ method: 'GET' } as any));
             const arr = Array.isArray((j as any)?.orders)
               ? (j as any).orders
               : Array.isArray((j as any)?.items)
@@ -94,7 +118,7 @@ export async function GET(req: NextRequest) {
             while (cursor && st.buf.length === 0 && !st.isLast && safety < 5) {
               const p = new URL(basePath, 'http://x/');
               const qp = p.search ? `${p.pathname}${p.search}&token=${encodeURIComponent(String(st.token))}` : `${p.pathname}?token=${encodeURIComponent(String(st.token))}`;
-              const j2 = await jumiaFetch(qp.slice(1), shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+              const j2 = await jumiaFetch(qp.slice(1), shopAuth ? ({ method: 'GET', shopAuth, shopKey: s.id } as any) : ({ method: 'GET' } as any));
               const arr2 = Array.isArray((j2 as any)?.orders)
                 ? (j2 as any).orders
                 : Array.isArray((j2 as any)?.items)
@@ -140,7 +164,7 @@ export async function GET(req: NextRequest) {
                     ? `${p.pathname}${p.search}&token=${encodeURIComponent(String(st.token))}`
                     : `${p.pathname}?token=${encodeURIComponent(String(st.token))}`
                   : `${p.pathname}${p.search}`;
-                const j = await jumiaFetch(qp.slice(1), shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+                const j = await jumiaFetch(qp.slice(1), shopAuth ? ({ method: 'GET', shopAuth, shopKey: st.id } as any) : ({ method: 'GET' } as any));
                 const arr = Array.isArray((j as any)?.orders)
                   ? (j as any).orders
                   : Array.isArray((j as any)?.items)
@@ -184,13 +208,30 @@ export async function GET(req: NextRequest) {
       }
 
       const isLastPage = out.length < pageSize; // conservative: if we couldn't fill, treat as last
-      return NextResponse.json({ orders: out, nextToken, isLastPage });
+      const payload = { orders: out, nextToken, isLastPage };
+      if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: payload });
+      const resAll = NextResponse.json(payload);
+      if (cacheKey) resAll.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
+      return resAll;
     }
 
     const shopAuth = qs.shopId ? await loadShopAuthById(qs.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+    // Single-shop PENDING caching (no cursor)
+    if (cacheKey) {
+      const hit = cacheMap.get(cacheKey);
+      if (hit && Date.now() - hit.ts < TTL_MS) {
+        const res = NextResponse.json(hit.data);
+        res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
+        res.headers.set('X-Cache', 'HIT');
+        return res;
+      }
+    }
     try {
-      const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
-      return NextResponse.json(data);
+      const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
+      if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
+      const res = NextResponse.json(data);
+      if (cacheKey) res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
+      return res;
     } catch (e: any) {
       // Some tenants error if shopId is supplied while the token is already scoped; retry without shopId.
       const msg = e?.message ? String(e.message) : '';
@@ -199,8 +240,11 @@ export async function GET(req: NextRequest) {
         const q2 = new URLSearchParams(qs);
         q2.delete('shopId');
         const p2 = `orders?${q2.toString()}`;
-        const data2 = await jumiaFetch(p2, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
-        return NextResponse.json(data2);
+        const data2 = await jumiaFetch(p2, shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
+        if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
+        const res2 = NextResponse.json(data2);
+        if (cacheKey) res2.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
+        return res2;
       }
       throw e;
     }
