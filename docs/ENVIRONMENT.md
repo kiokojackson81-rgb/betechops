@@ -28,3 +28,13 @@ Optional endpoint overrides if your vendor uses different paths:
 - Prefer Neon or another hosted Postgres with pooled connections. Keep `sslmode=require` and enable PgBouncer flags in `DATABASE_URL` for Vercel. Provide `DIRECT_URL` for migrations.
 - If OIDC test fails with 404, set `JUMIA_OIDC_TOKEN_URL` or `OIDC_TOKEN_URL` explicitly to the token endpoint (should be `/oauth/token` or the provider's token endpoint).
 - After editing envs, redeploy to apply.
+
+### Neon example
+Use the pooled host for `DATABASE_URL` and the direct host for `DIRECT_URL`:
+
+```
+DATABASE_URL="postgresql://<user>:<pass>@<project>-pooler.<region>.neon.tech/<db>?sslmode=require&pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://<user>:<pass>@<project>.<region>.neon.tech/<db>?sslmode=require"
+```
+
+With Prisma 5.10+ (and 6.x), `directUrl` is supported in `schema.prisma` and will be used automatically for migrations.

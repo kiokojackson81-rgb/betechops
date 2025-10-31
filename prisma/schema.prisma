@@ -6,6 +6,8 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Use a direct, non-pooled connection for migrations; keep pooled URL for runtime
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
@@ -580,6 +582,40 @@ model FulfillmentAudit {
 
   shop Shop @relation(fields: [shopId], references: [id])
   @@index([shopId, orderId])
+}
+
+/// Persisted catalog counters (per shop and aggregate "ALL")
+model CatalogCounters {
+  id           String   @id @default(cuid())
+  // scope: 'SHOP' for per-shop entries, 'ALL' for aggregate across all shops
+  scope        String
+  shopId       String?
+
+  // totals
+  total        Int       @default(0)
+  active       Int       @default(0)
+  inactive     Int       @default(0)
+  deleted      Int       @default(0)
+  pending      Int       @default(0)
+  visibleLive  Int       @default(0)
+  // QC buckets
+  qcApproved   Int       @default(0)
+  qcPending    Int       @default(0)
+  qcRejected   Int       @default(0)
+  qcNotReady   Int       @default(0)
+  // original granular maps (optional)
+  byStatus     Json?
+  byQcStatus   Json?
+  approx       Boolean   @default(false)
+
+  computedAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // no explicit relation needed; shopId references Shop.id
+
+  @@unique([scope, shopId])
+  @@index([scope, shopId, computedAt])
 }
 
 

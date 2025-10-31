@@ -6,6 +6,7 @@ import {
   getCatalogProductsCountExactForShop,
   getCatalogProductsCountExactAll,
 } from "@/lib/jumia";
+import { computeAndStoreCountersForShop, getLatestCounters, rowToSummaryPayload, storeAggregateSummary } from "@/lib/catalog-counters";
 
 // GET /api/catalog/products-count
 // Params:
@@ -51,8 +52,18 @@ export async function GET(req: Request) {
 
     if (all) {
       if (exact) {
-        const totals = await getCatalogProductsCountExactAll({ size, timeMs }).catch(() => null);
-        if (totals) result = totals as typeof result;
+        // Try persisted aggregate first; if stale/missing, compute now and store
+        const hit = await getLatestCounters({ scope: "ALL" }).catch(() => ({ stale: true as const, row: null as any }));
+        if (hit.row && !hit.stale) {
+          result = rowToSummaryPayload(hit.row) as typeof result;
+        } else {
+          const totals = await getCatalogProductsCountExactAll({ size, timeMs }).catch(() => null);
+          if (totals) {
+            result = totals as typeof result;
+            // best-effort: persist aggregate for next requests
+            try { await storeAggregateSummary(result as any); } catch {}
+          }
+        }
       } else {
         // quick path: sum quick counts per shop; if no shops or zero totals, fallback to exact-all
         const shops = await getShops().catch(() => [] as any[]);
@@ -92,8 +103,18 @@ export async function GET(req: Request) {
     } else {
       if (!shopId) return NextResponse.json({ error: "shopId required (or set all=true)" }, { status: 400 });
       if (exact) {
-        const totals = await getCatalogProductsCountExactForShop({ shopId, size, timeMs }).catch(() => null);
-        if (totals) result = totals as typeof result;
+        // Prefer persisted exact counters per shop if fresh
+        const hit = await getLatestCounters({ scope: "SHOP", shopId }).catch(() => ({ stale: true as const, row: null as any }));
+        if (hit.row && !hit.stale) {
+          result = rowToSummaryPayload(hit.row) as typeof result;
+        } else {
+          const totals = await getCatalogProductsCountExactForShop({ shopId, size, timeMs }).catch(() => null);
+          if (totals) {
+            result = totals as typeof result;
+            // Fire-and-forget: persist latest for next time
+            try { await computeAndStoreCountersForShop(shopId, { size, timeMs }); } catch {}
+          }
+        }
       } else {
         const totals = await getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs }).catch(() => null);
         if (totals) result = totals as typeof result;
