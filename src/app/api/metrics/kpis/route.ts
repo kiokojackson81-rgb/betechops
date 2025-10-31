@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { readKpisCache } from '@/lib/kpisCache';
-import { updateKpisCache } from '@/lib/jobs/kpis';
+import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 
 export async function GET() {
   try {
@@ -22,8 +22,17 @@ export async function GET() {
         try {
           cross = await updateKpisCache();
         } catch {
-          // degrade gracefully
           cross = { productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
+        }
+        // If quick snapshot looks empty or approximate, opportunistically try exact once
+        if ((cross.pendingAll ?? 0) === 0 || cross.approx) {
+          try {
+            const exact = await updateKpisCacheExact();
+            // prefer exact if it produced a non-zero or non-approx result
+            if ((exact.pendingAll ?? 0) > 0 || !exact.approx) cross = exact;
+          } catch {
+            // ignore if exact fails; quick snapshot already returned
+          }
         }
       }
     }
