@@ -65,14 +65,7 @@ export type ShopConnectivity = {
 };
 
 export async function computeShopsConnectivity(): Promise<ShopConnectivity[]> {
-  let shops: Array<{ id: string; name: string; platform: string; isActive: boolean }> = [];
-  try {
-    shops = await prisma.shop.findMany({ select: { id: true, name: true, platform: true, isActive: true }, orderBy: { name: 'asc' } });
-  } catch (e) {
-    // During DB outages or quota limits, degrade gracefully: no shops listed
-    console.error('computeShopsConnectivity prisma error:', e);
-    return [];
-  }
+  const shops = await prisma.shop.findMany({ select: { id: true, name: true, platform: true, isActive: true }, orderBy: { name: 'asc' } });
 
   const today = new Date();
   const yyyy = today.toISOString().slice(0, 10);

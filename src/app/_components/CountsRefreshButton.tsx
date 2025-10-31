@@ -8,9 +8,7 @@ export default function CountsRefreshButton({ shopId, exact }: { shopId: string;
   const isAll = !shopId || shopId.toUpperCase() === "ALL";
   const qs = new URLSearchParams();
   if (isAll) qs.set("all", "true"); else qs.set("shopId", shopId);
-  // Force an exact recompute and bypass cache read; route will still write the refreshed exact result into cache
-  qs.set("exact", "true");
-  qs.set("force", "true");
+  if (exact) qs.set("exact", "true");
 
   return (
     <button
