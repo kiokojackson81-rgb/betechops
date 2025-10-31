@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getShops, getShopsOfMasterShop, jumiaFetch, loadDefaultShopAuth, getCatalogProductTotals } from "@/lib/jumia";
+import { getShops, getShopsOfMasterShop, jumiaFetch, loadDefaultShopAuth, getCatalogProductTotals, loadShopAuthById } from "@/lib/jumia";
 
 // GET /api/debug/jumia/products-count?shopName=JM%20Latest%20Collections
 //    or /api/debug/jumia/products-count?shopId=<prismaId>
@@ -82,15 +82,15 @@ export async function GET(req: Request) {
 
     // If shopId was provided, try to use per-shop credentials by hitting the shop-specific param to vendor
     // However, vendor supports sids filter; prefer that when we have SID.
-    const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+  // Choose auth: if a Prisma shopId is provided (no sids), use that shop's credentials; otherwise default
+  const shopAuth = shopId && !sidsQ ? await loadShopAuthById(shopId).catch(() => loadDefaultShopAuth().catch(() => undefined)) : await loadDefaultShopAuth().catch(() => undefined);
 
     // Fast-path: ask for one item and read the total from response metadata
-    const params = new URLSearchParams();
-    params.set('size', '1');
-    if (sids && sids.length) params.set('sids', sids.join(','));
-    if (shopId && !params.has('sids')) params.set('shopId', shopId);
-
-    const first = await jumiaFetch(`/catalog/products?${params.toString()}`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
+  const params = new URLSearchParams();
+  params.set('size', '1');
+  if (sids && sids.length) params.set('sids', sids.join(','));
+  // Do NOT pass our internal Prisma shopId as vendor query param; rely on per-shop auth when shopId is present
+  const first = await jumiaFetch(`/catalog/products?${params.toString()}`, shopAuth ? ({ shopAuth } as any) : ({} as any)).catch(() => null);
     const hinted = extractTotal(first);
     if (typeof hinted === 'number' && hinted >= 0) {
       return NextResponse.json({ ok: true, by: sids?.length ? 'sid' : (shopId ? 'shopId' : (shopName ? 'shopName' : 'default')), shop: matchedName ? { name: matchedName, sid: sids?.[0] } : undefined, total: hinted, approx: false, source: 'metadata' });
@@ -106,7 +106,7 @@ export async function GET(req: Request) {
       const qp = new URLSearchParams();
       qp.set('size', String(size));
       if (sids && sids.length) qp.set('sids', sids.join(','));
-      if (shopId && !qp.has('sids')) qp.set('shopId', shopId);
+      // Do NOT include Prisma shopId as vendor filter; auth already scopes to shop when needed
       if (token) qp.set('token', token);
       const page = await jumiaFetch(`/catalog/products?${qp.toString()}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
       const arr = Array.isArray((page as any)?.products) ? (page as any).products : Array.isArray((page as any)?.items) ? (page as any).items : Array.isArray((page as any)?.data) ? (page as any).data : [];
