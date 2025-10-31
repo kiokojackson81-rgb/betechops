@@ -578,7 +578,8 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
           <div className="flex gap-2 overflow-x-auto pb-2">
             {categories.map((category: AnyRecord, index: number) => {
               const code = Number(category?.code ?? category?.categoryCode ?? index);
-              const label = category?.name ?? category?.categoryName ?? category?.title ?? `Category ${index + 1}`;
+              const rawLabel = category?.name ?? category?.categoryName ?? category?.title ?? `Category ${index + 1}`;
+              const label = typeof rawLabel === "string" ? rawLabel : String(rawLabel);
               const isActive = categoryCode !== undefined && code === categoryCode;
               const href = `/admin/catalog?${buildQueryString({
                 ...baseQuery,
@@ -587,7 +588,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
               })}`;
               return (
                 <a
-                  key={code || label}
+                  key={`cat-${code}-${label}`}
                   href={href}
                   className={`min-w-[180px] rounded-lg border px-3 py-2 text-sm transition-colors ${
                     isActive
