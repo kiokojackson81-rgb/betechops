@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "./prisma";
 import {
   getCatalogProductsCountExactForShop,
   getCatalogProductsCountExactAll,
-} from "@/lib/jumia";
+} from "./jumia";
 
 export type Summary = {
   total: number;
