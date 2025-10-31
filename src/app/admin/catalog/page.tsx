@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getCatalogCategories, getCatalogProducts, getCatalogProductsCountQuickForShop } from "@/lib/jumia";
 import { headers } from "next/headers";
 import CountsRefreshButton from "@/app/_components/CountsRefreshButton";
+import CatalogMetrics from "@/app/_components/CatalogMetrics";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_TIMEOUT = 8000;
@@ -520,15 +521,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
         </p>
       </header>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {metricsCards.map((card) => (
-          <div key={card.key} className={`rounded-xl border px-4 py-3 shadow-sm ${metricTone(card.tone)}`}>
-            <div className="text-xs uppercase tracking-wide text-white/70">{card.label}</div>
-            <div className="mt-2 text-2xl font-semibold">{formatNumber(card.value)}</div>
-            {card.key === "total" && summary.approx ? <div className="text-xs text-amber-200/80">Approximate</div> : null}
-          </div>
-        ))}
-      </section>
+      <CatalogMetrics initial={summary} shopId={shopId} exact={exact} />
 
       <section className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
         <div>
