@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { getCatalogCategories, getCatalogProducts, getCatalogProductsCountQuickForShop } from "@/lib/jumia";
+import { headers } from "next/headers";
+import CountsRefreshButton from "@/app/_components/CountsRefreshButton";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_TIMEOUT = 8000;
@@ -330,6 +332,27 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
   let nextToken = "";
   let summary: Summary = EMPTY_SUMMARY;
 
+  async function fetchCountsFromApi(all: boolean, sid: string, exactMode: boolean, sizeHint: number): Promise<Summary | null> {
+    try {
+      const h = await headers();
+      const host = h.get("x-forwarded-host") || h.get("host") || process.env.NEXT_PUBLIC_VERCEL_URL || "localhost:3000";
+      const proto = h.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+      const base = host.startsWith("http") ? host : `${proto}://${host}`;
+      const qs = new URLSearchParams();
+      if (all) qs.set("all", "true"); else qs.set("shopId", sid);
+      if (exactMode) qs.set("exact", "true");
+      qs.set("size", String(Math.max(1, sizeHint)));
+      const url = `${base}/api/catalog/products-count?${qs.toString()}`;
+      const res = await fetch(url, { cache: "no-store" as const, next: { revalidate: 0 } });
+      if (!res.ok) return null;
+      const j = (await res.json()) as Summary & { updatedAt?: string };
+      if (typeof j?.total === "number") return { total: j.total, approx: !!j.approx, byStatus: j.byStatus || {}, byQcStatus: j.byQcStatus || {} };
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   if (shopId.toUpperCase() === "ALL") {
     const perShopProducts = await Promise.all(
       shops.map(async (shop) => {
@@ -344,8 +367,10 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
     );
     rawProducts = perShopProducts.flat();
     nextToken = "";
-    if (exact) {
-      // Exact totals across all shops (bounded by internal time caps)
+    const fromApi = await fetchCountsFromApi(true, "", exact, exact ? Math.max(size, 200) : Math.max(size, 100));
+    if (fromApi) {
+      summary = fromApi;
+    } else if (exact) {
       const exactTotals = await (await import("@/lib/jumia")).getCatalogProductsCountExactAll({ size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY);
       summary = exactTotals;
     } else {
@@ -376,18 +401,22 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
       summary = { total, approx, byStatus, byQcStatus };
     }
   } else {
-    const [productsResponse, summaryResponse] = await Promise.all([
+    const [productsResponse, apiSummary] = await Promise.all([
       withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode, shopId }), DEFAULT_TIMEOUT).catch(() => undefined),
-      exact
-        ? (await import("@/lib/jumia")).getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY)
-        : getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY),
+      fetchCountsFromApi(false, shopId, exact, exact ? Math.max(size, 200) : Math.max(size, 100)),
     ]);
     rawProducts = extractProducts(productsResponse).map((item: AnyRecord) => ({
       ...item,
       _shop: { id: shopId, name: shopLookup.get(shopId) },
     }));
     nextToken = String(productsResponse?.nextToken ?? productsResponse?.token ?? productsResponse?.next ?? "") || "";
-    summary = summaryResponse;
+    if (apiSummary) {
+      summary = apiSummary;
+    } else {
+      summary = await (exact
+        ? (await import("@/lib/jumia")).getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY)
+        : getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY));
+    }
   }
 
   const filteredProducts = rawProducts
@@ -631,6 +660,8 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
             >
               {exact ? "Exact counts" : "Use exact counts"}
             </a>
+            {/* Client-side refresh button to warm cache and refresh UI */}
+            <CountsRefreshButton shopId={shopId} exact={exact} />
             {nextToken ? (
               <a
                 className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-100 hover:border-white/25"
