@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { Platform } from "@prisma/client";
 import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson, ShopAuthSchema } from '@/lib/oidc';
 import { decryptJson } from '@/lib/crypto/secure-json';
 
@@ -466,7 +465,7 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
 export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
   if (process.env.NODE_ENV === 'test') return undefined;
   try {
-    const shop = await prisma.shop.findFirst({ where: { platform: Platform.JUMIA, isActive: true }, select: { id: true } });
+    const shop = await prisma.shop.findFirst({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
     if (!shop) return undefined;
     return await loadShopAuthById(shop.id);
   } catch {
@@ -790,7 +789,8 @@ export async function getCatalogProducts(opts?: { token?: string; size?: number;
   if (o.sellerSku) params.push(`sellerSku=${encodeURIComponent(o.sellerSku)}`);
   if (o.createdAtFrom) params.push(`createdAtFrom=${encodeURIComponent(o.createdAtFrom)}`);
   if (o.createdAtTo) params.push(`createdAtTo=${encodeURIComponent(o.createdAtTo)}`);
-  if (o.shopId) params.push(`shopId=${encodeURIComponent(o.shopId)}`);
+  // IMPORTANT: Do NOT pass our internal shopId as Jumia shopId param; use per-shop auth instead.
+  // Some vendor endpoints support a vendor 'sid' query, which we already support via `sids`.
   const q = params.length ? `?${params.join('&')}` : '';
   const shopAuth = o.shopId ? await loadShopAuthById(o.shopId).catch(() => undefined) : await loadDefaultShopAuth();
   const j = await jumiaFetch(`/catalog/products${q}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
@@ -1182,7 +1182,7 @@ export async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2
 }
 
 // Exact vendor product counter per shop (scans all pages with safety caps)
-export async function getCatalogProductsCountExactForShop({ shopId, size = 200, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
+export async function getCatalogProductsCountExactForShop({ shopId, size = 100, maxPages = 2000, timeMs = 45_000 }: { shopId: string; size?: number; maxPages?: number; timeMs?: number }) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   const byQcStatus: Record<string, number> = {};
@@ -1200,7 +1200,8 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
     ]);
 
   let pages = 0;
-  for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+  const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
+  for await (const page of jumiaPaginator('/catalog/products', { size: String(pageSize) }, fetcher)) {
     const arr = Array.isArray((page as any)?.products)
       ? (page as any).products
       : Array.isArray((page as any)?.items)
@@ -1224,7 +1225,7 @@ export async function getCatalogProductsCountExactForShop({ shopId, size = 200, 
 }
 
 // Exact product count across all shops under a master account (preferred for KPIs)
-export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
+export async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60_000 }: { size?: number; timeMs?: number } = {}) {
   const start = Date.now();
   const byStatus: Record<string, number> = {};
   const byQcStatus: Record<string, number> = {};
@@ -1239,7 +1240,8 @@ export async function getCatalogProductsCountExactAll({ size = 200, timeMs = 60_
     if (!sids.length) sids = undefined;
   } catch { sids = undefined; }
 
-  const params: Record<string, string> = { size: String(size) };
+  const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
+  const params: Record<string, string> = { size: String(pageSize) };
   if (sids && sids.length) params['sids'] = sids.join(',');
 
   const shopAuth = await loadDefaultShopAuth().catch(() => undefined);

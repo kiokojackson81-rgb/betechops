@@ -21,7 +21,7 @@ export async function updateKpisCache(): Promise<CrossShopKpis> {
 export async function updateKpisCacheExact(): Promise<CrossShopKpis> {
   const shops = await prisma.shop.findMany({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
   // Use master-account all-shops exact counter for products to avoid 14x fan-out
-  const prodAll = await getCatalogProductsCountExactAll({ size: 200, timeMs: 55_000 }).catch(() => ({ total: 0, approx: true }));
+  const prodAll = await getCatalogProductsCountExactAll({ size: 100, timeMs: 55_000 }).catch(() => ({ total: 0, approx: true }));
   // Pending orders can remain a bounded sum per shop (usually small)
   const perShopPending = await Promise.all(
     shops.map(async (s) => await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 10, size: 100, timeMs: 20_000 }).catch(() => ({ total: 0, approx: true })))
