@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { Platform } from "@prisma/client";
 import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson, ShopAuthSchema } from '@/lib/oidc';
 import { decryptJson } from '@/lib/crypto/secure-json';
 
@@ -466,7 +465,7 @@ export async function loadShopAuthById(shopId: string): Promise<ShopAuthJson | u
 export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
   if (process.env.NODE_ENV === 'test') return undefined;
   try {
-    const shop = await prisma.shop.findFirst({ where: { platform: Platform.JUMIA, isActive: true }, select: { id: true } });
+    const shop = await prisma.shop.findFirst({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
     if (!shop) return undefined;
     return await loadShopAuthById(shop.id);
   } catch {
