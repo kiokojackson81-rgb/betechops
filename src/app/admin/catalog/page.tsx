@@ -154,7 +154,7 @@ type Summary = { total: number; approx: boolean; byStatus: Record<string, number
 
 const EMPTY_SUMMARY: Summary = { total: 0, approx: true, byStatus: {}, byQcStatus: {} };
 
-type CatalogSearchParams = Promise<{ token?: string; size?: string; sellerSku?: string; categoryCode?: string; status?: string; qcStatus?: string; shopId?: string }>;
+type CatalogSearchParams = Promise<{ token?: string; size?: string; sellerSku?: string; categoryCode?: string; status?: string; qcStatus?: string; shopId?: string; exact?: string }>;
 
 type NormalizedProduct = {
   key: string;
@@ -303,6 +303,8 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
   const categoryCode = sp.categoryCode ? Number(sp.categoryCode) : undefined;
   const token = (sp.token || "").trim() || undefined;
   const shopId = (sp.shopId || "ALL").toString();
+  const exactFlag = String(sp.exact || "").toLowerCase();
+  const exact = exactFlag === "1" || exactFlag === "true" || exactFlag === "yes";
 
   const rawStatus = normalize(sp.status);
   const rawQcStatus = normalize(sp.qcStatus);
@@ -342,36 +344,43 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
     );
     rawProducts = perShopProducts.flat();
     nextToken = "";
-
-    const counts = await Promise.allSettled(
-      shops.map((shop) =>
-        getCatalogProductsCountQuickForShop({ shopId: shop.id, limitPages: 4, size: Math.max(size, 50), timeMs: 12_000 }),
-      ),
-    );
-    const byStatus: Record<string, number> = {};
-    const byQcStatus: Record<string, number> = {};
-    let total = 0;
-    let approx = shops.length > 0 ? false : true;
-    for (const result of counts) {
-      if (result.status === "fulfilled") {
-        const value = result.value;
-        total += value.total;
-        approx = approx || value.approx;
-        for (const [key, count] of Object.entries(value.byStatus)) {
-          byStatus[key] = (byStatus[key] || 0) + count;
+    if (exact) {
+      // Exact totals across all shops (bounded by internal time caps)
+      const exactTotals = await (await import("@/lib/jumia")).getCatalogProductsCountExactAll({ size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY);
+      summary = exactTotals;
+    } else {
+      const counts = await Promise.allSettled(
+        shops.map((shop) =>
+          getCatalogProductsCountQuickForShop({ shopId: shop.id, limitPages: 4, size: Math.max(size, 50), timeMs: 12_000 }),
+        ),
+      );
+      const byStatus: Record<string, number> = {};
+      const byQcStatus: Record<string, number> = {};
+      let total = 0;
+      let approx = shops.length > 0 ? false : true;
+      for (const result of counts) {
+        if (result.status === "fulfilled") {
+          const value = result.value as Summary;
+          total += value.total;
+          approx = approx || (value as any).approx;
+          for (const [key, count] of Object.entries((value as any).byStatus || {})) {
+            byStatus[key] = (byStatus[key] || 0) + (count as number);
+          }
+          for (const [key, count] of Object.entries((value as any).byQcStatus || {})) {
+            byQcStatus[key] = (byQcStatus[key] || 0) + (count as number);
+          }
+        } else {
+          approx = true;
         }
-        for (const [key, count] of Object.entries(value.byQcStatus)) {
-          byQcStatus[key] = (byQcStatus[key] || 0) + count;
-        }
-      } else {
-        approx = true;
       }
+      summary = { total, approx, byStatus, byQcStatus };
     }
-    summary = { total, approx, byStatus, byQcStatus };
   } else {
     const [productsResponse, summaryResponse] = await Promise.all([
       withTimeout(getCatalogProducts({ size, token, sellerSku, categoryCode, shopId }), DEFAULT_TIMEOUT).catch(() => undefined),
-      getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY),
+      exact
+        ? (await import("@/lib/jumia")).getCatalogProductsCountExactForShop({ shopId, size: Math.max(size, 200) }).catch(() => EMPTY_SUMMARY)
+        : getCatalogProductsCountQuickForShop({ shopId, limitPages: 6, size: Math.max(size, 100), timeMs: 15_000 }).catch(() => EMPTY_SUMMARY),
     ]);
     rawProducts = extractProducts(productsResponse).map((item: AnyRecord) => ({
       ...item,
@@ -478,7 +487,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
         <h1 className="text-3xl font-semibold">Catalog</h1>
         <p className="text-sm text-slate-300">
           {selectedShopName}
-          {summary.approx ? <span className="ml-2 text-amber-300">Counts are approximate (first few pages).</span> : null}
+          {!exact && summary.approx ? <span className="ml-2 text-amber-300">Counts are approximate (first few pages).</span> : null}
         </p>
       </header>
 
@@ -507,6 +516,7 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
         <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <input type="hidden" name="status" value={listingStatusFilter ?? ""} />
           <input type="hidden" name="qcStatus" value={qcStatusFilter ?? ""} />
+          <input type="hidden" name="exact" value={exact ? "true" : ""} />
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-300">Shop</label>
             <select name="shopId" defaultValue={shopId} className="rounded border border-white/15 bg-slate-900/60 px-3 py-2 text-sm">
@@ -610,6 +620,17 @@ export default async function CatalogPage({ searchParams }: { searchParams?: Cat
           <h2 className="text-lg font-semibold">Products</h2>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             {token ? <span>token: {token.slice(0, 6)}…</span> : null}
+            <a
+              className={`rounded border px-3 py-1 text-xs ${
+                exact
+                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                  : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"
+              }`}
+              href={`/admin/catalog?${buildQueryString({ ...baseQuery, exact: exact ? undefined : "true" })}`}
+              title={exact ? "Switch to quick counts" : "Switch to exact counts"}
+            >
+              {exact ? "Exact counts" : "Use exact counts"}
+            </a>
             {nextToken ? (
               <a
                 className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-100 hover:border-white/25"

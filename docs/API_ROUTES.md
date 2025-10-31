@@ -41,6 +41,9 @@ Note: All routes that accept `shopId` must call `requireShopAccess(...)` (server
   - /api/commissions/recompute — existing recompute endpoints extended to consider penalty lines.
   - /api/settings/jumia — manage global Jumia endpoints/overrides.
   - /api/health — health check endpoint.
+  - /api/catalog/products-count — lightweight counts for catalog products with Redis caching.
+    - GET params: `shopId` or `all=true`, `exact=true|false` (default false), optional `ttlMs` (default 30m), `size`, `timeMs`.
+    - Response: `{ total, approx, byStatus, byQcStatus, updatedAt }` and header `x-cache: hit|miss`.
 
 ## Implementation notes
 - All syncs must be idempotent: upsert by (`shopId`, `externalOrderId`).
