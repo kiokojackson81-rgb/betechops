@@ -179,10 +179,8 @@ export default function Home() {
     () => ["/api/orders/pending-pricing", "/api/reports/pending-pricing"],
     []
   );
-  const pendingPaths = useMemo(
-    () => ["/api/metrics/kpis", "/api/orders?status=PENDING&shopId=ALL", "/api/orders/pending-pricing"],
-    []
-  );
+  // Pending Orders (All) should come from the persisted KPIs endpoint only to avoid flicker
+  const pendingPaths = useMemo(() => ["/api/metrics/kpis"], []);
 
   useEffect(() => {
     let ignore = false;

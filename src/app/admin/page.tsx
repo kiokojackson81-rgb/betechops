@@ -28,14 +28,12 @@ async function getStats(): Promise<Stats> {
       attendants,
       returnsDb,
       revenueAgg,
-      pendingLegacy,
     ] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
       prisma.returnCase.count(),
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
-      prisma.order.count({ where: { status: "PENDING" } }),
     ]);
 
     let kpis: any = null;
@@ -50,30 +48,10 @@ async function getStats(): Promise<Stats> {
     const productsAll = Number(kpis?.productsAll ?? 0);
     const approxProducts = Boolean(kpis?.approx);
 
-    let pendingSynced = 0;
-    let approxPending = false;
-    try {
-      if (kpis && typeof kpis.pendingAll === "number" && !kpis.approx) {
-        pendingSynced = Number(kpis.pendingAll);
-      } else {
-        const pendingUrl = await absUrl("/api/orders?status=PENDING&shopId=ALL");
-        const pendingResp = await fetch(pendingUrl, { cache: "no-store" });
-        if (pendingResp.ok) {
-          const pendingData = await pendingResp.json();
-          if (Array.isArray(pendingData?.orders)) {
-            pendingSynced = pendingData.orders.length;
-          } else {
-            approxPending = true;
-          }
-        } else {
-          approxPending = true;
-        }
-      }
-    } catch {
-      approxPending = true;
-    }
-
-    const pendingAll = pendingLegacy + pendingSynced;
+    // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
+    // This avoids flicker and double counting.
+    const pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
+    const approxPending = Boolean(kpis?.approx);
 
     return {
       productsAll,
