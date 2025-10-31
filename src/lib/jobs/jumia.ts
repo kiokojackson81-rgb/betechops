@@ -230,8 +230,9 @@ function pickLatest(current: string | null, next: string | null) {
 }
 
 export async function syncReturnOrders(opts?: { shopId?: string; lookbackDays?: number }) {
+  // Narrow shopId to non-null in the truthy branch to satisfy Prisma.ShopWhereInput
   const shopFilter: Prisma.ShopWhereInput = opts?.shopId
-    ? { id: opts.shopId }
+    ? { id: opts.shopId! }
     : { platform: Platform.JUMIA, isActive: true };
   const shops = await prisma.shop.findMany({ where: shopFilter, select: { id: true } });
   const summary: Record<string, { processed: number; returnCases: number; cursor?: string }> = {};
