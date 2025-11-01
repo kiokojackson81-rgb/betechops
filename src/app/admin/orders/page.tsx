@@ -409,6 +409,8 @@ export default async function OrdersPage(props: unknown) {
           // Smaller default page size when aggregating ALL shops to reduce initial payload
           size: params.size ?? (params.shopId === 'ALL' ? '30' : '50'),
         }}
+        // When using cached PENDING from DB, keep SSR snapshot only (no live fetch)
+        disableClientFetch={Boolean(showingSynced)}
       />
     </div>
   );

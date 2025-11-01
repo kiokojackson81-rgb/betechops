@@ -31,9 +31,12 @@ type Props = {
     q?: string;
     size?: string;
   };
+  // When true, never call the live /api/orders endpoint; keep SSR rows only.
+  // Useful for DB-only PENDING view to avoid flicker and vendor calls.
+  disableClientFetch?: boolean;
 };
 
-export default function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, params }: Props) {
+export default function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, params, disableClientFetch = false }: Props) {
   const [rows, setRows] = useState<Row[]>(initialRows ?? []);
   const [nextToken, setNextToken] = useState<string | null>(initialNextToken ?? null);
   const [isLastPage, setIsLastPage] = useState<boolean>(initialIsLastPage ?? true);
@@ -55,6 +58,7 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
   }, [params.status, params.country, params.shopId, params.dateFrom, params.dateTo, params.q, params.size]);
 
   const fetchLatest = useCallback(async () => {
+    if (disableClientFetch) return Promise.resolve();
     // Throttle: if a fetch ran very recently, skip
     const now = Date.now();
     if (now - lastFetchTsRef.current < MIN_INTERVAL_MS) {
@@ -88,13 +92,16 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
     })();
     busyRef.current = p.finally(() => { busyRef.current = null; });
     return busyRef.current;
-  }, [query]);
+  }, [query, disableClientFetch]);
 
   useEffect(() => {
     const handler = () => { fetchLatest(); };
-    window.addEventListener("orders:refresh", handler as EventListener);
-    return () => window.removeEventListener("orders:refresh", handler as EventListener);
-  }, [fetchLatest]);
+    if (!disableClientFetch) {
+      window.addEventListener("orders:refresh", handler as EventListener);
+      return () => window.removeEventListener("orders:refresh", handler as EventListener);
+    }
+    return () => {};
+  }, [fetchLatest, disableClientFetch]);
 
   // Also fetch once on params change
   // On mount or query change, seed from sessionStorage if SSR provided nothing
@@ -123,9 +130,9 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
         }
       }
     } catch {}
-    fetchLatest();
+    if (!disableClientFetch) fetchLatest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, fetchLatest]);
+  }, [query, fetchLatest, disableClientFetch]);
 
   // Whenever rows update to a non-empty list, persist snapshot for this query
   useEffect(() => {
