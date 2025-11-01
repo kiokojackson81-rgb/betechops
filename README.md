@@ -5,6 +5,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 - Environment setup: `docs/ENVIRONMENT.md`
 - Redesign plan: `docs/REDESIGN_PLAN.md`
 - Architecture decisions: `docs/adr/`
+ - Vercel deploy notes and crons: `VERCEL_DEPLOY.md`
 
 ## Getting Started
 
@@ -40,3 +41,10 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Operations
+
+- Incremental Jumia orders sync runs via an API job and Vercel Cron (see `vercel.json`).
+- Optional retention control for stored vendor orders:
+	- Set `JUMIA_ORDERS_RETENTION_DAYS` in your environment to control how many days of `JumiaOrder` we keep (default: 60).
+	- Nightly cleanup script: `npm run cleanup:jumia-orders`.
