@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
 import OrdersSSE from './_components/OrdersSSE';
 import { Prisma } from '@prisma/client';
+import SyncNowButton from './_components/SyncNowButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -380,6 +381,7 @@ export default async function OrdersPage(props: unknown) {
           )}
         </div>
         <div className="pt-1 flex items-center gap-4">
+          <SyncNowButton />
           <OrdersSSE
             status={params.status}
             country={params.country}
