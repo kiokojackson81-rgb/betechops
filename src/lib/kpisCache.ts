@@ -9,10 +9,10 @@ export type CrossShopKpis = {
 };
 
 const KEY = 'kpis:cross-shops';
-// Cache TTL for KPIs: keep short so Pending Orders reflects changes quickly
-// Products count is cheap to recompute via quick scan; Pending is bounded per shop.
-// Choose ~90s to balance freshness and vendor rate limits.
-const TTL_SECONDS = 90; // previously 6h; now ~1.5 minutes
+// Cache TTL for KPIs: vendor APIs apply strict rate limits, so avoid hammering.
+// Pending orders still refresh via the local DB fallback; products can be a bit stale.
+// Choose ~10 minutes to balance freshness and rate limits.
+const TTL_SECONDS = 600;
 
 let mem: CrossShopKpis | null = null;
 

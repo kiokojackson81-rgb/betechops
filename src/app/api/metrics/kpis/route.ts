@@ -16,8 +16,9 @@ export async function GET() {
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
-    // Cross-shop KPIs (cached 6h)
+    // Cross-shop KPIs (cached ~10 minutes)
     let cross = await readKpisCache();
+    let quickFailed = false;
     if (!cross) {
       // compute a quick snapshot and cache (skip in unit tests to avoid DB deps)
       if (process.env.NODE_ENV === 'test') {
@@ -26,10 +27,11 @@ export async function GET() {
         try {
           cross = await updateKpisCache();
         } catch {
+          quickFailed = true;
           cross = { productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
         }
         // If quick snapshot looks empty or approximate, opportunistically try exact once
-        if ((cross.pendingAll ?? 0) === 0 || cross.approx) {
+        if (!quickFailed && ((cross.pendingAll ?? 0) === 0 || cross.approx)) {
           try {
             const exact = await updateKpisCacheExact();
             // prefer exact if it produced a non-zero or non-approx result
@@ -44,8 +46,13 @@ export async function GET() {
     // Ensure Pending Orders (All) reflects the live sum of all currently PENDING orders (no date window).
     // Prefer the vendor aggregate unless the local queued cache is higher (vendor snapshots can lag).
     const crossPending = cross.pendingAll ?? 0;
-    const useDbFallback = queued > crossPending;
-    const pendingAllOut = useDbFallback ? queued : crossPending;
+    let pendingAllOut = queued;
+    let approxFlag = false;
+
+    if (pendingAllOut === 0 && crossPending > 0) {
+      pendingAllOut = crossPending;
+      approxFlag = Boolean(cross.approx);
+    }
 
     return NextResponse.json({
       ok: true,
@@ -54,7 +61,7 @@ export async function GET() {
       rts,
       productsAll: cross.productsAll,
       pendingAll: pendingAllOut,
-      approx: useDbFallback ? true : (cross.approx ?? false),
+      approx: approxFlag,
       updatedAt: cross.updatedAt,
     });
   } catch (err: unknown) {
