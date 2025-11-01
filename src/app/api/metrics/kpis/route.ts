@@ -9,10 +9,24 @@ export async function GET() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Local cache stores all pending orders regardless of age; count everything we have.
-    // Some payloads use MULTIPLE to signal a pending multi-status order, so include it too.
+    // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
+    // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const queued = await prisma.jumiaOrder.count({
-      where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+      where: {
+        status: { in: ['PENDING', 'MULTIPLE'] },
+        OR: [
+          { updatedAtJumia: { gte: sevenDaysAgo } },
+          { createdAtJumia: { gte: sevenDaysAgo } },
+          {
+            AND: [
+              { updatedAtJumia: null },
+              { createdAtJumia: null },
+              { updatedAt: { gte: sevenDaysAgo } },
+            ],
+          },
+        ],
+      },
     });
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
@@ -44,47 +58,9 @@ export async function GET() {
       }
     }
 
-    // Ensure Pending Orders (All) reflects the live sum of all currently PENDING orders (no date window).
-    // Prefer the vendor aggregate unless the local queued cache is higher (vendor snapshots can lag).
-    const crossPending = cross.pendingAll ?? 0;
-    let pendingAllOut = queued;
-    let approxFlag = false;
-
-    if (pendingAllOut === 0 && crossPending > 0) {
-      pendingAllOut = crossPending;
-      approxFlag = Boolean(cross.approx);
-    }
-
-    // Last-resort guard: if both local DB and cross-shop cache report 0, compute a live
-    // aggregate via the internal ALL-shops orders endpoint to avoid zeros after cold start.
-    if (pendingAllOut === 0) {
-      try {
-        let total = 0;
-        let token: string | null = null;
-        do {
-          const base = `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-          const url = await absUrl(base);
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) break;
-          const j: any = await res.json();
-          const arr = Array.isArray(j?.orders)
-            ? j.orders
-            : Array.isArray(j?.items)
-            ? j.items
-            : Array.isArray(j?.data)
-            ? j.data
-            : [];
-          total += arr.length;
-          token = (j?.nextToken ? String(j.nextToken) : '') || null;
-        } while (token);
-        if (total > 0) {
-          pendingAllOut = total;
-          approxFlag = true; // computed live without persistence
-        }
-      } catch {
-        // ignore; keep 0
-      }
-    }
+    // For the card, we report the 7-day DB count directly to match the requirement.
+    const pendingAllOut = queued;
+    const approxFlag = false;
 
     return NextResponse.json({
       ok: true,
