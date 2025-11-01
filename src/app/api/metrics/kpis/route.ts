@@ -58,9 +58,37 @@ export async function GET() {
       }
     }
 
-    // For the card, we report the 7-day DB count directly to match the requirement.
-    const pendingAllOut = queued;
-    const approxFlag = false;
+    // For the card, prefer the 7-day DB count. If zero (e.g., sync lag), fall back to a live
+    // vendor aggregation across ALL shops constrained to the same 7-day window.
+    let pendingAllOut = queued;
+    let approxFlag = false;
+    if (pendingAllOut === 0) {
+      try {
+        let total = 0;
+        let token: string | null = null;
+        const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+        const dateTo = now.toISOString().slice(0, 10);
+        do {
+          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          const url = await absUrl(base);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) break;
+          const j: any = await res.json();
+          const arr = Array.isArray(j?.orders)
+            ? j.orders
+            : Array.isArray(j?.items)
+            ? j.items
+            : Array.isArray(j?.data)
+            ? j.data
+            : [];
+          total += arr.length;
+          token = (j?.nextToken ? String(j.nextToken) : '') || null;
+        } while (token);
+        if (total > 0) { pendingAllOut = total; approxFlag = true; }
+      } catch {
+        // keep DB value (0)
+      }
+    }
 
     return NextResponse.json({
       ok: true,
@@ -70,7 +98,7 @@ export async function GET() {
       productsAll: cross.productsAll,
       pendingAll: pendingAllOut,
       approx: approxFlag,
-      updatedAt: cross.updatedAt,
+      updatedAt: cross.updatedAt || Date.now(),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
