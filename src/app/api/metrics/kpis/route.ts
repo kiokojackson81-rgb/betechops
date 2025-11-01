@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { readKpisCache } from '@/lib/kpisCache';
+import { absUrl } from '@/lib/abs-url';
 import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 
 export async function GET() {
@@ -52,6 +53,37 @@ export async function GET() {
     if (pendingAllOut === 0 && crossPending > 0) {
       pendingAllOut = crossPending;
       approxFlag = Boolean(cross.approx);
+    }
+
+    // Last-resort guard: if both local DB and cross-shop cache report 0, compute a live
+    // aggregate via the internal ALL-shops orders endpoint to avoid zeros after cold start.
+    if (pendingAllOut === 0) {
+      try {
+        let total = 0;
+        let token: string | null = null;
+        do {
+          const base = `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          const url = await absUrl(base);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) break;
+          const j: any = await res.json();
+          const arr = Array.isArray(j?.orders)
+            ? j.orders
+            : Array.isArray(j?.items)
+            ? j.items
+            : Array.isArray(j?.data)
+            ? j.data
+            : [];
+          total += arr.length;
+          token = (j?.nextToken ? String(j.nextToken) : '') || null;
+        } while (token);
+        if (total > 0) {
+          pendingAllOut = total;
+          approxFlag = true; // computed live without persistence
+        }
+      } catch {
+        // ignore; keep 0
+      }
     }
 
     return NextResponse.json({
