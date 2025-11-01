@@ -272,6 +272,23 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
+  // For PENDING (synced) view, default to last 7 days if no dates provided.
+  // This ensures we show the weekly queue instead of only today's records.
+  if (prefersSynced) {
+    const hasFrom = Boolean(params.dateFrom);
+    const hasTo = Boolean(params.dateTo);
+    if (!hasTo) {
+      params.dateTo = new Date().toISOString().slice(0, 10);
+      usedDefaultTo = true;
+    }
+    if (!hasFrom) {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      params.dateFrom = d.toISOString().slice(0, 10);
+      usedDefaultFrom = true;
+    }
+  }
+
   const legacyShopsPromise = prisma.shop.findMany({
     where: { isActive: true, platform: 'JUMIA' },
     select: { id: true, name: true },
@@ -341,9 +358,10 @@ export default async function OrdersPage(props: unknown) {
           {syncFallbackMessage && (
             <p className="text-xs text-amber-400 mt-1">{syncFallbackMessage}</p>
           )}
-          {(!showingSynced && (usedDefaultFrom || usedDefaultTo)) && (
+          {((!showingSynced && (usedDefaultFrom || usedDefaultTo)) || (showingSynced && (usedDefaultFrom || usedDefaultTo))) && (
             <p className="text-xs text-slate-400 mt-1">
-              Default window: last 3 months, bounded by when the system started. Showing {params.dateFrom} to {params.dateTo}.
+              Default window: {prefersSynced ? 'last 7 days' : 'last 3 months (bounded by system start)'}.
+              Showing {params.dateFrom} to {params.dateTo}.
             </p>
           )}
         </div>
