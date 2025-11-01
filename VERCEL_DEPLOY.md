@@ -18,7 +18,11 @@ Important note about SQLite
 
 Database migrations and seeding
 
-- CI uses `npx prisma migrate deploy` (see `.github/workflows/prisma-and-vercel.yml`).
+- Primary CI runs `npx prisma migrate deploy` before deploying (see `.github/workflows/prisma-and-vercel.yml`).
+- A lightweight migration-only pipeline exists at `.github/workflows/prisma-migrate.yml` to just apply migrations using `DATABASE_URL`.
+- Locally or one-off in CI, you can run:
+   - `npm run prisma:generate` (or `npx prisma generate`)
+   - `npm run prisma:migrate` (alias of `prisma migrate deploy`)
 - If you need to seed data, run `node prisma/seed.js` once against the production DB (be careful not to overwrite production data).
 
 Recommended workflow
@@ -35,9 +39,13 @@ Cron jobs (sync + cleanup)
 - This repo defines Vercel Cron Jobs in `vercel.json`.
    - Incremental Jumia orders sync runs every 5 minutes: `POST /api/jumia/jobs/sync-incremental`
    - You can adjust schedules in `vercel.json` or Vercel dashboard under Project > Settings > Cron Jobs.
-- To periodically purge old orders (>60 days), run the script once daily using a scheduled runner (e.g., GitHub Actions, a cron on your host, or a Vercel background job if preferred):
-   - `npm run cleanup:jumia-orders`
-   - Control via `JUMIA_ORDERS_RETENTION_DAYS` env var (default 60).
+- To periodically purge old orders (>60 days), a GitHub Actions workflow is provided:
+   - `.github/workflows/nightly-cleanup.yml` runs daily at 02:00 UTC
+   - Requires the following repository secrets:
+      - `DATABASE_URL` (required)
+      - `DIRECT_URL` (optional; falls back to `DATABASE_URL` if not set)
+      - `JUMIA_ORDERS_RETENTION_DAYS` (optional; defaults to 60)
+   - You can also run locally or from another scheduler: `npm run cleanup:jumia-orders`
 
 Jumia configuration
 

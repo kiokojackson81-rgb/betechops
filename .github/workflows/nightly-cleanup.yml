@@ -1,0 +1,41 @@
+name: Nightly: Cleanup Jumia Orders (Retention)
+
+on:
+  schedule:
+    # Runs every day at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Purge vendor orders older than retention window
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run cleanup script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+          # Optional override; defaults to 60 inside the script if unset
+          JUMIA_ORDERS_RETENTION_DAYS: ${{ secrets.JUMIA_ORDERS_RETENTION_DAYS }}
+        run: npm run cleanup:jumia-orders

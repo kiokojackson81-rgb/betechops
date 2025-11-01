@@ -47,4 +47,14 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Incremental Jumia orders sync runs via an API job and Vercel Cron (see `vercel.json`).
 - Optional retention control for stored vendor orders:
 	- Set `JUMIA_ORDERS_RETENTION_DAYS` in your environment to control how many days of `JumiaOrder` we keep (default: 60).
-	- Nightly cleanup script: `npm run cleanup:jumia-orders`.
+	- Nightly cleanup:
+		- GitHub Actions workflow `.github/workflows/nightly-cleanup.yml` runs daily at 02:00 UTC.
+		- Set repo secrets: `DATABASE_URL` (required), `DIRECT_URL` (optional), and optionally `JUMIA_ORDERS_RETENTION_DAYS`.
+		- You can also run locally: `npm run cleanup:jumia-orders`.
+
+Prisma migrations
+
+- Migrations are applied in CI (see `.github/workflows/prisma-and-vercel.yml`).
+- You can also run them manually:
+	- `npm run prisma:generate`
+	- `npm run prisma:migrate` (alias for `prisma migrate deploy`)
