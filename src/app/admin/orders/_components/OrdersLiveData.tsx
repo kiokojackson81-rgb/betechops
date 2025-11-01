@@ -71,6 +71,13 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
         // Only replace if we actually have data; otherwise keep last non-empty snapshot to avoid flicker
         if (incoming.length > 0) {
           setRows(incoming);
+          // persist snapshot for this query
+          try {
+            if (typeof window !== 'undefined') {
+              const key = `orders:last:${location.pathname}?${query}`;
+              sessionStorage.setItem(key, JSON.stringify({ rows: incoming, ts: Date.now(), nextToken: data?.nextToken ?? null, isLastPage: Boolean(data?.isLastPage) }));
+            }
+          } catch {}
         }
         if (typeof data?.nextToken === "string" || data?.nextToken === null) setNextToken(data.nextToken ?? null);
         if (typeof data?.isLastPage === "boolean") setIsLastPage(!!data.isLastPage);
@@ -90,7 +97,25 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
   }, [fetchLatest]);
 
   // Also fetch once on params change
-  useEffect(() => { fetchLatest(); }, [query, fetchLatest]);
+  // On mount or query change, seed from sessionStorage if SSR provided nothing
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = sessionStorage.getItem(`orders:last:${location.pathname}?${query}`);
+        if (rows.length === 0 && raw) {
+          const parsed = JSON.parse(raw) as { rows?: Row[]; ts?: number; nextToken?: string | null; isLastPage?: boolean };
+          if (Array.isArray(parsed?.rows) && parsed.rows.length > 0) {
+            setRows(parsed.rows);
+            if (typeof parsed.nextToken === 'string' || parsed.nextToken === null) setNextToken(parsed.nextToken ?? null);
+            if (typeof parsed.isLastPage === 'boolean') setIsLastPage(Boolean(parsed.isLastPage));
+            if (typeof parsed.ts === 'number') setLastUpdatedAt(parsed.ts);
+          }
+        }
+      }
+    } catch {}
+    fetchLatest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, fetchLatest]);
 
   return (
     <div className="space-y-2">

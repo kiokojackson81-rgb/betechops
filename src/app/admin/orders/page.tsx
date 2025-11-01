@@ -75,6 +75,20 @@ async function fetchSyncedRows(params: Search): Promise<Row[]> {
   if (params.shopId && params.shopId !== 'ALL') where.shopId = params.shopId;
   if (params.country) where.countryCode = params.country.trim().toUpperCase();
 
+  // Apply server-side date window to avoid fetching out-of-range rows then filtering to empty
+  const from = params.dateFrom ? new Date(`${params.dateFrom}T00:00:00Z`) : null;
+  const to = params.dateTo ? new Date(`${params.dateTo}T23:59:59Z`) : null;
+  if ((from && !Number.isNaN(from.getTime())) || (to && !Number.isNaN(to.getTime()))) {
+    const range: { gte?: Date; lte?: Date } = {};
+    if (from && !Number.isNaN(from.getTime())) range.gte = from;
+    if (to && !Number.isNaN(to.getTime())) range.lte = to;
+    where.OR = [
+      { updatedAtJumia: range },
+      { AND: [{ updatedAtJumia: null }, { createdAtJumia: range }] },
+      { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: range }] },
+    ];
+  }
+
   const take = Math.max(1, Math.min(parseInt(params.size ?? '100', 10) || 100, 1000));
   const orders = await prisma.jumiaOrder.findMany({
     where,
