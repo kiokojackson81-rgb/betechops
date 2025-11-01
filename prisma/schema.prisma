@@ -180,6 +180,10 @@ model JumiaOrder {
   shop              JumiaShop @relation(fields: [shopId], references: [id])
 
   @@index([shopId, status])
+  // Optimization for incremental sync and retention cleanup
+  @@index([updatedAtJumia])
+  @@index([createdAtJumia])
+  @@index([shopId, updatedAtJumia])
 }
 
 model ShopApiConfig {

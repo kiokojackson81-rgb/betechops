@@ -3,6 +3,10 @@
     {
       "path": "/api/admin/catalog/counters/recompute",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/jumia/jobs/sync-incremental",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

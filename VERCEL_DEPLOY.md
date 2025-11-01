@@ -30,6 +30,15 @@ Recommended workflow
    - optionally `node prisma/seed.js` (if you need initial data)
 3. Deploy the Next.js app to Vercel. The `postinstall` script runs `prisma generate` on install.
 
+Cron jobs (sync + cleanup)
+
+- This repo defines Vercel Cron Jobs in `vercel.json`.
+   - Incremental Jumia orders sync runs every 5 minutes: `POST /api/jumia/jobs/sync-incremental`
+   - You can adjust schedules in `vercel.json` or Vercel dashboard under Project > Settings > Cron Jobs.
+- To periodically purge old orders (>60 days), run the script once daily using a scheduled runner (e.g., GitHub Actions, a cron on your host, or a Vercel background job if preferred):
+   - `npm run cleanup:jumia-orders`
+   - Control via `JUMIA_ORDERS_RETENTION_DAYS` env var (default 60).
+
 Jumia configuration
 
 - You can configure Jumia OIDC/API either via env vars (JUMIA_*) or via the API:

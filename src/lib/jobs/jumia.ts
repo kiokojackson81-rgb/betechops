@@ -324,3 +324,154 @@ const jobs = {
 };
 
 export default jobs;
+
+/**
+ * Incremental orders sync across shops using an updatedAfter watermark per shop.
+ * Stores watermark in Config as key: `jumia:orders:${shopId}:cursor`.
+ * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
+ */
+export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
+  const ALL_STATUSES = 'PENDING,PROCESSING,FULFILLED,COMPLETED,CANCELED,FAILED,RETURNED';
+  const shopFilter: Prisma.ShopWhereInput = opts?.shopId
+    ? { id: opts.shopId! }
+    : { platform: Platform.JUMIA, isActive: true };
+  const shops = await prisma.shop.findMany({ where: shopFilter, select: { id: true } });
+
+  const summary: Record<string, { processed: number; upserted: number; cursor?: string }> = {};
+
+  for (const shop of shops) {
+    const shopId = shop.id;
+    const key = `jumia:orders:${shopId}:cursor`;
+    const cfg = await prisma.config.findUnique({ where: { key } }).catch(() => null);
+    let updatedAfter: string | null = (cfg?.json as { updatedAfter?: string } | null)?.updatedAfter || null;
+    if (!updatedAfter) {
+      const lookbackDays = opts?.lookbackDays ?? 7;
+      const from = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+      updatedAfter = from.toISOString();
+    }
+    // Apply a small overlap to guard against vendor clock skew or pagination edges
+    const overlapMs = 60 * 1000; // 60 seconds
+    const adjustedUpdatedAfter = (() => {
+      try {
+        const d = new Date(String(updatedAfter));
+        if (!Number.isNaN(d.getTime())) {
+          const t = new Date(d.getTime() - overlapMs);
+          return t.toISOString();
+        }
+      } catch {}
+      return updatedAfter!;
+    })();
+
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const fetcher = (path: string) => jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
+  const params: Record<string, string> = { status: ALL_STATUSES, size: '100' };
+  if (adjustedUpdatedAfter) params.updatedAfter = adjustedUpdatedAfter;
+
+    let processed = 0;
+    let upserted = 0;
+  let latestCursor: string | null = updatedAfter;
+
+    try {
+      for await (const page of jumiaPaginator('/orders', params, fetcher)) {
+        const arr = Array.isArray((page as any)?.orders)
+          ? (page as any).orders
+          : Array.isArray((page as any)?.items)
+          ? (page as any).items
+          : Array.isArray((page as any)?.data)
+          ? (page as any).data
+          : [];
+        for (const raw of arr) {
+          processed += 1;
+          const rawObj = (raw || {}) as Record<string, unknown>;
+          const id = String(rawObj.id ?? rawObj.orderId ?? rawObj.order_id ?? '');
+          if (!id) continue;
+
+          const status = rawObj.hasMultipleStatus
+            ? 'MULTIPLE'
+            : (typeof rawObj.status === 'string' && rawObj.status.trim())
+            ? String(rawObj.status)
+            : 'UNKNOWN';
+
+          const toDate = (v: unknown): Date | null => {
+            if (!v) return null;
+            const d = v instanceof Date ? v : new Date(String(v));
+            return Number.isNaN(d.getTime()) ? null : d;
+          };
+          const toInt = (v: unknown): number | null => {
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            if (typeof v === 'string' && v.trim()) {
+              const n = Number.parseInt(v, 10);
+              return Number.isFinite(n) ? n : null;
+            }
+            return null;
+          };
+          const toBool = (v: unknown): boolean | null => {
+            if (v === null || v === undefined) return null;
+            if (typeof v === 'boolean') return v;
+            if (typeof v === 'string') {
+              const t = v.trim().toLowerCase();
+              if (['true','1','yes'].includes(t)) return true;
+              if (['false','0','no'].includes(t)) return false;
+            }
+            if (typeof v === 'number') return v !== 0;
+            return null;
+          };
+
+          await prisma.jumiaOrder.upsert({
+            where: { id },
+            create: {
+              id,
+              number: toInt((rawObj as any).number),
+              status,
+              hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
+              pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
+              totalItems: toInt((rawObj as any).totalItems),
+              packedItems: toInt((rawObj as any).packedItems),
+              countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
+              isPrepayment: toBool((rawObj as any).isPrepayment),
+              createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
+              updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
+              shopId,
+            },
+            update: {
+              number: toInt((rawObj as any).number),
+              status,
+              hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
+              pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
+              totalItems: toInt((rawObj as any).totalItems),
+              packedItems: toInt((rawObj as any).packedItems),
+              countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
+              isPrepayment: toBool((rawObj as any).isPrepayment),
+              createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
+              updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
+            },
+          });
+          upserted += 1;
+
+          const updatedIso = (() => {
+            const u = (rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt;
+            const d = u ? new Date(String(u)) : null;
+            return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+          })();
+          if (updatedIso && (!latestCursor || new Date(updatedIso).getTime() > new Date(latestCursor).getTime())) {
+            latestCursor = updatedIso;
+          }
+        }
+      }
+    } catch (err) {
+      logger.error({ shopId, err }, 'syncOrdersIncremental failed for shop');
+    }
+
+    if (latestCursor && latestCursor !== updatedAfter) {
+      await prisma.config.upsert({
+        where: { key },
+        update: { json: { updatedAfter: latestCursor } },
+        create: { key, json: { updatedAfter: latestCursor } },
+      }).catch(() => null);
+    }
+
+    summary[shopId] = { processed, upserted, cursor: latestCursor ?? undefined };
+  }
+
+  return summary;
+}
