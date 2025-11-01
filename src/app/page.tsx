@@ -187,16 +187,10 @@ export default function Home() {
   const [pendingUpdated, setPendingUpdated] = useState<string | null>(null);
 
   // endpoints per spec
-  const pickupPaths = useMemo(
-    () => ["/api/returns/waiting-pickup", "/api/returns/count?status=waiting-pickup"],
-    []
-  );
-  const pricingPaths = useMemo(
-    () => ["/api/orders/pending-pricing", "/api/reports/pending-pricing"],
-    []
-  );
-  // Pending Orders (All) should come from the persisted KPIs endpoint only to avoid flicker
-  const pendingPaths = useMemo(() => ["/api/metrics/kpis"], []);
+  // Single source of truth per card to avoid inconsistent values from mixed endpoints
+  const pickupPaths = useMemo(() => ["/api/returns/waiting-pickup"], []);
+  const pricingPaths = useMemo(() => ["/api/orders/pending-pricing"], []);
+  const pendingPaths = useMemo(() => ["/api/metrics/kpis"], []); // KPIs only
 
   useEffect(() => {
     let ignore = false;
@@ -209,10 +203,21 @@ export default function Home() {
           fetchJsonWithTimeout<any>("/api/metrics/kpis"),
         ]);
         if (!ignore) {
-          setPickupCnt(c1);
-          setPricingCnt(c2);
-          const p = Number(kpis?.pendingAll ?? 0);
-          setPendingAll(Number.isFinite(p) ? p : 0);
+          // Only update when we have a concrete value; keep last value on errors
+          if (typeof c1 === "number" && Number.isFinite(c1)) setPickupCnt(c1);
+          if (typeof c2 === "number" && Number.isFinite(c2)) setPricingCnt(c2);
+
+          const pending = Number(kpis?.pendingAll);
+          const approx = Boolean(kpis?.approx);
+          // Protect against transient zeros: if approx is true and pending is 0, keep last non-zero value
+          if (Number.isFinite(pending)) {
+            if (pending === 0 && approx && (pendingAll ?? 0) > 0) {
+              // keep previous value, just refresh the timestamp
+            } else {
+              setPendingAll(pending);
+            }
+          }
+
           const ts = typeof kpis?.updatedAt === "number" ? kpis.updatedAt : Date.now();
           const dt = new Date(ts);
           const hh = String(dt.getHours()).padStart(2, "0");
@@ -220,12 +225,8 @@ export default function Home() {
           setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
         }
       } catch {
-        if (!ignore) {
-          setPickupCnt(0);
-          setPricingCnt(0);
-          setPendingAll(0);
-          setPendingUpdated(null);
-        }
+        // On error, keep previous values to avoid flicker to zero; just clear the timestamp
+        if (!ignore) setPendingUpdated(null);
       }
     };
 
