@@ -33,7 +33,17 @@ async function fetchJsonWithTimeout<T = unknown>(url: string, timeoutMs = 5000):
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { cache: "no-store", signal: controller.signal });
+    // Cache-buster per minute to avoid any intermediary caches despite no-store
+    let finalUrl = url;
+    try {
+      const u = new URL(url, window.location.origin);
+      // Change every minute to reduce re-downloading while keeping things fresh
+      u.searchParams.set("_v", String(Math.floor(Date.now() / 60000)));
+      finalUrl = u.toString();
+    } catch {
+      // non-fatal if URL construction fails for relative strings
+    }
+    const r = await fetch(finalUrl, { cache: "no-store", signal: controller.signal });
     if (!r.ok) throw new Error(`${url} -> ${r.status}`);
     return (await r.json()) as T;
   } finally {

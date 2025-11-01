@@ -4,6 +4,9 @@ import { readKpisCache } from '@/lib/kpisCache';
 import { absUrl } from '@/lib/abs-url';
 import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 
+// Always execute on the server without static caching
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const now = new Date();
@@ -89,7 +92,7 @@ export async function GET() {
       // ignore network/vendor errors and keep DB-based value
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       queued,
       todayPacked,
@@ -99,6 +102,9 @@ export async function GET() {
       approx: approxFlag,
       updatedAt: cross.updatedAt || Date.now(),
     });
+    // Ensure no CDN caching on this KPI endpoint
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return new NextResponse(msg, { status: 500 });
