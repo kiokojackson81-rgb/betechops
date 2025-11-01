@@ -185,6 +185,7 @@ export default function Home() {
   const [pricingCnt, setPricingCnt] = useState<number | null>(null);
   const [pendingAll, setPendingAll] = useState<number | null>(null);
   const [pendingUpdated, setPendingUpdated] = useState<string | null>(null);
+  const LS_KEY = 'home:stats:v1';
 
   // endpoints per spec
   // Single source of truth per card to avoid inconsistent values from mixed endpoints
@@ -194,6 +195,25 @@ export default function Home() {
 
   useEffect(() => {
     let ignore = false;
+
+    // 1) Hydrate instantly from last good local snapshot to avoid blanks on first paint.
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
+      if (raw) {
+        const cached = JSON.parse(raw) as { pickup?: number; pricing?: number; pending?: number; updatedAt?: number };
+        if (!ignore) {
+          if (Number.isFinite(cached?.pickup)) setPickupCnt(Number(cached.pickup));
+          if (Number.isFinite(cached?.pricing)) setPricingCnt(Number(cached.pricing));
+          if (Number.isFinite(cached?.pending)) setPendingAll(Number(cached.pending));
+          if (typeof cached?.updatedAt === 'number') {
+            const dt = new Date(cached.updatedAt);
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mm = String(dt.getMinutes()).padStart(2, '0');
+            setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
+          }
+        }
+      }
+    } catch {}
 
     const run = async () => {
       try {
@@ -223,6 +243,17 @@ export default function Home() {
           const hh = String(dt.getHours()).padStart(2, "0");
           const mm = String(dt.getMinutes()).padStart(2, "0");
           setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
+
+          // 2) Persist latest successful snapshot for instant reuse next load
+          try {
+            const snapshot = {
+              pickup: typeof c1 === 'number' && Number.isFinite(c1) ? c1 : pickupCnt,
+              pricing: typeof c2 === 'number' && Number.isFinite(c2) ? c2 : pricingCnt,
+              pending: Number.isFinite(pending) ? (pending === 0 && approx && (pendingAll ?? 0) > 0 ? pendingAll : pending) : pendingAll,
+              updatedAt: ts,
+            };
+            localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
+          } catch {}
         }
       } catch {
         // On error, keep previous values to avoid flicker to zero; just clear the timestamp
