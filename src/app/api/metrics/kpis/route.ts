@@ -35,38 +35,33 @@ export async function GET() {
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
     // Cross-shop KPIs (cached ~10 minutes)
+    // Fast path: never block the request to compute cache; kick off background refresh instead.
     let cross = await readKpisCache();
-    let quickFailed = false;
     if (!cross) {
-      // compute a quick snapshot and cache (skip in unit tests to avoid DB deps)
-      if (process.env.NODE_ENV === 'test') {
-        cross = { productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
-      } else {
-        try {
-          cross = await updateKpisCache();
-        } catch {
-          quickFailed = true;
-          cross = { productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
-        }
-        // If quick snapshot looks empty or approximate, opportunistically try exact once
-        if (!quickFailed && ((cross.pendingAll ?? 0) === 0 || cross.approx)) {
-          try {
-            const exact = await updateKpisCacheExact();
-            // prefer exact if it produced a non-zero or non-approx result
-            if ((exact.pendingAll ?? 0) > 0 || !exact.approx) cross = exact;
-          } catch {
-            // ignore if exact fails; quick snapshot already returned
-          }
-        }
+      cross = { productsAll: 0, pendingAll: 0, approx: true, updatedAt: Date.now() };
+      if (process.env.NODE_ENV !== 'test') {
+        // Fire-and-forget cache warm-up; do not await
+        Promise.resolve()
+          .then(() => updateKpisCache())
+          .then((q) => {
+            // If quick result still looks approximate/empty, try an exact refresh in the background
+            if ((q?.pendingAll ?? 0) === 0 || q?.approx) return updateKpisCacheExact().catch(() => undefined);
+            return undefined;
+          })
+          .catch(() => undefined);
       }
     }
 
-    // For the card, compute the 7-day DB count and also a live vendor aggregation across ALL
+  // For the card, compute the 7-day DB count and also an optional live vendor aggregation across ALL
     // shops for the same window. If the live total is higher (DB window incomplete), prefer it
     // and mark as approx. Time-box the live check to avoid UI blocking.
     let pendingAllOut = queued;
     let approxFlag = false;
     try {
+      if (String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true') {
+        // Explicitly disabled — skip live boost
+        throw new Error('live-adjust-disabled');
+      }
       const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
       const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
       const start = Date.now();
