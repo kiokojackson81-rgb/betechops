@@ -7,9 +7,9 @@ import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 // Always execute on the server without static caching
 export const dynamic = 'force-dynamic';
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
-    const url = new URL(request?.url || 'http://localhost/api/metrics/kpis');
+    const url = new URL(request.url);
     const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
     const noLive = (noLiveParam || '').toLowerCase() === '1' || (noLiveParam || '').toLowerCase() === 'true' || (noLiveParam || '').toLowerCase() === 'db' || (noLiveParam || '').toLowerCase() === 'db-only';
     const now = new Date();

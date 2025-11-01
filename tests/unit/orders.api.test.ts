@@ -20,7 +20,7 @@ describe('orders APIs', () => {
     (prisma as any).fulfillmentAudit.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
 
   const { GET } = await import('../../src/app/api/metrics/kpis/route');
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/metrics/kpis'));
     // NextResponse returned; check body by calling json() if available
     // The NextResponse in tests is simple; verify it returned successfully
     expect(res.status).toBe(200);
