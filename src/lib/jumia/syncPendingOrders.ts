@@ -7,8 +7,12 @@ import { zonedTimeToUtc } from "date-fns-tz";
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
 const LIMIT_RPS = 4;
-const WINDOW_DAYS = 2;
-const PAGE_SIZE = 300;
+// Sync a full 7-day window so downstream KPIs that read from DB reflect the last week,
+// not just "today" or the last couple of days.
+const WINDOW_DAYS = 7;
+// The Jumia API reliably supports page sizes up to 100. Larger values can return 400s.
+// Keep this at or below 100 to avoid vendor errors.
+const PAGE_SIZE = 100;
 const DEFAULT_TIMEZONE = "Africa/Nairobi";
 
 type SyncResult = {

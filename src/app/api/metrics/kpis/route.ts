@@ -58,36 +58,35 @@ export async function GET() {
       }
     }
 
-    // For the card, prefer the 7-day DB count. If zero (e.g., sync lag), fall back to a live
-    // vendor aggregation across ALL shops constrained to the same 7-day window.
+    // For the card, compute the 7-day DB count and also a live vendor aggregation across ALL
+    // shops for the same window. If the live total is higher (DB window incomplete), prefer it
+    // and mark as approx. This avoids showing only "today" when the sync job covered fewer days.
     let pendingAllOut = queued;
     let approxFlag = false;
-    if (pendingAllOut === 0) {
-      try {
-        let total = 0;
-        let token: string | null = null;
-        const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
-        const dateTo = now.toISOString().slice(0, 10);
-        do {
-          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-          const url = await absUrl(base);
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) break;
-          const j: any = await res.json();
-          const arr = Array.isArray(j?.orders)
-            ? j.orders
-            : Array.isArray(j?.items)
-            ? j.items
-            : Array.isArray(j?.data)
-            ? j.data
-            : [];
-          total += arr.length;
-          token = (j?.nextToken ? String(j.nextToken) : '') || null;
-        } while (token);
-        if (total > 0) { pendingAllOut = total; approxFlag = true; }
-      } catch {
-        // keep DB value (0)
-      }
+    try {
+      let total = 0;
+      let token: string | null = null;
+      const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+      const dateTo = now.toISOString().slice(0, 10);
+      do {
+        const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+        const url = await absUrl(base);
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) break;
+        const j: any = await res.json();
+        const arr = Array.isArray(j?.orders)
+          ? j.orders
+          : Array.isArray(j?.items)
+          ? j.items
+          : Array.isArray(j?.data)
+          ? j.data
+          : [];
+        total += arr.length;
+        token = (j?.nextToken ? String(j.nextToken) : '') || null;
+      } while (token);
+      if (total > pendingAllOut) { pendingAllOut = total; approxFlag = true; }
+    } catch {
+      // ignore network/vendor errors and keep DB-based value
     }
 
     return NextResponse.json({
