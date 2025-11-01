@@ -124,11 +124,13 @@ function Stat({
   value,
   prefix,
   tone = "sky",
+  sub,
 }: {
   title: string;
   value: number | null | undefined;
   prefix?: string;
   tone?: "sky" | "violet" | "pink";
+  sub?: string | null;
 }) {
   const display = typeof value === "number" ? numberFmt.format(value) : "—";
   const ring =
@@ -158,6 +160,9 @@ function Stat({
       <div className="mt-2 text-4xl font-semibold tracking-tight">
         {prefix ? `${prefix} ` : ""}{display}
       </div>
+      {sub && (
+        <div className="mt-1 text-xs text-slate-400">{sub}</div>
+      )}
     </div>
   );
 }
@@ -169,6 +174,7 @@ export default function Home() {
   const [pickupCnt, setPickupCnt] = useState<number | null>(null);
   const [pricingCnt, setPricingCnt] = useState<number | null>(null);
   const [pendingAll, setPendingAll] = useState<number | null>(null);
+  const [pendingUpdated, setPendingUpdated] = useState<string | null>(null);
 
   // endpoints per spec
   const pickupPaths = useMemo(
@@ -187,21 +193,28 @@ export default function Home() {
 
     const run = async () => {
       try {
-        const [c1, c2, pending] = await Promise.all([
+        const [c1, c2, kpis] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
-          tryCounts(pendingPaths),
+          fetchJsonWithTimeout<any>("/api/metrics/kpis"),
         ]);
         if (!ignore) {
           setPickupCnt(c1);
           setPricingCnt(c2);
-          setPendingAll(pending);
+          const p = Number(kpis?.pendingAll ?? 0);
+          setPendingAll(Number.isFinite(p) ? p : 0);
+          const ts = typeof kpis?.updatedAt === "number" ? kpis.updatedAt : Date.now();
+          const dt = new Date(ts);
+          const hh = String(dt.getHours()).padStart(2, "0");
+          const mm = String(dt.getMinutes()).padStart(2, "0");
+          setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
         }
       } catch {
         if (!ignore) {
           setPickupCnt(0);
           setPricingCnt(0);
           setPendingAll(0);
+          setPendingUpdated(null);
         }
       }
     };
@@ -294,7 +307,7 @@ export default function Home() {
               value={pricingCnt}
               tone="violet"
             />
-            <Stat title="Pending Orders (All)" value={pendingAll} tone="pink" />
+            <Stat title="Pending Orders (All)" value={pendingAll} tone="pink" sub={pendingUpdated} />
           </div>
         </section>
 
