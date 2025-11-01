@@ -9,7 +9,10 @@ export async function GET() {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Local cache stores all pending orders regardless of age; count everything we have.
-    const queued = await prisma.jumiaOrder.count();
+    // Some payloads use MULTIPLE to signal a pending multi-status order, so include it too.
+    const queued = await prisma.jumiaOrder.count({
+      where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+    });
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
@@ -38,10 +41,11 @@ export async function GET() {
       }
     }
 
-    // Ensure Pending Orders (All) reflects the live sum of all currently PENDING orders (no date window)
-    // If the cross-shop cache is cold/approx/zero, fall back to the local DB "queued" count.
-    const useDbFallback = ((cross.pendingAll ?? 0) === 0 || cross.approx) && queued > 0;
-    const pendingAllOut = useDbFallback ? queued : cross.pendingAll;
+    // Ensure Pending Orders (All) reflects the live sum of all currently PENDING orders (no date window).
+    // Prefer the vendor aggregate unless the local queued cache is higher (vendor snapshots can lag).
+    const crossPending = cross.pendingAll ?? 0;
+    const useDbFallback = queued > crossPending;
+    const pendingAllOut = useDbFallback ? queued : crossPending;
 
     return NextResponse.json({
       ok: true,
