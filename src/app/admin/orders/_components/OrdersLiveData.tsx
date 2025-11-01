@@ -111,11 +111,32 @@ export default function OrdersLiveData({ initialRows, initialNextToken, initialI
             if (typeof parsed.ts === 'number') setLastUpdatedAt(parsed.ts);
           }
         }
+        // If we have SSR-provided rows (non-empty) and no cache yet, persist them immediately
+        if (rows.length > 0) {
+          const key = `orders:last:${location.pathname}?${query}`;
+          const existing = sessionStorage.getItem(key);
+          if (!existing) {
+            try {
+              sessionStorage.setItem(key, JSON.stringify({ rows, ts: Date.now(), nextToken, isLastPage }));
+            } catch {}
+          }
+        }
       }
     } catch {}
     fetchLatest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, fetchLatest]);
+
+  // Whenever rows update to a non-empty list, persist snapshot for this query
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (rows.length === 0) return;
+    try {
+      const key = `orders:last:${location.pathname}?${query}`;
+      sessionStorage.setItem(key, JSON.stringify({ rows, ts: Date.now(), nextToken, isLastPage }));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, nextToken, isLastPage, query]);
 
   return (
     <div className="space-y-2">
