@@ -27,6 +27,7 @@ const blankAccount: AccountForm = { label: "", clientId: "", refreshToken: "", s
 export default function AdminSettings() {
   const [accounts, setAccounts] = useState<AccountForm[]>([]);
   const [accountStatus, setAccountStatus] = useState<Record<string, string>>({});
+  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [newAccount, setNewAccount] = useState<AccountForm>(blankAccount);
   const [newAccountStatus, setNewAccountStatus] = useState("");
 
@@ -114,6 +115,41 @@ export default function AdminSettings() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Discovery failed";
       setAccountStatus((prev) => ({ ...prev, [id]: message }));
+    }
+  }
+
+  async function deleteAccount(id: string) {
+    setAccountStatus((prev) => ({ ...prev, [id]: "Deleting..." }));
+    try {
+      const res = await fetch(`/api/settings/jumia/accounts/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      await reloadAccounts();
+      setAccountStatus((prev) => ({ ...prev, [id]: "Deleted" }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Delete failed";
+      setAccountStatus((prev) => ({ ...prev, [id]: message }));
+    }
+  }
+
+  async function mergeAccount(sourceId: string) {
+    const targetId = mergeTargets[sourceId];
+    if (!targetId) {
+      setAccountStatus((prev) => ({ ...prev, [sourceId]: "Select target account" }));
+      return;
+    }
+    setAccountStatus((prev) => ({ ...prev, [sourceId]: "Merging (moving shops)..." }));
+    try {
+      const res = await fetch(`/api/settings/jumia/accounts/${sourceId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetAccountId: targetId, deleteSource: true }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await reloadAccounts();
+      setAccountStatus((prev) => ({ ...prev, [sourceId]: "Merged and deleted" }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Merge failed";
+      setAccountStatus((prev) => ({ ...prev, [sourceId]: message }));
     }
   }
 
@@ -231,6 +267,40 @@ export default function AdminSettings() {
                   className="rounded-md border border-white/20 px-3 py-1.5 hover:bg-white/10"
                 >
                   Discover Shops
+                </button>
+                {/* Merge controls */}
+                {accounts.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="rounded-md bg-[#0b0e13] border border-white/10 px-2 py-1 text-sm"
+                      value={mergeTargets[account.id ?? ""] ?? ""}
+                      onChange={(e) => setMergeTargets((prev) => ({ ...prev, [account.id ?? ""]: e.target.value }))}
+                    >
+                      <option value="">Merge into...</option>
+                      {accounts
+                        .filter((a) => a.id !== account.id)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>{a.label || a.id}</option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => account.id && mergeAccount(account.id)}
+                      className="rounded-md border border-white/20 px-3 py-1.5 hover:bg-white/10 text-sm"
+                    >
+                      Merge & Delete
+                    </button>
+                  </div>
+                )}
+                {/* Delete account (only if no shops) */}
+                <button
+                  type="button"
+                  onClick={() => account.id && deleteAccount(account.id)}
+                  disabled={(account.shops?.length ?? 0) > 0}
+                  className="rounded-md border border-red-400/40 text-red-300 px-3 py-1.5 hover:bg-red-400/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={(account.shops?.length ?? 0) > 0 ? "Transfer shops to another account before deleting" : "Delete account"}
+                >
+                  Delete
                 </button>
                 {account.shops.length > 0 && (
                   <span className="text-xs text-slate-300">{account.shops.length} linked shop{account.shops.length === 1 ? "" : "s"}</span>
