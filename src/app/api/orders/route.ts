@@ -15,7 +15,23 @@ export async function GET(req: NextRequest) {
 
   if (!qs.size) qs.size = '50';
 
-  const query = new URLSearchParams(qs).toString();
+  // Map friendly dateFrom/dateTo to vendor-supported fields.
+  // For PENDING/MULTIPLE we prefer updatedAfter/updatedBefore (orders can be updated while pending).
+  // For other statuses we fall back to createdAfter/createdBefore.
+  const statusUpper = (qs.status || '').toUpperCase();
+  const isPendingLike = statusUpper === 'PENDING' || statusUpper === 'MULTIPLE';
+  const afterKey = isPendingLike ? 'updatedAfter' : 'createdAfter';
+  const beforeKey = isPendingLike ? 'updatedBefore' : 'createdBefore';
+  const qsOut: Record<string, string> = { ...qs };
+  if (qsOut.dateFrom) {
+    qsOut[afterKey] = qsOut.dateFrom;
+    delete qsOut.dateFrom;
+  }
+  if (qsOut.dateTo) {
+    qsOut[beforeKey] = qsOut.dateTo;
+    delete qsOut.dateTo;
+  }
+  const query = new URLSearchParams(qsOut).toString();
   const path = query ? `orders?${query}` : 'orders';
 
   // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
@@ -73,7 +89,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Build base path without shopId for per-shop calls; carry through filters
-      const qBase = new URLSearchParams(qs);
+  const qBase = new URLSearchParams(qsOut);
       qBase.delete('shopId');
       qBase.delete('nextToken');
       qBase.delete('token');
