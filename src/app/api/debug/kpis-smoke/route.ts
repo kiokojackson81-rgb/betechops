@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     });
 
     // 2) Small sample of orders to verify presence visually
-    const sample = await prisma.jumiaOrder.findMany({
+  const sample = await prisma.jumiaOrder.findMany({
       where: {
         status: { in: ['PENDING', 'MULTIPLE'] },
         OR: [
@@ -43,7 +43,8 @@ export async function GET(request: Request) {
           },
         ],
       },
-      select: { id: true, orderId: true, status: true, createdAtJumia: true, updatedAtJumia: true, shopId: true },
+  // JumiaOrder doesn't have orderId; it uses id (string) and optional numeric number
+  select: { id: true, number: true, status: true, createdAtJumia: true, updatedAtJumia: true, shopId: true },
       take: 5,
       orderBy: { updatedAtJumia: 'desc' },
     });
