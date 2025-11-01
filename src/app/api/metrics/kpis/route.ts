@@ -8,7 +8,8 @@ export async function GET() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const queued = await prisma.jumiaOrder.count({ where: { status: 'PENDING' } });
+    // Local cache stores all pending orders regardless of age; count everything we have.
+    const queued = await prisma.jumiaOrder.count();
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
