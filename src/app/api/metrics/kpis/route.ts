@@ -7,8 +7,11 @@ import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 // Always execute on the server without static caching
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request?: Request) {
   try {
+    const url = new URL(request?.url || 'http://localhost/api/metrics/kpis');
+    const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
+    const noLive = (noLiveParam || '').toLowerCase() === '1' || (noLiveParam || '').toLowerCase() === 'true' || (noLiveParam || '').toLowerCase() === 'db' || (noLiveParam || '').toLowerCase() === 'db-only';
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -58,7 +61,7 @@ export async function GET() {
     let pendingAllOut = queued;
     let approxFlag = false;
     try {
-      if (String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true') {
+      if (noLive || String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true') {
         // Explicitly disabled — skip live boost
         throw new Error('live-adjust-disabled');
       }

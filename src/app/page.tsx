@@ -220,7 +220,8 @@ export default function Home() {
         const [c1, c2, kpis] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
-          fetchJsonWithTimeout<any>("/api/metrics/kpis"),
+          // Force fast DB-only mode for Home card to avoid any live vendor delay
+          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1"),
         ]);
         if (!ignore) {
           // Only update when we have a concrete value; keep last value on errors
