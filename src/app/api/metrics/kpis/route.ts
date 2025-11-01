@@ -63,30 +63,46 @@ export async function GET() {
 
     // For the card, compute the 7-day DB count and also a live vendor aggregation across ALL
     // shops for the same window. If the live total is higher (DB window incomplete), prefer it
-    // and mark as approx. This avoids showing only "today" when the sync job covered fewer days.
+    // and mark as approx. Time-box the live check to avoid UI blocking.
     let pendingAllOut = queued;
     let approxFlag = false;
     try {
+      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
+      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
+      const start = Date.now();
+      let pages = 0;
       let total = 0;
       let token: string | null = null;
       const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
       const dateTo = now.toISOString().slice(0, 10);
       do {
-        const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-        const url = await absUrl(base);
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) break;
-        const j: any = await res.json();
-        const arr = Array.isArray(j?.orders)
-          ? j.orders
-          : Array.isArray(j?.items)
-          ? j.items
-          : Array.isArray(j?.data)
-          ? j.data
-          : [];
-        total += arr.length;
-        token = (j?.nextToken ? String(j.nextToken) : '') || null;
-      } while (token);
+        const elapsed = Date.now() - start;
+        if (elapsed >= LIVE_TIMEOUT_MS) break;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
+        try {
+          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          const url = await absUrl(base);
+          const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+          if (!res.ok) break;
+          const j: any = await res.json();
+          const arr = Array.isArray(j?.orders)
+            ? j.orders
+            : Array.isArray(j?.items)
+            ? j.items
+            : Array.isArray(j?.data)
+            ? j.data
+            : [];
+          total += arr.length;
+          token = (j?.nextToken ? String(j.nextToken) : '') || null;
+          pages += 1;
+        } catch {
+          // Abort/timeout or network error — stop live adjustment and keep DB value
+          break;
+        } finally {
+          clearTimeout(timeout);
+        }
+      } while (token && pages < LIVE_MAX_PAGES);
       if (total > pendingAllOut) { pendingAllOut = total; approxFlag = true; }
     } catch {
       // ignore network/vendor errors and keep DB-based value
