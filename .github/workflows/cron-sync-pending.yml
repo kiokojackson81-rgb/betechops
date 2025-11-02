@@ -1,0 +1,26 @@
+name: Jumia Pending Sync
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger /api/jumia/sync-pending
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not configured in repository secrets." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            -X POST \
+            "https://ops.betech.co.ke/api/jumia/sync-pending?cronSecret=${CRON_SECRET}"
