@@ -343,11 +343,23 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
     const shopId = shop.id;
     const key = `jumia:orders:${shopId}:cursor`;
     const cfg = await prisma.config.findUnique({ where: { key } }).catch(() => null);
+    // Rewind far enough on every run so long-lived pending orders are never dropped.
+    const defaultLookbackDays = (() => {
+      const envVal = process.env.JUMIA_SYNC_LOOKBACK_DAYS;
+      if (!envVal) return 120;
+      const parsed = Number.parseInt(envVal, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 120;
+    })();
+    const lookbackDays = opts?.lookbackDays ?? defaultLookbackDays;
+    const baseline = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+
     let updatedAfter: string | null = (cfg?.json as { updatedAfter?: string } | null)?.updatedAfter || null;
-    if (!updatedAfter) {
-      const lookbackDays = opts?.lookbackDays ?? 7;
-      const from = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
-      updatedAfter = from.toISOString();
+    if (!updatedAfter || opts?.lookbackDays) {
+      updatedAfter = baseline.toISOString();
+    }
+    // Ensure cursor never drifts more recent than the rolling baseline so bootstrap gaps are re-fetched.
+    if (updatedAfter && new Date(updatedAfter).getTime() > baseline.getTime()) {
+      updatedAfter = baseline.toISOString();
     }
     // Apply a small overlap to guard against vendor clock skew or pagination edges
     const overlapMs = 60 * 1000; // 60 seconds
