@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'jumia-sync-worker',
-      script: 'node',
-  args: '-r ts-node/register scripts/jumia-sync-worker.ts',
+    script: 'node',
+  args: '-r ts-node/register -r tsconfig-paths/register scripts/jumia-sync-worker.ts',
       env: {
         NODE_ENV: 'production',
         // Use a worker-specific tsconfig so ts-node resolves modules in CJS mode
