@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'jumia-sync-worker',
       script: 'node',
-  args: '.worker-dist/scripts/jumia-sync-worker.js',
+  args: '.worker-dist/scripts/jumia-sync-worker.entry.js',
       env: {
         NODE_ENV: 'production',
         // Built worker runs as plain Node.js script from .worker-dist
