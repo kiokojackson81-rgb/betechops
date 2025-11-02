@@ -331,7 +331,7 @@ export default jobs;
  * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
  */
 export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
-  const ALL_STATUSES = 'PENDING,PROCESSING,FULFILLED,COMPLETED,CANCELED,FAILED,RETURNED';
+  const STATUS_SEQUENCE = ['PENDING', 'PROCESSING', 'FULFILLED', 'COMPLETED', 'CANCELED', 'FAILED', 'RETURNED'];
   const shopFilter: Prisma.ShopWhereInput = opts?.shopId
     ? { id: opts.shopId! }
     : { platform: Platform.JUMIA, isActive: true };
@@ -376,98 +376,112 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
 
     const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
     const fetcher = (path: string) => jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
-  const params: Record<string, string> = { status: ALL_STATUSES, size: '100' };
-  if (adjustedUpdatedAfter) params.updatedAfter = adjustedUpdatedAfter;
+    const baseParams: Record<string, string> = { size: '100' };
+    if (adjustedUpdatedAfter) baseParams.updatedAfter = adjustedUpdatedAfter;
 
     let processed = 0;
     let upserted = 0;
-  let latestCursor: string | null = updatedAfter;
+    let latestCursor: string | null = updatedAfter;
 
     try {
-      for await (const page of jumiaPaginator('/orders', params, fetcher)) {
-        const arr = Array.isArray((page as any)?.orders)
-          ? (page as any).orders
-          : Array.isArray((page as any)?.items)
-          ? (page as any).items
-          : Array.isArray((page as any)?.data)
-          ? (page as any).data
-          : [];
-        for (const raw of arr) {
-          processed += 1;
-          const rawObj = (raw || {}) as Record<string, unknown>;
-          const id = String(rawObj.id ?? rawObj.orderId ?? rawObj.order_id ?? '');
-          if (!id) continue;
+      for (const status of STATUS_SEQUENCE) {
+        const params = { ...baseParams, status };
+        try {
+          for await (const page of jumiaPaginator('/orders', params, fetcher)) {
+            const arr = Array.isArray((page as any)?.orders)
+              ? (page as any).orders
+              : Array.isArray((page as any)?.items)
+              ? (page as any).items
+              : Array.isArray((page as any)?.data)
+              ? (page as any).data
+              : [];
+            for (const raw of arr) {
+              processed += 1;
+              const rawObj = (raw || {}) as Record<string, unknown>;
+              const id = String(rawObj.id ?? rawObj.orderId ?? rawObj.order_id ?? '');
+              if (!id) continue;
 
-          const status = rawObj.hasMultipleStatus
-            ? 'MULTIPLE'
-            : (typeof rawObj.status === 'string' && rawObj.status.trim())
-            ? String(rawObj.status)
-            : 'UNKNOWN';
+              const statusValue = rawObj.hasMultipleStatus
+                ? 'MULTIPLE'
+                : (typeof rawObj.status === 'string' && rawObj.status.trim())
+                ? String(rawObj.status)
+                : 'UNKNOWN';
 
-          const toDate = (v: unknown): Date | null => {
-            if (!v) return null;
-            const d = v instanceof Date ? v : new Date(String(v));
-            return Number.isNaN(d.getTime()) ? null : d;
-          };
-          const toInt = (v: unknown): number | null => {
-            if (typeof v === 'number' && Number.isFinite(v)) return v;
-            if (typeof v === 'string' && v.trim()) {
-              const n = Number.parseInt(v, 10);
-              return Number.isFinite(n) ? n : null;
+              const toDate = (v: unknown): Date | null => {
+                if (!v) return null;
+                const d = v instanceof Date ? v : new Date(String(v));
+                return Number.isNaN(d.getTime()) ? null : d;
+              };
+              const toInt = (v: unknown): number | null => {
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+                if (typeof v === 'string' && v.trim()) {
+                  const n = Number.parseInt(v, 10);
+                  return Number.isFinite(n) ? n : null;
+                }
+                return null;
+              };
+              const toBool = (v: unknown): boolean | null => {
+                if (v === null || v === undefined) return null;
+                if (typeof v === 'boolean') return v;
+                if (typeof v === 'string') {
+                  const t = v.trim().toLowerCase();
+                  if (['true','1','yes'].includes(t)) return true;
+                  if (['false','0','no'].includes(t)) return false;
+                }
+                if (typeof v === 'number') return v !== 0;
+                return null;
+              };
+
+              await prisma.jumiaOrder.upsert({
+                where: { id },
+                create: {
+                  id,
+                  number: toInt((rawObj as any).number),
+                  status: statusValue,
+                  hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
+                  pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
+                  totalItems: toInt((rawObj as any).totalItems),
+                  packedItems: toInt((rawObj as any).packedItems),
+                  countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
+                  isPrepayment: toBool((rawObj as any).isPrepayment),
+                  createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
+                  updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
+                  shopId,
+                },
+                update: {
+                  number: toInt((rawObj as any).number),
+                  status: statusValue,
+                  hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
+                  pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
+                  totalItems: toInt((rawObj as any).totalItems),
+                  packedItems: toInt((rawObj as any).packedItems),
+                  countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
+                  isPrepayment: toBool((rawObj as any).isPrepayment),
+                  createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
+                  updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
+                },
+              });
+              upserted += 1;
+
+              const updatedIso = (() => {
+                const u = (rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt;
+                const d = u ? new Date(String(u)) : null;
+                return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+              })();
+              if (updatedIso && (!latestCursor || new Date(updatedIso).getTime() > new Date(latestCursor).getTime())) {
+                latestCursor = updatedIso;
+              }
             }
-            return null;
-          };
-          const toBool = (v: unknown): boolean | null => {
-            if (v === null || v === undefined) return null;
-            if (typeof v === 'boolean') return v;
-            if (typeof v === 'string') {
-              const t = v.trim().toLowerCase();
-              if (['true','1','yes'].includes(t)) return true;
-              if (['false','0','no'].includes(t)) return false;
-            }
-            if (typeof v === 'number') return v !== 0;
-            return null;
-          };
-
-          await prisma.jumiaOrder.upsert({
-            where: { id },
-            create: {
-              id,
-              number: toInt((rawObj as any).number),
-              status,
-              hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
-              pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
-              totalItems: toInt((rawObj as any).totalItems),
-              packedItems: toInt((rawObj as any).packedItems),
-              countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
-              isPrepayment: toBool((rawObj as any).isPrepayment),
-              createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
-              updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
-              shopId,
-            },
-            update: {
-              number: toInt((rawObj as any).number),
-              status,
-              hasMultipleStatus: Boolean((rawObj as any).hasMultipleStatus),
-              pendingSince: typeof (rawObj as any).pendingSince === 'string' && (rawObj as any).pendingSince.trim() ? String((rawObj as any).pendingSince) : null,
-              totalItems: toInt((rawObj as any).totalItems),
-              packedItems: toInt((rawObj as any).packedItems),
-              countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
-              isPrepayment: toBool((rawObj as any).isPrepayment),
-              createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
-              updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
-            },
-          });
-          upserted += 1;
-
-          const updatedIso = (() => {
-            const u = (rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt;
-            const d = u ? new Date(String(u)) : null;
-            return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
-          })();
-          if (updatedIso && (!latestCursor || new Date(updatedIso).getTime() > new Date(latestCursor).getTime())) {
-            latestCursor = updatedIso;
           }
+        } catch (err) {
+          const code = (err as { status?: number })?.status ?? 0;
+          const body = (err as { body?: string })?.body ?? '';
+          const message = (err as Error)?.message ?? '';
+          if (code === 400 && /invalid status value/i.test(body || message)) {
+            logger.warn({ shopId, status, err }, 'status not supported by vendor; skipping');
+            continue;
+          }
+          throw err;
         }
       }
     } catch (err) {

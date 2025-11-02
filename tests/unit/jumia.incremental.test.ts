@@ -17,7 +17,13 @@ jest.mock('@/lib/jumia', () => ({
 
 describe('syncOrdersIncremental', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2025-11-02T12:00:00.000Z'));
     jest.resetAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('processes first-time sync and advances cursor to latest vendor updatedAt', async () => {
@@ -31,11 +37,13 @@ describe('syncOrdersIncremental', () => {
     const o1Updated = new Date(now - 5 * 60 * 1000).toISOString();
     const o2Updated = new Date(now - 1 * 60 * 1000).toISOString();
 
-    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, _params: any) => (async function* () {
-      yield { orders: [
-        { id: 'o1', status: 'PENDING', createdAt: o1Updated, updatedAt: o1Updated },
-        { id: 'o2', status: 'PROCESSING', createdAt: o2Updated, updatedAt: o2Updated },
-      ] };
+    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, params: any) => (async function* () {
+      if (params.status === 'PENDING') {
+        yield { orders: [
+          { id: 'o1', status: 'PENDING', createdAt: o1Updated, updatedAt: o1Updated },
+          { id: 'o2', status: 'PROCESSING', createdAt: o2Updated, updatedAt: o2Updated },
+        ] };
+      }
     })());
 
     (prisma as any).jumiaOrder.upsert.mockResolvedValue({});
@@ -62,18 +70,22 @@ describe('syncOrdersIncremental', () => {
     (prisma as any).config.findUnique.mockResolvedValue({ json: { updatedAfter: cursor } });
     (jumia.loadShopAuthById as jest.Mock).mockResolvedValue(undefined);
 
-    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, _params: any) => (async function* () {
+    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, params: any) => (async function* () {
+      if (params.status === 'PENDING') {
       // minimal page to drive loop
       yield { orders: [] };
+      }
     })());
 
     await syncOrdersIncremental();
 
     const call = (jumia.jumiaPaginator as jest.Mock).mock.calls[0];
     const params = call[1];
-    expect(params.status).toContain('PENDING');
-    // overlap of 60s
-    const expected = new Date(new Date(cursor).getTime() - 60 * 1000).toISOString();
+    expect(params.status).toBe('PENDING');
+    // overlap of 60s (respecting lookback baseline)
+    const baseline = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+    const basis = Math.min(new Date(cursor).getTime(), baseline.getTime());
+    const expected = new Date(basis - 60 * 1000).toISOString();
     expect(params.updatedAfter).toBe(expected);
   });
 
@@ -87,11 +99,13 @@ describe('syncOrdersIncremental', () => {
     const u1 = '2025-11-01T10:00:00.000Z';
     const u2 = '2025-11-01T11:00:00.000Z';
 
-    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, _params: any) => (async function* () {
-      yield { orders: [
-        { id: 'o1', status: 'PENDING', updatedAt: u1 },
-        { id: 'o1', status: 'COMPLETED', updatedAt: u2 },
-      ] };
+    (jumia.jumiaPaginator as jest.Mock).mockImplementation((_path: string, params: any) => (async function* () {
+      if (params.status === 'PENDING') {
+        yield { orders: [
+          { id: 'o1', status: 'PENDING', updatedAt: u1 },
+          { id: 'o1', status: 'COMPLETED', updatedAt: u2 },
+        ] };
+      }
     })());
 
     (prisma as any).jumiaOrder.upsert.mockResolvedValue({});
