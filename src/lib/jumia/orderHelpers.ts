@@ -1,4 +1,4 @@
-import { type OrdersRow } from "@/app/admin/orders/_lib/types";
+// Keep helper types decoupled from UI row types to avoid tight coupling/errors in builds
 
 type Money = { currency?: string; value: number };
 
@@ -108,13 +108,16 @@ function buildProductUrl(opts: {
   return `${base}/${parts.join("-")}.html`;
 }
 
+export type ItemsAggregate = {
+  totalAmountLocal?: Money;
+  primaryProductUrl?: string;
+  primaryProductName?: string;
+};
+
 export function aggregateItemsDetails(
   items: Array<Record<string, unknown>>,
   opts: { countryCode?: string } = {},
-): Pick<
-  OrdersRow,
-  "totalAmountLocal" | "primaryProductUrl" | "primaryProductName"
-> {
+): ItemsAggregate {
   let totalValue = 0;
   let totalCurrency: string | undefined;
   let productUrl: string | undefined;
@@ -206,10 +209,7 @@ export function aggregateItemsDetails(
     }
   }
 
-  const result: Pick<
-    OrdersRow,
-    "totalAmountLocal" | "primaryProductUrl" | "primaryProductName"
-  > = {};
+  const result: ItemsAggregate = {};
 
   if (totalValue > 0) {
     result.totalAmountLocal = {
