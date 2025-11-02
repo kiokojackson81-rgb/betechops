@@ -8,6 +8,7 @@ module.exports = {
         NODE_ENV: 'production',
         // Use a worker-specific tsconfig so ts-node resolves modules in CJS mode
         TS_NODE_PROJECT: 'tsconfig.worker.json',
+        TS_NODE_TRANSPILE_ONLY: 'true',
         // Provide real values at deploy time or via PM2 ecosystem file overrides
         // DATABASE_URL: 'postgres://user:pass@host:5432/dbname',
         // JUMIA_CLIENT_ID: '...'
