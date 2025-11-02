@@ -1,6 +1,6 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { OrdersRow } from "../_lib/types";
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
 
 export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [details, setDetails] = useState<Record<string, { url?: string; name?: string; total?: { currency?: string; value: number }; count?: number }>>({});
   const pathname = usePathname();
   const router = useRouter();
   const sp = useSearchParams();
@@ -79,6 +80,43 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     router.push(`${pathname}?${q.toString()}`);
   }
 
+  // Lazy-load per-order item details (product URL and computed amount) for rows missing them.
+  const idsNeedingDetails = useMemo(() => {
+    return rows
+      .filter((r) => !details[r.id])
+      .map((r) => ({ id: r.id, shopId: r.shopId || (Array.isArray(r.shopIds) ? r.shopIds[0] : undefined) }));
+  }, [rows, details]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      for (const { id, shopId } of idsNeedingDetails) {
+        try {
+          const url = shopId ? `/api/jumia/orders/${encodeURIComponent(id)}/items?shopId=${encodeURIComponent(shopId)}` : `/api/jumia/orders/${encodeURIComponent(id)}/items`;
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) continue;
+          const j = await res.json();
+          if (cancelled) return;
+          setDetails((prev) => ({
+            ...prev,
+            [id]: {
+              url: j?.primaryProductUrl || undefined,
+              name: j?.primaryProductName || undefined,
+              total: j?.totalAmountLocal || undefined,
+              count: typeof j?.itemsCount === "number" ? j.itemsCount : Array.isArray(j?.items) ? j.items.length : undefined,
+            },
+          }));
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (idsNeedingDetails.length) void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [idsNeedingDetails]);
+
   return (
     <div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] overflow-auto">
       <table className="w-full text-sm">
@@ -119,10 +157,34 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                 </td>
                 <td className="px-3 py-2">
                   {row.totalAmountLocal
-                    ? `${row.totalAmountLocal.currency} ${row.totalAmountLocal.value.toLocaleString()}`
+                    ? `${row.totalAmountLocal.currency ?? ""} ${row.totalAmountLocal.value.toLocaleString()}`.trim()
+                    : details[row.id]?.total
+                    ? `${details[row.id]?.total?.currency ?? ""} ${details[row.id]?.total?.value.toLocaleString()}`.trim()
                     : "-"}
                 </td>
-                <td className="px-3 py-2">{row.shopName ?? row.shopId ?? row.shopIds?.[0] ?? "-"}</td>
+                <td className="px-3 py-2">
+                  {details[row.id]?.url ? (
+                    <a
+                      href={details[row.id]!.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-300 hover:underline"
+                      title={details[row.id]?.name || "Open product on Jumia"}
+                    >
+                      {(row.shopName ?? row.shopId ?? row.shopIds?.[0] ?? "-")}
+                      {typeof details[row.id]?.count === "number" && details[row.id]?.count! > 1 && (
+                        <span className="ml-1 text-xs opacity-70">(x{details[row.id]?.count})</span>
+                      )}
+                    </a>
+                  ) : (
+                    <>
+                      {row.shopName ?? row.shopId ?? row.shopIds?.[0] ?? "-"}
+                      {typeof details[row.id]?.count === "number" && details[row.id]?.count! > 1 && (
+                        <span className="ml-1 text-xs opacity-70">(x{details[row.id]?.count})</span>
+                      )}
+                    </>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-2">
                     <button

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { OrdersQuery, OrdersRow } from "./types";
+import { cleanShopName } from "@/lib/jumia/orderHelpers";
 
 function pickComparableDate(order: {
   updatedAtJumia: Date | null;
@@ -84,8 +85,8 @@ export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]>
   return filtered.map((order) => {
     const created = order.createdAtJumia ?? order.updatedAtJumia ?? order.createdAt;
     const updated = order.updatedAtJumia ?? order.updatedAt;
-    const shopLabelParts = [order.shop?.account?.label, order.shop?.name].filter(Boolean) as string[];
-    const shopLabel = shopLabelParts.length ? shopLabelParts.join("  ") : order.shopId;
+    // Show a single, clean shop name (avoid duplicating account label + shop name)
+    const shopLabel = cleanShopName(order.shop?.name ?? undefined, order.shop?.account?.label ?? undefined) ?? order.shopId;
 
     return {
       id: order.id,
