@@ -1,5 +1,42 @@
 import { z } from "zod";
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const TOKEN_MAX_CONCURRENCY = (() => {
+  const raw = Number.parseInt(process.env.JUMIA_TOKEN_CONCURRENCY ?? "2", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 2;
+})();
+
+const tokenQueue: Array<() => void> = [];
+let tokenActive = 0;
+
+async function withTokenSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (!TOKEN_MAX_CONCURRENCY || TOKEN_MAX_CONCURRENCY <= 0) return fn();
+  if (tokenActive >= TOKEN_MAX_CONCURRENCY) {
+    await new Promise<void>((resolve) => tokenQueue.push(resolve));
+  }
+  tokenActive += 1;
+  try {
+    return await fn();
+  } finally {
+    tokenActive -= 1;
+    const next = tokenQueue.shift();
+    if (next) next();
+  }
+}
+
+function parseRetryAfter(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric >= 0) return numeric * 1000;
+  const parsed = Date.parse(value);
+  if (!Number.isNaN(parsed)) {
+    const delta = parsed - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+  return null;
+}
+
 type AuthSource = "SHOP" | "ENV";
 type ShopAuth = {
   platform?: "JUMIA" | "KILIMALL";
@@ -17,6 +54,17 @@ export type AccessToken = {
   token_type?: string;
   _meta?: { source: AuthSource; platform?: string; tokenUrl?: string };
 };
+
+type CachedTokenRecord = { token: AccessToken; exp: number };
+
+function getInflightMap(): Map<string, Promise<CachedTokenRecord>> {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  if (!(globalThis as any).__jumiaTokenInflight) (globalThis as any).__jumiaTokenInflight = new Map<string, Promise<CachedTokenRecord>>();
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  return (globalThis as any).__jumiaTokenInflight as Map<string, Promise<CachedTokenRecord>>;
+}
 
 // Unified token getter: prefers per-shop JSON, falls back to env.
 async function getJumiaAccessTokenWithMeta(
@@ -58,47 +106,125 @@ async function getJumiaAccessTokenWithMeta(
     return { ...cached.token, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
   }
 
-  const body = new URLSearchParams({
-    client_id: clientId!,
-    grant_type: "refresh_token",
-    refresh_token: refreshToken!,
-  });
+  const inflight = getInflightMap();
+  let recordPromise = inflight.get(cacheKey);
+  if (!recordPromise) {
+    const payload = new URLSearchParams({
+      client_id: clientId!,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken!,
+    }).toString();
+    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    const maxAttempts = Number.isFinite(Number.parseInt(process.env.JUMIA_TOKEN_MAX_ATTEMPTS ?? "", 10))
+      ? Math.max(1, Number.parseInt(process.env.JUMIA_TOKEN_MAX_ATTEMPTS ?? "", 10))
+      : 4;
+    const maxBackoffMs = Number.isFinite(Number.parseInt(process.env.JUMIA_TOKEN_MAX_BACKOFF_MS ?? "", 10))
+      ? Math.max(500, Number.parseInt(process.env.JUMIA_TOKEN_MAX_BACKOFF_MS ?? "", 10))
+      : 10_000;
 
-  const resp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+    recordPromise = withTokenSlot(async () => {
+      let attempt = 0;
+      let lastError: unknown = null;
+      let lastStatus = 0;
+      let lastBody = "";
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    // Structured, safe log (never print full secrets)
-    console.error("[OIDC] token exchange FAILED", {
-      source,
-      tokenUrl,
-      platform: shopAuth?.platform ?? "JUMIA",
-      clientId: redact(clientId),
-      refreshToken: redact(refreshToken),
-      status: resp.status,
-      body: text.slice(0, 400),
+      while (attempt < maxAttempts) {
+        attempt += 1;
+        let resp: Response;
+        try {
+          resp = await fetch(tokenUrl, { method: "POST", headers, body: payload });
+        } catch (err) {
+          lastError = err;
+          if (attempt < maxAttempts) {
+            const wait = Math.min(Math.pow(2, attempt - 1) * 1000, maxBackoffMs) + Math.floor(Math.random() * 250);
+            await sleep(wait);
+            continue;
+          }
+          console.error("[OIDC] token exchange FAILED", {
+            source,
+            tokenUrl,
+            platform: shopAuth?.platform ?? "JUMIA",
+            clientId: redact(clientId),
+            refreshToken: redact(refreshToken),
+            status: 0,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          throw new Error("OIDC token exchange failed (network error)");
+        }
+
+        if (resp.ok) {
+          const json = (await resp.json()) as AccessToken;
+          const expSeconds = Math.floor(Date.now() / 1000) + (json.expires_in ?? 3000);
+          const record: CachedTokenRecord = { token: json, exp: expSeconds };
+          cache.set(cacheKey, record);
+          console.info("[OIDC] token exchange OK", {
+            source,
+            tokenUrl,
+            platform: shopAuth?.platform ?? "JUMIA",
+            clientId: redact(clientId),
+            exp: expSeconds,
+          });
+          return record;
+        }
+
+        lastStatus = resp.status;
+        lastBody = await resp.text();
+        const retryable = resp.status === 429 || resp.status >= 500;
+        if (retryable && attempt < maxAttempts) {
+          const retryAfter = parseRetryAfter(resp.headers?.get("retry-after"));
+          const backoff = Math.min(Math.pow(2, attempt - 1) * 1000, maxBackoffMs);
+          const wait = (retryAfter ?? backoff) + Math.floor(Math.random() * 250);
+          console.warn("[OIDC] token exchange RETRY", {
+            source,
+            tokenUrl,
+            platform: shopAuth?.platform ?? "JUMIA",
+            clientId: redact(clientId),
+            status: resp.status,
+            attempt,
+            maxAttempts,
+            waitMs: wait,
+          });
+          await sleep(wait);
+          continue;
+        }
+
+        console.error("[OIDC] token exchange FAILED", {
+          source,
+          tokenUrl,
+          platform: shopAuth?.platform ?? "JUMIA",
+          clientId: redact(clientId),
+          refreshToken: redact(refreshToken),
+          status: resp.status,
+          body: lastBody.slice(0, 400),
+        });
+        throw new Error(`OIDC token exchange failed (${resp.status})`);
+      }
+
+      console.error("[OIDC] token exchange FAILED", {
+        source,
+        tokenUrl,
+        platform: shopAuth?.platform ?? "JUMIA",
+        clientId: redact(clientId),
+        refreshToken: redact(refreshToken),
+        status: lastStatus,
+        body: lastBody.slice(0, 400),
+        error: lastError instanceof Error ? lastError.message : lastError ? String(lastError) : undefined,
+      });
+      throw new Error(`OIDC token exchange failed (${lastStatus || 0})`);
     });
-    throw new Error(`OIDC token exchange failed (${resp.status})`);
+
+    inflight.set(cacheKey, recordPromise);
+    recordPromise.finally(() => {
+      try {
+        inflight.delete(cacheKey);
+      } catch {
+        /* noop */
+      }
+    });
   }
 
-  const json = (await resp.json()) as AccessToken;
-  const exp = now + (json.expires_in ?? 3000);
-  cache.set(cacheKey, { token: json, exp });
-
-  // Helpful success log (still redacted)
-  console.info("[OIDC] token exchange OK", {
-    source,
-    tokenUrl,
-    platform: shopAuth?.platform ?? "JUMIA",
-    clientId: redact(clientId),
-    exp,
-  });
-
-  return { ...json, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
+  const record = await recordPromise;
+  return { ...record.token, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
 }
 
 // Backwards-compatible wrapper:
