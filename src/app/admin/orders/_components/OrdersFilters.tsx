@@ -3,6 +3,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELLED","RETURNED","DISPUTED"];
+const SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000];
 
 type FiltersState = {
   status: string;
@@ -29,15 +30,19 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   const router = useRouter();
   const sp = useSearchParams();
 
-  const snapshot = useMemo(() => ({
-    status: sp.get("status") || DEFAULTS.status,
-    country: sp.get("country") || DEFAULTS.country,
-    shopId: sp.get("shopId") || DEFAULTS.shopId,
-    dateFrom: sp.get("dateFrom") || DEFAULTS.dateFrom,
-    dateTo: sp.get("dateTo") || DEFAULTS.dateTo,
-    q: sp.get("q") || DEFAULTS.q,
-    size: sp.get("size") || DEFAULTS.size,
-  }), [sp]);
+  const snapshot = useMemo(() => {
+    const status = sp.get("status") || DEFAULTS.status;
+    const sizeDefault = status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    return {
+      status,
+      country: sp.get("country") || DEFAULTS.country,
+      shopId: sp.get("shopId") || DEFAULTS.shopId,
+      dateFrom: sp.get("dateFrom") || DEFAULTS.dateFrom,
+      dateTo: sp.get("dateTo") || DEFAULTS.dateTo,
+      q: sp.get("q") || DEFAULTS.q,
+      size: sp.get("size") || sizeDefault,
+    };
+  }, [sp]);
 
   const [pending, setPending] = useState<FiltersState>(snapshot);
 
@@ -61,14 +66,16 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
     assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
     assign("q", pending.q.trim(), DEFAULTS.q);
-    assign("size", pending.size, DEFAULTS.size);
+    const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    assign("size", pending.size, sizeDefault);
 
     q.delete("nextToken");
     router.push(`${pathname}?${q.toString()}`);
   };
 
   const reset = () => {
-    setPending(DEFAULTS);
+    const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    setPending({ ...DEFAULTS, size: sizeDefault });
     const q = new URLSearchParams(sp.toString());
     Object.keys(DEFAULTS).forEach((key) => q.delete(key));
     q.delete("nextToken");
@@ -138,7 +145,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
           onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
         >
-          {[25, 50, 100].map((n) => (
+          {SIZE_OPTIONS.map((n) => (
             <option key={n} value={n.toString()}>
               {n} / page
             </option>

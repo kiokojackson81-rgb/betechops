@@ -133,6 +133,8 @@ export default async function OrdersPage(props: unknown) {
   };
 
   const prefersSynced = (params.status ?? '').toUpperCase() === 'PENDING';
+  // Keep vendor-synced pending views free of implicit date filters.
+  // Some orders stay pending for weeks, so forcing a lookback window causes mismatches.
 
   let usedDefaultFrom = false;
   let usedDefaultTo = false;
@@ -161,23 +163,6 @@ export default async function OrdersPage(props: unknown) {
     if (!params.dateTo) {
       params.dateTo = new Date().toISOString().slice(0, 10);
       usedDefaultTo = true;
-    }
-  }
-
-  // For PENDING (synced) view, default to last 7 days if no dates provided.
-  // This ensures we show the weekly queue instead of only today's records.
-  if (prefersSynced) {
-    const hasFrom = Boolean(params.dateFrom);
-    const hasTo = Boolean(params.dateTo);
-    if (!hasTo) {
-      params.dateTo = new Date().toISOString().slice(0, 10);
-      usedDefaultTo = true;
-    }
-    if (!hasFrom) {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
-      params.dateFrom = d.toISOString().slice(0, 10);
-      usedDefaultFrom = true;
     }
   }
 

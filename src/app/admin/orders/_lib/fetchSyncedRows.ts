@@ -31,7 +31,13 @@ export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]>
     ];
   }
 
-  const take = Math.max(1, Math.min(parseInt(params.size ?? "100", 10) || 100, 1000));
+  const normalizedStatus = (params.status ?? "").toUpperCase();
+  const defaultSize = normalizedStatus === "PENDING" ? 500 : 100;
+  const parsedSize = Number.parseInt(params.size ?? "", 10);
+  const take = Math.max(
+    1,
+    Math.min(Number.isFinite(parsedSize) && parsedSize > 0 ? parsedSize : defaultSize, 1000),
+  );
   const orders = await prisma.jumiaOrder.findMany({
     where,
     include: {
