@@ -346,6 +346,11 @@ export default async function OrdersPage(props: unknown) {
       rows = await fetchSyncedRows(params);
       nextToken = null;
       isLastPage = true;
+      if (rows.length === 0) {
+        showingSynced = false;
+        syncFallbackMessage =
+          'No cached pending orders are available yet. Showing live data until the next sync finishes.';
+      }
     } catch (error) {
       console.error('[orders.page] Failed to load cached pending orders, falling back to live API', error);
       showingSynced = false;
