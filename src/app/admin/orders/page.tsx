@@ -135,6 +135,19 @@ export default async function OrdersPage(props: unknown) {
   const prefersSynced = (params.status ?? '').toUpperCase() === 'PENDING';
   // Keep vendor-synced pending views free of implicit date filters.
   // Some orders stay pending for weeks, so forcing a lookback window causes mismatches.
+  let kpisPendingCount: number | null = null;
+  try {
+    const metricsUrl = await absUrl('/api/metrics/kpis');
+    const metricsResp = await fetch(metricsUrl, { cache: 'no-store' });
+    if (metricsResp.ok) {
+      const metricsJson: any = await metricsResp.json();
+      if (typeof metricsJson?.pendingAll === 'number' && Number.isFinite(metricsJson.pendingAll)) {
+        kpisPendingCount = Number(metricsJson.pendingAll);
+      }
+    }
+  } catch {
+    kpisPendingCount = null;
+  }
 
   let usedDefaultFrom = false;
   let usedDefaultTo = false;
@@ -218,6 +231,14 @@ export default async function OrdersPage(props: unknown) {
       showingSynced = false;
       syncFallbackMessage = 'Cached pending orders are temporarily unavailable. Showing live data instead.';
     }
+  }
+
+  if (prefersSynced && showingSynced && kpisPendingCount !== null && kpisPendingCount > rows.length) {
+    showingSynced = false;
+    syncFallbackMessage = `Cached snapshot is behind vendor count (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
+    rows = [];
+    nextToken = null;
+    isLastPage = false;
   }
 
   // Defer live remote fetch to the client for faster initial paint when not using cached PENDING

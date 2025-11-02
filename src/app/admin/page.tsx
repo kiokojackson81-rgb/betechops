@@ -39,28 +39,13 @@ async function getStats(): Promise<Stats> {
       kpis = null;
     }
 
-    let productsAll = Number(kpis?.productsAll ?? 0);
+    let productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
     const approxProducts = Boolean(kpis?.approx);
 
     // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
     // This avoids flicker and double counting.
     let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
     let approxPending = Boolean(kpis?.approx);
-
-    try {
-      const liveUrl = await absUrl("/api/orders/pending-pricing");
-      const liveResp = await fetch(liveUrl, { cache: "no-store" });
-      if (liveResp.ok) {
-        const liveJson: any = await liveResp.json();
-        const liveCount = typeof liveJson?.count === "number" ? Number(liveJson.count) : null;
-        if (liveCount !== null && liveCount > pendingAll) {
-          pendingAll = liveCount;
-          approxPending = true;
-        }
-      }
-    } catch {
-      // ignore live failures
-    }
 
     return {
       productsAll,
@@ -111,7 +96,12 @@ export default async function Overview() {
         <Card title="Vendor Products (All)" value={s.productsAll} Icon={Package} sub={s.approxProducts ? "Approx (bounded scan)" : undefined} />
         <Card title="Shops" value={s.shops} Icon={Store} />
         <Card title="Attendants" value={s.attendants} Icon={Users} />
-        <Card title="Pending Orders (All)" value={s.pendingAll} Icon={Receipt} sub={s.approxPending ? "Synced count unavailable" : undefined} />
+        <Card
+          title="Pending Orders (All)"
+          value={s.pendingAll}
+          Icon={Receipt}
+          sub={s.approxPending ? "Live vendor count (DB sync pending)" : undefined}
+        />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>
 
