@@ -6,8 +6,7 @@
     "noEmit": false,
     "outDir": ".worker-dist",
     "rootDir": ".",
-    "esModuleInterop": true,
-    "allowImportingTsExtensions": true
+    "esModuleInterop": true
   },
   "include": [
     "scripts/**/*.ts",
