@@ -12,9 +12,9 @@ function sleep(ms: number) {
 async function tick() {
   const startedAt = new Date();
   try {
-    const results = await syncAllAccountsPendingOrders();
-    const totalOrders = results.reduce((acc, r) => acc + (r?.orders || 0), 0);
-    const totalPages = results.reduce((acc, r) => acc + (r?.pages || 0), 0);
+    const results = (await syncAllAccountsPendingOrders()) as any[];
+    const totalOrders = results.reduce((acc: number, r: any) => acc + (r?.orders || 0), 0);
+    const totalPages = results.reduce((acc: number, r: any) => acc + (r?.pages || 0), 0);
     // eslint-disable-next-line no-console
     console.log(
       `[jumia-sync-worker] tick ok @ ${startedAt.toISOString()} pages=${totalPages} orders=${totalOrders} shops=${results.length}`
