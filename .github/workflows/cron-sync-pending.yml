@@ -24,3 +24,16 @@ jobs:
           curl --fail --silent --show-error \
             -X POST \
             "https://ops.betech.co.ke/api/jumia/sync-pending?cronSecret=${CRON_SECRET}"
+
+      - name: Trigger /api/jumia/jobs/sync-incremental
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not configured in repository secrets." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "https://ops.betech.co.ke/api/jumia/jobs/sync-incremental"

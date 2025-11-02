@@ -15,8 +15,17 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.res;
   }
 
+  const opts: { shopId?: string; lookbackDays?: number } = {};
+  const shopIdParam = url.searchParams.get("shopId");
+  if (shopIdParam) opts.shopId = shopIdParam;
+  const lookbackParam = url.searchParams.get("lookbackDays");
+  if (lookbackParam) {
+    const parsed = Number.parseInt(lookbackParam, 10);
+    if (Number.isFinite(parsed) && parsed > 0) opts.lookbackDays = parsed;
+  }
+
   try {
-    const summary = await syncOrdersIncremental();
+    const summary = await syncOrdersIncremental(opts);
     if (isCron) {
       const res = NextResponse.json({ ok: true, cron: true, summary });
       res.headers.set("Cache-Control", "no-store");

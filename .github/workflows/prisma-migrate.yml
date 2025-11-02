@@ -26,4 +26,14 @@ jobs:
       - name: Run migrations (deploy)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not configured in repository secrets." >&2
+            exit 1
+          fi
+          if [ -z "$DIRECT_URL" ]; then
+            echo "DIRECT_URL is not configured; falling back to DATABASE_URL for prisma migrate deploy." >&2
+            export DIRECT_URL="$DATABASE_URL"
+          fi
+          npx prisma migrate deploy

@@ -1,44 +1,18 @@
 import OrdersFilters from './_components/OrdersFilters';
-import OrdersTable from './_components/OrdersTable';
 import OrdersLiveData from './_components/OrdersLiveData';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
 import OrdersSSE from './_components/OrdersSSE';
-import { Prisma } from '@prisma/client';
 import SyncNowButton from './_components/SyncNowButton';
+import { fetchSyncedRows } from './_lib/fetchSyncedRows';
+import type { OrdersQuery, OrdersRow } from './_lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_STATUS = 'PENDING';
 
-type Search = {
-  status?: string;
-  country?: string;
-  shopId?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  q?: string;
-  nextToken?: string;
-  size?: string;
-};
-
-export type Row = {
-  id: string;
-  number?: string;
-  status?: string;
-  pendingSince?: string;
-  createdAt: string;
-  updatedAt?: string;
-  totalItems?: number;
-  packedItems?: number;
-  totalAmountLocal?: { currency: string; value: number };
-  shopName?: string;
-  shopIds?: string[];
-  isPrepayment?: boolean;
-};
-
-async function fetchRemoteOrders(params: Search) {
+async function fetchRemoteOrders(params: OrdersQuery) {
   const base = await absUrl('/api/orders');
   const query = new URLSearchParams();
 
@@ -61,109 +35,7 @@ async function fetchRemoteOrders(params: Search) {
   }>;
 }
 
-function pickComparableDate(order: {
-  updatedAtJumia: Date | null;
-  createdAtJumia: Date | null;
-  updatedAt: Date;
-  createdAt: Date;
-}) {
-  return order.updatedAtJumia ?? order.createdAtJumia ?? order.updatedAt ?? order.createdAt;
-}
-
-async function fetchSyncedRows(params: Search): Promise<Row[]> {
-  const where: Prisma.JumiaOrderWhereInput = {};
-  if (params.status && params.status !== 'ALL') where.status = params.status;
-  if (params.shopId && params.shopId !== 'ALL') where.shopId = params.shopId;
-  if (params.country) where.countryCode = params.country.trim().toUpperCase();
-
-  // Apply server-side date window to avoid fetching out-of-range rows then filtering to empty
-  const from = params.dateFrom ? new Date(`${params.dateFrom}T00:00:00Z`) : null;
-  const to = params.dateTo ? new Date(`${params.dateTo}T23:59:59Z`) : null;
-  if ((from && !Number.isNaN(from.getTime())) || (to && !Number.isNaN(to.getTime()))) {
-    const range: { gte?: Date; lte?: Date } = {};
-    if (from && !Number.isNaN(from.getTime())) range.gte = from;
-    if (to && !Number.isNaN(to.getTime())) range.lte = to;
-    where.OR = [
-      { updatedAtJumia: range },
-      { AND: [{ updatedAtJumia: null }, { createdAtJumia: range }] },
-      { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: range }] },
-    ];
-  }
-
-  const take = Math.max(1, Math.min(parseInt(params.size ?? '100', 10) || 100, 1000));
-  const orders = await prisma.jumiaOrder.findMany({
-    where,
-    include: {
-      shop: {
-        select: {
-          name: true,
-          account: { select: { label: true } },
-        },
-      },
-    },
-    orderBy: [
-      { updatedAtJumia: 'desc' },
-      { createdAtJumia: 'desc' },
-      { updatedAt: 'desc' },
-    ],
-    take,
-  });
-
-  const filtered = orders.filter((order) => {
-    const comparable = pickComparableDate(order);
-    if (params.dateFrom) {
-      const from = new Date(`${params.dateFrom}T00:00:00Z`);
-      if (!Number.isNaN(from.getTime()) && comparable < from) return false;
-    }
-    if (params.dateTo) {
-      const to = new Date(`${params.dateTo}T23:59:59Z`);
-      if (!Number.isNaN(to.getTime()) && comparable > to) return false;
-    }
-    if (params.q) {
-      const term = params.q.trim().toLowerCase();
-      if (term) {
-        const maybeNumber = Number.parseInt(term, 10);
-        const numberMatches = Number.isFinite(maybeNumber) && order.number !== null && order.number === maybeNumber;
-        const textHaystack = [
-          order.id,
-          order.status ?? '',
-          order.pendingSince ?? '',
-          order.countryCode ?? '',
-          order.shop?.name ?? '',
-          order.shop?.account?.label ?? '',
-        ]
-          .concat(order.number !== null ? String(order.number) : [])
-          .map((value) => String(value).toLowerCase());
-        const textMatches = textHaystack.some((value) => value.includes(term));
-        if (!numberMatches && !textMatches) return false;
-      }
-    }
-    return true;
-  });
-
-  return filtered.map((order) => {
-    const created = order.createdAtJumia ?? order.updatedAtJumia ?? order.createdAt;
-    const updated = order.updatedAtJumia ?? order.updatedAt;
-    const shopLabelParts = [order.shop?.account?.label, order.shop?.name].filter(Boolean) as string[];
-    const shopLabel = shopLabelParts.length ? shopLabelParts.join(' • ') : order.shopId;
-
-    return {
-      id: order.id,
-      number: order.number !== null && order.number !== undefined ? String(order.number) : undefined,
-      status: order.status ?? undefined,
-      pendingSince: order.pendingSince ?? undefined,
-      createdAt: created?.toISOString?.() ?? new Date().toISOString(),
-      updatedAt: updated?.toISOString?.(),
-      totalItems: order.totalItems ?? undefined,
-      packedItems: order.packedItems ?? undefined,
-      shopName: shopLabel ?? undefined,
-      shopIds: shopLabel ? [shopLabel] : undefined,
-      isPrepayment: order.isPrepayment ?? undefined,
-    } satisfies Row;
-  });
-}
-
-function normalizeApiOrder(raw: Record<string, unknown>): Row {
+function normalizeApiOrder(raw: Record<string, unknown>): OrdersRow {
   const fallbackId = Math.random().toString(36).slice(2);
   const id = String(raw.id ?? raw.orderId ?? raw.order_id ?? raw.number ?? raw.orderNumber ?? fallbackId);
   const number =
@@ -199,7 +71,7 @@ function normalizeApiOrder(raw: Record<string, unknown>): Row {
     (raw.totalAmountCurrency && raw.totalAmount
       ? { currency: String(raw.totalAmountCurrency), value: Number(raw.totalAmount) }
       : undefined) ??
-    (raw.totalAmountLocal as Row['totalAmountLocal']);
+    (raw.totalAmountLocal as OrdersRow['totalAmountLocal']);
 
   const packedItems =
     raw.packedItems ??
@@ -216,6 +88,10 @@ function normalizeApiOrder(raw: Record<string, unknown>): Row {
     raw.items_total;
 
   const shopObject = typeof raw.shop === 'object' && raw.shop !== null ? (raw.shop as Record<string, unknown>) : null;
+  const shopId =
+    (typeof raw.shopId === 'string' ? raw.shopId : undefined) ??
+    (Array.isArray(raw.shopIds) ? (raw.shopIds.find((s) => typeof s === 'string') as string | undefined) : undefined) ??
+    (typeof shopObject?.id === 'string' ? shopObject.id : undefined);
   const shopNameCandidate =
     (raw.shopName as string | undefined) ??
     (raw.shop_label as string | undefined) ??
@@ -232,8 +108,9 @@ function normalizeApiOrder(raw: Record<string, unknown>): Row {
     updatedAt,
     totalItems: totalItems !== undefined ? Number(totalItems) : undefined,
     packedItems: packedItems !== undefined ? Number(packedItems) : undefined,
-    totalAmountLocal: totalAmount as Row['totalAmountLocal'],
+    totalAmountLocal: totalAmount as OrdersRow['totalAmountLocal'],
     shopName: shopNameCandidate,
+    shopId: shopId ?? undefined,
     shopIds: Array.isArray(raw.shopIds) ? raw.shopIds.filter((s) => typeof s === 'string') as string[] : undefined,
     isPrepayment: typeof raw.isPrepayment === 'boolean' ? raw.isPrepayment : undefined,
   };
@@ -244,7 +121,7 @@ export default async function OrdersPage(props: unknown) {
   const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const rawStatus = toStr(searchParams.status);
 
-  const params: Search = {
+  const params: OrdersQuery = {
     status: rawStatus ?? DEFAULT_STATUS,
     country: toStr(searchParams.country),
     shopId: toStr(searchParams.shopId) ?? 'ALL',
@@ -333,7 +210,7 @@ export default async function OrdersPage(props: unknown) {
     ...syncedShops.map((shop) => ({ id: shop.id, name: `${shop.account?.label ?? 'Jumia'} • ${shop.name}` })),
   ];
 
-  let rows: Row[] = [];
+  let rows: OrdersRow[] = [];
   let nextToken: string | null = null;
   let isLastPage = true;
   let showingSynced = prefersSynced && !syncBootstrapError;
