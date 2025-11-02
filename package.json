@@ -19,7 +19,8 @@
     "run-jumia-sync": "node -r ts-node/register scripts/run-jumia-sync.ts",
     "backfill:catalog-counters": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill-catalog-counters.js",
     "cleanup:jumia-orders": "node -r ts-node/register -r tsconfig-paths/register scripts/cleanup-jumia-orders.ts",
-    "job:jumia-sync-incremental": "curl -s -X POST http://localhost:3000/api/jumia/jobs/sync-incremental || true"
+    "job:jumia-sync-incremental": "curl -s -X POST http://localhost:3000/api/jumia/jobs/sync-incremental || true",
+    "worker:jumia-sync": "node -r ts-node/register -r tsconfig-paths/register scripts/jumia-sync-worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
