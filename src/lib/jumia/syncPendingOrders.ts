@@ -1,5 +1,5 @@
-import { prisma } from "../prisma.ts";
-import { JumiaClient } from "./client.ts";
+import { prisma } from "../prisma";
+import { JumiaClient } from "./client";
 import pLimit from "p-limit";
 import { addDays, format } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
