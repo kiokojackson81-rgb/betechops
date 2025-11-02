@@ -22,13 +22,7 @@ type Stats = {
 
 async function getStats(): Promise<Stats> {
   try {
-    const [
-      dbProducts,
-      shops,
-      attendants,
-      returnsDb,
-      revenueAgg,
-    ] = await Promise.all([
+    const [dbProducts, shops, attendants, returnsDb, revenueAgg] = await Promise.all([
       prisma.product.count(),
       prisma.shop.count(),
       prisma.user.count({ where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] } } }),
@@ -45,13 +39,28 @@ async function getStats(): Promise<Stats> {
       kpis = null;
     }
 
-    const productsAll = Number(kpis?.productsAll ?? 0);
+    let productsAll = Number(kpis?.productsAll ?? 0);
     const approxProducts = Boolean(kpis?.approx);
 
     // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
     // This avoids flicker and double counting.
-    const pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
-    const approxPending = Boolean(kpis?.approx);
+    let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
+    let approxPending = Boolean(kpis?.approx);
+
+    try {
+      const liveUrl = await absUrl("/api/orders/pending-pricing");
+      const liveResp = await fetch(liveUrl, { cache: "no-store" });
+      if (liveResp.ok) {
+        const liveJson: any = await liveResp.json();
+        const liveCount = typeof liveJson?.count === "number" ? Number(liveJson.count) : null;
+        if (liveCount !== null && liveCount > pendingAll) {
+          pendingAll = liveCount;
+          approxPending = true;
+        }
+      }
+    } catch {
+      // ignore live failures
+    }
 
     return {
       productsAll,

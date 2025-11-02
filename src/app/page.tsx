@@ -191,7 +191,10 @@ export default function Home() {
   // Single source of truth per card to avoid inconsistent values from mixed endpoints
   const pickupPaths = useMemo(() => ["/api/returns/waiting-pickup"], []);
   const pricingPaths = useMemo(() => ["/api/orders/pending-pricing"], []);
-  const pendingPaths = useMemo(() => ["/api/metrics/kpis"], []); // KPIs only
+  const pendingPaths = useMemo(
+    () => ["/api/orders/pending-pricing", "/api/metrics/kpis"],
+    []
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -217,9 +220,10 @@ export default function Home() {
 
     const run = async () => {
       try {
-        const [c1, c2, kpis] = await Promise.all([
+        const [c1, c2, pendingLive, kpis] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
+          tryCounts(pendingPaths),
           // Force fast DB-only mode for Home card to avoid any live vendor delay
           fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1"),
         ]);
@@ -228,29 +232,48 @@ export default function Home() {
           if (typeof c1 === "number" && Number.isFinite(c1)) setPickupCnt(c1);
           if (typeof c2 === "number" && Number.isFinite(c2)) setPricingCnt(c2);
 
-          const pending = Number(kpis?.pendingAll);
-          const approx = Boolean(kpis?.approx);
-          // Protect against transient zeros: if approx is true and pending is 0, keep last non-zero value
-          if (Number.isFinite(pending)) {
-            if (pending === 0 && approx && (pendingAll ?? 0) > 0) {
-              // keep previous value, just refresh the timestamp
-            } else {
-              setPendingAll(pending);
-            }
+          const dbPending = Number.isFinite(Number(kpis?.pendingAll)) ? Number(kpis.pendingAll) : null;
+          const livePending = Number.isFinite(pendingLive) ? Number(pendingLive) : null;
+          let pendingValue = dbPending ?? 0;
+          let approx = Boolean(kpis?.approx);
+
+          if (livePending !== null && (dbPending === null || livePending > dbPending)) {
+            pendingValue = livePending;
+            approx = true;
+          } else if (dbPending !== null) {
+            pendingValue = dbPending;
+          } else if (livePending !== null) {
+            pendingValue = livePending;
+            approx = true;
           }
 
-          const ts = typeof kpis?.updatedAt === "number" ? kpis.updatedAt : Date.now();
+          if (pendingValue === 0 && approx && (pendingAll ?? 0) > 0) {
+            // keep previous cached value, only refresh timestamp
+          } else {
+            setPendingAll(pendingValue);
+          }
+
+          const ts =
+            typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
+              ? kpis.updatedAt
+              : Date.now();
           const dt = new Date(ts);
           const hh = String(dt.getHours()).padStart(2, "0");
           const mm = String(dt.getMinutes()).padStart(2, "0");
-          setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
+          setPendingUpdated(
+            approx ? `Live ${dt.toLocaleDateString()} ${hh}:${mm}` : `Updated ${dt.toLocaleDateString()} ${hh}:${mm}`,
+          );
 
           // 2) Persist latest successful snapshot for instant reuse next load
           try {
             const snapshot = {
               pickup: typeof c1 === 'number' && Number.isFinite(c1) ? c1 : pickupCnt,
               pricing: typeof c2 === 'number' && Number.isFinite(c2) ? c2 : pricingCnt,
-              pending: Number.isFinite(pending) ? (pending === 0 && approx && (pendingAll ?? 0) > 0 ? pendingAll : pending) : pendingAll,
+              pending: Number.isFinite(pendingValue)
+                ? pendingValue === 0 && approx && (pendingAll ?? 0) > 0
+                  ? pendingAll
+                  : pendingValue
+                : pendingAll,
               updatedAt: ts,
             };
             localStorage.setItem(LS_KEY, JSON.stringify(snapshot));

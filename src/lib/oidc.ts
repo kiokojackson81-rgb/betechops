@@ -3,8 +3,8 @@ import { z } from "zod";
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const TOKEN_MAX_CONCURRENCY = (() => {
-  const raw = Number.parseInt(process.env.JUMIA_TOKEN_CONCURRENCY ?? "2", 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : 2;
+  const raw = Number.parseInt(process.env.JUMIA_TOKEN_CONCURRENCY ?? "1", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1;
 })();
 
 const tokenQueue: Array<() => void> = [];
