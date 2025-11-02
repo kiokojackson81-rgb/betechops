@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'jumia-sync-worker',
       script: 'node',
-      args: '-r ts-node/register -r tsconfig-paths/register scripts/jumia-sync-worker.ts',
+  args: '-r ts-node/register scripts/jumia-sync-worker.ts',
       env: {
         NODE_ENV: 'production',
         // Provide real values at deploy time or via PM2 ecosystem file overrides
