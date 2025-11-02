@@ -1,9 +1,7 @@
 // Simple PM2-friendly worker that periodically syncs Jumia pending orders into the DB
-import 'dotenv/config';
-// If you run via npm script or PM2 ecosystem, tsconfig-paths/register is preloaded.
-
-// Use relative import to avoid requiring tsconfig-paths at runtime
-import { syncAllAccountsPendingOrders } from '../src/lib/jumia/syncPendingOrders';
+require('dotenv/config');
+// Use CommonJS require to avoid Node ESM resolution issues under ts-node
+const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
 
 const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 15_000);
 
