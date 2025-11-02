@@ -165,21 +165,21 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                 <td className="px-3 py-2">
                   {details[row.id]?.url ? (
                     <a
-                      href={details[row.id]!.url}
+                      href={details[row.id]?.url ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-300 hover:underline"
                       title={details[row.id]?.name || "Open product on Jumia"}
                     >
                       {(row.shopName ?? row.shopId ?? row.shopIds?.[0] ?? "-")}
-                      {typeof details[row.id]?.count === "number" && details[row.id]?.count! > 1 && (
+                      {(details[row.id]?.count ?? 0) > 1 && (
                         <span className="ml-1 text-xs opacity-70">(x{details[row.id]?.count})</span>
                       )}
                     </a>
                   ) : (
                     <>
                       {row.shopName ?? row.shopId ?? row.shopIds?.[0] ?? "-"}
-                      {typeof details[row.id]?.count === "number" && details[row.id]?.count! > 1 && (
+                      {(details[row.id]?.count ?? 0) > 1 && (
                         <span className="ml-1 text-xs opacity-70">(x{details[row.id]?.count})</span>
                       )}
                     </>
