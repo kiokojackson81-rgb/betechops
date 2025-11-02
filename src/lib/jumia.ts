@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { absUrl } from "@/lib/abs-url";
 import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson, ShopAuthSchema } from '@/lib/oidc';
 import { decryptJson } from '@/lib/crypto/secure-json';
 
@@ -684,13 +685,62 @@ export async function getSalesToday() {
 
 // Orders pending pricing (normalize to { count })
 export async function getPendingPricingCount() {
-  const { endpoints } = await loadConfig();
-  const shopAuth = await loadDefaultShopAuth();
-  const explicit = endpoints?.pendingPricing;
-  const path = explicit || '/orders?status=PENDING';
-  const j = await jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
-  const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
-  return { count: orders.length };
+  // Prefer querying our composite orders endpoint so we get a stable aggregate across all shops.
+  const fetchAllShops = async () => {
+    const base = await absUrl("/api/orders");
+    let total = 0;
+    let token: string | null = null;
+    let guard = 0;
+
+    do {
+      const url = new URL(base);
+      url.searchParams.set("status", "PENDING");
+      url.searchParams.set("shopId", "ALL");
+      url.searchParams.set("size", "100");
+      if (token) url.searchParams.set("nextToken", token);
+
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`orders aggregate failed: ${res.status} ${text}`);
+      }
+      const payload = await res.json();
+      const chunk = Array.isArray(payload?.orders)
+        ? payload.orders
+        : Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload?.data)
+        ? payload.data
+        : [];
+      total += chunk.length;
+      const next = payload?.nextToken ? String(payload.nextToken) : "";
+      token = next || null;
+      guard += 1;
+      if (guard > 50) break; // safety valve against runaway cursors
+    } while (token);
+
+    return total;
+  };
+
+  try {
+    const count = await fetchAllShops();
+    return { count };
+  } catch (err) {
+    // Fall back to the legacy single-shop implementation so dashboards still render.
+    const { endpoints } = await loadConfig();
+    const shopAuth = await loadDefaultShopAuth();
+    const explicit = endpoints?.pendingPricing;
+    const path = explicit || "/orders?status=PENDING";
+    const j = await jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    const orders = Array.isArray(j?.orders)
+      ? j.orders
+      : Array.isArray(j?.items)
+      ? j.items
+      : Array.isArray(j?.data)
+      ? j.data
+      : [];
+    return { count: orders.length };
+  }
 }
 
 // Returns waiting pickup (normalize to { count })
