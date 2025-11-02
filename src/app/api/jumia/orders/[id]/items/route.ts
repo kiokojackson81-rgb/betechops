@@ -14,13 +14,21 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
 
     const resp = await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(id)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
-    const items = Array.isArray((resp as any)?.items)
-      ? (resp as any).items as Array<Record<string, unknown>>
-      : [];
+    // Be permissive: vendor responses vary (items | orderItems | data | orders | order_items | list)
+    const candidates: unknown[] = [
+      (resp as any)?.items,
+      (resp as any)?.orderItems,
+      (resp as any)?.data,
+      (resp as any)?.orders,
+      (resp as any)?.order_items,
+      (resp as any)?.list,
+    ];
+    const firstArray = candidates.find((v) => Array.isArray(v)) as Array<Record<string, unknown>> | undefined;
+    const items = Array.isArray(firstArray) ? firstArray : [];
 
     // Try to infer country code from first item
-    const first = (items[0] || {}) as Record<string, any>;
-    const countryCode: string | undefined = (first?.country?.code as string) || undefined;
+  const first = (items[0] || {}) as Record<string, any>;
+  const countryCode: string | undefined = (first?.country?.code as string) || (resp as any)?.country || undefined;
 
     const agg = aggregateItemsDetails(items, { countryCode });
 
