@@ -1,5 +1,5 @@
-// JS bootstrap to run the TS worker under Node with ts-node and tsconfig-paths
+// JS bootstrap to run the built worker from .worker-dist
 require('dotenv/config');
-require('ts-node/register');
-require('tsconfig-paths/register');
-require('./jumia-sync-worker.ts');
+// In the built output, this file is copied to .worker-dist/scripts/
+// and the compiled worker exists at .worker-dist/scripts/jumia-sync-worker.js
+require('./jumia-sync-worker.js');
