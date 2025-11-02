@@ -28,6 +28,7 @@ Database migrations and seeding
 Recommended workflow
 
 1. Provision a hosted Postgres DB and set the `DATABASE_URL` secret in Vercel.
+   - For Neon, prefer the pooled host for `DATABASE_URL` and set the direct host as `DIRECT_URL` (used by Prisma migrations). See `docs/ENVIRONMENT.md` and `.env.example`.
 2. In your CI (or a one-off job), run:
    - `npx prisma generate`
    - `npx prisma migrate deploy`
