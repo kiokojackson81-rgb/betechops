@@ -5,13 +5,28 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "public"."Role" AS ENUM ('ADMIN', 'SUPERVISOR', 'ATTENDANT');
+DO $$
+BEGIN
+    CREATE TYPE "public"."Role" AS ENUM ('ADMIN', 'SUPERVISOR', 'ATTENDANT');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "public"."OrderStatus" AS ENUM ('PENDING', 'PROCESSING', 'FULFILLED', 'COMPLETED', 'CANCELED');
+DO $$
+BEGIN
+    CREATE TYPE "public"."OrderStatus" AS ENUM ('PENDING', 'PROCESSING', 'FULFILLED', 'COMPLETED', 'CANCELED');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "public"."PaymentStatus" AS ENUM ('UNPAID', 'PARTIAL', 'PAID');
+DO $$
+BEGIN
+    CREATE TYPE "public"."PaymentStatus" AS ENUM ('UNPAID', 'PARTIAL', 'PAID');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateTable
 CREATE TABLE "public"."User" (
