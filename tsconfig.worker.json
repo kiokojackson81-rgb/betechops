@@ -3,9 +3,10 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node",
-    "noEmit": true,
-    "esModuleInterop": true,
-    "allowImportingTsExtensions": true
+    "noEmit": false,
+    "outDir": ".worker-dist",
+    "rootDir": ".",
+    "esModuleInterop": true
   },
   "include": [
     "scripts/**/*.ts",
