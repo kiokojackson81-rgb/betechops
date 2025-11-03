@@ -13,7 +13,6 @@ import { incOrdersProcessed, incOrderHandlerErrors, incFulfillments, incFulfillm
 import { normalizeFromJumia } from '../connectors/normalize';
 import { upsertNormalizedOrder, ensureReturnCaseForOrder } from '../sync/upsertOrder';
 import type { Prisma } from '@prisma/client';
-import { Platform } from '@prisma/client';
 
 type RedisClientLike = {
   get(key: string): Promise<string | null>;
@@ -250,7 +249,13 @@ export async function syncReturnOrders(opts?: { shopId?: string; lookbackDays?: 
     }
 
     const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
-    const fetcher = (path: string) => jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    const fetcher = (path: string) =>
+      jumiaFetch(
+        path,
+        shopAuth
+          ? ({ shopAuth, shopCode: shopId } as any)
+          : ({ shopCode: shopId } as any),
+      );
     const params: Record<string, string> = { status: 'RETURNED,FAILED', size: '50' };
     if (updatedAfter) params.updatedAfter = updatedAfter;
 
@@ -349,14 +354,14 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
       'DISPUTED',
     ]),
   );
-  const shopFilter: Prisma.ShopWhereInput = opts?.shopId
-    ? { id: opts.shopId! }
-    : { platform: Platform.JUMIA, isActive: true };
-  const shops = await prisma.shop.findMany({ where: shopFilter, select: { id: true } });
+  const jumiaShops = await prisma.jumiaShop.findMany({
+    where: opts?.shopId ? { id: opts.shopId } : {},
+    select: { id: true },
+  });
 
   const summary: Record<string, { processed: number; upserted: number; cursor?: string }> = {};
 
-  for (const shop of shops) {
+  for (const shop of jumiaShops) {
     const shopId = shop.id;
     const key = `jumia:orders:${shopId}:cursor`;
     const cfg = await prisma.config.findUnique({ where: { key } }).catch(() => null);
