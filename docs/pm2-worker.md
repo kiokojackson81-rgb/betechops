@@ -2,7 +2,54 @@
 
 This worker keeps your database in sync with Jumia pending orders so the Admin UI stays fresh.
 
-## Prerequisites
+# PM2 worker
+
+This repository ships a Jumia sync worker you can run continuously for sub‑5s freshness.
+
+## TL;DR (Linux/Windows)
+
+1) Build the worker bundle
+
+```
+npm run build:worker
+```
+
+2) Start under PM2 using the provided ecosystem file
+
+```
+pm2 start ecosystem.worker.config.cjs
+pm2 save
+```
+
+3) Verify logs
+
+```
+pm2 logs jumia-sync --lines 200
+```
+
+## Tuning
+
+- `JUMIA_WORKER_INTERVAL_MS`: tick interval (default 5000). Set to `2000` for ~2s.
+- `JUMIA_WORKER_INCREMENTAL_EVERY_MS`: how often to run incremental refresh (default = `INTERVAL_MS`).
+- `JUMIA_WORKER_PENDING_EVERY_MS`: how often to run the heavy 7‑day pending sweep (default = `INTERVAL_MS`). Use a higher value like `30000` to reduce vendor load while keeping incremental fast.
+
+Environment to set (via PM2 env or system env):
+
+- `DATABASE_URL` (Prisma)
+- `REDIS_URL` (optional)
+- Vendor auth (client IDs, refresh tokens if used in your setup)
+
+On Windows, install PM2 globally and use PowerShell:
+
+```
+npm i -g pm2
+npm run build:worker
+pm2 start ecosystem.worker.config.cjs
+pm2 save
+```
+
+PM2 auto-start on Windows can be handled with pm2-windows-startup or a scheduled task.
+
 
 - Node.js 20+
 - PostgreSQL and `DATABASE_URL`

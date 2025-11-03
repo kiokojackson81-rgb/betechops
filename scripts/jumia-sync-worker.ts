@@ -23,9 +23,12 @@ const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5_000);
 // Allow tuning for environments that prefer a slower incremental cadence,
 // but default to matching the tick interval so vendor/order state mirrors quickly.
 const INCREMENTAL_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_EVERY_MS ?? INTERVAL_MS);
+// Optional: run the heavy pending sweep less often than the tick to reduce vendor load
+const PENDING_EVERY_MS = Number(process.env.JUMIA_WORKER_PENDING_EVERY_MS ?? INTERVAL_MS);
 
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;
+let lastPendingAt = 0;
 let inFlight = false;
 
 function sleep(ms: number) {
@@ -43,18 +46,21 @@ async function tick() {
   const logParts: string[] = [];
   let anyWork = false;
 
-  try {
-    const results = (await syncAllAccountsPendingOrders()) as any[];
-    const totalOrders = results.reduce((acc: number, r: any) => acc + (r?.orders || 0), 0);
-    const totalPages = results.reduce((acc: number, r: any) => acc + (r?.pages || 0), 0);
-    logParts.push(`pending pages=${totalPages} orders=${totalOrders} shops=${results.length}`);
-    anyWork = true;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(`${LOG_PREFIX} pending sync failed`, err);
+  const now = Date.now();
+  if (now - lastPendingAt >= PENDING_EVERY_MS) {
+    try {
+      const results = (await syncAllAccountsPendingOrders()) as any[];
+      const totalOrders = results.reduce((acc: number, r: any) => acc + (r?.orders || 0), 0);
+      const totalPages = results.reduce((acc: number, r: any) => acc + (r?.pages || 0), 0);
+      logParts.push(`pending pages=${totalPages} orders=${totalOrders} shops=${results.length}`);
+      lastPendingAt = now;
+      anyWork = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`${LOG_PREFIX} pending sync failed`, err);
+    }
   }
 
-  const now = Date.now();
   if (now - lastIncrementalAt >= INCREMENTAL_EVERY_MS) {
     try {
       const summary = (await syncOrdersIncremental()) as Record<string, { processed: number; upserted: number; cursor?: string }>;
@@ -79,7 +85,7 @@ async function tick() {
 
 (async () => {
   // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}`);
+  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}`);
   // initial tick immediately
   await tick();
   while (true) {
