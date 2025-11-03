@@ -255,7 +255,7 @@ export default function Home() {
     };
 
     void run();
-    const interval = setInterval(run, 60_000);
+  const interval = setInterval(run, 5_000);
     return () => {
       ignore = true;
       clearInterval(interval);

@@ -12,7 +12,7 @@ module.exports = {
         // JUMIA_CLIENT_ID: '...'
         // JUMIA_REFRESH_TOKEN: '...'
         // Optional tuning
-        // JUMIA_WORKER_INTERVAL_MS: '15000'
+        JUMIA_WORKER_INTERVAL_MS: '5000'
       }
     }
   ]

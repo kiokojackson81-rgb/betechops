@@ -3,7 +3,8 @@ require('dotenv/config');
 // Use CommonJS require to avoid Node ESM resolution issues under ts-node
 const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
 
-const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 15_000);
+// Default to 5s; can be overridden via env JUMIA_WORKER_INTERVAL_MS
+const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5_000);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
