@@ -47,9 +47,34 @@ export async function syncAllAccountsPendingOrders() {
       }
     );
 
-    const remoteShops = await safeCall(() => client.getShops());
-    if (remoteShops?.shops?.length) {
-      for (const shop of remoteShops.shops) {
+    // Discover shops for this account; try /shops first, then fall back to /shops-of-master-shop
+    let remoteShops = await safeCall(() => client.getShops());
+    // Debug: log shape summary
+    try {
+      const kind = Array.isArray(remoteShops)
+        ? `array(len=${(remoteShops as any[]).length})`
+        : remoteShops && typeof remoteShops === 'object'
+        ? `object(keys=${Object.keys(remoteShops as Record<string, unknown>).join(',')})`
+        : typeof remoteShops;
+      console.log(`[jumia.sync] /shops shape: ${kind}`);
+    } catch {}
+
+    if (!(remoteShops as any)?.shops?.length && !Array.isArray(remoteShops)) {
+      const alt = await safeCall(() => client.call<{ shops: { id: string; name: string }[] }>("/shops-of-master-shop"));
+      if (alt?.shops?.length) remoteShops = alt;
+    }
+    const shopsArr = Array.isArray((remoteShops as any))
+      ? ((remoteShops as any) as { id: string; name: string }[])
+      : (remoteShops as any)?.shops || [];
+    try {
+      console.log(`[jumia.sync] shopsArr computed len=${Array.isArray(shopsArr) ? shopsArr.length : -1}`);
+      if (Array.isArray(shopsArr) && shopsArr.length) {
+        const s0 = shopsArr[0] as any;
+        console.log(`[jumia.sync] sample shop fields: id=${String(s0?.id || s0?.shopId || s0?.sid || '')} name=${String(s0?.name || '')}`);
+      }
+    } catch {}
+    if (Array.isArray(shopsArr) && shopsArr.length) {
+      for (const shop of shopsArr) {
         await prisma.jumiaShop.upsert({
           where: { id: shop.id },
           create: {
@@ -63,12 +88,20 @@ export async function syncAllAccountsPendingOrders() {
           },
         });
       }
+    } else {
+      const sample = (() => {
+        try { return JSON.stringify(remoteShops)?.slice(0, 200); } catch { return String(remoteShops); }
+      })();
+      console.warn(`[jumia.sync] no shops discovered for account id=${account.id} label="${account.label || ''}" body=${sample}`);
     }
 
     const dbShops = await prisma.jumiaShop.findMany({
       where: { accountId: account.id },
       select: { id: true },
     });
+    if (!dbShops.length) {
+      console.warn(`[jumia.sync] zero shops in DB for account id=${account.id}; skipping orders sync for this account`);
+    }
 
     for (const shop of dbShops) {
       tasks.push(
