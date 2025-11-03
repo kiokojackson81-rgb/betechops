@@ -1,10 +1,12 @@
 "use strict";
 var _a;
 // Simple PM2-friendly worker that periodically syncs Jumia pending orders into the DB
-require('dotenv/config');
+try { require('dotenv/config'); }
+catch (_e) { /* optional when using PM2 env */ }
 // Use CommonJS require to avoid Node ESM resolution issues under ts-node
 const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
-const INTERVAL_MS = Number((_a = process.env.JUMIA_WORKER_INTERVAL_MS) !== null && _a !== void 0 ? _a : 15000);
+// Default to 5s; can be overridden via env JUMIA_WORKER_INTERVAL_MS
+const INTERVAL_MS = Number((_a = process.env.JUMIA_WORKER_INTERVAL_MS) !== null && _a !== void 0 ? _a : 5000);
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }

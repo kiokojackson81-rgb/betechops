@@ -1,5 +1,6 @@
 // Simple PM2-friendly worker that periodically syncs Jumia pending orders into the DB
-require('dotenv/config');
+// Load .env if present but don't hard-require it (PM2 usually provides env)
+try { require('dotenv/config'); } catch { /* optional */ }
 // Use CommonJS require to avoid Node ESM resolution issues under ts-node
 const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
 
