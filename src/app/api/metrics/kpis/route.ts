@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { readKpisCache } from '@/lib/kpisCache';
 import { absUrl } from '@/lib/abs-url';
 import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
+import { addDays } from 'date-fns';
+import { zonedTimeToUtc } from 'date-fns-tz';
 
 // Always execute on the server without static caching
 export const dynamic = 'force-dynamic';
@@ -12,12 +14,14 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
     const noLive = (noLiveParam || '').toLowerCase() === '1' || (noLiveParam || '').toLowerCase() === 'true' || (noLiveParam || '').toLowerCase() === 'db' || (noLiveParam || '').toLowerCase() === 'db-only';
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const DEFAULT_TZ = 'Africa/Nairobi';
 
     // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
     // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Align the 7-day window to Nairobi timezone to match how vendor windows are queried by the worker
+    const sevenDaysAgo = zonedTimeToUtc(addDays(now, -7), DEFAULT_TZ);
     const queued = await prisma.jumiaOrder.count({
       where: {
         status: { in: ['PENDING', 'MULTIPLE'] },

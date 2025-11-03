@@ -2,7 +2,7 @@ import { noStoreJson, requireRole } from "@/lib/api";
 import { syncOrdersIncremental } from "@/lib/jobs/jumia";
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
+async function handle(request: Request) {
   // Allow headless cron via secret (header or query): x-cron-secret / cronSecret
   const url = new URL(request.url);
   const cronSecretHeader = request.headers.get("x-cron-secret") || "";
@@ -36,4 +36,14 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : String(err);
     return noStoreJson({ ok: false, error: message }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return handle(request);
+}
+
+// Some platforms (e.g., Vercel Cron) invoke the URL with GET.
+// Support GET by delegating to the same handler.
+export async function GET(request: Request) {
+  return handle(request);
 }
