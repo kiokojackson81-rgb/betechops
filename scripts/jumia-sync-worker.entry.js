@@ -1,5 +1,6 @@
 // JS entry to run built worker from .worker-dist without ts-node
-require('dotenv/config');
+// Load .env when available but don't hard-require it (PM2 env may be sufficient)
+try { require('dotenv/config'); } catch (_) {}
 
 // Prefer persistent HTTP keep-alive for vendor API calls to reduce DNS churn and latency
 try {
