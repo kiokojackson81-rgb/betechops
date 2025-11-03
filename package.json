@@ -21,7 +21,7 @@
     "cleanup:jumia-orders": "node -r ts-node/register -r tsconfig-paths/register scripts/cleanup-jumia-orders.ts",
     "job:jumia-sync-incremental": "curl -s -X POST http://localhost:3000/api/jumia/jobs/sync-incremental || true",
     "worker:jumia-sync": "node -r ts-node/register scripts/jumia-sync-worker.ts",
-    "build:worker": "tsc -p tsconfig.worker.json"
+    "build:worker": "tsc -p tsconfig.worker.json && node scripts/build-copy-worker-entry.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
