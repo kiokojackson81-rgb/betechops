@@ -185,9 +185,8 @@ export default function Home() {
   const [pricingCnt, setPricingCnt] = useState<number | null>(null);
   const [pendingAll, setPendingAll] = useState<number | null>(null);
   const [pendingUpdated, setPendingUpdated] = useState<string | null>(null);
-  // Local snapshot cache (client only) — short TTL to avoid stale first-paint flips
-  const LS_KEY = 'home:stats:v2';
-  const SNAPSHOT_MAX_AGE_MS = 60_000; // 1 minute
+  // Explicitly disable any localStorage snapshot usage to always show DB values
+  const USE_LOCAL_SNAPSHOT = false as const;
 
   // endpoints per spec
   // Single source of truth per card to avoid inconsistent values from mixed endpoints
@@ -198,39 +197,18 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
 
-    // 1) Hydrate from a recent local snapshot (<= TTL) to avoid blanks, but don't use stale values.
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
-      if (raw) {
-        const cached = JSON.parse(raw) as { pickup?: number; pricing?: number; pending?: number; updatedAt?: number; approx?: boolean };
-        const fresh = typeof cached?.updatedAt === 'number' && (Date.now() - cached.updatedAt) <= SNAPSHOT_MAX_AGE_MS;
-        if (!ignore && fresh) {
-          if (Number.isFinite(cached?.pickup)) setPickupCnt(Number(cached.pickup));
-          if (Number.isFinite(cached?.pricing)) setPricingCnt(Number(cached.pricing));
-          if (Number.isFinite(cached?.pending)) setPendingAll(Number(cached.pending));
-          if (typeof cached?.updatedAt === 'number') {
-            const dt = new Date(cached.updatedAt);
-            const hh = String(dt.getHours()).padStart(2, '0');
-            const mm = String(dt.getMinutes()).padStart(2, '0');
-            setPendingUpdated(
-              cached?.approx
-                ? `Live ${dt.toLocaleDateString()} ${hh}:${mm}`
-                : `Updated ${dt.toLocaleDateString()} ${hh}:${mm}`,
-            );
-          }
-        } else if (!ignore) {
-          // If stale, ensure the UI waits for live fetch instead of showing outdated numbers
-          setPendingUpdated(null);
-        }
-      }
-    } catch {}
+    // 1) Bypass localStorage hydration entirely for strict DB accuracy
+    if (!USE_LOCAL_SNAPSHOT) {
+      setPendingUpdated(null);
+    }
 
     const run = async () => {
       try {
         const [c1, c2, kpis] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
-          fetchJsonWithTimeout<any>("/api/metrics/kpis"),
+          // DB-only accuracy: disable live vendor boost
+          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1"),
         ]);
         if (!ignore) {
           // Only update when we have a concrete value; keep last value on errors
@@ -268,31 +246,7 @@ export default function Home() {
             setPendingUpdated(null);
           }
 
-          // 2) Persist latest successful snapshot for instant reuse next load (short TTL consumer)
-          try {
-            const ts =
-              typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
-                ? kpis.updatedAt
-                : Date.now();
-            const rawSnapshot =
-              typeof kpis?.pendingAll === "number" && Number.isFinite(kpis.pendingAll)
-                ? Number(kpis.pendingAll)
-                : null;
-            const snapshotPending =
-              rawSnapshot === null
-                ? pendingAll
-                : approx && rawSnapshot === 0 && (pendingAll ?? 0) > 0
-                ? pendingAll
-                : rawSnapshot;
-            const snapshot = {
-              pickup: typeof c1 === 'number' && Number.isFinite(c1) ? c1 : pickupCnt,
-              pricing: typeof c2 === 'number' && Number.isFinite(c2) ? c2 : pricingCnt,
-              pending: snapshotPending,
-              updatedAt: ts,
-              approx,
-            };
-            localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
-          } catch {}
+          // 2) Skip persisting any snapshot to localStorage
         }
       } catch {
         // On error, keep previous values to avoid flicker to zero; just clear the timestamp
