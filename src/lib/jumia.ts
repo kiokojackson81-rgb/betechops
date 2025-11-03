@@ -947,17 +947,23 @@ export async function getFeedById(id: string) {
 }
 
 export async function getOrders(opts?: { status?: string; createdAfter?: string; createdBefore?: string; token?: string; size?: number; country?: string; shopId?: string }) {
-  const params: string[] = [];
-  if (opts?.status) params.push(`status=${encodeURIComponent(opts.status)}`);
-  if (opts?.createdAfter) params.push(`createdAfter=${encodeURIComponent(opts.createdAfter)}`);
-  if (opts?.createdBefore) params.push(`createdBefore=${encodeURIComponent(opts.createdBefore)}`);
-  if (opts?.token) params.push(`token=${encodeURIComponent(opts.token)}`);
-  if (opts?.size) params.push(`size=${encodeURIComponent(String(opts.size))}`);
-  if (opts?.country) params.push(`country=${encodeURIComponent(opts.country)}`);
-  if (opts?.shopId) params.push(`shopId=${encodeURIComponent(opts.shopId)}`);
-  const q = params.length ? `?${params.join('&')}` : '';
+  const params = new URLSearchParams();
+  if (opts?.status) params.set('status', opts.status);
+  if (opts?.createdAfter) params.set('createdAfter', opts.createdAfter);
+  if (opts?.createdBefore) params.set('createdBefore', opts.createdBefore);
+  if (opts?.token) params.set('token', opts.token);
+  if (opts?.size) params.set('size', String(opts.size));
+  if (opts?.country) params.set('country', opts.country);
+  if (opts?.shopId) params.set('shopId', opts.shopId);
+
   const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
-  return await jumiaFetch(`/orders${q}`, shopAuth ? ({ shopAuth, shopKey: opts?.shopId } as any) : ({} as any));
+  const vendorParams = new URLSearchParams(params);
+  if (shopAuth && opts?.shopId) {
+    vendorParams.delete('shopId');
+  }
+  const q = vendorParams.toString();
+  const path = `/orders${q ? `?${q}` : ''}`;
+  return await jumiaFetch(path, shopAuth ? ({ shopAuth, shopKey: opts?.shopId } as any) : ({} as any));
 }
 
 export async function getOrderItems(orderId: string) {

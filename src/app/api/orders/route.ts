@@ -242,8 +242,18 @@ export async function GET(req: NextRequest) {
         return res;
       }
     }
+    const stripShopIdFromPath = (raw: string) => {
+      if (!shopAuth || !qs.shopId) return raw;
+      const url = new URL(raw.startsWith('/') ? raw : `/${raw}`, 'http://local/');
+      url.searchParams.delete('shopId');
+      const search = url.search ? url.search : '';
+      return `${url.pathname.replace(/^\//, '')}${search}`;
+    };
+
+    const vendorPath = stripShopIdFromPath(path);
+
     try {
-      const data = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
+      const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
       if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
       const res = NextResponse.json(data);
       if (cacheKey) res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
@@ -256,7 +266,7 @@ export async function GET(req: NextRequest) {
         const q2 = new URLSearchParams(qs);
         q2.delete('shopId');
         const p2 = `orders?${q2.toString()}`;
-        const data2 = await jumiaFetch(p2, shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
+        const data2 = await jumiaFetch(stripShopIdFromPath(p2), shopAuth ? ({ method: 'GET', shopAuth, shopKey: qs.shopId } as any) : ({ method: 'GET' } as any));
         if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
         const res2 = NextResponse.json(data2);
         if (cacheKey) res2.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);

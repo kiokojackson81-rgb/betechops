@@ -26,10 +26,21 @@ async function fetchNewestForShop(shopId: string, params: { status?: string; cou
   const q = qs.length ? `?${qs.join('&')}` : '';
 
   const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
-  const path = `/orders${q}${q ? '&' : '?'}shopId=${encodeURIComponent(shopId)}`;
+  const buildPath = () => {
+    const base = `/orders${q}`;
+    const url = new URL(base, 'http://local/');
+    url.searchParams.delete('shopId');
+    const search = url.search ? url.search : '';
+    return {
+      raw: `/orders${q}${q ? '&' : '?'}shopId=${encodeURIComponent(shopId)}`,
+      sanitized: `${url.pathname}${search}`,
+    };
+  };
+
+  const { raw: rawPath, sanitized } = buildPath();
 
   try {
-    const j: any = await jumiaFetch(path, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+    const j: any = await jumiaFetch(shopAuth ? sanitized : rawPath, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
     const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
     if (!arr.length) return null;
     return parseHead(arr[0]);
@@ -39,7 +50,8 @@ async function fetchNewestForShop(shopId: string, params: { status?: string; cou
     const code = typeof e?.status === 'number' ? e.status : 0;
     if (code === 400 || code === 422 || /\b(400|422)\b/.test(msg)) {
       const path2 = `/orders${q}`;
-      const j2: any = await jumiaFetch(path2, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+      const fallbackPath = shopAuth ? sanitized : path2;
+      const j2: any = await jumiaFetch(fallbackPath, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
       const arr2 = Array.isArray(j2?.orders) ? j2.orders : Array.isArray(j2?.items) ? j2.items : Array.isArray(j2?.data) ? j2.data : [];
       if (!arr2.length) return null;
       return parseHead(arr2[0]);
