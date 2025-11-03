@@ -6,11 +6,11 @@
     },
     {
       "path": "/api/jumia/jobs/sync-incremental",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/1 * * * *"
     },
     {
       "path": "/api/jumia/sync-pending",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/1 * * * *"
     }
   ]
 }

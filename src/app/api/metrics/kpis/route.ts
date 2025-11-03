@@ -125,6 +125,19 @@ export async function GET(request: Request) {
       // ignore network/vendor errors and keep DB-based value
     }
 
+    // If DB looks stale, kick off a background pending sweep to reconcile.
+    // Non-blocking and time-limited; safe to fire-and-forget.
+    try {
+      if (isStale && process.env.NODE_ENV !== 'test') {
+        Promise.resolve().then(async () => {
+          const urlSync = await absUrl('/api/jumia/sync-pending');
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 5000);
+          try { await fetch(urlSync, { cache: 'no-store', signal: controller.signal }); } finally { clearTimeout(t); }
+        }).catch(() => undefined);
+      }
+    } catch {}
+
     const res = NextResponse.json({
       ok: true,
       queued,
