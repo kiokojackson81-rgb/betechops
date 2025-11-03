@@ -3,7 +3,7 @@ import * as jumia from '@/lib/jumia';
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
-    shop: { findMany: jest.fn() },
+    jumiaShop: { findMany: jest.fn() },
     config: { findUnique: jest.fn(), upsert: jest.fn() },
     jumiaOrder: { upsert: jest.fn() },
   },
@@ -29,7 +29,7 @@ describe('syncOrdersIncremental', () => {
   it('processes first-time sync and advances cursor to latest vendor updatedAt', async () => {
     const { syncOrdersIncremental } = await import('@/lib/jobs/jumia');
 
-    (prisma as any).shop.findMany.mockResolvedValue([{ id: 's1' }]);
+    (prisma as any).jumiaShop.findMany.mockResolvedValue([{ id: 's1' }]);
     (prisma as any).config.findUnique.mockResolvedValue(null);
     (jumia.loadShopAuthById as jest.Mock).mockResolvedValue(undefined);
 
@@ -66,7 +66,7 @@ describe('syncOrdersIncremental', () => {
     const { syncOrdersIncremental } = await import('@/lib/jobs/jumia');
 
     const cursor = new Date('2025-11-01T12:00:00.000Z').toISOString();
-    (prisma as any).shop.findMany.mockResolvedValue([{ id: 's1' }]);
+    (prisma as any).jumiaShop.findMany.mockResolvedValue([{ id: 's1' }]);
     (prisma as any).config.findUnique.mockResolvedValue({ json: { updatedAfter: cursor } });
     (jumia.loadShopAuthById as jest.Mock).mockResolvedValue(undefined);
 
@@ -92,7 +92,7 @@ describe('syncOrdersIncremental', () => {
   it('upserts status changes for same id and updates cursor to latest updatedAt', async () => {
     const { syncOrdersIncremental } = await import('@/lib/jobs/jumia');
 
-    (prisma as any).shop.findMany.mockResolvedValue([{ id: 's1' }]);
+    (prisma as any).jumiaShop.findMany.mockResolvedValue([{ id: 's1' }]);
     (prisma as any).config.findUnique.mockResolvedValue(null);
     (jumia.loadShopAuthById as jest.Mock).mockResolvedValue(undefined);
 
