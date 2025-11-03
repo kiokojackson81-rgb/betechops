@@ -43,7 +43,8 @@ async function main() {
   const results: Array<{ name: string; action: string; id: string }> = [];
   for (const s of seeds) {
     if ((s.platform && s.platform.toUpperCase() !== 'JUMIA') || !s.credentials) continue;
-    const { clientId, refreshToken } = s.credentials as Required<ShopSeed['credentials']>;
+    const clientId = s.credentials!.clientId;
+    const refreshToken = s.credentials!.refreshToken;
     if (!clientId || !refreshToken) {
       console.warn(`Skipping ${s.name}: missing clientId/refreshToken`);
       continue;
