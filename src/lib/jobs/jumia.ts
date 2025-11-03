@@ -331,7 +331,24 @@ export default jobs;
  * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
  */
 export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
-  const STATUS_SEQUENCE = ['PENDING', 'PROCESSING', 'FULFILLED', 'COMPLETED', 'CANCELED', 'FAILED', 'RETURNED'];
+  // Cover all Jumia order states we surface in the UI so post-pending transitions are ingested.
+  const STATUS_SEQUENCE = Array.from(
+    new Set([
+      'PENDING',
+      'PACKED',
+      'READY_TO_SHIP',
+      'PROCESSING',
+      'FULFILLED',
+      'COMPLETED',
+      'DELIVERED',
+      'SHIPPED',
+      'CANCELLED',
+      'CANCELED',
+      'FAILED',
+      'RETURNED',
+      'DISPUTED',
+    ]),
+  );
   const shopFilter: Prisma.ShopWhereInput = opts?.shopId
     ? { id: opts.shopId! }
     : { platform: Platform.JUMIA, isActive: true };
