@@ -185,7 +185,9 @@ export default function Home() {
   const [pricingCnt, setPricingCnt] = useState<number | null>(null);
   const [pendingAll, setPendingAll] = useState<number | null>(null);
   const [pendingUpdated, setPendingUpdated] = useState<string | null>(null);
-  const LS_KEY = 'home:stats:v1';
+  // Local snapshot cache (client only) — short TTL to avoid stale first-paint flips
+  const LS_KEY = 'home:stats:v2';
+  const SNAPSHOT_MAX_AGE_MS = 60_000; // 1 minute
 
   // endpoints per spec
   // Single source of truth per card to avoid inconsistent values from mixed endpoints
@@ -196,12 +198,13 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
 
-    // 1) Hydrate instantly from last good local snapshot to avoid blanks on first paint.
+    // 1) Hydrate from a recent local snapshot (<= TTL) to avoid blanks, but don't use stale values.
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
       if (raw) {
-        const cached = JSON.parse(raw) as { pickup?: number; pricing?: number; pending?: number; updatedAt?: number };
-        if (!ignore) {
+        const cached = JSON.parse(raw) as { pickup?: number; pricing?: number; pending?: number; updatedAt?: number; approx?: boolean };
+        const fresh = typeof cached?.updatedAt === 'number' && (Date.now() - cached.updatedAt) <= SNAPSHOT_MAX_AGE_MS;
+        if (!ignore && fresh) {
           if (Number.isFinite(cached?.pickup)) setPickupCnt(Number(cached.pickup));
           if (Number.isFinite(cached?.pricing)) setPricingCnt(Number(cached.pricing));
           if (Number.isFinite(cached?.pending)) setPendingAll(Number(cached.pending));
@@ -209,8 +212,15 @@ export default function Home() {
             const dt = new Date(cached.updatedAt);
             const hh = String(dt.getHours()).padStart(2, '0');
             const mm = String(dt.getMinutes()).padStart(2, '0');
-            setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
+            setPendingUpdated(
+              cached?.approx
+                ? `Live ${dt.toLocaleDateString()} ${hh}:${mm}`
+                : `Updated ${dt.toLocaleDateString()} ${hh}:${mm}`,
+            );
           }
+        } else if (!ignore) {
+          // If stale, ensure the UI waits for live fetch instead of showing outdated numbers
+          setPendingUpdated(null);
         }
       }
     } catch {}
@@ -258,7 +268,7 @@ export default function Home() {
             setPendingUpdated(null);
           }
 
-          // 2) Persist latest successful snapshot for instant reuse next load
+          // 2) Persist latest successful snapshot for instant reuse next load (short TTL consumer)
           try {
             const ts =
               typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
@@ -279,6 +289,7 @@ export default function Home() {
               pricing: typeof c2 === 'number' && Number.isFinite(c2) ? c2 : pricingCnt,
               pending: snapshotPending,
               updatedAt: ts,
+              approx,
             };
             localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
           } catch {}
