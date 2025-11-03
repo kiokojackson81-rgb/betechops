@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncAllAccountsPendingOrders } from "@/lib/jumia/syncPendingOrders";
 
-export async function POST() {
+async function handle(request: Request) {
   try {
     const results = await syncAllAccountsPendingOrders();
     return NextResponse.json({ ok: true, results });
@@ -15,4 +15,13 @@ export async function POST() {
       { status: 500 }
     );
   }
+}
+
+export async function POST(request: Request) {
+  return handle(request);
+}
+
+// Allow Vercel Cron to invoke via GET
+export async function GET(request: Request) {
+  return handle(request);
 }

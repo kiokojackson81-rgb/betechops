@@ -6,9 +6,12 @@ async function handle(request: Request) {
   // Allow headless cron via secret (header or query): x-cron-secret / cronSecret
   const url = new URL(request.url);
   const cronSecretHeader = request.headers.get("x-cron-secret") || "";
+  const vercelCronHeader = request.headers.get("x-vercel-cron") || ""; // present on Vercel scheduled requests
   const cronSecretQuery = (url.searchParams.get("cronSecret") || "").trim();
   const cronSecretEnv = (process.env.CRON_SECRET || "").trim();
-  const isCron = !!cronSecretEnv && (cronSecretHeader === cronSecretEnv || cronSecretQuery === cronSecretEnv);
+  const isCronBySecret = !!cronSecretEnv && (cronSecretHeader === cronSecretEnv || cronSecretQuery === cronSecretEnv);
+  const isCronByVercelHeader = vercelCronHeader !== "";
+  const isCron = isCronBySecret || isCronByVercelHeader;
 
   if (!isCron) {
     const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
