@@ -38,6 +38,19 @@ export async function GET(request: Request) {
         ],
       },
     });
+
+    // Determine staleness: when was the latest pending-row update recorded?
+    const latestAgg = await prisma.jumiaOrder.aggregate({
+      _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
+      where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+    });
+    const latestUpdatedMillis = Math.max(
+      latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0,
+      latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0,
+      latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0,
+    );
+    const staleMinutes = Number(process.env.KPIS_FORCE_LIVE_IF_STALE_MINUTES ?? 3);
+    const isStale = latestUpdatedMillis > 0 ? (now.getTime() - latestUpdatedMillis) > staleMinutes * 60 * 1000 : true;
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
     const rts = await prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
 
@@ -65,7 +78,9 @@ export async function GET(request: Request) {
     let pendingAllOut = queued;
     let approxFlag = false;
     try {
-      if (noLive || String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true') {
+      const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
+      const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
+      if (!allowLive) {
         // Explicitly disabled — skip live boost
         throw new Error('live-adjust-disabled');
       }
@@ -118,6 +133,8 @@ export async function GET(request: Request) {
       productsAll: cross.productsAll,
       pendingAll: pendingAllOut,
       approx: approxFlag,
+      stale: isStale,
+      latestPendingUpdatedAt: latestUpdatedMillis || undefined,
       updatedAt: cross.updatedAt || Date.now(),
     });
     // Ensure no CDN caching on this KPI endpoint
