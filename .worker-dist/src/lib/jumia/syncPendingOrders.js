@@ -56,6 +56,7 @@ async function syncAllAccountsPendingOrders() {
         const shopsArr = Array.isArray(remoteShops)
             ? remoteShops
             : (remoteShops === null || remoteShops === void 0 ? void 0 : remoteShops.shops) || [];
+        const remoteIds = new Set();
         try {
             console.log(`[jumia.sync] shopsArr computed len=${Array.isArray(shopsArr) ? shopsArr.length : -1}`);
             if (Array.isArray(shopsArr) && shopsArr.length) {
@@ -66,6 +67,8 @@ async function syncAllAccountsPendingOrders() {
         catch (_d) { }
         if (Array.isArray(shopsArr) && shopsArr.length) {
             for (const shop of shopsArr) {
+                if (shop === null || shop === void 0 ? void 0 : shop.id)
+                    remoteIds.add(String(shop.id));
                 await prisma_1.prisma.jumiaShop.upsert({
                     where: { id: shop.id },
                     create: {
@@ -92,8 +95,11 @@ async function syncAllAccountsPendingOrders() {
             })();
             console.warn(`[jumia.sync] no shops discovered for account id=${account.id} label="${account.label || ''}" body=${sample}`);
         }
+        const whereShops = { accountId: account.id };
+        if (remoteIds.size)
+            whereShops.id = { in: Array.from(remoteIds) };
         const dbShops = await prisma_1.prisma.jumiaShop.findMany({
-            where: { accountId: account.id },
+            where: whereShops,
             select: { id: true },
         });
         if (!dbShops.length) {
