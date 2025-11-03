@@ -51,8 +51,13 @@ export async function GET(req: NextRequest) {
     // Special scope: aggregate across all active JUMIA shops with composite pagination
     if ((qs.shopId || '').toUpperCase() === 'ALL') {
       // Helper accessors
+      // For PENDING-like queries we should sort by last update time, not creation time,
+      // because pagination is bounded by updatedAfter/updatedBefore.
+      const isPendingLikeAll = ((qs.status || '').toUpperCase() === 'PENDING' || (qs.status || '').toUpperCase() === 'MULTIPLE');
       const getTs = (x: any) => {
-        const v = x?.createdAt || x?.created_date || x?.created || x?.dateCreated;
+        const v = isPendingLikeAll
+          ? (x?.updatedAt || x?.updated_at || x?.updated || x?.dateUpdated || x?.lastUpdated || x?.modifiedAt)
+          : (x?.createdAt || x?.created_date || x?.created || x?.dateCreated);
         const t = v ? new Date(v).getTime() : 0;
         return isNaN(t) ? 0 : t;
       };
