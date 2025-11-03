@@ -1,8 +1,10 @@
 "use strict";
 // JS entry to run built worker from .worker-dist without ts-node
-// Load .env when available but don't fail if the module isn't installed
-try { require('dotenv/config'); }
-catch (_e) { /* optional in production when PM2 env is used */ }
+// Load .env when available but don't hard-require it (PM2 env may be sufficient)
+try {
+    require('dotenv/config');
+}
+catch (_) { }
 // Prefer persistent HTTP keep-alive for vendor API calls to reduce DNS churn and latency
 try {
     const { setGlobalDispatcher, Agent } = require('undici');

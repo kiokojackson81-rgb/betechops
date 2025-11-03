@@ -15,11 +15,28 @@ This worker keeps your database in sync with Jumia pending orders so the Admin U
 npm run worker:jumia-sync
 ```
 
+### Windows (PowerShell) quick overrides
+
+macOS/Linux often show inline env like `JUMIA_WORKER_INTERVAL_MS=5000 npm run worker:jumia-sync`, which doesn't work in PowerShell. Use these instead:
+
+```powershell
+# Set temporary env vars for this PowerShell session
+$env:JUMIA_WORKER_INTERVAL_MS = "5000"
+$env:JUMIA_WORKER_INCREMENTAL_EVERY_MS = "5000"  # optional; defaults to the interval
+
+# Start the worker
+npm run worker:jumia-sync
+
+# When finished, clear the overrides (optional)
+Remove-Item Env:JUMIA_WORKER_INTERVAL_MS -ErrorAction SilentlyContinue
+Remove-Item Env:JUMIA_WORKER_INCREMENTAL_EVERY_MS -ErrorAction SilentlyContinue
+```
+
+Alternatively, put these in a `.env` file and omit the PowerShell exports.
+
 Environment variables (set before running or via `.env`):
 
-- `DATABASE_URL` – Prisma connection string
-- `JUMIA_CLIENT_ID`, `JUMIA_REFRESH_TOKEN` – or configure via DB `apiCredential`
-- `JUMIA_WORKER_INTERVAL_MS` – optional polling interval (default 15000ms)
+- `JUMIA_WORKER_INCREMENTAL_EVERY_MS` – optional cadence for the incremental sync pass (defaults to same as interval)
 
 ## Run with PM2
 

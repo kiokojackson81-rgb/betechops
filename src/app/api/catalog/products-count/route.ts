@@ -112,8 +112,10 @@ export async function GET(req: Request) {
           const totals = await getCatalogProductsCountExactForShop({ shopId, size, timeMs }).catch(() => null);
           if (totals) {
             result = totals as typeof result;
-            // Fire-and-forget: persist latest for next time
-            try { await computeAndStoreCountersForShop(shopId, { size, timeMs }); } catch {}
+            // Fire-and-forget: persist latest for next time (skip during tests to avoid DB writes)
+            if (process.env.NODE_ENV !== 'test') {
+              try { await computeAndStoreCountersForShop(shopId, { size, timeMs }); } catch {}
+            }
           }
         }
       } else {

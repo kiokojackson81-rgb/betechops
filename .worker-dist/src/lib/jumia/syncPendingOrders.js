@@ -56,7 +56,6 @@ async function syncAllAccountsPendingOrders() {
         const shopsArr = Array.isArray(remoteShops)
             ? remoteShops
             : (remoteShops === null || remoteShops === void 0 ? void 0 : remoteShops.shops) || [];
-        const remoteIds = new Set();
         try {
             console.log(`[jumia.sync] shopsArr computed len=${Array.isArray(shopsArr) ? shopsArr.length : -1}`);
             if (Array.isArray(shopsArr) && shopsArr.length) {
@@ -65,6 +64,7 @@ async function syncAllAccountsPendingOrders() {
             }
         }
         catch (_d) { }
+        const remoteIds = new Set();
         if (Array.isArray(shopsArr) && shopsArr.length) {
             for (const shop of shopsArr) {
                 if (shop === null || shop === void 0 ? void 0 : shop.id)
@@ -116,13 +116,16 @@ async function syncAllAccountsPendingOrders() {
     return results;
 }
 async function syncShopPending(client, shopId) {
+    var _a;
     const now = new Date();
     const start = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -WINDOW_DAYS), DEFAULT_TIMEZONE);
     const end = (0, date_fns_tz_1.zonedTimeToUtc)(now, DEFAULT_TIMEZONE);
     const formatTimestamp = (value) => (0, date_fns_1.format)(value, "yyyy-MM-dd HH:mm:ss");
     let nextToken;
+    const seenTokens = new Set();
     let pages = 0;
     let ordersUpserted = 0;
+    const MAX_PAGES = 2000; // hard safety cap to prevent infinite loops if vendor tokens misbehave
     do {
         const response = await client.getOrders({
             status: "PENDING",
@@ -138,9 +141,29 @@ async function syncShopPending(client, shopId) {
             await upsertOrder(shopId, order);
             ordersUpserted += 1;
         }
-        nextToken = (response === null || response === void 0 ? void 0 : response.nextToken) || undefined;
+        // Break conditions per vendor docs and extra safety:
+        // - Stop when isLastPage flag is true
+        // - Stop if nextToken is falsy
+        // - Stop if nextToken repeats (stale token) to avoid infinite loops
+        const nxt = (_a = response === null || response === void 0 ? void 0 : response.nextToken) !== null && _a !== void 0 ? _a : null;
+        const lastFlag = (response === null || response === void 0 ? void 0 : response.isLastPage) === true;
         pages += 1;
-    } while (nextToken);
+        if (lastFlag) {
+            nextToken = undefined;
+            break;
+        }
+        if (!nxt || typeof nxt !== 'string' || !nxt.trim()) {
+            nextToken = undefined;
+            break;
+        }
+        if (seenTokens.has(String(nxt))) {
+            // token repeated — vendor likely returned the same page token; stop to prevent loop
+            nextToken = undefined;
+            break;
+        }
+        seenTokens.add(String(nxt));
+        nextToken = String(nxt);
+    } while (nextToken && pages < MAX_PAGES);
     await prisma_1.prisma.jumiaShop.update({
         where: { id: shopId },
         data: { lastOrdersUpdatedBefore: end },

@@ -51,8 +51,13 @@ async function GET(req) {
         // Special scope: aggregate across all active JUMIA shops with composite pagination
         if ((qs.shopId || '').toUpperCase() === 'ALL') {
             // Helper accessors
+            // For PENDING-like queries we should sort by last update time, not creation time,
+            // because pagination is bounded by updatedAfter/updatedBefore.
+            const isPendingLikeAll = ((qs.status || '').toUpperCase() === 'PENDING' || (qs.status || '').toUpperCase() === 'MULTIPLE');
             const getTs = (x) => {
-                const v = (x === null || x === void 0 ? void 0 : x.createdAt) || (x === null || x === void 0 ? void 0 : x.created_date) || (x === null || x === void 0 ? void 0 : x.created) || (x === null || x === void 0 ? void 0 : x.dateCreated);
+                const v = isPendingLikeAll
+                    ? ((x === null || x === void 0 ? void 0 : x.updatedAt) || (x === null || x === void 0 ? void 0 : x.updated_at) || (x === null || x === void 0 ? void 0 : x.updated) || (x === null || x === void 0 ? void 0 : x.dateUpdated) || (x === null || x === void 0 ? void 0 : x.lastUpdated) || (x === null || x === void 0 ? void 0 : x.modifiedAt))
+                    : ((x === null || x === void 0 ? void 0 : x.createdAt) || (x === null || x === void 0 ? void 0 : x.created_date) || (x === null || x === void 0 ? void 0 : x.created) || (x === null || x === void 0 ? void 0 : x.dateCreated));
                 const t = v ? new Date(v).getTime() : 0;
                 return isNaN(t) ? 0 : t;
             };

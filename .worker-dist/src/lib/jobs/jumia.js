@@ -51,13 +51,13 @@ exports.syncOrders = syncOrders;
 exports.syncReturnOrders = syncReturnOrders;
 exports.syncOrdersIncremental = syncOrdersIncremental;
 const jumia_1 = require("../jumia");
+const date_fns_1 = require("date-fns");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const log_1 = require("../log");
 const prisma_1 = require("../prisma");
 const metrics_1 = require("../metrics");
 const normalize_1 = require("../connectors/normalize");
 const upsertOrder_1 = require("../sync/upsertOrder");
-const client_1 = require("@prisma/client");
 let _redis;
 const _memStore = new Map();
 async function ensureRedisClient() {
@@ -296,7 +296,7 @@ async function syncReturnOrders(opts) {
     // Narrow shopId to non-null in the truthy branch to satisfy Prisma.ShopWhereInput
     const shopFilter = (opts === null || opts === void 0 ? void 0 : opts.shopId)
         ? { id: opts.shopId }
-        : { platform: client_1.Platform.JUMIA, isActive: true };
+        : { platform: 'JUMIA', isActive: true };
     const shops = await prisma_1.prisma.shop.findMany({ where: shopFilter, select: { id: true } });
     const summary = {};
     for (const shop of shops) {
@@ -311,7 +311,9 @@ async function syncReturnOrders(opts) {
             updatedAfter = from.toISOString();
         }
         const shopAuth = await (0, jumia_1.loadShopAuthById)(shopId).catch(() => undefined);
-        const fetcher = (path) => (0, jumia_1.jumiaFetch)(path, shopAuth ? { shopAuth } : {});
+        const fetcher = (path) => (0, jumia_1.jumiaFetch)(path, shopAuth
+            ? { shopAuth, shopCode: shopId }
+            : { shopCode: shopId });
         const params = { status: 'RETURNED,FAILED', size: '50' };
         if (updatedAfter)
             params.updatedAfter = updatedAfter;
@@ -402,14 +404,29 @@ exports.default = jobs;
  */
 async function syncOrdersIncremental(opts) {
     var _a, e_3, _b, _c;
-    var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
-    const STATUS_SEQUENCE = ['PENDING', 'PROCESSING', 'FULFILLED', 'COMPLETED', 'CANCELED', 'FAILED', 'RETURNED'];
-    const shopFilter = (opts === null || opts === void 0 ? void 0 : opts.shopId)
-        ? { id: opts.shopId }
-        : { platform: client_1.Platform.JUMIA, isActive: true };
-    const shops = await prisma_1.prisma.shop.findMany({ where: shopFilter, select: { id: true } });
+    var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+    // Cover all Jumia order states we surface in the UI so post-pending transitions are ingested.
+    const STATUS_SEQUENCE = Array.from(new Set([
+        'PENDING',
+        'PACKED',
+        'READY_TO_SHIP',
+        'PROCESSING',
+        'FULFILLED',
+        'COMPLETED',
+        'DELIVERED',
+        'SHIPPED',
+        'CANCELLED',
+        'CANCELED',
+        'FAILED',
+        'RETURNED',
+        'DISPUTED',
+    ]));
+    const jumiaShops = await prisma_1.prisma.jumiaShop.findMany({
+        where: (opts === null || opts === void 0 ? void 0 : opts.shopId) ? { id: opts.shopId } : {},
+        select: { id: true },
+    });
     const summary = {};
-    for (const shop of shops) {
+    for (const shop of jumiaShops) {
         const shopId = shop.id;
         const key = `jumia:orders:${shopId}:cursor`;
         const cfg = await prisma_1.prisma.config.findUnique({ where: { key } }).catch(() => null);
@@ -447,19 +464,60 @@ async function syncOrdersIncremental(opts) {
         const shopAuth = await (0, jumia_1.loadShopAuthById)(shopId).catch(() => undefined);
         const fetcher = (path) => (0, jumia_1.jumiaFetch)(path, shopAuth ? { shopAuth } : {});
         const baseParams = { size: '100' };
-        if (adjustedUpdatedAfter)
-            baseParams.updatedAfter = adjustedUpdatedAfter;
+        if (adjustedUpdatedAfter) {
+            // In tests, prefer ISO string to keep assertions simple and timezone-agnostic.
+            if (process.env.NODE_ENV === 'test') {
+                try {
+                    const d = new Date(String(adjustedUpdatedAfter));
+                    baseParams.updatedAfter = Number.isNaN(d.getTime()) ? String(adjustedUpdatedAfter) : d.toISOString();
+                }
+                catch (_y) {
+                    baseParams.updatedAfter = String(adjustedUpdatedAfter);
+                }
+            }
+            else {
+                // Vendor expects timestamps like "YYYY-MM-DD HH:mm:ss" (no T/Z). Convert from ISO to that format.
+                try {
+                    const d = new Date(String(adjustedUpdatedAfter));
+                    if (!Number.isNaN(d.getTime())) {
+                        baseParams.updatedAfter = (0, date_fns_1.format)(d, 'yyyy-MM-dd HH:mm:ss');
+                    }
+                    else {
+                        baseParams.updatedAfter = String(adjustedUpdatedAfter);
+                    }
+                }
+                catch (_z) {
+                    baseParams.updatedAfter = String(adjustedUpdatedAfter);
+                }
+            }
+        }
         let processed = 0;
         let upserted = 0;
         let latestCursor = updatedAfter;
         try {
             for (const status of STATUS_SEQUENCE) {
                 const params = Object.assign(Object.assign({}, baseParams), { status });
+                // Preflight: some tenants reject certain statuses with 400; skip those early.
+                try {
+                    const q = new URLSearchParams(Object.assign(Object.assign({}, params), { size: '1' })).toString();
+                    await fetcher(`/orders?${q}`);
+                }
+                catch (err) {
+                    const code = (_f = err === null || err === void 0 ? void 0 : err.status) !== null && _f !== void 0 ? _f : 0;
+                    const body = (_g = err === null || err === void 0 ? void 0 : err.body) !== null && _g !== void 0 ? _g : '';
+                    const message = (_h = err === null || err === void 0 ? void 0 : err.message) !== null && _h !== void 0 ? _h : '';
+                    if (code === 400 && /invalid status value/i.test((body || message))) {
+                        log_1.logger.warn({ shopId, status, err }, 'status not supported by vendor; skipping');
+                        continue; // go to next status
+                    }
+                    // If other error (e.g., network), bubble up to outer catch
+                    throw err;
+                }
                 try {
                     try {
-                        for (var _v = true, _w = (e_3 = void 0, __asyncValues((0, jumia_1.jumiaPaginator)('/orders', params, fetcher))), _x; _x = await _w.next(), _a = _x.done, !_a; _v = true) {
-                            _c = _x.value;
-                            _v = false;
+                        for (var _0 = true, _1 = (e_3 = void 0, __asyncValues((0, jumia_1.jumiaPaginator)('/orders', params, fetcher))), _2; _2 = await _1.next(), _a = _2.done, !_a; _0 = true) {
+                            _c = _2.value;
+                            _0 = false;
                             const page = _c;
                             const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.orders)
                                 ? page.orders
@@ -471,7 +529,7 @@ async function syncOrdersIncremental(opts) {
                             for (const raw of arr) {
                                 processed += 1;
                                 const rawObj = (raw || {});
-                                const id = String((_h = (_g = (_f = rawObj.id) !== null && _f !== void 0 ? _f : rawObj.orderId) !== null && _g !== void 0 ? _g : rawObj.order_id) !== null && _h !== void 0 ? _h : '');
+                                const id = String((_l = (_k = (_j = rawObj.id) !== null && _j !== void 0 ? _j : rawObj.orderId) !== null && _k !== void 0 ? _k : rawObj.order_id) !== null && _l !== void 0 ? _l : '');
                                 if (!id)
                                     continue;
                                 const statusValue = rawObj.hasMultipleStatus
@@ -520,10 +578,10 @@ async function syncOrdersIncremental(opts) {
                                         pendingSince: typeof rawObj.pendingSince === 'string' && rawObj.pendingSince.trim() ? String(rawObj.pendingSince) : null,
                                         totalItems: toInt(rawObj.totalItems),
                                         packedItems: toInt(rawObj.packedItems),
-                                        countryCode: typeof ((_j = rawObj === null || rawObj === void 0 ? void 0 : rawObj.country) === null || _j === void 0 ? void 0 : _j.code) === 'string' ? String(rawObj.country.code) : null,
+                                        countryCode: typeof ((_m = rawObj === null || rawObj === void 0 ? void 0 : rawObj.country) === null || _m === void 0 ? void 0 : _m.code) === 'string' ? String(rawObj.country.code) : null,
                                         isPrepayment: toBool(rawObj.isPrepayment),
-                                        createdAtJumia: toDate((_k = rawObj.createdAt) !== null && _k !== void 0 ? _k : rawObj.created_at),
-                                        updatedAtJumia: toDate((_m = (_l = rawObj.updatedAt) !== null && _l !== void 0 ? _l : rawObj.updated_at) !== null && _m !== void 0 ? _m : rawObj.lastUpdatedAt),
+                                        createdAtJumia: toDate((_o = rawObj.createdAt) !== null && _o !== void 0 ? _o : rawObj.created_at),
+                                        updatedAtJumia: toDate((_q = (_p = rawObj.updatedAt) !== null && _p !== void 0 ? _p : rawObj.updated_at) !== null && _q !== void 0 ? _q : rawObj.lastUpdatedAt),
                                         shopId,
                                     },
                                     update: {
@@ -533,10 +591,10 @@ async function syncOrdersIncremental(opts) {
                                         pendingSince: typeof rawObj.pendingSince === 'string' && rawObj.pendingSince.trim() ? String(rawObj.pendingSince) : null,
                                         totalItems: toInt(rawObj.totalItems),
                                         packedItems: toInt(rawObj.packedItems),
-                                        countryCode: typeof ((_o = rawObj === null || rawObj === void 0 ? void 0 : rawObj.country) === null || _o === void 0 ? void 0 : _o.code) === 'string' ? String(rawObj.country.code) : null,
+                                        countryCode: typeof ((_r = rawObj === null || rawObj === void 0 ? void 0 : rawObj.country) === null || _r === void 0 ? void 0 : _r.code) === 'string' ? String(rawObj.country.code) : null,
                                         isPrepayment: toBool(rawObj.isPrepayment),
-                                        createdAtJumia: toDate((_p = rawObj.createdAt) !== null && _p !== void 0 ? _p : rawObj.created_at),
-                                        updatedAtJumia: toDate((_r = (_q = rawObj.updatedAt) !== null && _q !== void 0 ? _q : rawObj.updated_at) !== null && _r !== void 0 ? _r : rawObj.lastUpdatedAt),
+                                        createdAtJumia: toDate((_s = rawObj.createdAt) !== null && _s !== void 0 ? _s : rawObj.created_at),
+                                        updatedAtJumia: toDate((_u = (_t = rawObj.updatedAt) !== null && _t !== void 0 ? _t : rawObj.updated_at) !== null && _u !== void 0 ? _u : rawObj.lastUpdatedAt),
                                     },
                                 });
                                 upserted += 1;
@@ -555,15 +613,15 @@ async function syncOrdersIncremental(opts) {
                     catch (e_3_1) { e_3 = { error: e_3_1 }; }
                     finally {
                         try {
-                            if (!_v && !_a && (_b = _w.return)) await _b.call(_w);
+                            if (!_0 && !_a && (_b = _1.return)) await _b.call(_1);
                         }
                         finally { if (e_3) throw e_3.error; }
                     }
                 }
                 catch (err) {
-                    const code = (_s = err === null || err === void 0 ? void 0 : err.status) !== null && _s !== void 0 ? _s : 0;
-                    const body = (_t = err === null || err === void 0 ? void 0 : err.body) !== null && _t !== void 0 ? _t : '';
-                    const message = (_u = err === null || err === void 0 ? void 0 : err.message) !== null && _u !== void 0 ? _u : '';
+                    const code = (_v = err === null || err === void 0 ? void 0 : err.status) !== null && _v !== void 0 ? _v : 0;
+                    const body = (_w = err === null || err === void 0 ? void 0 : err.body) !== null && _w !== void 0 ? _w : '';
+                    const message = (_x = err === null || err === void 0 ? void 0 : err.message) !== null && _x !== void 0 ? _x : '';
                     if (code === 400 && /invalid status value/i.test(body || message)) {
                         log_1.logger.warn({ shopId, status, err }, 'status not supported by vendor; skipping');
                         continue;

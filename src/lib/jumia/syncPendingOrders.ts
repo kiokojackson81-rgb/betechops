@@ -128,8 +128,10 @@ async function syncShopPending(client: JumiaClient, shopId: string): Promise<Syn
   const formatTimestamp = (value: Date) => format(value, "yyyy-MM-dd HH:mm:ss");
 
   let nextToken: string | undefined;
+  const seenTokens = new Set<string>();
   let pages = 0;
   let ordersUpserted = 0;
+  const MAX_PAGES = 2000; // hard safety cap to prevent infinite loops if vendor tokens misbehave
 
   do {
     const response = await client.getOrders({
@@ -149,9 +151,29 @@ async function syncShopPending(client: JumiaClient, shopId: string): Promise<Syn
       ordersUpserted += 1;
     }
 
-    nextToken = response?.nextToken || undefined;
+    // Break conditions per vendor docs and extra safety:
+    // - Stop when isLastPage flag is true
+    // - Stop if nextToken is falsy
+    // - Stop if nextToken repeats (stale token) to avoid infinite loops
+    const nxt = (response as any)?.nextToken ?? null;
+    const lastFlag = (response as any)?.isLastPage === true;
     pages += 1;
-  } while (nextToken);
+    if (lastFlag) {
+      nextToken = undefined;
+      break;
+    }
+    if (!nxt || typeof nxt !== 'string' || !nxt.trim()) {
+      nextToken = undefined;
+      break;
+    }
+    if (seenTokens.has(String(nxt))) {
+      // token repeated — vendor likely returned the same page token; stop to prevent loop
+      nextToken = undefined;
+      break;
+    }
+    seenTokens.add(String(nxt));
+    nextToken = String(nxt);
+  } while (nextToken && pages < MAX_PAGES);
 
   await prisma.jumiaShop.update({
     where: { id: shopId },

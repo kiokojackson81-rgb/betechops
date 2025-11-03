@@ -6,7 +6,7 @@ import { absUrl } from '@/lib/abs-url';
 export async function updateKpisCache(): Promise<CrossShopKpis> {
   const shops = await prisma.shop.findMany({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
   const perShop = await Promise.all(
-    shops.map(async (s) => ({
+    shops.map(async (s: { id: string }) => ({
       prod: await getCatalogProductsCountQuickForShop({ shopId: s.id, limitPages: 6, size: 100, timeMs: 15_000 }).catch(() => ({ total: 0, approx: true })),
       pend: await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 6, size: 50, timeMs: 10_000 }).catch(() => ({ total: 0, approx: true })),
     }))
@@ -52,7 +52,7 @@ export async function updateKpisCacheExact(): Promise<CrossShopKpis> {
     // Fallback: bounded per-shop sum (may be approximate if shops lack credentials)
     pendingApprox = true;
     const perShopPending = await Promise.all(
-      shops.map(async (s) => await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 10, size: 100, timeMs: 20_000 }).catch(() => ({ total: 0, approx: true })))
+      shops.map(async (s: { id: string }) => await getPendingOrdersCountQuickForShop({ shopId: s.id, limitPages: 10, size: 100, timeMs: 20_000 }).catch(() => ({ total: 0, approx: true })))
     );
     pendingAll = perShopPending.reduce((n, s) => n + (s?.total || 0), 0);
     pendingApprox = perShopPending.some((s) => s?.approx) || false;

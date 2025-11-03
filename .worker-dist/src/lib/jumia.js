@@ -515,45 +515,70 @@ async function loadShopAuthById(shopId) {
     var _a, _b;
     if (process.env.NODE_ENV === 'test')
         return undefined;
+    const baseFromEnv = process.env.base_url ||
+        process.env.BASE_URL ||
+        process.env.JUMIA_API_BASE ||
+        'https://vendor-api.jumia.com';
+    const tokenUrlFromEnv = process.env.OIDC_TOKEN_URL ||
+        process.env.JUMIA_OIDC_TOKEN_URL ||
+        `${new URL(baseFromEnv).origin}/token`;
     try {
         const shop = await prisma_1.prisma.shop.findUnique({ where: { id: shopId }, select: { platform: true, credentialsEncrypted: true, apiConfig: true } });
-        if (!shop)
-            return undefined;
-        let raw = (_b = (_a = shop.credentialsEncrypted) !== null && _a !== void 0 ? _a : shop.apiConfig) !== null && _b !== void 0 ? _b : undefined;
-        if (raw && raw.payload) {
-            const dec = (0, secure_json_1.decryptJson)(raw);
-            if (dec)
-                raw = dec;
-            else
-                return undefined; // cannot decrypt without key
+        if (shop) {
+            let raw = (_b = (_a = shop.credentialsEncrypted) !== null && _a !== void 0 ? _a : shop.apiConfig) !== null && _b !== void 0 ? _b : undefined;
+            if (raw && raw.payload) {
+                const dec = (0, secure_json_1.decryptJson)(raw);
+                if (dec)
+                    raw = dec;
+                else
+                    return undefined; // cannot decrypt without key
+            }
+            // Normalize common alias keys from various imports
+            if (raw && typeof raw === 'object') {
+                const r = raw;
+                if (r.client_id && !r.clientId)
+                    r.clientId = r.client_id;
+                if (r.refresh_token && !r.refreshToken)
+                    r.refreshToken = r.refresh_token;
+                if (r.base_url && !r.apiBase)
+                    r.apiBase = r.base_url;
+                if (r.api_base && !r.apiBase)
+                    r.apiBase = r.api_base;
+                raw = r;
+            }
+            let parsed = {};
+            try {
+                parsed = oidc_1.ShopAuthSchema.partial().parse(raw || {});
+            }
+            catch (_c) {
+                parsed = {};
+            }
+            if (!parsed.platform)
+                parsed.platform = shop.platform || 'JUMIA';
+            if (!parsed.tokenUrl)
+                parsed.tokenUrl = tokenUrlFromEnv;
+            const auth = Object.assign(Object.assign({}, parsed), { apiBase: (raw === null || raw === void 0 ? void 0 : raw.apiBase) || (raw === null || raw === void 0 ? void 0 : raw.base_url) || baseFromEnv });
+            return auth;
         }
-        // Normalize common alias keys from various imports
-        if (raw && typeof raw === 'object') {
-            const r = raw;
-            if (r.client_id && !r.clientId)
-                r.clientId = r.client_id;
-            if (r.refresh_token && !r.refreshToken)
-                r.refreshToken = r.refresh_token;
-            if (r.base_url && !r.apiBase)
-                r.apiBase = r.base_url;
-            if (r.api_base && !r.apiBase)
-                r.apiBase = r.api_base;
-            raw = r;
+        // Try legacy jumiaShop -> jumiaAccount mapping when the Shop record does not have embedded credentials
+        const jShop = await prisma_1.prisma.jumiaShop.findUnique({
+            where: { id: shopId },
+            include: { account: true },
+        });
+        if (jShop === null || jShop === void 0 ? void 0 : jShop.account) {
+            return {
+                platform: 'JUMIA',
+                clientId: jShop.account.clientId,
+                refreshToken: jShop.account.refreshToken,
+                tokenUrl: tokenUrlFromEnv,
+                apiBase: baseFromEnv,
+            };
         }
-        let parsed = {};
-        try {
-            parsed = oidc_1.ShopAuthSchema.partial().parse(raw || {});
-        }
-        catch (_c) {
-            parsed = {};
-        }
-        if (!parsed.platform)
-            parsed.platform = shop.platform || 'JUMIA';
-        return parsed;
     }
     catch (_d) {
         return undefined;
     }
+    return undefined;
 }
 /** Load the first active JUMIA shop's credentials as a default. */
 async function loadDefaultShopAuth() {
@@ -1093,6 +1118,7 @@ function jumiaPaginator(pathBase_1) {
         delete params.token;
         delete params.nextToken;
         let retriedOn401 = false;
+        const seenTokens = new Set();
         while (true) {
             const qParts = [];
             for (const [k, v] of Object.entries(params)) {
@@ -1107,10 +1133,26 @@ function jumiaPaginator(pathBase_1) {
                 // determine next token from common fields by narrowing unknown
                 if (page && typeof page === 'object') {
                     const pRec = page;
-                    token = String((_c = (_b = (_a = pRec.nextToken) !== null && _a !== void 0 ? _a : pRec.token) !== null && _b !== void 0 ? _b : pRec.next) !== null && _c !== void 0 ? _c : '');
+                    // If vendor indicates last page, stop regardless of token value.
+                    if (pRec.isLastPage === true) {
+                        token = '';
+                    }
+                    else {
+                        const nxt = (_c = (_b = (_a = pRec.nextToken) !== null && _a !== void 0 ? _a : pRec.token) !== null && _b !== void 0 ? _b : pRec.next) !== null && _c !== void 0 ? _c : '';
+                        token = String(nxt || '');
+                    }
                 }
                 else {
                     token = '';
+                }
+                // Break if next token repeats to avoid infinite loops on buggy tokens
+                if (token) {
+                    if (seenTokens.has(token)) {
+                        token = '';
+                    }
+                    else {
+                        seenTokens.add(token);
+                    }
                 }
                 if (!token)
                     break; // no more pages
@@ -1314,9 +1356,12 @@ async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2, size 
     var _a, e_3, _b, _c;
     const start = Date.now();
     let total = 0;
-    const params = { status: 'PENDING', size: String(size), shopId };
+    // IMPORTANT: Do NOT pass shopId as a vendor query param when using per-shop auth.
+    // Some tenants return 400/422 if shopId is provided alongside a shop-scoped token.
+    // We scope by credentials only; vendor filtering by shop happens implicitly.
+    const params = { status: 'PENDING', size: String(size) };
     const fetcher = async (p) => await Promise.race([
-        jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined) }),
+        jumiaFetch(p, { shopAuth: await loadShopAuthById(shopId).catch(() => undefined), shopKey: shopId }),
         new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))),
     ]);
     let pages = 0;

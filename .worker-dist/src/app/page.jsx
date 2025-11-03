@@ -138,7 +138,8 @@ function Home() {
     const [pricingCnt, setPricingCnt] = (0, react_1.useState)(null);
     const [pendingAll, setPendingAll] = (0, react_1.useState)(null);
     const [pendingUpdated, setPendingUpdated] = (0, react_1.useState)(null);
-    const LS_KEY = 'home:stats:v1';
+    // Explicitly disable any localStorage snapshot usage to always show DB values
+    const USE_LOCAL_SNAPSHOT = false;
     // endpoints per spec
     // Single source of truth per card to avoid inconsistent values from mixed endpoints
     const pickupPaths = (0, react_1.useMemo)(() => ["/api/returns/waiting-pickup"], []);
@@ -146,34 +147,17 @@ function Home() {
     const pendingPaths = (0, react_1.useMemo)(() => [], []);
     (0, react_1.useEffect)(() => {
         let ignore = false;
-        // 1) Hydrate instantly from last good local snapshot to avoid blanks on first paint.
-        try {
-            const raw = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
-            if (raw) {
-                const cached = JSON.parse(raw);
-                if (!ignore) {
-                    if (Number.isFinite(cached === null || cached === void 0 ? void 0 : cached.pickup))
-                        setPickupCnt(Number(cached.pickup));
-                    if (Number.isFinite(cached === null || cached === void 0 ? void 0 : cached.pricing))
-                        setPricingCnt(Number(cached.pricing));
-                    if (Number.isFinite(cached === null || cached === void 0 ? void 0 : cached.pending))
-                        setPendingAll(Number(cached.pending));
-                    if (typeof (cached === null || cached === void 0 ? void 0 : cached.updatedAt) === 'number') {
-                        const dt = new Date(cached.updatedAt);
-                        const hh = String(dt.getHours()).padStart(2, '0');
-                        const mm = String(dt.getMinutes()).padStart(2, '0');
-                        setPendingUpdated(`Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
-                    }
-                }
-            }
+        // 1) Bypass localStorage hydration entirely for strict DB accuracy
+        if (!USE_LOCAL_SNAPSHOT) {
+            setPendingUpdated(null);
         }
-        catch (_a) { }
         const run = async () => {
             try {
                 const [c1, c2, kpis] = await Promise.all([
                     tryCounts(pickupPaths),
                     tryCounts(pricingPaths),
-                    fetchJsonWithTimeout("/api/metrics/kpis"),
+                    // DB-only accuracy: disable live vendor boost
+                    fetchJsonWithTimeout("/api/metrics/kpis?noLive=1"),
                 ]);
                 if (!ignore) {
                     // Only update when we have a concrete value; keep last value on errors
@@ -204,38 +188,17 @@ function Home() {
                     else {
                         setPendingUpdated(null);
                     }
-                    // 2) Persist latest successful snapshot for instant reuse next load
-                    try {
-                        const ts = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.updatedAt) === "number" && !Number.isNaN(kpis.updatedAt)
-                            ? kpis.updatedAt
-                            : Date.now();
-                        const rawSnapshot = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.pendingAll) === "number" && Number.isFinite(kpis.pendingAll)
-                            ? Number(kpis.pendingAll)
-                            : null;
-                        const snapshotPending = rawSnapshot === null
-                            ? pendingAll
-                            : approx && rawSnapshot === 0 && (pendingAll !== null && pendingAll !== void 0 ? pendingAll : 0) > 0
-                                ? pendingAll
-                                : rawSnapshot;
-                        const snapshot = {
-                            pickup: typeof c1 === 'number' && Number.isFinite(c1) ? c1 : pickupCnt,
-                            pricing: typeof c2 === 'number' && Number.isFinite(c2) ? c2 : pricingCnt,
-                            pending: snapshotPending,
-                            updatedAt: ts,
-                        };
-                        localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
-                    }
-                    catch (_a) { }
+                    // 2) Skip persisting any snapshot to localStorage
                 }
             }
-            catch (_b) {
+            catch (_a) {
                 // On error, keep previous values to avoid flicker to zero; just clear the timestamp
                 if (!ignore)
                     setPendingUpdated(null);
             }
         };
         void run();
-        const interval = setInterval(run, 60000);
+        const interval = setInterval(run, 5000);
         return () => {
             ignore = true;
             clearInterval(interval);

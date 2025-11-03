@@ -9,6 +9,7 @@ function pickComparableDate(order) {
 }
 async function fetchSyncedRows(params) {
     var _a, _b;
+    // Use a flexible where type to avoid tight coupling to generated Prisma types in CI/builds
     const where = {};
     if (params.status && params.status !== "ALL")
         where.status = params.status;
