@@ -1,6 +1,5 @@
 "use strict";
 (async () => {
-    var _a;
     const base = process.env.BASE_URL || 'http://localhost:3000';
     console.log('Using BASE_URL=', base);
     function rand(n = 6) { return Math.random().toString(36).slice(2, 2 + n); }
@@ -26,7 +25,7 @@
             const assignRes = await fetch(`${base}/api/shops/${shopJson.id}/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: ((_a = userJson.user) === null || _a === void 0 ? void 0 : _a.id) || userJson.id, roleAtShop: 'ATTENDANT' })
+                body: JSON.stringify({ userId: userJson.user?.id || userJson.id, roleAtShop: 'ATTENDANT' })
             });
             const assignJson = await assignRes.json();
             console.log('assign:', assignRes.status, assignJson);

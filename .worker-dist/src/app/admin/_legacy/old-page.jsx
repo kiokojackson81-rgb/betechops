@@ -7,7 +7,6 @@ const lucide_react_1 = require("lucide-react");
 // Opt out of prerendering; this page hits the DB
 exports.dynamic = "force-dynamic";
 async function getStats() {
-    var _a;
     try {
         const [products, shops, attendants, orders, revenueAgg] = await Promise.all([
             prisma_1.prisma.product.count(),
@@ -21,7 +20,7 @@ async function getStats() {
             shops,
             attendants,
             orders,
-            revenue: (_a = revenueAgg._sum.paidAmount) !== null && _a !== void 0 ? _a : 0,
+            revenue: revenueAgg._sum.paidAmount ?? 0,
         };
     }
     catch (e) {

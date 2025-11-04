@@ -30,6 +30,13 @@ async function handle(request) {
         if (Number.isFinite(parsed) && parsed > 0)
             opts.lookbackDays = parsed;
     }
+    // If this is an interactive call (not cron) and no explicit lookback provided,
+    // default to a small window for fast updates. Cron will continue to use the
+    // broader default inside syncOrdersIncremental (env JUMIA_SYNC_LOOKBACK_DAYS or 120).
+    if (!isCron && !opts.lookbackDays) {
+        const interactiveDefault = Number.parseInt(process.env.JUMIA_SYNC_LOOKBACK_DAYS_INTERACTIVE || '', 10);
+        opts.lookbackDays = Number.isFinite(interactiveDefault) && interactiveDefault > 0 ? interactiveDefault : 3;
+    }
     try {
         const summary = await (0, jumia_1.syncOrdersIncremental)(opts);
         if (isCron) {

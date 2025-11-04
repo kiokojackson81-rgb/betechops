@@ -30,11 +30,14 @@ function buildWhere(term) {
     const where = { status: { in: [...RETURN_STATUSES] } };
     if (!term)
         return where;
-    return Object.assign(Object.assign({}, where), { OR: [
+    return {
+        ...where,
+        OR: [
             { order: { is: { orderNumber: { contains: term } } } },
             { order: { is: { customerName: { contains: term } } } },
             { shop: { is: { name: { contains: term } } } },
-        ] });
+        ],
+    };
 }
 async function fetchReturns(where, page, size) {
     return await prisma_1.prisma.returnCase.findMany({
@@ -66,9 +69,9 @@ async function fetchReturns(where, page, size) {
 async function ReturnsPage({ searchParams, }) {
     const params = await searchParams;
     const scope = await (0, scope_1.resolveShopScopeForServer)();
-    const page = Math.max(1, Number((params === null || params === void 0 ? void 0 : params.page) || 1));
-    const size = Math.min(50, Math.max(1, Number((params === null || params === void 0 ? void 0 : params.size) || PAGE_SIZE_DEFAULT)));
-    const q = ((params === null || params === void 0 ? void 0 : params.q) || "").trim() || undefined;
+    const page = Math.max(1, Number(params?.page || 1));
+    const size = Math.min(50, Math.max(1, Number(params?.size || PAGE_SIZE_DEFAULT)));
+    const q = (params?.q || "").trim() || undefined;
     let syncError = null;
     try {
         await (0, jumia_1.syncReturnOrders)({ lookbackDays: 30 });
@@ -78,7 +81,8 @@ async function ReturnsPage({ searchParams, }) {
     }
     const whereBase = buildWhere(q);
     const where = scope.shopIds && scope.shopIds.length > 0
-        ? Object.assign(Object.assign({}, whereBase), { shopId: { in: scope.shopIds } }) : whereBase;
+        ? { ...whereBase, shopId: { in: scope.shopIds } }
+        : whereBase;
     let degraded = false;
     let total = 0;
     let rows = [];
@@ -146,18 +150,17 @@ async function ReturnsPage({ searchParams, }) {
           </thead>
           <tbody className="divide-y divide-white/10">
             {rows.map((ret) => {
-            var _a;
             const order = ret.order;
-            const items = (order === null || order === void 0 ? void 0 : order.items) || [];
+            const items = order?.items || [];
             const itemsCount = items.reduce((sum, it) => sum + it.quantity, 0);
             const value = items.reduce((sum, it) => sum + (Number(it.sellingPrice || 0) * it.quantity), 0);
             const picked = ret.status === "picked_up" || Boolean(ret.pickedAt);
             return (<tr key={ret.id} className="[&>td]:px-3 [&>td]:py-3">
-                  <td className="font-mono">{(order === null || order === void 0 ? void 0 : order.orderNumber) || "—"}</td>
+                  <td className="font-mono">{order?.orderNumber || "—"}</td>
                   <td>
-                    <div className="font-medium">{(order === null || order === void 0 ? void 0 : order.customerName) || "—"}</div>
+                    <div className="font-medium">{order?.customerName || "—"}</div>
                   </td>
-                  <td>{((_a = ret.shop) === null || _a === void 0 ? void 0 : _a.name) || "—"}</td>
+                  <td>{ret.shop?.name || "—"}</td>
                   <td>{itemsCount}</td>
                   <td>{fmtKsh(value)}</td>
                   <td>
@@ -165,7 +168,7 @@ async function ReturnsPage({ searchParams, }) {
                       {picked ? "Picked" : "Waiting pickup"}
                     </span>
                   </td>
-                  <td>{(order === null || order === void 0 ? void 0 : order.createdAt) ? fmtDate(order.createdAt) : fmtDate(ret.createdAt)}</td>
+                  <td>{order?.createdAt ? fmtDate(order.createdAt) : fmtDate(ret.createdAt)}</td>
                   <td className="text-right">
                     <link_1.default href={`/admin/returns/${ret.id}`} className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/10">
                       View

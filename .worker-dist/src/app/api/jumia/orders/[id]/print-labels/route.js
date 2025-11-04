@@ -5,6 +5,7 @@ exports.POST = POST;
 const server_1 = require("next/server");
 const api_1 = require("@/lib/api");
 const jumia_1 = require("@/lib/jumia");
+const prisma_1 = require("@/lib/prisma");
 function normalizeIdsFromBody(body, fallbackId) {
     if (body && typeof body === "object") {
         const ids = body.orderItemIds;
@@ -40,10 +41,10 @@ function extractLabel(data, fallbackName) {
     const haystacks = [];
     if (typeof data === "object") {
         haystacks.push(data);
-        const success = data === null || data === void 0 ? void 0 : data.success;
+        const success = data?.success;
         if (success)
             haystacks.push(success);
-        const firstOrderItem = Array.isArray(success === null || success === void 0 ? void 0 : success.labels) ? success.labels[0] : undefined;
+        const firstOrderItem = Array.isArray(success?.labels) ? success.labels[0] : undefined;
         if (firstOrderItem)
             haystacks.push(firstOrderItem);
     }
@@ -63,11 +64,11 @@ function extractLabel(data, fallbackName) {
     }
     return null;
 }
-async function fetchLabels(orderItemIds) {
-    return await (0, jumia_1.postOrdersPrintLabels)({ orderItemIds });
+async function fetchLabels(orderItemIds, shopId) {
+    return await (0, jumia_1.postOrdersPrintLabels)(shopId ? { shopId, orderItemIds } : { orderItemIds });
 }
-async function respondWithPdf(orderItemIds, identifier) {
-    const result = await fetchLabels(orderItemIds);
+async function respondWithPdf(orderItemIds, identifier, shopId) {
+    const result = await fetchLabels(orderItemIds, shopId);
     const label = extractLabel(result, identifier);
     if (!label)
         return null;
@@ -86,15 +87,38 @@ async function GET(_req, context) {
     const auth = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
     if (!auth.ok)
         return auth.res;
-    const orderItemIds = id ? [id] : [];
-    if (!orderItemIds.length) {
-        return (0, api_1.noStoreJson)({ ok: false, error: "order item id required" }, { status: 400 });
+    const sp = new URL(_req.url).searchParams;
+    const shopIdParam = (sp.get("shopId") || "").trim();
+    let shopId = shopIdParam;
+    // Try to resolve shopId via DB if not provided (treat path id as orderId first)
+    if (!shopId) {
+        try {
+            const row = await prisma_1.prisma.jumiaOrder.findUnique({ where: { id }, select: { shopId: true } });
+            if (row?.shopId)
+                shopId = row.shopId;
+        }
+        catch { }
     }
+    // If we have a shopId, prefer to treat `id` as orderId and expand to item IDs
+    let orderItemIds = [];
+    if (shopId) {
+        try {
+            const itemsResp = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
+            const items = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
+            orderItemIds = items.map((it) => String(it?.id || "")).filter(Boolean);
+        }
+        catch { }
+    }
+    // Fallback: treat `id` as orderItemId
+    if (!orderItemIds.length && id)
+        orderItemIds = [id];
+    if (!orderItemIds.length)
+        return (0, api_1.noStoreJson)({ ok: false, error: "order item id required" }, { status: 400 });
     try {
-        const pdf = await respondWithPdf(orderItemIds, id);
+        const pdf = await respondWithPdf(orderItemIds, id, shopId || undefined);
         if (pdf)
             return pdf;
-        const result = await fetchLabels(orderItemIds);
+        const result = await fetchLabels(orderItemIds, shopId || undefined);
         return (0, api_1.noStoreJson)({ ok: false, error: "Label not available", result }, { status: 502 });
     }
     catch (e) {
@@ -103,33 +127,59 @@ async function GET(_req, context) {
     }
 }
 async function POST(req, context) {
-    var _a, _b;
     const { id } = await context.params;
     const auth = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
     if (!auth.ok)
         return auth.res;
     let body = undefined;
-    if ((_a = req.headers.get("content-type")) === null || _a === void 0 ? void 0 : _a.includes("application/json")) {
+    if (req.headers.get("content-type")?.includes("application/json")) {
         try {
             body = await req.json();
         }
-        catch (_c) {
+        catch {
             return (0, api_1.noStoreJson)({ ok: false, error: "Invalid JSON payload" }, { status: 400 });
         }
     }
-    const orderItemIds = normalizeIdsFromBody(body, id);
+    const sp = req.nextUrl.searchParams;
+    const shopIdParam = (sp.get("shopId") || "").trim();
+    let shopId = shopIdParam;
+    if (!shopId) {
+        try {
+            const row = await prisma_1.prisma.jumiaOrder.findUnique({ where: { id }, select: { shopId: true } });
+            if (row?.shopId)
+                shopId = row.shopId;
+        }
+        catch { }
+    }
+    let orderItemIds = normalizeIdsFromBody(body, id);
+    if ((!orderItemIds || orderItemIds.length === 0) && shopId) {
+        try {
+            const itemsResp = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
+            const items = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
+            orderItemIds = items.map((it) => String(it?.id || "")).filter(Boolean);
+        }
+        catch { }
+    }
     if (!orderItemIds.length) {
         return (0, api_1.noStoreJson)({ ok: false, error: "orderItemIds required" }, { status: 400 });
     }
     try {
-        const labelResponse = await respondWithPdf(orderItemIds, (_b = orderItemIds[0]) !== null && _b !== void 0 ? _b : id);
+        const labelResponse = await respondWithPdf(orderItemIds, orderItemIds[0] ?? id, shopId || undefined);
         if (labelResponse)
             return labelResponse;
-        const fallback = await fetchLabels(orderItemIds);
-        return (0, api_1.noStoreJson)({ ok: true, result: fallback, orderItemIds });
+        const fallback = await fetchLabels(orderItemIds, shopId || undefined);
+        return (0, api_1.noStoreJson)({ ok: true, result: fallback, orderItemIds, shopId: shopId || undefined }, { status: 201 });
     }
     catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        return (0, api_1.noStoreJson)({ ok: false, error: message }, { status: 502 });
+        if (message.toLowerCase().includes("missing credentials")) {
+            return (0, api_1.noStoreJson)({
+                ok: false,
+                error: "Missing credentials for Jumia Vendor API",
+                hint: "Ensure per-shop OAuth refresh token is configured and pass ?shopId=...",
+                shopId: shopId || undefined,
+            }, { status: 400 });
+        }
+        return (0, api_1.noStoreJson)({ ok: false, error: message, shopId: shopId || undefined }, { status: 502 });
     }
 }

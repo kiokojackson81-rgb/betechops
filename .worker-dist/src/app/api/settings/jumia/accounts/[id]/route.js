@@ -5,9 +5,8 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const auth_1 = require("@/lib/auth");
 async function requireAdmin() {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (role !== "ADMIN") {
         throw new server_1.NextResponse(JSON.stringify({ error: "Forbidden" }), { status: 403 });
     }

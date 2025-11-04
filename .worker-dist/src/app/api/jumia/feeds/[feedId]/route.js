@@ -8,6 +8,6 @@ async function GET(_req, context) {
     const auth = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR"]);
     if (!auth.ok)
         return auth.res;
-    const data = await (0, jumia_1.getFeedById)(feedId).catch((e) => ({ ok: false, error: String((e === null || e === void 0 ? void 0 : e.message) || e) }));
+    const data = await (0, jumia_1.getFeedById)(feedId).catch((e) => ({ ok: false, error: String(e?.message || e) }));
     return (0, api_1.noStoreJson)(data);
 }

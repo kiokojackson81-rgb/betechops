@@ -14,15 +14,14 @@ async function mintAccessToken(tokenUrl, clientId, refreshToken) {
     return j.access_token;
 }
 async function pingJumiaShop(name) {
-    var _a, _b, _c, _d, _e, _f;
     const shop = await prisma.shop.findFirst({ where: { name }, select: { id: true, name: true, credentialsEncrypted: true } });
     if (!shop)
         throw new Error(`shop not found: ${name}`);
     const creds = (0, secure_json_1.decryptJson)(shop.credentialsEncrypted);
-    const apiBase = (creds === null || creds === void 0 ? void 0 : creds.apiBase) || (creds === null || creds === void 0 ? void 0 : creds.base_url) || "https://vendor-api.jumia.com";
-    const tokenUrl = (creds === null || creds === void 0 ? void 0 : creds.tokenUrl) || "https://vendor-api.jumia.com/token";
-    const clientId = String((creds === null || creds === void 0 ? void 0 : creds.clientId) || "");
-    const refreshToken = String((creds === null || creds === void 0 ? void 0 : creds.refreshToken) || "");
+    const apiBase = creds?.apiBase || creds?.base_url || "https://vendor-api.jumia.com";
+    const tokenUrl = creds?.tokenUrl || "https://vendor-api.jumia.com/token";
+    const clientId = String(creds?.clientId || "");
+    const refreshToken = String(creds?.refreshToken || "");
     if (!clientId || !refreshToken)
         throw new Error("missing clientId/refreshToken");
     const accessToken = await mintAccessToken(tokenUrl, clientId, refreshToken);
@@ -38,10 +37,10 @@ async function pingJumiaShop(name) {
         try {
             parsed = JSON.parse(text);
         }
-        catch (_g) { }
+        catch { }
     }
-    const count = Array.isArray(parsed === null || parsed === void 0 ? void 0 : parsed.orders) ? parsed.orders.length : Array.isArray(parsed === null || parsed === void 0 ? void 0 : parsed.items) ? parsed.items.length : Array.isArray(parsed === null || parsed === void 0 ? void 0 : parsed.data) ? parsed.data.length : 0;
-    return { id: shop.id, name: shop.name, httpStatus: r.status, count, sampleId: count > 0 ? (((_b = (_a = parsed.orders) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.id) || ((_d = (_c = parsed.items) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.id) || ((_f = (_e = parsed.data) === null || _e === void 0 ? void 0 : _e[0]) === null || _f === void 0 ? void 0 : _f.id)) : null };
+    const count = Array.isArray(parsed?.orders) ? parsed.orders.length : Array.isArray(parsed?.items) ? parsed.items.length : Array.isArray(parsed?.data) ? parsed.data.length : 0;
+    return { id: shop.id, name: shop.name, httpStatus: r.status, count, sampleId: count > 0 ? (parsed.orders?.[0]?.id || parsed.items?.[0]?.id || parsed.data?.[0]?.id) : null };
 }
 async function main() {
     // Accept names as CLI args: node ping-jumia.ts "Shop A" "Shop B" ...

@@ -58,21 +58,20 @@ function normalize(value) {
     return String(value).trim().toLowerCase();
 }
 function productStatus(product) {
-    var _a, _b, _c;
-    return normalize((_c = (_b = (_a = product === null || product === void 0 ? void 0 : product.status) !== null && _a !== void 0 ? _a : product === null || product === void 0 ? void 0 : product.itemStatus) !== null && _b !== void 0 ? _b : product === null || product === void 0 ? void 0 : product.productStatus) !== null && _c !== void 0 ? _c : product === null || product === void 0 ? void 0 : product.state) || "unknown";
+    return normalize(product?.status ?? product?.itemStatus ?? product?.productStatus ?? product?.state) || "unknown";
 }
 function productQcStatus(product) {
     const raw = firstDefined([
-        product === null || product === void 0 ? void 0 : product.qcStatus,
-        asRecord(product === null || product === void 0 ? void 0 : product.qualityControl).status,
-        asRecord(product === null || product === void 0 ? void 0 : product.quality_control).status,
-        product === null || product === void 0 ? void 0 : product.qualityCheckStatus,
-        product === null || product === void 0 ? void 0 : product.quality_control_status,
-        asRecord(product === null || product === void 0 ? void 0 : product.qc).status,
-        product === null || product === void 0 ? void 0 : product.qc_status,
-        product === null || product === void 0 ? void 0 : product.qcstatus,
-        product === null || product === void 0 ? void 0 : product.qcStatusName,
-        product === null || product === void 0 ? void 0 : product.qc_status_name,
+        product?.qcStatus,
+        asRecord(product?.qualityControl).status,
+        asRecord(product?.quality_control).status,
+        product?.qualityCheckStatus,
+        product?.quality_control_status,
+        asRecord(product?.qc).status,
+        product?.qc_status,
+        product?.qcstatus,
+        product?.qcStatusName,
+        product?.qc_status_name,
     ]);
     return normalize(raw);
 }
@@ -112,17 +111,15 @@ function bucketSum(source, keys) {
     return keys.reduce((acc, key) => acc + (source[key] || 0), 0);
 }
 function matchesListingStatus(status, filter) {
-    var _a;
     if (!filter)
         return true;
-    const aliases = (_a = resolveAlias(filter, listingStatusAliases)) !== null && _a !== void 0 ? _a : [filter];
+    const aliases = resolveAlias(filter, listingStatusAliases) ?? [filter];
     return aliases.some((alias) => status.includes(alias));
 }
 function matchesQcStatus(status, filter) {
-    var _a;
     if (!filter)
         return true;
-    const aliases = (_a = resolveAlias(filter, qcStatusAliases)) !== null && _a !== void 0 ? _a : [filter];
+    const aliases = resolveAlias(filter, qcStatusAliases) ?? [filter];
     return aliases.some((alias) => status.includes(alias));
 }
 function formatNumber(value) {
@@ -136,7 +133,7 @@ function formatCurrency(value, currency) {
     try {
         return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
     }
-    catch (_a) {
+    catch {
         return `${currency.toUpperCase()} ${value.toLocaleString("en-US")}`;
     }
 }
@@ -198,39 +195,57 @@ function extractCategories(response) {
 }
 const EMPTY_SUMMARY = { total: 0, approx: true, byStatus: {}, byQcStatus: {} };
 function normalizeProduct(product, shops) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18;
-    const sellerSkuCandidate = (_e = (_d = (_c = (_b = (_a = product.sellerSku) !== null && _a !== void 0 ? _a : product.sellerSKU) !== null && _b !== void 0 ? _b : product.sku) !== null && _c !== void 0 ? _c : product.sid) !== null && _d !== void 0 ? _d : product.id) !== null && _e !== void 0 ? _e : `SKU-${Math.random().toString(16).slice(2)}`;
-    const nameCandidate = (_h = (_g = (_f = product.name) !== null && _f !== void 0 ? _f : product.title) !== null && _g !== void 0 ? _g : product.productName) !== null && _h !== void 0 ? _h : product.displayName;
+    const sellerSkuCandidate = product.sellerSku ?? product.sellerSKU ?? product.sku ?? product.sid ?? product.id ?? `SKU-${Math.random().toString(16).slice(2)}`;
+    const nameCandidate = product.name ?? product.title ?? product.productName ?? product.displayName;
     const name = typeof nameCandidate === "string"
         ? nameCandidate
-        : typeof (nameCandidate === null || nameCandidate === void 0 ? void 0 : nameCandidate.value) === "string"
+        : typeof nameCandidate?.value === "string"
             ? String(nameCandidate.value)
             : "-";
     const rawPrice = product.price;
     const priceRecord = asRecord(rawPrice);
-    const saleRecord = asRecord((_j = priceRecord.salePrice) !== null && _j !== void 0 ? _j : product.salePrice);
+    const saleRecord = asRecord(priceRecord.salePrice ?? product.salePrice);
     const saleFallback = product.salePrice;
-    const priceValue = (_o = (_m = (_l = (_k = numeric(rawPrice)) !== null && _k !== void 0 ? _k : numeric(priceRecord.value)) !== null && _l !== void 0 ? _l : numeric(priceRecord.amount)) !== null && _m !== void 0 ? _m : numeric(priceRecord.price)) !== null && _o !== void 0 ? _o : numeric(product.priceValue);
-    const salePriceValue = (_s = (_r = (_q = (_p = numeric(saleFallback)) !== null && _p !== void 0 ? _p : numeric(saleRecord.value)) !== null && _q !== void 0 ? _q : numeric(saleRecord.amount)) !== null && _r !== void 0 ? _r : numeric(saleRecord.price)) !== null && _s !== void 0 ? _s : numeric(product.salePriceValue);
-    const currencyCandidate = (_v = (_u = (_t = priceRecord.currency) !== null && _t !== void 0 ? _t : saleRecord.currency) !== null && _u !== void 0 ? _u : product.currency) !== null && _v !== void 0 ? _v : (Array.isArray(product.prices) ? (_w = product.prices[0]) === null || _w === void 0 ? void 0 : _w.currency : undefined);
+    const priceValue = numeric(rawPrice) ??
+        numeric(priceRecord.value) ??
+        numeric(priceRecord.amount) ??
+        numeric(priceRecord.price) ??
+        numeric(product.priceValue);
+    const salePriceValue = numeric(saleFallback) ??
+        numeric(saleRecord.value) ??
+        numeric(saleRecord.amount) ??
+        numeric(saleRecord.price) ??
+        numeric(product.salePriceValue);
+    const currencyCandidate = priceRecord.currency ??
+        saleRecord.currency ??
+        product.currency ??
+        (Array.isArray(product.prices) ? product.prices[0]?.currency : undefined);
     const currency = typeof currencyCandidate === "string" ? currencyCandidate : undefined;
     const stockRecord = asRecord(product.stock);
-    const qtyCandidate = (_2 = (_1 = (_0 = (_z = (_y = (_x = product.quantity) !== null && _x !== void 0 ? _x : product.stock) !== null && _y !== void 0 ? _y : product.availableQuantity) !== null && _z !== void 0 ? _z : product.globalStock) !== null && _0 !== void 0 ? _0 : product.inventory) !== null && _1 !== void 0 ? _1 : product.lastKnownStock) !== null && _2 !== void 0 ? _2 : stockRecord.value;
+    const qtyCandidate = product.quantity ??
+        product.stock ??
+        product.availableQuantity ??
+        product.globalStock ??
+        product.inventory ??
+        product.lastKnownStock ??
+        stockRecord.value;
     const quantity = numeric(qtyCandidate);
     const priceUpdated = asRecord(product.price).updatedAt;
     const stockUpdated = asRecord(product.stock).updatedAt;
-    const updatedAtCandidate = (_8 = (_7 = (_6 = (_5 = (_4 = (_3 = product.updatedAt) !== null && _3 !== void 0 ? _3 : product.lastUpdatedAt) !== null && _4 !== void 0 ? _4 : priceUpdated) !== null && _5 !== void 0 ? _5 : stockUpdated) !== null && _6 !== void 0 ? _6 : product.lastStockUpdatedAt) !== null && _7 !== void 0 ? _7 : product.createdAt) !== null && _8 !== void 0 ? _8 : undefined;
+    const updatedAtCandidate = product.updatedAt ?? product.lastUpdatedAt ?? priceUpdated ?? stockUpdated ?? product.lastStockUpdatedAt ?? product.createdAt ?? undefined;
     const statusKey = productStatus(product);
     const qcStatusKey = productQcStatus(product);
     const shopRef = asRecord(product._shop);
     const nestedShop = asRecord(product.shop);
-    const shopIdRaw = (_13 = (_12 = (_11 = (_10 = (_9 = shopRef.id) !== null && _9 !== void 0 ? _9 : nestedShop.id) !== null && _10 !== void 0 ? _10 : product.shopId) !== null && _11 !== void 0 ? _11 : nestedShop.sid) !== null && _12 !== void 0 ? _12 : product.shopSid) !== null && _13 !== void 0 ? _13 : nestedShop.shopId;
+    const shopIdRaw = shopRef.id ?? nestedShop.id ?? product.shopId ?? nestedShop.sid ?? product.shopSid ?? nestedShop.shopId;
     const shopId = shopIdRaw !== undefined && shopIdRaw !== null ? String(shopIdRaw) : undefined;
-    const shopNameCandidate = (_15 = (_14 = (typeof shopRef.name === "string" ? shopRef.name : undefined)) !== null && _14 !== void 0 ? _14 : (typeof nestedShop.name === "string" ? nestedShop.name : undefined)) !== null && _15 !== void 0 ? _15 : (shopId ? shops.get(shopId) : undefined);
+    const shopNameCandidate = (typeof shopRef.name === "string" ? shopRef.name : undefined) ??
+        (typeof nestedShop.name === "string" ? nestedShop.name : undefined) ??
+        (shopId ? shops.get(shopId) : undefined);
     const shopName = typeof shopNameCandidate === "string" ? shopNameCandidate : "-";
     return {
-        key: String((_18 = (_17 = (_16 = product.id) !== null && _16 !== void 0 ? _16 : product.sid) !== null && _17 !== void 0 ? _17 : sellerSkuCandidate) !== null && _18 !== void 0 ? _18 : Math.random().toString(16).slice(2)),
-        sellerSku: String(sellerSkuCandidate !== null && sellerSkuCandidate !== void 0 ? sellerSkuCandidate : "-"),
+        key: String(product.id ?? product.sid ?? sellerSkuCandidate ?? Math.random().toString(16).slice(2)),
+        sellerSku: String(sellerSkuCandidate ?? "-"),
         name,
         statusKey,
         qcStatusKey,
@@ -290,7 +305,6 @@ function buildQueryString(params) {
     return query.toString();
 }
 async function CatalogPage({ searchParams }) {
-    var _a, _b, _c, _d;
     const sp = (await searchParams) || {};
     const size = Math.min(100, Math.max(1, Number(sp.size || 20)));
     const sellerSku = (sp.sellerSku || "").trim() || undefined;
@@ -324,7 +338,7 @@ async function CatalogPage({ searchParams }) {
         try {
             const h = await (0, headers_1.headers)();
             const host = h.get("x-forwarded-host") || h.get("host") || process.env.NEXT_PUBLIC_VERCEL_URL || "localhost:3000";
-            const proto = h.get("x-forwarded-proto") || ((host === null || host === void 0 ? void 0 : host.includes("localhost")) ? "http" : "https");
+            const proto = h.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
             const base = host.startsWith("http") ? host : `${proto}://${host}`;
             const qs = new URLSearchParams();
             if (all)
@@ -339,11 +353,11 @@ async function CatalogPage({ searchParams }) {
             if (!res.ok)
                 return null;
             const j = (await res.json());
-            if (typeof (j === null || j === void 0 ? void 0 : j.total) === "number")
+            if (typeof j?.total === "number")
                 return { total: j.total, approx: !!j.approx, byStatus: j.byStatus || {}, byQcStatus: j.byQcStatus || {} };
             return null;
         }
-        catch (_a) {
+        catch {
             return null;
         }
     }
@@ -390,8 +404,11 @@ async function CatalogPage({ searchParams }) {
             withTimeout((0, jumia_1.getCatalogProducts)({ size, token, sellerSku, categoryCode, shopId }), DEFAULT_TIMEOUT).catch(() => undefined),
             fetchCountsFromApi(false, shopId, exact, exact ? Math.min(100, Math.max(size, 50)) : Math.min(100, Math.max(size, 50))),
         ]);
-        rawProducts = extractProducts(productsResponse).map((item) => (Object.assign(Object.assign({}, item), { _shop: { id: shopId, name: shopLookup.get(shopId) } })));
-        nextToken = String((_c = (_b = (_a = productsResponse === null || productsResponse === void 0 ? void 0 : productsResponse.nextToken) !== null && _a !== void 0 ? _a : productsResponse === null || productsResponse === void 0 ? void 0 : productsResponse.token) !== null && _b !== void 0 ? _b : productsResponse === null || productsResponse === void 0 ? void 0 : productsResponse.next) !== null && _c !== void 0 ? _c : "") || "";
+        rawProducts = extractProducts(productsResponse).map((item) => ({
+            ...item,
+            _shop: { id: shopId, name: shopLookup.get(shopId) },
+        }));
+        nextToken = String(productsResponse?.nextToken ?? productsResponse?.token ?? productsResponse?.next ?? "") || "";
         if (apiSummary) {
             summary = apiSummary;
         }
@@ -457,15 +474,18 @@ async function CatalogPage({ searchParams }) {
         status: listingStatusFilter,
         qcStatus: qcStatusFilter,
     };
-    const selectedShopName = shopId.toUpperCase() === "ALL" ? "All Jumia shops" : (_d = shopLookup.get(shopId)) !== null && _d !== void 0 ? _d : "Selected shop";
+    const selectedShopName = shopId.toUpperCase() === "ALL" ? "All Jumia shops" : shopLookup.get(shopId) ?? "Selected shop";
     const renderChip = (chip, kind) => {
-        var _a;
         const currentFilter = kind === "status" ? listingStatusFilter : qcStatusFilter;
         const hasFilter = currentFilter !== undefined && currentFilter !== "";
         const isActive = chip.param.status === undefined && chip.param.qcStatus === undefined
             ? !hasFilter && (kind === "status" ? !listingStatusFilter : !qcStatusFilter)
-            : !!(currentFilter && (currentFilter === (kind === "status" ? chip.param.status : chip.param.qcStatus) || ((_a = chip.aliases) === null || _a === void 0 ? void 0 : _a.includes(currentFilter))));
-        const href = `/admin/catalog?${buildQueryString(Object.assign(Object.assign({}, baseQuery), { status: kind === "status" ? chip.param.status : baseQuery.status, qcStatus: kind === "qc" ? chip.param.qcStatus : baseQuery.qcStatus }))}`;
+            : !!(currentFilter && (currentFilter === (kind === "status" ? chip.param.status : chip.param.qcStatus) || chip.aliases?.includes(currentFilter)));
+        const href = `/admin/catalog?${buildQueryString({
+            ...baseQuery,
+            status: kind === "status" ? chip.param.status : baseQuery.status,
+            qcStatus: kind === "qc" ? chip.param.qcStatus : baseQuery.qcStatus,
+        })}`;
         return (<a key={chip.key} href={href} className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors ${isActive ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100" : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"}`}>
         <span>{chip.label}</span>
         {chip.count !== undefined ? <span className="text-xs text-slate-300">{formatNumber(chip.count)}</span> : null}
@@ -495,8 +515,8 @@ async function CatalogPage({ searchParams }) {
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-4">
         <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <input type="hidden" name="status" value={listingStatusFilter !== null && listingStatusFilter !== void 0 ? listingStatusFilter : ""}/>
-          <input type="hidden" name="qcStatus" value={qcStatusFilter !== null && qcStatusFilter !== void 0 ? qcStatusFilter : ""}/>
+          <input type="hidden" name="status" value={listingStatusFilter ?? ""}/>
+          <input type="hidden" name="qcStatus" value={qcStatusFilter ?? ""}/>
           <input type="hidden" name="exact" value={exact ? "true" : ""}/>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-300">Shop</label>
@@ -509,7 +529,7 @@ async function CatalogPage({ searchParams }) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-300">Seller SKU</label>
-            <input name="sellerSku" defaultValue={sellerSku !== null && sellerSku !== void 0 ? sellerSku : ""} placeholder="Search by SKU" className="rounded border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"/>
+            <input name="sellerSku" defaultValue={sellerSku ?? ""} placeholder="Search by SKU" className="rounded border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"/>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-300">Category Code</label>
@@ -537,18 +557,21 @@ async function CatalogPage({ searchParams }) {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Categories</h2>
-          {categoryCode ? (<a href={`/admin/catalog?${buildQueryString(Object.assign(Object.assign({}, baseQuery), { categoryCode: undefined, token: undefined }))}`} className="text-xs text-emerald-200 underline">
+          {categoryCode ? (<a href={`/admin/catalog?${buildQueryString({ ...baseQuery, categoryCode: undefined, token: undefined })}`} className="text-xs text-emerald-200 underline">
               Clear category
             </a>) : null}
         </div>
         {categories.length === 0 ? (<p className="text-sm text-slate-400">No categories available.</p>) : (<div className="flex gap-2 overflow-x-auto pb-2">
             {categories.map((category, index) => {
-                var _a, _b, _c, _d, _e;
-                const code = Number((_b = (_a = category === null || category === void 0 ? void 0 : category.code) !== null && _a !== void 0 ? _a : category === null || category === void 0 ? void 0 : category.categoryCode) !== null && _b !== void 0 ? _b : index);
-                const rawLabel = (_e = (_d = (_c = category === null || category === void 0 ? void 0 : category.name) !== null && _c !== void 0 ? _c : category === null || category === void 0 ? void 0 : category.categoryName) !== null && _d !== void 0 ? _d : category === null || category === void 0 ? void 0 : category.title) !== null && _e !== void 0 ? _e : `Category ${index + 1}`;
+                const code = Number(category?.code ?? category?.categoryCode ?? index);
+                const rawLabel = category?.name ?? category?.categoryName ?? category?.title ?? `Category ${index + 1}`;
                 const label = typeof rawLabel === "string" ? rawLabel : String(rawLabel);
                 const isActive = categoryCode !== undefined && code === categoryCode;
-                const href = `/admin/catalog?${buildQueryString(Object.assign(Object.assign({}, baseQuery), { categoryCode: code, token: undefined }))}`;
+                const href = `/admin/catalog?${buildQueryString({
+                    ...baseQuery,
+                    categoryCode: code,
+                    token: undefined,
+                })}`;
                 return (<a key={`cat-${code}-${label}`} href={href} className={`min-w-[180px] rounded-lg border px-3 py-2 text-sm transition-colors ${isActive
                         ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
                         : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"}`}>
@@ -567,12 +590,12 @@ async function CatalogPage({ searchParams }) {
             <AutoRefresh_1.default eventName="catalog:counts:refresh" storageKey="catalogAutoRefresh" intervalMs={60000}/>
             <a className={`rounded border px-3 py-1 text-xs ${exact
             ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-            : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"}`} href={`/admin/catalog?${buildQueryString(Object.assign(Object.assign({}, baseQuery), { exact: exact ? undefined : "true" }))}`} title={exact ? "Switch to quick counts" : "Switch to exact counts"}>
+            : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"}`} href={`/admin/catalog?${buildQueryString({ ...baseQuery, exact: exact ? undefined : "true" })}`} title={exact ? "Switch to quick counts" : "Switch to exact counts"}>
               {exact ? "Exact counts" : "Use exact counts"}
             </a>
             {/* Client-side refresh button to warm cache and refresh UI */}
             <CountsRefreshButton_1.default shopId={shopId} exact={exact}/>
-            {nextToken ? (<a className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-100 hover:border-white/25" href={`/admin/catalog?${buildQueryString(Object.assign(Object.assign({}, baseQuery), { token: nextToken }))}`}>
+            {nextToken ? (<a className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-100 hover:border-white/25" href={`/admin/catalog?${buildQueryString({ ...baseQuery, token: nextToken })}`}>
                 Next →
               </a>) : null}
           </div>

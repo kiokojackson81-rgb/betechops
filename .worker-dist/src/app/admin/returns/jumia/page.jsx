@@ -6,7 +6,6 @@ exports.dynamic = "force-dynamic";
 const jumia_1 = require("@/lib/jumia");
 const prisma_1 = require("@/lib/prisma");
 async function fetchReturns({ token, size, status, shopId }) {
-    var _a, _b, _c, _d, _e, _f;
     const qs = new URLSearchParams();
     if (token)
         qs.set("token", token);
@@ -19,16 +18,16 @@ async function fetchReturns({ token, size, status, shopId }) {
     // Try /returns first; fallback to /orders?status=RETURNED
     try {
         const j = await (0, jumia_1.jumiaFetch)(`/returns${q}`, shopAuth ? { shopAuth } : {});
-        const items = Array.isArray(j === null || j === void 0 ? void 0 : j.items) ? j.items : Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : (j === null || j === void 0 ? void 0 : j.returns) || [];
-        const nextToken = String((_c = (_b = (_a = j === null || j === void 0 ? void 0 : j.nextToken) !== null && _a !== void 0 ? _a : j === null || j === void 0 ? void 0 : j.token) !== null && _b !== void 0 ? _b : j === null || j === void 0 ? void 0 : j.next) !== null && _c !== void 0 ? _c : "");
+        const items = Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : j?.returns || [];
+        const nextToken = String(j?.nextToken ?? j?.token ?? j?.next ?? "");
         return { items, nextToken, pathUsed: "/returns" };
     }
-    catch (_g) {
+    catch {
         const status2 = status || "RETURNED";
         const join = q ? `${q}&status=${encodeURIComponent(status2)}` : `?status=${encodeURIComponent(status2)}`;
         const j = await (0, jumia_1.jumiaFetch)(`/orders${join}`, shopAuth ? { shopAuth } : {});
-        const items = Array.isArray(j === null || j === void 0 ? void 0 : j.orders) ? j.orders : Array.isArray(j === null || j === void 0 ? void 0 : j.items) ? j.items : Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : [];
-        const nextToken = String((_f = (_e = (_d = j === null || j === void 0 ? void 0 : j.nextToken) !== null && _d !== void 0 ? _d : j === null || j === void 0 ? void 0 : j.token) !== null && _e !== void 0 ? _e : j === null || j === void 0 ? void 0 : j.next) !== null && _f !== void 0 ? _f : "");
+        const items = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
+        const nextToken = String(j?.nextToken ?? j?.token ?? j?.next ?? "");
         return { items, nextToken, pathUsed: "/orders" };
     }
 }
@@ -47,10 +46,10 @@ async function JumiaReturnsPage({ searchParams, }) {
             try {
                 const r = await fetchReturns({ token: undefined, size, status, shopId: s.id });
                 // tag shop on items
-                const tagged = (r.items || []).map((x) => (Object.assign(Object.assign({}, x), { _shop: s })));
+                const tagged = (r.items || []).map((x) => ({ ...x, _shop: s }));
                 return { items: tagged };
             }
-            catch (_a) {
+            catch {
                 return { items: [] };
             }
         }));
@@ -112,16 +111,13 @@ async function JumiaReturnsPage({ searchParams, }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((it, i) => {
-            var _a;
-            return (<tr key={i} className="border-t border-white/10">
+            {items.map((it, i) => (<tr key={i} className="border-t border-white/10">
                 <td className="px-3 py-2 font-mono">{it.orderNumber || it.id || it.externalId || `#${i + 1}`}</td>
                 <td className="px-3 py-2">{it.customerName || it.buyerName || '-'}</td>
                 <td className="px-3 py-2 text-slate-400">{it.status || '-'}</td>
                 <td className="px-3 py-2">{it.createdAt || it.created || it.date || '-'}</td>
-                <td className="px-3 py-2">{((_a = it._shop) === null || _a === void 0 ? void 0 : _a.name) || '-'}</td>
-              </tr>);
-        })}
+                <td className="px-3 py-2">{it._shop?.name || '-'}</td>
+              </tr>))}
           </tbody>
         </table>
       </div>

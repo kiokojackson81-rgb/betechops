@@ -39,7 +39,7 @@ const prisma = new client_1.PrismaClient();
 async function kmFetch(apiBase, appId, appSecret, path, payload) {
     // This mirrors src/lib/connectors/kilimall.ts signing
     const ts = Date.now();
-    const body = JSON.stringify(payload !== null && payload !== void 0 ? payload : {});
+    const body = JSON.stringify(payload ?? {});
     const s = await (await Promise.resolve().then(() => __importStar(require("crypto")))).createHash("md5").update(appSecret + body + String(ts)).digest("hex");
     const r = await fetch(`${apiBase}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-App-Id": appId, "X-Timestamp": String(ts), "X-Sign": s }, body });
     if (!r.ok)
@@ -47,20 +47,19 @@ async function kmFetch(apiBase, appId, appSecret, path, payload) {
     return r.json();
 }
 async function pingKilimallShop(name) {
-    var _a, _b;
     const shop = await prisma.shop.findFirst({ where: { name }, select: { id: true, name: true, credentialsEncrypted: true } });
     if (!shop)
         throw new Error(`shop not found: ${name}`);
     const creds = (0, secure_json_1.decryptJson)(shop.credentialsEncrypted);
-    const appId = String((creds === null || creds === void 0 ? void 0 : creds.storeId) || (creds === null || creds === void 0 ? void 0 : creds.appId) || "");
-    const appSecret = String((creds === null || creds === void 0 ? void 0 : creds.appSecret) || (creds === null || creds === void 0 ? void 0 : creds.app_secret) || "");
-    const apiBase = (creds === null || creds === void 0 ? void 0 : creds.apiBase) || "https://openapi.kilimall.co.ke";
+    const appId = String(creds?.storeId || creds?.appId || "");
+    const appSecret = String(creds?.appSecret || creds?.app_secret || "");
+    const apiBase = creds?.apiBase || "https://openapi.kilimall.co.ke";
     if (!appId || !appSecret)
         throw new Error(`missing appId/appSecret for ${name}`);
     // NOTE: Path '/orders/list' is our current placeholder; if you have the official endpoint, share it and I'll update.
     const res = await kmFetch(apiBase, appId, appSecret, "/orders/list", { since: undefined }).catch((e) => { throw new Error(String(e instanceof Error ? e.message : e)); });
-    const arr = Array.isArray(res === null || res === void 0 ? void 0 : res.data) ? res.data : Array.isArray(res === null || res === void 0 ? void 0 : res.orders) ? res.orders : [];
-    return { id: shop.id, name: shop.name, httpStatus: 200, count: arr.length, sampleId: (_b = (_a = arr[0]) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : null };
+    const arr = Array.isArray(res?.data) ? res.data : Array.isArray(res?.orders) ? res.orders : [];
+    return { id: shop.id, name: shop.name, httpStatus: 200, count: arr.length, sampleId: arr[0]?.id ?? null };
 }
 async function main() {
     const argv = process.argv.slice(2).filter(Boolean);

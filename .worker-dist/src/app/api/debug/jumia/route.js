@@ -63,7 +63,7 @@ async function GET(req) {
         ];
         // build base candidates with resolved base preferred
         const bases = [];
-        if (resolved === null || resolved === void 0 ? void 0 : resolved.base)
+        if (resolved?.base)
             bases.push(resolved.base.replace(/\/$/, ''));
         for (const b of ['https://vendor-api.jumia.com', 'https://vendor-api.jumia.com/api', 'https://vendor-api.jumia.com/v1', 'https://vendor-api.jumia.com/v2']) {
             const bb = b.replace(/\/$/, '');
@@ -75,15 +75,15 @@ async function GET(req) {
         try {
             token = await (0, oidc_1.getJumiaAccessToken)();
         }
-        catch (_a) {
+        catch {
             try {
                 token = await (0, oidc_1.getAccessTokenFromEnv)();
             }
-            catch (_b) {
+            catch {
                 token = '';
             }
         }
-        const scheme = (resolved === null || resolved === void 0 ? void 0 : resolved.scheme) || 'Bearer';
+        const scheme = resolved?.scheme || 'Bearer';
         const probeResults = [];
         for (const base of bases) {
             for (const p of candidatePaths) {
@@ -98,7 +98,7 @@ async function GET(req) {
                         const txt = await r.text();
                         preview = txt ? (txt.length > 300 ? txt.slice(0, 300) + '...' : txt) : '';
                     }
-                    catch (_c) {
+                    catch {
                         preview = '';
                     }
                     probeResults.push({ base, path: p, status: r.status, ok: r.ok, preview });

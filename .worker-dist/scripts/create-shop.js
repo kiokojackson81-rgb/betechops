@@ -14,7 +14,6 @@ const defaultCreds = {
     shopLabel: 'JM Collection',
 };
 async function main() {
-    var _a;
     const name = process.env.SHOP_NAME || defaultCreds.shopLabel || 'JM Collection';
     const platformEnv = process.env.SHOP_PLATFORM || 'JUMIA';
     // Allow overriding credentials via env var SHOP_JSON (stringified JSON)
@@ -35,7 +34,7 @@ async function main() {
     const existing = await prisma.shop.findFirst({ where: { name } });
     const data = {
         name,
-        platform: (_a = client_1.Platform[platformEnv]) !== null && _a !== void 0 ? _a : client_1.Platform.JUMIA,
+        platform: client_1.Platform[platformEnv] ?? client_1.Platform.JUMIA,
         isActive: true,
         // Store credentials in plaintext JSON (code will use directly or decrypt if encrypted). 
         // If you prefer encryption, replace this with your encryptJsonForStorage helper.

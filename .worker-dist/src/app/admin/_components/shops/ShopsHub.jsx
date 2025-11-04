@@ -12,17 +12,14 @@ function ShopsHub({ initial }) {
     return (<div className="grid md:grid-cols-2 gap-6">
       <div className="rounded-xl border border-white/10 bg-[#23272f] p-4">
         <h2 className="text-lg font-semibold mb-2">Shops & Staff</h2>
-        <AdminShopsClient_1.default initial={initial.map((s) => {
-            var _a, _b, _c, _d, _e;
-            return ({
-                id: s.id,
-                name: (_a = s.name) !== null && _a !== void 0 ? _a : '',
-                platform: (_b = s.platform) !== null && _b !== void 0 ? _b : '',
-                assignedUser: s.userAssignments && s.userAssignments[0] && s.userAssignments[0].user
-                    ? { id: s.userAssignments[0].user.id, label: (_d = (_c = s.userAssignments[0].user.name) !== null && _c !== void 0 ? _c : s.userAssignments[0].user.email) !== null && _d !== void 0 ? _d : '', roleAtShop: (_e = s.userAssignments[0].roleAtShop) !== null && _e !== void 0 ? _e : undefined }
-                    : undefined,
-            });
-        })}/>
+        <AdminShopsClient_1.default initial={initial.map((s) => ({
+            id: s.id,
+            name: s.name ?? '',
+            platform: s.platform ?? '',
+            assignedUser: s.userAssignments && s.userAssignments[0] && s.userAssignments[0].user
+                ? { id: s.userAssignments[0].user.id, label: s.userAssignments[0].user.name ?? s.userAssignments[0].user.email ?? '', roleAtShop: s.userAssignments[0].roleAtShop ?? undefined }
+                : undefined,
+        }))}/>
       </div>
       <div className="rounded-xl border border-white/10 bg-[#23272f] p-4">
         <h2 className="text-lg font-semibold mb-2">API Credentials (per Shop)</h2>

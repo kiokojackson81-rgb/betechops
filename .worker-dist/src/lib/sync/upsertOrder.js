@@ -33,7 +33,7 @@ async function upsertNormalizedOrder(n) {
     const existing = await p.order.findUnique({ where: { orderNumber } }).catch(() => null);
     if (existing) {
         // update summary fields
-        const orderRecord = await p.order.update({ where: { id: existing.id }, data: { status: mapStatus(status), totalAmount, customerName: (buyer === null || buyer === void 0 ? void 0 : buyer.name) || existing.customerName } });
+        const orderRecord = await p.order.update({ where: { id: existing.id }, data: { status: mapStatus(status), totalAmount, customerName: buyer?.name || existing.customerName } });
         // replace items (simple approach)
         await p.orderItem.deleteMany({ where: { orderId: existing.id } });
         const createdItems = [];
@@ -48,7 +48,7 @@ async function upsertNormalizedOrder(n) {
         return { orderId: orderRecord.id, order: orderRecord, createdItems };
     }
     // create new order
-    const created = await p.order.create({ data: { orderNumber, shopId, customerName: (buyer === null || buyer === void 0 ? void 0 : buyer.name) || '', status: mapStatus(status), totalAmount, createdAt: new Date(orderedAt) } });
+    const created = await p.order.create({ data: { orderNumber, shopId, customerName: buyer?.name || '', status: mapStatus(status), totalAmount, createdAt: new Date(orderedAt) } });
     const createdItems = [];
     for (const it of items) {
         let prod = (await p.product.findUnique({ where: { sku: it.externalSku } }).catch(() => null));
@@ -83,14 +83,13 @@ async function upsertNormalizedOrder(n) {
             },
         });
     }
-    catch (_a) {
+    catch {
         // ignore if model not present or other issues
     }
     return { orderId: created.id, order: created, createdItems };
 }
 let _systemUserId;
 async function getSystemUserId() {
-    var _a;
     if (_systemUserId !== undefined)
         return _systemUserId;
     const explicit = process.env.RETURNS_SYSTEM_USER_ID;
@@ -99,12 +98,12 @@ async function getSystemUserId() {
         return _systemUserId;
     }
     const admin = await prisma_1.prisma.user.findFirst({ where: { role: client_1.Role.ADMIN }, select: { id: true } }).catch(() => null);
-    if (admin === null || admin === void 0 ? void 0 : admin.id) {
+    if (admin?.id) {
         _systemUserId = admin.id;
         return _systemUserId;
     }
     const any = await prisma_1.prisma.user.findFirst({ select: { id: true } }).catch(() => null);
-    _systemUserId = (_a = any === null || any === void 0 ? void 0 : any.id) !== null && _a !== void 0 ? _a : null;
+    _systemUserId = any?.id ?? null;
     return _systemUserId;
 }
 function deriveReturnStatus(vendorStatus, picked) {

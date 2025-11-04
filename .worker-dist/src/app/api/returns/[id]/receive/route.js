@@ -5,7 +5,6 @@ const api_1 = require("@/lib/api");
 const prisma_1 = require("@/lib/prisma");
 const returns_1 = require("@/lib/returns");
 async function PATCH(_req, context) {
-    var _a, _b;
     const { id } = await context.params;
     const authz = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR"]);
     if (!authz.ok)
@@ -13,7 +12,7 @@ async function PATCH(_req, context) {
     const ret = await prisma_1.prisma.returnCase.findUnique({ where: { id } });
     if (!ret)
         return (0, api_1.noStoreJson)({ error: "Return not found" }, { status: 404 });
-    const actorId = ((_b = (_a = authz.session) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.id) || '';
+    const actorId = (authz.session?.user?.id) || '';
     const can = (0, returns_1.guardTransition)(ret.status, "received", { role: String(authz.role) });
     if (!can.ok)
         return (0, api_1.noStoreJson)({ error: can.reason }, { status: 400 });

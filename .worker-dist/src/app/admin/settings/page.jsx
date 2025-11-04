@@ -16,7 +16,6 @@ function AdminSettings() {
     const [okW, setOkW] = (0, react_1.useState)("");
     (0, react_1.useEffect)(() => {
         (async () => {
-            var _a, _b, _c, _d, _e, _f;
             try {
                 const [jumiaRes, windowRes, accountsRes] = await Promise.all([
                     fetch("/api/settings/jumia"),
@@ -26,18 +25,18 @@ function AdminSettings() {
                 if (jumiaRes.ok) {
                     const data = await jumiaRes.json();
                     setJ({
-                        apiBase: String((_a = data.apiBase) !== null && _a !== void 0 ? _a : ""),
-                        issuer: String((_b = data.issuer) !== null && _b !== void 0 ? _b : ""),
-                        clientId: String((_c = data.clientId) !== null && _c !== void 0 ? _c : ""),
+                        apiBase: String(data.apiBase ?? ""),
+                        issuer: String(data.issuer ?? ""),
+                        clientId: String(data.clientId ?? ""),
                         refreshToken: "",
                     });
                 }
                 if (windowRes.ok) {
                     const data = await windowRes.json();
                     setW({
-                        fromDay: Number((_d = data.fromDay) !== null && _d !== void 0 ? _d : 24),
-                        toDay: Number((_e = data.toDay) !== null && _e !== void 0 ? _e : 24),
-                        adminEmails: String((_f = data.adminEmails) !== null && _f !== void 0 ? _f : ""),
+                        fromDay: Number(data.fromDay ?? 24),
+                        toDay: Number(data.toDay ?? 24),
+                        adminEmails: String(data.adminEmails ?? ""),
                     });
                 }
                 if (accountsRes.ok) {
@@ -61,14 +60,14 @@ function AdminSettings() {
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Unable to reload accounts";
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { global: message })));
+            setAccountStatus((prev) => ({ ...prev, global: message }));
         }
     }
     async function saveExistingAccount(id) {
         const account = accounts.find((a) => a.id === id);
         if (!account)
             return;
-        setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: "Saving..." })));
+        setAccountStatus((prev) => ({ ...prev, [id]: "Saving..." }));
         try {
             const res = await fetch("/api/settings/jumia/accounts", {
                 method: "POST",
@@ -78,15 +77,15 @@ function AdminSettings() {
             if (!res.ok)
                 throw new Error(await res.text());
             await reloadAccounts();
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: "Saved" })));
+            setAccountStatus((prev) => ({ ...prev, [id]: "Saved" }));
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Unable to save";
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: message })));
+            setAccountStatus((prev) => ({ ...prev, [id]: message }));
         }
     }
     async function discoverShops(id) {
-        setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: "Discovering shops..." })));
+        setAccountStatus((prev) => ({ ...prev, [id]: "Discovering shops..." }));
         try {
             const res = await fetch(`/api/settings/jumia/accounts/${id}/discover`, { method: "POST" });
             if (!res.ok)
@@ -94,34 +93,34 @@ function AdminSettings() {
             const data = await res.json();
             const count = Array.isArray(data.shops) ? data.shops.length : 0;
             await reloadAccounts();
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: `Discovered ${count} shop${count === 1 ? "" : "s"}` })));
+            setAccountStatus((prev) => ({ ...prev, [id]: `Discovered ${count} shop${count === 1 ? "" : "s"}` }));
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Discovery failed";
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: message })));
+            setAccountStatus((prev) => ({ ...prev, [id]: message }));
         }
     }
     async function deleteAccount(id) {
-        setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: "Deleting..." })));
+        setAccountStatus((prev) => ({ ...prev, [id]: "Deleting..." }));
         try {
             const res = await fetch(`/api/settings/jumia/accounts/${id}`, { method: "DELETE" });
             if (!res.ok)
                 throw new Error(await res.text());
             await reloadAccounts();
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: "Deleted" })));
+            setAccountStatus((prev) => ({ ...prev, [id]: "Deleted" }));
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Delete failed";
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [id]: message })));
+            setAccountStatus((prev) => ({ ...prev, [id]: message }));
         }
     }
     async function mergeAccount(sourceId) {
         const targetId = mergeTargets[sourceId];
         if (!targetId) {
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [sourceId]: "Select target account" })));
+            setAccountStatus((prev) => ({ ...prev, [sourceId]: "Select target account" }));
             return;
         }
-        setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [sourceId]: "Merging (moving shops)..." })));
+        setAccountStatus((prev) => ({ ...prev, [sourceId]: "Merging (moving shops)..." }));
         try {
             const res = await fetch(`/api/settings/jumia/accounts/${sourceId}/merge`, {
                 method: "POST",
@@ -131,11 +130,11 @@ function AdminSettings() {
             if (!res.ok)
                 throw new Error(await res.text());
             await reloadAccounts();
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [sourceId]: "Merged and deleted" })));
+            setAccountStatus((prev) => ({ ...prev, [sourceId]: "Merged and deleted" }));
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Merge failed";
-            setAccountStatus((prev) => (Object.assign(Object.assign({}, prev), { [sourceId]: message })));
+            setAccountStatus((prev) => ({ ...prev, [sourceId]: message }));
         }
     }
     async function createAccount(e) {
@@ -193,6 +192,17 @@ function AdminSettings() {
         <p className="text-sm text-slate-400">Manage marketplace credentials and operations windows.</p>
       </header>
 
+      {/* Quick links */}
+      <section className="rounded-xl border border-white/10 bg-[#0b0e13] p-4">
+        <h2 className="text-lg font-medium mb-2">Shortcuts</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="/admin/settings/jumia/shipping-stations" className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5">
+            <div className="font-semibold">Jumia Shipping Stations</div>
+            <div className="text-sm text-slate-400">Set default shipping station per shop and discover providers.</div>
+          </a>
+        </div>
+      </section>
+
       <section className="rounded-xl border border-white/10 bg-[#0b0e13] p-4 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -203,26 +213,24 @@ function AdminSettings() {
         </div>
 
         <div className="space-y-4">
-          {accounts.map((account) => {
-            var _a, _b, _c, _d, _e, _f, _g;
-            return (<div key={account.id} className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-3">
+          {accounts.map((account) => (<div key={account.id} className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold">{account.label || "Unnamed account"}</h3>
-                <span className="text-xs text-slate-400">{accountStatus[(_a = account.id) !== null && _a !== void 0 ? _a : ""]}</span>
+                <span className="text-xs text-slate-400">{accountStatus[account.id ?? ""]}</span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Label</div>
-                  <Input value={account.label} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? Object.assign(Object.assign({}, acc), { label: e.target.value }) : acc))}/>
+                  <Input value={account.label} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? { ...acc, label: e.target.value } : acc))}/>
                 </label>
                 <label className="block">
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Client ID</div>
-                  <Input value={account.clientId} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? Object.assign(Object.assign({}, acc), { clientId: e.target.value }) : acc))}/>
+                  <Input value={account.clientId} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? { ...acc, clientId: e.target.value } : acc))}/>
                 </label>
               </div>
               <label className="block">
                 <div className="text-xs text-slate-400 uppercase tracking-wide">Refresh Token</div>
-                <Input value={account.refreshToken} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? Object.assign(Object.assign({}, acc), { refreshToken: e.target.value }) : acc))} placeholder="Enter refresh token"/>
+                <Input value={account.refreshToken} onChange={(e) => setAccounts((prev) => prev.map((acc) => acc.id === account.id ? { ...acc, refreshToken: e.target.value } : acc))} placeholder="Enter refresh token"/>
               </label>
               <div className="flex flex-wrap items-center gap-3">
                 <button type="button" onClick={() => account.id && saveExistingAccount(account.id)} className="rounded-md bg-yellow-400 text-black px-3 py-1.5 font-medium">
@@ -233,18 +241,18 @@ function AdminSettings() {
                 </button>
                 {/* Merge controls */}
                 {accounts.length > 1 && (<div className="flex items-center gap-2">
-                    <select className="rounded-md bg-[#0b0e13] border border-white/10 px-2 py-1 text-sm" value={(_c = mergeTargets[(_b = account.id) !== null && _b !== void 0 ? _b : ""]) !== null && _c !== void 0 ? _c : ""} onChange={(e) => setMergeTargets((prev) => { var _a; return (Object.assign(Object.assign({}, prev), { [(_a = account.id) !== null && _a !== void 0 ? _a : ""]: e.target.value })); })}>
+                    <select className="rounded-md bg-[#0b0e13] border border-white/10 px-2 py-1 text-sm" value={mergeTargets[account.id ?? ""] ?? ""} onChange={(e) => setMergeTargets((prev) => ({ ...prev, [account.id ?? ""]: e.target.value }))}>
                       <option value="">Merge into...</option>
                       {accounts
-                        .filter((a) => a.id !== account.id)
-                        .map((a) => (<option key={a.id} value={a.id}>{a.label || a.id}</option>))}
+                    .filter((a) => a.id !== account.id)
+                    .map((a) => (<option key={a.id} value={a.id}>{a.label || a.id}</option>))}
                     </select>
                     <button type="button" onClick={() => account.id && mergeAccount(account.id)} className="rounded-md border border-white/20 px-3 py-1.5 hover:bg-white/10 text-sm">
                       Merge & Delete
                     </button>
                   </div>)}
                 {/* Delete account (only if no shops) */}
-                <button type="button" onClick={() => account.id && deleteAccount(account.id)} disabled={((_e = (_d = account.shops) === null || _d === void 0 ? void 0 : _d.length) !== null && _e !== void 0 ? _e : 0) > 0} className="rounded-md border border-red-400/40 text-red-300 px-3 py-1.5 hover:bg-red-400/10 disabled:opacity-50 disabled:cursor-not-allowed" title={((_g = (_f = account.shops) === null || _f === void 0 ? void 0 : _f.length) !== null && _g !== void 0 ? _g : 0) > 0 ? "Transfer shops to another account before deleting" : "Delete account"}>
+                <button type="button" onClick={() => account.id && deleteAccount(account.id)} disabled={(account.shops?.length ?? 0) > 0} className="rounded-md border border-red-400/40 text-red-300 px-3 py-1.5 hover:bg-red-400/10 disabled:opacity-50 disabled:cursor-not-allowed" title={(account.shops?.length ?? 0) > 0 ? "Transfer shops to another account before deleting" : "Delete account"}>
                   Delete
                 </button>
                 {account.shops.length > 0 && (<span className="text-xs text-slate-300">{account.shops.length} linked shop{account.shops.length === 1 ? "" : "s"}</span>)}
@@ -252,8 +260,7 @@ function AdminSettings() {
               {account.shops.length > 0 && (<ul className="list-disc list-inside text-sm text-slate-400">
                   {account.shops.map((shop) => (<li key={shop.id}>{shop.name} ({shop.id})</li>))}
                 </ul>)}
-            </div>);
-        })}
+            </div>))}
 
           <div className="rounded-lg border border-dashed border-white/10 p-4">
             <form onSubmit={createAccount} className="space-y-3">
@@ -261,16 +268,16 @@ function AdminSettings() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Label</div>
-                  <Input value={newAccount.label} onChange={(e) => setNewAccount((prev) => (Object.assign(Object.assign({}, prev), { label: e.target.value })))}/>
+                  <Input value={newAccount.label} onChange={(e) => setNewAccount((prev) => ({ ...prev, label: e.target.value }))}/>
                 </label>
                 <label className="block">
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Client ID</div>
-                  <Input value={newAccount.clientId} onChange={(e) => setNewAccount((prev) => (Object.assign(Object.assign({}, prev), { clientId: e.target.value })))}/>
+                  <Input value={newAccount.clientId} onChange={(e) => setNewAccount((prev) => ({ ...prev, clientId: e.target.value }))}/>
                 </label>
               </div>
               <label className="block">
                 <div className="text-xs text-slate-400 uppercase tracking-wide">Refresh Token</div>
-                <Input value={newAccount.refreshToken} onChange={(e) => setNewAccount((prev) => (Object.assign(Object.assign({}, prev), { refreshToken: e.target.value })))}/>
+                <Input value={newAccount.refreshToken} onChange={(e) => setNewAccount((prev) => ({ ...prev, refreshToken: e.target.value }))}/>
               </label>
               <div className="flex items-center gap-3">
                 <button type="submit" className="rounded-md bg-yellow-400 text-black px-3 py-1.5 font-medium">Create</button>
@@ -286,19 +293,19 @@ function AdminSettings() {
         <form onSubmit={saveJ} className="space-y-3">
           <label className="block">
             <div className="text-sm text-slate-400">API Base URL</div>
-            <Input value={j.apiBase} onChange={(e) => setJ((v) => (Object.assign(Object.assign({}, v), { apiBase: e.target.value })))}/>
+            <Input value={j.apiBase} onChange={(e) => setJ((v) => ({ ...v, apiBase: e.target.value }))}/>
           </label>
           <label className="block">
             <div className="text-sm text-slate-400">OIDC Issuer</div>
-            <Input value={j.issuer} onChange={(e) => setJ((v) => (Object.assign(Object.assign({}, v), { issuer: e.target.value })))}/>
+            <Input value={j.issuer} onChange={(e) => setJ((v) => ({ ...v, issuer: e.target.value }))}/>
           </label>
           <label className="block">
             <div className="text-sm text-slate-400">Client ID</div>
-            <Input value={j.clientId} onChange={(e) => setJ((v) => (Object.assign(Object.assign({}, v), { clientId: e.target.value })))}/>
+            <Input value={j.clientId} onChange={(e) => setJ((v) => ({ ...v, clientId: e.target.value }))}/>
           </label>
           <label className="block">
             <div className="text-sm text-slate-400">Refresh Token</div>
-            <Input value={j.refreshToken} onChange={(e) => setJ((v) => (Object.assign(Object.assign({}, v), { refreshToken: e.target.value })))}/>
+            <Input value={j.refreshToken} onChange={(e) => setJ((v) => ({ ...v, refreshToken: e.target.value }))}/>
           </label>
           <button className="rounded-md bg-yellow-400 text-black px-4 py-2 font-medium">Save</button>
           {okJ && <span className="ml-3 text-sm text-slate-300">{okJ}</span>}
@@ -311,16 +318,16 @@ function AdminSettings() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <div className="text-sm text-slate-400">From Day (1-28)</div>
-              <Input type="number" min={1} max={28} value={w.fromDay} onChange={(e) => setW((v) => (Object.assign(Object.assign({}, v), { fromDay: Number(e.target.value) })))}/>
+              <Input type="number" min={1} max={28} value={w.fromDay} onChange={(e) => setW((v) => ({ ...v, fromDay: Number(e.target.value) }))}/>
             </label>
             <label className="block">
               <div className="text-sm text-slate-400">To Day (1-28)</div>
-              <Input type="number" min={1} max={28} value={w.toDay} onChange={(e) => setW((v) => (Object.assign(Object.assign({}, v), { toDay: Number(e.target.value) })))}/>
+              <Input type="number" min={1} max={28} value={w.toDay} onChange={(e) => setW((v) => ({ ...v, toDay: Number(e.target.value) }))}/>
             </label>
           </div>
           <label className="block">
             <div className="text-sm text-slate-400">Admin Emails (comma separated)</div>
-            <Input value={w.adminEmails} onChange={(e) => setW((v) => (Object.assign(Object.assign({}, v), { adminEmails: e.target.value })))}/>
+            <Input value={w.adminEmails} onChange={(e) => setW((v) => ({ ...v, adminEmails: e.target.value }))}/>
           </label>
           <button className="rounded-md bg-yellow-400 text-black px-4 py-2 font-medium">Save</button>
           {okW && <span className="ml-3 text-sm text-slate-300">{okW}</span>}

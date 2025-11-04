@@ -6,7 +6,6 @@ const prisma_1 = require("@/lib/prisma");
 const oidc_1 = require("@/lib/oidc");
 const oidc_2 = require("@/lib/oidc");
 async function POST(req, context) {
-    var _a, _b, _c;
     const params = await context.params;
     const id = params.id;
     // Pull only the credentials field from DB (adjust field name if needed)
@@ -19,8 +18,8 @@ async function POST(req, context) {
     }
     // Parse/normalize the stored JSON to our expected shape
     // Prefer credentialsEncrypted (JSON) stored on the shop; fall back to apiConfig if present
-    const rawCreds = (_b = (_a = shop.credentialsEncrypted) !== null && _a !== void 0 ? _a : shop.apiConfig) !== null && _b !== void 0 ? _b : {};
-    const parsed = oidc_1.ShopAuthSchema.partial().parse(rawCreds !== null && rawCreds !== void 0 ? rawCreds : {});
+    const rawCreds = shop.credentialsEncrypted ?? shop.apiConfig ?? {};
+    const parsed = oidc_1.ShopAuthSchema.partial().parse(rawCreds ?? {});
     // Ensure platform is visible to the token helper (default JUMIA)
     if (!parsed.platform)
         parsed.platform = shop.platform || "JUMIA";
@@ -33,11 +32,11 @@ async function POST(req, context) {
             shopId: shop.id,
             shopName: shop.name,
             platform: parsed.platform,
-            source: (_c = meta === null || meta === void 0 ? void 0 : meta.source) !== null && _c !== void 0 ? _c : "ENV",
-            tokenUrl: meta === null || meta === void 0 ? void 0 : meta.tokenUrl,
+            source: meta?.source ?? "ENV",
+            tokenUrl: meta?.tokenUrl,
         });
     }
     catch (e) {
-        return server_1.NextResponse.json({ ok: false, shopId: shop.id, error: (e === null || e === void 0 ? void 0 : e.message) || "Token exchange failed" }, { status: 500 });
+        return server_1.NextResponse.json({ ok: false, shopId: shop.id, error: e?.message || "Token exchange failed" }, { status: 500 });
     }
 }

@@ -25,7 +25,6 @@ function isAllowed(path) {
     return ALLOW.has(path);
 }
 async function POST(req) {
-    var _a;
     try {
         const body = await req.json();
         const { shopId, method = "GET", path, query, payload, } = body;
@@ -33,7 +32,7 @@ async function POST(req) {
             return server_1.NextResponse.json({ error: "Path not allowed" }, { status: 400 });
         }
         const shop = await prisma_1.prisma.shop.findUnique({ where: { id: shopId }, include: { apiCredentials: true } });
-        if (!shop || !((_a = shop.apiCredentials) === null || _a === void 0 ? void 0 : _a.length)) {
+        if (!shop || !shop.apiCredentials?.length) {
             return server_1.NextResponse.json({ error: "Shop or credentials not found" }, { status: 404 });
         }
         const cred = shop.apiCredentials[0];

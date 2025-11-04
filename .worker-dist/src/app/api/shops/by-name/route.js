@@ -17,7 +17,10 @@ async function GET(req) {
     const platform = (platformParam === "JUMIA" || platformParam === "KILIMALL")
         ? platformParam
         : undefined;
-    const where = Object.assign({ name: { equals: name.trim(), mode: "insensitive" } }, (platform ? { platform } : {}));
+    const where = {
+        name: { equals: name.trim(), mode: "insensitive" },
+        ...(platform ? { platform } : {}),
+    };
     try {
         const shop = await prisma_1.prisma.shop.findFirst({
             where,
@@ -31,7 +34,7 @@ async function GET(req) {
     catch (e) {
         const msg = typeof e === "object" && e !== null && "message" in e
             ? String(e.message)
-            : String(e !== null && e !== void 0 ? e : "Server error");
+            : String(e ?? "Server error");
         return server_1.NextResponse.json({ error: msg }, { status: 500 });
     }
 }

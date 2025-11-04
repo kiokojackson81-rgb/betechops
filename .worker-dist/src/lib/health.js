@@ -25,7 +25,7 @@ async function computeHealth() {
             dbHost = u.hostname;
         }
     }
-    catch (_a) {
+    catch {
         // ignore parse errors
     }
     return {
@@ -40,7 +40,6 @@ async function computeHealth() {
     };
 }
 async function computeShopsConnectivity() {
-    var _a;
     const shops = await prisma_1.prisma.shop.findMany({ select: { id: true, name: true, platform: true, isActive: true }, orderBy: { name: 'asc' } });
     const today = new Date();
     const yyyy = today.toISOString().slice(0, 10);
@@ -51,17 +50,17 @@ async function computeShopsConnectivity() {
         if (s.platform === 'JUMIA') {
             try {
                 const j = await (0, jumia_1.getOrders)({ size: 1, createdAfter: yyyy, createdBefore: yyyy, shopId: s.id });
-                const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders)
+                const arr = Array.isArray(j?.orders)
                     ? j.orders
-                    : Array.isArray(j === null || j === void 0 ? void 0 : j.items)
+                    : Array.isArray(j?.items)
                         ? j.items
-                        : Array.isArray(j === null || j === void 0 ? void 0 : j.data)
+                        : Array.isArray(j?.data)
                             ? j.data
                             : [];
                 ping = { ok: true, status: 200, count: arr.length };
             }
             catch (e) {
-                const status = (_a = e === null || e === void 0 ? void 0 : e.status) !== null && _a !== void 0 ? _a : 0;
+                const status = e?.status ?? 0;
                 const msg = (e instanceof Error ? e.message : String(e)) || 'error';
                 ping = { ok: false, status, error: msg };
             }
@@ -79,10 +78,10 @@ async function computeShopsConnectivity() {
             prisma_1.prisma.settlementRow.findFirst({ where: { shopId: s.id }, select: { createdAt: true }, orderBy: { createdAt: 'desc' } }).catch(() => null),
             prisma_1.prisma.returnCase.findFirst({ where: { shopId: s.id }, select: { updatedAt: true }, orderBy: { updatedAt: 'desc' } }).catch(() => null),
         ]);
-        const lastOrder = (o === null || o === void 0 ? void 0 : o.createdAt) ? o.createdAt.toISOString() : null;
-        const lastFulfill = (f === null || f === void 0 ? void 0 : f.createdAt) ? f.createdAt.toISOString() : null;
-        const lastSettlement = (stl === null || stl === void 0 ? void 0 : stl.createdAt) ? stl.createdAt.toISOString() : null;
-        const lastReturn = (ret === null || ret === void 0 ? void 0 : ret.updatedAt) ? ret.updatedAt.toISOString() : null;
+        const lastOrder = o?.createdAt ? o.createdAt.toISOString() : null;
+        const lastFulfill = f?.createdAt ? f.createdAt.toISOString() : null;
+        const lastSettlement = stl?.createdAt ? stl.createdAt.toISOString() : null;
+        const lastReturn = ret?.updatedAt ? ret.updatedAt.toISOString() : null;
         const maxTs = [lastOrder, lastFulfill, lastSettlement, lastReturn]
             .filter(Boolean)
             .map((t) => new Date(t).getTime());

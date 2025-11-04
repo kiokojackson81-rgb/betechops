@@ -5,7 +5,6 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const shops_1 = require("@/lib/rbac/shops");
 async function POST(request, { params }) {
-    var _a;
     // find return case
     const { id } = await params;
     const rc = await prisma_1.prisma.returnCase.findUnique({ where: { id } });
@@ -21,7 +20,7 @@ async function POST(request, { params }) {
     // store evidence rows if provided
     if (Array.isArray(evidence) && evidence.length) {
         const now = new Date();
-        const actorId = (_a = access.actorId) !== null && _a !== void 0 ? _a : '';
+        const actorId = access.actorId ?? '';
         const rows = evidence.map((url) => ({ returnCaseId: id, type: 'photo', uri: url, sha256: '', takenBy: actorId, takenAt: now, geo: undefined }));
         await prisma_1.prisma.returnEvidence.createMany({ data: rows });
     }

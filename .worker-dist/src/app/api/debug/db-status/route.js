@@ -4,28 +4,26 @@ exports.GET = GET;
 const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 async function tableExists(name) {
-    var _a;
     try {
         const r = await prisma_1.prisma.$queryRawUnsafe(`select exists (
          select 1 from information_schema.tables
          where table_schema = 'public' and table_name = $1
        ) as exists`, name);
-        return Boolean((_a = r === null || r === void 0 ? void 0 : r[0]) === null || _a === void 0 ? void 0 : _a.exists);
+        return Boolean(r?.[0]?.exists);
     }
-    catch (_b) {
+    catch {
         return false;
     }
 }
 async function columnExists(table, column) {
-    var _a;
     try {
         const r = await prisma_1.prisma.$queryRawUnsafe(`select exists (
          select 1 from information_schema.columns
          where table_schema = 'public' and table_name = $1 and column_name = $2
        ) as exists`, table, column);
-        return Boolean((_a = r === null || r === void 0 ? void 0 : r[0]) === null || _a === void 0 ? void 0 : _a.exists);
+        return Boolean(r?.[0]?.exists);
     }
-    catch (_b) {
+    catch {
         return false;
     }
 }

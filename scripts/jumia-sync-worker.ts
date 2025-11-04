@@ -24,6 +24,10 @@ const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5_000);
 // Allow tuning for environments that prefer a slower incremental cadence,
 // but default to matching the tick interval so vendor/order state mirrors quickly.
 const INCREMENTAL_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_EVERY_MS ?? INTERVAL_MS);
+// Prefer a small lookback for fast frequent passes, and run an occasional deep backfill
+const INCREMENTAL_LOOKBACK_DAYS = Number(process.env.JUMIA_WORKER_INCREMENTAL_LOOKBACK_DAYS ?? 3);
+const INCREMENTAL_DEEP_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_DEEP_EVERY_MS ?? 15 * 60_000); // 15 minutes
+// Deep lookback falls back to JUMIA_SYNC_LOOKBACK_DAYS (defaults inside job to 120) when unset
 // Optional: run the heavy pending sweep less often than the tick to reduce vendor load
 const PENDING_EVERY_MS = Number(process.env.JUMIA_WORKER_PENDING_EVERY_MS ?? INTERVAL_MS);
 // Optional: run returns sync periodically (default: 10 minutes)
@@ -33,6 +37,7 @@ const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ??
 
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;
+let lastIncrementalDeepAt = 0;
 let lastPendingAt = 0;
 let lastReturnsAt = 0;
 let lastRetentionAt = 0;
@@ -70,12 +75,15 @@ async function tick() {
 
   if (now - lastIncrementalAt >= INCREMENTAL_EVERY_MS) {
     try {
-      const summary = (await syncOrdersIncremental()) as Record<string, { processed: number; upserted: number; cursor?: string }>;
+      const doDeep = (now - lastIncrementalDeepAt) >= INCREMENTAL_DEEP_EVERY_MS;
+      const lookback = doDeep ? undefined : INCREMENTAL_LOOKBACK_DAYS;
+      const summary = (await syncOrdersIncremental(lookback ? { lookbackDays: lookback } : undefined)) as Record<string, { processed: number; upserted: number; cursor?: string }>;
       const shopSummaries = Object.values(summary || {});
       const incProcessed = shopSummaries.reduce((acc, s) => acc + (s?.processed || 0), 0);
       const incUpserted = shopSummaries.reduce((acc, s) => acc + (s?.upserted || 0), 0);
-      logParts.push(`incremental processed=${incProcessed} upserted=${incUpserted} shops=${shopSummaries.length}`);
+      logParts.push(`incremental ${doDeep ? 'deep' : 'fast'} processed=${incProcessed} upserted=${incUpserted} shops=${shopSummaries.length}`);
       lastIncrementalAt = now;
+      if (doDeep) lastIncrementalDeepAt = now;
       anyWork = true;
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -120,7 +128,7 @@ async function tick() {
 
 (async () => {
   // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}, returnsEvery(ms)= ${RETURNS_EVERY_MS}, retentionEvery(ms)= ${RETENTION_EVERY_MS}`);
+  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, incrementalLookback(days)= ${INCREMENTAL_LOOKBACK_DAYS}, deepEvery(ms)= ${INCREMENTAL_DEEP_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}, returnsEvery(ms)= ${RETURNS_EVERY_MS}, retentionEvery(ms)= ${RETENTION_EVERY_MS}`);
   // initial tick immediately
   await tick();
   while (true) {

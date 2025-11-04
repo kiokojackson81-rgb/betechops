@@ -5,19 +5,18 @@ exports.default = AdminStatusBanner;
 const lucide_react_1 = require("lucide-react");
 const headers_1 = require("next/headers");
 async function AdminStatusBanner() {
-    var _a, _b, _c;
     let health = null;
     // Construct absolute origin from headers to satisfy Node fetch
     const h = await (0, headers_1.headers)();
-    const proto = (_a = h.get("x-forwarded-proto")) !== null && _a !== void 0 ? _a : "https";
-    const host = (_c = (_b = h.get("x-forwarded-host")) !== null && _b !== void 0 ? _b : h.get("host")) !== null && _c !== void 0 ? _c : "";
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
     const origin = host ? `${proto}://${host}` : "";
     try {
         const r = await fetch(`${origin}/api/health`, { cache: "no-store" });
         if (r.ok)
             health = (await r.json());
     }
-    catch (_d) {
+    catch {
         // ignore
     }
     if (!health) {

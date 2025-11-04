@@ -8,10 +8,10 @@ const DEFAULT_POLICY = {
 async function getEvidencePolicy() {
     try {
         const row = await prisma_1.prisma.config.findUnique({ where: { key: "returns_evidence_policy" } });
-        if (row === null || row === void 0 ? void 0 : row.json)
+        if (row?.json)
             return row.json;
     }
-    catch (_a) {
+    catch {
         // ignore
     }
     return DEFAULT_POLICY;

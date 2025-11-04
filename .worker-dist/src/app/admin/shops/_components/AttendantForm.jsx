@@ -54,13 +54,13 @@ function AttendantForm({ shops }) {
             const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name }) });
             const j = await res.json();
             if (!res.ok)
-                throw new Error((j === null || j === void 0 ? void 0 : j.error) || 'failed');
+                throw new Error(j?.error || 'failed');
             const user = j.user;
             if (shopId) {
                 const r2 = await fetch(`/api/shops/${shopId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, roleAtShop }) });
                 const j2 = await r2.json();
                 if (!r2.ok)
-                    throw new Error((j2 === null || j2 === void 0 ? void 0 : j2.error) || 'assign failed');
+                    throw new Error(j2?.error || 'assign failed');
             }
             // Notify the user and let a parent update the UI in-place if available.
             setEmail('');

@@ -5,13 +5,12 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const auth_1 = require("@/lib/auth");
 async function POST(req, { params }) {
-    var _a, _b;
     try {
         const { id } = await params;
         // Body: { productId: string, lastBuyingPrice: number }
         const body = await req.json().catch(() => ({}));
-        const productId = String((body === null || body === void 0 ? void 0 : body.productId) || "");
-        const lastBuyingPrice = Number(body === null || body === void 0 ? void 0 : body.lastBuyingPrice);
+        const productId = String(body?.productId || "");
+        const lastBuyingPrice = Number(body?.lastBuyingPrice);
         if (!productId || !Number.isFinite(lastBuyingPrice) || lastBuyingPrice <= 0) {
             return server_1.NextResponse.json({ error: "Invalid price payload" }, { status: 400 });
         }
@@ -31,7 +30,7 @@ async function POST(req, { params }) {
             data: { lastBuyingPrice: lastBuyingPrice },
         });
         // TODO: Add audit logging when AuditLog table is migrated
-        console.log(`Price updated for product ${productId}: ${lastBuyingPrice} by ${(_a = (0, auth_1.getSession)()) === null || _a === void 0 ? void 0 : _a.role}:${(_b = (0, auth_1.getSession)()) === null || _b === void 0 ? void 0 : _b.id}`);
+        console.log(`Price updated for product ${productId}: ${lastBuyingPrice} by ${(0, auth_1.getSession)()?.role}:${(0, auth_1.getSession)()?.id}`);
         return server_1.NextResponse.json({ ok: true, productId: updated.id, lastBuyingPrice });
     }
     catch (e) {

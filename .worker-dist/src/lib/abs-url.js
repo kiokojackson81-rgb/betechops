@@ -9,10 +9,9 @@ const headers_1 = require("next/headers");
  * Falls back to https + host, works on Vercel behind proxies.
  */
 async function absUrl(path) {
-    var _a, _b;
     const h = await (0, headers_1.headers)();
-    const proto = (_a = h.get("x-forwarded-proto")) !== null && _a !== void 0 ? _a : "https";
-    const host = (_b = h.get("x-forwarded-host")) !== null && _b !== void 0 ? _b : h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const host = h.get("x-forwarded-host") ?? h.get("host");
     if (!host)
         throw new Error("Cannot determine host for server-side fetch");
     return `${proto}://${host}${path.startsWith("/") ? path : `/${path}`}`;

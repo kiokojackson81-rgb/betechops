@@ -19,16 +19,16 @@ async function readKpisCache() {
         try {
             if (process.env.NODE_ENV !== 'test') {
                 const row = await prisma_1.prisma.config.findUnique({ where: { key: KEY } });
-                if (row === null || row === void 0 ? void 0 : row.json) {
+                if (row?.json) {
                     const parsed = row.json;
-                    if ((parsed === null || parsed === void 0 ? void 0 : parsed.updatedAt) && Date.now() - Number(parsed.updatedAt) < TTL_SECONDS * 1000) {
+                    if (parsed?.updatedAt && Date.now() - Number(parsed.updatedAt) < TTL_SECONDS * 1000) {
                         mem = parsed;
                         return parsed;
                     }
                 }
             }
         }
-        catch (_a) { }
+        catch { }
         // Fallback to Redis (if available)
         const r = await (0, redis_1.getRedis)();
         if (r) {
@@ -41,7 +41,7 @@ async function readKpisCache() {
         }
         return mem;
     }
-    catch (_b) {
+    catch {
         return mem;
     }
 }
@@ -57,7 +57,7 @@ async function writeKpisCache(value) {
             });
         }
     }
-    catch (_a) { }
+    catch { }
     try {
         const r = await (0, redis_1.getRedis)();
         if (!r)
@@ -66,7 +66,7 @@ async function writeKpisCache(value) {
         // we use the most permissive unknown[] typing in our helper, so call as variadic
         await r.set(KEY, JSON.stringify(value), 'EX', TTL_SECONDS);
     }
-    catch (_b) {
+    catch {
         // ignore failures; memory fallback remains
     }
 }

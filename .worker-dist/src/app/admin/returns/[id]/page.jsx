@@ -27,7 +27,6 @@ function statusLabel(status, pickedAt) {
     return status.replace(/_/g, " ");
 }
 async function ReturnDetailPage({ params }) {
-    var _a, _b, _c, _d, _e, _f;
     const { id } = await params;
     const ret = await prisma_1.prisma.returnCase.findUnique({
         where: { id },
@@ -59,8 +58,8 @@ async function ReturnDetailPage({ params }) {
     }
     const order = ret.order;
     const qty = order.items.reduce((n, it) => n + it.quantity, 0);
-    const total = order.items.reduce((sum, it) => { var _a, _b, _c; return sum + (((_c = (_a = it.sellingPrice) !== null && _a !== void 0 ? _a : (_b = it.product) === null || _b === void 0 ? void 0 : _b.sellingPrice) !== null && _c !== void 0 ? _c : 0) * it.quantity); }, 0);
-    const cost = order.items.reduce((sum, it) => { var _a, _b; return sum + (((_b = (_a = it.product) === null || _a === void 0 ? void 0 : _a.lastBuyingPrice) !== null && _b !== void 0 ? _b : 0) * it.quantity); }, 0);
+    const total = order.items.reduce((sum, it) => sum + ((it.sellingPrice ?? it.product?.sellingPrice ?? 0) * it.quantity), 0);
+    const cost = order.items.reduce((sum, it) => sum + ((it.product?.lastBuyingPrice ?? 0) * it.quantity), 0);
     const gross = total - cost;
     const picked = ret.status === "picked_up" || Boolean(ret.pickedAt);
     return (<div className="mx-auto max-w-5xl p-6">
@@ -84,13 +83,13 @@ async function ReturnDetailPage({ params }) {
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Shop</div>
-          <div className="mt-1 font-medium">{((_a = ret.shop) === null || _a === void 0 ? void 0 : _a.name) || ((_b = order.shop) === null || _b === void 0 ? void 0 : _b.name) || "—"}</div>
-          <div className="text-slate-400 text-sm">{((_c = ret.shop) === null || _c === void 0 ? void 0 : _c.location) || ((_d = order.shop) === null || _d === void 0 ? void 0 : _d.location) || "—"}</div>
+          <div className="mt-1 font-medium">{ret.shop?.name || order.shop?.name || "—"}</div>
+          <div className="text-slate-400 text-sm">{ret.shop?.location || order.shop?.location || "—"}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Attendant</div>
-          <div className="mt-1 font-medium">{((_e = order.attendant) === null || _e === void 0 ? void 0 : _e.name) || "—"}</div>
-          <div className="text-slate-400 text-sm">{((_f = order.attendant) === null || _f === void 0 ? void 0 : _f.email) || "—"}</div>
+          <div className="mt-1 font-medium">{order.attendant?.name || "—"}</div>
+          <div className="text-slate-400 text-sm">{order.attendant?.email || "—"}</div>
         </div>
       </div>
 
@@ -107,12 +106,11 @@ async function ReturnDetailPage({ params }) {
           </thead>
           <tbody className="divide-y divide-white/10">
             {order.items.map((it) => {
-            var _a, _b, _c, _d, _e;
-            const unit = (_c = (_a = it.sellingPrice) !== null && _a !== void 0 ? _a : (_b = it.product) === null || _b === void 0 ? void 0 : _b.sellingPrice) !== null && _c !== void 0 ? _c : 0;
+            const unit = it.sellingPrice ?? it.product?.sellingPrice ?? 0;
             const sub = unit * it.quantity;
             return (<tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
-                  <td>{((_d = it.product) === null || _d === void 0 ? void 0 : _d.name) || "—"}</td>
-                  <td className="font-mono">{((_e = it.product) === null || _e === void 0 ? void 0 : _e.sku) || "—"}</td>
+                  <td>{it.product?.name || "—"}</td>
+                  <td className="font-mono">{it.product?.sku || "—"}</td>
                   <td>{it.quantity}</td>
                   <td>{fmtKsh(unit)}</td>
                   <td>{fmtKsh(sub)}</td>

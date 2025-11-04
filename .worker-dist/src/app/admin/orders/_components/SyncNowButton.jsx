@@ -18,9 +18,9 @@ function SyncNowButton({ className }) {
             let syncedShops = 0;
             try {
                 const payload = (await pendingRes.json());
-                syncedShops = Array.isArray(payload === null || payload === void 0 ? void 0 : payload.results) ? payload.results.length : 0;
+                syncedShops = Array.isArray(payload?.results) ? payload.results.length : 0;
             }
-            catch (_a) {
+            catch {
                 // Ignore parse errors; message below covers success.
             }
             setMsg(syncedShops > 0
@@ -39,7 +39,7 @@ function SyncNowButton({ className }) {
             try {
                 await fetch("/api/metrics/kpis/refresh", { method: "POST" });
             }
-            catch (_b) { }
+            catch { }
             setMsg("Done. Reloading.");
             setTimeout(() => {
                 window.location.reload();

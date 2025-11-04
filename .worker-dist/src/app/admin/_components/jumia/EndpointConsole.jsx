@@ -11,16 +11,15 @@ const DEFAULT_ENDPOINTS = [
     { label: "Create Feed", path: "/feeds/products/create" },
 ];
 function EndpointConsole({ shops: initialShops, endpoints }) {
-    var _a;
     const [shopId, setShopId] = (0, react_1.useState)("");
     // Default to Catalog Products endpoint
-    const [endpoint, setEndpoint] = (0, react_1.useState)(((_a = endpoints === null || endpoints === void 0 ? void 0 : endpoints[0]) === null || _a === void 0 ? void 0 : _a.path) || "/catalog/products");
+    const [endpoint, setEndpoint] = (0, react_1.useState)(endpoints?.[0]?.path || "/catalog/products");
     const [method, setMethod] = (0, react_1.useState)("GET");
     const [queryStr, setQueryStr] = (0, react_1.useState)("size=5");
     const [payload, setPayload] = (0, react_1.useState)("{}");
     const [busy, setBusy] = (0, react_1.useState)(false);
     const [result, setResult] = (0, react_1.useState)(null);
-    const [shops, setShops] = (0, react_1.useState)(initialShops !== null && initialShops !== void 0 ? initialShops : []);
+    const [shops, setShops] = (0, react_1.useState)(initialShops ?? []);
     const [totalHint, setTotalHint] = (0, react_1.useState)(null);
     (0, react_1.useEffect)(() => {
         if (!initialShops) {
@@ -34,7 +33,7 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
                     if ((j || []).length)
                         setShopId(j[0].id);
                 }
-                catch (_a) {
+                catch {
                     // ignore
                 }
             })();
@@ -50,10 +49,9 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
             .map(s => s.trim())
             .filter(Boolean)
             .forEach(line => {
-            var _a, _b;
             const [k, ...rest] = line.split("=");
             if (k)
-                out[k.trim()] = (_b = (_a = rest.join("=")) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : "";
+                out[k.trim()] = rest.join("=")?.trim() ?? "";
         });
         return out;
     }, [queryStr]);
@@ -76,7 +74,7 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
                 try {
                     json = JSON.parse(payload);
                 }
-                catch (_a) {
+                catch {
                     throw new Error("Invalid JSON payload");
                 }
             }
@@ -88,13 +86,13 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
             const j = await res.json();
             // try to hint total from the response
             try {
-                const data = j === null || j === void 0 ? void 0 : j.data;
+                const data = j?.data;
                 const t = (data && typeof data === 'object' && (data.total || data.totalCount || data.totalElements))
-                    || (Array.isArray(data === null || data === void 0 ? void 0 : data.products) ? data.products.length : null);
+                    || (Array.isArray(data?.products) ? data.products.length : null);
                 if (typeof t === 'number')
                     setTotalHint(Number(t));
             }
-            catch (_b) { }
+            catch { }
             setResult(j);
         }
         catch (e) {
@@ -110,9 +108,9 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
         setResult(null);
     }
     const badge = (source) => source === "SHOP" ? (<span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-emerald-500/20 text-emerald-300">Using SHOP creds</span>) : source === "ENV" ? (<span className="ml-2 text-xs rounded-full px-2 py-0.5 bg-yellow-500/20 text-yellow-300">Using ENV fallback</span>) : null;
-    const endpointList = endpoints !== null && endpoints !== void 0 ? endpoints : DEFAULT_ENDPOINTS;
-    const meta = result === null || result === void 0 ? void 0 : result._meta;
-    const httpStatus = result === null || result === void 0 ? void 0 : result.status;
+    const endpointList = endpoints ?? DEFAULT_ENDPOINTS;
+    const meta = result?._meta;
+    const httpStatus = result?.status;
     // When shop changes, default query to include shopId and size=5 and auto-run
     (0, react_1.useEffect)(() => {
         if (!shopId)
@@ -176,7 +174,7 @@ function EndpointConsole({ shops: initialShops, endpoints }) {
               {totalHint !== null && <div className="opacity-75">Total Count: {totalHint}</div>}
             </div>)}
           <pre className="whitespace-pre-wrap break-words">
-            {JSON.stringify(result !== null && result !== void 0 ? result : { "No result yet": true }, null, 2)}
+            {JSON.stringify(result ?? { "No result yet": true }, null, 2)}
           </pre>
         </div>
       </div>

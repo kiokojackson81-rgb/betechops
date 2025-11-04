@@ -17,9 +17,9 @@ async function sanityShopByName(name) {
         if (!shop.credentialsEncrypted)
             return { name, platform: shop.platform, error: "missing credentials" };
         const creds = (0, secure_json_1.decryptJson)(shop.credentialsEncrypted);
-        const appId = (creds === null || creds === void 0 ? void 0 : creds.storeId) || (creds === null || creds === void 0 ? void 0 : creds.appId);
-        const appSecret = (creds === null || creds === void 0 ? void 0 : creds.appSecret) || (creds === null || creds === void 0 ? void 0 : creds.app_secret);
-        const apiBase = (creds === null || creds === void 0 ? void 0 : creds.apiBase) || "https://openapi.kilimall.co.ke";
+        const appId = creds?.storeId || creds?.appId;
+        const appSecret = creds?.appSecret || creds?.app_secret;
+        const apiBase = creds?.apiBase || "https://openapi.kilimall.co.ke";
         const items = await (0, kilimall_1.fetchOrders)({ appId, appSecret, apiBase }, { since: undefined }).catch((e) => { throw new Error(`Kilimall fetch failed for ${name}: ${String(e instanceof Error ? e.message : e)}`); });
         return { name, platform: shop.platform, count: items.length, sample: items[0] ? { id: items[0].id, status: items[0].status } : null };
     }

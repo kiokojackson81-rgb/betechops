@@ -25,7 +25,7 @@ function ShopSnapshot({ shopId }) {
                 if (!ignore)
                     setData(j);
             }
-            catch (_a) {
+            catch {
                 if (!ignore)
                     setData({ revenueToday: 0, ordersToday: 0, avgOrder: 0, lowStockCount: 0, openReturns: 0 });
             }

@@ -16,7 +16,6 @@ const AutoRefresh_1 = __importDefault(require("@/app/_components/AutoRefresh"));
 const KpisRefresher_1 = __importDefault(require("@/app/_components/KpisRefresher"));
 exports.dynamic = "force-dynamic";
 async function getStats() {
-    var _a;
     try {
         const [dbProducts, shops, attendants, returnsDb, revenueAgg] = await Promise.all([
             prisma_1.prisma.product.count(),
@@ -32,15 +31,15 @@ async function getStats() {
             if (resp.ok)
                 kpis = await resp.json();
         }
-        catch (_b) {
+        catch {
             kpis = null;
         }
-        let productsAll = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.productsAll) === "number" ? Number(kpis.productsAll) : 0;
-        const approxProducts = Boolean(kpis === null || kpis === void 0 ? void 0 : kpis.approx);
+        let productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
+        const approxProducts = Boolean(kpis?.approx);
         // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
         // This avoids flicker and double counting.
-        let pendingAll = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.pendingAll) === "number" ? Number(kpis.pendingAll) : 0;
-        let approxPending = Boolean(kpis === null || kpis === void 0 ? void 0 : kpis.approx);
+        let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
+        let approxPending = Boolean(kpis?.approx);
         return {
             productsAll,
             productsDb: dbProducts,
@@ -48,12 +47,12 @@ async function getStats() {
             attendants,
             pendingAll,
             returnsDb,
-            revenue: (_a = revenueAgg._sum.paidAmount) !== null && _a !== void 0 ? _a : 0,
+            revenue: revenueAgg._sum.paidAmount ?? 0,
             approxProducts,
             approxPending,
         };
     }
-    catch (_c) {
+    catch {
         return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true };
     }
 }

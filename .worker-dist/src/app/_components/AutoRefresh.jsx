@@ -12,7 +12,7 @@ function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefreshEnabled", de
             const v = localStorage.getItem(storageKey);
             return v === null ? defaultEnabled : v === "1";
         }
-        catch (_a) {
+        catch {
             return defaultEnabled;
         }
     });
@@ -23,7 +23,7 @@ function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefreshEnabled", de
                     const detail = { source: 'timer', ts: Date.now() };
                     window.dispatchEvent(new CustomEvent(eventName, { detail }));
                 }
-                catch (_a) { }
+                catch { }
             }, Math.max(5000, intervalMs));
         }
         return () => { if (timer.current)
@@ -33,7 +33,7 @@ function AutoRefresh({ intervalMs = 60000, storageKey = "autoRefreshEnabled", de
         try {
             localStorage.setItem(storageKey, enabled ? "1" : "0");
         }
-        catch (_a) { }
+        catch { }
     }, [enabled, storageKey]);
     return (<div className="text-xs text-slate-400 flex items-center gap-2">
       <span>Auto-refresh</span>

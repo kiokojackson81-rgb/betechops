@@ -30,7 +30,7 @@ function QueueList({ shopId }) {
             }
             catch (e) {
                 if (!ignore)
-                    setErr((e === null || e === void 0 ? void 0 : e.message) || "Failed to load queue");
+                    setErr(e?.message || "Failed to load queue");
             }
             finally {
                 if (!ignore)
@@ -70,14 +70,14 @@ function QueueList({ shopId }) {
             if (!r.ok)
                 throw new Error("pack error");
         }
-        catch (_a) {
+        catch {
             setRows(prev);
             (0, toast_1.default)("Failed to mark packed", 'error');
         }
     };
     const confirmPayment = async (id) => {
         const prev = rows;
-        setRows((s) => s.map((r) => (r.id === id ? Object.assign(Object.assign({}, r), { paymentStatus: "PAID" }) : r)));
+        setRows((s) => s.map((r) => (r.id === id ? { ...r, paymentStatus: "PAID" } : r)));
         try {
             const r = await fetch(`/api/orders/${id}/payment`, {
                 method: "POST",
@@ -87,7 +87,7 @@ function QueueList({ shopId }) {
             if (!r.ok)
                 throw new Error("payment error");
         }
-        catch (_a) {
+        catch {
             setRows(prev);
             (0, toast_1.default)("Failed to confirm payment", 'error');
         }

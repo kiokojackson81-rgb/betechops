@@ -7,11 +7,10 @@ const jumia_1 = require("@/lib/jumia");
 exports.dynamic = 'force-dynamic';
 exports.runtime = 'nodejs';
 function parseHead(order) {
-    var _a, _b, _c, _d, _e, _f;
     if (!order || typeof order !== 'object')
         return null;
-    const id = String((_c = (_b = (_a = order.id) !== null && _a !== void 0 ? _a : order.number) !== null && _b !== void 0 ? _b : order.orderNumber) !== null && _c !== void 0 ? _c : '');
-    const v = (_f = (_e = (_d = order.createdAt) !== null && _d !== void 0 ? _d : order.created_date) !== null && _e !== void 0 ? _e : order.created) !== null && _f !== void 0 ? _f : order.dateCreated;
+    const id = String(order.id ?? order.number ?? order.orderNumber ?? '');
+    const v = order.createdAt ?? order.created_date ?? order.created ?? order.dateCreated;
     const ts = v ? new Date(v).getTime() : 0;
     if (!id || !ts || isNaN(ts))
         return null;
@@ -43,20 +42,20 @@ async function fetchNewestForShop(shopId, params) {
     const { raw: rawPath, sanitized } = buildPath();
     try {
         const j = await (0, jumia_1.jumiaFetch)(shopAuth ? sanitized : rawPath, shopAuth ? { method: 'GET', shopAuth } : { method: 'GET' });
-        const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders) ? j.orders : Array.isArray(j === null || j === void 0 ? void 0 : j.items) ? j.items : Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : [];
+        const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
         if (!arr.length)
             return null;
         return parseHead(arr[0]);
     }
     catch (e) {
         // Compatibility fallback: some tenants reject redundant shopId in query; retry without shopId but keep token
-        const msg = (e === null || e === void 0 ? void 0 : e.message) ? String(e.message) : '';
-        const code = typeof (e === null || e === void 0 ? void 0 : e.status) === 'number' ? e.status : 0;
+        const msg = e?.message ? String(e.message) : '';
+        const code = typeof e?.status === 'number' ? e.status : 0;
         if (code === 400 || code === 422 || /\b(400|422)\b/.test(msg)) {
             const path2 = `/orders${q}`;
             const fallbackPath = shopAuth ? sanitized : path2;
             const j2 = await (0, jumia_1.jumiaFetch)(fallbackPath, shopAuth ? { method: 'GET', shopAuth } : { method: 'GET' });
-            const arr2 = Array.isArray(j2 === null || j2 === void 0 ? void 0 : j2.orders) ? j2.orders : Array.isArray(j2 === null || j2 === void 0 ? void 0 : j2.items) ? j2.items : Array.isArray(j2 === null || j2 === void 0 ? void 0 : j2.data) ? j2.data : [];
+            const arr2 = Array.isArray(j2?.orders) ? j2.orders : Array.isArray(j2?.items) ? j2.items : Array.isArray(j2?.data) ? j2.data : [];
             if (!arr2.length)
                 return null;
             return parseHead(arr2[0]);
@@ -83,7 +82,7 @@ async function GET(req) {
             const rows = await prisma_1.prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true } });
             shopIds = rows.map((r) => r.id);
         }
-        catch (_a) {
+        catch {
             shopIds = [];
         }
         if (!shopIds.length) {
@@ -146,7 +145,7 @@ async function GET(req) {
                     try {
                         console.error('orders/events tick error', e);
                     }
-                    catch (_a) { }
+                    catch { }
                 }
             };
             // Kick off periodic tick
@@ -160,7 +159,7 @@ async function GET(req) {
                 try {
                     controller.close();
                 }
-                catch (_a) { }
+                catch { }
             };
             req.signal.addEventListener('abort', cleanup, { once: true });
         },

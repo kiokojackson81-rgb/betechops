@@ -26,7 +26,6 @@ function getThisWeekRangeNairobi() {
     return { startUTC, endUTC };
 }
 async function GET() {
-    var _a;
     try {
         const scope = await (0, scope_1.resolveShopScope)();
         const { startUTC, endUTC } = getThisWeekRangeNairobi();
@@ -45,19 +44,18 @@ async function GET() {
         ]);
         // Revenue this week: sum of paidAmount for orders created this week
         const revenueAgg = await prisma_1.prisma.order.aggregate({
-            where: Object.assign({ createdAt: { gte: startUTC, lt: endUTC } }, (orderWhere || {})),
+            where: { createdAt: { gte: startUTC, lt: endUTC }, ...(orderWhere || {}) },
             _sum: { paidAmount: true },
         });
-        const revenueThisWeek = (_a = revenueAgg._sum.paidAmount) !== null && _a !== void 0 ? _a : 0;
+        const revenueThisWeek = revenueAgg._sum.paidAmount ?? 0;
         // Buying this week:
         // Sum(Product.actualPrice * OrderItem.quantity) for items whose parent order was created this week
         const orderItems = await prisma_1.prisma.orderItem.findMany({
-            where: { order: Object.assign({ createdAt: { gte: startUTC, lt: endUTC } }, (orderWhere || {})) },
+            where: { order: { createdAt: { gte: startUTC, lt: endUTC }, ...(orderWhere || {}) } },
             select: { quantity: true, product: { select: { lastBuyingPrice: true } } },
         });
         const buyingThisWeek = orderItems.reduce((sum, it) => {
-            var _a, _b;
-            const cost = ((_b = (_a = it.product) === null || _a === void 0 ? void 0 : _a.lastBuyingPrice) !== null && _b !== void 0 ? _b : 0) * it.quantity;
+            const cost = (it.product?.lastBuyingPrice ?? 0) * it.quantity;
             return sum + cost;
         }, 0);
         // Profit (gross)

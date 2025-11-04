@@ -5,7 +5,7 @@ const server_1 = require("next/server");
 async function POST(req) {
     try {
         const body = await req.json();
-        const { code } = body !== null && body !== void 0 ? body : {};
+        const { code } = body ?? {};
         if (!code)
             return server_1.NextResponse.json({ action: 'INVALID', reason: 'no-code' }, { status: 400 });
         // Very small stub logic for demo purposes

@@ -28,7 +28,7 @@ async function POST(req) {
     try {
         if (all) {
             const { aggregate } = await (0, catalog_counters_1.recomputeAllCounters)();
-            const payload = Object.assign(Object.assign({}, (0, catalog_counters_1.rowToSummaryPayload)(aggregate)), { updatedAt: new Date().toISOString(), cron: isCron });
+            const payload = { ...(0, catalog_counters_1.rowToSummaryPayload)(aggregate), updatedAt: new Date().toISOString(), cron: isCron };
             return (0, api_1.noStoreJson)(payload);
         }
         if (!shopId)
@@ -36,11 +36,11 @@ async function POST(req) {
         if (dryRun) {
             // Run compute without writing by skipping store call
             const row = await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId).catch((e) => { throw e; });
-            const payload = Object.assign(Object.assign({}, (0, catalog_counters_1.rowToSummaryPayload)(row)), { updatedAt: new Date().toISOString(), dryRun: true });
+            const payload = { ...(0, catalog_counters_1.rowToSummaryPayload)(row), updatedAt: new Date().toISOString(), dryRun: true };
             return (0, api_1.noStoreJson)(payload);
         }
         const row = await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId);
-        const payload = Object.assign(Object.assign({}, (0, catalog_counters_1.rowToSummaryPayload)(row)), { updatedAt: new Date().toISOString() });
+        const payload = { ...(0, catalog_counters_1.rowToSummaryPayload)(row), updatedAt: new Date().toISOString() };
         return (0, api_1.noStoreJson)(payload);
     }
     catch (e) {
@@ -70,13 +70,13 @@ async function GET(req) {
     try {
         if (all) {
             const { aggregate } = await (0, catalog_counters_1.recomputeAllCounters)();
-            const payload = Object.assign(Object.assign({}, (0, catalog_counters_1.rowToSummaryPayload)(aggregate)), { updatedAt: new Date().toISOString(), cron: isCron });
+            const payload = { ...(0, catalog_counters_1.rowToSummaryPayload)(aggregate), updatedAt: new Date().toISOString(), cron: isCron };
             return (0, api_1.noStoreJson)(payload);
         }
         if (!shopId)
             return server_1.NextResponse.json({ error: "shopId required (or set all=true)" }, { status: 400 });
         const row = await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId);
-        const payload = Object.assign(Object.assign({}, (0, catalog_counters_1.rowToSummaryPayload)(row)), { updatedAt: new Date().toISOString() });
+        const payload = { ...(0, catalog_counters_1.rowToSummaryPayload)(row), updatedAt: new Date().toISOString() };
         return (0, api_1.noStoreJson)(payload);
     }
     catch (e) {

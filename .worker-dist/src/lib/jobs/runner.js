@@ -8,9 +8,8 @@ async function delay(ms) {
     return new Promise((res) => setTimeout(res, ms));
 }
 async function runShop(shopId, options) {
-    var _a, _b;
-    const retries = (_a = options.retries) !== null && _a !== void 0 ? _a : 2;
-    const baseDelay = (_b = options.retryDelayMs) !== null && _b !== void 0 ? _b : 500;
+    const retries = options.retries ?? 2;
+    const baseDelay = options.retryDelayMs ?? 500;
     let attempt = 0;
     while (true) {
         try {
@@ -30,8 +29,7 @@ async function runShop(shopId, options) {
     }
 }
 async function runForShops(shopIds, options = {}) {
-    var _a;
-    const concurrency = Math.max(1, (_a = options.concurrency) !== null && _a !== void 0 ? _a : 2);
+    const concurrency = Math.max(1, options.concurrency ?? 2);
     const results = [];
     const executing = [];
     let inFlight = 0;

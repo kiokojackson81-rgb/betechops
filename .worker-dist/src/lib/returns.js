@@ -4,7 +4,6 @@ exports.canTransition = canTransition;
 exports.meetsEvidencePolicy = meetsEvidencePolicy;
 exports.guardTransition = guardTransition;
 function canTransition(from, to) {
-    var _a, _b;
     const allowed = {
         requested: ["approved", "rejected"],
         approved: ["pickup_scheduled", "rejected"],
@@ -14,7 +13,7 @@ function canTransition(from, to) {
         resolved: [],
         rejected: [],
     };
-    return (_b = (_a = allowed[from]) === null || _a === void 0 ? void 0 : _a.includes(to)) !== null && _b !== void 0 ? _b : false;
+    return allowed[from]?.includes(to) ?? false;
 }
 function meetsEvidencePolicy(evidence, category, policy) {
     const req = policy[category] || {};

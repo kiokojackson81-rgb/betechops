@@ -40,14 +40,13 @@ const auth_1 = require("@/lib/auth");
 const redis_1 = require("@/lib/redis");
 const jumia = __importStar(require("@/lib/jumia"));
 async function POST(req) {
-    var _a;
     try {
         const body = await req.json();
-        const { orderId, shopId } = body !== null && body !== void 0 ? body : {};
+        const { orderId, shopId } = body ?? {};
         const session = await (0, auth_1.auth)();
         if (!session)
             return server_1.NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-        const su = ((_a = session === null || session === void 0 ? void 0 : session.user) !== null && _a !== void 0 ? _a : {});
+        const su = (session?.user ?? {});
         const actor = typeof su.email === 'string'
             ? su.email
             : typeof su.name === 'string'
@@ -68,7 +67,7 @@ async function POST(req) {
                 await r.set(`lock:${idempotencyKey}`, '1', 'EX', 60, 'NX');
             }
         }
-        catch (_b) {
+        catch {
             // ignore redis failures
         }
         try {
@@ -78,7 +77,7 @@ async function POST(req) {
                 const jf = jumia.jumiaFetch;
                 result = await jf(`/orders/${encodeURIComponent(orderId)}/label`, { method: 'POST', body: JSON.stringify({ shopId }) });
             }
-            catch (_c) {
+            catch {
                 // simulate label generation
                 result = { ok: true, labelUrl: null, note: 'simulated-label' };
             }
@@ -93,7 +92,7 @@ async function POST(req) {
                 if (r)
                     await r.set(`idempotency:${idempotencyKey}`, JSON.stringify({ ok: true, action, result }), 'EX', 60 * 60);
             }
-            catch (_d) {
+            catch {
                 // ignore redis caching errors
             }
             // labelUrl may be present depending on vendor response shape

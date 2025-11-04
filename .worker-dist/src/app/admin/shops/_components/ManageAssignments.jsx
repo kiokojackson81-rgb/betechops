@@ -53,7 +53,7 @@ function ManageAssignments({ shopId }) {
                 if (mounted)
                     setRows(j || []);
             }
-            catch (_a) {
+            catch {
                 (0, toast_1.showToast)('Failed to load assignments', 'error');
             }
             finally {
@@ -81,7 +81,7 @@ function ManageAssignments({ shopId }) {
                 setRows(j2 || []);
             }
         }
-        catch (_a) {
+        catch {
             (0, toast_1.showToast)('Failed to remove assignment', 'error');
         }
     }
@@ -90,17 +90,14 @@ function ManageAssignments({ shopId }) {
     if (!rows.length)
         return <div className="text-sm text-slate-500">No assignments</div>;
     return (<div className="space-y-2">
-      {rows.map(r => {
-            var _a;
-            return (<div key={r.id} className="flex justify-between items-center p-2 border rounded">
+      {rows.map(r => (<div key={r.id} className="flex justify-between items-center p-2 border rounded">
           <div>
-            <div className="font-medium">{(_a = r.user.name) !== null && _a !== void 0 ? _a : r.user.email}</div>
+            <div className="font-medium">{r.user.name ?? r.user.email}</div>
             <div className="text-sm text-slate-500">{r.roleAtShop}</div>
           </div>
           <div>
             <button className="text-red-600 px-2 py-1" onClick={() => remove(r.user.id)}>Remove</button>
           </div>
-        </div>);
-        })}
+        </div>))}
     </div>);
 }

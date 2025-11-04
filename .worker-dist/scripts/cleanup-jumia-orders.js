@@ -3,9 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.performCleanup = performCleanup;
 const prisma_1 = require("@/lib/prisma");
 async function performCleanup(retentionDays) {
-    var _a;
     // Retain for 90 days by default (3 months)
-    const days = Number((_a = retentionDays !== null && retentionDays !== void 0 ? retentionDays : process.env.JUMIA_ORDERS_RETENTION_DAYS) !== null && _a !== void 0 ? _a : 90);
+    const days = Number(retentionDays ?? process.env.JUMIA_ORDERS_RETENTION_DAYS ?? 90);
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     // Prefer vendor update time when present, else vendor createdAt, else local createdAt
     const deleted = await prisma_1.prisma.jumiaOrder.deleteMany({
@@ -34,7 +33,7 @@ async function performCleanup(retentionDays) {
         });
         deletedReturnCases = rc.count;
     }
-    catch (_b) { }
+    catch { }
     try {
         // Delete order items for those old orders first
         const oi = await prisma_1.prisma.orderItem.deleteMany({
@@ -47,7 +46,7 @@ async function performCleanup(retentionDays) {
         });
         deletedOrderItems = oi.count;
     }
-    catch (_c) { }
+    catch { }
     try {
         const od = await prisma_1.prisma.order.deleteMany({
             where: {
@@ -57,7 +56,7 @@ async function performCleanup(retentionDays) {
         });
         deletedOrders = od.count;
     }
-    catch (_d) { }
+    catch { }
     return { retentionDays: days, cutoff, deleted: deleted.count, deletedOrders, deletedOrderItems, deletedReturnCases };
 }
 async function main() {

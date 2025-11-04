@@ -37,7 +37,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = AttendantHeader;
 const react_1 = __importStar(require("react"));
 function AttendantHeader({ user }) {
-    var _a;
     const [kpis, setKpis] = (0, react_1.useState)(null);
     (0, react_1.useEffect)(() => {
         let mounted = true;
@@ -50,7 +49,7 @@ function AttendantHeader({ user }) {
                 if (mounted)
                     setKpis(data);
             }
-            catch (_a) {
+            catch {
                 // ignore
             }
         }
@@ -61,7 +60,7 @@ function AttendantHeader({ user }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>Attendant</h2>
-          <p style={{ margin: 0, color: '#6b7280' }}>{(_a = user === null || user === void 0 ? void 0 : user.name) !== null && _a !== void 0 ? _a : '—'}</p>
+          <p style={{ margin: 0, color: '#6b7280' }}>{user?.name ?? '—'}</p>
         </div>
         <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
           <div>

@@ -18,7 +18,6 @@ exports.authOptions = {
     callbacks: {
         // signIn: upsert user and force ADMIN for any configured ADMIN_EMAILS
         async signIn({ user }) {
-            var _a, _b, _c, _d;
             const emails = auth_1.ADMIN_EMAILS;
             const email = (user.email || "").toLowerCase();
             if (!email)
@@ -29,7 +28,7 @@ exports.authOptions = {
                     await prisma_1.prisma.user.upsert({
                         where: { email },
                         update: { role: "ADMIN", isActive: true },
-                        create: { email, name: (_a = user.name) !== null && _a !== void 0 ? _a : "Admin", image: (_b = user.image) !== null && _b !== void 0 ? _b : "", role: "ADMIN", isActive: true },
+                        create: { email, name: user.name ?? "Admin", image: user.image ?? "", role: "ADMIN", isActive: true },
                     });
                     return true;
                 }
@@ -37,11 +36,11 @@ exports.authOptions = {
                 await prisma_1.prisma.user.upsert({
                     where: { email },
                     update: { role: "ATTENDANT", isActive: true },
-                    create: { email, name: (_c = user.name) !== null && _c !== void 0 ? _c : email.split("@")[0], image: (_d = user.image) !== null && _d !== void 0 ? _d : "", role: "ATTENDANT", isActive: true },
+                    create: { email, name: user.name ?? email.split("@")[0], image: user.image ?? "", role: "ATTENDANT", isActive: true },
                 });
                 return true;
             }
-            catch (_e) {
+            catch {
                 // If DB not ready, still allow sign-in but roles will be resolved later via fallback
                 return true;
             }
@@ -50,7 +49,7 @@ exports.authOptions = {
         async jwt({ token, user }) {
             // ensure email is set on token when user logs in
             const t0 = token;
-            if (user === null || user === void 0 ? void 0 : user.email)
+            if (user?.email)
                 t0.email = user.email;
             const email = (t0.email || "").toLowerCase();
             // If it's the owner email, force ADMIN in the token (no DB needed)
@@ -68,21 +67,20 @@ exports.authOptions = {
                 if (!dbUser && t.email) {
                     dbUser = await prisma_1.prisma.user.findUnique({ where: { email: t.email.toLowerCase() }, select: { role: true } });
                 }
-                t0.role = (dbUser === null || dbUser === void 0 ? void 0 : dbUser.role) || "ATTENDANT";
+                t0.role = dbUser?.role || "ATTENDANT";
             }
-            catch (_a) {
+            catch {
                 t0.role = "ATTENDANT";
             }
             return token;
         },
         // session: expose role from token
         async session({ session, token }) {
-            var _a;
             const s = session;
             const t = token;
             if (!s.user)
                 s.user = {};
-            s.user.role = (_a = t.role) !== null && _a !== void 0 ? _a : "ATTENDANT";
+            s.user.role = t.role ?? "ATTENDANT";
             return s;
         },
     },

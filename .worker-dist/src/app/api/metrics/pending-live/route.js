@@ -7,11 +7,10 @@ const prisma_1 = require("@/lib/prisma");
 const jumia_1 = require("@/lib/jumia");
 exports.dynamic = 'force-dynamic';
 async function GET(request) {
-    var _a, _b, _c;
     const url = new URL(request.url);
-    const windowDays = Math.max(1, Number((_a = url.searchParams.get('days')) !== null && _a !== void 0 ? _a : 7));
-    const timeoutMs = Math.max(500, Number((_b = url.searchParams.get('timeoutMs')) !== null && _b !== void 0 ? _b : 2500));
-    const pageSize = Math.min(200, Math.max(1, Number((_c = url.searchParams.get('size')) !== null && _c !== void 0 ? _c : 100)));
+    const windowDays = Math.max(1, Number(url.searchParams.get('days') ?? 7));
+    const timeoutMs = Math.max(500, Number(url.searchParams.get('timeoutMs') ?? 2500));
+    const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get('size') ?? 100)));
     const started = Date.now();
     const deadline = started + timeoutMs;
     // Discover shops known locally
@@ -36,21 +35,21 @@ async function GET(request) {
                     params.set('token', token);
                 const q = params.toString();
                 const page = await fetcher(`/orders${q ? `?${q}` : ''}`);
-                const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.orders)
+                const arr = Array.isArray(page?.orders)
                     ? page.orders
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
+                    : Array.isArray(page?.items)
                         ? page.items
-                        : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
+                        : Array.isArray(page?.data)
                             ? page.data
                             : [];
                 count += arr.length;
-                token = ((page === null || page === void 0 ? void 0 : page.nextToken) ? String(page.nextToken) : '') || null;
+                token = (page?.nextToken ? String(page.nextToken) : '') || null;
                 pages += 1;
-                if ((page === null || page === void 0 ? void 0 : page.isLastPage) === true)
+                if (page?.isLastPage === true)
                     break;
             } while (token && pages < 2000);
         }
-        catch (_d) {
+        catch {
             // ignore errors per shop; continue
         }
         perShop.push({ shopId, count, pages });

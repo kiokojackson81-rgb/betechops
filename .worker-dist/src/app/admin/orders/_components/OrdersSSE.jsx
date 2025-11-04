@@ -32,14 +32,14 @@ function OrdersSSE({ status, country, shopId, dateFrom, dateTo, intervalMs = 400
                 const detail = { source: 'sse', ts: Date.now() };
                 window.dispatchEvent(new CustomEvent('orders:refresh', { detail }));
             }
-            catch (_a) { }
+            catch { }
             // Avoid full page refresh here; OrdersLiveData listens for orders:refresh and fetches incrementally
         });
         return () => {
             try {
                 es.close();
             }
-            catch (_a) { }
+            catch { }
             esRef.current = null;
             setLive('off');
         };

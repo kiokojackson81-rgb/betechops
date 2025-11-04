@@ -8,16 +8,14 @@ const client_1 = require("@/lib/jumia/client");
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
 async function requireAdmin() {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (role !== "ADMIN") {
         throw new server_1.NextResponse(JSON.stringify({ error: "Forbidden" }), { status: 403 });
     }
 }
 // Next 15 route handlers: context is an object whose params is a Promise
 async function POST(_request, context) {
-    var _a;
     try {
         await requireAdmin();
     }
@@ -43,7 +41,7 @@ async function POST(_request, context) {
     });
     try {
         const payload = await client.getShops();
-        const shops = Array.isArray(payload === null || payload === void 0 ? void 0 : payload.shops) ? payload.shops : [];
+        const shops = Array.isArray(payload?.shops) ? payload.shops : [];
         await Promise.all(shops.map((shop) => prisma_1.prisma.jumiaShop.upsert({
             where: { id: shop.id },
             create: {
@@ -68,7 +66,7 @@ async function POST(_request, context) {
         });
         return server_1.NextResponse.json({
             ok: true,
-            shops: (_a = refreshed === null || refreshed === void 0 ? void 0 : refreshed.shops) !== null && _a !== void 0 ? _a : [],
+            shops: refreshed?.shops ?? [],
         });
     }
     catch (error) {

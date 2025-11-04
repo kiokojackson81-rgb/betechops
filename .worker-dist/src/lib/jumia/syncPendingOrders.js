@@ -12,15 +12,15 @@ const date_fns_tz_1 = require("date-fns-tz");
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
 const LIMIT_RPS = 4;
-// Sync a full 7-day window so downstream KPIs that read from DB reflect the last week,
-// not just "today" or the last couple of days.
-const WINDOW_DAYS = 7;
+// Sync window for PENDING orders. Some pending orders can linger for weeks.
+// Make this configurable via env JUMIA_PENDING_WINDOW_DAYS, defaulting to 30 days.
+// Set to a larger value (e.g., 90) if you observe older pendings in vendor.
+const WINDOW_DAYS = Number(process.env.JUMIA_PENDING_WINDOW_DAYS || 30);
 // The Jumia API reliably supports page sizes up to 100. Larger values can return 400s.
 // Keep this at or below 100 to avoid vendor errors.
 const PAGE_SIZE = 100;
 const DEFAULT_TIMEZONE = "Africa/Nairobi";
 async function syncAllAccountsPendingOrders() {
-    var _a, _b;
     const accounts = await prisma_1.prisma.jumiaAccount.findMany({
         include: { shops: true },
     });
@@ -47,27 +47,27 @@ async function syncAllAccountsPendingOrders() {
                     : typeof remoteShops;
             console.log(`[jumia.sync] /shops shape: ${kind}`);
         }
-        catch (_c) { }
-        if (!((_a = remoteShops === null || remoteShops === void 0 ? void 0 : remoteShops.shops) === null || _a === void 0 ? void 0 : _a.length) && !Array.isArray(remoteShops)) {
+        catch { }
+        if (!remoteShops?.shops?.length && !Array.isArray(remoteShops)) {
             const alt = await safeCall(() => client.call("/shops-of-master-shop"));
-            if ((_b = alt === null || alt === void 0 ? void 0 : alt.shops) === null || _b === void 0 ? void 0 : _b.length)
+            if (alt?.shops?.length)
                 remoteShops = alt;
         }
         const shopsArr = Array.isArray(remoteShops)
             ? remoteShops
-            : (remoteShops === null || remoteShops === void 0 ? void 0 : remoteShops.shops) || [];
+            : remoteShops?.shops || [];
         try {
             console.log(`[jumia.sync] shopsArr computed len=${Array.isArray(shopsArr) ? shopsArr.length : -1}`);
             if (Array.isArray(shopsArr) && shopsArr.length) {
                 const s0 = shopsArr[0];
-                console.log(`[jumia.sync] sample shop fields: id=${String((s0 === null || s0 === void 0 ? void 0 : s0.id) || (s0 === null || s0 === void 0 ? void 0 : s0.shopId) || (s0 === null || s0 === void 0 ? void 0 : s0.sid) || '')} name=${String((s0 === null || s0 === void 0 ? void 0 : s0.name) || '')}`);
+                console.log(`[jumia.sync] sample shop fields: id=${String(s0?.id || s0?.shopId || s0?.sid || '')} name=${String(s0?.name || '')}`);
             }
         }
-        catch (_d) { }
+        catch { }
         const remoteIds = new Set();
         if (Array.isArray(shopsArr) && shopsArr.length) {
             for (const shop of shopsArr) {
-                if (shop === null || shop === void 0 ? void 0 : shop.id)
+                if (shop?.id)
                     remoteIds.add(String(shop.id));
                 await prisma_1.prisma.jumiaShop.upsert({
                     where: { id: shop.id },
@@ -85,11 +85,10 @@ async function syncAllAccountsPendingOrders() {
         }
         else {
             const sample = (() => {
-                var _a;
                 try {
-                    return (_a = JSON.stringify(remoteShops)) === null || _a === void 0 ? void 0 : _a.slice(0, 200);
+                    return JSON.stringify(remoteShops)?.slice(0, 200);
                 }
-                catch (_b) {
+                catch {
                     return String(remoteShops);
                 }
             })();
@@ -116,7 +115,6 @@ async function syncAllAccountsPendingOrders() {
     return results;
 }
 async function syncShopPending(client, shopId) {
-    var _a;
     const now = new Date();
     const start = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -WINDOW_DAYS), DEFAULT_TIMEZONE);
     const end = (0, date_fns_tz_1.zonedTimeToUtc)(now, DEFAULT_TIMEZONE);
@@ -136,7 +134,7 @@ async function syncShopPending(client, shopId) {
             token: nextToken,
             sort: "ASC",
         });
-        const orders = Array.isArray(response === null || response === void 0 ? void 0 : response.orders) ? response.orders : [];
+        const orders = Array.isArray(response?.orders) ? response.orders : [];
         for (const order of orders) {
             await upsertOrder(shopId, order);
             ordersUpserted += 1;
@@ -145,8 +143,8 @@ async function syncShopPending(client, shopId) {
         // - Stop when isLastPage flag is true
         // - Stop if nextToken is falsy
         // - Stop if nextToken repeats (stale token) to avoid infinite loops
-        const nxt = (_a = response === null || response === void 0 ? void 0 : response.nextToken) !== null && _a !== void 0 ? _a : null;
-        const lastFlag = (response === null || response === void 0 ? void 0 : response.isLastPage) === true;
+        const nxt = response?.nextToken ?? null;
+        const lastFlag = response?.isLastPage === true;
         pages += 1;
         if (lastFlag) {
             nextToken = undefined;
@@ -171,13 +169,12 @@ async function syncShopPending(client, shopId) {
     return { shopId, pages, orders: ordersUpserted };
 }
 async function upsertOrder(shopId, raw) {
-    var _a, _b, _c, _d, _e;
-    const status = (raw === null || raw === void 0 ? void 0 : raw.hasMultipleStatus)
+    const status = raw?.hasMultipleStatus
         ? "MULTIPLE"
-        : typeof (raw === null || raw === void 0 ? void 0 : raw.status) === "string" && raw.status.trim()
+        : typeof raw?.status === "string" && raw.status.trim()
             ? raw.status
             : "UNKNOWN";
-    const id = String((_c = (_b = (_a = raw === null || raw === void 0 ? void 0 : raw.id) !== null && _a !== void 0 ? _a : raw === null || raw === void 0 ? void 0 : raw.orderId) !== null && _b !== void 0 ? _b : raw === null || raw === void 0 ? void 0 : raw.order_id) !== null && _c !== void 0 ? _c : "");
+    const id = String(raw?.id ?? raw?.orderId ?? raw?.order_id ?? "");
     if (!id) {
         throw new Error("Missing order id in Jumia payload");
     }
@@ -185,29 +182,29 @@ async function upsertOrder(shopId, raw) {
         where: { id },
         create: {
             id,
-            number: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.number),
+            number: parseNullableInt(raw?.number),
             status,
-            hasMultipleStatus: Boolean(raw === null || raw === void 0 ? void 0 : raw.hasMultipleStatus),
-            pendingSince: isNonEmptyString(raw === null || raw === void 0 ? void 0 : raw.pendingSince) ? String(raw.pendingSince) : null,
-            totalItems: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.totalItems),
-            packedItems: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.packedItems),
-            countryCode: isNonEmptyString((_d = raw === null || raw === void 0 ? void 0 : raw.country) === null || _d === void 0 ? void 0 : _d.code) ? String(raw.country.code) : null,
-            isPrepayment: coerceBoolean(raw === null || raw === void 0 ? void 0 : raw.isPrepayment),
-            createdAtJumia: parseOptionalDate(raw === null || raw === void 0 ? void 0 : raw.createdAt),
-            updatedAtJumia: parseOptionalDate(raw === null || raw === void 0 ? void 0 : raw.updatedAt),
+            hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+            pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+            totalItems: parseNullableInt(raw?.totalItems),
+            packedItems: parseNullableInt(raw?.packedItems),
+            countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+            isPrepayment: coerceBoolean(raw?.isPrepayment),
+            createdAtJumia: parseOptionalDate(raw?.createdAt),
+            updatedAtJumia: parseOptionalDate(raw?.updatedAt),
             shopId,
         },
         update: {
-            number: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.number),
+            number: parseNullableInt(raw?.number),
             status,
-            hasMultipleStatus: Boolean(raw === null || raw === void 0 ? void 0 : raw.hasMultipleStatus),
-            pendingSince: isNonEmptyString(raw === null || raw === void 0 ? void 0 : raw.pendingSince) ? String(raw.pendingSince) : null,
-            totalItems: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.totalItems),
-            packedItems: parseNullableInt(raw === null || raw === void 0 ? void 0 : raw.packedItems),
-            countryCode: isNonEmptyString((_e = raw === null || raw === void 0 ? void 0 : raw.country) === null || _e === void 0 ? void 0 : _e.code) ? String(raw.country.code) : null,
-            isPrepayment: coerceBoolean(raw === null || raw === void 0 ? void 0 : raw.isPrepayment),
-            createdAtJumia: parseOptionalDate(raw === null || raw === void 0 ? void 0 : raw.createdAt),
-            updatedAtJumia: parseOptionalDate(raw === null || raw === void 0 ? void 0 : raw.updatedAt),
+            hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+            pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+            totalItems: parseNullableInt(raw?.totalItems),
+            packedItems: parseNullableInt(raw?.packedItems),
+            countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+            isPrepayment: coerceBoolean(raw?.isPrepayment),
+            createdAtJumia: parseOptionalDate(raw?.createdAt),
+            updatedAtJumia: parseOptionalDate(raw?.updatedAt),
         },
     });
 }

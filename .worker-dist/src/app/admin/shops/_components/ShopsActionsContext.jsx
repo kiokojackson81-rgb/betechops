@@ -55,7 +55,7 @@ function useShopsActionsSafe() {
     try {
         return useShopsActions();
     }
-    catch (_a) {
+    catch {
         return {
             onShopCreated: () => { },
             onAttendantCreated: () => { },

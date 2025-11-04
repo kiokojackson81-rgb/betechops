@@ -36,7 +36,7 @@ async function GET(req) {
                 }
             }
         }
-        catch (_a) {
+        catch {
             // ignore redis errors
         }
         let result = {
@@ -60,7 +60,7 @@ async function GET(req) {
                         try {
                             await (0, catalog_counters_1.storeAggregateSummary)(result);
                         }
-                        catch (_b) { }
+                        catch { }
                     }
                 }
             }
@@ -76,11 +76,11 @@ async function GET(req) {
                 for (const c of counts) {
                     if (c.status === "fulfilled") {
                         const v = c.value;
-                        total += Number((v === null || v === void 0 ? void 0 : v.total) || 0);
-                        approx = approx || Boolean(v === null || v === void 0 ? void 0 : v.approx);
-                        for (const [k, n] of Object.entries((v === null || v === void 0 ? void 0 : v.byStatus) || {}))
+                        total += Number(v?.total || 0);
+                        approx = approx || Boolean(v?.approx);
+                        for (const [k, n] of Object.entries(v?.byStatus || {}))
                             byStatus[String(k).toLowerCase()] = (byStatus[String(k).toLowerCase()] || 0) + Number(n || 0);
-                        for (const [k, n] of Object.entries((v === null || v === void 0 ? void 0 : v.byQcStatus) || {}))
+                        for (const [k, n] of Object.entries(v?.byQcStatus || {}))
                             byQcStatus[String(k).toLowerCase()] = (byQcStatus[String(k).toLowerCase()] || 0) + Number(n || 0);
                     }
                     else {
@@ -120,7 +120,7 @@ async function GET(req) {
                             try {
                                 await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId, { size, timeMs });
                             }
-                            catch (_c) { }
+                            catch { }
                         }
                     }
                 }
@@ -131,13 +131,13 @@ async function GET(req) {
                     result = totals;
             }
         }
-        const payload = Object.assign(Object.assign({}, result), { updatedAt: new Date().toISOString() });
+        const payload = { ...result, updatedAt: new Date().toISOString() };
         try {
             const r = await (0, redis_1.getRedis)();
             if (r && ttlMs > 0)
                 await r.set(key, JSON.stringify(payload), "EX", Math.max(1, Math.floor(ttlMs / 1000)));
         }
-        catch (_d) {
+        catch {
             // ignore redis errors
         }
         // Help upstream caches (and Next/Vercel) keep this cheap to re-serve for a short window

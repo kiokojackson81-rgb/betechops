@@ -60,7 +60,7 @@ function ApiCredentialsManager() {
             const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
             const j = await res.json();
             if (!res.ok)
-                throw new Error((j === null || j === void 0 ? void 0 : j.error) || 'failed');
+                throw new Error(j?.error || 'failed');
             (0, toast_1.showToast)(editingId ? 'Updated' : 'Saved', 'success');
             setForm({ scope: 'GLOBAL', apiBase: '', apiKey: '', apiSecret: '', shopId: '' });
             setEditingId(null);
@@ -98,22 +98,22 @@ function ApiCredentialsManager() {
         <div className="space-y-2 mt-2">
           <div>
             <label className="block">Scope</label>
-            <select value={form.scope} onChange={e => setForm(f => (Object.assign(Object.assign({}, f), { scope: e.target.value })))} className="border p-1">
+            <select value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))} className="border p-1">
               <option>GLOBAL</option>
               <option>SHOP</option>
             </select>
           </div>
           <div>
             <label className="block">API Base</label>
-            <input value={form.apiBase} onChange={e => setForm(f => (Object.assign(Object.assign({}, f), { apiBase: e.target.value })))} className="border p-1 w-full"/>
+            <input value={form.apiBase} onChange={e => setForm(f => ({ ...f, apiBase: e.target.value }))} className="border p-1 w-full"/>
           </div>
           <div>
             <label className="block">API Key</label>
-            <input value={form.apiKey} onChange={e => setForm(f => (Object.assign(Object.assign({}, f), { apiKey: e.target.value })))} className="border p-1 w-full"/>
+            <input value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))} className="border p-1 w-full"/>
           </div>
           <div>
             <label className="block">Shop ID (optional)</label>
-            <input value={form.shopId} onChange={e => setForm(f => (Object.assign(Object.assign({}, f), { shopId: e.target.value })))} className="border p-1 w-full"/>
+            <input value={form.shopId} onChange={e => setForm(f => ({ ...f, shopId: e.target.value }))} className="border p-1 w-full"/>
           </div>
           <div>
             <button className="px-3 py-1 bg-blue-600 text-white" onClick={create} disabled={busy}>Save</button>

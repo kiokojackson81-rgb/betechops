@@ -23,7 +23,7 @@ async function syncOrdersJob() {
                 if (s.credentialsEncrypted) {
                     const creds = (0, secure_json_1.decryptJson)(s.credentialsEncrypted);
                     const credObj = creds;
-                    const items = await (0, kilimall_1.fetchOrders)({ appId: (credObj === null || credObj === void 0 ? void 0 : credObj.storeId) || (credObj === null || credObj === void 0 ? void 0 : credObj.appId), appSecret: (credObj === null || credObj === void 0 ? void 0 : credObj.appSecret) || (credObj === null || credObj === void 0 ? void 0 : credObj.app_secret), apiBase: credObj === null || credObj === void 0 ? void 0 : credObj.apiBase }, { since: undefined });
+                    const items = await (0, kilimall_1.fetchOrders)({ appId: credObj?.storeId || credObj?.appId, appSecret: credObj?.appSecret || credObj?.app_secret, apiBase: credObj?.apiBase }, { since: undefined });
                     results[s.id] = { count: items.length };
                 }
                 else {
@@ -44,14 +44,14 @@ async function syncPayoutsJob(_opts) {
     for (const s of shops) {
         try {
             if (s.platform === 'JUMIA') {
-                await (0, jumia_1.fetchPayoutsForShop)(s.id, { day: _opts === null || _opts === void 0 ? void 0 : _opts.day });
+                await (0, jumia_1.fetchPayoutsForShop)(s.id, { day: _opts?.day });
                 results[s.id] = { ok: true };
             }
             else if (s.platform === 'KILIMALL') {
                 if (s.credentialsEncrypted) {
                     const creds = (0, secure_json_1.decryptJson)(s.credentialsEncrypted);
                     const credObj = creds;
-                    await (0, kilimall_1.fetchPayouts)({ appId: (credObj === null || credObj === void 0 ? void 0 : credObj.storeId) || (credObj === null || credObj === void 0 ? void 0 : credObj.appId), appSecret: (credObj === null || credObj === void 0 ? void 0 : credObj.appSecret) || (credObj === null || credObj === void 0 ? void 0 : credObj.app_secret), apiBase: credObj === null || credObj === void 0 ? void 0 : credObj.apiBase }, { day: _opts === null || _opts === void 0 ? void 0 : _opts.day });
+                    await (0, kilimall_1.fetchPayouts)({ appId: credObj?.storeId || credObj?.appId, appSecret: credObj?.appSecret || credObj?.app_secret, apiBase: credObj?.apiBase }, { day: _opts?.day });
                     results[s.id] = { ok: true };
                 }
                 else {

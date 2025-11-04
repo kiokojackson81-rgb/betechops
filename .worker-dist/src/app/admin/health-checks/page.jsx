@@ -8,11 +8,10 @@ const health_1 = require("@/lib/health");
 const AutoRefresh_1 = __importDefault(require("@/app/_components/AutoRefresh"));
 const headers_1 = require("next/headers");
 async function fetchJson(path) {
-    var _a, _b, _c;
     try {
         const h = await (0, headers_1.headers)();
-        const proto = (_a = h.get("x-forwarded-proto")) !== null && _a !== void 0 ? _a : "https";
-        const host = (_c = (_b = h.get("x-forwarded-host")) !== null && _b !== void 0 ? _b : h.get("host")) !== null && _c !== void 0 ? _c : "";
+        const proto = h.get("x-forwarded-proto") ?? "https";
+        const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
         const origin = host ? `${proto}://${host}` : "";
         const url = path.startsWith("http") ? path : `${origin}${path}`;
         const r = await fetch(url, { cache: "no-store" });

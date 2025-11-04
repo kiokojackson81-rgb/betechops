@@ -8,13 +8,14 @@ exports.default = OrdersLiveData;
 const react_1 = require("react");
 const OrdersTable_1 = __importDefault(require("./OrdersTable"));
 function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, params, disableClientFetch = false, }) {
-    const [rows, setRows] = (0, react_1.useState)(initialRows !== null && initialRows !== void 0 ? initialRows : []);
-    const [nextToken, setNextToken] = (0, react_1.useState)(initialNextToken !== null && initialNextToken !== void 0 ? initialNextToken : null);
-    const [isLastPage, setIsLastPage] = (0, react_1.useState)(initialIsLastPage !== null && initialIsLastPage !== void 0 ? initialIsLastPage : true);
+    const [rows, setRows] = (0, react_1.useState)(initialRows ?? []);
+    const [nextToken, setNextToken] = (0, react_1.useState)(initialNextToken ?? null);
+    const [isLastPage, setIsLastPage] = (0, react_1.useState)(initialIsLastPage ?? true);
     const [lastUpdatedAt, setLastUpdatedAt] = (0, react_1.useState)(Date.now());
     const busyRef = (0, react_1.useRef)(null);
     const lastFetchTsRef = (0, react_1.useRef)(0);
     const MIN_INTERVAL_MS = 2500;
+    const freshOnceRef = (0, react_1.useRef)(false);
     const query = (0, react_1.useMemo)(() => {
         const qs = new URLSearchParams();
         if (params.status && params.status !== "ALL")
@@ -46,15 +47,16 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         if (busyRef.current)
             return busyRef.current;
         const promise = (async () => {
-            var _a, _b;
             try {
                 lastFetchTsRef.current = Date.now();
                 const endpoint = disableClientFetch ? "/api/orders/synced" : "/api/orders";
-                const res = await fetch(`${endpoint}?${query}`, { cache: "no-store" });
+                // If a manual refresh was requested (e.g., after actions), bypass in-memory cache once using fresh=1
+                const freshParam = (!disableClientFetch && freshOnceRef.current) ? (query ? `${query}&fresh=1` : `fresh=1`) : query;
+                const res = await fetch(`${endpoint}?${freshParam}`, { cache: "no-store" });
                 if (!res.ok)
                     return;
                 const data = await res.json();
-                const incoming = Array.isArray(data === null || data === void 0 ? void 0 : data.orders) ? data.orders : [];
+                const incoming = Array.isArray(data?.orders) ? data.orders : [];
                 const shouldReplaceOnEmpty = disableClientFetch;
                 if (incoming.length > 0 || shouldReplaceOnEmpty) {
                     setRows(incoming);
@@ -63,12 +65,12 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
                             sessionStorage.setItem(storageKey, JSON.stringify({
                                 rows: incoming,
                                 ts: Date.now(),
-                                nextToken: disableClientFetch ? null : (_a = data === null || data === void 0 ? void 0 : data.nextToken) !== null && _a !== void 0 ? _a : null,
-                                isLastPage: disableClientFetch ? true : Boolean(data === null || data === void 0 ? void 0 : data.isLastPage),
+                                nextToken: disableClientFetch ? null : data?.nextToken ?? null,
+                                isLastPage: disableClientFetch ? true : Boolean(data?.isLastPage),
                             }));
                         }
                     }
-                    catch (_c) {
+                    catch {
                         // ignore storage errors
                     }
                 }
@@ -77,16 +79,16 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
                     setIsLastPage(true);
                 }
                 else {
-                    if (typeof (data === null || data === void 0 ? void 0 : data.nextToken) === "string" || (data === null || data === void 0 ? void 0 : data.nextToken) === null) {
-                        setNextToken((_b = data.nextToken) !== null && _b !== void 0 ? _b : null);
+                    if (typeof data?.nextToken === "string" || data?.nextToken === null) {
+                        setNextToken(data.nextToken ?? null);
                     }
-                    if (typeof (data === null || data === void 0 ? void 0 : data.isLastPage) === "boolean") {
+                    if (typeof data?.isLastPage === "boolean") {
                         setIsLastPage(Boolean(data.isLastPage));
                     }
                 }
                 setLastUpdatedAt(Date.now());
             }
-            catch (_d) {
+            catch {
                 // keep prior snapshot on failure
             }
         })();
@@ -99,7 +101,11 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         if (typeof window === "undefined")
             return;
         const handler = () => {
-            fetchLatest();
+            // mark next fetch as fresh to bypass short-lived cache
+            freshOnceRef.current = true;
+            fetchLatest().finally(() => {
+                freshOnceRef.current = false;
+            });
         };
         window.addEventListener("orders:refresh", handler);
         return () => {
@@ -107,16 +113,15 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         };
     }, [fetchLatest]);
     (0, react_1.useEffect)(() => {
-        var _a;
         if (typeof window !== "undefined") {
             try {
                 const raw = sessionStorage.getItem(storageKey);
                 if (rows.length === 0 && raw) {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed === null || parsed === void 0 ? void 0 : parsed.rows)) {
+                    if (Array.isArray(parsed?.rows)) {
                         setRows(parsed.rows);
                         if (typeof parsed.nextToken === "string" || parsed.nextToken === null) {
-                            setNextToken((_a = parsed.nextToken) !== null && _a !== void 0 ? _a : null);
+                            setNextToken(parsed.nextToken ?? null);
                         }
                         if (typeof parsed.isLastPage === "boolean") {
                             setIsLastPage(Boolean(parsed.isLastPage));
@@ -127,7 +132,7 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
                     }
                 }
             }
-            catch (_b) {
+            catch {
                 // ignore storage errors
             }
         }
@@ -141,7 +146,7 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         try {
             sessionStorage.setItem(storageKey, JSON.stringify({ rows, ts: Date.now(), nextToken, isLastPage }));
         }
-        catch (_a) {
+        catch {
             // ignore storage errors
         }
     }, [rows, nextToken, isLastPage, storageKey, disableClientFetch]);

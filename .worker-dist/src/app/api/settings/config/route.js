@@ -6,13 +6,12 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const KEY = "commission_window";
 async function GET() {
-    var _a, _b, _c;
     const row = await prisma_1.prisma.config.findUnique({ where: { key: KEY } });
-    const json = (row === null || row === void 0 ? void 0 : row.json) || {};
+    const json = row?.json || {};
     return server_1.NextResponse.json({
-        fromDay: Number((_a = json.fromDay) !== null && _a !== void 0 ? _a : 24),
-        toDay: Number((_b = json.toDay) !== null && _b !== void 0 ? _b : 24),
-        adminEmails: String((_c = json.adminEmails) !== null && _c !== void 0 ? _c : (process.env.ADMIN_EMAILS || "")),
+        fromDay: Number(json.fromDay ?? 24),
+        toDay: Number(json.toDay ?? 24),
+        adminEmails: String(json.adminEmails ?? (process.env.ADMIN_EMAILS || "")),
     });
 }
 async function POST(req) {

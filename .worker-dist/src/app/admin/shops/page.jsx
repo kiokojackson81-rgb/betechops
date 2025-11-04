@@ -37,7 +37,7 @@ async function Page() {
       <h1 className="text-xl font-bold">Shops</h1>
       <div>
         {/* Client wrapper handles shop creation, attendant creation and in-place updates */}
-        <AdminShopsClient_1.default initial={shops.map(s => { var _a, _b, _c, _d, _e, _f, _g, _h; return ({ id: s.id, name: s.name, platform: (_a = s.platform) !== null && _a !== void 0 ? _a : undefined, assignedUser: ((_c = (_b = s.userAssignments) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.user) ? { id: s.userAssignments[0].user.id, label: (_e = ((_d = s.userAssignments[0].user.name) !== null && _d !== void 0 ? _d : s.userAssignments[0].user.email)) !== null && _e !== void 0 ? _e : '', roleAtShop: (_h = (_g = (_f = s.userAssignments) === null || _f === void 0 ? void 0 : _f[0]) === null || _g === void 0 ? void 0 : _g.roleAtShop) !== null && _h !== void 0 ? _h : undefined } : undefined }); })}/>
+        <AdminShopsClient_1.default initial={shops.map(s => ({ id: s.id, name: s.name, platform: s.platform ?? undefined, assignedUser: s.userAssignments?.[0]?.user ? { id: s.userAssignments[0].user.id, label: (s.userAssignments[0].user.name ?? s.userAssignments[0].user.email) ?? '', roleAtShop: s.userAssignments?.[0]?.roleAtShop ?? undefined } : undefined }))}/>
       </div>
       <div className="mt-4 p-4 border rounded">
         <h2 className="font-semibold">API Credentials</h2>

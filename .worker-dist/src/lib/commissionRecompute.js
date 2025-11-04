@@ -4,7 +4,6 @@ exports.recomputeCommissions = recomputeCommissions;
 const prisma_1 = require("@/lib/prisma");
 const commissions_1 = require("@/lib/commissions");
 async function recomputeCommissions(input) {
-    var _a, _b, _c;
     const { shopId, window } = input;
     const from = new Date(window.from);
     const to = new Date(window.to);
@@ -24,7 +23,7 @@ async function recomputeCommissions(input) {
         },
     });
     // Collect shopIds present for rule pre-filtering
-    const shopIds = Array.from(new Set(snapshots.map(s => { var _a, _b; return (_b = (_a = s.orderItem) === null || _a === void 0 ? void 0 : _a.order) === null || _b === void 0 ? void 0 : _b.shopId; }).filter(Boolean)));
+    const shopIds = Array.from(new Set(snapshots.map(s => s.orderItem?.order?.shopId).filter(Boolean)));
     // Fetch CommissionRules overlapping the window; we'll filter by scope in-memory
     const rules = await prisma_1.prisma.commissionRule.findMany({
         where: {
@@ -50,9 +49,9 @@ async function recomputeCommissions(input) {
     });
     const earnings = [];
     for (const s of snapshots) {
-        const order = (_a = s.orderItem) === null || _a === void 0 ? void 0 : _a.order;
-        const product = (_b = s.orderItem) === null || _b === void 0 ? void 0 : _b.product;
-        const staffId = order === null || order === void 0 ? void 0 : order.attendantId;
+        const order = s.orderItem?.order;
+        const product = s.orderItem?.product;
+        const staffId = order?.attendantId;
         if (!order || !product || !staffId)
             continue; // cannot attribute without attendant
         const basis = {
@@ -78,7 +77,7 @@ async function recomputeCommissions(input) {
             qty: basis.qty,
             amount: Number(amount),
             status: "pending",
-            calcDetail: Object.assign(Object.assign({}, detail), { at: basis.at, shopId: basis.shopId, sku: basis.sku }),
+            calcDetail: { ...detail, at: basis.at, shopId: basis.shopId, sku: basis.sku },
             createdAt: new Date(),
         });
     }
@@ -102,8 +101,8 @@ async function recomputeCommissions(input) {
         if (adj.commissionImpact !== "reverse")
             continue;
         const itemId = adj.orderItemId;
-        const order = (_c = adj.orderItem) === null || _c === void 0 ? void 0 : _c.order;
-        const staffId = order === null || order === void 0 ? void 0 : order.attendantId;
+        const order = adj.orderItem?.order;
+        const staffId = order?.attendantId;
         if (!staffId)
             continue;
         const total = totalsByItem.get(itemId) || 0;

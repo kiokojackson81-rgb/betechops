@@ -4,9 +4,8 @@ exports.recomputeProfit = recomputeProfit;
 const prisma_1 = require("@/lib/prisma");
 const profit_1 = require("@/lib/profit");
 async function recomputeProfit({ from, to, shopId, actorId }) {
-    var _a, _b, _c;
     const rows = await prisma_1.prisma.settlementRow.findMany({
-        where: Object.assign(Object.assign({ postedAt: { gte: from, lte: to } }, (shopId ? { shopId } : {})), { orderItemId: { not: null } }),
+        where: { postedAt: { gte: from, lte: to }, ...(shopId ? { shopId } : {}), orderItemId: { not: null } },
     });
     if (!rows.length)
         return { snapshots: 0 };
@@ -34,15 +33,15 @@ async function recomputeProfit({ from, to, shopId, actorId }) {
         const info = itemMap.get(orderItemId);
         if (!info)
             continue;
-        const sku = (_a = info.product) === null || _a === void 0 ? void 0 : _a.sku;
+        const sku = info.product?.sku;
         const qty = Number(info.quantity || 0);
         const sellPrice = Number(info.sellingPrice || 0);
-        const refDate = new Date(((_b = info.order) === null || _b === void 0 ? void 0 : _b.createdAt) || now);
-        const shop = ((_c = info.order) === null || _c === void 0 ? void 0 : _c.shopId) || null;
+        const refDate = new Date(info.order?.createdAt || now);
+        const shop = info.order?.shopId || null;
         const rowsFor = (byItem.get(orderItemId) || []);
         const sumBy = (k) => rowsFor
             .filter((r) => (r.kind || "").toLowerCase() === k)
-            .reduce((t, r) => { var _a; return t + Number((_a = r.amount) !== null && _a !== void 0 ? _a : 0); }, 0);
+            .reduce((t, r) => t + Number(r.amount ?? 0), 0);
         const commission = sumBy("commission");
         const penalty = sumBy("penalty");
         const shipping_fee = sumBy("shipping_fee");

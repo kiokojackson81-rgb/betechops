@@ -53,7 +53,7 @@ function AdminShopsClient({ initial }) {
     }
     function onAttendantCreated(user, assigned) {
         setShops(prev => (0, AdminShopsClient_helpers_1.assignUserToShop)(prev, user, assigned));
-        if (assigned === null || assigned === void 0 ? void 0 : assigned.shopId)
+        if (assigned?.shopId)
             (0, toast_1.showToast)('Attendant assigned', 'success');
     }
     const actions = {

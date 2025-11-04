@@ -26,8 +26,7 @@ async function POST(_, { params }) {
         if (!order)
             return server_1.NextResponse.json({ error: "Order not found" }, { status: 404 });
         const total = order.items.reduce((sum, it) => {
-            var _a, _b;
-            const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : ((_b = (_a = it.product) === null || _a === void 0 ? void 0 : _a.sellingPrice) !== null && _b !== void 0 ? _b : 0);
+            const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : (it.product?.sellingPrice ?? 0);
             return sum + unit * it.quantity;
         }, 0);
         const updated = await prisma_1.prisma.order.update({

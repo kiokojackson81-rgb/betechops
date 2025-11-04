@@ -26,7 +26,7 @@ async function POST(request) {
                 if (s.credentialsEncrypted) {
                     const creds = (0, secure_json_1.decryptJson)(s.credentialsEncrypted);
                     const credObj = creds;
-                    const j = await (0, kilimall_1.fetchPayouts)({ appId: (credObj === null || credObj === void 0 ? void 0 : credObj.storeId) || (credObj === null || credObj === void 0 ? void 0 : credObj.appId), appSecret: (credObj === null || credObj === void 0 ? void 0 : credObj.appSecret) || (credObj === null || credObj === void 0 ? void 0 : credObj.app_secret), apiBase: credObj === null || credObj === void 0 ? void 0 : credObj.apiBase }, { day });
+                    const j = await (0, kilimall_1.fetchPayouts)({ appId: credObj?.storeId || credObj?.appId, appSecret: credObj?.appSecret || credObj?.app_secret, apiBase: credObj?.apiBase }, { day });
                     results[s.id] = { ok: true, payload: j };
                 }
                 else {

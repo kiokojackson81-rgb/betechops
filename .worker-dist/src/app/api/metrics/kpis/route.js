@@ -12,7 +12,6 @@ const date_fns_tz_1 = require("date-fns-tz");
 // Always execute on the server without static caching
 exports.dynamic = 'force-dynamic';
 async function GET(request) {
-    var _a, _b, _c;
     try {
         const url = new URL(request.url);
         const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
@@ -20,33 +19,54 @@ async function GET(request) {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const DEFAULT_TZ = 'Africa/Nairobi';
+        const PENDING_WINDOW_DAYS = Math.max(0, Number(process.env.KPIS_PENDING_WINDOW_DAYS ?? 0));
         // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
         // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
         // Align the 7-day window to Nairobi timezone to match how vendor windows are queried by the worker
         const sevenDaysAgo = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -7), DEFAULT_TZ);
-        const queued = await prisma_1.prisma.jumiaOrder.count({
-            where: {
-                status: { in: ['PENDING', 'MULTIPLE'] },
-                OR: [
-                    { updatedAtJumia: { gte: sevenDaysAgo } },
-                    { createdAtJumia: { gte: sevenDaysAgo } },
-                    {
-                        AND: [
-                            { updatedAtJumia: null },
-                            { createdAtJumia: null },
-                            { updatedAt: { gte: sevenDaysAgo } },
-                        ],
-                    },
-                ],
-            },
-        });
+        // Count pending orders. By default include ALL pending, regardless of last update time,
+        // because some pendings can linger beyond a week. If KPIS_PENDING_WINDOW_DAYS>0, apply that window instead.
+        let queued;
+        if (PENDING_WINDOW_DAYS > 0) {
+            const windowStart = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ);
+            queued = await prisma_1.prisma.jumiaOrder.count({
+                where: {
+                    status: { in: ['PENDING', 'MULTIPLE'] },
+                    OR: [
+                        { updatedAtJumia: { gte: windowStart } },
+                        { createdAtJumia: { gte: windowStart } },
+                        {
+                            AND: [
+                                { updatedAtJumia: null },
+                                { createdAtJumia: null },
+                                { updatedAt: { gte: windowStart } },
+                            ],
+                        },
+                    ],
+                },
+            });
+        }
+        else {
+            queued = await prisma_1.prisma.jumiaOrder.count({
+                where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+            });
+        }
         // Determine staleness: when was the latest pending-row update recorded?
-        const latestAgg = await prisma_1.prisma.jumiaOrder.aggregate({
-            _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
-            where: { status: { in: ['PENDING', 'MULTIPLE'] } },
-        });
-        const latestUpdatedMillis = Math.max(latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0, latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0, latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0);
-        const staleMinutes = Number((_a = process.env.KPIS_FORCE_LIVE_IF_STALE_MINUTES) !== null && _a !== void 0 ? _a : 3);
+        // Some unit tests mock prisma minimally; guard aggregate call to avoid 500s when not provided.
+        let latestUpdatedMillis = 0;
+        try {
+            const latestAgg = await prisma_1.prisma.jumiaOrder.aggregate({
+                _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
+                where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+            });
+            if (latestAgg && latestAgg._max) {
+                latestUpdatedMillis = Math.max(latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0, latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0, latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0);
+            }
+        }
+        catch {
+            latestUpdatedMillis = 0;
+        }
+        const staleMinutes = Number(process.env.KPIS_FORCE_LIVE_IF_STALE_MINUTES ?? 3);
         const isStale = latestUpdatedMillis > 0 ? (now.getTime() - latestUpdatedMillis) > staleMinutes * 60 * 1000 : true;
         const todayPacked = await prisma_1.prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });
         const rts = await prisma_1.prisma.fulfillmentAudit.count({ where: { ok: false, createdAt: { gte: startOfDay } } });
@@ -60,9 +80,8 @@ async function GET(request) {
                 Promise.resolve()
                     .then(() => (0, kpis_1.updateKpisCache)())
                     .then((q) => {
-                    var _a;
                     // If quick result still looks approximate/empty, try an exact refresh in the background
-                    if (((_a = q === null || q === void 0 ? void 0 : q.pendingAll) !== null && _a !== void 0 ? _a : 0) === 0 || (q === null || q === void 0 ? void 0 : q.approx))
+                    if ((q?.pendingAll ?? 0) === 0 || q?.approx)
                         return (0, kpis_1.updateKpisCacheExact)().catch(() => undefined);
                     return undefined;
                 })
@@ -76,18 +95,19 @@ async function GET(request) {
         let approxFlag = false;
         try {
             const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
+            const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
             const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
             if (!allowLive) {
                 // Explicitly disabled — skip live boost
                 throw new Error('live-adjust-disabled');
             }
-            const LIVE_TIMEOUT_MS = Number((_b = process.env.KPIS_LIVE_TIMEOUT_MS) !== null && _b !== void 0 ? _b : 1500);
-            const LIVE_MAX_PAGES = Math.max(1, Number((_c = process.env.KPIS_LIVE_MAX_PAGES) !== null && _c !== void 0 ? _c : 2));
+            const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 2500);
+            const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 4));
             const start = Date.now();
             let pages = 0;
             let total = 0;
             let token = null;
-            const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+            const dateFrom = PENDING_WINDOW_DAYS > 0 ? (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ).toISOString().slice(0, 10) : '';
             const dateTo = now.toISOString().slice(0, 10);
             do {
                 const elapsed = Date.now() - start;
@@ -96,24 +116,27 @@ async function GET(request) {
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
                 try {
-                    const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+                    // If a window is configured, include it; otherwise omit date filters to consider all PENDING.
+                    const base = PENDING_WINDOW_DAYS > 0
+                        ? `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`
+                        : `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
                     const url = await (0, abs_url_1.absUrl)(base);
                     const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
                     if (!res.ok)
                         break;
                     const j = await res.json();
-                    const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders)
+                    const arr = Array.isArray(j?.orders)
                         ? j.orders
-                        : Array.isArray(j === null || j === void 0 ? void 0 : j.items)
+                        : Array.isArray(j?.items)
                             ? j.items
-                            : Array.isArray(j === null || j === void 0 ? void 0 : j.data)
+                            : Array.isArray(j?.data)
                                 ? j.data
                                 : [];
                     total += arr.length;
-                    token = ((j === null || j === void 0 ? void 0 : j.nextToken) ? String(j.nextToken) : '') || null;
+                    token = (j?.nextToken ? String(j.nextToken) : '') || null;
                     pages += 1;
                 }
-                catch (_d) {
+                catch {
                     // Abort/timeout or network error — stop live adjustment and keep DB value
                     break;
                 }
@@ -121,12 +144,18 @@ async function GET(request) {
                     clearTimeout(timeout);
                 }
             } while (token && pages < LIVE_MAX_PAGES);
-            if (total > pendingAllOut) {
+            // Prefer vendor truth when it differs from DB, unless disabled.
+            if (pages > 0 && preferVendorWhenDiff && total !== queued) {
+                pendingAllOut = total;
+                approxFlag = true;
+            }
+            else if (total > pendingAllOut) {
+                // Legacy behavior: only boost upwards when vendor is higher
                 pendingAllOut = total;
                 approxFlag = true;
             }
         }
-        catch (_e) {
+        catch {
             // ignore network/vendor errors and keep DB-based value
         }
         // If DB looks stale, kick off a background pending sweep to reconcile.
@@ -146,7 +175,27 @@ async function GET(request) {
                 }).catch(() => undefined);
             }
         }
-        catch (_f) { }
+        catch { }
+        // If vendor live total differs substantially from DB, trigger a quick incremental sync in the background
+        // with a small lookback window to align downstream views faster.
+        try {
+            const diff = Math.abs((pendingAllOut || 0) - (queued || 0));
+            const allowKick = diff >= 1; // any difference
+            if (allowKick && process.env.NODE_ENV !== 'test') {
+                Promise.resolve().then(async () => {
+                    const urlInc = await (0, abs_url_1.absUrl)('/api/jumia/jobs/sync-incremental?lookbackDays=3');
+                    const controller = new AbortController();
+                    const t = setTimeout(() => controller.abort(), 4000);
+                    try {
+                        await fetch(urlInc, { cache: 'no-store', signal: controller.signal, headers: { 'x-vercel-cron': '1' } });
+                    }
+                    finally {
+                        clearTimeout(t);
+                    }
+                }).catch(() => undefined);
+            }
+        }
+        catch { }
         const res = server_1.NextResponse.json({
             ok: true,
             queued,

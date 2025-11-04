@@ -23,7 +23,7 @@ function CountsRefreshButton({ shopId, exact }) {
                 if (!res.ok)
                     throw new Error("counts refresh failed");
             }
-            catch (_a) {
+            catch {
                 // ignore
             }
             finally {
@@ -31,7 +31,7 @@ function CountsRefreshButton({ shopId, exact }) {
                 try {
                     window.dispatchEvent(new Event("catalog:counts:refresh"));
                 }
-                catch (_b) { }
+                catch { }
             }
         }} className={`rounded border px-3 py-1 text-xs ${loading ? "border-white/10 bg-white/10 text-slate-300" : "border-white/15 bg-white/5 text-slate-100 hover:border-white/25"}`} title="Refresh counts now">
       {loading ? "Refreshing…" : "Refresh counts"}

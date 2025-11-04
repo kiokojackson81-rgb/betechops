@@ -8,13 +8,12 @@ const auth_1 = require("@/lib/auth");
 const navigation_1 = require("next/navigation");
 const ClientRedirect_1 = __importDefault(require("./ClientRedirect"));
 async function PostLogin(props) {
-    var _a;
     const { searchParams } = props;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
-    const intended = Array.isArray(searchParams === null || searchParams === void 0 ? void 0 : searchParams.intended)
-        ? searchParams === null || searchParams === void 0 ? void 0 : searchParams.intended[0]
-        : searchParams === null || searchParams === void 0 ? void 0 : searchParams.intended;
+    const role = session?.user?.role;
+    const intended = Array.isArray(searchParams?.intended)
+        ? searchParams?.intended[0]
+        : searchParams?.intended;
     // If we have a server-side session and role, validate and redirect.
     if (session && role) {
         if (intended === "admin" && role === "ADMIN")

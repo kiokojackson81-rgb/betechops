@@ -15,8 +15,8 @@ async function POST(request) {
     const normalizedEmail = email.toLowerCase().trim();
     const up = await prisma_1.prisma.user.upsert({
         where: { email: normalizedEmail },
-        update: { name: name !== null && name !== void 0 ? name : undefined, role: role !== null && role !== void 0 ? role : undefined, isActive: true },
-        create: { email: normalizedEmail, name: name !== null && name !== void 0 ? name : normalizedEmail.split('@')[0], role: role !== null && role !== void 0 ? role : 'ATTENDANT', isActive: true },
+        update: { name: name ?? undefined, role: role ?? undefined, isActive: true },
+        create: { email: normalizedEmail, name: name ?? normalizedEmail.split('@')[0], role: role ?? 'ATTENDANT', isActive: true },
     });
     return server_1.NextResponse.json({ ok: true, user: up }, { status: 201 });
 }

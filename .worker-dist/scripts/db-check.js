@@ -23,7 +23,7 @@ async function run() {
         try {
             await prisma.$disconnect();
         }
-        catch (_a) { }
+        catch { }
     }
 }
 run();

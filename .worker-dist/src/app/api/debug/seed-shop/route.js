@@ -21,7 +21,6 @@ exports.dynamic = "force-dynamic";
  * - Writes or updates a Shop by name, storing credentials (encrypted when SECURE_JSON_KEY set)
  */
 async function POST(req) {
-    var _a, _b;
     const url = new URL(req.url);
     const token = url.searchParams.get("token") || req.headers.get("x-setup-token");
     const expected = process.env.SETUP_TOKEN;
@@ -32,13 +31,13 @@ async function POST(req) {
     try {
         body = (await req.json());
     }
-    catch (_c) {
+    catch {
         return server_1.NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     const name = (body.name || body.shopLabel || "JM Collection").trim();
     const platformKey = (body.platform || "JUMIA");
-    const platform = (_a = client_1.Platform[platformKey]) !== null && _a !== void 0 ? _a : client_1.Platform.JUMIA;
-    const creds = (_b = body.credentials) !== null && _b !== void 0 ? _b : {};
+    const platform = client_1.Platform[platformKey] ?? client_1.Platform.JUMIA;
+    const creds = body.credentials ?? {};
     // If we have SECURE_JSON_KEY, store encrypted; otherwise store plaintext JSON
     let credentialsEncrypted = null;
     try {
@@ -49,7 +48,7 @@ async function POST(req) {
             credentialsEncrypted = creds;
         }
     }
-    catch (_d) {
+    catch {
         credentialsEncrypted = creds;
     }
     const existing = await prisma.shop.findFirst({ where: { name } });

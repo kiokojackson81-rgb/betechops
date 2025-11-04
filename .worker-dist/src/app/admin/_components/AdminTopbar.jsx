@@ -25,7 +25,7 @@ function AdminTopbar() {
                     setWaitingPickup(typeof rp.count === "number" ? rp.count : 0);
                 }
             }
-            catch (_a) {
+            catch {
                 if (!ignore) {
                     setPendingPricing(0);
                     setWaitingPickup(0);

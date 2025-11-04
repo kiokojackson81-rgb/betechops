@@ -45,7 +45,7 @@ async function GET(req) {
                     const totals = await (0, jumia_1.getCatalogProductTotals)(String(s.id || s.shopId || ''));
                     return { id: String(s.id || s.shopId || ''), name: String(s.name || s.shopName || ''), total: totals.total, approx: totals.approx };
                 }
-                catch (_a) {
+                catch {
                     return { id: String(s.id || s.shopId || ''), name: String(s.name || s.shopName || ''), total: 0, approx: true, error: 'fetch_failed' };
                 }
             }));
@@ -65,8 +65,8 @@ async function GET(req) {
             let best = null;
             let bestScore = -1;
             for (const sh of (Array.isArray(shops) ? shops : [])) {
-                const nm = String((sh === null || sh === void 0 ? void 0 : sh.name) || (sh === null || sh === void 0 ? void 0 : sh.shopName) || (sh === null || sh === void 0 ? void 0 : sh.label) || '').trim();
-                const sid = String((sh === null || sh === void 0 ? void 0 : sh.sid) || (sh === null || sh === void 0 ? void 0 : sh.id) || (sh === null || sh === void 0 ? void 0 : sh.shopId) || '') || '';
+                const nm = String(sh?.name || sh?.shopName || sh?.label || '').trim();
+                const sid = String(sh?.sid || sh?.id || sh?.shopId || '') || '';
                 if (!nm || !sid)
                     continue;
                 const score = nm.toLowerCase().includes(target) ? 2 : (target.includes(nm.toLowerCase()) ? 1 : 0);
@@ -93,7 +93,7 @@ async function GET(req) {
         const first = await (0, jumia_1.jumiaFetch)(`/catalog/products?${params.toString()}`, shopAuth ? { shopAuth } : {}).catch(() => null);
         const hinted = extractTotal(first);
         if (typeof hinted === 'number' && hinted >= 0) {
-            return server_1.NextResponse.json({ ok: true, by: (sids === null || sids === void 0 ? void 0 : sids.length) ? 'sid' : (shopId ? 'shopId' : (shopName ? 'shopName' : 'default')), shop: matchedName ? { name: matchedName, sid: sids === null || sids === void 0 ? void 0 : sids[0] } : undefined, total: hinted, approx: false, source: 'metadata' });
+            return server_1.NextResponse.json({ ok: true, by: sids?.length ? 'sid' : (shopId ? 'shopId' : (shopName ? 'shopName' : 'default')), shop: matchedName ? { name: matchedName, sid: sids?.[0] } : undefined, total: hinted, approx: false, source: 'metadata' });
         }
         // Fallback: paginate with a time cap
         const byStatus = {};
@@ -110,18 +110,18 @@ async function GET(req) {
             if (token)
                 qp.set('token', token);
             const page = await (0, jumia_1.jumiaFetch)(`/catalog/products?${qp.toString()}`, shopAuth ? { shopAuth } : {});
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.products) ? page.products : Array.isArray(page === null || page === void 0 ? void 0 : page.items) ? page.items : Array.isArray(page === null || page === void 0 ? void 0 : page.data) ? page.data : [];
+            const arr = Array.isArray(page?.products) ? page.products : Array.isArray(page?.items) ? page.items : Array.isArray(page?.data) ? page.data : [];
             for (const it of arr) {
                 total += 1;
-                const st = String((it === null || it === void 0 ? void 0 : it.status) || (it === null || it === void 0 ? void 0 : it.itemStatus) || 'unknown').toLowerCase();
+                const st = String(it?.status || it?.itemStatus || 'unknown').toLowerCase();
                 byStatus[st] = (byStatus[st] || 0) + 1;
             }
-            token = String((page === null || page === void 0 ? void 0 : page.nextToken) || (page === null || page === void 0 ? void 0 : page.token) || (page === null || page === void 0 ? void 0 : page.next) || '');
+            token = String(page?.nextToken || page?.token || page?.next || '');
             if (!token || Date.now() - t0 > timeMs)
                 break;
         }
         const approx = Date.now() - t0 > timeMs;
-        return server_1.NextResponse.json({ ok: true, by: (sids === null || sids === void 0 ? void 0 : sids.length) ? 'sid' : (shopId ? 'shopId' : (shopName ? 'shopName' : 'default')), shop: matchedName ? { name: matchedName, sid: sids === null || sids === void 0 ? void 0 : sids[0] } : undefined, total, approx, byStatus, source: 'scan' });
+        return server_1.NextResponse.json({ ok: true, by: sids?.length ? 'sid' : (shopId ? 'shopId' : (shopName ? 'shopName' : 'default')), shop: matchedName ? { name: matchedName, sid: sids?.[0] } : undefined, total, approx, byStatus, source: 'scan' });
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

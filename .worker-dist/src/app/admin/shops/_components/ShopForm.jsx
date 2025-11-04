@@ -39,7 +39,6 @@ const react_1 = __importStar(require("react"));
 const toast_1 = require("@/lib/ui/toast");
 const ShopsActionsContext_1 = require("./ShopsActionsContext");
 function parseJsonWithPosition(input) {
-    var _a;
     const text = input.trim();
     if (!text)
         return { valid: true, value: {} };
@@ -48,7 +47,7 @@ function parseJsonWithPosition(input) {
     }
     catch (e) {
         // Try to extract line/column from error message if present
-        const msg = typeof e === 'object' && e !== null && 'message' in e ? String((_a = e.message) !== null && _a !== void 0 ? _a : 'Invalid JSON') : String(e !== null && e !== void 0 ? e : 'Invalid JSON');
+        const msg = typeof e === 'object' && e !== null && 'message' in e ? String(e.message ?? 'Invalid JSON') : String(e ?? 'Invalid JSON');
         // V8 doesn’t give line/col by default; still show raw error
         return { valid: false, error: msg };
     }
@@ -82,12 +81,11 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
             else
                 (0, toast_1.showToast)(`JSON probe: ${j.error || "invalid"}`, "error");
         }
-        catch (_a) {
+        catch {
             (0, toast_1.showToast)("Probe failed", "error");
         }
     }
     async function submit(e) {
-        var _a, _b, _c;
         e.preventDefault();
         if (!name.trim()) {
             (0, toast_1.showToast)("Name is required", "warn");
@@ -104,7 +102,7 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
                 body: JSON.stringify({
                     name: name.trim(),
                     platform,
-                    credentials: (_a = parsed.value) !== null && _a !== void 0 ? _a : {},
+                    credentials: parsed.value ?? {},
                 }),
             });
             async function readResponseSafely(res) {
@@ -113,7 +111,7 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
                     try {
                         return await res.json();
                     }
-                    catch (_a) {
+                    catch {
                         return null;
                     }
                 }
@@ -121,7 +119,7 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
                     const text = await res.text();
                     return { text };
                 }
-                catch (_b) {
+                catch {
                     return null;
                 }
             }
@@ -130,7 +128,7 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
                 const payloadObj = payload && typeof payload === 'object' ? payload : null;
                 let msg = `HTTP ${res.status}`;
                 if (payloadObj) {
-                    const maybeErr = (_b = payloadObj['error']) !== null && _b !== void 0 ? _b : payloadObj['message'];
+                    const maybeErr = payloadObj['error'] ?? payloadObj['message'];
                     if (typeof maybeErr === 'string')
                         msg = maybeErr;
                     else if ('text' in payloadObj && typeof payloadObj['text'] === 'string')
@@ -149,7 +147,7 @@ function ShopForm({ defaultPlatform = "JUMIA" }) {
             }
         }
         catch (err) {
-            const msg = typeof err === 'object' && err !== null && 'message' in err ? String((_c = err.message) !== null && _c !== void 0 ? _c : 'Create failed') : String(err !== null && err !== void 0 ? err : 'Create failed');
+            const msg = typeof err === 'object' && err !== null && 'message' in err ? String(err.message ?? 'Create failed') : String(err ?? 'Create failed');
             (0, toast_1.showToast)(msg, "error");
         }
     }

@@ -9,6 +9,6 @@ async function POST(req) {
         return server_1.NextResponse.json({ ok: true });
     }
     catch (e) {
-        return server_1.NextResponse.json({ ok: false, error: (e === null || e === void 0 ? void 0 : e.message) || "Invalid JSON" }, { status: 400 });
+        return server_1.NextResponse.json({ ok: false, error: e?.message || "Invalid JSON" }, { status: 400 });
     }
 }

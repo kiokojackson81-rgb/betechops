@@ -15,7 +15,7 @@ async function main() {
             console.log(`\nQuick catalog count for '${jumiaShop.name}':`, quick);
         }
         catch (e) {
-            console.warn(`\nQuick catalog count failed for '${jumiaShop.name}':`, (e === null || e === void 0 ? void 0 : e.message) || e);
+            console.warn(`\nQuick catalog count failed for '${jumiaShop.name}':`, e?.message || e);
         }
     }
     // All-shops exact products (via master)
@@ -24,7 +24,7 @@ async function main() {
         console.log("\nAll-shops exact product total:", allExact);
     }
     catch (e) {
-        console.warn("\nAll-shops exact product total failed:", (e === null || e === void 0 ? void 0 : e.message) || e);
+        console.warn("\nAll-shops exact product total failed:", e?.message || e);
     }
     // KPIs cache quick and exact
     try {
@@ -32,14 +32,14 @@ async function main() {
         console.log("\nKPIs (quick):", quickKpis);
     }
     catch (e) {
-        console.warn("\nKPIs (quick) failed:", (e === null || e === void 0 ? void 0 : e.message) || e);
+        console.warn("\nKPIs (quick) failed:", e?.message || e);
     }
     try {
         const exactKpis = await (0, kpis_1.updateKpisCacheExact)();
         console.log("KPIs (exact):", exactKpis);
     }
     catch (e) {
-        console.warn("KPIs (exact) failed:", (e === null || e === void 0 ? void 0 : e.message) || e);
+        console.warn("KPIs (exact) failed:", e?.message || e);
     }
 }
 main()

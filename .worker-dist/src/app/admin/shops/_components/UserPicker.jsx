@@ -52,7 +52,7 @@ function UserPicker({ onSelect, placeholder }) {
                 setResults(j || []);
                 setOpen(true);
             }
-            catch (_a) {
+            catch {
                 setResults([]);
             }
         }, 300);

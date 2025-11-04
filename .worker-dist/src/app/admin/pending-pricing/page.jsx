@@ -23,21 +23,24 @@ function buildWhere(q) {
     const base = { status: "PENDING" };
     if (!q)
         return base;
-    return Object.assign(Object.assign({}, base), { OR: [
+    return {
+        ...base,
+        OR: [
             { orderNumber: { contains: q } },
             { customerName: { contains: q } },
             { shop: { is: { name: { contains: q } } } },
-        ] });
+        ],
+    };
 }
 async function PendingPricingPage({ searchParams, }) {
     const params = await searchParams;
     const scope = await (0, scope_1.resolveShopScopeForServer)();
-    const page = Math.max(1, Number((params === null || params === void 0 ? void 0 : params.page) || 1));
-    const size = Math.min(50, Math.max(1, Number((params === null || params === void 0 ? void 0 : params.size) || PAGE_SIZE_DEFAULT)));
-    const q = ((params === null || params === void 0 ? void 0 : params.q) || "").trim() || undefined;
+    const page = Math.max(1, Number(params?.page || 1));
+    const size = Math.min(50, Math.max(1, Number(params?.size || PAGE_SIZE_DEFAULT)));
+    const q = (params?.q || "").trim() || undefined;
     const whereBase = buildWhere(q);
     const where = (scope.shopIds && scope.shopIds.length > 0)
-        ? (Object.assign(Object.assign({}, whereBase), { shopId: { in: scope.shopIds } }))
+        ? ({ ...whereBase, shopId: { in: scope.shopIds } })
         : whereBase;
     let degraded = false;
     let total = 0;
@@ -69,9 +72,8 @@ async function PendingPricingPage({ searchParams, }) {
         const qty = items.reduce((n, it) => n + it.quantity, 0);
         // Compute subtotal from sellingPrice (item.sellingPrice || product.sellingPrice)
         const subtotal = items.reduce((sum, it) => {
-            var _a, _b, _c;
             const item = it;
-            const unit = ((_c = (_a = item.sellingPrice) !== null && _a !== void 0 ? _a : (_b = item.product) === null || _b === void 0 ? void 0 : _b.sellingPrice) !== null && _c !== void 0 ? _c : 0);
+            const unit = (item.sellingPrice ?? item.product?.sellingPrice ?? 0);
             return sum + unit * item.quantity;
         }, 0);
         return { qty, subtotal };
@@ -114,7 +116,6 @@ async function PendingPricingPage({ searchParams, }) {
           </thead>
           <tbody className="divide-y divide-white/10">
             {rows.map((o) => {
-            var _a;
             const order = o;
             const { qty, subtotal } = calcTotals(order.items);
             return (<tr key={order.id} className="[&>td]:px-3 [&>td]:py-3">
@@ -122,7 +123,7 @@ async function PendingPricingPage({ searchParams, }) {
                   <td>
                     <div className="font-medium">{order.customerName}</div>
                   </td>
-                  <td>{((_a = order.shop) === null || _a === void 0 ? void 0 : _a.name) || "—"}</td>
+                  <td>{order.shop?.name || "—"}</td>
                   <td>{qty}</td>
                   <td>{fmtKsh(subtotal)}</td>
                   <td>{fmtDate(order.createdAt)}</td>

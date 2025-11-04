@@ -20,11 +20,10 @@ const COUNTRY_DOMAIN_MAP = {
     UG: "co.ug",
 };
 function jumiaDomainForCountry(countryCode) {
-    var _a;
     if (!countryCode)
         return "com";
     const key = countryCode.toUpperCase();
-    return (_a = COUNTRY_DOMAIN_MAP[key]) !== null && _a !== void 0 ? _a : "com";
+    return COUNTRY_DOMAIN_MAP[key] ?? "com";
 }
 function slugifyProductName(name) {
     return name
@@ -37,7 +36,6 @@ function slugifyProductName(name) {
         .slice(0, 200);
 }
 function parseMoney(input) {
-    var _a, _b, _c, _d, _e;
     if (input === null || input === undefined)
         return undefined;
     if (typeof input === "number" && Number.isFinite(input)) {
@@ -52,17 +50,21 @@ function parseMoney(input) {
     }
     if (typeof input === "object") {
         const obj = input;
-        const valueCandidate = (_e = (_d = (_c = (_b = (_a = obj.value) !== null && _a !== void 0 ? _a : obj.amount) !== null && _b !== void 0 ? _b : obj.price) !== null && _c !== void 0 ? _c : obj.total) !== null && _d !== void 0 ? _d : obj.paid) !== null && _e !== void 0 ? _e : obj.subtotal;
+        const valueCandidate = obj.value ??
+            obj.amount ??
+            obj.price ??
+            obj.total ??
+            obj.paid ??
+            obj.subtotal;
         const parsed = parseMoney(valueCandidate);
         if (!parsed)
             return undefined;
         const currency = typeof obj.currency === "string" ? obj.currency : undefined;
-        return { currency: currency !== null && currency !== void 0 ? currency : parsed.currency, value: parsed.value };
+        return { currency: currency ?? parsed.currency, value: parsed.value };
     }
     return undefined;
 }
 function normaliseShopName(parts) {
-    var _a;
     const filtered = parts
         .map((part) => (typeof part === "string" ? part.trim() : ""))
         .filter(Boolean);
@@ -76,7 +78,7 @@ function normaliseShopName(parts) {
         seen.add(key);
         return part;
     }
-    return (_a = filtered[0]) !== null && _a !== void 0 ? _a : undefined;
+    return filtered[0] ?? undefined;
 }
 function extractProductId(candidate) {
     if (candidate === null || candidate === undefined)
@@ -107,7 +109,6 @@ function buildProductUrl(opts) {
     return `${base}/${parts.join("-")}.html`;
 }
 function aggregateItemsDetails(items, opts = {}) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
     let totalValue = 0;
     let totalCurrency;
     let productUrl;
@@ -116,7 +117,7 @@ function aggregateItemsDetails(items, opts = {}) {
         if (!rawItem || typeof rawItem !== "object")
             continue;
         const item = rawItem;
-        const product = ((_a = item.product) !== null && _a !== void 0 ? _a : {});
+        const product = (item.product ?? {});
         if (!productName) {
             const candidate = (typeof product.name === "string" && product.name) ||
                 (typeof item.productName === "string" && item.productName) ||
@@ -149,7 +150,14 @@ function aggregateItemsDetails(items, opts = {}) {
                     });
                 }
                 else {
-                    const productId = (_h = (_g = (_f = (_e = (_d = (_c = (_b = extractProductId(product.id)) !== null && _b !== void 0 ? _b : extractProductId(item.productId)) !== null && _c !== void 0 ? _c : extractProductId(product.productId)) !== null && _d !== void 0 ? _d : extractProductId(item.masterProductId)) !== null && _e !== void 0 ? _e : extractProductId(product.productSid)) !== null && _f !== void 0 ? _f : extractProductId(item.productSid)) !== null && _g !== void 0 ? _g : extractProductId(item.skuId)) !== null && _h !== void 0 ? _h : extractProductId(productName);
+                    const productId = extractProductId(product.id) ??
+                        extractProductId(item.productId) ??
+                        extractProductId(product.productId) ??
+                        extractProductId(item.masterProductId) ??
+                        extractProductId(product.productSid) ??
+                        extractProductId(item.productSid) ??
+                        extractProductId(item.skuId) ??
+                        extractProductId(productName);
                     const built = buildProductUrl({
                         countryCode: opts.countryCode,
                         productName,
@@ -160,9 +168,17 @@ function aggregateItemsDetails(items, opts = {}) {
                 }
             }
         }
-        const quantity = Number.parseFloat(String((_k = (_j = item.quantity) !== null && _j !== void 0 ? _j : item.qty) !== null && _k !== void 0 ? _k : 1));
+        const quantity = Number.parseFloat(String(item.quantity ?? item.qty ?? 1));
         const resolvedQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-        const moneySource = (_t = (_s = (_r = (_q = (_p = (_o = (_m = (_l = item.totalAmountLocal) !== null && _l !== void 0 ? _l : item.totalPriceLocal) !== null && _m !== void 0 ? _m : item.subtotalLocal) !== null && _o !== void 0 ? _o : item.paidPriceLocal) !== null && _p !== void 0 ? _p : item.itemPriceLocal) !== null && _q !== void 0 ? _q : item.paidPrice) !== null && _r !== void 0 ? _r : item.itemPrice) !== null && _s !== void 0 ? _s : product.priceLocal) !== null && _t !== void 0 ? _t : product.price;
+        const moneySource = item.totalAmountLocal ??
+            item.totalPriceLocal ??
+            item.subtotalLocal ??
+            item.paidPriceLocal ??
+            item.itemPriceLocal ??
+            item.paidPrice ??
+            item.itemPrice ??
+            product.priceLocal ??
+            product.price;
         const parsedMoney = parseMoney(moneySource);
         if (parsedMoney && Number.isFinite(parsedMoney.value)) {
             const value = moneySource === item.totalAmountLocal ||
@@ -190,6 +206,8 @@ function aggregateItemsDetails(items, opts = {}) {
     return result;
 }
 function cleanShopName(primary, fallback) {
-    var _a, _b, _c;
-    return ((_c = (_b = (_a = normaliseShopName([primary, fallback])) !== null && _a !== void 0 ? _a : primary) !== null && _b !== void 0 ? _b : fallback) !== null && _c !== void 0 ? _c : undefined);
+    return (normaliseShopName([primary, fallback]) ??
+        primary ??
+        fallback ??
+        undefined);
 }

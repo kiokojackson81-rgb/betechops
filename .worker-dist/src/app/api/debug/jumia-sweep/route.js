@@ -64,7 +64,7 @@ async function GET(req) {
     // build bases: prefer resolved base then canonical + expanded list
     const resolved = await (0, jumia_1.resolveJumiaConfig)().catch(() => null);
     const bases = [];
-    if (resolved === null || resolved === void 0 ? void 0 : resolved.base)
+    if (resolved?.base)
         bases.push(resolved.base.replace(/\/$/, ''));
     const baseCandidates = [
         'https://vendor-api.jumia.com',
@@ -88,16 +88,16 @@ async function GET(req) {
     try {
         token = await (0, oidc_1.getJumiaAccessToken)();
     }
-    catch (_a) {
+    catch {
         try {
             token = await (0, oidc_1.getAccessTokenFromEnv)();
         }
-        catch (_b) {
+        catch {
             token = '';
         }
     }
     // try multiple auth header schemes (do not return tokens)
-    const authSchemes = (resolved === null || resolved === void 0 ? void 0 : resolved.scheme) ? [resolved.scheme, 'Bearer', 'Token', 'VcToken'] : ['Bearer', 'Token', 'VcToken'];
+    const authSchemes = resolved?.scheme ? [resolved.scheme, 'Bearer', 'Token', 'VcToken'] : ['Bearer', 'Token', 'VcToken'];
     const results = [];
     // For each path, try bases in order and for each base try multiple auth header schemes and also an unauthenticated attempt.
     for (const p of candidatePaths) {
@@ -113,7 +113,7 @@ async function GET(req) {
                     const txt = await r.text();
                     preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : '';
                 }
-                catch (_c) { }
+                catch { }
                 const ok = r.ok && status === 200;
                 results.push({ path: p, base, status, ok, preview: preview ? preview : undefined });
                 if (ok) {
@@ -137,7 +137,7 @@ async function GET(req) {
                             const txt = await r.text();
                             preview = txt ? (txt.length > 500 ? txt.slice(0, 500) + '...' : txt) : '';
                         }
-                        catch (_d) { }
+                        catch { }
                         const ok = r.ok && status === 200;
                         results.push({ path: p, base, status, ok, preview: preview ? preview : undefined });
                         if (ok) {

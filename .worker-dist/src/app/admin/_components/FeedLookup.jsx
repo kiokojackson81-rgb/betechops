@@ -19,7 +19,7 @@ function FeedLookup() {
             setResult(j);
         }
         catch (err) {
-            setResult({ ok: false, error: (err === null || err === void 0 ? void 0 : err.message) || String(err) });
+            setResult({ ok: false, error: err?.message || String(err) });
         }
         finally {
             setBusy(false);

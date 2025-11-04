@@ -25,7 +25,7 @@ async function GET(req) {
         });
         return server_1.NextResponse.json(users);
     }
-    catch (_a) {
+    catch {
         return server_1.NextResponse.json({ error: "search_failed" }, { status: 500 });
     }
 }

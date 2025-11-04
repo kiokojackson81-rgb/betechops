@@ -7,9 +7,8 @@ const server_1 = require("next/server");
 const auth_1 = require("@/lib/auth");
 const prisma_1 = require("@/lib/prisma");
 async function requireRole(min) {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (!role)
         return { ok: false, res: server_1.NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     const allowed = Array.isArray(min) ? min : [min];
@@ -23,16 +22,15 @@ function noStoreJson(data, init) {
     return res;
 }
 async function getActorId() {
-    var _a, _b;
     try {
         const session = await (0, auth_1.auth)();
-        const email = ((_b = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.email) === null || _b === void 0 ? void 0 : _b.toLowerCase()) || "";
+        const email = session?.user?.email?.toLowerCase() || "";
         if (!email)
             return null;
         const user = await prisma_1.prisma.user.findUnique({ where: { email }, select: { id: true } });
-        return (user === null || user === void 0 ? void 0 : user.id) || null;
+        return user?.id || null;
     }
-    catch (_c) {
+    catch {
         return null;
     }
 }

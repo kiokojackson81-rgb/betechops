@@ -7,11 +7,10 @@ const client_1 = require("@prisma/client");
 const next_1 = require("next-auth/next");
 const nextAuth_1 = require("@/lib/nextAuth");
 async function resolveShopScope() {
-    var _a, _b, _c;
     try {
         const session = await (0, next_1.getServerSession)(nextAuth_1.authOptions);
-        const roleStr = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
-        const email = ((_c = (_b = session === null || session === void 0 ? void 0 : session.user) === null || _b === void 0 ? void 0 : _b.email) === null || _c === void 0 ? void 0 : _c.toLowerCase()) || "";
+        const roleStr = session?.user?.role;
+        const email = session?.user?.email?.toLowerCase() || "";
         const role = mapRole(roleStr);
         if (!role || role === client_1.Role.ADMIN)
             return { role };
@@ -25,18 +24,17 @@ async function resolveShopScope() {
             return { role };
         return { role: user.role, shopIds: (user.managedShops || []).map(s => s.id) };
     }
-    catch (_d) {
+    catch {
         return {};
     }
 }
 // Server components/pages variant (no Request available)
 async function resolveShopScopeForServer() {
-    var _a, _b;
     try {
         const session = await (0, next_1.getServerSession)(nextAuth_1.authOptions);
-        const roleStr = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+        const roleStr = session?.user?.role;
         const role = mapRole(roleStr);
-        const email = (((_b = session === null || session === void 0 ? void 0 : session.user) === null || _b === void 0 ? void 0 : _b.email) || "").toLowerCase();
+        const email = (session?.user?.email || "").toLowerCase();
         if (!role || role === client_1.Role.ADMIN)
             return { role };
         if (!email)
@@ -49,7 +47,7 @@ async function resolveShopScopeForServer() {
             return { role };
         return { role: user.role, shopIds: (user.managedShops || []).map(s => s.id) };
     }
-    catch (_c) {
+    catch {
         return {};
     }
 }

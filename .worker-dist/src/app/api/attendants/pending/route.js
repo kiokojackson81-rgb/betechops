@@ -5,9 +5,8 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const auth_1 = require("@/lib/auth");
 async function GET(req) {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (!session || !role)
         return server_1.NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const url = new URL(req.url);
@@ -31,18 +30,16 @@ async function GET(req) {
         },
     });
     const rows = rowsRaw.map((o) => {
-        var _a;
-        const itemsCount = (o.items || []).reduce((acc, x) => { var _a; return acc + ((_a = x.quantity) !== null && _a !== void 0 ? _a : 0); }, 0);
+        const itemsCount = (o.items || []).reduce((acc, x) => acc + (x.quantity ?? 0), 0);
         const sellingTotal = (o.items || []).reduce((acc, x) => {
-            var _a, _b, _c, _d;
-            const sp = ((_c = (_a = x.sellingPrice) !== null && _a !== void 0 ? _a : (_b = x.product) === null || _b === void 0 ? void 0 : _b.sellingPrice) !== null && _c !== void 0 ? _c : 0) * ((_d = x.quantity) !== null && _d !== void 0 ? _d : 0);
+            const sp = (x.sellingPrice ?? x.product?.sellingPrice ?? 0) * (x.quantity ?? 0);
             return acc + sp;
         }, 0);
-        const hasBuyingPrice = (o.items || []).every((x) => { var _a; return typeof ((_a = x.product) === null || _a === void 0 ? void 0 : _a.lastBuyingPrice) === "number"; });
+        const hasBuyingPrice = (o.items || []).every((x) => typeof x.product?.lastBuyingPrice === "number");
         return {
             id: o.id,
             orderNumber: o.orderNumber,
-            customerName: (_a = o.customerName) !== null && _a !== void 0 ? _a : null,
+            customerName: o.customerName ?? null,
             itemsCount,
             sellingTotal,
             hasBuyingPrice,

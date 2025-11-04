@@ -23,12 +23,12 @@ async function main() {
 }
 main()
     .catch((e) => {
-    console.error('[backfill] Failed:', (e === null || e === void 0 ? void 0 : e.message) || e);
+    console.error('[backfill] Failed:', e?.message || e);
     process.exitCode = 1;
 })
     .finally(async () => {
     try {
         await prisma_1.prisma.$disconnect();
     }
-    catch (_a) { }
+    catch { }
 });

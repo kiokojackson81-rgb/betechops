@@ -11,7 +11,7 @@ async function POST(req) {
     try {
         payload = await req.json();
     }
-    catch (_a) {
+    catch {
         return (0, api_1.noStoreJson)({ ok: false, error: "Invalid JSON payload" }, { status: 400 });
     }
     if (!payload || typeof payload !== "object") {

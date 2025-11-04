@@ -23,14 +23,13 @@ function QuickPriceCard() {
     }, [buy, selected]);
     const money = (v) => `KES ${new Intl.NumberFormat().format(v)}`;
     const search = async () => {
-        var _a;
         if (!query.trim())
             return;
         const r = await fetch(`/api/products?search=${encodeURIComponent(query)}`, { cache: "no-store" });
         if (r.ok) {
             const arr = (await r.json());
             setSelected(arr[0] || null);
-            if ((_a = arr[0]) === null || _a === void 0 ? void 0 : _a.lastBuyingPrice)
+            if (arr[0]?.lastBuyingPrice)
                 setBuy(String(arr[0].lastBuyingPrice));
         }
     };
@@ -41,7 +40,7 @@ function QuickPriceCard() {
         if (!Number.isFinite(buying) || buying <= 0)
             return (0, toast_1.default)("Enter a valid buying price > 0", 'error');
         const prev = selected.lastBuyingPrice;
-        setSelected(Object.assign(Object.assign({}, selected), { lastBuyingPrice: buying }));
+        setSelected({ ...selected, lastBuyingPrice: buying });
         try {
             const r = await fetch(`/api/attendants/orders/price`, {
                 method: "POST",
@@ -52,8 +51,8 @@ function QuickPriceCard() {
                 throw new Error("save error");
             (0, toast_1.default)("Buying price saved", 'success');
         }
-        catch (_a) {
-            setSelected(Object.assign(Object.assign({}, selected), { lastBuyingPrice: prev }));
+        catch {
+            setSelected({ ...selected, lastBuyingPrice: prev });
             (0, toast_1.default)("Failed to save", 'error');
         }
     };

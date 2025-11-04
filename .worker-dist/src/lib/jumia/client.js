@@ -45,14 +45,27 @@ class JumiaClient {
         return this.call(path);
     }
     async call(path, init = {}) {
-        var _a;
         await this.ensureAccessToken();
         const exec = async () => {
             const url = `${this.apiBase.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-            const res = await fetch(url, Object.assign(Object.assign({}, init), { headers: Object.assign(Object.assign({ Accept: "application/json" }, init.headers), { Authorization: `Bearer ${this.accessToken}` }) }));
+            const res = await fetch(url, {
+                ...init,
+                headers: {
+                    Accept: "application/json",
+                    ...init.headers,
+                    Authorization: `Bearer ${this.accessToken}`,
+                },
+            });
             if (res.status === 401) {
                 await this.ensureAccessToken(true);
-                const retry = await fetch(url, Object.assign(Object.assign({}, init), { headers: Object.assign(Object.assign({ Accept: "application/json" }, init.headers), { Authorization: `Bearer ${this.accessToken}` }) }));
+                const retry = await fetch(url, {
+                    ...init,
+                    headers: {
+                        Accept: "application/json",
+                        ...init.headers,
+                        Authorization: `Bearer ${this.accessToken}`,
+                    },
+                });
                 if (!retry.ok) {
                     throw new Error(`${retry.status} ${await retry.text().catch(() => "")}`);
                 }
@@ -69,7 +82,7 @@ class JumiaClient {
                 return await exec();
             }
             catch (err) {
-                const message = String((_a = err === null || err === void 0 ? void 0 : err.message) !== null && _a !== void 0 ? _a : "");
+                const message = String(err?.message ?? "");
                 if (attempt >= 5 || !isRetriableError(message)) {
                     throw err;
                 }
@@ -127,7 +140,7 @@ class JumiaClient {
         try {
             return JSON.parse(text);
         }
-        catch (_a) {
+        catch {
             return text;
         }
     }

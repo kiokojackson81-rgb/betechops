@@ -1,35 +1,4 @@
 "use strict";
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
-var __await = (this && this.__await) || function (v) { return this instanceof __await ? (this.v = v, this) : new __await(v); }
-var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _arguments, generator) {
-    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-    var g = generator.apply(thisArg, _arguments || []), i, q = [];
-    return i = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i[Symbol.asyncIterator] = function () { return this; }, i;
-    function awaitReturn(f) { return function (v) { return Promise.resolve(v).then(f, reject); }; }
-    function verb(n, f) { if (g[n]) { i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; if (f) i[n] = f(i[n]); } }
-    function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
-    function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r); }
-    function fulfill(value) { resume("next", value); }
-    function reject(value) { resume("throw", value); }
-    function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
-};
-var __asyncValues = (this && this.__asyncValues) || function (o) {
-    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-    var m = o[Symbol.asyncIterator], i;
-    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
-    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
-    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.makeJumiaFetch = makeJumiaFetch;
 exports.getAccessToken = getAccessToken;
@@ -106,11 +75,10 @@ function _extractTotal(obj) {
 }
 const _clientTokenMem = {};
 async function _mintAccessTokenForClient({ apiBase, clientId, refreshToken }) {
-    var _a;
     const k = `jumia-client:${clientId}`;
     const hit = _clientTokenMem[k];
     const now = Math.floor(Date.now() / 1000);
-    if ((hit === null || hit === void 0 ? void 0 : hit.accessToken) && hit.exp && hit.exp - 60 > now)
+    if (hit?.accessToken && hit.exp && hit.exp - 60 > now)
         return hit.accessToken;
     // token endpoint commonly lives at the origin + /token
     const url = `${new URL(apiBase).origin}/token`;
@@ -125,12 +93,11 @@ async function _mintAccessTokenForClient({ apiBase, clientId, refreshToken }) {
         throw new Error(`mint token for client failed: ${r.status} ${text}`);
     }
     const j = (await r.json());
-    _clientTokenMem[k] = { accessToken: j.access_token, exp: now + ((_a = j.expires_in) !== null && _a !== void 0 ? _a : 12 * 3600) };
+    _clientTokenMem[k] = { accessToken: j.access_token, exp: now + (j.expires_in ?? 12 * 3600) };
     return j.access_token;
 }
 function makeJumiaFetch(opts) {
     return async function jumiaFetch(path, init = {}) {
-        var _a, _b;
         const token = await _mintAccessTokenForClient(opts);
         const base = opts.apiBase.replace(/\/+$/, '');
         const url = `${base}${path.startsWith('/') ? '' : '/'}${path}`;
@@ -140,7 +107,11 @@ function makeJumiaFetch(opts) {
         if (hasBody && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
             headers.set('Content-Type', 'application/json');
         }
-        const reqInit = Object.assign(Object.assign({}, init), { headers, cache: (_a = init.cache) !== null && _a !== void 0 ? _a : 'no-store' });
+        const reqInit = {
+            ...init,
+            headers,
+            cache: init.cache ?? 'no-store',
+        };
         const r = await fetch(url, reqInit);
         if (!r.ok) {
             const t = await r.text().catch(() => '');
@@ -151,27 +122,27 @@ function makeJumiaFetch(opts) {
             if (typeof r.json === 'function')
                 return await r.json();
         }
-        catch (_c) { }
+        catch { }
         try {
-            const ct = ((_b = r === null || r === void 0 ? void 0 : r.headers) === null || _b === void 0 ? void 0 : _b.get) ? (r.headers.get('content-type') || '') : '';
+            const ct = r?.headers?.get ? (r.headers.get('content-type') || '') : '';
             if (ct.includes('application/pdf') || ct.includes('octet-stream')) {
                 const b = await r.arrayBuffer();
                 return { _binary: Buffer.from(b).toString('base64'), contentType: ct };
             }
         }
-        catch (_d) { }
+        catch { }
         try {
             if (typeof r.text === 'function') {
                 const t = await r.text();
                 try {
                     return JSON.parse(t);
                 }
-                catch (_e) {
+                catch {
                     return t;
                 }
             }
         }
-        catch (_f) { }
+        catch { }
         return {};
     };
 }
@@ -200,7 +171,7 @@ async function loadConfig() {
     if (missing) {
         // In unit tests, avoid touching the database to keep tests fast and isolated
         if (process.env.NODE_ENV === 'test') {
-            cache.cfg = Object.assign(Object.assign({}, cfg), { loadedAt: now });
+            cache.cfg = { ...cfg, loadedAt: now };
             return cfg;
         }
         try {
@@ -216,11 +187,11 @@ async function loadConfig() {
                 };
             }
         }
-        catch (_a) {
+        catch {
             // ignore DB errors in diagnostics; rely on env-only
         }
     }
-    cache.cfg = Object.assign(Object.assign({}, cfg), { loadedAt: now });
+    cache.cfg = { ...cfg, loadedAt: now };
     return cfg;
 }
 /**
@@ -247,17 +218,16 @@ async function getAccessToken() {
 // Cached resolved detection
 let resolvedConfig = null;
 async function resolveJumiaConfig(ctx) {
-    var _a, _b, _c, _d;
     // Keep tests deterministic and fast: avoid probing network in test env
     if (process.env.NODE_ENV === 'test') {
-        const base = ((_a = ctx === null || ctx === void 0 ? void 0 : ctx.shopAuth) === null || _a === void 0 ? void 0 : _a.apiBase) || ((_b = ctx === null || ctx === void 0 ? void 0 : ctx.shopAuth) === null || _b === void 0 ? void 0 : _b.base_url) || (ctx === null || ctx === void 0 ? void 0 : ctx.baseHint) || process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || 'https://vendor-api.jumia.com';
+        const base = ctx?.shopAuth?.apiBase || ctx?.shopAuth?.base_url || ctx?.baseHint || process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE || 'https://vendor-api.jumia.com';
         const scheme = process.env.JUMIA_AUTH_SCHEME || 'Bearer';
         return { base, scheme };
     }
     if (resolvedConfig && resolvedConfig.base && resolvedConfig.scheme && !ctx)
         return { base: resolvedConfig.base, scheme: resolvedConfig.scheme };
     // Prefer shop-specific base if provided in context
-    const shopBase = ((_c = ctx === null || ctx === void 0 ? void 0 : ctx.shopAuth) === null || _c === void 0 ? void 0 : _c.apiBase) || ((_d = ctx === null || ctx === void 0 ? void 0 : ctx.shopAuth) === null || _d === void 0 ? void 0 : _d.base_url) || (ctx === null || ctx === void 0 ? void 0 : ctx.baseHint) || undefined;
+    const shopBase = ctx?.shopAuth?.apiBase || ctx?.shopAuth?.base_url || ctx?.baseHint || undefined;
     if (shopBase) {
         const scheme = process.env.JUMIA_AUTH_SCHEME || 'Bearer';
         return { base: shopBase, scheme };
@@ -283,7 +253,7 @@ async function resolveJumiaConfig(ctx) {
     try {
         token = await getAccessToken();
     }
-    catch (_e) {
+    catch {
         token = '';
     }
     for (const base of bases) {
@@ -313,7 +283,7 @@ async function resolveJumiaConfig(ctx) {
                     return { base, scheme };
                 }
             }
-            catch (_f) {
+            catch {
                 // network error -> try next candidate
                 continue;
             }
@@ -327,19 +297,18 @@ async function resolveJumiaConfig(ctx) {
 }
 function _unwrapAccessToken(value, defaults = {}) {
     if (typeof value === 'string') {
-        const merged = Object.assign({}, defaults);
+        const merged = { ...defaults };
         if (!merged.source)
             merged.source = 'ENV';
         return { token: value, meta: merged };
     }
     if (value && typeof value === 'object' && typeof value.access_token === 'string') {
-        const meta = Object.assign(Object.assign({}, defaults), (typeof value._meta === 'object' ? value._meta : {}));
+        const meta = { ...defaults, ...(typeof value._meta === 'object' ? value._meta : {}) };
         return { token: value.access_token, meta };
     }
     throw new Error('Invalid token payload returned from getJumiaAccessToken');
 }
 async function jumiaFetch(path, init = {}) {
-    var _a, _b, _c, _d, _e;
     function isFetchOpts(o) {
         return (o &&
             (o.shopAuth !== undefined ||
@@ -348,13 +317,13 @@ async function jumiaFetch(path, init = {}) {
                 o.rawResponse !== undefined));
     }
     const cfg = await loadConfig();
-    const resolved = await resolveJumiaConfig({ shopAuth: (_a = init === null || init === void 0 ? void 0 : init.shopAuth) !== null && _a !== void 0 ? _a : undefined });
+    const resolved = await resolveJumiaConfig({ shopAuth: init?.shopAuth ?? undefined });
     // Detect whether caller passed FetchOpts (with shopAuth/shopCode) or plain RequestInit
     const maybeOpts = init;
     const fetchOpts = isFetchOpts(maybeOpts) ? maybeOpts : init;
-    const rawResponse = Boolean(fetchOpts === null || fetchOpts === void 0 ? void 0 : fetchOpts.rawResponse);
+    const rawResponse = Boolean(fetchOpts?.rawResponse);
     // Prefer per-shop base first (when provided), then canonical env, then DB-config, then resolved probe
-    const shopBase = ((_b = fetchOpts.shopAuth) === null || _b === void 0 ? void 0 : _b.apiBase) || ((_c = fetchOpts.shopAuth) === null || _c === void 0 ? void 0 : _c.base_url);
+    const shopBase = fetchOpts.shopAuth?.apiBase || fetchOpts.shopAuth?.base_url;
     const envBase = process.env.base_url || process.env.BASE_URL || process.env.JUMIA_API_BASE;
     const apiBase = shopBase || envBase || cfg.apiBase || resolved.base || resolveApiBase(fetchOpts.shopAuth);
     if (!apiBase)
@@ -366,7 +335,7 @@ async function jumiaFetch(path, init = {}) {
         const tok = await oidc_1.getJumiaAccessToken(fetchOpts.shopAuth);
         const resolvedTok = _unwrapAccessToken(tok, {
             source: fetchOpts.shopAuth ? 'SHOP' : undefined,
-            platform: (_d = fetchOpts.shopAuth) === null || _d === void 0 ? void 0 : _d.platform,
+            platform: fetchOpts.shopAuth?.platform,
         });
         accessToken = resolvedTok.token;
         tokenMeta = resolvedTok.meta;
@@ -379,7 +348,7 @@ async function jumiaFetch(path, init = {}) {
             accessToken = resolvedTok.token;
             tokenMeta = resolvedTok.meta;
         }
-        catch (_f) {
+        catch {
             // final fallback: older helper
             const t = await getAccessToken();
             accessToken = t;
@@ -394,14 +363,18 @@ async function jumiaFetch(path, init = {}) {
         headers.set('Content-Type', 'application/json');
     }
     // Debug headers
-    if (tokenMeta === null || tokenMeta === void 0 ? void 0 : tokenMeta.source)
+    if (tokenMeta?.source)
         headers.set('X-Auth-Source', String(tokenMeta.source));
-    if (tokenMeta === null || tokenMeta === void 0 ? void 0 : tokenMeta.platform)
+    if (tokenMeta?.platform)
         headers.set('X-Platform', String(tokenMeta.platform));
     if (fetchOpts.shopCode)
         headers.set('X-Shop-Code', String(fetchOpts.shopCode));
-    const { shopAuth: _sa, shopCode: _sc, rawResponse: _rr, headers: _unusedHeaders } = fetchOpts, rest = __rest(fetchOpts, ["shopAuth", "shopCode", "rawResponse", "headers"]);
-    const requestInit = Object.assign(Object.assign({}, rest), { headers, cache: (_e = rest.cache) !== null && _e !== void 0 ? _e : 'no-store' });
+    const { shopAuth: _sa, shopCode: _sc, rawResponse: _rr, headers: _unusedHeaders, ...rest } = fetchOpts;
+    const requestInit = {
+        ...rest,
+        headers,
+        cache: rest.cache ?? 'no-store',
+    };
     // In unit tests, avoid noisy network failures for basic orders calls when using the synthetic test token.
     if (process.env.NODE_ENV === 'test') {
         try {
@@ -426,13 +399,12 @@ async function jumiaFetch(path, init = {}) {
                 return { orders: [], nextToken: null, isLastPage: true };
             }
         }
-        catch (_g) { }
+        catch { }
     }
     // Use the shared rate-limited queue to perform the request with retries
     // Identify per-key (per-shop) limiter key when provided by callers
-    const perKey = (fetchOpts === null || fetchOpts === void 0 ? void 0 : fetchOpts.shopKey) ? String(fetchOpts.shopKey) : '';
+    const perKey = fetchOpts?.shopKey ? String(fetchOpts.shopKey) : '';
     const attempt = async () => {
-        var _a, _b, _c;
         const start = Date.now();
         const r = await fetch(url, requestInit);
         const latency = Date.now() - start;
@@ -442,8 +414,8 @@ async function jumiaFetch(path, init = {}) {
             console.error('[jumiaFetch] HTTP error', {
                 url,
                 status: r.status,
-                authSource: tokenMeta === null || tokenMeta === void 0 ? void 0 : tokenMeta.source,
-                platform: tokenMeta === null || tokenMeta === void 0 ? void 0 : tokenMeta.platform,
+                authSource: tokenMeta?.source,
+                platform: tokenMeta?.platform,
                 body: String(msg).slice(0, 400),
             });
             const err = new Error(`Jumia ${path} failed: ${r.status} ${String(msg)}`);
@@ -451,19 +423,19 @@ async function jumiaFetch(path, init = {}) {
             err.body = String(msg);
             // Propagate Retry-After header (seconds) to guide backoff when rate-limited
             try {
-                const ra = typeof ((_a = r.headers) === null || _a === void 0 ? void 0 : _a.get) === 'function' ? r.headers.get('retry-after') : null;
+                const ra = typeof r.headers?.get === 'function' ? r.headers.get('retry-after') : null;
                 if (ra) {
                     const seconds = Number(ra);
                     if (!Number.isNaN(seconds) && seconds >= 0)
                         err.retryAfterMs = seconds * 1000;
                 }
             }
-            catch (_d) { }
+            catch { }
             throw err;
         }
         // On success, adapt per-key rate based on vendor hints if available
         try {
-            const lim = ((_b = r.headers) === null || _b === void 0 ? void 0 : _b.get) ? r.headers.get('x-ratelimit-limit') : null;
+            const lim = r.headers?.get ? r.headers.get('x-ratelimit-limit') : null;
             // Heuristic: if header present and looks like per-second limit up to 10, adapt per-key interval
             if (perKey && lim) {
                 const n = Number(lim);
@@ -473,10 +445,10 @@ async function jumiaFetch(path, init = {}) {
                 }
             }
         }
-        catch (_e) { }
+        catch { }
         if (rawResponse)
             return r;
-        const contentType = (typeof ((_c = r.headers) === null || _c === void 0 ? void 0 : _c.get) === 'function' ? r.headers.get('content-type') : '') || '';
+        const contentType = (typeof r.headers?.get === 'function' ? r.headers.get('content-type') : '') || '';
         if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
             const b = await r.arrayBuffer();
             return { _binary: Buffer.from(b).toString('base64'), contentType };
@@ -486,23 +458,23 @@ async function jumiaFetch(path, init = {}) {
                 return await r.clone().json();
             }
         }
-        catch (_f) { }
+        catch { }
         try {
             if (typeof r.json === 'function') {
                 return await r.json();
             }
         }
-        catch (_g) { }
+        catch { }
         try {
             if (typeof r.text === 'function')
                 return await r.text();
         }
-        catch (_h) { }
+        catch { }
         return {};
     };
     // Coalesce concurrent identical GETs to avoid stampede on same URL
-    const method = String((requestInit === null || requestInit === void 0 ? void 0 : requestInit.method) || 'GET').toUpperCase();
-    const canCoalesce = method === 'GET' && String((tokenMeta === null || tokenMeta === void 0 ? void 0 : tokenMeta.source) || '') !== 'SHOP';
+    const method = String(requestInit?.method || 'GET').toUpperCase();
+    const canCoalesce = method === 'GET' && String(tokenMeta?.source || '') !== 'SHOP';
     const coalesceKey = canCoalesce ? `${method} ${url}` : '';
     if (!coalesceKey) {
         return perKey ? _rateLimiter.schedulePerKey(perKey, attempt) : _rateLimiter.scheduleWithRetry(attempt);
@@ -523,14 +495,14 @@ async function jumiaFetch(path, init = {}) {
         try {
             inflight.delete(coalesceKey);
         }
-        catch (_a) { }
+        catch { }
     });
     return p;
 }
 /** Resolve API base (keeps your existing logic but ensures a default). */
 function resolveApiBase(shopAuth) {
-    return ((shopAuth === null || shopAuth === void 0 ? void 0 : shopAuth.apiBase) ||
-        (shopAuth === null || shopAuth === void 0 ? void 0 : shopAuth.base_url) ||
+    return (shopAuth?.apiBase ||
+        shopAuth?.base_url ||
         process.env.base_url ||
         process.env.BASE_URL ||
         process.env.JUMIA_API_BASE ||
@@ -538,7 +510,6 @@ function resolveApiBase(shopAuth) {
 }
 /** Load per-shop credentials (if any). Returns normalized ShopAuthJson or undefined. */
 async function loadShopAuthById(shopId) {
-    var _a, _b;
     if (process.env.NODE_ENV === 'test')
         return undefined;
     const baseFromEnv = process.env.base_url ||
@@ -551,7 +522,7 @@ async function loadShopAuthById(shopId) {
     try {
         const shop = await prisma_1.prisma.shop.findUnique({ where: { id: shopId }, select: { platform: true, credentialsEncrypted: true, apiConfig: true } });
         if (shop) {
-            let raw = (_b = (_a = shop.credentialsEncrypted) !== null && _a !== void 0 ? _a : shop.apiConfig) !== null && _b !== void 0 ? _b : undefined;
+            let raw = shop.credentialsEncrypted ?? shop.apiConfig ?? undefined;
             if (raw && raw.payload) {
                 const dec = (0, secure_json_1.decryptJson)(raw);
                 if (dec)
@@ -576,14 +547,17 @@ async function loadShopAuthById(shopId) {
             try {
                 parsed = oidc_1.ShopAuthSchema.partial().parse(raw || {});
             }
-            catch (_c) {
+            catch {
                 parsed = {};
             }
             if (!parsed.platform)
                 parsed.platform = shop.platform || 'JUMIA';
             if (!parsed.tokenUrl)
                 parsed.tokenUrl = tokenUrlFromEnv;
-            const auth = Object.assign(Object.assign({}, parsed), { apiBase: (raw === null || raw === void 0 ? void 0 : raw.apiBase) || (raw === null || raw === void 0 ? void 0 : raw.base_url) || baseFromEnv });
+            const auth = {
+                ...parsed,
+                apiBase: raw?.apiBase || raw?.base_url || baseFromEnv,
+            };
             return auth;
         }
         // Try legacy jumiaShop -> jumiaAccount mapping when the Shop record does not have embedded credentials
@@ -591,7 +565,7 @@ async function loadShopAuthById(shopId) {
             where: { id: shopId },
             include: { account: true },
         });
-        if (jShop === null || jShop === void 0 ? void 0 : jShop.account) {
+        if (jShop?.account) {
             return {
                 platform: 'JUMIA',
                 clientId: jShop.account.clientId,
@@ -601,7 +575,7 @@ async function loadShopAuthById(shopId) {
             };
         }
     }
-    catch (_d) {
+    catch {
         return undefined;
     }
     return undefined;
@@ -616,7 +590,7 @@ async function loadDefaultShopAuth() {
             return undefined;
         return await loadShopAuthById(shop.id);
     }
-    catch (_a) {
+    catch {
         return undefined;
     }
 }
@@ -693,31 +667,29 @@ const _rateLimiter = (() => {
         });
     }
     async function scheduleWithRetry(fn, opts) {
-        var _a, _b;
-        const retries = (_a = opts === null || opts === void 0 ? void 0 : opts.retries) !== null && _a !== void 0 ? _a : 4;
-        const baseDelay = (_b = opts === null || opts === void 0 ? void 0 : opts.baseDelayMs) !== null && _b !== void 0 ? _b : 500;
+        const retries = opts?.retries ?? 4;
+        const baseDelay = opts?.baseDelayMs ?? 500;
         let attempt = 0;
         const runAttempt = async () => {
-            var _a;
             try {
                 return await schedule(fn);
             }
             catch (err) {
                 attempt += 1;
-                const status = (_a = err === null || err === void 0 ? void 0 : err.status) !== null && _a !== void 0 ? _a : 0;
+                const status = err?.status ?? 0;
                 // retry only on 429 or 5xx
                 if (attempt <= retries && (status === 429 || status >= 500)) {
                     _metrics.totalRetries += 1;
                     // honor Retry-After if present in err.body (best-effort parsing)
-                    let retryAfterMs = (err === null || err === void 0 ? void 0 : err.retryAfterMs) || 0;
+                    let retryAfterMs = err?.retryAfterMs || 0;
                     if (!retryAfterMs) {
                         try {
-                            const bodyText = String((err === null || err === void 0 ? void 0 : err.body) || '');
+                            const bodyText = String(err?.body || '');
                             const m = bodyText.match(/Retry-After:\s*(\d+)/i);
                             if (m)
                                 retryAfterMs = Number(m[1]) * 1000;
                         }
-                        catch (_b) { }
+                        catch { }
                     }
                     const jitter = Math.floor(Math.random() * 250);
                     const delay = retryAfterMs || Math.pow(2, attempt) * baseDelay + jitter;
@@ -766,11 +738,11 @@ async function getSalesToday() {
     const shopAuth = await loadDefaultShopAuth();
     // Prefer explicit endpoint override; otherwise use /orders and count items for today
     const today = new Date().toISOString().slice(0, 10);
-    const explicit = endpoints === null || endpoints === void 0 ? void 0 : endpoints.salesToday;
+    const explicit = endpoints?.salesToday;
     const path = explicit || `/orders?createdAfter=${today}&createdBefore=${today}`;
     const j = await jumiaFetch(path, shopAuth ? { shopAuth } : {});
     // The Orders API returns { orders: [...] } per the doc
-    const orders = Array.isArray(j === null || j === void 0 ? void 0 : j.orders) ? j.orders : Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : [];
+    const orders = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.data) ? j.data : [];
     return { total: orders.length };
 }
 // Orders pending pricing (normalize to { count })
@@ -797,14 +769,14 @@ async function getPendingPricingCount() {
         console.error("getPendingPricingCount DB fallback:", err instanceof Error ? err.message : err);
         const { endpoints } = await loadConfig();
         const shopAuth = await loadDefaultShopAuth();
-        const explicit = endpoints === null || endpoints === void 0 ? void 0 : endpoints.pendingPricing;
+        const explicit = endpoints?.pendingPricing;
         const path = explicit || "/orders?status=PENDING";
         const j = await jumiaFetch(path, shopAuth ? { shopAuth } : {});
-        const orders = Array.isArray(j === null || j === void 0 ? void 0 : j.orders)
+        const orders = Array.isArray(j?.orders)
             ? j.orders
-            : Array.isArray(j === null || j === void 0 ? void 0 : j.items)
+            : Array.isArray(j?.items)
                 ? j.items
-                : Array.isArray(j === null || j === void 0 ? void 0 : j.data)
+                : Array.isArray(j?.data)
                     ? j.data
                     : [];
         return { count: orders.length };
@@ -814,16 +786,16 @@ async function getPendingPricingCount() {
 async function getReturnsWaitingPickup() {
     const { endpoints } = await loadConfig();
     const shopAuth = await loadDefaultShopAuth();
-    const explicit = endpoints === null || endpoints === void 0 ? void 0 : endpoints.returnsWaitingPickup;
+    const explicit = endpoints?.returnsWaitingPickup;
     // Prefer explicit; otherwise check orders with RETURNED status or a /returns endpoint
     const pathCandidates = explicit ? [explicit] : ['/orders?status=RETURNED', '/returns', '/returns?status=waiting-pickup'];
     for (const p of pathCandidates) {
         try {
             const j = await jumiaFetch(p, shopAuth ? { shopAuth } : {});
-            const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders) ? j.orders : Array.isArray(j === null || j === void 0 ? void 0 : j.items) ? j.items : Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : [];
+            const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
             return { count: arr.length };
         }
-        catch (_a) {
+        catch {
             // try next candidate
             continue;
         }
@@ -843,7 +815,7 @@ async function diagnoseOidc(opts) {
         hasClientSecret: Boolean(cfg.clientSecret || process.env.JUMIA_CLIENT_SECRET || process.env.OIDC_CLIENT_SECRET),
         hasRefreshToken: Boolean(cfg.refreshToken || process.env.JUMIA_REFRESH_TOKEN || process.env.OIDC_REFRESH_TOKEN),
     };
-    if (opts === null || opts === void 0 ? void 0 : opts.test) {
+    if (opts?.test) {
         try {
             // build the same candidate list we would use in getAccessToken
             const candidates = [];
@@ -873,7 +845,7 @@ async function diagnoseOidc(opts) {
                 const expiresIn = info.expiresAt ? Math.max(0, Math.floor((info.expiresAt - now) / 1000)) : undefined;
                 res.test = { ok: true, expiresIn };
             }
-            catch (_a) {
+            catch {
                 // fall back to generic access token flow; we can't introspect the generic cache here reliably,
                 // so just attempt to mint and report success without TTL.
                 await getAccessToken();
@@ -890,20 +862,19 @@ async function diagnoseOidc(opts) {
 // --- New: marketplace-specific normalized fetchers ---
 const normalize_1 = require("./connectors/normalize");
 async function fetchOrdersForShop(shopId, opts) {
-    var _a;
     // Load shop credentials from DB or env
     const cfg = await loadConfig();
     // Use /orders and allow since to be mapped to createdAfter
-    const pathBase = ((_a = cfg.endpoints) === null || _a === void 0 ? void 0 : _a.pendingPricing) || '/orders';
+    const pathBase = cfg.endpoints?.pendingPricing || '/orders';
     let q = '';
-    if (opts === null || opts === void 0 ? void 0 : opts.since) {
+    if (opts?.since) {
         // map since to createdAfter (ISO date expected)
         q = `?createdAfter=${encodeURIComponent(opts.since)}`;
     }
     try {
         const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
         const j = await jumiaFetch(pathBase + q, shopAuth ? { shopAuth } : {});
-        const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders) ? j.orders : Array.isArray(j === null || j === void 0 ? void 0 : j.items) ? j.items : (j === null || j === void 0 ? void 0 : j.data) || [];
+        const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : j?.data || [];
         return arr.map((r) => (0, normalize_1.normalizeFromJumia)(r, shopId));
     }
     catch (e) {
@@ -911,10 +882,9 @@ async function fetchOrdersForShop(shopId, opts) {
     }
 }
 async function fetchPayoutsForShop(shopId, opts) {
-    var _a;
     const cfg = await loadConfig();
-    const pathBase = ((_a = cfg.endpoints) === null || _a === void 0 ? void 0 : _a.salesToday) || '/payout-statement';
-    const q = (opts === null || opts === void 0 ? void 0 : opts.day) ? `?createdAfter=${encodeURIComponent(opts.day)}&page=1&size=50` : '?page=1&size=50';
+    const pathBase = cfg.endpoints?.salesToday || '/payout-statement';
+    const q = opts?.day ? `?createdAfter=${encodeURIComponent(opts.day)}&page=1&size=50` : '?page=1&size=50';
     const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
     const j = await jumiaFetch(pathBase + q, shopAuth ? { shopAuth } : {});
     return j;
@@ -932,13 +902,13 @@ async function getShops() {
     if (hit && now - hit.ts < TTL_MS)
         return hit.items;
     const j = await jumiaFetch('/shops');
-    const items = (j === null || j === void 0 ? void 0 : j.shops) || j || [];
+    const items = j?.shops || j || [];
     global.__jumiaShopsCache = { ts: now, items };
     return items;
 }
 async function getShopsOfMasterShop() {
     const j = await jumiaFetch('/shops-of-master-shop');
-    return (j === null || j === void 0 ? void 0 : j.shops) || j || [];
+    return j?.shops || j || [];
 }
 async function getCatalogBrands(page = 1) {
     const shopAuth = await loadDefaultShopAuth();
@@ -952,15 +922,14 @@ async function getCatalogCategories(page = 1, attributeSetName) {
     return j;
 }
 async function getCatalogProducts(opts) {
-    var _a;
-    const o = Object.assign({}, (opts || {}));
+    const o = { ...(opts || {}) };
     // Auto-inject first shopId if caller didn't specify
     if (!o.shopId) {
         try {
             // getFirstShopId() returns string | null; coerce null to undefined to satisfy type
-            o.shopId = (_a = (await getFirstShopId())) !== null && _a !== void 0 ? _a : undefined;
+            o.shopId = (await getFirstShopId()) ?? undefined;
         }
-        catch (_b) {
+        catch {
             // ignore; fall back to default shop auth
         }
     }
@@ -988,12 +957,11 @@ async function getCatalogProducts(opts) {
 }
 // Helper: return first available shopId or null
 async function getFirstShopId() {
-    var _a, _b;
     try {
         const shops = await getShops();
-        return ((_a = shops === null || shops === void 0 ? void 0 : shops[0]) === null || _a === void 0 ? void 0 : _a.id) || ((_b = shops === null || shops === void 0 ? void 0 : shops[0]) === null || _b === void 0 ? void 0 : _b.shopId) || null;
+        return shops?.[0]?.id || shops?.[0]?.shopId || null;
     }
-    catch (_c) {
+    catch {
         return null;
     }
 }
@@ -1003,8 +971,8 @@ async function getCatalogProductTotals(shopId) {
     const total = (res && typeof res === 'object' && res.total) ||
         (res && typeof res === 'object' && res.totalCount) ||
         (res && typeof res === 'object' && res.totalElements) ||
-        (Array.isArray(res === null || res === void 0 ? void 0 : res.products) ? res.products.length : 0);
-    const approx = !Boolean((res === null || res === void 0 ? void 0 : res.total) || (res === null || res === void 0 ? void 0 : res.totalCount) || (res === null || res === void 0 ? void 0 : res.totalElements));
+        (Array.isArray(res?.products) ? res.products.length : 0);
+    const approx = !Boolean(res?.total || res?.totalCount || res?.totalElements);
     return { total: Number(total || 0), approx };
 }
 async function postFeedProductsStock(payload) {
@@ -1029,34 +997,37 @@ async function getFeedById(id) {
 }
 async function getOrders(opts) {
     const params = new URLSearchParams();
-    if (opts === null || opts === void 0 ? void 0 : opts.status)
+    if (opts?.status)
         params.set('status', opts.status);
-    if (opts === null || opts === void 0 ? void 0 : opts.createdAfter)
+    if (opts?.createdAfter)
         params.set('createdAfter', opts.createdAfter);
-    if (opts === null || opts === void 0 ? void 0 : opts.createdBefore)
+    if (opts?.createdBefore)
         params.set('createdBefore', opts.createdBefore);
-    if (opts === null || opts === void 0 ? void 0 : opts.token)
+    if (opts?.token)
         params.set('token', opts.token);
-    if (opts === null || opts === void 0 ? void 0 : opts.size)
+    if (opts?.size)
         params.set('size', String(opts.size));
-    if (opts === null || opts === void 0 ? void 0 : opts.country)
+    if (opts?.country)
         params.set('country', opts.country);
-    if (opts === null || opts === void 0 ? void 0 : opts.shopId)
+    if (opts?.shopId)
         params.set('shopId', opts.shopId);
-    const shopAuth = (opts === null || opts === void 0 ? void 0 : opts.shopId) ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
+    const shopAuth = opts?.shopId ? await loadShopAuthById(opts.shopId).catch(() => undefined) : await loadDefaultShopAuth();
     const vendorParams = new URLSearchParams(params);
-    if (shopAuth && (opts === null || opts === void 0 ? void 0 : opts.shopId)) {
+    if (shopAuth && opts?.shopId) {
         vendorParams.delete('shopId');
     }
     const q = vendorParams.toString();
     const path = `/orders${q ? `?${q}` : ''}`;
-    return await jumiaFetch(path, shopAuth ? { shopAuth, shopKey: opts === null || opts === void 0 ? void 0 : opts.shopId } : {});
+    return await jumiaFetch(path, shopAuth ? { shopAuth, shopKey: opts?.shopId } : {});
 }
-async function getOrderItems(orderId) {
+async function getOrderItems(arg) {
+    const orderId = typeof arg === 'string' ? arg : String(arg?.orderId || '');
     if (!orderId)
         throw new Error('orderId required');
-    const shopAuth = await loadDefaultShopAuth();
-    return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, shopAuth ? { shopAuth } : {});
+    const shopId = typeof arg === 'object' && arg?.shopId ? String(arg.shopId) : '';
+    const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
+    const init = shopAuth ? { shopAuth, shopKey: shopId || undefined } : {};
+    return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, init);
 }
 /** Catalog: attribute set details by id */
 async function getCatalogAttributeSet(id) {
@@ -1067,7 +1038,7 @@ async function getCatalogAttributeSet(id) {
 }
 /** Catalog: stock pages (global stock per product). Supports token/size/productSids */
 async function getCatalogStock(opts) {
-    const o = Object.assign({}, (opts || {}));
+    const o = { ...(opts || {}) };
     const params = [];
     if (o.token)
         params.push(`token=${encodeURIComponent(o.token)}`);
@@ -1079,14 +1050,15 @@ async function getCatalogStock(opts) {
     const shopAuth = await loadDefaultShopAuth();
     return await jumiaFetch(`/catalog/stock${q}`, shopAuth ? { shopAuth } : {});
 }
-/** Orders: shipment providers for one or more order items */
-async function getShipmentProviders(orderItemIds) {
-    const ids = Array.isArray(orderItemIds) ? orderItemIds : [orderItemIds];
+async function getShipmentProviders(arg) {
+    const ids = Array.isArray(arg) ? arg : Array.isArray(arg?.orderItemIds) ? arg.orderItemIds : [];
     if (!ids.length)
         throw new Error('orderItemIds required');
     const qs = ids.map((id) => `orderItemId=${encodeURIComponent(id)}`).join('&');
-    const shopAuth = await loadDefaultShopAuth();
-    return await jumiaFetch(`/orders/shipment-providers?${qs}`, shopAuth ? { shopAuth } : {});
+    const shopId = typeof arg === 'object' && arg?.shopId ? String(arg.shopId) : '';
+    const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
+    const init = shopAuth ? { shopAuth, shopKey: shopId || undefined } : {};
+    return await jumiaFetch(`/orders/shipment-providers?${qs}`, init);
 }
 /** Orders: cancel items */
 async function postOrdersCancel(payload) {
@@ -1094,19 +1066,58 @@ async function postOrdersCancel(payload) {
 }
 /** Orders: pack (v1) */
 async function postOrdersPack(payload) {
-    return await jumiaFetch('/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+    // Allow passing shopId to scope auth to a specific shop
+    const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+    const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+    if (body && typeof body === 'object')
+        delete body.shopId;
+    if (shopId) {
+        const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+        const init = shopAuth
+            ? { shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) }
+            : { method: 'POST', body: JSON.stringify(body) };
+        return await jumiaFetch('/orders/pack', init);
+    }
+    return await jumiaFetch('/orders/pack', { method: 'POST', body: JSON.stringify(body) });
 }
 /** Orders: pack (v2) */
 async function postOrdersPackV2(payload) {
-    return await jumiaFetch('/v2/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+    const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+    const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+    if (body && typeof body === 'object')
+        delete body.shopId;
+    if (shopId) {
+        const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+        const init = shopAuth ? { shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } : { method: 'POST', body: JSON.stringify(body) };
+        return await jumiaFetch('/v2/orders/pack', init);
+    }
+    return await jumiaFetch('/v2/orders/pack', { method: 'POST', body: JSON.stringify(body) });
 }
 /** Orders: ready to ship */
 async function postOrdersReadyToShip(payload) {
-    return await jumiaFetch('/orders/ready-to-ship', { method: 'POST', body: JSON.stringify(payload) });
+    const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+    const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+    if (body && typeof body === 'object')
+        delete body.shopId;
+    if (shopId) {
+        const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+        const init = shopAuth ? { shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } : { method: 'POST', body: JSON.stringify(body) };
+        return await jumiaFetch('/orders/ready-to-ship', init);
+    }
+    return await jumiaFetch('/orders/ready-to-ship', { method: 'POST', body: JSON.stringify(body) });
 }
 /** Orders: print labels */
 async function postOrdersPrintLabels(payload) {
-    return await jumiaFetch('/orders/print-labels', { method: 'POST', body: JSON.stringify(payload) });
+    const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+    const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+    if (body && typeof body === 'object')
+        delete body.shopId;
+    if (shopId) {
+        const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+        const init = shopAuth ? { shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } : { method: 'POST', body: JSON.stringify(body) };
+        return await jumiaFetch('/orders/print-labels', init);
+    }
+    return await jumiaFetch('/orders/print-labels', { method: 'POST', body: JSON.stringify(body) });
 }
 /** Consignment: create order */
 async function postConsignmentOrder(payload) {
@@ -1135,77 +1146,74 @@ async function getConsignmentStock(params) {
  * - Uses `token` query param for subsequent pages when `nextToken` is returned
  * - On 401 it will attempt one token refresh via `getAccessToken()` and retry once.
  */
-function jumiaPaginator(pathBase_1) {
-    return __asyncGenerator(this, arguments, function* jumiaPaginator_1(pathBase, initialParams = {}, fetcher = jumiaFetch) {
-        var _a, _b, _c, _d;
-        let token = initialParams['token'] || initialParams['nextToken'] || '';
-        const params = Object.assign({}, initialParams);
-        // ensure token param not duplicated in query string builder below
-        delete params.token;
-        delete params.nextToken;
-        let retriedOn401 = false;
-        const seenTokens = new Set();
-        while (true) {
-            const qParts = [];
-            for (const [k, v] of Object.entries(params)) {
-                qParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
-            }
-            if (token)
-                qParts.push(`token=${encodeURIComponent(token)}`);
-            const q = qParts.length ? `?${qParts.join('&')}` : '';
-            try {
-                const page = yield __await(fetcher(`${pathBase}${q}`));
-                yield yield __await(page);
-                // determine next token from common fields by narrowing unknown
-                if (page && typeof page === 'object') {
-                    const pRec = page;
-                    // If vendor indicates last page, stop regardless of token value.
-                    if (pRec.isLastPage === true) {
-                        token = '';
-                    }
-                    else {
-                        const nxt = (_c = (_b = (_a = pRec.nextToken) !== null && _a !== void 0 ? _a : pRec.token) !== null && _b !== void 0 ? _b : pRec.next) !== null && _c !== void 0 ? _c : '';
-                        token = String(nxt || '');
-                    }
-                }
-                else {
+async function* jumiaPaginator(pathBase, initialParams = {}, fetcher = jumiaFetch) {
+    let token = initialParams['token'] || initialParams['nextToken'] || '';
+    const params = { ...initialParams };
+    // ensure token param not duplicated in query string builder below
+    delete params.token;
+    delete params.nextToken;
+    let retriedOn401 = false;
+    const seenTokens = new Set();
+    while (true) {
+        const qParts = [];
+        for (const [k, v] of Object.entries(params)) {
+            qParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+        }
+        if (token)
+            qParts.push(`token=${encodeURIComponent(token)}`);
+        const q = qParts.length ? `?${qParts.join('&')}` : '';
+        try {
+            const page = await fetcher(`${pathBase}${q}`);
+            yield page;
+            // determine next token from common fields by narrowing unknown
+            if (page && typeof page === 'object') {
+                const pRec = page;
+                // If vendor indicates last page, stop regardless of token value.
+                if (pRec.isLastPage === true) {
                     token = '';
                 }
-                // Break if next token repeats to avoid infinite loops on buggy tokens
-                if (token) {
-                    if (seenTokens.has(token)) {
-                        token = '';
-                    }
-                    else {
-                        seenTokens.add(token);
-                    }
+                else {
+                    const nxt = pRec.nextToken ?? pRec.token ?? pRec.next ?? '';
+                    token = String(nxt || '');
                 }
-                if (!token)
-                    break; // no more pages
-                // small inter-page delay to avoid burst rate spikes
-                yield __await(new Promise((res) => setTimeout(res, 200)));
-                // continue loop to fetch next page
             }
-            catch (err) {
-                // if unauthorized, try refreshing token once and retry
-                const status = (_d = err === null || err === void 0 ? void 0 : err.status) !== null && _d !== void 0 ? _d : 0;
-                const msg = String((err === null || err === void 0 ? void 0 : err.message) || '');
-                if ((status === 401 || /unauthorized/i.test(msg)) && !retriedOn401) {
-                    retriedOn401 = true;
-                    // attempt to refresh token cache and retry
-                    try {
-                        yield __await(getAccessToken());
-                        // continue to retry fetch in next loop iteration (no token change here)
-                        continue;
-                    }
-                    catch (_e) {
-                        throw err; // original error
-                    }
+            else {
+                token = '';
+            }
+            // Break if next token repeats to avoid infinite loops on buggy tokens
+            if (token) {
+                if (seenTokens.has(token)) {
+                    token = '';
                 }
-                throw err;
+                else {
+                    seenTokens.add(token);
+                }
             }
+            if (!token)
+                break; // no more pages
+            // small inter-page delay to avoid burst rate spikes
+            await new Promise((res) => setTimeout(res, 200));
+            // continue loop to fetch next page
         }
-    });
+        catch (err) {
+            // if unauthorized, try refreshing token once and retry
+            const status = err?.status ?? 0;
+            const msg = String(err?.message || '');
+            if ((status === 401 || /unauthorized/i.test(msg)) && !retriedOn401) {
+                retriedOn401 = true;
+                // attempt to refresh token cache and retry
+                try {
+                    await getAccessToken();
+                    // continue to retry fetch in next loop iteration (no token change here)
+                    continue;
+                }
+                catch {
+                    throw err; // original error
+                }
+            }
+            throw err;
+        }
+    }
 }
 /**
  * Quick vendor product counter with safety caps to avoid long-running scans.
@@ -1222,27 +1230,26 @@ function normalizeKey(value) {
     return text;
 }
 function productStatusKey(it) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     // Try common top-level fields first
-    let raw = (_e = (_d = (_c = (_b = (_a = it === null || it === void 0 ? void 0 : it.status) !== null && _a !== void 0 ? _a : it === null || it === void 0 ? void 0 : it.itemStatus) !== null && _b !== void 0 ? _b : it === null || it === void 0 ? void 0 : it.productStatus) !== null && _c !== void 0 ? _c : it === null || it === void 0 ? void 0 : it.state) !== null && _d !== void 0 ? _d : it === null || it === void 0 ? void 0 : it.listingStatus) !== null && _e !== void 0 ? _e : it === null || it === void 0 ? void 0 : it.statusName;
+    let raw = it?.status ?? it?.itemStatus ?? it?.productStatus ?? it?.state ?? it?.listingStatus ?? it?.statusName;
     let normalized = normalizeKey(raw);
     if (normalized)
         return normalized;
     // Some payloads expose status per-variation rather than at product level
     try {
-        const vars = Array.isArray(it === null || it === void 0 ? void 0 : it.variations) ? it.variations : [];
+        const vars = Array.isArray(it?.variations) ? it.variations : [];
         for (const v of vars) {
-            raw = (_k = (_j = (_h = (_g = (_f = v === null || v === void 0 ? void 0 : v.status) !== null && _f !== void 0 ? _f : v === null || v === void 0 ? void 0 : v.itemStatus) !== null && _g !== void 0 ? _g : v === null || v === void 0 ? void 0 : v.productStatus) !== null && _h !== void 0 ? _h : v === null || v === void 0 ? void 0 : v.state) !== null && _j !== void 0 ? _j : v === null || v === void 0 ? void 0 : v.listingStatus) !== null && _k !== void 0 ? _k : v === null || v === void 0 ? void 0 : v.statusName;
+            raw = v?.status ?? v?.itemStatus ?? v?.productStatus ?? v?.state ?? v?.listingStatus ?? v?.statusName;
             normalized = normalizeKey(raw);
             if (normalized)
                 return normalized;
         }
     }
-    catch (_p) { }
+    catch { }
     // Some payloads namespace listing info
-    const listing = (it === null || it === void 0 ? void 0 : it.listing) || (it === null || it === void 0 ? void 0 : it.product) || (it === null || it === void 0 ? void 0 : it.details);
+    const listing = it?.listing || it?.product || it?.details;
     if (listing && typeof listing === 'object') {
-        raw = (_o = (_m = (_l = listing === null || listing === void 0 ? void 0 : listing.status) !== null && _l !== void 0 ? _l : listing === null || listing === void 0 ? void 0 : listing.itemStatus) !== null && _m !== void 0 ? _m : listing === null || listing === void 0 ? void 0 : listing.state) !== null && _o !== void 0 ? _o : listing === null || listing === void 0 ? void 0 : listing.listingStatus;
+        raw = listing?.status ?? listing?.itemStatus ?? listing?.state ?? listing?.listingStatus;
         normalized = normalizeKey(raw);
         if (normalized)
             return normalized;
@@ -1250,27 +1257,35 @@ function productStatusKey(it) {
     return 'unknown';
 }
 function productQcStatusKey(it) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w;
     // Try common top-level fields first
-    let raw = (_m = (_l = (_k = (_j = (_g = (_f = (_e = (_c = (_a = it === null || it === void 0 ? void 0 : it.qcStatus) !== null && _a !== void 0 ? _a : (_b = it === null || it === void 0 ? void 0 : it.qualityControl) === null || _b === void 0 ? void 0 : _b.status) !== null && _c !== void 0 ? _c : (_d = it === null || it === void 0 ? void 0 : it.quality_control) === null || _d === void 0 ? void 0 : _d.status) !== null && _e !== void 0 ? _e : it === null || it === void 0 ? void 0 : it.qualityCheckStatus) !== null && _f !== void 0 ? _f : it === null || it === void 0 ? void 0 : it.quality_control_status) !== null && _g !== void 0 ? _g : (_h = it === null || it === void 0 ? void 0 : it.qc) === null || _h === void 0 ? void 0 : _h.status) !== null && _j !== void 0 ? _j : it === null || it === void 0 ? void 0 : it.qc_status) !== null && _k !== void 0 ? _k : it === null || it === void 0 ? void 0 : it.qcstatus) !== null && _l !== void 0 ? _l : it === null || it === void 0 ? void 0 : it.qcStatusName) !== null && _m !== void 0 ? _m : it === null || it === void 0 ? void 0 : it.qc_status_name;
+    let raw = it?.qcStatus ??
+        it?.qualityControl?.status ??
+        it?.quality_control?.status ??
+        it?.qualityCheckStatus ??
+        it?.quality_control_status ??
+        it?.qc?.status ??
+        it?.qc_status ??
+        it?.qcstatus ??
+        it?.qcStatusName ??
+        it?.qc_status_name;
     let normalized = normalizeKey(raw);
     if (normalized)
         return normalized;
     // Some payloads carry QC status at variation level
     try {
-        const vars = Array.isArray(it === null || it === void 0 ? void 0 : it.variations) ? it.variations : [];
+        const vars = Array.isArray(it?.variations) ? it.variations : [];
         for (const v of vars) {
-            raw = (_w = (_v = (_u = (_s = (_q = (_o = v === null || v === void 0 ? void 0 : v.qcStatus) !== null && _o !== void 0 ? _o : (_p = v === null || v === void 0 ? void 0 : v.qualityControl) === null || _p === void 0 ? void 0 : _p.status) !== null && _q !== void 0 ? _q : (_r = v === null || v === void 0 ? void 0 : v.quality_control) === null || _r === void 0 ? void 0 : _r.status) !== null && _s !== void 0 ? _s : (_t = v === null || v === void 0 ? void 0 : v.qc) === null || _t === void 0 ? void 0 : _t.status) !== null && _u !== void 0 ? _u : v === null || v === void 0 ? void 0 : v.qc_status) !== null && _v !== void 0 ? _v : v === null || v === void 0 ? void 0 : v.qcStatusName) !== null && _w !== void 0 ? _w : v === null || v === void 0 ? void 0 : v.qc_status_name;
+            raw = v?.qcStatus ?? v?.qualityControl?.status ?? v?.quality_control?.status ?? v?.qc?.status ?? v?.qc_status ?? v?.qcStatusName ?? v?.qc_status_name;
             normalized = normalizeKey(raw);
             if (normalized)
                 return normalized;
         }
     }
-    catch (_x) { }
+    catch { }
     // As a last resort, some payloads expose a nested qc object elsewhere
-    const qc = (it === null || it === void 0 ? void 0 : it.qc) || (it === null || it === void 0 ? void 0 : it.quality) || (it === null || it === void 0 ? void 0 : it.details);
+    const qc = it?.qc || it?.quality || it?.details;
     if (qc && typeof qc === 'object') {
-        raw = qc === null || qc === void 0 ? void 0 : qc.status;
+        raw = qc?.status;
         normalized = normalizeKey(raw);
         if (normalized)
             return normalized;
@@ -1278,7 +1293,6 @@ function productQcStatusKey(it) {
     return '';
 }
 async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs = 8000, ttlMs = 60000 } = {}) {
-    var _a, e_1, _b, _c;
     const now = Date.now();
     if (_prodCountCache && now - _prodCountCache.ts < ttlMs)
         return _prodCountCache.value;
@@ -1292,38 +1306,26 @@ async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs
         new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))),
     ]);
     let pages = 0;
-    try {
-        for (var _d = true, _e = __asyncValues(jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)), _f; _f = await _e.next(), _a = _f.done, !_a; _d = true) {
-            _c = _f.value;
-            _d = false;
-            const page = _c;
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.products)
-                ? page.products
-                : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
-                    ? page.items
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
-                        ? page.data
-                        : [];
-            for (const it of arr) {
-                const item = it;
-                total += 1;
-                const st = productStatusKey(item);
-                byStatus[st] = (byStatus[st] || 0) + 1;
-                const qc = productQcStatusKey(item);
-                if (qc)
-                    byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
-            }
-            pages += 1;
-            if (pages >= limitPages || Date.now() - start > timeMs)
-                break;
+    for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+        const arr = Array.isArray(page?.products)
+            ? page.products
+            : Array.isArray(page?.items)
+                ? page.items
+                : Array.isArray(page?.data)
+                    ? page.data
+                    : [];
+        for (const it of arr) {
+            const item = it;
+            total += 1;
+            const st = productStatusKey(item);
+            byStatus[st] = (byStatus[st] || 0) + 1;
+            const qc = productQcStatusKey(item);
+            if (qc)
+                byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
         }
-    }
-    catch (e_1_1) { e_1 = { error: e_1_1 }; }
-    finally {
-        try {
-            if (!_d && !_a && (_b = _e.return)) await _b.call(_e);
-        }
-        finally { if (e_1) throw e_1.error; }
+        pages += 1;
+        if (pages >= limitPages || Date.now() - start > timeMs)
+            break;
     }
     const approx = pages >= limitPages || Date.now() - start > timeMs;
     _prodCountCache = { value: { total, byStatus, byQcStatus, approx }, ts: Date.now() };
@@ -1331,7 +1333,6 @@ async function getCatalogProductsCountQuick({ limitPages = 3, size = 100, timeMs
 }
 // Per-shop quick product counter
 async function getCatalogProductsCountQuickForShop({ shopId, limitPages = 2, size = 100, timeMs = 6000 }) {
-    var _a, e_2, _b, _c;
     const start = Date.now();
     const byStatus = {};
     const byQcStatus = {};
@@ -1341,45 +1342,32 @@ async function getCatalogProductsCountQuickForShop({ shopId, limitPages = 2, siz
         new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))),
     ]);
     let pages = 0;
-    try {
-        for (var _d = true, _e = __asyncValues(jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)), _f; _f = await _e.next(), _a = _f.done, !_a; _d = true) {
-            _c = _f.value;
-            _d = false;
-            const page = _c;
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.products)
-                ? page.products
-                : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
-                    ? page.items
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
-                        ? page.data
-                        : [];
-            for (const it of arr) {
-                const item = it;
-                total += 1;
-                const st = productStatusKey(item);
-                byStatus[st] = (byStatus[st] || 0) + 1;
-                const qc = productQcStatusKey(item);
-                if (qc)
-                    byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
-            }
-            pages += 1;
-            if (pages >= limitPages || Date.now() - start > timeMs)
-                break;
+    for await (const page of jumiaPaginator('/catalog/products', { size: String(size) }, fetcher)) {
+        const arr = Array.isArray(page?.products)
+            ? page.products
+            : Array.isArray(page?.items)
+                ? page.items
+                : Array.isArray(page?.data)
+                    ? page.data
+                    : [];
+        for (const it of arr) {
+            const item = it;
+            total += 1;
+            const st = productStatusKey(item);
+            byStatus[st] = (byStatus[st] || 0) + 1;
+            const qc = productQcStatusKey(item);
+            if (qc)
+                byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
         }
-    }
-    catch (e_2_1) { e_2 = { error: e_2_1 }; }
-    finally {
-        try {
-            if (!_d && !_a && (_b = _e.return)) await _b.call(_e);
-        }
-        finally { if (e_2) throw e_2.error; }
+        pages += 1;
+        if (pages >= limitPages || Date.now() - start > timeMs)
+            break;
     }
     const approx = pages >= limitPages || Date.now() - start > timeMs;
     return { total, byStatus, byQcStatus, approx };
 }
 // Quick pending orders counter per shop
 async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2, size = 50, timeMs = 6000 }) {
-    var _a, e_3, _b, _c;
     const start = Date.now();
     let total = 0;
     // IMPORTANT: Do NOT pass shopId as a vendor query param when using per-shop auth.
@@ -1391,37 +1379,24 @@ async function getPendingOrdersCountQuickForShop({ shopId, limitPages = 2, size 
         new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(5000, timeMs))),
     ]);
     let pages = 0;
-    try {
-        for (var _d = true, _e = __asyncValues(jumiaPaginator('/orders', params, fetcher)), _f; _f = await _e.next(), _a = _f.done, !_a; _d = true) {
-            _c = _f.value;
-            _d = false;
-            const page = _c;
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.orders)
-                ? page.orders
-                : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
-                    ? page.items
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
-                        ? page.data
-                        : [];
-            total += arr.length;
-            pages += 1;
-            if (pages >= limitPages || Date.now() - start > timeMs)
-                break;
-        }
-    }
-    catch (e_3_1) { e_3 = { error: e_3_1 }; }
-    finally {
-        try {
-            if (!_d && !_a && (_b = _e.return)) await _b.call(_e);
-        }
-        finally { if (e_3) throw e_3.error; }
+    for await (const page of jumiaPaginator('/orders', params, fetcher)) {
+        const arr = Array.isArray(page?.orders)
+            ? page.orders
+            : Array.isArray(page?.items)
+                ? page.items
+                : Array.isArray(page?.data)
+                    ? page.data
+                    : [];
+        total += arr.length;
+        pages += 1;
+        if (pages >= limitPages || Date.now() - start > timeMs)
+            break;
     }
     const approx = pages >= limitPages || Date.now() - start > timeMs;
     return { total, approx };
 }
 // Exact vendor product counter per shop (scans all pages with safety caps)
 async function getCatalogProductsCountExactForShop({ shopId, size = 100, maxPages = 2000, timeMs = 45000 }) {
-    var _a, e_4, _b, _c;
     const start = Date.now();
     const byStatus = {};
     const byQcStatus = {};
@@ -1438,45 +1413,32 @@ async function getCatalogProductsCountExactForShop({ shopId, size = 100, maxPage
     ]);
     let pages = 0;
     const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
-    try {
-        for (var _d = true, _e = __asyncValues(jumiaPaginator('/catalog/products', { size: String(pageSize) }, fetcher)), _f; _f = await _e.next(), _a = _f.done, !_a; _d = true) {
-            _c = _f.value;
-            _d = false;
-            const page = _c;
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.products)
-                ? page.products
-                : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
-                    ? page.items
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
-                        ? page.data
-                        : [];
-            for (const it of arr) {
-                const item = it;
-                total += 1;
-                const st = productStatusKey(item);
-                byStatus[st] = (byStatus[st] || 0) + 1;
-                const qc = productQcStatusKey(item);
-                if (qc)
-                    byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
-            }
-            pages += 1;
-            if (pages >= maxPages || Date.now() - start > timeMs)
-                break;
+    for await (const page of jumiaPaginator('/catalog/products', { size: String(pageSize) }, fetcher)) {
+        const arr = Array.isArray(page?.products)
+            ? page.products
+            : Array.isArray(page?.items)
+                ? page.items
+                : Array.isArray(page?.data)
+                    ? page.data
+                    : [];
+        for (const it of arr) {
+            const item = it;
+            total += 1;
+            const st = productStatusKey(item);
+            byStatus[st] = (byStatus[st] || 0) + 1;
+            const qc = productQcStatusKey(item);
+            if (qc)
+                byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
         }
-    }
-    catch (e_4_1) { e_4 = { error: e_4_1 }; }
-    finally {
-        try {
-            if (!_d && !_a && (_b = _e.return)) await _b.call(_e);
-        }
-        finally { if (e_4) throw e_4.error; }
+        pages += 1;
+        if (pages >= maxPages || Date.now() - start > timeMs)
+            break;
     }
     const approx = pages >= maxPages || Date.now() - start > timeMs;
     return { total, byStatus, byQcStatus, approx };
 }
 // Exact product count across all shops under a master account (preferred for KPIs)
 async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60000 } = {}) {
-    var _a, e_5, _b, _c;
     const start = Date.now();
     const byStatus = {};
     const byQcStatus = {};
@@ -1487,11 +1449,11 @@ async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60000 } = 
         const shops = await getShopsOfMasterShop().catch(() => []);
         const vals = Array.isArray(shops) ? shops : [];
         const keys = ['sid', 'shopId', 'id'];
-        sids = vals.map((v) => { var _a, _b, _c; return String((_c = (_b = (_a = v === null || v === void 0 ? void 0 : v.sid) !== null && _a !== void 0 ? _a : v === null || v === void 0 ? void 0 : v.shopId) !== null && _b !== void 0 ? _b : v === null || v === void 0 ? void 0 : v.id) !== null && _c !== void 0 ? _c : ''); }).filter(Boolean);
+        sids = vals.map((v) => String(v?.sid ?? v?.shopId ?? v?.id ?? '')).filter(Boolean);
         if (!sids.length)
             sids = undefined;
     }
-    catch (_d) {
+    catch {
         sids = undefined;
     }
     const pageSize = Math.min(100, Math.max(1, Number(size) || 100));
@@ -1500,7 +1462,7 @@ async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60000 } = 
         params['sids'] = sids.join(',');
     const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
     // Try fast path: ask for size=1 and read total from response metadata
-    const qfast = new URLSearchParams(Object.assign({ size: '1' }, (params.sids ? { sids: params.sids } : {}))).toString();
+    const qfast = new URLSearchParams({ size: '1', ...(params.sids ? { sids: params.sids } : {}) }).toString();
     const first = await jumiaFetch(`/catalog/products?${qfast}`, shopAuth ? { shopAuth } : {}).catch(() => null);
     const hinted = _extractTotal(first);
     if (typeof hinted === 'number' && hinted >= 0) {
@@ -1511,38 +1473,26 @@ async function getCatalogProductsCountExactAll({ size = 100, timeMs = 60000 } = 
         new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), Math.min(45000, timeMs))),
     ]);
     let pages = 0;
-    try {
-        for (var _e = true, _f = __asyncValues(jumiaPaginator('/catalog/products', params, fetcher)), _g; _g = await _f.next(), _a = _g.done, !_a; _e = true) {
-            _c = _g.value;
-            _e = false;
-            const page = _c;
-            const arr = Array.isArray(page === null || page === void 0 ? void 0 : page.products)
-                ? page.products
-                : Array.isArray(page === null || page === void 0 ? void 0 : page.items)
-                    ? page.items
-                    : Array.isArray(page === null || page === void 0 ? void 0 : page.data)
-                        ? page.data
-                        : [];
-            for (const it of arr) {
-                const item = it;
-                total += 1;
-                const st = productStatusKey(item);
-                byStatus[st] = (byStatus[st] || 0) + 1;
-                const qc = productQcStatusKey(item);
-                if (qc)
-                    byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
-            }
-            pages += 1;
-            if (Date.now() - start > timeMs)
-                break;
+    for await (const page of jumiaPaginator('/catalog/products', params, fetcher)) {
+        const arr = Array.isArray(page?.products)
+            ? page.products
+            : Array.isArray(page?.items)
+                ? page.items
+                : Array.isArray(page?.data)
+                    ? page.data
+                    : [];
+        for (const it of arr) {
+            const item = it;
+            total += 1;
+            const st = productStatusKey(item);
+            byStatus[st] = (byStatus[st] || 0) + 1;
+            const qc = productQcStatusKey(item);
+            if (qc)
+                byQcStatus[qc] = (byQcStatus[qc] || 0) + 1;
         }
-    }
-    catch (e_5_1) { e_5 = { error: e_5_1 }; }
-    finally {
-        try {
-            if (!_e && !_a && (_b = _f.return)) await _b.call(_f);
-        }
-        finally { if (e_5) throw e_5.error; }
+        pages += 1;
+        if (Date.now() - start > timeMs)
+            break;
     }
     const approx = Date.now() - start > timeMs;
     return { total, byStatus, byQcStatus, approx };

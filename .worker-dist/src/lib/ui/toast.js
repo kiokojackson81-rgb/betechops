@@ -16,12 +16,11 @@ async function confirmDialog(message) {
     const id = `${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
     return new Promise((resolve) => {
         function onResponse(e) {
-            var _a, _b;
             const ev = e;
-            if (((_a = ev.detail) === null || _a === void 0 ? void 0 : _a.id) !== id)
+            if (ev.detail?.id !== id)
                 return;
             window.removeEventListener('betechops:confirm-response', onResponse);
-            resolve(Boolean((_b = ev.detail) === null || _b === void 0 ? void 0 : _b.ok));
+            resolve(Boolean(ev.detail?.ok));
         }
         window.addEventListener('betechops:confirm-response', onResponse);
         window.dispatchEvent(new CustomEvent('betechops:confirm-request', { detail: { id, message } }));
@@ -30,7 +29,7 @@ async function confirmDialog(message) {
             try {
                 window.removeEventListener('betechops:confirm-response', onResponse);
             }
-            catch (_a) { }
+            catch { }
             resolve(window.confirm(message));
         }, 20000);
     });

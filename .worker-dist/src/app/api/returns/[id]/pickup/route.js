@@ -29,6 +29,6 @@ async function POST(req, context) {
         data: { returnCaseId: id, scheduledAt: new Date(scheduledAt), carrier, tracking: tracking || null, assignedTo, notes: notes || null },
     });
     const updated = await prisma_1.prisma.returnCase.update({ where: { id }, data: { status: "pickup_scheduled" } });
-    await prisma_1.prisma.actionLog.create({ data: { actorId: assignedTo, entity: "ReturnCase", entityId: id, action: "PICKUP_SCHEDULED", before, after: Object.assign(Object.assign({}, updated), { pickupId: pickup.id }) } });
+    await prisma_1.prisma.actionLog.create({ data: { actorId: assignedTo, entity: "ReturnCase", entityId: id, action: "PICKUP_SCHEDULED", before, after: { ...updated, pickupId: pickup.id } } });
     return (0, api_1.noStoreJson)({ ok: true, id, status: updated.status, pickupId: pickup.id });
 }

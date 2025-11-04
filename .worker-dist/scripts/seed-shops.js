@@ -25,7 +25,7 @@ function maybeEncrypt(obj) {
         const payload = Buffer.concat([iv, tag, enc]).toString("base64");
         return { payload };
     }
-    catch (_a) {
+    catch {
         return obj; // fallback to plaintext in dev
     }
 }
@@ -42,11 +42,10 @@ function loadSeeds(fileArg) {
     throw new Error(`Invalid seed file format at ${file}: expected array or { shops: [] }`);
 }
 async function upsertShop(seed) {
-    var _a, _b;
     const name = seed.name.trim();
     const platformKey = (seed.platform || "JUMIA");
-    const platform = (_a = client_1.Platform[platformKey]) !== null && _a !== void 0 ? _a : client_1.Platform.JUMIA;
-    const active = (_b = seed.active) !== null && _b !== void 0 ? _b : true;
+    const platform = client_1.Platform[platformKey] ?? client_1.Platform.JUMIA;
+    const active = seed.active ?? true;
     const creds = seed.credentials || {};
     if (!creds || typeof creds !== "object")
         throw new Error(`Missing credentials for shop ${name}`);

@@ -7,7 +7,6 @@ const prisma_1 = require("@/lib/prisma");
 const abs_url_1 = require("@/lib/abs-url");
 exports.dynamic = 'force-dynamic';
 async function GET(request) {
-    var _a;
     try {
         const now = new Date();
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -53,13 +52,13 @@ async function GET(request) {
         const url = await (0, abs_url_1.absUrl)('/api/metrics/kpis?noLive=1');
         const resp = await fetch(url, { cache: 'no-store' });
         const routeJson = resp.ok ? await resp.json() : null;
-        const pendingAll = typeof (routeJson === null || routeJson === void 0 ? void 0 : routeJson.pendingAll) === 'number' ? Number(routeJson.pendingAll) : null;
+        const pendingAll = typeof routeJson?.pendingAll === 'number' ? Number(routeJson.pendingAll) : null;
         const out = {
             ok: true,
             now: now.toISOString(),
             windowStart: sevenDaysAgo.toISOString(),
             queuedDb,
-            kpisRoute: { status: resp.status, pendingAll, approx: Boolean(routeJson === null || routeJson === void 0 ? void 0 : routeJson.approx), updatedAt: (_a = routeJson === null || routeJson === void 0 ? void 0 : routeJson.updatedAt) !== null && _a !== void 0 ? _a : null },
+            kpisRoute: { status: resp.status, pendingAll, approx: Boolean(routeJson?.approx), updatedAt: routeJson?.updatedAt ?? null },
             equal: pendingAll === null ? null : queuedDb === pendingAll,
             sample,
         };

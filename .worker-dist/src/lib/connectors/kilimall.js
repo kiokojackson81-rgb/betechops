@@ -13,7 +13,7 @@ function sign(appSecret, body, ts) {
 }
 async function kmFetch(shopCreds, path, payload) {
     const ts = Date.now();
-    const body = JSON.stringify(payload !== null && payload !== void 0 ? payload : {});
+    const body = JSON.stringify(payload ?? {});
     const s = sign(shopCreds.appSecret, body, ts);
     const res = await fetch(`${shopCreds.apiBase}${path}`, {
         method: 'POST',
@@ -27,15 +27,15 @@ async function kmFetch(shopCreds, path, payload) {
 async function fetchOrders(shopCreds, opts) {
     // Example path; adapt to real Kilimall API
     const path = '/orders/list';
-    const payload = { since: opts === null || opts === void 0 ? void 0 : opts.since };
+    const payload = { since: opts?.since };
     const j = await kmFetch(shopCreds, path, payload);
     // Map array
-    const items = Array.isArray(j === null || j === void 0 ? void 0 : j.data) ? j.data : (j === null || j === void 0 ? void 0 : j.orders) || [];
+    const items = Array.isArray(j?.data) ? j.data : j?.orders || [];
     return items.map((r) => (0, normalize_1.normalizeFromKilimall)(r, shopCreds.appId));
 }
 async function fetchPayouts(shopCreds, opts) {
     const path = '/finance/payouts';
-    const payload = { day: opts === null || opts === void 0 ? void 0 : opts.day };
+    const payload = { day: opts?.day };
     const j = await kmFetch(shopCreds, path, payload);
     return j;
 }

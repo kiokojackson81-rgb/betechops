@@ -51,7 +51,7 @@ async function POST(request) {
     }
     catch (e) {
         // Ensure we always return JSON from this route (avoid HTML error pages)
-        const msg = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : String(e !== null && e !== void 0 ? e : 'Server error');
+        const msg = typeof e === 'object' && e !== null && 'message' in e ? String(e.message) : String(e ?? 'Server error');
         console.error("POST /api/shops failed:", e);
         return server_1.NextResponse.json({ error: msg }, { status: 500 });
     }

@@ -52,18 +52,18 @@ function ShopsList({ initial }) {
     // NEW: per-shop probe results
     const [probe, setProbe] = (0, react_1.useState)({});
     async function testAuth(shopId) {
-        setProbe(p => (Object.assign(Object.assign({}, p), { [shopId]: { status: "loading" } })));
+        setProbe(p => ({ ...p, [shopId]: { status: "loading" } }));
         try {
             const res = await fetch(`/api/shops/${shopId}/auth-source`, { method: "POST" });
             const j = await res.json();
             if (!res.ok || !j.ok)
-                throw new Error((j === null || j === void 0 ? void 0 : j.error) || `HTTP ${res.status}`);
-            setProbe(p => (Object.assign(Object.assign({}, p), { [shopId]: { status: "ok", source: j.source, platform: j.platform } })));
+                throw new Error(j?.error || `HTTP ${res.status}`);
+            setProbe(p => ({ ...p, [shopId]: { status: "ok", source: j.source, platform: j.platform } }));
             (0, toast_1.showToast)(`Auth OK (${j.source})`, j.source === "SHOP" ? "success" : "info");
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            setProbe(p => (Object.assign(Object.assign({}, p), { [shopId]: { status: "error", message: msg || "failed" } })));
+            setProbe(p => ({ ...p, [shopId]: { status: "error", message: msg || "failed" } }));
             (0, toast_1.showToast)(`Auth failed: ${msg || "unknown error"}`, "error");
         }
     }
@@ -75,7 +75,7 @@ function ShopsList({ initial }) {
         });
         const j = await res.json();
         if (res.ok) {
-            setShops((prev) => prev.map((p) => { var _a; return p.id === shopId ? Object.assign(Object.assign({}, p), { assignedUser: { id: userId, label: (_a = selectedUser === null || selectedUser === void 0 ? void 0 : selectedUser.label) !== null && _a !== void 0 ? _a : '', roleAtShop } }) : p; }));
+            setShops((prev) => prev.map((p) => p.id === shopId ? { ...p, assignedUser: { id: userId, label: selectedUser?.label ?? '', roleAtShop } } : p));
             (0, toast_1.showToast)('Assigned user to shop', 'success');
             setOpenAssign(null);
             setSelectedUser(null);
@@ -94,10 +94,10 @@ function ShopsList({ initial }) {
                     const r = await fetch(`/api/debug/jumia/products-count?shopId=${encodeURIComponent(s.id)}&size=1`, { cache: 'no-store' });
                     const j = await r.json();
                     if (!cancelled && r.ok && j && typeof j.total === 'number') {
-                        setProdTotals((prev) => (Object.assign(Object.assign({}, prev), { [s.id]: { total: j.total, approx: Boolean(j.approx) } })));
+                        setProdTotals((prev) => ({ ...prev, [s.id]: { total: j.total, approx: Boolean(j.approx) } }));
                     }
                 }
-                catch (_a) {
+                catch {
                     // ignore
                 }
             }
@@ -118,9 +118,7 @@ function ShopsList({ initial }) {
       </span>);
     };
     return (<div className="space-y-3">
-      {shops.map(s => {
-            var _a, _b, _c, _d;
-            return (<div key={s.id} className="p-3 border rounded flex justify-between items-center">
+      {shops.map(s => (<div key={s.id} className="p-3 border rounded flex justify-between items-center">
           <div className="min-w-0">
             <div className="font-medium flex items-center">
               <span className="truncate max-w-[40ch]">{s.name}</span>
@@ -128,7 +126,7 @@ function ShopsList({ initial }) {
             </div>
             <div className="text-sm text-slate-500">{s.platform}</div>
             <div className="text-sm text-slate-400">
-              Products: {(_b = (_a = prodTotals[s.id]) === null || _a === void 0 ? void 0 : _a.total) !== null && _b !== void 0 ? _b : '…'}{((_c = prodTotals[s.id]) === null || _c === void 0 ? void 0 : _c.approx) ? ' (approx)' : ''}
+              Products: {prodTotals[s.id]?.total ?? '…'}{prodTotals[s.id]?.approx ? ' (approx)' : ''}
             </div>
             {s.assignedUser && (<div className="text-sm text-slate-600">
                 Assigned: {s.assignedUser.label} {s.assignedUser.roleAtShop ? `(${s.assignedUser.roleAtShop})` : ''}
@@ -138,12 +136,11 @@ function ShopsList({ initial }) {
             <button className="px-2 py-1 border" onClick={() => setOpenAssign(s.id)}>Assign</button>
             <button className="px-2 py-1 border" onClick={() => setOpenManage(s.id)}>Manage</button>
             {/* NEW: Test Auth */}
-            <button className="px-2 py-1 border bg-white/5 hover:bg-white/10" onClick={() => testAuth(s.id)} disabled={((_d = probe[s.id]) === null || _d === void 0 ? void 0 : _d.status) === "loading"} title="Mint a token and show whether SHOP or ENV credentials are used">
+            <button className="px-2 py-1 border bg-white/5 hover:bg-white/10" onClick={() => testAuth(s.id)} disabled={probe[s.id]?.status === "loading"} title="Mint a token and show whether SHOP or ENV credentials are used">
               Test Auth
             </button>
           </div>
-        </div>);
-        })}
+        </div>))}
 
       {openAssign && (<div className="p-3 border rounded">
           <h3 className="font-semibold">Assign user to shop</h3>

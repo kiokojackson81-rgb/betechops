@@ -25,7 +25,7 @@ async function POST(req) {
     try {
         body = (await req.json());
     }
-    catch (_a) {
+    catch {
         return server_1.NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     const shops = Array.isArray(body.shops) ? body.shops : [];
@@ -56,7 +56,7 @@ async function POST(req) {
             else
                 credentialsEncrypted = creds;
         }
-        catch (_b) {
+        catch {
             credentialsEncrypted = creds;
         }
         try {

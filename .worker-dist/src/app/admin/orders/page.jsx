@@ -12,6 +12,7 @@ const prisma_1 = require("@/lib/prisma");
 const AutoRefresh_1 = __importDefault(require("@/app/_components/AutoRefresh"));
 const OrdersSSE_1 = __importDefault(require("./_components/OrdersSSE"));
 const SyncNowButton_1 = __importDefault(require("./_components/SyncNowButton"));
+const BulkActions_1 = __importDefault(require("./_components/BulkActions"));
 const fetchSyncedRows_1 = require("./_lib/fetchSyncedRows");
 exports.dynamic = 'force-dynamic';
 const DEFAULT_STATUS = 'PENDING';
@@ -41,24 +42,56 @@ async function fetchRemoteOrders(params) {
     return res.json();
 }
 function normalizeApiOrder(raw) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13;
     const fallbackId = Math.random().toString(36).slice(2);
-    const id = String((_e = (_d = (_c = (_b = (_a = raw.id) !== null && _a !== void 0 ? _a : raw.orderId) !== null && _b !== void 0 ? _b : raw.order_id) !== null && _c !== void 0 ? _c : raw.number) !== null && _d !== void 0 ? _d : raw.orderNumber) !== null && _e !== void 0 ? _e : fallbackId);
-    const number = (_k = (_j = (_h = (_g = (_f = raw.number) !== null && _f !== void 0 ? _f : raw.orderNumber) !== null && _g !== void 0 ? _g : raw.order_number) !== null && _h !== void 0 ? _h : raw.displayOrderId) !== null && _j !== void 0 ? _j : raw.orderId) !== null && _k !== void 0 ? _k : raw.id;
-    const createdRaw = (_r = (_q = (_p = (_o = (_m = (_l = raw.createdAt) !== null && _l !== void 0 ? _l : raw.created_at) !== null && _m !== void 0 ? _m : raw.created) !== null && _o !== void 0 ? _o : raw.dateCreated) !== null && _p !== void 0 ? _p : raw.created_at_utc) !== null && _q !== void 0 ? _q : raw.orderedAt) !== null && _r !== void 0 ? _r : raw.ordered_at;
-    const updatedRaw = (_w = (_v = (_u = (_t = (_s = raw.updatedAt) !== null && _s !== void 0 ? _s : raw.updated_at) !== null && _t !== void 0 ? _t : raw.updated) !== null && _u !== void 0 ? _u : raw.dateUpdated) !== null && _v !== void 0 ? _v : raw.lastUpdated) !== null && _w !== void 0 ? _w : raw.updated_at_utc;
+    const id = String(raw.id ?? raw.orderId ?? raw.order_id ?? raw.number ?? raw.orderNumber ?? fallbackId);
+    const number = raw.number ??
+        raw.orderNumber ??
+        raw.order_number ??
+        raw.displayOrderId ??
+        raw.orderId ??
+        raw.id;
+    const createdRaw = raw.createdAt ??
+        raw.created_at ??
+        raw.created ??
+        raw.dateCreated ??
+        raw.created_at_utc ??
+        raw.orderedAt ??
+        raw.ordered_at;
+    const updatedRaw = raw.updatedAt ??
+        raw.updated_at ??
+        raw.updated ??
+        raw.dateUpdated ??
+        raw.lastUpdated ??
+        raw.updated_at_utc;
     const createdAt = createdRaw ? new Date(createdRaw).toISOString() : new Date().toISOString();
     const updatedAt = updatedRaw ? new Date(updatedRaw).toISOString() : undefined;
-    const totalAmount = (_y = (_x = (raw.totalAmountLocalCurrency && raw.totalAmountLocalValue
+    const totalAmount = (raw.totalAmountLocalCurrency && raw.totalAmountLocalValue
         ? { currency: String(raw.totalAmountLocalCurrency), value: Number(raw.totalAmountLocalValue) }
-        : undefined)) !== null && _x !== void 0 ? _x : (raw.totalAmountCurrency && raw.totalAmount
-        ? { currency: String(raw.totalAmountCurrency), value: Number(raw.totalAmount) }
-        : undefined)) !== null && _y !== void 0 ? _y : raw.totalAmountLocal;
-    const packedItems = (_2 = (_1 = (_0 = (_z = raw.packedItems) !== null && _z !== void 0 ? _z : raw.packed_items) !== null && _0 !== void 0 ? _0 : raw.packed_qty) !== null && _1 !== void 0 ? _1 : raw.fulfilledQuantity) !== null && _2 !== void 0 ? _2 : raw.fulfilled_quantity;
-    const totalItems = (_7 = (_6 = (_5 = (_4 = (_3 = raw.totalItems) !== null && _3 !== void 0 ? _3 : raw.total_items) !== null && _4 !== void 0 ? _4 : raw.totalQuantity) !== null && _5 !== void 0 ? _5 : raw.total_quantity) !== null && _6 !== void 0 ? _6 : raw.itemsTotal) !== null && _7 !== void 0 ? _7 : raw.items_total;
+        : undefined) ??
+        (raw.totalAmountCurrency && raw.totalAmount
+            ? { currency: String(raw.totalAmountCurrency), value: Number(raw.totalAmount) }
+            : undefined) ??
+        raw.totalAmountLocal;
+    const packedItems = raw.packedItems ??
+        raw.packed_items ??
+        raw.packed_qty ??
+        raw.fulfilledQuantity ??
+        raw.fulfilled_quantity;
+    const totalItems = raw.totalItems ??
+        raw.total_items ??
+        raw.totalQuantity ??
+        raw.total_quantity ??
+        raw.itemsTotal ??
+        raw.items_total;
     const shopObject = typeof raw.shop === 'object' && raw.shop !== null ? raw.shop : null;
-    const shopId = (_9 = (_8 = (typeof raw.shopId === 'string' ? raw.shopId : undefined)) !== null && _8 !== void 0 ? _8 : (Array.isArray(raw.shopIds) ? raw.shopIds.find((s) => typeof s === 'string') : undefined)) !== null && _9 !== void 0 ? _9 : (typeof (shopObject === null || shopObject === void 0 ? void 0 : shopObject.id) === 'string' ? shopObject.id : undefined);
-    const shopNameCandidate = (_13 = (_12 = (_11 = (_10 = raw.shopName) !== null && _10 !== void 0 ? _10 : raw.shop_label) !== null && _11 !== void 0 ? _11 : shopObject === null || shopObject === void 0 ? void 0 : shopObject.name) !== null && _12 !== void 0 ? _12 : (Array.isArray(raw.shopIds) ? raw.shopIds.find((s) => typeof s === 'string') : undefined)) !== null && _13 !== void 0 ? _13 : (typeof raw.shopId === 'string' ? raw.shopId : undefined);
+    const shopId = (typeof raw.shopId === 'string' ? raw.shopId : undefined) ??
+        (Array.isArray(raw.shopIds) ? raw.shopIds.find((s) => typeof s === 'string') : undefined) ??
+        (typeof shopObject?.id === 'string' ? shopObject.id : undefined);
+    const shopNameCandidate = raw.shopName ??
+        raw.shop_label ??
+        shopObject?.name ??
+        (Array.isArray(raw.shopIds) ? raw.shopIds.find((s) => typeof s === 'string') : undefined) ??
+        (typeof raw.shopId === 'string' ? raw.shopId : undefined);
     return {
         id,
         number: number ? String(number) : undefined,
@@ -70,27 +103,26 @@ function normalizeApiOrder(raw) {
         packedItems: packedItems !== undefined ? Number(packedItems) : undefined,
         totalAmountLocal: totalAmount,
         shopName: shopNameCandidate,
-        shopId: shopId !== null && shopId !== void 0 ? shopId : undefined,
+        shopId: shopId ?? undefined,
         shopIds: Array.isArray(raw.shopIds) ? raw.shopIds.filter((s) => typeof s === 'string') : undefined,
         isPrepayment: typeof raw.isPrepayment === 'boolean' ? raw.isPrepayment : undefined,
     };
 }
 async function OrdersPage(props) {
-    var _a, _b, _c;
-    const searchParams = (props === null || props === void 0 ? void 0 : props.searchParams) || {};
+    const searchParams = (props?.searchParams) || {};
     const toStr = (v) => (Array.isArray(v) ? v[0] : v);
     const rawStatus = toStr(searchParams.status);
     const params = {
-        status: rawStatus !== null && rawStatus !== void 0 ? rawStatus : DEFAULT_STATUS,
+        status: rawStatus ?? DEFAULT_STATUS,
         country: toStr(searchParams.country),
-        shopId: (_a = toStr(searchParams.shopId)) !== null && _a !== void 0 ? _a : 'ALL',
+        shopId: toStr(searchParams.shopId) ?? 'ALL',
         dateFrom: toStr(searchParams.dateFrom),
         dateTo: toStr(searchParams.dateTo),
         q: toStr(searchParams.q),
         nextToken: toStr(searchParams.nextToken),
         size: toStr(searchParams.size),
     };
-    const prefersSynced = ((_b = params.status) !== null && _b !== void 0 ? _b : '').toUpperCase() === 'PENDING';
+    const prefersSynced = (params.status ?? '').toUpperCase() === 'PENDING';
     // Keep vendor-synced pending views free of implicit date filters.
     // Some orders stay pending for weeks, so forcing a lookback window causes mismatches.
     let kpisPendingCount = null;
@@ -99,12 +131,12 @@ async function OrdersPage(props) {
         const metricsResp = await fetch(metricsUrl, { cache: 'no-store' });
         if (metricsResp.ok) {
             const metricsJson = await metricsResp.json();
-            if (typeof (metricsJson === null || metricsJson === void 0 ? void 0 : metricsJson.pendingAll) === 'number' && Number.isFinite(metricsJson.pendingAll)) {
+            if (typeof metricsJson?.pendingAll === 'number' && Number.isFinite(metricsJson.pendingAll)) {
                 kpisPendingCount = Number(metricsJson.pendingAll);
             }
         }
     }
-    catch (_d) {
+    catch {
         kpisPendingCount = null;
     }
     let usedDefaultFrom = false;
@@ -116,7 +148,7 @@ async function OrdersPage(props) {
                     prisma_1.prisma.order.findFirst({ select: { createdAt: true }, orderBy: { createdAt: 'asc' } }).catch(() => null),
                     prisma_1.prisma.shop.findFirst({ select: { createdAt: true }, orderBy: { createdAt: 'asc' } }).catch(() => null),
                 ]);
-                const systemStart = (firstOrder === null || firstOrder === void 0 ? void 0 : firstOrder.createdAt) || (firstShop === null || firstShop === void 0 ? void 0 : firstShop.createdAt) || null;
+                const systemStart = firstOrder?.createdAt || firstShop?.createdAt || null;
                 const threeMonthsAgo = new Date();
                 threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
                 const startDate = new Date(Math.max(systemStart ? systemStart.getTime() : 0, threeMonthsAgo.getTime()));
@@ -124,7 +156,7 @@ async function OrdersPage(props) {
                 params.dateFrom = iso;
                 usedDefaultFrom = true;
             }
-            catch (_e) {
+            catch {
                 const d = new Date();
                 d.setMonth(d.getMonth() - 3);
                 params.dateFrom = d.toISOString().slice(0, 10);
@@ -160,7 +192,7 @@ async function OrdersPage(props) {
     const legacyShops = await legacyShopsPromise;
     const shopOptions = [
         ...legacyShops.map((shop) => ({ id: shop.id, name: shop.name })),
-        ...syncedShops.map((shop) => { var _a, _b; return ({ id: shop.id, name: `${(_b = (_a = shop.account) === null || _a === void 0 ? void 0 : _a.label) !== null && _b !== void 0 ? _b : 'Jumia'} • ${shop.name}` }); }),
+        ...syncedShops.map((shop) => ({ id: shop.id, name: `${shop.account?.label ?? 'Jumia'} • ${shop.name}` })),
     ];
     let rows = [];
     let nextToken = null;
@@ -186,9 +218,9 @@ async function OrdersPage(props) {
             syncFallbackMessage = 'Cached pending orders are temporarily unavailable. Showing live data instead.';
         }
     }
-    if (prefersSynced && showingSynced && kpisPendingCount !== null && kpisPendingCount > rows.length) {
+    if (prefersSynced && showingSynced && kpisPendingCount !== null && Math.abs(kpisPendingCount - rows.length) >= 1) {
         showingSynced = false;
-        syncFallbackMessage = `Cached snapshot is behind vendor count (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
+        syncFallbackMessage = `Cached snapshot diverges from vendor (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
         rows = [];
         nextToken = null;
         isLastPage = false;
@@ -210,18 +242,25 @@ async function OrdersPage(props) {
           </p>
           {syncFallbackMessage && (<p className="text-xs text-amber-400 mt-1">{syncFallbackMessage}</p>)}
           {((!showingSynced && (usedDefaultFrom || usedDefaultTo)) || (showingSynced && (usedDefaultFrom || usedDefaultTo))) && (<p className="text-xs text-slate-400 mt-1">
-              Default window: {prefersSynced ? 'last 7 days' : 'last 3 months (bounded by system start)'}.
-              Showing {params.dateFrom} to {params.dateTo}.
+              {prefersSynced
+                ? 'Pending view uses no fixed date window; showing full vendor-backed range.'
+                : `Default window: last 3 months (bounded by system start). Showing ${params.dateFrom} to ${params.dateTo}.`}
             </p>)}
         </div>
         <div className="pt-1 flex items-center gap-4">
           <SyncNowButton_1.default />
           <OrdersSSE_1.default status={params.status} country={params.country} shopId={params.shopId} dateFrom={params.dateFrom} dateTo={params.dateTo} intervalMs={4000}/>
           <AutoRefresh_1.default storageKey="autoRefreshOrders" intervalMs={10000} defaultEnabled={true}/>
+          <a href="/admin/settings/jumia/shipping-stations" className="px-3 py-1 rounded border border-white/10 hover:bg-white/10 text-sm" title="Configure per-shop default shipping stations">
+            Shipping Stations
+          </a>
         </div>
       </div>
 
       <OrdersFilters_1.default shops={shopOptions}/>
+
+  {/* Bulk actions: only shows when a specific shop is selected */}
+  <BulkActions_1.default />
 
       {/* Client wrapper keeps last non-empty snapshot and updates on SSE/AutoRefresh events */}
       <OrdersLiveData_1.default initialRows={rows} initialNextToken={nextToken} initialIsLastPage={isLastPage} params={{
@@ -232,7 +271,7 @@ async function OrdersPage(props) {
             dateTo: params.dateTo,
             q: params.q,
             // Smaller default page size when aggregating ALL shops to reduce initial payload
-            size: (_c = params.size) !== null && _c !== void 0 ? _c : (params.shopId === 'ALL' ? '30' : '50'),
+            size: params.size ?? (params.shopId === 'ALL' ? '30' : '50'),
         }} 
     // When using cached PENDING from DB, keep SSR snapshot only (no live fetch)
     disableClientFetch={Boolean(showingSynced)}/>

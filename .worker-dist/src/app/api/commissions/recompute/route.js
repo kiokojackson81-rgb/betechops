@@ -22,5 +22,5 @@ async function POST(req) {
     const res = await (0, commissionRecompute_1.recomputeCommissions)({ shopId: shopId || undefined, window: { from, to } });
     const actorId = await (0, api_1.getActorId)();
     await prisma_1.prisma.actionLog.create({ data: { actorId: actorId || "", entity: "CommissionEarning", entityId: "batch", action: "RECOMPUTE", before: undefined, after: res } });
-    return (0, api_1.noStoreJson)(Object.assign({ ok: true }, res));
+    return (0, api_1.noStoreJson)({ ok: true, ...res });
 }

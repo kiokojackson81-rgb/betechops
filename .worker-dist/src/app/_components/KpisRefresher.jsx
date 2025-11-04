@@ -25,7 +25,7 @@ function KpisRefresher({ enabled }) {
                 setStatus("done");
                 setTimeout(() => router.refresh(), 1500);
             }
-            catch (_a) {
+            catch {
                 setStatus("error");
             }
         })();

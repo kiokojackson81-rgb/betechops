@@ -9,7 +9,6 @@ const link_1 = __importDefault(require("next/link"));
 const FinalizePricingButton_1 = __importDefault(require("./_actions/FinalizePricingButton"));
 function fmtKsh(n) { return `Ksh ${n.toLocaleString()}`; }
 async function PendingPricingDetail({ params }) {
-    var _a;
     const { id } = await params;
     const order = await prisma_1.prisma.order.findUnique({
         where: { id },
@@ -31,10 +30,9 @@ async function PendingPricingDetail({ params }) {
     }
     // compute estimated totals
     const rows = order.items.map((it) => {
-        var _a, _b;
-        const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : ((_b = (_a = it.product) === null || _a === void 0 ? void 0 : _a.sellingPrice) !== null && _b !== void 0 ? _b : 0);
+        const unit = typeof it.sellingPrice === "number" ? it.sellingPrice : (it.product?.sellingPrice ?? 0);
         const sub = unit * it.quantity;
-        return Object.assign(Object.assign({}, it), { unit, sub });
+        return { ...it, unit, sub };
     });
     const total = rows.reduce((s, it) => s + it.sub, 0);
     const qty = rows.reduce((s, it) => s + it.quantity, 0);
@@ -42,7 +40,7 @@ async function PendingPricingDetail({ params }) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Pending Pricing · {order.orderNumber}</h1>
-          <p className="text-slate-400 text-sm">Shop: {((_a = order.shop) === null || _a === void 0 ? void 0 : _a.name) || "—"}</p>
+          <p className="text-slate-400 text-sm">Shop: {order.shop?.name || "—"}</p>
         </div>
         <link_1.default href="/admin/pending-pricing" className="rounded-lg border border-white/10 px-3 py-1.5 hover:bg-white/10">Back</link_1.default>
       </div>
@@ -55,16 +53,13 @@ async function PendingPricingDetail({ params }) {
             </tr>
           </thead>
         <tbody className="divide-y divide-white/10">
-          {rows.map((it) => {
-            var _a, _b;
-            return (<tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
-              <td>{((_a = it.product) === null || _a === void 0 ? void 0 : _a.name) || "—"}</td>
-              <td className="font-mono">{((_b = it.product) === null || _b === void 0 ? void 0 : _b.sku) || "—"}</td>
+          {rows.map((it) => (<tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
+              <td>{it.product?.name || "—"}</td>
+              <td className="font-mono">{it.product?.sku || "—"}</td>
               <td>{it.quantity}</td>
               <td>{fmtKsh(it.unit)}</td>
               <td>{fmtKsh(it.sub)}</td>
-            </tr>);
-        })}
+            </tr>))}
           {rows.length === 0 && (<tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">No items.</td></tr>)}
         </tbody>
         </table>

@@ -10,14 +10,13 @@ async function getUserShops(userId) {
 async function upsertAssignments(userId, entries) {
     return prisma_1.prisma.$transaction(async (tx) => {
         await tx.shopAssignment.deleteMany({ where: { userId } });
-        const data = entries.map((e) => (Object.assign(Object.assign({}, e), { userId })));
+        const data = entries.map((e) => ({ ...e, userId }));
         if (data.length === 0)
             return [];
         return tx.shopAssignment.createMany({ data, skipDuplicates: true });
     });
 }
 function can(user, action) {
-    var _a, _b;
     const map = {
         VIEW_QUEUES: ['ATTENDANT', 'SUPERVISOR', 'ADMIN'],
         PACK: ['ATTENDANT', 'SUPERVISOR', 'ADMIN'],
@@ -25,7 +24,7 @@ function can(user, action) {
         CANCEL: ['SUPERVISOR', 'ADMIN'],
         ASSIGN: ['SUPERVISOR', 'ADMIN'],
     };
-    return (_b = (_a = map[action]) === null || _a === void 0 ? void 0 : _a.includes(user.role)) !== null && _b !== void 0 ? _b : false;
+    return map[action]?.includes(user.role) ?? false;
 }
 const assignments = { getUserShops, upsertAssignments, can };
 exports.default = assignments;

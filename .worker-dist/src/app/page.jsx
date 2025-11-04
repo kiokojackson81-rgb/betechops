@@ -24,7 +24,7 @@ async function fetchJsonWithTimeout(url, timeoutMs = 5000) {
             u.searchParams.set("_v", String(Math.floor(Date.now() / 60000)));
             finalUrl = u.toString();
         }
-        catch (_a) {
+        catch {
             // non-fatal if URL construction fails for relative strings
         }
         const r = await fetch(finalUrl, { cache: "no-store", signal: controller.signal });
@@ -38,7 +38,6 @@ async function fetchJsonWithTimeout(url, timeoutMs = 5000) {
 }
 /** Try a list of endpoints until one gives a numeric count. */
 async function tryCounts(paths) {
-    var _a;
     for (const p of paths) {
         try {
             const j = await fetchJsonWithTimeout(p);
@@ -48,7 +47,7 @@ async function tryCounts(paths) {
                 return j;
             if (j && typeof j === "object") {
                 const obj = j;
-                const approx = Boolean((_a = obj.approx) !== null && _a !== void 0 ? _a : obj.approxPending);
+                const approx = Boolean(obj.approx ?? obj.approxPending);
                 let candidate = null;
                 for (const k of ["count", "total", "value", "pendingAll", "queued"]) {
                     if (typeof obj[k] === "number" && Number.isFinite(obj[k])) {
@@ -75,7 +74,7 @@ async function tryCounts(paths) {
                 }
             }
         }
-        catch (_b) {
+        catch {
             // try next
         }
     }
@@ -96,7 +95,7 @@ async function tryMoney(paths) {
                 }
             }
         }
-        catch (_a) {
+        catch {
             // try next
         }
     }
@@ -165,17 +164,17 @@ function Home() {
                         setPickupCnt(c1);
                     if (typeof c2 === "number" && Number.isFinite(c2))
                         setPricingCnt(c2);
-                    const rawPending = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.pendingAll) === "number" && Number.isFinite(kpis.pendingAll)
+                    const rawPending = typeof kpis?.pendingAll === "number" && Number.isFinite(kpis.pendingAll)
                         ? Number(kpis.pendingAll)
                         : null;
-                    const approx = Boolean(kpis === null || kpis === void 0 ? void 0 : kpis.approx);
+                    const approx = Boolean(kpis?.approx);
                     if (rawPending !== null) {
                         const prev = pendingAll;
                         const shouldKeepPrev = approx && typeof prev === "number" && Number.isFinite(prev) && rawPending < prev;
                         if (!shouldKeepPrev) {
                             setPendingAll(rawPending);
                         }
-                        const ts = typeof (kpis === null || kpis === void 0 ? void 0 : kpis.updatedAt) === "number" && !Number.isNaN(kpis.updatedAt)
+                        const ts = typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
                             ? kpis.updatedAt
                             : Date.now();
                         const dt = new Date(ts);
@@ -191,7 +190,7 @@ function Home() {
                     // 2) Skip persisting any snapshot to localStorage
                 }
             }
-            catch (_a) {
+            catch {
                 // On error, keep previous values to avoid flicker to zero; just clear the timestamp
                 if (!ignore)
                     setPendingUpdated(null);

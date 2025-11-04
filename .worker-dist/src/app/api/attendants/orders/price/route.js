@@ -5,9 +5,8 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const auth_1 = require("@/lib/auth");
 async function POST(req) {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (!session || !role)
         return server_1.NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json().catch(() => ({}));
@@ -25,7 +24,7 @@ async function POST(req) {
         });
         return server_1.NextResponse.json({ ok: true, product: updated });
     }
-    catch (_b) {
+    catch {
         // If the schema doesn't have lastBuyingPrice, accept the request but don't persist
         return server_1.NextResponse.json({ ok: true, accepted: true }, { status: 202 });
     }

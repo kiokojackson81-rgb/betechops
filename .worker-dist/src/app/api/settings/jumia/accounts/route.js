@@ -6,9 +6,8 @@ const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const auth_1 = require("@/lib/auth");
 async function requireAdmin() {
-    var _a;
     const session = await (0, auth_1.auth)();
-    const role = (_a = session === null || session === void 0 ? void 0 : session.user) === null || _a === void 0 ? void 0 : _a.role;
+    const role = session?.user?.role;
     if (role !== "ADMIN") {
         throw new server_1.NextResponse(JSON.stringify({ error: "Forbidden" }), { status: 403 });
     }
@@ -38,7 +37,6 @@ async function GET() {
     return server_1.NextResponse.json({ accounts: data });
 }
 async function POST(request) {
-    var _a, _b, _c;
     try {
         await requireAdmin();
     }
@@ -49,9 +47,9 @@ async function POST(request) {
     }
     try {
         const body = (await request.json());
-        const label = (_a = body.label) === null || _a === void 0 ? void 0 : _a.trim();
-        const clientId = (_b = body.clientId) === null || _b === void 0 ? void 0 : _b.trim();
-        const refreshTokenRaw = (_c = body.refreshToken) === null || _c === void 0 ? void 0 : _c.trim();
+        const label = body.label?.trim();
+        const clientId = body.clientId?.trim();
+        const refreshTokenRaw = body.refreshToken?.trim();
         if (!label || !clientId) {
             return server_1.NextResponse.json({ error: "label and clientId are required" }, { status: 400 });
         }
@@ -60,8 +58,11 @@ async function POST(request) {
         if (body.id) {
             account = await prisma_1.prisma.jumiaAccount.update({
                 where: { id: body.id },
-                data: Object.assign({ label,
-                    clientId }, (refreshToken ? { refreshToken } : {})),
+                data: {
+                    label,
+                    clientId,
+                    ...(refreshToken ? { refreshToken } : {}),
+                },
                 include: { shops: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
             });
         }

@@ -6,7 +6,6 @@ const prisma_1 = require("@/lib/prisma");
 const returns_1 = require("@/lib/returns");
 const config_1 = require("@/lib/config");
 async function PATCH(req, context) {
-    var _a, _b;
     const { id } = await context.params;
     const authz = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
     if (!authz.ok)
@@ -31,7 +30,7 @@ async function PATCH(req, context) {
         return (0, api_1.noStoreJson)({ error: can.reason }, { status: 400 });
     const before = ret;
     const updated = await prisma_1.prisma.returnCase.update({ where: { id }, data: { status: String(to) } });
-    const actorId = ((_b = (_a = authz.session) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.id) || "";
+    const actorId = (authz.session?.user?.id) || "";
     await prisma_1.prisma.actionLog.create({ data: { actorId, entity: "ReturnCase", entityId: id, action: "STATE", before, after: updated } });
     return (0, api_1.noStoreJson)({ ok: true, id, status: updated.status });
 }

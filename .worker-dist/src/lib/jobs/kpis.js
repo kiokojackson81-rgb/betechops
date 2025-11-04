@@ -12,9 +12,9 @@ async function updateKpisCache() {
         prod: await (0, jumia_1.getCatalogProductsCountQuickForShop)({ shopId: s.id, limitPages: 6, size: 100, timeMs: 15000 }).catch(() => ({ total: 0, approx: true })),
         pend: await (0, jumia_1.getPendingOrdersCountQuickForShop)({ shopId: s.id, limitPages: 6, size: 50, timeMs: 10000 }).catch(() => ({ total: 0, approx: true })),
     })));
-    const productsAll = perShop.reduce((n, s) => { var _a; return n + (((_a = s.prod) === null || _a === void 0 ? void 0 : _a.total) || 0); }, 0);
-    const pendingAll = perShop.reduce((n, s) => { var _a; return n + (((_a = s.pend) === null || _a === void 0 ? void 0 : _a.total) || 0); }, 0);
-    const approx = perShop.some((s) => { var _a, _b; return ((_a = s.prod) === null || _a === void 0 ? void 0 : _a.approx) || ((_b = s.pend) === null || _b === void 0 ? void 0 : _b.approx); });
+    const productsAll = perShop.reduce((n, s) => n + (s.prod?.total || 0), 0);
+    const pendingAll = perShop.reduce((n, s) => n + (s.pend?.total || 0), 0);
+    const approx = perShop.some((s) => s.prod?.approx || s.pend?.approx);
     const payload = { productsAll, pendingAll, approx, updatedAt: Date.now() };
     await (0, kpisCache_1.writeKpisCache)(payload);
     return payload;
@@ -37,26 +37,26 @@ async function updateKpisCacheExact() {
             if (!res.ok)
                 throw new Error(`orders ALL failed: ${res.status}`);
             const j = await res.json();
-            const arr = Array.isArray(j === null || j === void 0 ? void 0 : j.orders)
+            const arr = Array.isArray(j?.orders)
                 ? j.orders
-                : Array.isArray(j === null || j === void 0 ? void 0 : j.items)
+                : Array.isArray(j?.items)
                     ? j.items
-                    : Array.isArray(j === null || j === void 0 ? void 0 : j.data)
+                    : Array.isArray(j?.data)
                         ? j.data
                         : [];
             pendingAll += arr.length;
-            token = ((j === null || j === void 0 ? void 0 : j.nextToken) ? String(j.nextToken) : '') || null;
+            token = (j?.nextToken ? String(j.nextToken) : '') || null;
             // small safety to avoid infinite loops on malformed tokens
             if (token && typeof token !== 'string')
                 token = null;
         } while (token);
     }
-    catch (_a) {
+    catch {
         // Fallback: bounded per-shop sum (may be approximate if shops lack credentials)
         pendingApprox = true;
         const perShopPending = await Promise.all(shops.map(async (s) => await (0, jumia_1.getPendingOrdersCountQuickForShop)({ shopId: s.id, limitPages: 10, size: 100, timeMs: 20000 }).catch(() => ({ total: 0, approx: true }))));
-        pendingAll = perShopPending.reduce((n, s) => n + ((s === null || s === void 0 ? void 0 : s.total) || 0), 0);
-        pendingApprox = perShopPending.some((s) => s === null || s === void 0 ? void 0 : s.approx) || false;
+        pendingAll = perShopPending.reduce((n, s) => n + (s?.total || 0), 0);
+        pendingApprox = perShopPending.some((s) => s?.approx) || false;
     }
     const productsAll = prodAll.total;
     const approx = Boolean(prodAll.approx) || pendingApprox;

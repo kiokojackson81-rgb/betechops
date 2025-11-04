@@ -20,14 +20,14 @@ async function run() {
             console.log('JumiaOrder count:', ordersCount);
     }
     catch (e) {
-        console.error('count-jumia error:', (e === null || e === void 0 ? void 0 : e.message) || e);
+        console.error('count-jumia error:', e?.message || e);
         process.exitCode = 1;
     }
     finally {
         try {
             await prisma.$disconnect();
         }
-        catch (_a) { }
+        catch { }
     }
 }
 run();

@@ -43,8 +43,8 @@ function ToastContainer() {
         function onToast(e) {
             const ev = e;
             const { message, type } = ev.detail || {};
-            const msg = message !== null && message !== void 0 ? message : String(e);
-            const tp = type !== null && type !== void 0 ? type : 'info';
+            const msg = message ?? String(e);
+            const tp = type ?? 'info';
             const id = idSeq++;
             setItems((s) => [...s, { id, message: msg, type: tp }]);
             setTimeout(() => setItems((s) => s.filter(x => x.id !== id)), 4000);

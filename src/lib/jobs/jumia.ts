@@ -339,24 +339,25 @@ export default jobs;
  * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
  */
 export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
-  // Cover all Jumia order states we surface in the UI so post-pending transitions are ingested.
-  const STATUS_SEQUENCE = Array.from(
-    new Set([
-      'PENDING',
-      'PACKED',
-      'READY_TO_SHIP',
-      'PROCESSING',
-      'FULFILLED',
-      'COMPLETED',
-      'DELIVERED',
-      'SHIPPED',
-      'CANCELLED',
-      'CANCELED',
-      'FAILED',
-      'RETURNED',
-      'DISPUTED',
-    ]),
-  );
+  // Vendor-supported Order Item statuses per Jumia GOP docs for /orders
+  // Avoid unsupported ones (e.g., PACKED, PROCESSING, FULFILLED, COMPLETED, DISPUTED, CANCELLED)
+  // Valid: PENDING, SHIPPED, DELIVERED, FAILED, RETURNED, READY_TO_SHIP, CANCELED
+  const STATUS_SEQUENCE = [
+    'PENDING',
+    'READY_TO_SHIP',
+    'SHIPPED',
+    'DELIVERED',
+    'FAILED',
+    'RETURNED',
+    'CANCELED', // note: single-L spelling required by vendor
+  ];
+
+  // Cache vendor-unsupported statuses per shop to avoid repeated 400 spam.
+  // Memory-scoped; reset on process restart. Keeps logs clean and reduces vendor calls.
+  const unsupportedByShop: Map<string, Set<string>> = (globalThis as any).__jumiaUnsupportedCache || new Map();
+  (globalThis as any).__jumiaUnsupportedCache = unsupportedByShop;
+  const warnedOnce: Set<string> = (globalThis as any).__jumiaUnsupportedWarned || new Set();
+  (globalThis as any).__jumiaUnsupportedWarned = warnedOnce;
   const jumiaShops = await prisma.jumiaShop.findMany({
     where: opts?.shopId ? { id: opts.shopId } : {},
     select: { id: true },
@@ -432,6 +433,11 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
 
     try {
       for (const status of STATUS_SEQUENCE) {
+        // Skip immediately if we've previously learned this shop/status is unsupported
+        const skipSet = unsupportedByShop.get(shopId);
+        if (skipSet && skipSet.has(status)) {
+          continue;
+        }
         const params = { ...baseParams, status };
         // Preflight: some tenants reject certain statuses with 400; skip those early.
         try {
@@ -442,7 +448,14 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
           const body = (err as { body?: string })?.body ?? '';
           const message = (err as Error)?.message ?? '';
           if (code === 400 && /invalid status value/i.test((body || message))) {
-            logger.warn({ shopId, status, err }, 'status not supported by vendor; skipping');
+            // Remember and warn only once per shop/status to prevent log noise
+            if (!unsupportedByShop.has(shopId)) unsupportedByShop.set(shopId, new Set());
+            unsupportedByShop.get(shopId)!.add(status);
+            const warnKey = `${shopId}:${status}`;
+            if (!warnedOnce.has(warnKey)) {
+              warnedOnce.add(warnKey);
+              logger.warn({ shopId, status }, 'status not supported by vendor; skipping');
+            }
             continue; // go to next status
           }
           // If other error (e.g., network), bubble up to outer catch
@@ -541,7 +554,13 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
           const body = (err as { body?: string })?.body ?? '';
           const message = (err as Error)?.message ?? '';
           if (code === 400 && /invalid status value/i.test(body || message)) {
-            logger.warn({ shopId, status, err }, 'status not supported by vendor; skipping');
+            if (!unsupportedByShop.has(shopId)) unsupportedByShop.set(shopId, new Set());
+            unsupportedByShop.get(shopId)!.add(status);
+            const warnKey = `${shopId}:${status}`;
+            if (!warnedOnce.has(warnKey)) {
+              warnedOnce.add(warnKey);
+              logger.warn({ shopId, status }, 'status not supported by vendor; skipping');
+            }
             continue;
           }
           throw err;

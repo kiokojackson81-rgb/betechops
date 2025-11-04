@@ -37,7 +37,7 @@ function bucketSum(source, keys) {
     for (const key of keys) {
         const variants = new Set([canonicalize(key), normalizeKey(key)]);
         for (const variant of variants)
-            sum += Number((normalized === null || normalized === void 0 ? void 0 : normalized[variant]) || 0);
+            sum += Number(normalized?.[variant] || 0);
     }
     return sum;
 }
@@ -77,11 +77,11 @@ function CatalogMetrics({ initial, shopId, exact }) {
             const res = await fetch(`/api/catalog/products-count?${qs.toString()}`, { cache: "no-store" });
             if (res.ok) {
                 const j = (await res.json());
-                if (typeof (j === null || j === void 0 ? void 0 : j.total) === "number")
+                if (typeof j?.total === "number")
                     setSummary({ total: j.total, approx: !!j.approx, byStatus: j.byStatus || {}, byQcStatus: j.byQcStatus || {} });
             }
         }
-        catch (_a) {
+        catch {
             // ignore
         }
         finally {

@@ -28,7 +28,6 @@ function ReturnModal({ onClose }) {
     const fileRef = (0, react_1.useRef)(null);
     const [busy, setBusy] = (0, react_1.useState)(false);
     const submit = async () => {
-        var _a, _b;
         setBusy(true);
         try {
             const fd = new FormData();
@@ -36,7 +35,7 @@ function ReturnModal({ onClose }) {
             fd.append("qty", qty);
             fd.append("reason", reason);
             fd.append("notes", notes);
-            if ((_b = (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.files) === null || _b === void 0 ? void 0 : _b[0])
+            if (fileRef.current?.files?.[0])
                 fd.append("photo", fileRef.current.files[0]);
             const r = await fetch("/api/returns", { method: "POST", body: fd });
             if (!r.ok)
@@ -44,7 +43,7 @@ function ReturnModal({ onClose }) {
             (0, toast_1.default)("Return submitted", 'success');
             onClose();
         }
-        catch (_c) {
+        catch {
             (0, toast_1.default)("Failed to submit return", 'error');
         }
         finally {

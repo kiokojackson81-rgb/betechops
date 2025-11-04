@@ -62,20 +62,20 @@ async function POST(request) {
                     const r = await upsertNormalizedOrder(o).catch((e) => ({ error: errMessage(e) }));
                     saved.push(r);
                 }
-                results[s.id] = { count: orders.length, savedCount: saved.filter(x => !(x === null || x === void 0 ? void 0 : x.error)).length };
+                results[s.id] = { count: orders.length, savedCount: saved.filter(x => !(x?.error)).length };
             }
             else if (s.platform === 'KILIMALL') {
                 if (s.credentialsEncrypted) {
                     const creds = (0, secure_json_1.decryptJson)(s.credentialsEncrypted);
                     const credObj = creds;
-                    const items = (await (0, kilimall_1.fetchOrders)({ appId: (credObj === null || credObj === void 0 ? void 0 : credObj.storeId) || (credObj === null || credObj === void 0 ? void 0 : credObj.appId), appSecret: (credObj === null || credObj === void 0 ? void 0 : credObj.appSecret) || (credObj === null || credObj === void 0 ? void 0 : credObj.app_secret), apiBase: credObj === null || credObj === void 0 ? void 0 : credObj.apiBase }, { since: undefined }));
+                    const items = (await (0, kilimall_1.fetchOrders)({ appId: credObj?.storeId || credObj?.appId, appSecret: credObj?.appSecret || credObj?.app_secret, apiBase: credObj?.apiBase }, { since: undefined }));
                     const saved = [];
                     for (const o of items) {
                         const norm = (await Promise.resolve().then(() => __importStar(require('@/lib/connectors/normalize')))).normalizeFromKilimall(o, s.id);
                         const r = await upsertNormalizedOrder(norm).catch((e) => ({ error: errMessage(e) }));
                         saved.push(r);
                     }
-                    results[s.id] = { count: items.length, savedCount: saved.filter(x => !(x === null || x === void 0 ? void 0 : x.error)).length };
+                    results[s.id] = { count: items.length, savedCount: saved.filter(x => !(x?.error)).length };
                 }
                 else {
                     results[s.id] = { error: 'no credentials' };

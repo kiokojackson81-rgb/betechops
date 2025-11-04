@@ -45,7 +45,7 @@ function bucketSum(source, keys) {
     for (const key of keys) {
         const variants = new Set([canonicalize(key), normalizeKey(key)]);
         for (const variant of variants)
-            sum += Number((normalized === null || normalized === void 0 ? void 0 : normalized[variant]) || 0);
+            sum += Number(normalized?.[variant] || 0);
     }
     return sum;
 }
@@ -80,7 +80,7 @@ function deriveExpanded(summary) {
 async function computeAndStoreCountersForShop(shopId, opts) {
     if (!shopId)
         throw new Error("shopId required");
-    const exact = await (0, jumia_1.getCatalogProductsCountExactForShop)({ shopId, size: Math.min(100, Math.max(50, (opts === null || opts === void 0 ? void 0 : opts.size) || 100)), timeMs: Math.max(30000, (opts === null || opts === void 0 ? void 0 : opts.timeMs) || 60000) });
+    const exact = await (0, jumia_1.getCatalogProductsCountExactForShop)({ shopId, size: Math.min(100, Math.max(50, opts?.size || 100)), timeMs: Math.max(30000, opts?.timeMs || 60000) });
     const exp = deriveExpanded(exact);
     const now = new Date();
     const row = await prisma_1.prisma.catalogCounters.upsert({
@@ -130,7 +130,7 @@ async function recomputeAllCounters() {
             const r = await computeAndStoreCountersForShop(s.id);
             perShop.push(r);
         }
-        catch (_a) {
+        catch {
             // continue
         }
     }
@@ -139,7 +139,7 @@ async function recomputeAllCounters() {
     try {
         agg = await (0, jumia_1.getCatalogProductsCountExactAll)({ size: 100, timeMs: 60000 });
     }
-    catch (_b) {
+    catch {
         agg = null;
     }
     if (!agg) {
@@ -173,8 +173,8 @@ async function recomputeAllCounters() {
         });
         const row = await prisma_1.prisma.catalogCounters.upsert({
             where: { scope_shopId: { scope: "ALL", shopId: "ALL" } },
-            update: Object.assign(Object.assign({}, sum), { computedAt: new Date() }),
-            create: Object.assign(Object.assign({ scope: "ALL", shopId: "ALL" }, sum), { computedAt: new Date() }),
+            update: { ...sum, computedAt: new Date() },
+            create: { scope: "ALL", shopId: "ALL", ...sum, computedAt: new Date() },
         });
         return { perShop, aggregate: row };
     }
@@ -235,11 +235,11 @@ async function getLatestCounters(opts, stalenessMs = 30 * 60000) {
 }
 function rowToSummaryPayload(row) {
     // Prefer granular maps when present; otherwise reconstruct from expanded fields
-    const byStatus = (row === null || row === void 0 ? void 0 : row.byStatus) || {};
-    const byQcStatus = (row === null || row === void 0 ? void 0 : row.byQcStatus) || {};
+    const byStatus = row?.byStatus || {};
+    const byQcStatus = row?.byQcStatus || {};
     return {
-        total: Number((row === null || row === void 0 ? void 0 : row.total) || 0),
-        approx: !!(row === null || row === void 0 ? void 0 : row.approx),
+        total: Number(row?.total || 0),
+        approx: !!row?.approx,
         byStatus,
         byQcStatus,
     };

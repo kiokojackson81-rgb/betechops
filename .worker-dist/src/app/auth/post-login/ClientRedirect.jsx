@@ -42,14 +42,13 @@ function ClientRedirect() {
     const router = (0, navigation_1.useRouter)();
     const { data: session, status } = (0, react_2.useSession)();
     (0, react_1.useEffect)(() => {
-        var _a;
         if (status === "loading")
             return;
         if (!session) {
             router.replace("/attendant/login");
             return;
         }
-        const role = ((_a = session.user) === null || _a === void 0 ? void 0 : _a.role) || "ATTENDANT";
+        const role = session.user?.role || "ATTENDANT";
         // Read intended param from URL. If present, prefer it (but validate against role)
         const params = new URLSearchParams(window.location.search);
         const intended = params.get("intended");

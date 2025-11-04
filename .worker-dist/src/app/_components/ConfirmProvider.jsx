@@ -40,9 +40,8 @@ function ConfirmProvider() {
     const [queue, setQueue] = (0, react_1.useState)([]);
     (0, react_1.useEffect)(() => {
         function onRequest(e) {
-            var _a;
             const ev = e;
-            const id = (_a = ev.detail) === null || _a === void 0 ? void 0 : _a.id;
+            const id = ev.detail?.id;
             if (!id)
                 return;
             setQueue((q) => [...q, { id: id, message: ev.detail.message || '' }]);

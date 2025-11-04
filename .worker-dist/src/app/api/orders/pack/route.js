@@ -40,16 +40,15 @@ const auth_1 = require("@/lib/auth");
 const redis_1 = require("@/lib/redis");
 const jumia = __importStar(require("@/lib/jumia"));
 async function POST(req) {
-    var _a, _b;
     try {
         const body = await req.json();
-        const { orderId, shopId } = body !== null && body !== void 0 ? body : {};
+        const { orderId, shopId } = body ?? {};
         // Enforce auth
         const session = await (0, auth_1.auth)();
         if (!session)
             return server_1.NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
         // session.user shape may vary; tolerate missing fields
-        const su = ((_a = session === null || session === void 0 ? void 0 : session.user) !== null && _a !== void 0 ? _a : {});
+        const su = (session?.user ?? {});
         const actor = typeof su.email === 'string'
             ? su.email
             : typeof su.name === 'string'
@@ -72,7 +71,7 @@ async function POST(req) {
                 await r.set(`lock:${idempotencyKey}`, '1', 'EX', 60, 'NX');
             }
         }
-        catch (_c) {
+        catch {
             // continue without Redis
         }
         // Call Jumia to perform pack action. If vendor has a specific endpoint, jumiaFetch will call it.
@@ -83,13 +82,13 @@ async function POST(req) {
                 const jf = jumia.jumiaFetch;
                 result = await jf(`/orders/${encodeURIComponent(orderId)}/pack`, { method: 'POST', body: JSON.stringify({ shopId }) });
             }
-            catch (_d) {
+            catch {
                 // If vendor pack endpoint is not available, attempt a read of order items to validate existence
                 try {
                     const jmod = jumia;
-                    await ((_b = jmod.getOrderItems) === null || _b === void 0 ? void 0 : _b.call(jmod, orderId).catch(() => null));
+                    await jmod.getOrderItems?.(orderId).catch(() => null);
                 }
-                catch (_e) { }
+                catch { }
                 result = { ok: true, note: 'simulated-pack' };
             }
             // persist audit (best-effort)
@@ -106,7 +105,7 @@ async function POST(req) {
                     await r.set(`idempotency:${idempotencyKey}`, JSON.stringify(result), 'EX', 60 * 60);
                 }
             }
-            catch (_f) {
+            catch {
                 // ignore
             }
             return server_1.NextResponse.json({ ok: true, action, result });

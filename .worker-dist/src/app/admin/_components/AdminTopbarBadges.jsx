@@ -13,18 +13,17 @@ function AdminTopbarBadges() {
     (0, react_1.useEffect)(() => {
         let ignore = false;
         (async () => {
-            var _a, _b;
             try {
                 const [a, b] = await Promise.all([
                     fetch("/api/orders/pending-pricing", { cache: "no-store" }).then(r => r.ok ? r.json() : { count: 0 }),
                     fetch("/api/returns/waiting-pickup", { cache: "no-store" }).then(r => r.ok ? r.json() : { count: 0 }),
                 ]);
                 if (!ignore) {
-                    setPP((_a = a.count) !== null && _a !== void 0 ? _a : 0);
-                    setRP((_b = b.count) !== null && _b !== void 0 ? _b : 0);
+                    setPP(a.count ?? 0);
+                    setRP(b.count ?? 0);
                 }
             }
-            catch (_c) {
+            catch {
                 if (!ignore) {
                     setPP(0);
                     setRP(0);

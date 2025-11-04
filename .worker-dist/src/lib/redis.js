@@ -38,17 +38,16 @@ exports.isRedisAvailable = isRedisAvailable;
 let client = null;
 let available = false;
 async function getRedis() {
-    var _a, _b;
     if (!process.env.REDIS_URL)
         return null;
     if (client)
         return client;
     try {
         const mod = await Promise.resolve().then(() => __importStar(require('ioredis')));
-        const RedisCtor = (_a = mod.default) !== null && _a !== void 0 ? _a : mod;
+        const RedisCtor = mod.default ?? mod;
         // instantiate with minimal typing and avoid `any` by casting via unknown to a constructor type
         client = (new RedisCtor(process.env.REDIS_URL));
-        await ((_b = client.ping) === null || _b === void 0 ? void 0 : _b.call(client));
+        await client.ping?.();
         available = true;
         return client;
     }

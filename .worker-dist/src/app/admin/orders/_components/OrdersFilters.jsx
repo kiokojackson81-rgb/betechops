@@ -59,7 +59,7 @@ function OrdersFilters({ shops }) {
     };
     const reset = () => {
         const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
-        setPending(Object.assign(Object.assign({}, DEFAULTS), { size: sizeDefault }));
+        setPending({ ...DEFAULTS, size: sizeDefault });
         const q = new URLSearchParams(sp.toString());
         Object.keys(DEFAULTS).forEach((key) => q.delete(key));
         q.delete("nextToken");
@@ -67,30 +67,30 @@ function OrdersFilters({ shops }) {
     };
     return (<div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
       <div className="grid md:grid-cols-6 gap-3">
-        <select value={pending.status} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { status: e.target.value })))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select value={pending.status} onChange={(e) => setPending((prev) => ({ ...prev, status: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           <option value="ALL">All Status</option>
           {STATUSES.map((s) => (<option key={s} value={s}>
               {s}
             </option>))}
         </select>
 
-        <input value={pending.country} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { country: e.target.value })))} placeholder="Country (e.g. KE)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input value={pending.country} onChange={(e) => setPending((prev) => ({ ...prev, country: e.target.value }))} placeholder="Country (e.g. KE)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
 
-        <select value={pending.shopId} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { shopId: e.target.value })))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select value={pending.shopId} onChange={(e) => setPending((prev) => ({ ...prev, shopId: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           <option value="ALL">All Jumia</option>
           {shops.map((s) => (<option key={s.id} value={s.id}>
               {s.name}
             </option>))}
         </select>
 
-        <input type="date" value={pending.dateFrom} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { dateFrom: e.target.value })))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
-        <input type="date" value={pending.dateTo} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { dateTo: e.target.value })))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input type="date" value={pending.dateFrom} onChange={(e) => setPending((prev) => ({ ...prev, dateFrom: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input type="date" value={pending.dateTo} onChange={(e) => setPending((prev) => ({ ...prev, dateTo: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
 
-        <input value={pending.q} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { q: e.target.value })))} placeholder="Search number or name." className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input value={pending.q} onChange={(e) => setPending((prev) => ({ ...prev, q: e.target.value }))} placeholder="Search number or name." className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <select value={pending.size} onChange={(e) => setPending((prev) => (Object.assign(Object.assign({}, prev), { size: e.target.value })))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select value={pending.size} onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           {SIZE_OPTIONS.map((n) => (<option key={n} value={n.toString()}>
               {n} / page
             </option>))}
