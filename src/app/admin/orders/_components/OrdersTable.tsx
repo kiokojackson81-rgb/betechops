@@ -36,10 +36,22 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
         (Array.isArray(row.shopIds) ? row.shopIds.find((s) => typeof s === "string") : undefined) ??
         undefined;
       if (action === "print") {
-        const url = shopIdForRow
+        // Single-button flow: trigger RTS (auto-packs when needed) then open Print Labels
+        const rtsEndpoint = shopIdForRow
+          ? `/api/jumia/orders/${id}/ready-to-ship?shopId=${encodeURIComponent(shopIdForRow)}`
+          : `/api/jumia/orders/${id}/ready-to-ship`;
+        const res = await fetch(rtsEndpoint, { method: "POST" });
+        if (!res.ok) throw new Error(`Action rts failed with status ${res.status}`);
+        const printUrl = shopIdForRow
           ? `/api/jumia/orders/${id}/print-labels?shopId=${encodeURIComponent(shopIdForRow)}`
           : `/api/jumia/orders/${id}/print-labels`;
-        window.open(url, "_blank");
+        try { window.open(printUrl, "_blank"); } catch {}
+        const params = new URLSearchParams();
+        if (shopIdForRow) params.set("shopId", shopIdForRow);
+        const query = params.toString();
+        await fetch(`/api/jumia/jobs/sync-incremental${query ? `?${query}` : ""}`, { method: "POST" }).catch(() => {});
+        dispatchRefresh();
+        router.refresh();
         return;
       }
 
@@ -197,17 +209,26 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
       // call endpoints per shop
       for (const [shopId, orderIds] of groups) {
         if (!orderIds.length) continue;
-        const endpoint =
-          action === "pack"
-            ? "/api/jumia/orders/bulk/pack"
-            : action === "rts"
-            ? "/api/jumia/orders/bulk/ready-to-ship"
-            : "/api/jumia/orders/bulk/print-labels";
-        await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shopId, orderIds }),
-        });
+        if (action === "print") {
+          // Single-button bulk flow: RTS then Print Labels
+          await fetch("/api/jumia/orders/bulk/ready-to-ship", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ shopId, orderIds }),
+          });
+          await fetch("/api/jumia/orders/bulk/print-labels", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ shopId, orderIds }),
+          });
+        } else {
+          const endpoint = action === "pack" ? "/api/jumia/orders/bulk/pack" : "/api/jumia/orders/bulk/ready-to-ship";
+          await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ shopId, orderIds }),
+          });
+        }
         await fetch(`/api/jumia/jobs/sync-incremental?shopId=${encodeURIComponent(shopId)}`, { method: "POST" }).catch(() => {});
       }
       // clear selection and refresh
@@ -335,20 +356,6 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-2">
-                    <button
-                      className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-60"
-                      onClick={() => callAction(row, "pack")}
-                      disabled={busy !== null}
-                    >
-                      {actionBusy && busy?.endsWith(":pack") ? "…" : "Pack"}
-                    </button>
-                    <button
-                      className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-60"
-                      onClick={() => callAction(row, "rts")}
-                      disabled={busy !== null}
-                    >
-                      {actionBusy && busy?.endsWith(":rts") ? "…" : "RTS"}
-                    </button>
                     <button
                       className="px-2 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-60"
                       onClick={() => callAction(row, "print")}
