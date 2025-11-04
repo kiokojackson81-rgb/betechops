@@ -33,6 +33,36 @@ async function resolveShipmentProviderId(orderItemId: string, shopId?: string): 
   }
 }
 
+async function resolveAndMaybePersistDefault(shopId: string, orderItemId: string): Promise<string | null> {
+  // Try default first
+  try {
+    const row = await prisma.config.findUnique({ where: { key: 'jumia:shipper-defaults' } });
+    const defaults = ((row?.json as any) || {}) as Record<string, { providerId: string; label?: string }>;
+    const def = defaults?.[shopId]?.providerId;
+    if (def && def !== 'auto') return def;
+  } catch {}
+
+  // Discover providers
+  try {
+    const prov = await getShipmentProviders({ shopId, orderItemIds: [orderItemId] }).catch(() => ({ providers: [] as any[] }));
+    const providers: any[] = Array.isArray((prov as any)?.providers) ? (prov as any).providers : [];
+    if (providers.length === 1) {
+      const pid = String((providers[0]?.id ?? providers[0]?.providerId) || "");
+      try {
+        const row = await prisma.config.findUnique({ where: { key: 'jumia:shipper-defaults' } });
+        const next = { ...(((row?.json as any) || {}) as Record<string, { providerId: string; label?: string }>) };
+        next[shopId] = { providerId: pid, label: String(providers[0]?.name || providers[0]?.label || pid) };
+        await prisma.config.upsert({ where: { key: 'jumia:shipper-defaults' }, update: { json: next }, create: { key: 'jumia:shipper-defaults', json: next } });
+      } catch {}
+      return pid;
+    }
+    // Prefer a non-tracking provider
+    const pick = providers.find((p) => !p?.requiredTrackingCode) || providers[0];
+    if (pick) return String((pick?.id ?? pick?.providerId) || "");
+  } catch {}
+  return null;
+}
+
 function sanitizePayload(body: unknown): OrderItemsPayload | null {
   if (!body || typeof body !== "object") return null;
   const orderItems = (body as { orderItems?: unknown }).orderItems;
@@ -81,7 +111,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const shipmentProviderId =
       (body && typeof body === "object" && typeof (body as { shipmentProviderId?: unknown }).shipmentProviderId === "string"
         ? ((body as { shipmentProviderId: string }).shipmentProviderId || "").trim()
-        : "") || (await resolveShipmentProviderId(id, shopId || undefined));
+        : "") || (shopId ? await resolveAndMaybePersistDefault(shopId, id) : await resolveShipmentProviderId(id, shopId || undefined));
     if (!shipmentProviderId) {
       // Treat path param as orderId: fetch its items and resolve providers per item
       let items: Array<{ id: string }> = [];
@@ -93,7 +123,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }
       const orderItems = [] as Array<{ id: string; shipmentProviderId?: string }>;
       for (const it of items) {
-        const resolved = await resolveShipmentProviderId(String((it as any)?.id || ""), shopId || undefined);
+        const resolved = shopId
+          ? await resolveAndMaybePersistDefault(shopId, String((it as any)?.id || ""))
+          : await resolveShipmentProviderId(String((it as any)?.id || ""), shopId || undefined);
         orderItems.push({ id: String((it as any)?.id || ""), shipmentProviderId: resolved || undefined });
       }
       const cleaned = orderItems.filter((x) => x.id);

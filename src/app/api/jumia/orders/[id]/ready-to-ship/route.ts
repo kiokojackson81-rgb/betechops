@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
-import { getOrderItems, postOrdersReadyToShip } from "@/lib/jumia";
+import { getOrderItems, getShipmentProviders, postOrdersPack, postOrdersPackV2, postOrdersReadyToShip } from "@/lib/jumia";
 import { prisma } from "@/lib/prisma";
 
 function parseOrderItemIds(body: unknown, fallbackId: string): string[] {
@@ -58,6 +58,68 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   }
 
   try {
+    // Auto-pack if needed (when items are still PENDING) using default or single provider
+    if (shopId) {
+      try {
+        const itemsResp = await getOrderItems({ shopId, orderId: id });
+        const allItems = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
+        const idsSet = new Set(orderItemIds);
+        const target = allItems.filter((it: any) => idsSet.has(String(it?.id || "")));
+        const pending = target.filter((it: any) => String(it?.status || "").toUpperCase() === "PENDING");
+        if (pending.length > 0) {
+          // Load default provider
+          let defaults: Record<string, { providerId: string; label?: string }> = {};
+          try {
+            const row = await prisma.config.findUnique({ where: { key: 'jumia:shipper-defaults' } });
+            defaults = ((row?.json as any) || {}) as Record<string, { providerId: string; label?: string }>;
+          } catch {}
+          let providerId = defaults?.[shopId]?.providerId || "";
+
+          // Discover providers if no default
+          let requiredTracking = false;
+          if (!providerId || providerId === 'auto') {
+            const prov = await getShipmentProviders({ shopId, orderItemIds: [String(pending[0]?.id)] }).catch(() => ({ providers: [] as any[] }));
+            const providers: any[] = Array.isArray((prov as any)?.providers) ? (prov as any).providers : [];
+            if (providers.length === 1) {
+              providerId = String((providers[0]?.id ?? providers[0]?.providerId) || "");
+              requiredTracking = !!providers[0]?.requiredTrackingCode;
+              // Persist single-provider default for this shop
+              try {
+                const next = { ...(defaults || {}) } as Record<string, { providerId: string; label?: string }>;
+                next[shopId] = { providerId, label: String(providers[0]?.name || providers[0]?.label || providerId) };
+                await prisma.config.upsert({ where: { key: 'jumia:shipper-defaults' }, update: { json: next }, create: { key: 'jumia:shipper-defaults', json: next } });
+              } catch {}
+            } else if (providers.length > 1) {
+              // Prefer a provider that does not require tracking code
+              const pick = providers.find((p) => !p?.requiredTrackingCode) || providers[0];
+              providerId = String((pick?.id ?? pick?.providerId) || "");
+              requiredTracking = !!pick?.requiredTrackingCode;
+            }
+          }
+
+          // If still no providerId, stop with guidance
+          if (!providerId) {
+            return noStoreJson(
+              { ok: false, error: "No shipment provider configured for this shop", hint: "Save a default in Settings → Jumia → Shipping Stations or ensure only one provider is active", shopId },
+              { status: 400 }
+            );
+          }
+
+          // Pack pending items before RTS
+          const toPackIds: string[] = pending.map((it: any) => String(it.id));
+          if (requiredTracking) {
+            const base = String(toPackIds[0]).slice(0, 8);
+            const trackingCode = `AUTO-${base}-${Date.now()}`.slice(0, 32);
+            await postOrdersPackV2({ shopId, packages: [{ orderItems: toPackIds, shipmentProviderId: providerId, trackingCode }] });
+          } else {
+            await postOrdersPack({ shopId, orderItems: toPackIds.map((id: string) => ({ id, shipmentProviderId: providerId })) });
+          }
+        }
+      } catch {
+        // best-effort auto-pack
+      }
+    }
+
     const result = await postOrdersReadyToShip(shopId ? { shopId, orderItemIds } : { orderItemIds });
     return noStoreJson({ ok: true, orderItemIds, result, shopId: shopId || undefined }, { status: 201 });
   } catch (e: unknown) {

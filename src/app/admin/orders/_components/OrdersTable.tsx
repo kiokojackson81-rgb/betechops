@@ -56,6 +56,14 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
         throw new Error(`Action ${action} failed with status ${res.status}`);
       }
 
+      // If RTS succeeded, immediately open Print Labels for a smooth flow
+      if (action === "rts") {
+        const printUrl = shopIdForRow
+          ? `/api/jumia/orders/${id}/print-labels?shopId=${encodeURIComponent(shopIdForRow)}`
+          : `/api/jumia/orders/${id}/print-labels`;
+        try { window.open(printUrl, "_blank"); } catch {}
+      }
+
       const shopId = shopIdForRow;
 
       try {
