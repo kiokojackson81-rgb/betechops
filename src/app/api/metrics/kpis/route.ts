@@ -17,27 +17,38 @@ export async function GET(request: Request) {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const DEFAULT_TZ = 'Africa/Nairobi';
+  const PENDING_WINDOW_DAYS = Math.max(0, Number(process.env.KPIS_PENDING_WINDOW_DAYS ?? 0));
 
     // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
     // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
     // Align the 7-day window to Nairobi timezone to match how vendor windows are queried by the worker
     const sevenDaysAgo = zonedTimeToUtc(addDays(now, -7), DEFAULT_TZ);
-    const queued = await prisma.jumiaOrder.count({
-      where: {
-        status: { in: ['PENDING', 'MULTIPLE'] },
-        OR: [
-          { updatedAtJumia: { gte: sevenDaysAgo } },
-          { createdAtJumia: { gte: sevenDaysAgo } },
-          {
-            AND: [
-              { updatedAtJumia: null },
-              { createdAtJumia: null },
-              { updatedAt: { gte: sevenDaysAgo } },
-            ],
-          },
-        ],
-      },
-    });
+    // Count pending orders. By default include ALL pending, regardless of last update time,
+    // because some pendings can linger beyond a week. If KPIS_PENDING_WINDOW_DAYS>0, apply that window instead.
+    let queued: number;
+    if (PENDING_WINDOW_DAYS > 0) {
+      const windowStart = zonedTimeToUtc(addDays(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ);
+      queued = await prisma.jumiaOrder.count({
+        where: {
+          status: { in: ['PENDING', 'MULTIPLE'] },
+          OR: [
+            { updatedAtJumia: { gte: windowStart } },
+            { createdAtJumia: { gte: windowStart } },
+            {
+              AND: [
+                { updatedAtJumia: null },
+                { createdAtJumia: null },
+                { updatedAt: { gte: windowStart } },
+              ],
+            },
+          ],
+        },
+      });
+    } else {
+      queued = await prisma.jumiaOrder.count({
+        where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+      });
+    }
 
     // Determine staleness: when was the latest pending-row update recorded?
     // Some unit tests mock prisma minimally; guard aggregate call to avoid 500s when not provided.
@@ -98,15 +109,18 @@ export async function GET(request: Request) {
       let pages = 0;
       let total = 0;
       let token: string | null = null;
-      const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
-      const dateTo = now.toISOString().slice(0, 10);
+  const dateFrom = PENDING_WINDOW_DAYS > 0 ? zonedTimeToUtc(addDays(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ).toISOString().slice(0, 10) : '';
+  const dateTo = now.toISOString().slice(0, 10);
       do {
         const elapsed = Date.now() - start;
         if (elapsed >= LIVE_TIMEOUT_MS) break;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
         try {
-          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          // If a window is configured, include it; otherwise omit date filters to consider all PENDING.
+          const base = PENDING_WINDOW_DAYS > 0
+            ? `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`
+            : `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
           const url = await absUrl(base);
           const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
           if (!res.ok) break;
