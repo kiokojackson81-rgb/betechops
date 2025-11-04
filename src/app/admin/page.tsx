@@ -121,7 +121,7 @@ export default async function Overview() {
           title="Pending Orders (Live API)"
           value={s.pendingLive ?? "—"}
           Icon={Receipt}
-          sub={s.pendingLive == null ? "Vendor timed out" : "Vendor live (timeboxed)"}
+          sub={s.pendingLive == null ? "Vendor timed out/error — check API credentials" : "Vendor live (timeboxed)"}
         />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>

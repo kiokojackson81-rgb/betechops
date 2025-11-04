@@ -30,9 +30,12 @@ export async function GET(request: Request) {
     // Vendor live count (timeboxed)
     let vendorPending = null as null | number;
     let livePages = 0;
+    let lastStatus: number | null = null;
+    let lastError: string | null = null;
+    let lastTriedUrl: string | null = null;
     try {
-      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 2000);
-      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 3));
+      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 3000);
+      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 5));
       const dateFrom = since.toISOString().slice(0, 10);
       const dateTo = now.toISOString().slice(0, 10);
       const start = Date.now();
@@ -44,16 +47,22 @@ export async function GET(request: Request) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
         try {
-          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&fresh=1&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
           const fetchUrl = await absUrl(base);
+          lastTriedUrl = base;
           const res = await fetch(fetchUrl, { cache: 'no-store', signal: controller.signal });
-          if (!res.ok) break;
+          lastStatus = res.status;
+          if (!res.ok) {
+            try { lastError = await res.text(); } catch {}
+            break;
+          }
           const j: any = await res.json();
           const arr = Array.isArray(j?.orders) ? j.orders : Array.isArray(j?.items) ? j.items : Array.isArray(j?.data) ? j.data : [];
           total += arr.length;
           token = (j?.nextToken ? String(j.nextToken) : '') || null;
           livePages += 1;
         } catch {
+          lastError = e?.message ? String(e.message) : 'fetch-error';
           break;
         } finally {
           clearTimeout(timeout);
@@ -69,7 +78,7 @@ export async function GET(request: Request) {
       days,
       since,
       db: { pending: dbPending, pendingPlusMultiple: dbPendingMultiple },
-      vendor: { pending: vendorPending, pages: livePages },
+  vendor: { pending: vendorPending, pages: livePages, lastStatus, lastError, lastTriedUrl },
       diff: vendorPending == null ? null : {
         vendorMinusDbPending: vendorPending - dbPending,
         vendorMinusDbPendingPlusMultiple: vendorPending - dbPendingMultiple,
