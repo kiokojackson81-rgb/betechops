@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-commit hook to block merge conflict markers in staged files.
+# Uses a Node checker for cross-platform parsing.
+
+# Ensure node is available
+command -v node >/dev/null 2>&1 || {
+  echo "[pre-commit] node is required but not found in PATH. Skipping conflict check." 1>&2
+  exit 0
+}
+
+node scripts/precommit-check.js
+status=$?
+if [ $status -ne 0 ]; then
+  echo "\n[pre-commit] Commit aborted due to merge-conflict markers." 1>&2
+  exit $status
+fi
+
+exit 0
