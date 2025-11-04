@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jumiaFetch as _jumiaFetch, loadShopAuthById, loadDefaultShopAuth } from '@/lib/jumia';
 import { prisma } from '@/lib/prisma';
+import { zonedTimeToUtc } from 'date-fns-tz';
+import { addDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +77,25 @@ export async function GET(req: NextRequest) {
     qsOut[beforeKey] = qsOut.dateTo;
     delete qsOut.dateTo;
   }
+  // Normalize date-only filters to full ISO timestamps aligned to Nairobi time
+  const DEFAULT_TZ = 'Africa/Nairobi';
+  const isDateOnly = (s: string | undefined) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const toIsoTs = (dateStr: string, endOfDay = false) => {
+    try {
+      // Build local date in Nairobi TZ at start or end of day, then convert to UTC ISO string
+      const base = new Date(`${dateStr}T00:00:00`);
+      const localStartUtc = zonedTimeToUtc(base, DEFAULT_TZ);
+      if (!endOfDay) return localStartUtc.toISOString();
+      const localEndUtc = addDays(localStartUtc, 1);
+      // Use one microsecond before next day to cover full inclusive day window
+      return new Date(localEndUtc.getTime() - 1).toISOString();
+    } catch {
+      return dateStr;
+    }
+  };
+  if (qsOut[afterKey] && isDateOnly(qsOut[afterKey])) qsOut[afterKey] = toIsoTs(qsOut[afterKey], false);
+  if (qsOut[beforeKey] && isDateOnly(qsOut[beforeKey])) qsOut[beforeKey] = toIsoTs(qsOut[beforeKey], true);
+
   const query = new URLSearchParams(qsOut).toString();
   const path = query ? `orders?${query}` : 'orders';
 
