@@ -5,6 +5,7 @@ import { absUrl } from '@/lib/abs-url';
 import { updateKpisCache, updateKpisCacheExact } from '@/lib/jobs/kpis';
 import { addDays } from 'date-fns';
 import { zonedTimeToUtc } from 'date-fns-tz';
+import { readPendingSnapshot, isPendingSnapshotFresh } from '@/lib/jumia/pendingSnapshot';
 
 // Always execute on the server without static caching
 export const dynamic = 'force-dynamic';
@@ -83,63 +84,85 @@ export async function GET(request: Request) {
       }
     }
 
-  // For the card, compute the 7-day DB count and also an optional live vendor aggregation across ALL
+    // For the card, compute the 7-day DB count and also an optional live vendor aggregation across ALL
     // shops for the same window. If the live total is higher (DB window incomplete), prefer it
     // and mark as approx. Time-box the live check to avoid UI blocking.
     let pendingAllOut = queued;
     let approxFlag = false;
+    let pendingSource: 'db' | 'snapshot' | 'snapshot-partial' | 'live' = 'db';
     try {
       const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
       const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
       const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
-      if (!allowLive) {
-        // Explicitly disabled — skip live boost
-        throw new Error('live-adjust-disabled');
-      }
-      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
-      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
-      const start = Date.now();
-      let pages = 0;
-      let total = 0;
-      let token: string | null = null;
-      const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
-      const dateTo = now.toISOString().slice(0, 10);
-      do {
-        const elapsed = Date.now() - start;
-        if (elapsed >= LIVE_TIMEOUT_MS) break;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
-        try {
-          // Use vendor-side PENDING status for live boost since vendor supports a single status filter
-          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-          const url = await absUrl(base);
-          const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-          if (!res.ok) break;
-          const j: any = await res.json();
-          const arr = Array.isArray(j?.orders)
-            ? j.orders
-            : Array.isArray(j?.items)
-            ? j.items
-            : Array.isArray(j?.data)
-            ? j.data
-            : [];
-          total += arr.length;
-          token = (j?.nextToken ? String(j.nextToken) : '') || null;
-          pages += 1;
-        } catch {
-          // Abort/timeout or network error — stop live adjustment and keep DB value
-          break;
-        } finally {
-          clearTimeout(timeout);
+      if (allowLive) {
+        const snapshotMaxAgeMs = Math.max(30_000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60_000));
+        const snapshotCandidate = await readPendingSnapshot().catch(() => null);
+        let usedSnapshot = false;
+        if (snapshotCandidate && isPendingSnapshotFresh(snapshotCandidate, snapshotMaxAgeMs)) {
+          const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
+          if (preferVendorWhenDiff && snapshotTotal !== queued) {
+            pendingAllOut = snapshotTotal;
+            approxFlag = true;
+          } else if (snapshotTotal > pendingAllOut) {
+            pendingAllOut = snapshotTotal;
+            approxFlag = true;
+          }
+          if (snapshotCandidate.ok === false) approxFlag = true;
+          pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
+          usedSnapshot = true;
         }
-      } while (token && pages < LIVE_MAX_PAGES);
-      // Prefer vendor truth when it differs from DB, unless disabled.
-      if (pages > 0 && preferVendorWhenDiff && total !== queued) {
-        pendingAllOut = total;
-        approxFlag = true;
-      } else if (total > pendingAllOut) {
-        // Legacy behavior: only boost upwards when vendor is higher
-        pendingAllOut = total; approxFlag = true;
+
+        if (!usedSnapshot) {
+          const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
+          const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
+          const start = Date.now();
+          let pages = 0;
+          let total = 0;
+          let token: string | null = null;
+          const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+          const dateTo = now.toISOString().slice(0, 10);
+          do {
+            const elapsed = Date.now() - start;
+            if (elapsed >= LIVE_TIMEOUT_MS) break;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
+            try {
+              // Use vendor-side PENDING status for live boost since vendor supports a single status filter
+              const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+              const url = await absUrl(base);
+              const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+              if (!res.ok) break;
+              const j: any = await res.json();
+              const arr = Array.isArray(j?.orders)
+                ? j.orders
+                : Array.isArray(j?.items)
+                ? j.items
+                : Array.isArray(j?.data)
+                ? j.data
+                : [];
+              total += arr.length;
+              token = (j?.nextToken ? String(j.nextToken) : '') || null;
+              pages += 1;
+            } catch {
+              // Abort/timeout or network error - stop live adjustment and keep DB value
+              break;
+            } finally {
+              clearTimeout(timeout);
+            }
+          } while (token && pages < LIVE_MAX_PAGES);
+          if (pages > 0) {
+            // Prefer vendor truth when it differs from DB, unless disabled.
+            if (preferVendorWhenDiff && total !== queued) {
+              pendingAllOut = total;
+              approxFlag = true;
+            } else if (total > pendingAllOut) {
+              // Legacy behavior: only boost upwards when vendor is higher
+              pendingAllOut = total;
+              approxFlag = true;
+            }
+            pendingSource = 'live';
+          }
+        }
       }
     } catch {
       // ignore network/vendor errors and keep DB-based value
@@ -182,6 +205,7 @@ export async function GET(request: Request) {
       productsAll: cross.productsAll,
       pendingAll: pendingAllOut,
       approx: approxFlag,
+      pendingSource,
       stale: isStale,
       latestPendingUpdatedAt: latestUpdatedMillis || undefined,
       // Use a fresh timestamp for the DB-based value so UI reflects DB freshness, not cache time

@@ -3,6 +3,7 @@ import { JumiaClient } from "./client";
 import pLimit from "p-limit";
 import { addDays, format } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
+import { writePendingSnapshot, type PendingSnapshot } from "./pendingSnapshot";
 
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
@@ -20,14 +21,35 @@ type SyncResult = {
   shopId: string;
   orders: number;
   pages: number;
+  error?: string | null;
 };
 
 export async function syncAllAccountsPendingOrders() {
+  const startedAt = new Date();
   const accounts = await prisma.jumiaAccount.findMany({
     include: { shops: true },
   });
 
   if (!accounts.length) {
+    const snapshot: PendingSnapshot = {
+      ok: false,
+      error: "no-jumia-accounts",
+      startedAt: startedAt.toISOString(),
+      completedAt: startedAt.toISOString(),
+      tookMs: 0,
+      windowDays: WINDOW_DAYS,
+      pageSize: PAGE_SIZE,
+      totalOrders: 0,
+      totalPages: 0,
+      shopCount: 0,
+      accountCount: 0,
+      perShop: [],
+    };
+    try {
+      await writePendingSnapshot(snapshot);
+    } catch (err) {
+      console.error("[jumia.sync] pending snapshot persist failed (no accounts)", err);
+    }
     return [];
   }
 
@@ -110,15 +132,53 @@ export async function syncAllAccountsPendingOrders() {
 
     for (const shop of dbShops) {
       tasks.push(
-        limiter(() => syncShopPending(client, shop.id).catch((error) => {
-          console.error(`[jumia.sync] shop=${shop.id} error`, error);
-          return { shopId: shop.id, pages: 0, orders: 0 };
-        }))
+        limiter(() =>
+          syncShopPending(client, shop.id).catch((error) => {
+            console.error(`[jumia.sync] shop=${shop.id} error`, error);
+            const message =
+              error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                ? error
+                : "unknown-error";
+            const truncated = message.length > 180 ? `${message.slice(0, 177)}...` : message;
+            return { shopId: shop.id, pages: 0, orders: 0, error: truncated };
+          })
+        )
       );
     }
   }
 
   const results = await Promise.all(tasks);
+  const completedAt = new Date();
+  const totalOrders = results.reduce((acc, r) => acc + (r?.orders || 0), 0);
+  const totalPages = results.reduce((acc, r) => acc + (r?.pages || 0), 0);
+  const anyError = results.some((r) => r?.error);
+  const shopCount = tasks.length;
+  const snapshot: PendingSnapshot = {
+    ok: shopCount > 0 && !anyError,
+    error: shopCount === 0 ? "no-shops-synced" : anyError ? "partial-shop-errors" : null,
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    tookMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+    windowDays: WINDOW_DAYS,
+    pageSize: PAGE_SIZE,
+    totalOrders,
+    totalPages,
+    shopCount,
+    accountCount: accounts.length,
+    perShop: results.map((r) => ({
+      shopId: r.shopId,
+      orders: r.orders,
+      pages: r.pages,
+      error: r.error ?? null,
+    })),
+  };
+  try {
+    await writePendingSnapshot(snapshot);
+  } catch (err) {
+    console.error("[jumia.sync] pending snapshot persist failed", err);
+  }
   return results;
 }
 
