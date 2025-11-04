@@ -14,7 +14,8 @@ type Stats = {
   productsAll: number;
   shops: number;
   attendants: number;
-  pendingAll: number;
+  pendingDb: number;
+  pendingLive: number | null;
   revenue: number;
   productsDb: number;
   returnsDb: number;
@@ -30,36 +31,50 @@ async function getStats(): Promise<Stats> {
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
     ]);
 
+    // Cross-shop vendor KPIs (products) and DB-only pending for accuracy
     let kpis: any = null;
+    let kpisDbOnly: any = null;
+    let pendingDiff: any = null;
     try {
-      const metricsUrl = await absUrl("/api/metrics/kpis");
-      const resp = await fetch(metricsUrl, { cache: "no-store" });
-      if (resp.ok) kpis = await resp.json();
+      const [metricsUrl, metricsDbUrl, diffUrl] = await Promise.all([
+        absUrl("/api/metrics/kpis"),
+        absUrl("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
+        absUrl("/api/metrics/pending-diff?days=7"),
+      ]);
+      const [resp, respDb, respDiff] = await Promise.all([
+        fetch(metricsUrl, { cache: "no-store" }).catch(() => null),
+        fetch(metricsDbUrl, { cache: "no-store" }).catch(() => null),
+        fetch(diffUrl, { cache: "no-store" }).catch(() => null),
+      ]);
+      if (resp && resp.ok) kpis = await resp.json();
+      if (respDb && respDb.ok) kpisDbOnly = await respDb.json();
+      if (respDiff && respDiff.ok) pendingDiff = await respDiff.json();
     } catch {
-      kpis = null;
+      kpis = kpisDbOnly = pendingDiff = null;
     }
 
-    let productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
+    const productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
     const approxProducts = Boolean(kpis?.approx);
 
-    // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
-    // This avoids flicker and double counting.
-    let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
-    let approxPending = Boolean(kpis?.approx);
+    // DB-only pending to avoid live adjustments here; we'll show live separately
+    const pendingDb = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : 0;
+    const approxPending = Boolean(kpisDbOnly?.approx);
+    const pendingLive = typeof pendingDiff?.vendor?.pending === "number" ? Number(pendingDiff.vendor.pending) : null;
 
     return {
       productsAll,
       productsDb: dbProducts,
       shops,
       attendants,
-      pendingAll,
+      pendingDb,
+      pendingLive,
       returnsDb,
       revenue: revenueAgg._sum.paidAmount ?? 0,
       approxProducts,
       approxPending,
     };
   } catch {
-    return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true as const };
+    return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingDb: 0, pendingLive: null, returnsDb: 0, revenue: 0, _degraded: true as const };
   }
 }
 
@@ -97,10 +112,16 @@ export default async function Overview() {
         <Card title="Shops" value={s.shops} Icon={Store} />
         <Card title="Attendants" value={s.attendants} Icon={Users} />
         <Card
-          title="Pending Orders (All)"
-          value={s.pendingAll}
+          title="Pending Orders (DB)"
+          value={s.pendingDb}
           Icon={Receipt}
-          sub={s.approxPending ? "Live vendor count (DB sync pending)" : undefined}
+          sub={s.approxPending ? "DB exact (windowed)" : "DB exact"}
+        />
+        <Card
+          title="Pending Orders (Live API)"
+          value={s.pendingLive ?? "—"}
+          Icon={Receipt}
+          sub={s.pendingLive == null ? "Vendor timed out" : "Vendor live (timeboxed)"}
         />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>
