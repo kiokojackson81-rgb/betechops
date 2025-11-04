@@ -98,13 +98,14 @@ export async function GET(request: Request) {
     let approxFlag = false;
     try {
       const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
+      const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
       const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
       if (!allowLive) {
         // Explicitly disabled — skip live boost
         throw new Error('live-adjust-disabled');
       }
-      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
-      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
+  const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 2500);
+  const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 4));
       const start = Date.now();
       let pages = 0;
       let total = 0;
@@ -142,7 +143,14 @@ export async function GET(request: Request) {
           clearTimeout(timeout);
         }
       } while (token && pages < LIVE_MAX_PAGES);
-      if (total > pendingAllOut) { pendingAllOut = total; approxFlag = true; }
+      // Prefer vendor truth when it differs from DB, unless disabled.
+      if (pages > 0 && preferVendorWhenDiff && total !== queued) {
+        pendingAllOut = total;
+        approxFlag = true;
+      } else if (total > pendingAllOut) {
+        // Legacy behavior: only boost upwards when vendor is higher
+        pendingAllOut = total; approxFlag = true;
+      }
     } catch {
       // ignore network/vendor errors and keep DB-based value
     }

@@ -234,9 +234,9 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  if (prefersSynced && showingSynced && kpisPendingCount !== null && kpisPendingCount > rows.length) {
+  if (prefersSynced && showingSynced && kpisPendingCount !== null && Math.abs(kpisPendingCount - rows.length) >= 1) {
     showingSynced = false;
-    syncFallbackMessage = `Cached snapshot is behind vendor count (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
+    syncFallbackMessage = `Cached snapshot diverges from vendor (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
     rows = [];
     nextToken = null;
     isLastPage = false;
