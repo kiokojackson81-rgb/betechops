@@ -168,6 +168,21 @@ export async function GET(request: Request) {
       }
     } catch {}
 
+    // If vendor live total differs substantially from DB, trigger a quick incremental sync in the background
+    // with a small lookback window to align downstream views faster.
+    try {
+      const diff = Math.abs((pendingAllOut || 0) - (queued || 0));
+      const allowKick = diff >= 1; // any difference
+      if (allowKick && process.env.NODE_ENV !== 'test') {
+        Promise.resolve().then(async () => {
+          const urlInc = await absUrl('/api/jumia/jobs/sync-incremental?lookbackDays=3');
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 4000);
+          try { await fetch(urlInc, { cache: 'no-store', signal: controller.signal, headers: { 'x-vercel-cron': '1' } }); } finally { clearTimeout(t); }
+        }).catch(() => undefined);
+      }
+    } catch {}
+
     const res = NextResponse.json({
       ok: true,
       queued,
