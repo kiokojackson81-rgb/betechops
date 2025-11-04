@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
-import { postOrdersReadyToShip } from "@/lib/jumia";
+import { getOrderItems, postOrdersReadyToShip } from "@/lib/jumia";
+import { prisma } from "@/lib/prisma";
 
 function parseOrderItemIds(body: unknown, fallbackId: string): string[] {
   if (body && typeof body === "object") {
@@ -34,14 +35,31 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     }
   }
 
-  const orderItemIds = parseOrderItemIds(body, id);
+  const sp = req.nextUrl.searchParams;
+  const shopIdParam = (sp.get("shopId") || "").trim();
+  let shopId = shopIdParam;
+  if (!shopId) {
+    try {
+      const row = await prisma.jumiaOrder.findUnique({ where: { id }, select: { shopId: true } });
+      if (row?.shopId) shopId = row.shopId;
+    } catch {}
+  }
+
+  let orderItemIds = parseOrderItemIds(body, id);
+  if ((!orderItemIds || orderItemIds.length === 0) && shopId) {
+    try {
+      const itemsResp = await getOrderItems({ shopId, orderId: id });
+      const items = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
+      orderItemIds = items.map((it: any) => String(it?.id || "")).filter(Boolean);
+    } catch {}
+  }
   if (!orderItemIds.length) {
     return noStoreJson({ ok: false, error: "orderItemIds required" }, { status: 400 });
   }
 
   try {
-    const result = await postOrdersReadyToShip({ orderItemIds });
-    return noStoreJson({ ok: true, orderItemIds, result });
+    const result = await postOrdersReadyToShip(shopId ? { shopId, orderItemIds } : { orderItemIds });
+    return noStoreJson({ ok: true, orderItemIds, result, shopId: shopId || undefined });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     return noStoreJson({ ok: false, error: message }, { status: 502 });

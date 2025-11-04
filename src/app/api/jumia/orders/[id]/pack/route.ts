@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { noStoreJson, requireRole } from "@/lib/api";
-import { getShipmentProviders, postOrdersPack } from "@/lib/jumia";
+import { getOrderItems, getShipmentProviders, postOrdersPack } from "@/lib/jumia";
+import { prisma } from "@/lib/prisma";
 
 type OrderItemsPayload = { orderItems: Array<{ id: string; shipmentProviderId?: string; [key: string]: unknown }> };
 
@@ -15,9 +16,9 @@ function extractShipmentProviderId(candidate: unknown): string | null {
   return null;
 }
 
-async function resolveShipmentProviderId(orderItemId: string): Promise<string | null> {
+async function resolveShipmentProviderId(orderItemId: string, shopId?: string): Promise<string | null> {
   try {
-    const resp = await getShipmentProviders(orderItemId);
+    const resp = await (shopId ? getShipmentProviders({ shopId, orderItemIds: [orderItemId] }) : getShipmentProviders(orderItemId));
     const orderItems = Array.isArray((resp as any)?.orderItems) ? (resp as any).orderItems : [];
     for (const item of orderItems) {
       const providers = Array.isArray(item?.shipmentProviders) ? item.shipmentProviders : [];
@@ -65,26 +66,54 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     }
   }
 
+  const sp = req.nextUrl.searchParams;
+  const shopIdParam = (sp.get("shopId") || "").trim();
+  let shopId = shopIdParam;
+  if (!shopId) {
+    try {
+      const row = await prisma.jumiaOrder.findUnique({ where: { id }, select: { shopId: true } });
+      if (row?.shopId) shopId = row.shopId;
+    } catch {}
+  }
+
   let payload = sanitizePayload(body);
   if (!payload) {
     const shipmentProviderId =
       (body && typeof body === "object" && typeof (body as { shipmentProviderId?: unknown }).shipmentProviderId === "string"
         ? ((body as { shipmentProviderId: string }).shipmentProviderId || "").trim()
-        : "") || (await resolveShipmentProviderId(id));
+        : "") || (await resolveShipmentProviderId(id, shopId || undefined));
     if (!shipmentProviderId) {
-      return noStoreJson(
-        { ok: false, error: "Unable to determine shipmentProviderId for packing" },
-        { status: 400 }
-      );
+      // Treat path param as orderId: fetch its items and resolve providers per item
+      let items: Array<{ id: string }> = [];
+      if (shopId) {
+        try {
+          const itemsResp = await getOrderItems({ shopId, orderId: id });
+          items = Array.isArray((itemsResp as any)?.items) ? (itemsResp as any).items : [];
+        } catch {}
+      }
+      const orderItems = [] as Array<{ id: string; shipmentProviderId?: string }>;
+      for (const it of items) {
+        const resolved = await resolveShipmentProviderId(String((it as any)?.id || ""), shopId || undefined);
+        orderItems.push({ id: String((it as any)?.id || ""), shipmentProviderId: resolved || undefined });
+      }
+      const cleaned = orderItems.filter((x) => x.id);
+      if (!cleaned.length || !cleaned.every((x) => typeof x.shipmentProviderId === "string" && x.shipmentProviderId)) {
+        return noStoreJson(
+          { ok: false, error: "Unable to determine shipmentProviderId for packing" },
+          { status: 400 }
+        );
+      }
+      payload = { orderItems: cleaned };
+    } else {
+      payload = { orderItems: [{ id, shipmentProviderId }] };
     }
-    payload = { orderItems: [{ id, shipmentProviderId }] };
   }
 
   // Ensure every order item has a shipmentProviderId
   const enriched = await Promise.all(
     payload.orderItems.map(async (item) => {
       if (typeof item.shipmentProviderId === "string" && item.shipmentProviderId.trim()) return item;
-      const derived = await resolveShipmentProviderId(item.id);
+      const derived = await resolveShipmentProviderId(item.id, shopId || undefined);
       if (!derived) return item;
       return { ...item, shipmentProviderId: derived };
     })
@@ -98,8 +127,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   }
 
   try {
-    const result = await postOrdersPack({ orderItems: enriched });
-    return noStoreJson({ ok: true, orderItems: enriched, result });
+    const result = await postOrdersPack(shopId ? { shopId, orderItems: enriched } : { orderItems: enriched });
+    return noStoreJson({ ok: true, orderItems: enriched, result, shopId: shopId || undefined });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     return noStoreJson({ ok: false, error: message }, { status: 502 });

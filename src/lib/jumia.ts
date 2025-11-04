@@ -1072,8 +1072,19 @@ export async function postOrdersCancel(payload: unknown) {
 }
 
 /** Orders: pack (v1) */
-export async function postOrdersPack(payload: unknown) {
-  return await jumiaFetch('/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+export async function postOrdersPack(payload: any) {
+  // Allow passing shopId to scope auth to a specific shop
+  const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+  const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+  if (body && typeof body === 'object') delete (body as any).shopId;
+  if (shopId) {
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const init = shopAuth
+      ? ({ shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } as any)
+      : ({ method: 'POST', body: JSON.stringify(body) } as any);
+    return await jumiaFetch('/orders/pack', init);
+  }
+  return await jumiaFetch('/orders/pack', { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** Orders: pack (v2) */
