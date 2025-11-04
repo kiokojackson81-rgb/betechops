@@ -14,41 +14,33 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
     const noLive = (noLiveParam || '').toLowerCase() === '1' || (noLiveParam || '').toLowerCase() === 'true' || (noLiveParam || '').toLowerCase() === 'db' || (noLiveParam || '').toLowerCase() === 'db-only';
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const DEFAULT_TZ = 'Africa/Nairobi';
-  const PENDING_WINDOW_DAYS = Math.max(0, Number(process.env.KPIS_PENDING_WINDOW_DAYS ?? 0));
+    const statusesParam = url.searchParams.get('pendingStatuses') || url.searchParams.get('pendingStatus') || url.searchParams.get('status');
+    // Default to just PENDING to align with the Vendor Center view; callers can opt-in to MULTIPLE.
+    const pendingStatuses = (statusesParam ? statusesParam.split(',') : ['PENDING'])
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const DEFAULT_TZ = 'Africa/Nairobi';
 
-    // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
-    // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
-    // Align the 7-day window to Nairobi timezone to match how vendor windows are queried by the worker
+    // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days (Nairobi-aligned).
     const sevenDaysAgo = zonedTimeToUtc(addDays(now, -7), DEFAULT_TZ);
-    // Count pending orders. By default include ALL pending, regardless of last update time,
-    // because some pendings can linger beyond a week. If KPIS_PENDING_WINDOW_DAYS>0, apply that window instead.
-    let queued: number;
-    if (PENDING_WINDOW_DAYS > 0) {
-      const windowStart = zonedTimeToUtc(addDays(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ);
-      queued = await prisma.jumiaOrder.count({
-        where: {
-          status: { in: ['PENDING', 'MULTIPLE'] },
-          OR: [
-            { updatedAtJumia: { gte: windowStart } },
-            { createdAtJumia: { gte: windowStart } },
-            {
-              AND: [
-                { updatedAtJumia: null },
-                { createdAtJumia: null },
-                { updatedAt: { gte: windowStart } },
-              ],
-            },
-          ],
-        },
-      });
-    } else {
-      queued = await prisma.jumiaOrder.count({
-        where: { status: { in: ['PENDING', 'MULTIPLE'] } },
-      });
-    }
+    const queued = await prisma.jumiaOrder.count({
+      where: {
+        status: { in: pendingStatuses as any },
+        OR: [
+          { updatedAtJumia: { gte: sevenDaysAgo } },
+          { createdAtJumia: { gte: sevenDaysAgo } },
+          {
+            AND: [
+              { updatedAtJumia: null },
+              { createdAtJumia: null },
+              { updatedAt: { gte: sevenDaysAgo } },
+            ],
+          },
+        ],
+      },
+    });
 
     // Determine staleness: when was the latest pending-row update recorded?
     // Some unit tests mock prisma minimally; guard aggregate call to avoid 500s when not provided.
@@ -56,7 +48,7 @@ export async function GET(request: Request) {
     try {
       const latestAgg = await (prisma as any).jumiaOrder.aggregate({
         _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
-        where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+        where: { status: { in: pendingStatuses as any } },
       });
       if (latestAgg && latestAgg._max) {
         latestUpdatedMillis = Math.max(
@@ -104,24 +96,22 @@ export async function GET(request: Request) {
         // Explicitly disabled — skip live boost
         throw new Error('live-adjust-disabled');
       }
-  const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 2500);
-  const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 4));
+      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
+      const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
       const start = Date.now();
       let pages = 0;
       let total = 0;
       let token: string | null = null;
-  const dateFrom = PENDING_WINDOW_DAYS > 0 ? zonedTimeToUtc(addDays(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ).toISOString().slice(0, 10) : '';
-  const dateTo = now.toISOString().slice(0, 10);
+      const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+      const dateTo = now.toISOString().slice(0, 10);
       do {
         const elapsed = Date.now() - start;
         if (elapsed >= LIVE_TIMEOUT_MS) break;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
         try {
-          // If a window is configured, include it; otherwise omit date filters to consider all PENDING.
-          const base = PENDING_WINDOW_DAYS > 0
-            ? `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`
-            : `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+          // Use vendor-side PENDING status for live boost since vendor supports a single status filter
+          const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
           const url = await absUrl(base);
           const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
           if (!res.ok) break;
@@ -183,6 +173,7 @@ export async function GET(request: Request) {
       }
     } catch {}
 
+    const dbNowTs = Date.now();
     const res = NextResponse.json({
       ok: true,
       queued,
@@ -193,7 +184,9 @@ export async function GET(request: Request) {
       approx: approxFlag,
       stale: isStale,
       latestPendingUpdatedAt: latestUpdatedMillis || undefined,
-      updatedAt: cross.updatedAt || Date.now(),
+      // Use a fresh timestamp for the DB-based value so UI reflects DB freshness, not cache time
+      updatedAt: dbNowTs,
+      updatedAtCross: cross.updatedAt || null,
     });
     // Ensure no CDN caching on this KPI endpoint
     res.headers.set('Cache-Control', 'no-store');
