@@ -31,25 +31,32 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     const key = `${id}:${action}`;
     setBusy(key);
     try {
+      const shopIdForRow =
+        row.shopId ??
+        (Array.isArray(row.shopIds) ? row.shopIds.find((s) => typeof s === "string") : undefined) ??
+        undefined;
       if (action === "print") {
-        const url = `/api/jumia/orders/${id}/print-labels`;
+        const url = shopIdForRow
+          ? `/api/jumia/orders/${id}/print-labels?shopId=${encodeURIComponent(shopIdForRow)}`
+          : `/api/jumia/orders/${id}/print-labels`;
         window.open(url, "_blank");
         return;
       }
 
       const endpoint =
         action === "pack"
-          ? `/api/jumia/orders/${id}/pack`
+          ? shopIdForRow
+            ? `/api/jumia/orders/${id}/pack?shopId=${encodeURIComponent(shopIdForRow)}`
+            : `/api/jumia/orders/${id}/pack`
+          : shopIdForRow
+          ? `/api/jumia/orders/${id}/ready-to-ship?shopId=${encodeURIComponent(shopIdForRow)}`
           : `/api/jumia/orders/${id}/ready-to-ship`;
       const res = await fetch(endpoint, { method: "POST" });
       if (!res.ok) {
         throw new Error(`Action ${action} failed with status ${res.status}`);
       }
 
-      const shopId =
-        row.shopId ??
-        (Array.isArray(row.shopIds) ? row.shopIds.find((s) => typeof s === "string") : undefined) ??
-        undefined;
+      const shopId = shopIdForRow;
 
       try {
         const params = new URLSearchParams();
