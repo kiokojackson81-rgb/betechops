@@ -61,8 +61,8 @@ export async function GET(request: Request) {
           total += arr.length;
           token = (j?.nextToken ? String(j.nextToken) : '') || null;
           livePages += 1;
-        } catch {
-          lastError = e?.message ? String(e.message) : 'fetch-error';
+        } catch (err: unknown) {
+          lastError = err instanceof Error ? String(err.message) : 'fetch-error';
           break;
         } finally {
           clearTimeout(timeout);
