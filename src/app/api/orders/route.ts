@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   }
   const url = new URL(req.url);
   const qs: Record<string, string> = {};
-  const allow = ['status', 'size', 'country', 'shopId', 'dateFrom', 'dateTo', 'nextToken', 'q'];
+  const allow = ['status', 'size', 'country', 'shopId', 'dateFrom', 'dateTo', 'nextToken', 'q', 'fresh'];
   allow.forEach((k) => {
     const v = url.searchParams.get(k);
     if (v) qs[k] = v;
@@ -85,11 +85,13 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   const cacheMap: Map<string, { ts: number; data: any }> = (global as any).__ordersPendingCache;
-  const TTL_MS = 7000; // 7 seconds default
+  // Allow short-lived caching to reduce vendor hammering, but make it configurable and bypassable.
+  const TTL_MS = Math.max(0, Number(process.env.ORDERS_PENDING_CACHE_TTL_MS ?? 3000)); // default 3s
+  const forceFresh = ((qs.fresh || '').toLowerCase() === '1' || (qs.fresh || '').toLowerCase() === 'true');
 
   const isPending = (qs.status || '').toUpperCase() === 'PENDING';
   const hasCursor = Boolean(qs.nextToken || (qs as any).token);
-  const cacheKey = isPending && !hasCursor ? `GET ${path}` : '';
+  const cacheKey = isPending && !hasCursor && !forceFresh ? `GET ${path}` : '';
 
   try {
     // Special scope: aggregate across all active JUMIA shops with composite pagination
@@ -308,7 +310,7 @@ export async function GET(req: NextRequest) {
       }
 
       const isLastPage = out.length < pageSize; // conservative: if we couldn't fill, treat as last
-      const payload = { orders: out, nextToken, isLastPage };
+  const payload = { orders: out, nextToken, isLastPage };
       if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: payload });
       const resAll = NextResponse.json(payload);
       if (cacheKey) resAll.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
@@ -338,7 +340,7 @@ export async function GET(req: NextRequest) {
 
     try {
   const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
-      if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
+  if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
       const res = NextResponse.json(data);
       if (cacheKey) res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
       return res;
@@ -351,7 +353,7 @@ export async function GET(req: NextRequest) {
         q2.delete('shopId');
         const p2 = `orders?${q2.toString()}`;
   const data2 = await jumiaFetch(stripShopIdFromPath(p2), shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
-        if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
+  if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
         const res2 = NextResponse.json(data2);
         if (cacheKey) res2.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
         return res2;

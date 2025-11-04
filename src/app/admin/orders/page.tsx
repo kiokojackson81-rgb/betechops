@@ -264,8 +264,9 @@ export default async function OrdersPage(props: unknown) {
           )}
           {((!showingSynced && (usedDefaultFrom || usedDefaultTo)) || (showingSynced && (usedDefaultFrom || usedDefaultTo))) && (
             <p className="text-xs text-slate-400 mt-1">
-              Default window: {prefersSynced ? 'last 7 days' : 'last 3 months (bounded by system start)'}.
-              Showing {params.dateFrom} to {params.dateTo}.
+              {prefersSynced
+                ? 'Pending view uses no fixed date window; showing full vendor-backed range.'
+                : `Default window: last 3 months (bounded by system start). Showing ${params.dateFrom} to ${params.dateTo}.`}
             </p>
           )}
         </div>
