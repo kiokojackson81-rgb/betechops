@@ -38,8 +38,26 @@ Recommended workflow
 Cron jobs (sync + cleanup)
 
 - This repo defines Vercel Cron Jobs in `vercel.json`.
-   - Incremental Jumia orders sync runs every 5 minutes: `POST /api/jumia/jobs/sync-incremental`
-   - You can adjust schedules in `vercel.json` or Vercel dashboard under Project > Settings > Cron Jobs.
+    - Incremental Jumia orders sync: `/api/jumia/jobs/sync-incremental` (per schedule in vercel.json)
+    - Full pending reconciliation: `/api/jumia/sync-pending` (per schedule in vercel.json)
+    - You can adjust schedules in `vercel.json` or Vercel dashboard under Project > Settings > Cron Jobs.
+
+Manual triggers (use CRON_SECRET)
+
+- Set `CRON_SECRET` in Vercel Environment Variables. You can then manually trigger the incremental job:
+
+   - via query string:
+
+      - GET `https://<your-app>/api/jumia/jobs/sync-incremental?cronSecret=<CRON_SECRET>`
+
+   - or with a header:
+
+      - `x-cron-secret: <CRON_SECRET>` on the request
+
+Notes:
+
+- `/api/jumia/sync-pending` does not require the secret (designed for Vercel Cron or manual GET).
+- The KPIs endpoint `/api/metrics/kpis` will auto-fire a background pending sweep if it detects stale DB data.
 - To periodically purge old orders (>60 days), a GitHub Actions workflow is provided:
    - `.github/workflows/nightly-cleanup.yml` runs daily at 02:00 UTC
    - Requires the following repository secrets:
@@ -58,6 +76,12 @@ Troubleshooting
 
 - If you see runtime errors about `prisma` or `prisma client`, ensure `prisma generate` ran successfully and `DATABASE_URL` is set.
 - If your NextAuth sessions are missing roles or user data, verify `NEXTAUTH_SECRET` and the Google client secrets are set.
+
+KPIs and pending window tuning
+
+- Pending order sync window (DB): `JUMIA_PENDING_WINDOW_DAYS` (defaults to 30). Increase to 60–90 if vendor shows older PENDING orders.
+- KPI pending count window: `KPIS_PENDING_WINDOW_DAYS` (0 = include ALL PENDING; recommended).
+- Live vendor boost for KPI totals: `KPIS_LIVE_MAX_PAGES` and `KPIS_LIVE_TIMEOUT_MS` to expand live scan temporarily.
 
 If you want, I can:
 - Add a GitHub Actions workflow to run migrations before (or during) Vercel deployments.
