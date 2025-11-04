@@ -208,7 +208,7 @@ export default function Home() {
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
           // DB-only accuracy: disable live vendor boost
-          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1"),
+          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
         ]);
         if (!ignore) {
           // Only update when we have a concrete value; keep last value on errors
