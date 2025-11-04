@@ -59,9 +59,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
   try {
     const result = await postOrdersReadyToShip(shopId ? { shopId, orderItemIds } : { orderItemIds });
-    return noStoreJson({ ok: true, orderItemIds, result, shopId: shopId || undefined });
+    return noStoreJson({ ok: true, orderItemIds, result, shopId: shopId || undefined }, { status: 201 });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
-    return noStoreJson({ ok: false, error: message }, { status: 502 });
+    if (message.toLowerCase().includes("missing credentials")) {
+      return noStoreJson(
+        {
+          ok: false,
+          error: "Missing credentials for Jumia Vendor API",
+          hint: "Ensure per-shop OAuth refresh token is configured and pass ?shopId=...",
+          shopId: shopId || undefined,
+        },
+        { status: 400 }
+      );
+    }
+    return noStoreJson({ ok: false, error: message, shopId: shopId || undefined }, { status: 502 });
   }
 }
