@@ -11,6 +11,8 @@ type Props = {
 
 export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"pack" | "rts" | "print" | null>(null);
+  const [selected, setSelected] = useState<Record<string, { shopId?: string }>>({});
   const [details, setDetails] = useState<Record<string, { url?: string; name?: string; total?: { currency?: string; value: number }; count?: number }>>({});
   const pathname = usePathname();
   const router = useRouter();
@@ -117,11 +119,135 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     };
   }, [idsNeedingDetails]);
 
+  // Persist selection across pages using localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ordersSelection');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') setSelected(parsed);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ordersSelection', JSON.stringify(selected));
+    } catch {}
+  }, [selected]);
+
+  const currentShopId = useMemo(() => sp.get("shopId") || undefined, [sp]);
+  const selectedIds = Object.keys(selected);
+  const allOnPageSelected = rows.length > 0 && rows.every((r) => selected[r.id]);
+  const someSelected = selectedIds.length > 0;
+
+  function toggleRow(id: string, shopId?: string) {
+    setSelected((prev) => {
+      const cp = { ...prev };
+      if (cp[id]) delete cp[id];
+      else cp[id] = { shopId };
+      return cp;
+    });
+  }
+
+  function toggleAllOnPage() {
+    if (allOnPageSelected) {
+      // clear only rows on page
+      const ids = new Set(rows.map((r) => r.id));
+      setSelected((prev) => {
+        const cp = { ...prev } as Record<string, { shopId?: string }>;
+        for (const id of rows.map((r) => r.id)) delete cp[id];
+        return cp;
+      });
+    } else {
+      // add rows on page
+      const add: Record<string, { shopId?: string }> = {};
+      for (const r of rows) add[r.id] = { shopId: (r.shopId || (Array.isArray(r.shopIds) ? r.shopIds[0] : undefined)) };
+      setSelected((prev) => ({ ...prev, ...add }));
+    }
+  }
+
+  async function runBulk(action: "pack" | "rts" | "print") {
+    if (!someSelected) return;
+    setBulkBusy(action);
+    try {
+      // group by shopId
+      const groups = new Map<string, string[]>();
+      for (const [id, meta] of Object.entries(selected)) {
+        const sid = meta.shopId || currentShopId || "";
+        if (!sid) continue;
+        if (!groups.has(sid)) groups.set(sid, []);
+        groups.get(sid)!.push(id);
+      }
+      // call endpoints per shop
+      for (const [shopId, orderIds] of groups) {
+        if (!orderIds.length) continue;
+        const endpoint =
+          action === "pack"
+            ? "/api/jumia/orders/bulk/pack"
+            : action === "rts"
+            ? "/api/jumia/orders/bulk/ready-to-ship"
+            : "/api/jumia/orders/bulk/print-labels";
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shopId, orderIds }),
+        });
+        await fetch(`/api/jumia/jobs/sync-incremental?shopId=${encodeURIComponent(shopId)}`, { method: "POST" }).catch(() => {});
+      }
+      // clear selection and refresh
+      setSelected({});
+      dispatchRefresh();
+      router.refresh();
+    } catch (e) {
+      console.warn("[orders.table] bulk action failed", e);
+    } finally {
+      setBulkBusy(null);
+    }
+  }
+
   return (
     <div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] overflow-auto">
+      {someSelected && (
+        <div className="flex items-center justify-between gap-3 p-3 border-b border-white/10 bg-black/20 sticky top-0 z-10">
+          <div className="text-sm">Selected {selectedIds.length} row(s)</div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-50"
+              onClick={() => runBulk("pack")}
+              disabled={!!bulkBusy}
+            >
+              {bulkBusy === "pack" ? "Packing…" : "Pack selected"}
+            </button>
+            <button
+              className="px-3 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-50"
+              onClick={() => runBulk("rts")}
+              disabled={!!bulkBusy}
+            >
+              {bulkBusy === "rts" ? "Marking…" : "RTS selected"}
+            </button>
+            <button
+              className="px-3 py-1 rounded border border-white/10 hover:bg-white/10 disabled:opacity-50"
+              onClick={() => runBulk("print")}
+              disabled={!!bulkBusy}
+            >
+              {bulkBusy === "print" ? "Printing…" : "Print selected"}
+            </button>
+            <button
+              className="px-3 py-1 rounded border border-white/10 hover:bg-white/10"
+              onClick={() => setSelected({})}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead className="text-left bg-black/10">
           <tr>
+            <th className="px-3 py-2">
+              <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} />
+            </th>
             <th className="px-3 py-2">Order #</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Created</th>
@@ -134,7 +260,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+              <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
                 No orders found.
               </td>
             </tr>
@@ -144,6 +270,13 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
             const printBusy = busy === `${row.id}:print`;
             return (
               <tr key={row.id} className="border-t border-white/5">
+                <td className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={!!selected[row.id]}
+                    onChange={() => toggleRow(row.id, row.shopId || (Array.isArray(row.shopIds) ? row.shopIds[0] : undefined))}
+                  />
+                </td>
                 <td className="px-3 py-2 font-medium">{row.number ?? row.id}</td>
                 <td className="px-3 py-2">
                   <span className="px-2 py-0.5 rounded-md border border-white/10 bg-white/5">{row.status}</span>

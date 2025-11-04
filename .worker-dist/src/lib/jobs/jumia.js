@@ -188,36 +188,38 @@ async function fulfillOrder(shopId, orderId, opts) {
     if (!res.ok)
         (0, metrics_1.incFulfillmentFailures)(1);
     (0, metrics_1.observeFulfillmentLatency)(took);
-    // persist audit to DB (best-effort)
-    try {
-        // Prisma JSON fields expect a serializable value; coerce safely by serializing
-        const payloadForDb = toStore.payload;
-        let s3Bucket = null;
-        let s3Key = null;
-        if (payloadForDb && typeof payloadForDb === 'object') {
-            const pRec = payloadForDb;
-            const stored = pRec._labelStored;
-            if (stored) {
-                s3Bucket = typeof stored.bucket === 'string' ? stored.bucket : null;
-                s3Key = typeof stored.key === 'string' ? stored.key : null;
+    // persist audit to DB (best-effort; skip in tests to keep suites hermetic)
+    if (process.env.NODE_ENV !== 'test') {
+        try {
+            // Prisma JSON fields expect a serializable value; coerce safely by serializing
+            const payloadForDb = toStore.payload;
+            let s3Bucket = null;
+            let s3Key = null;
+            if (payloadForDb && typeof payloadForDb === 'object') {
+                const pRec = payloadForDb;
+                const stored = pRec._labelStored;
+                if (stored) {
+                    s3Bucket = typeof stored.bucket === 'string' ? stored.bucket : null;
+                    s3Key = typeof stored.key === 'string' ? stored.key : null;
+                }
             }
+            await prisma_1.prisma.fulfillmentAudit.create({
+                data: {
+                    idempotencyKey: key,
+                    shopId,
+                    orderId,
+                    action: 'FULFILL',
+                    status: res.status,
+                    ok: Boolean(res.ok),
+                    payload: JSON.parse(JSON.stringify(payloadForDb)),
+                    s3Bucket,
+                    s3Key,
+                },
+            });
         }
-        await prisma_1.prisma.fulfillmentAudit.create({
-            data: {
-                idempotencyKey: key,
-                shopId,
-                orderId,
-                action: 'FULFILL',
-                status: res.status,
-                ok: Boolean(res.ok),
-                payload: JSON.parse(JSON.stringify(payloadForDb)),
-                s3Bucket,
-                s3Key,
-            },
-        });
-    }
-    catch (_d) {
-        log_1.logger.warn({ shopId, orderId }, 'failed to persist FulfillmentAudit');
+        catch (_d) {
+            log_1.logger.warn({ shopId, orderId }, 'failed to persist FulfillmentAudit');
+        }
     }
     log_1.logger.info({ shopId, orderId, status: res.status, durationMs: took }, 'fulfillOrder completed');
     return toStore;

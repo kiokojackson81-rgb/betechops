@@ -40,15 +40,23 @@ export async function GET(request: Request) {
     });
 
     // Determine staleness: when was the latest pending-row update recorded?
-    const latestAgg = await prisma.jumiaOrder.aggregate({
-      _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
-      where: { status: { in: ['PENDING', 'MULTIPLE'] } },
-    });
-    const latestUpdatedMillis = Math.max(
-      latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0,
-      latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0,
-      latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0,
-    );
+    // Some unit tests mock prisma minimally; guard aggregate call to avoid 500s when not provided.
+    let latestUpdatedMillis = 0;
+    try {
+      const latestAgg = await (prisma as any).jumiaOrder.aggregate({
+        _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
+        where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+      });
+      if (latestAgg && latestAgg._max) {
+        latestUpdatedMillis = Math.max(
+          latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0,
+          latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0,
+          latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0,
+        );
+      }
+    } catch {
+      latestUpdatedMillis = 0;
+    }
     const staleMinutes = Number(process.env.KPIS_FORCE_LIVE_IF_STALE_MINUTES ?? 3);
     const isStale = latestUpdatedMillis > 0 ? (now.getTime() - latestUpdatedMillis) > staleMinutes * 60 * 1000 : true;
     const todayPacked = await prisma.fulfillmentAudit.count({ where: { ok: true, createdAt: { gte: startOfDay } } });

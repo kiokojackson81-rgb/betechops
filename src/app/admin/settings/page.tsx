@@ -213,6 +213,20 @@ export default function AdminSettings() {
         <p className="text-sm text-slate-400">Manage marketplace credentials and operations windows.</p>
       </header>
 
+      {/* Quick links */}
+      <section className="rounded-xl border border-white/10 bg-[#0b0e13] p-4">
+        <h2 className="text-lg font-medium mb-2">Shortcuts</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a
+            href="/admin/settings/jumia/shipping-stations"
+            className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5"
+          >
+            <div className="font-semibold">Jumia Shipping Stations</div>
+            <div className="text-sm text-slate-400">Set default shipping station per shop and discover providers.</div>
+          </a>
+        </div>
+      </section>
+
       <section className="rounded-xl border border-white/10 bg-[#0b0e13] p-4 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div>

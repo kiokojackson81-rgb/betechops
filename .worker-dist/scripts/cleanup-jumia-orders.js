@@ -4,7 +4,8 @@ exports.performCleanup = performCleanup;
 const prisma_1 = require("@/lib/prisma");
 async function performCleanup(retentionDays) {
     var _a;
-    const days = Number((_a = retentionDays !== null && retentionDays !== void 0 ? retentionDays : process.env.JUMIA_ORDERS_RETENTION_DAYS) !== null && _a !== void 0 ? _a : 60);
+    // Retain for 90 days by default (3 months)
+    const days = Number((_a = retentionDays !== null && retentionDays !== void 0 ? retentionDays : process.env.JUMIA_ORDERS_RETENTION_DAYS) !== null && _a !== void 0 ? _a : 90);
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     // Prefer vendor update time when present, else vendor createdAt, else local createdAt
     const deleted = await prisma_1.prisma.jumiaOrder.deleteMany({
@@ -16,12 +17,53 @@ async function performCleanup(retentionDays) {
             ],
         },
     });
-    return { retentionDays: days, cutoff, deleted: deleted.count };
+    // Also remove normalized orders older than cutoff for JUMIA shops, along with their items and return cases.
+    // These relations may use foreign keys with CASCADE; still delete in safe order to avoid orphans when cascade is not present.
+    let deletedReturnCases = 0;
+    let deletedOrderItems = 0;
+    let deletedOrders = 0;
+    try {
+        // Delete return cases tied to old orders from JUMIA shops
+        const rc = await prisma_1.prisma.returnCase.deleteMany({
+            where: {
+                order: {
+                    createdAt: { lt: cutoff },
+                    shop: { platform: 'JUMIA' },
+                },
+            },
+        });
+        deletedReturnCases = rc.count;
+    }
+    catch (_b) { }
+    try {
+        // Delete order items for those old orders first
+        const oi = await prisma_1.prisma.orderItem.deleteMany({
+            where: {
+                order: {
+                    createdAt: { lt: cutoff },
+                    shop: { platform: 'JUMIA' },
+                },
+            },
+        });
+        deletedOrderItems = oi.count;
+    }
+    catch (_c) { }
+    try {
+        const od = await prisma_1.prisma.order.deleteMany({
+            where: {
+                createdAt: { lt: cutoff },
+                shop: { platform: 'JUMIA' },
+            },
+        });
+        deletedOrders = od.count;
+    }
+    catch (_d) { }
+    return { retentionDays: days, cutoff, deleted: deleted.count, deletedOrders, deletedOrderItems, deletedReturnCases };
 }
 async function main() {
     const result = await performCleanup();
     // eslint-disable-next-line no-console
-    console.log(JSON.stringify({ ok: true, retentionDays: result.retentionDays, cutoff: result.cutoff.toISOString(), deleted: result.deleted }));
+    console.log(JSON.stringify({ ok: true, retentionDays: result.retentionDays, cutoff: result.cutoff.toISOString(), deleted: result.deleted, deletedOrders: result.deletedOrders, deletedOrderItems: result.deletedOrderItems, deletedReturnCases: result.deletedReturnCases }));
 }
 if (require.main === module) {
     main().catch((err) => {

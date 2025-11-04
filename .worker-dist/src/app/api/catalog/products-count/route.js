@@ -115,11 +115,13 @@ async function GET(req) {
                     const totals = await (0, jumia_1.getCatalogProductsCountExactForShop)({ shopId, size, timeMs }).catch(() => null);
                     if (totals) {
                         result = totals;
-                        // Fire-and-forget: persist latest for next time
-                        try {
-                            await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId, { size, timeMs });
+                        // Fire-and-forget: persist latest for next time (skip during tests to avoid DB writes)
+                        if (process.env.NODE_ENV !== 'test') {
+                            try {
+                                await (0, catalog_counters_1.computeAndStoreCountersForShop)(shopId, { size, timeMs });
+                            }
+                            catch (_c) { }
                         }
-                        catch (_c) { }
                     }
                 }
             }

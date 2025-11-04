@@ -19,6 +19,13 @@ npm run build:worker
 ```
 pm2 start ecosystem.worker.config.cjs
 pm2 save
+Alternatively, use the local, gitignored config that already embeds your DATABASE_URL:
+
+```
+pm2 start ecosystem.worker.config.local.cjs
+pm2 save
+```
+
 ```
 
 3) Verify logs

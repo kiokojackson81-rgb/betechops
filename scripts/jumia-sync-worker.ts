@@ -16,7 +16,8 @@ try {
 } catch { /* optional */ }
 // Use CommonJS require to avoid Node ESM resolution issues under ts-node
 const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
-const { syncOrdersIncremental } = require('../src/lib/jobs/jumia');
+const { syncOrdersIncremental, syncReturnOrders } = require('../src/lib/jobs/jumia');
+const { performCleanup } = require('./cleanup-jumia-orders');
 
 // Default to 5s; can be overridden via env JUMIA_WORKER_INTERVAL_MS
 const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5_000);
@@ -25,10 +26,16 @@ const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5_000);
 const INCREMENTAL_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_EVERY_MS ?? INTERVAL_MS);
 // Optional: run the heavy pending sweep less often than the tick to reduce vendor load
 const PENDING_EVERY_MS = Number(process.env.JUMIA_WORKER_PENDING_EVERY_MS ?? INTERVAL_MS);
+// Optional: run returns sync periodically (default: 10 minutes)
+const RETURNS_EVERY_MS = Number(process.env.JUMIA_WORKER_RETURNS_EVERY_MS ?? 10 * 60_000);
+// Optional: retention cleanup cadence (default: every 6 hours)
+const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ?? 6 * 60 * 60_000);
 
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;
 let lastPendingAt = 0;
+let lastReturnsAt = 0;
+let lastRetentionAt = 0;
 let inFlight = false;
 
 function sleep(ms: number) {
@@ -76,6 +83,34 @@ async function tick() {
     }
   }
 
+  if (now - lastReturnsAt >= RETURNS_EVERY_MS) {
+    try {
+      const summary = await syncReturnOrders({ lookbackDays: 30 });
+  const shops = Object.keys(summary || {}).length;
+  const ensured = Object.values(summary || {}).reduce((acc: number, s: any) => acc + (s?.returnCases || 0), 0);
+  const processed = Object.values(summary || {}).reduce((acc: number, s: any) => acc + (s?.processed || 0), 0);
+      logParts.push(`returns processed=${processed} ensured=${ensured} shops=${shops}`);
+      lastReturnsAt = now;
+      anyWork = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`${LOG_PREFIX} returns sync failed`, err);
+    }
+  }
+
+  if (now - lastRetentionAt >= RETENTION_EVERY_MS) {
+    try {
+      const days = Number(process.env.JUMIA_ORDERS_RETENTION_DAYS ?? 90);
+      const res = await performCleanup(days);
+      logParts.push(`retention days=${days} deleted=${res.deleted} orders=${res.deletedOrders ?? 0} items=${res.deletedOrderItems ?? 0} returns=${res.deletedReturnCases ?? 0}`);
+      lastRetentionAt = now;
+      anyWork = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`${LOG_PREFIX} retention cleanup failed`, err);
+    }
+  }
+
   if (anyWork && logParts.length) {
     // eslint-disable-next-line no-console
     console.log(`${LOG_PREFIX} tick ok @ ${startedAt.toISOString()} interval=${INTERVAL_MS}ms details: ${logParts.join(' | ')}`);
@@ -85,7 +120,7 @@ async function tick() {
 
 (async () => {
   // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}`);
+  console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}, returnsEvery(ms)= ${RETURNS_EVERY_MS}, retentionEvery(ms)= ${RETENTION_EVERY_MS}`);
   // initial tick immediately
   await tick();
   while (true) {

@@ -1023,10 +1023,15 @@ export async function getOrders(opts?: { status?: string; createdAfter?: string;
   return await jumiaFetch(path, shopAuth ? ({ shopAuth, shopKey: opts?.shopId } as any) : ({} as any));
 }
 
-export async function getOrderItems(orderId: string) {
+export async function getOrderItems(orderId: string): Promise<any>;
+export async function getOrderItems(opts: { shopId?: string; orderId: string }): Promise<any>;
+export async function getOrderItems(arg: any): Promise<any> {
+  const orderId = typeof arg === 'string' ? arg : String(arg?.orderId || '');
   if (!orderId) throw new Error('orderId required');
-  const shopAuth = await loadDefaultShopAuth();
-  return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+  const shopId = typeof arg === 'object' && arg?.shopId ? String(arg.shopId) : '';
+  const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  const init = shopAuth ? ({ shopAuth, shopKey: shopId || undefined } as any) : ({} as any);
+  return await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(orderId)}`, init);
 }
 
 /** Catalog: attribute set details by id */
@@ -1049,12 +1054,16 @@ export async function getCatalogStock(opts?: { token?: string; size?: number; pr
 }
 
 /** Orders: shipment providers for one or more order items */
-export async function getShipmentProviders(orderItemIds: string | string[]) {
-  const ids = Array.isArray(orderItemIds) ? orderItemIds : [orderItemIds];
+export async function getShipmentProviders(orderItemIds: string | string[]): Promise<any>;
+export async function getShipmentProviders(opts: { shopId?: string; orderItemIds: string[] }): Promise<any>;
+export async function getShipmentProviders(arg: any): Promise<any> {
+  const ids = Array.isArray(arg) ? (arg as string[]) : Array.isArray(arg?.orderItemIds) ? (arg.orderItemIds as string[]) : [];
   if (!ids.length) throw new Error('orderItemIds required');
   const qs = ids.map((id) => `orderItemId=${encodeURIComponent(id)}`).join('&');
-  const shopAuth = await loadDefaultShopAuth();
-  return await jumiaFetch(`/orders/shipment-providers?${qs}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+  const shopId = typeof arg === 'object' && arg?.shopId ? String(arg.shopId) : '';
+  const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
+  const init = shopAuth ? ({ shopAuth, shopKey: shopId || undefined } as any) : ({} as any);
+  return await jumiaFetch(`/orders/shipment-providers?${qs}`, init);
 }
 
 /** Orders: cancel items */
@@ -1068,18 +1077,42 @@ export async function postOrdersPack(payload: unknown) {
 }
 
 /** Orders: pack (v2) */
-export async function postOrdersPackV2(payload: unknown) {
-  return await jumiaFetch('/v2/orders/pack', { method: 'POST', body: JSON.stringify(payload) });
+export async function postOrdersPackV2(payload: any) {
+  const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+  const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+  if (body && typeof body === 'object') delete (body as any).shopId;
+  if (shopId) {
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const init = shopAuth ? ({ shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } as any) : ({ method: 'POST', body: JSON.stringify(body) } as any);
+    return await jumiaFetch('/v2/orders/pack', init);
+  }
+  return await jumiaFetch('/v2/orders/pack', { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** Orders: ready to ship */
-export async function postOrdersReadyToShip(payload: unknown) {
-  return await jumiaFetch('/orders/ready-to-ship', { method: 'POST', body: JSON.stringify(payload) });
+export async function postOrdersReadyToShip(payload: any) {
+  const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+  const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+  if (body && typeof body === 'object') delete (body as any).shopId;
+  if (shopId) {
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const init = shopAuth ? ({ shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } as any) : ({ method: 'POST', body: JSON.stringify(body) } as any);
+    return await jumiaFetch('/orders/ready-to-ship', init);
+  }
+  return await jumiaFetch('/orders/ready-to-ship', { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** Orders: print labels */
-export async function postOrdersPrintLabels(payload: unknown) {
-  return await jumiaFetch('/orders/print-labels', { method: 'POST', body: JSON.stringify(payload) });
+export async function postOrdersPrintLabels(payload: any) {
+  const shopId = payload && typeof payload === 'object' && payload.shopId ? String(payload.shopId) : '';
+  const body = shopId && payload && typeof payload === 'object' ? { ...payload } : payload;
+  if (body && typeof body === 'object') delete (body as any).shopId;
+  if (shopId) {
+    const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
+    const init = shopAuth ? ({ shopAuth, shopKey: shopId, method: 'POST', body: JSON.stringify(body) } as any) : ({ method: 'POST', body: JSON.stringify(body) } as any);
+    return await jumiaFetch('/orders/print-labels', init);
+  }
+  return await jumiaFetch('/orders/print-labels', { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** Consignment: create order */

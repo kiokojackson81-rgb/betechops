@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
 import OrdersSSE from './_components/OrdersSSE';
 import SyncNowButton from './_components/SyncNowButton';
+import BulkActions from './_components/BulkActions';
 import { fetchSyncedRows } from './_lib/fetchSyncedRows';
 import type { OrdersQuery, OrdersRow } from './_lib/types';
 
@@ -279,10 +280,20 @@ export default async function OrdersPage(props: unknown) {
             intervalMs={4000}
           />
           <AutoRefresh storageKey="autoRefreshOrders" intervalMs={10000} defaultEnabled={true} />
+          <a
+            href="/admin/settings/jumia/shipping-stations"
+            className="px-3 py-1 rounded border border-white/10 hover:bg-white/10 text-sm"
+            title="Configure per-shop default shipping stations"
+          >
+            Shipping Stations
+          </a>
         </div>
       </div>
 
       <OrdersFilters shops={shopOptions} />
+
+  {/* Bulk actions: only shows when a specific shop is selected */}
+  <BulkActions />
 
       {/* Client wrapper keeps last non-empty snapshot and updates on SSE/AutoRefresh events */}
       <OrdersLiveData

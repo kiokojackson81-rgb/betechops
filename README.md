@@ -52,6 +52,31 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 		- Set repo secrets: `DATABASE_URL` (required), `DIRECT_URL` (optional), and optionally `JUMIA_ORDERS_RETENTION_DAYS`.
 		- You can also run locally: `npm run cleanup:jumia-orders`.
 
+### Bulk Jumia actions (per shop)
+
+From Admin → Orders, select a Jumia shop in the Filters. A Bulk Actions bar appears:
+
+- Pack all: Packs all PENDING items using the shop's default shipping station.
+- RTS all: Marks PACKED items Ready-To-Ship.
+- Print all: Prints labels for READY_TO_SHIP/SHIPPED/DELIVERED items.
+
+Default shipping station (per shop):
+
+- Enter the providerId (e.g., Lucytec or Ckantarial provider ID) in the "Default station" input and click Save. This is used by "Pack all".
+
+API endpoints (for automation):
+
+- POST `/api/jumia/orders/bulk/pack` { shopId, orderIds?, limit? }
+- POST `/api/jumia/orders/bulk/ready-to-ship` { shopId, orderIds?, orderItemIds?, limit? }
+- POST `/api/jumia/orders/bulk/print-labels` { shopId, orderIds?, orderItemIds?, includeLabels?, limit? }
+- GET/POST/DELETE `/api/settings/jumia/shipping-defaults` to manage per-shop default shipment providers.
+
+Notes:
+
+- Bulk endpoints compute eligible items by calling the vendor API for order items, batching calls with rate limits.
+- If a provider requires a tracking code, one is auto-generated when missing.
+- After each bulk action, an incremental sync is triggered for fast UI updates.
+
 Prisma migrations
 
 - Migrations are applied in CI (see `.github/workflows/prisma-and-vercel.yml`).

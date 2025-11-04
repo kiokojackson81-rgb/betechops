@@ -20,8 +20,9 @@
     "backfill:catalog-counters": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill-catalog-counters.js",
     "cleanup:jumia-orders": "node -r ts-node/register -r tsconfig-paths/register scripts/cleanup-jumia-orders.ts",
     "job:jumia-sync-incremental": "curl -s -X POST http://localhost:3000/api/jumia/jobs/sync-incremental || true",
-  "worker:jumia-sync": "npm run build:worker --silent && node .worker-dist/scripts/jumia-sync-worker.js",
-    "build:worker": "tsc -p tsconfig.worker.json"
+    "worker:jumia-sync": "npm run build:worker --silent && node .worker-dist/scripts/jumia-sync-worker.js",
+    "build:worker": "tsc -p tsconfig.worker.json",
+    "debug:prisma:check": "node scripts/prisma-connect-check.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -52,6 +53,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "jest": "^29.6.1",
+    "pg": "^8.16.3",
     "prisma": "^6.18.0",
     "tailwindcss": "^4",
     "ts-jest": "^29.1.0",
