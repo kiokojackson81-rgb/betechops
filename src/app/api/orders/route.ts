@@ -206,6 +206,27 @@ export async function GET(req: NextRequest) {
         ];
       }
 
+      // If we still have no active JUMIA shops, fall back to a single master call using default creds/env.
+      // This ensures the Admin "Live" card and diagnostics don't show zero due to missing shop rows.
+      if (!Array.isArray(jumiaShops) || jumiaShops.length === 0) {
+        try {
+          const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+          const j = await jumiaFetch(basePath, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+          const arr = Array.isArray((j as any)?.orders)
+            ? (j as any).orders
+            : Array.isArray((j as any)?.items)
+            ? (j as any).items
+            : Array.isArray((j as any)?.data)
+            ? (j as any).data
+            : [];
+          const nextToken = String((j as any)?.nextToken ?? (j as any)?.token ?? '') || null;
+          const resFallback = NextResponse.json({ orders: arr, nextToken, isLastPage: !nextToken });
+          return resFallback;
+        } catch {
+          // Fall through to the normal empty aggregation path below
+        }
+      }
+
       // Per-shop state
       type ShopState = { id: string; buf: any[]; token: string | null; isLast: boolean };
       const states: ShopState[] = await Promise.all(

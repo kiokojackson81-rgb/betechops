@@ -16,6 +16,9 @@ type Stats = {
   attendants: number;
   pendingDb: number;
   pendingLive: number | null;
+  vendorShopsActiveJumia?: number | null;
+  vendorLastStatus?: number | null;
+  vendorLastError?: string | null;
   revenue: number;
   productsDb: number;
   returnsDb: number;
@@ -60,6 +63,9 @@ async function getStats(): Promise<Stats> {
     const pendingDb = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : 0;
     const approxPending = Boolean(kpisDbOnly?.approx);
     const pendingLive = typeof pendingDiff?.vendor?.pending === "number" ? Number(pendingDiff.vendor.pending) : null;
+    const vendorShopsActiveJumia = typeof pendingDiff?.vendor?.shopsActiveJumia === "number" ? Number(pendingDiff.vendor.shopsActiveJumia) : null;
+    const vendorLastStatus = typeof pendingDiff?.vendor?.lastStatus === "number" ? Number(pendingDiff.vendor.lastStatus) : null;
+    const vendorLastError = typeof pendingDiff?.vendor?.lastError === "string" ? String(pendingDiff.vendor.lastError) : null;
 
     return {
       productsAll,
@@ -68,6 +74,9 @@ async function getStats(): Promise<Stats> {
       attendants,
       pendingDb,
       pendingLive,
+      vendorShopsActiveJumia,
+      vendorLastStatus,
+      vendorLastError,
       returnsDb,
       revenue: revenueAgg._sum.paidAmount ?? 0,
       approxProducts,
@@ -95,6 +104,14 @@ function Card({ title, value, Icon, sub }: { title: string; value: string | numb
 
 export default async function Overview() {
   const s = await getStats();
+  const liveSub = (() => {
+    if (s.pendingLive == null) return "Vendor timed out/error — check API credentials";
+    if (s.pendingLive === 0) {
+      if (typeof s.vendorShopsActiveJumia === 'number' && s.vendorShopsActiveJumia === 0) return "No active JUMIA shops in DB — add shops or set env creds";
+      if (typeof s.vendorLastStatus === 'number' && s.vendorLastStatus >= 400) return `Vendor ${s.vendorLastStatus} — check credentials`;
+    }
+    return "Vendor live (timeboxed)";
+  })();
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
@@ -121,7 +138,7 @@ export default async function Overview() {
           title="Pending Orders (Live API)"
           value={s.pendingLive ?? "—"}
           Icon={Receipt}
-          sub={s.pendingLive == null ? "Vendor timed out/error — check API credentials" : "Vendor live (timeboxed)"}
+          sub={liveSub}
         />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>

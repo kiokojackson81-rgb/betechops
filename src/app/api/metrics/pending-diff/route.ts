@@ -33,7 +33,17 @@ export async function GET(request: Request) {
     let lastStatus: number | null = null;
     let lastError: string | null = null;
     let lastTriedUrl: string | null = null;
+    // Shop diagnostics
+    let shopsActive: number | null = null;
+    let shopsActiveJumia: number | null = null;
     try {
+      // capture shop counts to help diagnose "0 live" scenarios caused by missing shop rows
+      try {
+        shopsActive = await prisma.shop.count({ where: { isActive: true } });
+        shopsActiveJumia = await prisma.shop.count({ where: { isActive: true, platform: 'JUMIA' as any } });
+      } catch {
+        shopsActive = shopsActiveJumia = null;
+      }
       const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 3000);
       const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 5));
       const dateFrom = since.toISOString().slice(0, 10);
@@ -78,7 +88,7 @@ export async function GET(request: Request) {
       days,
       since,
       db: { pending: dbPending, pendingPlusMultiple: dbPendingMultiple },
-  vendor: { pending: vendorPending, pages: livePages, lastStatus, lastError, lastTriedUrl },
+      vendor: { pending: vendorPending, pages: livePages, lastStatus, lastError, lastTriedUrl, shopsActive, shopsActiveJumia },
       diff: vendorPending == null ? null : {
         vendorMinusDbPending: vendorPending - dbPending,
         vendorMinusDbPendingPlusMultiple: vendorPending - dbPendingMultiple,
