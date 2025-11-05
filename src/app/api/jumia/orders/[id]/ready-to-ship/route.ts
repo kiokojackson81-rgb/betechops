@@ -21,6 +21,9 @@ function parseOrderItemIds(body: unknown, fallbackId: string): string[] {
   return fallbackId ? [fallbackId] : [];
 }
 
+const mapOrderItemId = (it: any): string =>
+  String(it?.id || it?.orderItemId || it?.order_item_id || "");
+
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
@@ -46,13 +49,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   }
 
   let orderItemIds = parseOrderItemIds(body, id);
-  if ((!orderItemIds || orderItemIds.length === 0) && shopId) {
+  let vendorItems: any[] = [];
+
+  if (shopId) {
     try {
       const itemsResp = await getOrderItems({ shopId, orderId: id });
-      const items = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
-      orderItemIds = items.map((it: any) => String(it?.id || "")).filter(Boolean);
-    } catch {}
+      vendorItems = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
+    } catch {
+      vendorItems = [];
+    }
   }
+
+  if (vendorItems.length) {
+    const extractedIds = vendorItems
+      .map(mapOrderItemId)
+      .filter(Boolean);
+    if (extractedIds.length) {
+      orderItemIds = extractedIds;
+    }
+  }
+
   if (!orderItemIds.length) {
     return noStoreJson({ ok: false, error: "orderItemIds required" }, { status: 400 });
   }
@@ -61,10 +77,25 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     // Auto-pack if needed (when items are still PENDING) using default or single provider
     if (shopId) {
       try {
-        const itemsResp = await getOrderItems({ shopId, orderId: id });
-        const allItems = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
-        const idsSet = new Set(orderItemIds);
-        const target = allItems.filter((it: any) => idsSet.has(String(it?.id || "")));
+        if (!vendorItems.length) {
+          try {
+            const retry = await getOrderItems({ shopId, orderId: id });
+            vendorItems = Array.isArray(retry?.items) ? retry.items : [];
+          } catch {
+            vendorItems = [];
+          }
+        }
+        const allItems = vendorItems.length ? vendorItems : [];
+        if (vendorItems.length) {
+          const extractedIds = vendorItems.map(mapOrderItemId).filter(Boolean);
+          if (extractedIds.length) {
+            orderItemIds = extractedIds;
+          }
+        }
+        const idsSet = new Set(orderItemIds.map((oid) => String(oid)));
+        const target = allItems.filter((it: any) => {
+          return idsSet.has(mapOrderItemId(it));
+        });
         const pending = target.filter((it: any) => String(it?.status || "").toUpperCase() === "PENDING");
         if (pending.length > 0) {
           // Load default provider
@@ -106,7 +137,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           }
 
           // Pack pending items before RTS
-          const toPackIds: string[] = pending.map((it: any) => String(it.id));
+          const toPackIds: string[] = pending.map(mapOrderItemId);
           if (requiredTracking) {
             const base = String(toPackIds[0]).slice(0, 8);
             const trackingCode = `AUTO-${base}-${Date.now()}`.slice(0, 32);
@@ -120,7 +151,42 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }
     }
 
+    if (!vendorItems.length && shopId) {
+      try {
+        const retry = await getOrderItems({ shopId, orderId: id });
+        vendorItems = Array.isArray(retry?.items) ? retry.items : [];
+      } catch {
+        vendorItems = [];
+      }
+    }
+    if (vendorItems.length) {
+      const extractedIds = vendorItems.map(mapOrderItemId).filter(Boolean);
+      if (extractedIds.length) {
+        orderItemIds = extractedIds;
+      }
+    }
+    if (!orderItemIds.length) {
+      return noStoreJson({ ok: false, error: "Unable to locate vendor order items for RTS action", shopId: shopId || undefined }, { status: 400 });
+    }
+
     const result = await postOrdersReadyToShip(shopId ? { shopId, orderItemIds } : { orderItemIds });
+    const newStatus =
+      result && typeof (result as any)?.status === "string"
+        ? String((result as any).status)
+        : "READY_TO_SHIP";
+
+    try {
+      await prisma.jumiaOrder.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          updatedAtJumia: new Date(),
+        },
+      });
+    } catch {
+      // best-effort persistence
+    }
+
     return noStoreJson({ ok: true, orderItemIds, result, shopId: shopId || undefined }, { status: 201 });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
