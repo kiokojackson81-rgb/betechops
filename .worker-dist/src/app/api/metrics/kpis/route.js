@@ -9,6 +9,7 @@ const abs_url_1 = require("@/lib/abs-url");
 const kpis_1 = require("@/lib/jobs/kpis");
 const date_fns_1 = require("date-fns");
 const date_fns_tz_1 = require("date-fns-tz");
+const pendingSnapshot_1 = require("@/lib/jumia/pendingSnapshot");
 // Always execute on the server without static caching
 exports.dynamic = 'force-dynamic';
 async function GET(request) {
@@ -16,48 +17,39 @@ async function GET(request) {
         const url = new URL(request.url);
         const noLiveParam = url.searchParams.get('noLive') || url.searchParams.get('nolive') || url.searchParams.get('disableLive') || url.searchParams.get('mode');
         const noLive = (noLiveParam || '').toLowerCase() === '1' || (noLiveParam || '').toLowerCase() === 'true' || (noLiveParam || '').toLowerCase() === 'db' || (noLiveParam || '').toLowerCase() === 'db-only';
+        const statusesParam = url.searchParams.get('pendingStatuses') || url.searchParams.get('pendingStatus') || url.searchParams.get('status');
+        // Default to just PENDING to align with the Vendor Center view; callers can opt-in to MULTIPLE.
+        const pendingStatuses = (statusesParam ? statusesParam.split(',') : ['PENDING'])
+            .map((s) => s.trim())
+            .filter(Boolean);
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const DEFAULT_TZ = 'Africa/Nairobi';
-        const PENDING_WINDOW_DAYS = Math.max(0, Number(process.env.KPIS_PENDING_WINDOW_DAYS ?? 0));
-        // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days.
-        // Include MULTIPLE (some payloads use it to signal a pending multi-status order).
-        // Align the 7-day window to Nairobi timezone to match how vendor windows are queried by the worker
+        // Pending Orders (All) should reflect the sum of PENDING orders from the last 7 days (Nairobi-aligned).
         const sevenDaysAgo = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -7), DEFAULT_TZ);
-        // Count pending orders. By default include ALL pending, regardless of last update time,
-        // because some pendings can linger beyond a week. If KPIS_PENDING_WINDOW_DAYS>0, apply that window instead.
-        let queued;
-        if (PENDING_WINDOW_DAYS > 0) {
-            const windowStart = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ);
-            queued = await prisma_1.prisma.jumiaOrder.count({
-                where: {
-                    status: { in: ['PENDING', 'MULTIPLE'] },
-                    OR: [
-                        { updatedAtJumia: { gte: windowStart } },
-                        { createdAtJumia: { gte: windowStart } },
-                        {
-                            AND: [
-                                { updatedAtJumia: null },
-                                { createdAtJumia: null },
-                                { updatedAt: { gte: windowStart } },
-                            ],
-                        },
-                    ],
-                },
-            });
-        }
-        else {
-            queued = await prisma_1.prisma.jumiaOrder.count({
-                where: { status: { in: ['PENDING', 'MULTIPLE'] } },
-            });
-        }
+        const queued = await prisma_1.prisma.jumiaOrder.count({
+            where: {
+                status: { in: pendingStatuses },
+                OR: [
+                    { updatedAtJumia: { gte: sevenDaysAgo } },
+                    { createdAtJumia: { gte: sevenDaysAgo } },
+                    {
+                        AND: [
+                            { updatedAtJumia: null },
+                            { createdAtJumia: null },
+                            { updatedAt: { gte: sevenDaysAgo } },
+                        ],
+                    },
+                ],
+            },
+        });
         // Determine staleness: when was the latest pending-row update recorded?
         // Some unit tests mock prisma minimally; guard aggregate call to avoid 500s when not provided.
         let latestUpdatedMillis = 0;
         try {
             const latestAgg = await prisma_1.prisma.jumiaOrder.aggregate({
                 _max: { updatedAt: true, updatedAtJumia: true, createdAtJumia: true },
-                where: { status: { in: ['PENDING', 'MULTIPLE'] } },
+                where: { status: { in: pendingStatuses } },
             });
             if (latestAgg && latestAgg._max) {
                 latestUpdatedMillis = Math.max(latestAgg._max.updatedAt ? new Date(latestAgg._max.updatedAt).getTime() : 0, latestAgg._max.updatedAtJumia ? new Date(latestAgg._max.updatedAtJumia).getTime() : 0, latestAgg._max.createdAtJumia ? new Date(latestAgg._max.createdAtJumia).getTime() : 0);
@@ -93,66 +85,86 @@ async function GET(request) {
         // and mark as approx. Time-box the live check to avoid UI blocking.
         let pendingAllOut = queued;
         let approxFlag = false;
+        let pendingSource = 'db';
         try {
             const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
             const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
             const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
-            if (!allowLive) {
-                // Explicitly disabled — skip live boost
-                throw new Error('live-adjust-disabled');
-            }
-            const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 2500);
-            const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 4));
-            const start = Date.now();
-            let pages = 0;
-            let total = 0;
-            let token = null;
-            const dateFrom = PENDING_WINDOW_DAYS > 0 ? (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -PENDING_WINDOW_DAYS), DEFAULT_TZ).toISOString().slice(0, 10) : '';
-            const dateTo = now.toISOString().slice(0, 10);
-            do {
-                const elapsed = Date.now() - start;
-                if (elapsed >= LIVE_TIMEOUT_MS)
-                    break;
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
-                try {
-                    // If a window is configured, include it; otherwise omit date filters to consider all PENDING.
-                    const base = PENDING_WINDOW_DAYS > 0
-                        ? `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`
-                        : `/api/orders?status=PENDING&shopId=ALL&size=100${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-                    const url = await (0, abs_url_1.absUrl)(base);
-                    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-                    if (!res.ok)
-                        break;
-                    const j = await res.json();
-                    const arr = Array.isArray(j?.orders)
-                        ? j.orders
-                        : Array.isArray(j?.items)
-                            ? j.items
-                            : Array.isArray(j?.data)
-                                ? j.data
-                                : [];
-                    total += arr.length;
-                    token = (j?.nextToken ? String(j.nextToken) : '') || null;
-                    pages += 1;
+            if (allowLive) {
+                const snapshotMaxAgeMs = Math.max(30000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60000));
+                const snapshotCandidate = await (0, pendingSnapshot_1.readPendingSnapshot)().catch(() => null);
+                let usedSnapshot = false;
+                if (snapshotCandidate && (0, pendingSnapshot_1.isPendingSnapshotFresh)(snapshotCandidate, snapshotMaxAgeMs)) {
+                    const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
+                    if (preferVendorWhenDiff && snapshotTotal !== queued) {
+                        pendingAllOut = snapshotTotal;
+                        approxFlag = true;
+                    }
+                    else if (snapshotTotal > pendingAllOut) {
+                        pendingAllOut = snapshotTotal;
+                        approxFlag = true;
+                    }
+                    if (snapshotCandidate.ok === false)
+                        approxFlag = true;
+                    pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
+                    usedSnapshot = true;
                 }
-                catch {
-                    // Abort/timeout or network error — stop live adjustment and keep DB value
-                    break;
+                if (!usedSnapshot) {
+                    const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
+                    const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
+                    const start = Date.now();
+                    let pages = 0;
+                    let total = 0;
+                    let token = null;
+                    const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+                    const dateTo = now.toISOString().slice(0, 10);
+                    do {
+                        const elapsed = Date.now() - start;
+                        if (elapsed >= LIVE_TIMEOUT_MS)
+                            break;
+                        const controller = new AbortController();
+                        const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
+                        try {
+                            // Use vendor-side PENDING status for live boost since vendor supports a single status filter
+                            const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+                            const url = await (0, abs_url_1.absUrl)(base);
+                            const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+                            if (!res.ok)
+                                break;
+                            const j = await res.json();
+                            const arr = Array.isArray(j?.orders)
+                                ? j.orders
+                                : Array.isArray(j?.items)
+                                    ? j.items
+                                    : Array.isArray(j?.data)
+                                        ? j.data
+                                        : [];
+                            total += arr.length;
+                            token = (j?.nextToken ? String(j.nextToken) : '') || null;
+                            pages += 1;
+                        }
+                        catch {
+                            // Abort/timeout or network error - stop live adjustment and keep DB value
+                            break;
+                        }
+                        finally {
+                            clearTimeout(timeout);
+                        }
+                    } while (token && pages < LIVE_MAX_PAGES);
+                    if (pages > 0) {
+                        // Prefer vendor truth when it differs from DB, unless disabled.
+                        if (preferVendorWhenDiff && total !== queued) {
+                            pendingAllOut = total;
+                            approxFlag = true;
+                        }
+                        else if (total > pendingAllOut) {
+                            // Legacy behavior: only boost upwards when vendor is higher
+                            pendingAllOut = total;
+                            approxFlag = true;
+                        }
+                        pendingSource = 'live';
+                    }
                 }
-                finally {
-                    clearTimeout(timeout);
-                }
-            } while (token && pages < LIVE_MAX_PAGES);
-            // Prefer vendor truth when it differs from DB, unless disabled.
-            if (pages > 0 && preferVendorWhenDiff && total !== queued) {
-                pendingAllOut = total;
-                approxFlag = true;
-            }
-            else if (total > pendingAllOut) {
-                // Legacy behavior: only boost upwards when vendor is higher
-                pendingAllOut = total;
-                approxFlag = true;
             }
         }
         catch {
@@ -196,6 +208,7 @@ async function GET(request) {
             }
         }
         catch { }
+        const dbNowTs = Date.now();
         const res = server_1.NextResponse.json({
             ok: true,
             queued,
@@ -204,9 +217,12 @@ async function GET(request) {
             productsAll: cross.productsAll,
             pendingAll: pendingAllOut,
             approx: approxFlag,
+            pendingSource,
             stale: isStale,
             latestPendingUpdatedAt: latestUpdatedMillis || undefined,
-            updatedAt: cross.updatedAt || Date.now(),
+            // Use a fresh timestamp for the DB-based value so UI reflects DB freshness, not cache time
+            updatedAt: dbNowTs,
+            updatedAtCross: cross.updatedAt || null,
         });
         // Ensure no CDN caching on this KPI endpoint
         res.headers.set('Cache-Control', 'no-store');

@@ -66,12 +66,14 @@ export async function GET(req: NextRequest) {
   qs.size = String(requestedSizeSafe);
 
   // Map friendly dateFrom/dateTo to vendor-supported fields.
-  // For PENDING/MULTIPLE we prefer updatedAfter/updatedBefore (orders can be updated while pending).
-  // For other statuses we fall back to createdAfter/createdBefore.
+  // When a specific status filter is present, prefer updatedAfter/updatedBefore so the
+  // date window reflects when orders transitioned (e.g., DELIVERED today even if created earlier).
+  // If no explicit status filter, default to createdAfter/createdBefore.
   const statusUpper = (qs.status || '').toUpperCase();
-  const isPendingLike = statusUpper === 'PENDING' || statusUpper === 'MULTIPLE';
-  const afterKey = isPendingLike ? 'updatedAfter' : 'createdAfter';
-  const beforeKey = isPendingLike ? 'updatedBefore' : 'createdBefore';
+  const hasExplicitStatus = Boolean(statusUpper && statusUpper !== 'ALL');
+  const useUpdatedWindow = hasExplicitStatus; // broaden to updated window for any status filter
+  const afterKey = useUpdatedWindow ? 'updatedAfter' : 'createdAfter';
+  const beforeKey = useUpdatedWindow ? 'updatedBefore' : 'createdBefore';
   const qsOut: Record<string, string> = { ...qs };
   qsOut.size = String(vendorSize);
   if (qsOut.dateFrom) {

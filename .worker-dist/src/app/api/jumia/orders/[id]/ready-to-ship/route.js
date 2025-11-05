@@ -23,6 +23,7 @@ function parseOrderItemIds(body, fallbackId) {
     }
     return fallbackId ? [fallbackId] : [];
 }
+const mapOrderItemId = (it) => String(it?.id || it?.orderItemId || it?.order_item_id || "");
 async function POST(req, context) {
     const { id } = await context.params;
     const auth = await (0, api_1.requireRole)(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
@@ -49,13 +50,23 @@ async function POST(req, context) {
         catch { }
     }
     let orderItemIds = parseOrderItemIds(body, id);
-    if ((!orderItemIds || orderItemIds.length === 0) && shopId) {
+    let vendorItems = [];
+    if (shopId) {
         try {
             const itemsResp = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
-            const items = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
-            orderItemIds = items.map((it) => String(it?.id || "")).filter(Boolean);
+            vendorItems = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
         }
-        catch { }
+        catch {
+            vendorItems = [];
+        }
+    }
+    if (vendorItems.length) {
+        const extractedIds = vendorItems
+            .map(mapOrderItemId)
+            .filter(Boolean);
+        if (extractedIds.length) {
+            orderItemIds = extractedIds;
+        }
     }
     if (!orderItemIds.length) {
         return (0, api_1.noStoreJson)({ ok: false, error: "orderItemIds required" }, { status: 400 });
@@ -64,10 +75,26 @@ async function POST(req, context) {
         // Auto-pack if needed (when items are still PENDING) using default or single provider
         if (shopId) {
             try {
-                const itemsResp = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
-                const allItems = Array.isArray(itemsResp?.items) ? itemsResp.items : [];
-                const idsSet = new Set(orderItemIds);
-                const target = allItems.filter((it) => idsSet.has(String(it?.id || "")));
+                if (!vendorItems.length) {
+                    try {
+                        const retry = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
+                        vendorItems = Array.isArray(retry?.items) ? retry.items : [];
+                    }
+                    catch {
+                        vendorItems = [];
+                    }
+                }
+                const allItems = vendorItems.length ? vendorItems : [];
+                if (vendorItems.length) {
+                    const extractedIds = vendorItems.map(mapOrderItemId).filter(Boolean);
+                    if (extractedIds.length) {
+                        orderItemIds = extractedIds;
+                    }
+                }
+                const idsSet = new Set(orderItemIds.map((oid) => String(oid)));
+                const target = allItems.filter((it) => {
+                    return idsSet.has(mapOrderItemId(it));
+                });
                 const pending = target.filter((it) => String(it?.status || "").toUpperCase() === "PENDING");
                 if (pending.length > 0) {
                     // Load default provider
@@ -106,7 +133,7 @@ async function POST(req, context) {
                         return (0, api_1.noStoreJson)({ ok: false, error: "No shipment provider configured for this shop", hint: "Save a default in Settings → Jumia → Shipping Stations or ensure only one provider is active", shopId }, { status: 400 });
                     }
                     // Pack pending items before RTS
-                    const toPackIds = pending.map((it) => String(it.id));
+                    const toPackIds = pending.map(mapOrderItemId);
                     if (requiredTracking) {
                         const base = String(toPackIds[0]).slice(0, 8);
                         const trackingCode = `AUTO-${base}-${Date.now()}`.slice(0, 32);
@@ -121,7 +148,40 @@ async function POST(req, context) {
                 // best-effort auto-pack
             }
         }
+        if (!vendorItems.length && shopId) {
+            try {
+                const retry = await (0, jumia_1.getOrderItems)({ shopId, orderId: id });
+                vendorItems = Array.isArray(retry?.items) ? retry.items : [];
+            }
+            catch {
+                vendorItems = [];
+            }
+        }
+        if (vendorItems.length) {
+            const extractedIds = vendorItems.map(mapOrderItemId).filter(Boolean);
+            if (extractedIds.length) {
+                orderItemIds = extractedIds;
+            }
+        }
+        if (!orderItemIds.length) {
+            return (0, api_1.noStoreJson)({ ok: false, error: "Unable to locate vendor order items for RTS action", shopId: shopId || undefined }, { status: 400 });
+        }
         const result = await (0, jumia_1.postOrdersReadyToShip)(shopId ? { shopId, orderItemIds } : { orderItemIds });
+        const newStatus = result && typeof result?.status === "string"
+            ? String(result.status)
+            : "READY_TO_SHIP";
+        try {
+            await prisma_1.prisma.jumiaOrder.update({
+                where: { id },
+                data: {
+                    status: newStatus,
+                    updatedAtJumia: new Date(),
+                },
+            });
+        }
+        catch {
+            // best-effort persistence
+        }
         return (0, api_1.noStoreJson)({ ok: true, orderItemIds, result, shopId: shopId || undefined }, { status: 201 });
     }
     catch (e) {

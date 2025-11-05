@@ -2,7 +2,8 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELLED","RETURNED","DISPUTED"];
+// Note: Jumia API uses American spelling for canceled -> "CANCELED"
+const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELED","RETURNED","DISPUTED"];
 const SIZE_OPTIONS = [25, 50, 100, 150, 200, 250, 300];
 
 type FiltersState = {

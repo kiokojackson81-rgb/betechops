@@ -5,14 +5,22 @@ exports.GET = GET;
 const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const jumia_1 = require("@/lib/jumia");
+const date_fns_1 = require("date-fns");
+const date_fns_tz_1 = require("date-fns-tz");
+const date_fns_2 = require("date-fns");
 exports.dynamic = 'force-dynamic';
 async function GET(request) {
     const url = new URL(request.url);
     const windowDays = Math.max(1, Number(url.searchParams.get('days') ?? 7));
-    const timeoutMs = Math.max(500, Number(url.searchParams.get('timeoutMs') ?? 2500));
+    const timeoutMs = Math.max(500, Number(url.searchParams.get('timeoutMs') ?? 5000));
     const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get('size') ?? 100)));
     const started = Date.now();
     const deadline = started + timeoutMs;
+    const DEFAULT_TZ = 'Africa/Nairobi';
+    const now = new Date();
+    const windowStart = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -windowDays), DEFAULT_TZ);
+    const windowEnd = (0, date_fns_tz_1.zonedTimeToUtc)(now, DEFAULT_TZ);
+    const fmt = (d) => (0, date_fns_2.format)(d, 'yyyy-MM-dd HH:mm:ss');
     // Discover shops known locally
     const shops = await prisma_1.prisma.jumiaShop.findMany({ select: { id: true } });
     const perShop = [];
@@ -21,20 +29,25 @@ async function GET(request) {
             break;
         const shopId = s.id;
         const shopAuth = await (0, jumia_1.loadShopAuthById)(shopId).catch(() => undefined);
-        const baseParams = { status: 'PENDING', size: String(pageSize) };
-        let token = null;
+        const baseParams = {
+            status: 'PENDING',
+            size: String(pageSize),
+            shopId,
+            updatedAfter: fmt(windowStart),
+            updatedBefore: fmt(windowEnd),
+            sort: 'DESC',
+        };
         let pages = 0;
         let count = 0;
-        const fetcher = (path) => (0, jumia_1.jumiaFetch)(path, shopAuth ? { shopAuth } : {});
+        let approx = false;
+        let error = null;
+        const fetcher = (path) => (0, jumia_1.jumiaFetch)(path, shopAuth ? { shopAuth, shopCode: shopId } : { shopCode: shopId });
         try {
-            do {
-                if (Date.now() >= deadline)
+            for await (const page of (0, jumia_1.jumiaPaginator)('/orders', baseParams, fetcher)) {
+                if (Date.now() >= deadline) {
+                    approx = true;
                     break;
-                const params = new URLSearchParams(baseParams);
-                if (token)
-                    params.set('token', token);
-                const q = params.toString();
-                const page = await fetcher(`/orders${q ? `?${q}` : ''}`);
+                }
                 const arr = Array.isArray(page?.orders)
                     ? page.orders
                     : Array.isArray(page?.items)
@@ -43,19 +56,36 @@ async function GET(request) {
                             ? page.data
                             : [];
                 count += arr.length;
-                token = (page?.nextToken ? String(page.nextToken) : '') || null;
                 pages += 1;
-                if (page?.isLastPage === true)
+                if (pages >= 2000) {
+                    approx = true;
                     break;
-            } while (token && pages < 2000);
+                }
+                if (Date.now() >= deadline) {
+                    approx = true;
+                    break;
+                }
+            }
         }
-        catch {
-            // ignore errors per shop; continue
+        catch (err) {
+            error = err instanceof Error ? err.message : String(err);
         }
-        perShop.push({ shopId, count, pages });
+        perShop.push({ shopId, count, pages, approx: approx || undefined, error: error || undefined });
+        if (Date.now() >= deadline)
+            break;
     }
     const total = perShop.reduce((acc, r) => acc + r.count, 0);
-    const res = server_1.NextResponse.json({ ok: true, total, perShop, shops: shops.length, tookMs: Date.now() - started });
+    const approxGlobal = perShop.length < shops.length || perShop.some((r) => r.approx || r.error);
+    const res = server_1.NextResponse.json({
+        ok: true,
+        total,
+        approx: approxGlobal,
+        perShop,
+        shops: shops.length,
+        processedShops: perShop.length,
+        tookMs: Date.now() - started,
+        windowDays,
+    });
     res.headers.set('Cache-Control', 'no-store');
     return res;
 }

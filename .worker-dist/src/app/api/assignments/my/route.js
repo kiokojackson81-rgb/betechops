@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.dynamic = exports.runtime = void 0;
 exports.GET = GET;
+exports.runtime = 'nodejs';
+exports.dynamic = 'force-dynamic';
 const server_1 = require("next/server");
 const assignments_1 = require("@/lib/assignments");
 // TODO: replace with real auth extraction

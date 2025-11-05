@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.performCleanup = performCleanup;
-const prisma_1 = require("@/lib/prisma");
+const prisma_1 = require("../src/lib/prisma");
 async function performCleanup(retentionDays) {
     // Retain for 90 days by default (3 months)
     const days = Number(retentionDays ?? process.env.JUMIA_ORDERS_RETENTION_DAYS ?? 90);

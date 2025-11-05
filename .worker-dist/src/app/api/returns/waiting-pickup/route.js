@@ -18,10 +18,14 @@ async function GET() {
                 ],
             },
         });
-        return server_1.NextResponse.json({ count, window: { from: sevenDaysAgo.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) } });
+        const res = server_1.NextResponse.json({ count, window: { from: sevenDaysAgo.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) } });
+        res.headers.set("Cache-Control", "no-store");
+        return res;
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return server_1.NextResponse.json({ count: 0, error: msg }, { status: 200 });
+        const res = server_1.NextResponse.json({ count: 0, error: msg }, { status: 200 });
+        res.headers.set("Cache-Control", "no-store");
+        return res;
     }
 }

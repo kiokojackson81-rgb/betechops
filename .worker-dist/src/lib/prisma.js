@@ -23,7 +23,7 @@ const shouldRetryPrismaError = (e) => {
 };
 // Attach middleware once
 let retryMiddlewareAttached = globalThis.__prismaRetryAttached;
-if (!retryMiddlewareAttached) {
+if (!retryMiddlewareAttached && typeof exports.prisma?.$use === 'function') {
     exports.prisma.$use(async (params, next) => {
         const delays = [200, 500, 1000];
         let lastErr;

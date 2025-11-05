@@ -24,28 +24,51 @@ async function getStats() {
             prisma_1.prisma.returnCase.count(),
             prisma_1.prisma.order.aggregate({ _sum: { paidAmount: true } }),
         ]);
+        // Cross-shop vendor KPIs (products) and DB-only pending for accuracy
         let kpis = null;
+        let kpisDbOnly = null;
+        let pendingDiff = null;
+        const pendingWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 30);
         try {
-            const metricsUrl = await (0, abs_url_1.absUrl)("/api/metrics/kpis");
-            const resp = await fetch(metricsUrl, { cache: "no-store" });
-            if (resp.ok)
+            const [metricsUrl, metricsDbUrl, diffUrl] = await Promise.all([
+                (0, abs_url_1.absUrl)("/api/metrics/kpis"),
+                (0, abs_url_1.absUrl)("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
+                (0, abs_url_1.absUrl)(`/api/metrics/pending-diff?days=${pendingWindowDays}`),
+            ]);
+            const [resp, respDb, respDiff] = await Promise.all([
+                fetch(metricsUrl, { cache: "no-store" }).catch(() => null),
+                fetch(metricsDbUrl, { cache: "no-store" }).catch(() => null),
+                fetch(diffUrl, { cache: "no-store" }).catch(() => null),
+            ]);
+            if (resp && resp.ok)
                 kpis = await resp.json();
+            if (respDb && respDb.ok)
+                kpisDbOnly = await respDb.json();
+            if (respDiff && respDiff.ok)
+                pendingDiff = await respDiff.json();
         }
         catch {
-            kpis = null;
+            kpis = kpisDbOnly = pendingDiff = null;
         }
-        let productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
+        const productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
         const approxProducts = Boolean(kpis?.approx);
-        // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
-        // This avoids flicker and double counting.
-        let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
-        let approxPending = Boolean(kpis?.approx);
+        // DB-only pending to avoid live adjustments here; we'll show live separately
+        const pendingDb = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : 0;
+        const approxPending = Boolean(kpisDbOnly?.approx);
+        const pendingLive = typeof pendingDiff?.vendor?.pending === "number" ? Number(pendingDiff.vendor.pending) : null;
+        const vendorShopsActiveJumia = typeof pendingDiff?.vendor?.shopsActiveJumia === "number" ? Number(pendingDiff.vendor.shopsActiveJumia) : null;
+        const vendorLastStatus = typeof pendingDiff?.vendor?.lastStatus === "number" ? Number(pendingDiff.vendor.lastStatus) : null;
+        const vendorLastError = typeof pendingDiff?.vendor?.lastError === "string" ? String(pendingDiff.vendor.lastError) : null;
         return {
             productsAll,
             productsDb: dbProducts,
             shops,
             attendants,
-            pendingAll,
+            pendingDb,
+            pendingLive,
+            vendorShopsActiveJumia,
+            vendorLastStatus,
+            vendorLastError,
             returnsDb,
             revenue: revenueAgg._sum.paidAmount ?? 0,
             approxProducts,
@@ -53,7 +76,7 @@ async function getStats() {
         };
     }
     catch {
-        return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true };
+        return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingDb: 0, pendingLive: null, returnsDb: 0, revenue: 0, _degraded: true };
     }
 }
 function Card({ title, value, Icon, sub }) {
@@ -70,6 +93,17 @@ function Card({ title, value, Icon, sub }) {
 }
 async function Overview() {
     const s = await getStats();
+    const liveSub = (() => {
+        if (s.pendingLive == null)
+            return "Vendor timed out/error — check API credentials";
+        if (s.pendingLive === 0) {
+            if (typeof s.vendorShopsActiveJumia === 'number' && s.vendorShopsActiveJumia === 0)
+                return "No active JUMIA shops in DB — add shops or set env creds";
+            if (typeof s.vendorLastStatus === 'number' && s.vendorLastStatus >= 400)
+                return `Vendor ${s.vendorLastStatus} — check credentials`;
+        }
+        return "Vendor live (timeboxed)";
+    })();
     return (<div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
       <AutoRefresh_1.default intervalMs={60000}/>
@@ -83,7 +117,8 @@ async function Overview() {
         <Card title="Vendor Products (All)" value={s.productsAll} Icon={lucide_react_1.Package} sub={s.approxProducts ? "Approx (bounded scan)" : undefined}/>
         <Card title="Shops" value={s.shops} Icon={lucide_react_1.Store}/>
         <Card title="Attendants" value={s.attendants} Icon={lucide_react_1.Users}/>
-        <Card title="Pending Orders (All)" value={s.pendingAll} Icon={lucide_react_1.Receipt} sub={s.approxPending ? "Live vendor count (DB sync pending)" : undefined}/>
+        <Card title="Pending Orders (DB)" value={s.pendingDb} Icon={lucide_react_1.Receipt} sub={s.approxPending ? "DB exact (windowed)" : "DB exact"}/>
+        <Card title="Pending Orders (Live API)" value={s.pendingLive ?? "—"} Icon={lucide_react_1.Receipt} sub={liveSub}/>
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={lucide_react_1.Wallet} sub="Sum of paid amounts"/>
       </section>
 

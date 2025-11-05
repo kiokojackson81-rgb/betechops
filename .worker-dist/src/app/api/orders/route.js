@@ -5,6 +5,8 @@ exports.GET = GET;
 const server_1 = require("next/server");
 const jumia_1 = require("@/lib/jumia");
 const prisma_1 = require("@/lib/prisma");
+const date_fns_tz_1 = require("date-fns-tz");
+const date_fns_1 = require("date-fns");
 exports.dynamic = 'force-dynamic';
 async function GET(req) {
     // In tests, try to use the mocked jumiaFetch from Jest if available to avoid real network calls
@@ -63,14 +65,21 @@ async function GET(req) {
     });
     if (!qs.size)
         qs.size = '50';
+    const requestedSizeRaw = Number.parseInt(qs.size, 10);
+    const requestedSizeSafe = Number.isFinite(requestedSizeRaw) && requestedSizeRaw > 0 ? requestedSizeRaw : 50;
+    const vendorSize = Math.max(1, Math.min(requestedSizeSafe, 300));
+    qs.size = String(requestedSizeSafe);
     // Map friendly dateFrom/dateTo to vendor-supported fields.
-    // For PENDING/MULTIPLE we prefer updatedAfter/updatedBefore (orders can be updated while pending).
-    // For other statuses we fall back to createdAfter/createdBefore.
+    // When a specific status filter is present, prefer updatedAfter/updatedBefore so the
+    // date window reflects when orders transitioned (e.g., DELIVERED today even if created earlier).
+    // If no explicit status filter, default to createdAfter/createdBefore.
     const statusUpper = (qs.status || '').toUpperCase();
-    const isPendingLike = statusUpper === 'PENDING' || statusUpper === 'MULTIPLE';
-    const afterKey = isPendingLike ? 'updatedAfter' : 'createdAfter';
-    const beforeKey = isPendingLike ? 'updatedBefore' : 'createdBefore';
+    const hasExplicitStatus = Boolean(statusUpper && statusUpper !== 'ALL');
+    const useUpdatedWindow = hasExplicitStatus; // broaden to updated window for any status filter
+    const afterKey = useUpdatedWindow ? 'updatedAfter' : 'createdAfter';
+    const beforeKey = useUpdatedWindow ? 'updatedBefore' : 'createdBefore';
     const qsOut = { ...qs };
+    qsOut.size = String(vendorSize);
     if (qsOut.dateFrom) {
         qsOut[afterKey] = qsOut.dateFrom;
         delete qsOut.dateFrom;
@@ -79,6 +88,28 @@ async function GET(req) {
         qsOut[beforeKey] = qsOut.dateTo;
         delete qsOut.dateTo;
     }
+    // Normalize date-only filters to full ISO timestamps aligned to Nairobi time
+    const DEFAULT_TZ = 'Africa/Nairobi';
+    const isDateOnly = (s) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const toIsoTs = (dateStr, endOfDay = false) => {
+        try {
+            // Build local date in Nairobi TZ at start or end of day, then convert to UTC ISO string
+            const base = new Date(`${dateStr}T00:00:00`);
+            const localStartUtc = (0, date_fns_tz_1.zonedTimeToUtc)(base, DEFAULT_TZ);
+            if (!endOfDay)
+                return localStartUtc.toISOString();
+            const localEndUtc = (0, date_fns_1.addDays)(localStartUtc, 1);
+            // Use one microsecond before next day to cover full inclusive day window
+            return new Date(localEndUtc.getTime() - 1).toISOString();
+        }
+        catch {
+            return dateStr;
+        }
+    };
+    if (qsOut[afterKey] && isDateOnly(qsOut[afterKey]))
+        qsOut[afterKey] = toIsoTs(qsOut[afterKey], false);
+    if (qsOut[beforeKey] && isDateOnly(qsOut[beforeKey]))
+        qsOut[beforeKey] = toIsoTs(qsOut[beforeKey], true);
     const query = new URLSearchParams(qsOut).toString();
     const path = query ? `orders?${query}` : 'orders';
     // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
@@ -182,6 +213,27 @@ async function GET(req) {
                     { id: 's1', platform: 'JUMIA' },
                     { id: 's2', platform: 'JUMIA' },
                 ];
+            }
+            // If we still have no active JUMIA shops, fall back to a single master call using default creds/env.
+            // This ensures the Admin "Live" card and diagnostics don't show zero due to missing shop rows.
+            if (!Array.isArray(jumiaShops) || jumiaShops.length === 0) {
+                try {
+                    const shopAuth = await (0, jumia_1.loadDefaultShopAuth)().catch(() => undefined);
+                    const j = await jumiaFetch(basePath, shopAuth ? { method: 'GET', shopAuth } : { method: 'GET' });
+                    const arr = Array.isArray(j?.orders)
+                        ? j.orders
+                        : Array.isArray(j?.items)
+                            ? j.items
+                            : Array.isArray(j?.data)
+                                ? j.data
+                                : [];
+                    const nextToken = String(j?.nextToken ?? j?.token ?? '') || null;
+                    const resFallback = server_1.NextResponse.json({ orders: arr, nextToken, isLastPage: !nextToken });
+                    return resFallback;
+                }
+                catch {
+                    // Fall through to the normal empty aggregation path below
+                }
             }
             const states = await Promise.all(jumiaShops.map(async (s) => {
                 const st = { id: s.id, buf: [], token: null, isLast: false };

@@ -4,8 +4,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = OrdersFilters;
 const navigation_1 = require("next/navigation");
 const react_1 = require("react");
-const STATUSES = ["PENDING", "PACKED", "READY_TO_SHIP", "DELIVERED", "CANCELLED", "RETURNED", "DISPUTED"];
-const SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000];
+// Note: Jumia API uses American spelling for canceled -> "CANCELED"
+const STATUSES = ["PENDING", "PACKED", "READY_TO_SHIP", "DELIVERED", "CANCELED", "RETURNED", "DISPUTED"];
+const SIZE_OPTIONS = [25, 50, 100, 150, 200, 250, 300];
 const DEFAULTS = {
     status: "PENDING",
     country: "",
@@ -21,7 +22,7 @@ function OrdersFilters({ shops }) {
     const sp = (0, navigation_1.useSearchParams)();
     const snapshot = (0, react_1.useMemo)(() => {
         const status = sp.get("status") || DEFAULTS.status;
-        const sizeDefault = status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+        const sizeDefault = status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
         return {
             status,
             country: sp.get("country") || DEFAULTS.country,
@@ -52,13 +53,13 @@ function OrdersFilters({ shops }) {
         assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
         assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
         assign("q", pending.q.trim(), DEFAULTS.q);
-        const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+        const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
         assign("size", pending.size, sizeDefault);
         q.delete("nextToken");
         router.push(`${pathname}?${q.toString()}`);
     };
     const reset = () => {
-        const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+        const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
         setPending({ ...DEFAULTS, size: sizeDefault });
         const q = new URLSearchParams(sp.toString());
         Object.keys(DEFAULTS).forEach((key) => q.delete(key));
