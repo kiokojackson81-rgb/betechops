@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { jumiaFetch, jumiaPaginator, loadShopAuthById } from '@/lib/jumia';
+import { addDays } from 'date-fns';
+import { zonedTimeToUtc } from 'date-fns-tz';
+import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
-type PerShop = { shopId: string; count: number; pages: number };
+type PerShop = { shopId: string; count: number; pages: number; approx?: boolean; error?: string | null };
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -14,6 +17,11 @@ export async function GET(request: Request) {
 
   const started = Date.now();
   const deadline = started + timeoutMs;
+  const DEFAULT_TZ = 'Africa/Nairobi';
+  const now = new Date();
+  const windowStart = zonedTimeToUtc(addDays(now, -windowDays), DEFAULT_TZ);
+  const windowEnd = zonedTimeToUtc(now, DEFAULT_TZ);
+  const fmt = (d: Date) => format(d, 'yyyy-MM-dd HH:mm:ss');
 
   // Discover shops known locally
   const shops = await prisma.jumiaShop.findMany({ select: { id: true } });
@@ -23,40 +31,67 @@ export async function GET(request: Request) {
     if (Date.now() >= deadline) break;
     const shopId = s.id;
     const shopAuth = await loadShopAuthById(shopId).catch(() => undefined);
-    const baseParams: Record<string, string> = { status: 'PENDING', size: String(pageSize) };
+    const baseParams: Record<string, string> = {
+      status: 'PENDING',
+      size: String(pageSize),
+      shopId,
+      updatedAfter: fmt(windowStart),
+      updatedBefore: fmt(windowEnd),
+      sort: 'DESC',
+    };
 
-    let token: string | null = null;
     let pages = 0;
     let count = 0;
-    const fetcher = (path: string) => jumiaFetch(path, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    let approx = false;
+    let error: string | null = null;
+    const fetcher = (path: string) => jumiaFetch(
+      path,
+      shopAuth ? ({ shopAuth, shopCode: shopId } as any) : ({ shopCode: shopId } as any),
+    );
 
     try {
-      do {
-        if (Date.now() >= deadline) break;
-        const params = new URLSearchParams(baseParams);
-        if (token) params.set('token', token);
-        const q = params.toString();
-        const page: any = await fetcher(`/orders${q ? `?${q}` : ''}`);
-        const arr = Array.isArray(page?.orders)
-          ? page.orders
-          : Array.isArray(page?.items)
-          ? page.items
-          : Array.isArray(page?.data)
-          ? page.data
+      for await (const page of jumiaPaginator('/orders', baseParams, fetcher)) {
+        if (Date.now() >= deadline) {
+          approx = true;
+          break;
+        }
+        const arr = Array.isArray((page as any)?.orders)
+          ? (page as any).orders
+          : Array.isArray((page as any)?.items)
+          ? (page as any).items
+          : Array.isArray((page as any)?.data)
+          ? (page as any).data
           : [];
         count += arr.length;
-        token = (page?.nextToken ? String(page.nextToken) : '') || null;
         pages += 1;
-        if (page?.isLastPage === true) break;
-      } while (token && pages < 2000);
-    } catch {
-      // ignore errors per shop; continue
+        if (pages >= 2000) {
+          approx = true;
+          break;
+        }
+        if (Date.now() >= deadline) {
+          approx = true;
+          break;
+        }
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
     }
-    perShop.push({ shopId, count, pages });
+    perShop.push({ shopId, count, pages, approx: approx || undefined, error: error || undefined });
+    if (Date.now() >= deadline) break;
   }
 
   const total = perShop.reduce((acc, r) => acc + r.count, 0);
-  const res = NextResponse.json({ ok: true, total, perShop, shops: shops.length, tookMs: Date.now() - started });
+  const approxGlobal = perShop.length < shops.length || perShop.some((r) => r.approx || r.error);
+  const res = NextResponse.json({
+    ok: true,
+    total,
+    approx: approxGlobal,
+    perShop,
+    shops: shops.length,
+    processedShops: perShop.length,
+    tookMs: Date.now() - started,
+    windowDays,
+  });
   res.headers.set('Cache-Control', 'no-store');
   return res;
 }

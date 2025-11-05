@@ -38,11 +38,12 @@ async function getStats(): Promise<Stats> {
     let kpis: any = null;
     let kpisDbOnly: any = null;
     let pendingDiff: any = null;
+    const pendingWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 30);
     try {
       const [metricsUrl, metricsDbUrl, diffUrl] = await Promise.all([
         absUrl("/api/metrics/kpis"),
         absUrl("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
-        absUrl("/api/metrics/pending-diff?days=7"),
+        absUrl(`/api/metrics/pending-diff?days=${pendingWindowDays}`),
       ]);
       const [resp, respDb, respDiff] = await Promise.all([
         fetch(metricsUrl, { cache: "no-store" }).catch(() => null),
