@@ -339,12 +339,16 @@ export default jobs;
  * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
  */
 export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
-  // Vendor-supported Order Item statuses per Jumia GOP docs for /orders
-  // Avoid unsupported ones (e.g., PACKED, PROCESSING, FULFILLED, COMPLETED, DISPUTED, CANCELLED)
-  // Valid: PENDING, SHIPPED, DELIVERED, FAILED, RETURNED, READY_TO_SHIP, CANCELED
+  // Vendor-supported Order Item statuses per Jumia GOP docs for /orders.
+  // Some tenants still emit legacy states such as PACKED/PROCESSING/FULFILLED; include them
+  // and rely on the preflight guard below to skip any that the current tenant rejects.
   const STATUS_SEQUENCE = [
     'PENDING',
     'READY_TO_SHIP',
+    'PACKED',
+    'PROCESSING',
+    'FULFILLED',
+    'COMPLETED',
     'SHIPPED',
     'DELIVERED',
     'FAILED',
