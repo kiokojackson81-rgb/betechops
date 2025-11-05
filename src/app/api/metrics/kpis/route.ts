@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         }
 
         if (!usedSnapshot) {
-          const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 1500);
+          const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
           const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
           const start = Date.now();
           let pages = 0;

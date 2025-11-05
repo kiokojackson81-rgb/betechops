@@ -12,7 +12,7 @@ type PerShop = { shopId: string; count: number; pages: number; approx?: boolean;
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const windowDays = Math.max(1, Number(url.searchParams.get('days') ?? 7));
-  const timeoutMs = Math.max(500, Number(url.searchParams.get('timeoutMs') ?? 2500));
+  const timeoutMs = Math.max(500, Number(url.searchParams.get('timeoutMs') ?? 5000));
   const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get('size') ?? 100)));
 
   const started = Date.now();

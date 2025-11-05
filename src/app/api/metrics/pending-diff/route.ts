@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     }
 
     if (vendorPending == null) {
-      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 3000);
+      const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
       const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 5));
       const dateFrom = since.toISOString().slice(0, 10);
       const dateTo = now.toISOString().slice(0, 10);
