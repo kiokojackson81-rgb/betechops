@@ -60,6 +60,10 @@ export async function GET(req: NextRequest) {
   });
 
   if (!qs.size) qs.size = '50';
+  const requestedSizeRaw = Number.parseInt(qs.size, 10);
+  const requestedSizeSafe = Number.isFinite(requestedSizeRaw) && requestedSizeRaw > 0 ? requestedSizeRaw : 50;
+  const vendorSize = Math.max(1, Math.min(requestedSizeSafe, 300));
+  qs.size = String(requestedSizeSafe);
 
   // Map friendly dateFrom/dateTo to vendor-supported fields.
   // For PENDING/MULTIPLE we prefer updatedAfter/updatedBefore (orders can be updated while pending).
@@ -69,6 +73,7 @@ export async function GET(req: NextRequest) {
   const afterKey = isPendingLike ? 'updatedAfter' : 'createdAfter';
   const beforeKey = isPendingLike ? 'updatedBefore' : 'createdBefore';
   const qsOut: Record<string, string> = { ...qs };
+  qsOut.size = String(vendorSize);
   if (qsOut.dateFrom) {
     qsOut[afterKey] = qsOut.dateFrom;
     delete qsOut.dateFrom;
