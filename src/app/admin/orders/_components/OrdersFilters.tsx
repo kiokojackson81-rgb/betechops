@@ -3,7 +3,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELLED","RETURNED","DISPUTED"];
-const SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000];
+const SIZE_OPTIONS = [25, 50, 100, 150, 200, 250, 300];
 
 type FiltersState = {
   status: string;
@@ -32,7 +32,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
   const snapshot = useMemo(() => {
     const status = sp.get("status") || DEFAULTS.status;
-    const sizeDefault = status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const sizeDefault = status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
     return {
       status,
       country: sp.get("country") || DEFAULTS.country,
@@ -66,7 +66,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
     assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
     assign("q", pending.q.trim(), DEFAULTS.q);
-    const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
     assign("size", pending.size, sizeDefault);
 
     q.delete("nextToken");
@@ -74,7 +74,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   };
 
   const reset = () => {
-    const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
     setPending({ ...DEFAULTS, size: sizeDefault });
     const q = new URLSearchParams(sp.toString());
     Object.keys(DEFAULTS).forEach((key) => q.delete(key));
