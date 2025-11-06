@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 import type { OrdersQuery, OrdersRow } from "./types";
 import { cleanShopName } from "@/lib/jumia/orderHelpers";
+import { normalizeStatus } from "@/lib/jumia/orderStatus";
 
 function pickComparableDate(order: {
   updatedAtJumia: Date | null;
@@ -15,7 +15,8 @@ function pickComparableDate(order: {
 export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]> {
   // Use a flexible where type to avoid tight coupling to generated Prisma types in CI/builds
   const where: any = {};
-  if (params.status && params.status !== "ALL") where.status = params.status;
+  const status = normalizeStatus(params.status);
+  if (status && status !== "ALL") where.status = status;
   if (params.shopId && params.shopId !== "ALL") where.shopId = params.shopId;
   if (params.country) where.countryCode = params.country.trim().toUpperCase();
 

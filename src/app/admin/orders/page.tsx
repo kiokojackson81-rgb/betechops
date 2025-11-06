@@ -8,6 +8,7 @@ import SyncNowButton from './_components/SyncNowButton';
 import BulkActions from './_components/BulkActions';
 import { fetchSyncedRows } from './_lib/fetchSyncedRows';
 import type { OrdersQuery, OrdersRow } from './_lib/types';
+import { isSyncedStatus, normalizeStatus } from '@/lib/jumia/orderStatus';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,21 +134,31 @@ export default async function OrdersPage(props: unknown) {
     size: toStr(searchParams.size),
   };
 
-  const prefersSynced = (params.status ?? '').toUpperCase() === 'PENDING';
+  const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
+  params.status = normalizedStatus;
+  const prefersSynced = isSyncedStatus(normalizedStatus);
+  const isPendingView = normalizedStatus === 'PENDING';
+  const statusDisplay = normalizedStatus.replace(/_/g, ' ');
+  const statusHeadline = statusDisplay
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const statusMessageLower = statusDisplay.toLowerCase();
   // Keep vendor-synced pending views free of implicit date filters.
   // Some orders stay pending for weeks, so forcing a lookback window causes mismatches.
   let kpisPendingCount: number | null = null;
-  try {
-    const metricsUrl = await absUrl('/api/metrics/kpis');
-    const metricsResp = await fetch(metricsUrl, { cache: 'no-store' });
-    if (metricsResp.ok) {
-      const metricsJson: any = await metricsResp.json();
-      if (typeof metricsJson?.pendingAll === 'number' && Number.isFinite(metricsJson.pendingAll)) {
-        kpisPendingCount = Number(metricsJson.pendingAll);
+  if (isPendingView) {
+    try {
+      const metricsUrl = await absUrl('/api/metrics/kpis');
+      const metricsResp = await fetch(metricsUrl, { cache: 'no-store' });
+      if (metricsResp.ok) {
+        const metricsJson: any = await metricsResp.json();
+        if (typeof metricsJson?.pendingAll === 'number' && Number.isFinite(metricsJson.pendingAll)) {
+          kpisPendingCount = Number(metricsJson.pendingAll);
+        }
       }
+    } catch {
+      kpisPendingCount = null;
     }
-  } catch {
-    kpisPendingCount = null;
   }
 
   let usedDefaultFrom = false;
@@ -214,7 +225,7 @@ export default async function OrdersPage(props: unknown) {
   let isLastPage = true;
   let showingSynced = prefersSynced && !syncBootstrapError;
   let syncFallbackMessage: string | null = syncBootstrapError
-    ? 'Cached pending orders are not initialized yet. Showing live data until the next sync completes.'
+    ? `Cached ${statusMessageLower} orders are not initialized yet. Showing live data until the next sync completes.`
     : null;
 
   if (prefersSynced && showingSynced) {
@@ -222,19 +233,25 @@ export default async function OrdersPage(props: unknown) {
       rows = await fetchSyncedRows(params);
       nextToken = null;
       isLastPage = true;
-      if (rows.length === 0) {
+      if (isPendingView && rows.length === 0) {
         showingSynced = false;
         syncFallbackMessage =
           'No cached pending orders are available yet. Showing live data until the next sync finishes.';
       }
     } catch (error) {
-      console.error('[orders.page] Failed to load cached pending orders, falling back to live API', error);
+      console.error('[orders.page] Failed to load cached orders, falling back to live API', error);
       showingSynced = false;
-      syncFallbackMessage = 'Cached pending orders are temporarily unavailable. Showing live data instead.';
+      syncFallbackMessage = `Cached ${statusMessageLower} orders are temporarily unavailable. Showing live data instead.`;
     }
   }
 
-  if (prefersSynced && showingSynced && kpisPendingCount !== null && Math.abs(kpisPendingCount - rows.length) >= 1) {
+  if (
+    prefersSynced &&
+    showingSynced &&
+    isPendingView &&
+    kpisPendingCount !== null &&
+    Math.abs(kpisPendingCount - rows.length) >= 1
+  ) {
     showingSynced = false;
     syncFallbackMessage = `Cached snapshot diverges from vendor (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
     rows = [];
@@ -256,17 +273,22 @@ export default async function OrdersPage(props: unknown) {
           <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
           <p className="text-slate-300">
             {showingSynced
-              ? 'Showing cached PENDING orders synced from Jumia accounts. Filters apply instantly.'
+              ? `Showing cached ${statusHeadline} orders synced from Jumia accounts. Filters apply instantly.`
               : 'Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.'}
           </p>
           {syncFallbackMessage && (
             <p className="text-xs text-amber-400 mt-1">{syncFallbackMessage}</p>
           )}
-          {((!showingSynced && (usedDefaultFrom || usedDefaultTo)) || (showingSynced && (usedDefaultFrom || usedDefaultTo))) && (
+          {showingSynced && prefersSynced && (
             <p className="text-xs text-slate-400 mt-1">
-              {prefersSynced
-                ? 'Pending view uses no fixed date window; showing full vendor-backed range.'
-                : `Default window: last 3 months (bounded by system start). Showing ${params.dateFrom} to ${params.dateTo}.`}
+              {isPendingView
+                ? 'Synced pending view uses no fixed date window; showing full vendor-backed range.'
+                : 'Synced view shows the rolling 90-day retention window stored in our database.'}
+            </p>
+          )}
+          {!prefersSynced && (usedDefaultFrom || usedDefaultTo) && (
+            <p className="text-xs text-slate-400 mt-1">
+              {`Default window: last 3 months (bounded by system start). Showing ${params.dateFrom} to ${params.dateTo}.`}
             </p>
           )}
         </div>

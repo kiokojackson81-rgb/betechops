@@ -1,6 +1,7 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { isSyncedStatus } from "@/lib/jumia/orderStatus";
 
 // Note: Jumia API uses American spelling for canceled -> "CANCELED"
 const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELED","RETURNED","DISPUTED"];
@@ -33,7 +34,12 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
   const snapshot = useMemo(() => {
     const status = sp.get("status") || DEFAULTS.status;
-    const sizeDefault = status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(status)) {
+        return status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     return {
       status,
       country: sp.get("country") || DEFAULTS.country,
@@ -67,7 +73,12 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
     assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
     assign("q", pending.q.trim(), DEFAULTS.q);
-    const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(pending.status)) {
+        return pending.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     assign("size", pending.size, sizeDefault);
 
     q.delete("nextToken");
@@ -75,7 +86,12 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   };
 
   const reset = () => {
-    const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(DEFAULTS.status)) {
+        return DEFAULTS.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     setPending({ ...DEFAULTS, size: sizeDefault });
     const q = new URLSearchParams(sp.toString());
     Object.keys(DEFAULTS).forEach((key) => q.delete(key));

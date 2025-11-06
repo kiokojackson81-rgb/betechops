@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { jumiaFetch, loadShopAuthById, loadDefaultShopAuth } from '@/lib/jumia';
+import { isSyncedStatus, normalizeStatus } from '@/lib/jumia/orderStatus';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,7 +17,10 @@ function parseHead(order: any): Head | null {
   return { ts, id };
 }
 
-async function fetchNewestForShop(shopId: string, params: { status?: string; country?: string; dateFrom?: string; dateTo?: string }) {
+async function fetchNewestForShopVendor(
+  shopId: string,
+  params: { status?: string; country?: string; dateFrom?: string; dateTo?: string },
+) {
   // Build minimal query asking for one newest item for this shop
   const qs: string[] = ['size=1'];
   if (params.status) qs.push(`status=${encodeURIComponent(params.status)}`);
@@ -61,10 +65,63 @@ async function fetchNewestForShop(shopId: string, params: { status?: string; cou
   }
 }
 
+async function fetchNewestForShopFromDb(
+  shopId: string,
+  params: { status?: string; country?: string; dateFrom?: string; dateTo?: string },
+): Promise<Head | null> {
+  const where: any = { shopId };
+  const status = normalizeStatus(params.status);
+  if (status && status !== 'ALL') where.status = status;
+  if (params.country) where.countryCode = params.country.trim().toUpperCase();
+
+  const dateFrom = params.dateFrom ? new Date(`${params.dateFrom}T00:00:00Z`) : null;
+  const dateTo = params.dateTo ? new Date(`${params.dateTo}T23:59:59Z`) : null;
+  if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+    const range: { gte?: Date; lte?: Date } = {};
+    if (dateFrom && !Number.isNaN(dateFrom.getTime())) range.gte = dateFrom;
+    if (dateTo && !Number.isNaN(dateTo.getTime())) range.lte = dateTo;
+    where.OR = [
+      { updatedAtJumia: range },
+      { AND: [{ updatedAtJumia: null }, { createdAtJumia: range }] },
+      { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: range }] },
+    ];
+  }
+
+  try {
+    const record = await prisma.jumiaOrder.findFirst({
+      where,
+      orderBy: [
+        { updatedAtJumia: 'desc' },
+        { createdAtJumia: 'desc' },
+        { updatedAt: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      select: {
+        id: true,
+        updatedAtJumia: true,
+        createdAtJumia: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    });
+    if (!record) return null;
+    const comparable =
+      record.updatedAtJumia ?? record.createdAtJumia ?? record.updatedAt ?? record.createdAt ?? null;
+    if (!comparable) return null;
+    const ts = comparable.getTime();
+    return Number.isNaN(ts) ? null : { ts, id: record.id };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const status = searchParams.get('status') || 'PENDING';
-  const country = searchParams.get('country') || undefined;
+  const statusRaw = searchParams.get('status');
+  const normalizedStatus = normalizeStatus(statusRaw) ?? 'PENDING';
+  let useSyncedStorage = isSyncedStatus(normalizedStatus);
+  const countryParam = searchParams.get('country') || undefined;
+  const country = countryParam ? countryParam.trim().toUpperCase() : undefined;
   const shopIdParam = searchParams.get('shopId') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
@@ -74,7 +131,19 @@ export async function GET(req: NextRequest) {
   let shopIds: string[] = [];
   if (shopIdParam && shopIdParam.toUpperCase() !== 'ALL') {
     shopIds = [shopIdParam];
-  } else {
+  } else if (useSyncedStorage) {
+    try {
+      const rows = await prisma.jumiaShop.findMany({ select: { id: true } });
+      shopIds = rows.map((r) => r.id);
+    } catch {
+      shopIds = [];
+    }
+    if (!shopIds.length) {
+      // If no synced shops exist yet, fall back to vendor polling.
+      useSyncedStorage = false;
+    }
+  }
+  if (!shopIds.length) {
     try {
       const rows = await prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true } });
       shopIds = rows.map((r) => r.id);
@@ -103,7 +172,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Initial hello
-      send('hello', { ok: true, status, country, shopIds, ts: Date.now() });
+      send('hello', { ok: true, status: normalizedStatus, country, shopIds, ts: Date.now(), source: useSyncedStorage ? 'db' : 'vendor' });
 
       let alive = true;
       const ac = new AbortController();
@@ -120,7 +189,19 @@ export async function GET(req: NextRequest) {
         try {
           let anyNew = false;
           for (const sid of shopIds) {
-            const head = await fetchNewestForShop(sid, { status, country, dateFrom, dateTo });
+            const head = useSyncedStorage
+              ? await fetchNewestForShopFromDb(sid, {
+                  status: normalizedStatus,
+                  country,
+                  dateFrom,
+                  dateTo,
+                })
+              : await fetchNewestForShopVendor(sid, {
+                  status: normalizedStatus,
+                  country,
+                  dateFrom,
+                  dateTo,
+                });
             const prev = last[sid] || null;
             if (!prev && head) {
               last[sid] = head;
