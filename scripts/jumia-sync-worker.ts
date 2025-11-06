@@ -77,7 +77,9 @@ async function tick() {
     try {
       const doDeep = (now - lastIncrementalDeepAt) >= INCREMENTAL_DEEP_EVERY_MS;
       const lookback = doDeep ? undefined : INCREMENTAL_LOOKBACK_DAYS;
-      const summary = (await syncOrdersIncremental(lookback ? { lookbackDays: lookback } : undefined)) as Record<string, { processed: number; upserted: number; cursor?: string }>;
+      const summary = (await syncOrdersIncremental(
+        lookback ? { lookbackDays: lookback, skipNonUuid: true } : { skipNonUuid: true },
+      )) as Record<string, { processed: number; upserted: number; cursor?: string }>;
       const shopSummaries = Object.values(summary || {});
       const incProcessed = shopSummaries.reduce((acc, s) => acc + (s?.processed || 0), 0);
       const incUpserted = shopSummaries.reduce((acc, s) => acc + (s?.upserted || 0), 0);

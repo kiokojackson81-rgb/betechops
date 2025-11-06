@@ -338,7 +338,17 @@ export default jobs;
  * Stores watermark in Config as key: `jumia:orders:${shopId}:cursor`.
  * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
  */
-export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDays?: number }) {
+type SyncOrdersIncrementalOptions = {
+  shopId?: string;
+  lookbackDays?: number;
+  skipNonUuid?: boolean;
+};
+
+function looksLikeUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions) {
   // Vendor-supported Order Item statuses per Jumia GOP docs for /orders.
   // Some tenants still emit legacy states such as PACKED/PROCESSING/FULFILLED; include them
   // and rely on the preflight guard below to skip any that the current tenant rejects.
@@ -362,10 +372,13 @@ export async function syncOrdersIncremental(opts?: { shopId?: string; lookbackDa
   (globalThis as any).__jumiaUnsupportedCache = unsupportedByShop;
   const warnedOnce: Set<string> = (globalThis as any).__jumiaUnsupportedWarned || new Set();
   (globalThis as any).__jumiaUnsupportedWarned = warnedOnce;
-  const jumiaShops = await prisma.jumiaShop.findMany({
+  const jumiaShopsRaw = await prisma.jumiaShop.findMany({
     where: opts?.shopId ? { id: opts.shopId } : {},
     select: { id: true },
   });
+  const jumiaShops = opts?.skipNonUuid
+    ? jumiaShopsRaw.filter((shop) => looksLikeUuid(shop.id))
+    : jumiaShopsRaw;
 
   const summary: Record<string, { processed: number; upserted: number; cursor?: string }> = {};
 
