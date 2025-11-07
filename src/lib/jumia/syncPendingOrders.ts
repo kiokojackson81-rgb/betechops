@@ -122,6 +122,23 @@ export async function syncAllAccountsPendingOrders() {
 
     const whereShops: any = { accountId: account.id };
     if (remoteIds.size) whereShops.id = { in: Array.from(remoteIds) };
+
+    if (remoteIds.size) {
+      try {
+        const pruned = await prisma.jumiaShop.deleteMany({
+          where: {
+            accountId: account.id,
+            id: { notIn: Array.from(remoteIds) },
+          },
+        });
+        if (pruned.count) {
+          console.log(`[jumia.sync] pruned ${pruned.count} stale jumiaShop rows for account=${account.id}`);
+        }
+      } catch (err) {
+        console.warn(`[jumia.sync] failed pruning stale shops for account=${account.id}`, err);
+      }
+    }
+
     const dbShops = await prisma.jumiaShop.findMany({
       where: whereShops,
       select: { id: true },
