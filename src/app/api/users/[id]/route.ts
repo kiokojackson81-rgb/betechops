@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { AttendantCategory, Role } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
-import { categoryValues, sanitizeCategories, syncUserCategories, shapeUser } from "../route";
+import { categoryValues, sanitizeCategories, syncUserCategories, shapeUser } from "../utils";
 
 export async function PATCH(request: Request) {
   const auth = await requireRole("ADMIN");
