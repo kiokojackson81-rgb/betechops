@@ -5,11 +5,12 @@ import { AttendantCategory, Role } from "@prisma/client";
 
 const categoryValues = new Set(Object.values(AttendantCategory));
 
-export async function PATCH(request: Request, context: { params?: { id?: string } }) {
+export async function PATCH(request: Request) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
 
-  const id = context?.params?.id;
+  const pathname = new URL(request.url).pathname;
+  const id = pathname.substring(pathname.lastIndexOf("/") + 1);
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
   const body = (await request.json().catch(() => ({}))) as {
