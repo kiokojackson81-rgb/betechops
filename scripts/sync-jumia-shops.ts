@@ -1,10 +1,21 @@
 import "dotenv/config";
 import crypto from "crypto";
 import { PrismaClient, Platform, Prisma } from "@prisma/client";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
 
 const prisma = new PrismaClient();
 
-type SyncResult = { shopName: string; action: "created" | "updated" | "skipped-no-credentials" | "skipped-inactive"; shopId?: string };
+type SyncResult = { shopName: string; action: "created" | "updated" | "skipped-no-credentials"; shopId?: string };
+
+const FALLBACK_FILENAMES = [
+  "shops.secrets.json",
+  "shops.local.json",
+  "shops.json",
+  "shops.example.json",
+];
+
+type SeedLike = { name?: string; shopLabel?: string };
 
 function resolveApiBase() {
   return (
@@ -40,6 +51,38 @@ function maybeEncrypt(obj: unknown): Prisma.InputJsonValue {
   } catch {
     return obj as any;
   }
+}
+
+function resolveSeedFile(fileArg?: string): string | null {
+  const candidates = fileArg ? [fileArg, ...FALLBACK_FILENAMES] : FALLBACK_FILENAMES;
+  return candidates.map((candidate) => path.resolve(process.cwd(), candidate)).find((p) => existsSync(p)) ?? null;
+}
+
+function loadSeeds(fileArg?: string): SeedLike[] {
+  const file = resolveSeedFile(fileArg);
+  if (!file) {
+    throw new Error(
+      `No shop seed file found. Provide a path argument or create one of: ${FALLBACK_FILENAMES.join(", ")}`
+    );
+  }
+  const text = readFileSync(file, "utf-8");
+  const json = JSON.parse(text);
+  if (Array.isArray(json)) return json as SeedLike[];
+  if (Array.isArray(json.shops)) return json.shops as SeedLike[];
+  return [json as SeedLike];
+}
+
+function loadAllowedNames(fileArg?: string): string[] {
+  const seeds = loadSeeds(fileArg);
+  const names = new Set<string>();
+  for (const seed of seeds) {
+    if (typeof seed.name === "string" && seed.name.trim()) names.add(seed.name.trim());
+    if (typeof seed.shopLabel === "string" && seed.shopLabel.trim()) names.add(seed.shopLabel.trim());
+  }
+  if (!names.size) {
+    throw new Error("No shop names discovered in seed file; cannot prune.");
+  }
+  return Array.from(names);
 }
 
 async function syncOne(shop: { id: string; name: string; account: { id: string; clientId: string; refreshToken: string } | null }): Promise<SyncResult> {
@@ -79,10 +122,55 @@ async function syncOne(shop: { id: string; name: string; account: { id: string; 
 }
 
 async function main() {
-  const jumiaShops = await prisma.jumiaShop.findMany({
+  const args = process.argv.slice(2);
+  const prune = args.includes("--prune");
+  const fileArg = args.find((arg) => !arg.startsWith("--"));
+
+  let allowedLower: Set<string> | null = null;
+  if (prune) {
+    const allowedNames = loadAllowedNames(fileArg);
+    allowedLower = new Set(allowedNames.map((name) => name.toLowerCase()));
+    const existingShops = await prisma.shop.findMany({
+      where: { platform: Platform.JUMIA },
+      select: { id: true, name: true },
+    });
+    const toDelete = existingShops.filter((shop) => !allowedLower!.has(shop.name.toLowerCase()));
+    if (toDelete.length) {
+      console.log(`Removing ${toDelete.length} non-production shops from Shop table...`);
+      await prisma.shop.deleteMany({ where: { id: { in: toDelete.map((s) => s.id) } } });
+    } else {
+      console.log("No extra JUMIA shops found in Shop table.");
+    }
+  }
+
+  let jumiaShops = await prisma.jumiaShop.findMany({
     orderBy: { createdAt: "asc" },
     include: { account: true },
   });
+
+  if (allowedLower) {
+    const extraJumia = jumiaShops.filter((shop) => !allowedLower!.has(shop.name.toLowerCase()));
+    if (extraJumia.length) {
+      console.log(`Attempting to delete ${extraJumia.length} legacy JumiaShop rows...`);
+      for (const legacy of extraJumia) {
+        try {
+          await prisma.jumiaShop.delete({ where: { id: legacy.id } });
+          console.log(`DELETED legacy JumiaShop ${legacy.name}`);
+        } catch (error) {
+          console.warn(
+            `Could not delete legacy JumiaShop ${legacy.name} (likely referenced by orders):`,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
+    }
+    const before = jumiaShops.length;
+    jumiaShops = jumiaShops.filter((shop) => allowedLower!.has(shop.name.toLowerCase()));
+    const skipped = before - jumiaShops.length;
+    if (skipped > 0) {
+      console.log(`Skipping ${skipped} legacy JumiaShop records not in allow list.`);
+    }
+  }
 
   if (!jumiaShops.length) {
     console.log("No legacy JumiaShop records found.");
