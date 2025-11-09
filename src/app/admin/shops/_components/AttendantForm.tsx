@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 import { useShopsActionsSafe } from './ShopsActionsContext';
+import { attendantCategoryOptions } from '@/lib/attendants/categories';
 
 type AttendantProps = {
   shops: { id: string; name: string }[];
@@ -13,6 +14,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
   const [roleAtShop, setRoleAtShop] = useState('ATTENDANT');
+  const [category, setCategory] = useState('GENERAL');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const actions = useShopsActionsSafe();
@@ -21,7 +23,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
-      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name }) });
+      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name, category }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'failed');
       const user = j.user;
@@ -31,7 +33,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
         if (!r2.ok) throw new Error(j2?.error || 'assign failed');
       }
       // Notify the user and let a parent update the UI in-place if available.
-      setEmail(''); setName(''); setShopId('');
+      setEmail(''); setName(''); setShopId(''); setCategory('GENERAL');
       showToast('Attendant created', 'success');
   // Notify parent via context if available (provider optional).
   actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
@@ -50,6 +52,14 @@ export default function AttendantForm({ shops }: AttendantProps) {
       <div>
         <label className="block">Name</label>
         <input value={name} onChange={e=>setName(e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label className="block">Category</label>
+        <select value={category} onChange={e=>setCategory(e.target.value)} className="border p-1">
+          {attendantCategoryOptions.map(opt => (
+            <option key={opt.id} value={opt.id}>{opt.label}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block">Assign to shop (optional)</label>

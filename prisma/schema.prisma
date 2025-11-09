@@ -16,6 +16,15 @@ enum Role {
   ATTENDANT
 }
 
+enum AttendantCategory {
+  GENERAL
+  DIRECT_SALES
+  JUMIA_OPERATIONS
+  KILIMALL_OPERATIONS
+  PRODUCT_UPLOAD
+  SUPPORT
+}
+
 enum Platform {
   JUMIA
   KILIMALL
@@ -73,6 +82,7 @@ model User {
   image     String?
   role      Role     @default(ATTENDANT)
   isActive  Boolean  @default(true)
+  attendantCategory AttendantCategory @default(GENERAL)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -89,11 +99,29 @@ model User {
   returnPickups ReturnPickup[] @relation("PickupAssignee")
   evidenceTaken ReturnEvidence[] @relation("EvidenceTaker")
   actionLogs ActionLog[]
+  activities AttendantActivity[]
   
   // per-shop assignments
   userShops UserShop[]
   // Shop assignments (supervisor/attendant)
   assignments ShopAssignment[]
+}
+
+model AttendantActivity {
+  id            String            @id @default(cuid())
+  userId        String
+  category      AttendantCategory
+  metric        String
+  numericValue  Decimal?          @db.Decimal(18, 2)
+  intValue      Int?
+  notes         String?
+  entryDate     DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+
+  user          User              @relation(fields: [userId], references: [id])
+
+  @@index([userId, entryDate])
+  @@index([category, metric, entryDate])
 }
 
 model Shop {

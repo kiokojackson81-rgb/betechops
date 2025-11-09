@@ -24,7 +24,7 @@ export const authOptions = {
           await prisma.user.upsert({
             where: { email },
             update: { role: "ADMIN", isActive: true },
-            create: { email, name: user.name ?? "Admin", image: user.image ?? "", role: "ADMIN", isActive: true },
+            create: { email, name: user.name ?? "Admin", image: user.image ?? "", role: "ADMIN", attendantCategory: "GENERAL", isActive: true },
           });
           return true;
         }
@@ -33,7 +33,7 @@ export const authOptions = {
         await prisma.user.upsert({
           where: { email },
           update: { role: "ATTENDANT", isActive: true },
-          create: { email, name: user.name ?? email.split("@")[0], image: user.image ?? "", role: "ATTENDANT", isActive: true },
+          create: { email, name: user.name ?? email.split("@")[0], image: user.image ?? "", role: "ATTENDANT", attendantCategory: "GENERAL", isActive: true },
         });
         return true;
       } catch {

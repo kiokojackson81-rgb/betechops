@@ -9,17 +9,45 @@ async function main() {
     shop = await prisma.shop.create({ data: { name: "Main Shop", location: "Nairobi CBD", phone: "+254722151083", email: "shop@betech.co.ke" } });
   }
 
-  // Create User as an attendant
-  const attendant = await prisma.user.upsert({
-    where: { email: "attendant@betech.co.ke" },
-    update: {},
-    create: {
+  // Create baseline attendants with categories to showcase dashboards
+  const attendants = [
+    {
       email: "attendant@betech.co.ke",
       name: "Default Attendant",
-      role: "ATTENDANT",
-      isActive: true,
+      category: "GENERAL",
     },
-  });
+    {
+      email: "sales@betech.co.ke",
+      name: "Direct Sales Lead",
+      category: "DIRECT_SALES",
+    },
+    {
+      email: "jumia.ops@betech.co.ke",
+      name: "Jumia Ops Specialist",
+      category: "JUMIA_OPERATIONS",
+    },
+    {
+      email: "catalog@betech.co.ke",
+      name: "Catalog Uploader",
+      category: "PRODUCT_UPLOAD",
+    },
+  ] as const;
+
+  const attendantRecords = await Promise.all(
+    attendants.map((att) =>
+      prisma.user.upsert({
+        where: { email: att.email },
+        update: { attendantCategory: att.category, isActive: true },
+        create: {
+          email: att.email,
+          name: att.name,
+          role: "ATTENDANT",
+          attendantCategory: att.category,
+          isActive: true,
+        },
+      })
+    )
+  );
 
   // Create Product
   const product = await prisma.product.upsert({
@@ -35,7 +63,54 @@ async function main() {
     },
   });
 
-  console.log({ shop, attendant, product });
+  console.log({ shop, attendants: attendantRecords.map((a) => ({ email: a.email, category: a.attendantCategory })), product });
+
+  // Seed sample activity logs so dashboards are populated
+  try {
+    const [directSales, jumiaOps, catalog] = [
+      attendantRecords.find((a) => a.email === "sales@betech.co.ke"),
+      attendantRecords.find((a) => a.email === "jumia.ops@betech.co.ke"),
+      attendantRecords.find((a) => a.email === "catalog@betech.co.ke"),
+    ];
+
+    if (directSales) {
+      await prisma.attendantActivity.create({
+        data: {
+          userId: directSales.id,
+          category: "DIRECT_SALES",
+          metric: "DAILY_SALES",
+          numericValue: 18500,
+          notes: "Walk-ins and MPESA collections",
+        },
+      });
+    }
+
+    if (jumiaOps) {
+      await prisma.attendantActivity.create({
+        data: {
+          userId: jumiaOps.id,
+          category: "JUMIA_OPERATIONS",
+          metric: "ORDER_PROCESSING",
+          intValue: 24,
+          notes: "Orders confirmed and packed today",
+        },
+      });
+    }
+
+    if (catalog) {
+      await prisma.attendantActivity.create({
+        data: {
+          userId: catalog.id,
+          category: "PRODUCT_UPLOAD",
+          metric: "PRODUCT_UPLOADS",
+          intValue: 18,
+          notes: "Inverters & batteries batch upload",
+        },
+      });
+    }
+  } catch (activityError) {
+    console.warn("activity seeding skipped:", activityError instanceof Error ? activityError.message : activityError);
+  }
 
   // Ensure JM (Jumia) shop exists and create per-shop ApiCredential linking to env values
   try {
