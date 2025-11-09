@@ -566,8 +566,33 @@ export async function loadDefaultShopAuth(): Promise<ShopAuthJson | undefined> {
   if (process.env.NODE_ENV === 'test') return undefined;
   try {
     const shop = await prisma.shop.findFirst({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
-    if (!shop) return undefined;
-    return await loadShopAuthById(shop.id);
+    if (shop) {
+      const auth = await loadShopAuthById(shop.id);
+      if (auth) return auth;
+    }
+    // Fallback to first Jumia account when legacy Shop records are not populated
+    const jShop = await prisma.jumiaShop.findFirst({
+      orderBy: { createdAt: 'asc' },
+      include: { account: true },
+    });
+    if (jShop?.account) {
+      const baseFromEnv =
+        process.env.base_url ||
+        process.env.BASE_URL ||
+        process.env.JUMIA_API_BASE ||
+        'https://vendor-api.jumia.com';
+      const tokenUrlFromEnv =
+        process.env.OIDC_TOKEN_URL ||
+        process.env.JUMIA_OIDC_TOKEN_URL ||
+        `${new URL(baseFromEnv).origin}/token`;
+      return {
+        platform: 'JUMIA',
+        clientId: jShop.account.clientId,
+        refreshToken: jShop.account.refreshToken,
+        tokenUrl: tokenUrlFromEnv,
+        apiBase: baseFromEnv,
+      } as ShopAuthJson & { apiBase?: string };
+    }
   } catch {
     return undefined;
   }
