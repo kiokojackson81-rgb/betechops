@@ -9,7 +9,7 @@ import Shortcuts from "./_components/Shortcuts";
 import Announcement from "./_components/Announcement";
 import DailySalesCard from "./_components/DailySalesCard";
 import ProductUploadsCard from "./_components/ProductUploadsCard";
-import { getCategoryDefinition } from "@/lib/attendants/categories";
+import { attendantCategoryById } from "@/lib/attendants/categories";
 import type { AttendantCategory } from "@prisma/client";
 
 type ProfileResponse = {
@@ -19,6 +19,7 @@ type ProfileResponse = {
     email: string;
     role: string;
     attendantCategory: AttendantCategory;
+    categories?: AttendantCategory[];
   };
 };
 
@@ -108,24 +109,48 @@ export default function AttendantDashboard() {
     }
   }
 
-  const def = getCategoryDefinition(profile?.attendantCategory);
+  const categoryOrder = useMemo<AttendantCategory[]>(() => {
+    const fallback = profile?.attendantCategory ?? "GENERAL";
+    const raw = profile?.categories ?? [];
+    const ordered = [fallback, ...raw].filter(Boolean) as AttendantCategory[];
+    return Array.from(new Set(ordered)) as AttendantCategory[];
+  }, [profile?.attendantCategory, profile?.categories]);
+
+  const definitions = useMemo(() => {
+    if (categoryOrder.length) {
+      return categoryOrder.map((cat) => attendantCategoryById[cat] ?? attendantCategoryById.GENERAL);
+    }
+    return [attendantCategoryById.GENERAL];
+  }, [categoryOrder]);
 
   const widgets = useMemo(() => {
-    const nodes = def.defaultWidgets
+    const widgetSequence: string[] = [];
+    for (const def of definitions) {
+      for (const widget of def.defaultWidgets) {
+        if (!widgetSequence.includes(widget)) widgetSequence.push(widget);
+      }
+    }
+
+    const nodes = widgetSequence
       .map((id) => ({ id, node: renderWidget(id, shopId) }))
       .filter((item) => Boolean(item.node));
     const primary = nodes.filter((n) => PRIMARY_WIDGETS.has(n.id));
     const secondary = nodes.filter((n) => !PRIMARY_WIDGETS.has(n.id));
     return { primary, secondary };
-  }, [def.defaultWidgets, shopId]);
+  }, [definitions, shopId]);
 
   return (
     <div className="mx-auto max-w-7xl p-6 text-slate-100">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Attendant Dashboard</h1>
-          <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest text-slate-300">
-            Category <span className="font-semibold text-white">{def.label}</span>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs uppercase tracking-widest text-slate-300">
+            {definitions.map((def, idx) => (
+              <span key={def.id} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1">
+                <span className="font-semibold text-white">{def.label}</span>
+                {idx === 0 ? <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-200">Primary</span> : null}
+              </span>
+            ))}
           </div>
         </div>
 

@@ -16,9 +16,11 @@ export async function GET() {
       role: true,
       attendantCategory: true,
       isActive: true,
+      categoryAssignments: { select: { category: true } },
     },
   });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ user });
+  const { categoryAssignments, ...rest } = user;
+  return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) } });
 }

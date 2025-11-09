@@ -100,6 +100,7 @@ model User {
   evidenceTaken ReturnEvidence[] @relation("EvidenceTaker")
   actionLogs ActionLog[]
   activities AttendantActivity[]
+  categoryAssignments AttendantCategoryAssignment[]
   
   // per-shop assignments
   userShops UserShop[]
@@ -546,6 +547,18 @@ model ShopAssignment {
   shop Shop @relation(fields: [shopId], references: [id])
 
   @@unique([userId, shopId, role])
+}
+
+model AttendantCategoryAssignment {
+  id         String            @id @default(cuid())
+  userId     String
+  category   AttendantCategory
+  assignedAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([category])
 }
 
 model ProductCost {

@@ -12,6 +12,7 @@ type AttendantLite = {
   attendantCategory: string;
   isActive: boolean;
   createdAt: string;
+  categories: string[];
 };
 
 const categoryFilters = [{ id: "ALL", label: "All categories" }, ...attendantCategoryOptions];
@@ -29,33 +30,45 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
 
   const summary = useMemo(() => {
     return rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.attendantCategory] = (acc[row.attendantCategory] || 0) + 1;
+      for (const cat of row.categories) {
+        acc[cat] = (acc[cat] || 0) + 1;
+      }
       return acc;
     }, {});
   }, [rows]);
 
   const filtered = useMemo(() => {
     if (filter === "ALL") return rows;
-    return rows.filter((row) => row.attendantCategory === filter);
+    return rows.filter((row) => row.categories.includes(filter));
   }, [filter, rows]);
 
-  async function updateCategory(id: string, attendantCategory: string) {
+  async function updateCategories(id: string, categories: string[]) {
+    if (!categories.length) {
+      showToast("Select at least one category", "error");
+      return;
+    }
+
     setBusy(id);
     const previous = rows.map((row) => ({ ...row }));
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, attendantCategory } : row)));
+    const primary = categories[0];
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, categories: categories.slice(), attendantCategory: primary } : row
+      )
+    );
 
     const res = await fetch(`/api/users/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attendantCategory }),
+      body: JSON.stringify({ categories, attendantCategory: primary }),
     });
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      showToast(json?.error || "Failed to update category", "error");
+      showToast(json?.error || "Failed to update categories", "error");
       setRows(previous);
     } else {
-      showToast("Attendant category updated", "success");
+      showToast("Attendant categories updated", "success");
     }
     setBusy(null);
   }
@@ -65,7 +78,6 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
       <section>
         <div className="flex flex-wrap gap-3">
           {categoryFilters.map((cat) => {
-            const def = attendantCategories.find((c) => c.id === cat.id);
             const count = cat.id === "ALL" ? rows.length : summary[cat.id] || 0;
             return (
               <button
@@ -89,36 +101,59 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">Category</th>
+              <th className="px-4 py-3 font-medium">Categories</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Created</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5 bg-[#0f141f] text-slate-200">
             {filtered.map((row) => {
-              const def = attendantCategories.find((c) => c.id === row.attendantCategory);
+              const activeDefs = row.categories
+                .map((cat) => attendantCategories.find((c) => c.id === cat))
+                .filter(Boolean);
               return (
                 <tr key={row.id} className="hover:bg-white/5">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-white">{row.name || "—"}</div>
+                    <div className="font-medium text-white">{row.name || "-"}</div>
                   </td>
                   <td className="px-4 py-3 text-slate-300">{row.email}</td>
                   <td className="px-4 py-3">{row.role}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-2">
-                      <select
-                        className="rounded border border-white/10 bg-transparent px-2 py-1 text-sm"
-                        value={row.attendantCategory}
-                        onChange={(e) => updateCategory(row.id, e.target.value)}
-                        disabled={busy === row.id}
-                      >
-                        {attendantCategoryOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
-                          </option>
+                      <div className="flex flex-wrap gap-2">
+                        {attendantCategoryOptions.map((opt) => {
+                          const checked = row.categories.includes(opt.id);
+                          return (
+                            <label key={opt.id} className="flex items-center gap-2 text-xs text-slate-300">
+                              <input
+                                type="checkbox"
+                                className="rounded border border-white/20 bg-transparent"
+                                checked={checked}
+                                disabled={busy === row.id}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? Array.from(new Set([...row.categories, opt.id]))
+                                    : row.categories.filter((c) => c !== opt.id);
+                                  if (!next.length) {
+                                    showToast("Attendant must have at least one category", "error");
+                                    return;
+                                  }
+                                  updateCategories(row.id, next);
+                                }}
+                              />
+                              <span>{opt.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {activeDefs.map((def, idx) => (
+                          <span key={def!.id} className="mr-2">
+                            <span className="font-medium text-white">{def!.label}</span>
+                            {idx === 0 ? <span className="ml-1 text-emerald-300">(primary)</span> : null}
+                          </span>
                         ))}
-                      </select>
-                      {def ? <p className="text-xs text-slate-400">{def.description}</p> : null}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">

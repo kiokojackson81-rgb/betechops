@@ -8,6 +8,7 @@ type UploadActivity = {
   intValue?: number | null;
   entryDate: string;
   notes?: string | null;
+  category?: string | null;
 };
 
 function formatDate(input: string) {
@@ -52,6 +53,7 @@ export default function ProductUploadsCard() {
           metric: "PRODUCT_UPLOADS",
           intValue: value,
           notes: notes.trim() ? notes.trim() : undefined,
+          category: "PRODUCT_UPLOAD",
         }),
       });
       if (!res.ok) {

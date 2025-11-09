@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import type { AttendantCategory } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -14,39 +15,56 @@ async function main() {
     {
       email: "attendant@betech.co.ke",
       name: "Default Attendant",
-      category: "GENERAL",
+      categories: ["GENERAL"],
     },
     {
       email: "sales@betech.co.ke",
       name: "Direct Sales Lead",
-      category: "DIRECT_SALES",
+      categories: ["GENERAL", "DIRECT_SALES"],
     },
     {
       email: "jumia.ops@betech.co.ke",
       name: "Jumia Ops Specialist",
-      category: "JUMIA_OPERATIONS",
+      categories: ["JUMIA_OPERATIONS"],
     },
     {
       email: "catalog@betech.co.ke",
       name: "Catalog Uploader",
-      category: "PRODUCT_UPLOAD",
+      categories: ["PRODUCT_UPLOAD"],
     },
   ] as const;
 
   const attendantRecords = await Promise.all(
-    attendants.map((att) =>
-      prisma.user.upsert({
+    attendants.map(async (att) => {
+      const primary = att.categories[0] ?? "GENERAL";
+      const user = await prisma.user.upsert({
         where: { email: att.email },
-        update: { attendantCategory: att.category, isActive: true },
+        update: { attendantCategory: primary, isActive: true },
         create: {
           email: att.email,
           name: att.name,
           role: "ATTENDANT",
-          attendantCategory: att.category,
+          attendantCategory: primary,
           isActive: true,
         },
-      })
-    )
+      });
+
+      const desired = Array.from(new Set(att.categories)) as AttendantCategory[];
+      await prisma.attendantCategoryAssignment.deleteMany({
+        where: { userId: user.id, category: { notIn: desired as AttendantCategory[] } },
+      });
+      await Promise.all(
+        desired.map((category) =>
+          prisma.attendantCategoryAssignment.upsert({
+            where: { userId_category: { userId: user.id, category: category as AttendantCategory } },
+            update: {},
+            create: { userId: user.id, category: category as AttendantCategory },
+          })
+        )
+      );
+
+      return user;
+    })
   );
 
   // Create Product
@@ -63,7 +81,14 @@ async function main() {
     },
   });
 
-  console.log({ shop, attendants: attendantRecords.map((a) => ({ email: a.email, category: a.attendantCategory })), product });
+  console.log({
+    shop,
+    attendants: attendantRecords.map((a) => ({
+      email: a.email,
+      primaryCategory: a.attendantCategory,
+    })),
+    product,
+  });
 
   // Seed sample activity logs so dashboards are populated
   try {

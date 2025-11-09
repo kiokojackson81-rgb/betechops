@@ -8,6 +8,7 @@ type Activity = {
   numericValue?: string | number | null;
   entryDate: string;
   notes?: string | null;
+  category?: string | null;
 };
 
 function formatMoney(value: number) {
@@ -56,6 +57,7 @@ export default function DailySalesCard() {
           metric: "DAILY_SALES",
           numericValue: value,
           notes: notes.trim() ? notes.trim() : undefined,
+          category: "DIRECT_SALES",
         }),
       });
 

@@ -5,7 +5,7 @@ function formatDateRange(start: Date, days: number) {
   const end = new Date();
   const startStr = start.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const endStr = end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `${startStr} → ${endStr} (${days} days)`;
+  return `${startStr} - ${endStr} (${days} days)`;
 }
 
 function formatCurrency(value: number) {
@@ -87,3 +87,5 @@ export default async function ReportsPage() {
     </div>
   );
 }
+
+

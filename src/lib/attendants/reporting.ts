@@ -16,16 +16,24 @@ export async function getAttendantCategorySummary(days: number) {
   const since = new Date();
   since.setDate(since.getDate() - rangeDays + 1);
 
-  const [activityAgg, userCounts, jumiaOrders, kilimallOrders] = await Promise.all([
+  const [activityAgg, assignmentCounts, fallbackUsers, jumiaOrders, kilimallOrders] = await Promise.all([
     prisma.attendantActivity.groupBy({
       by: ["category", "metric"],
       where: { entryDate: { gte: since } },
       _sum: { numericValue: true, intValue: true },
     }),
-    prisma.user.groupBy({
-      by: ["attendantCategory"],
-      _count: true,
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] }, isActive: true },
+    prisma.attendantCategoryAssignment.groupBy({
+      by: ["category"],
+      where: { user: { role: { in: ["ATTENDANT", "SUPERVISOR"] }, isActive: true } },
+      _count: { _all: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        role: { in: ["ATTENDANT", "SUPERVISOR"] },
+        isActive: true,
+        categoryAssignments: { none: {} },
+      },
+      select: { attendantCategory: true },
     }),
     prisma.order.groupBy({
       by: ["status"],
@@ -44,10 +52,16 @@ export async function getAttendantCategorySummary(days: number) {
     return acc;
   }, {} as TotalsByCategory);
 
-  for (const row of userCounts) {
-    const cat = row.attendantCategory as AttendantCategory;
+  for (const row of assignmentCounts) {
+    const cat = row.category as AttendantCategory;
     if (!totalsByCategory[cat]) totalsByCategory[cat] = { users: 0, metrics: {} };
-    totalsByCategory[cat].users = row._count;
+    totalsByCategory[cat].users += row._count._all;
+  }
+
+  for (const user of fallbackUsers) {
+    const cat = user.attendantCategory as AttendantCategory;
+    if (!totalsByCategory[cat]) totalsByCategory[cat] = { users: 0, metrics: {} };
+    totalsByCategory[cat].users += 1;
   }
 
   for (const agg of activityAgg) {
