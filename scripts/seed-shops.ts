@@ -32,10 +32,24 @@ function maybeEncrypt(obj: unknown): Prisma.InputJsonValue {
   }
 }
 
+const FALLBACK_FILENAMES = [
+  "shops.json",
+  "shops.secrets.json",
+  "shops.local.json",
+  "shops.example.json",
+];
+
 function loadSeeds(fileArg?: string): ShopSeed[] {
-  const defaultPath = path.resolve(process.cwd(), fileArg || "shops.json");
-  const fallbackPath = path.resolve(process.cwd(), "shops.example.json");
-  const file = existsSync(defaultPath) ? defaultPath : fallbackPath;
+  const candidates = fileArg ? [fileArg, ...FALLBACK_FILENAMES] : FALLBACK_FILENAMES;
+  const file = candidates
+    .map((candidate) => path.resolve(process.cwd(), candidate))
+    .find((p) => existsSync(p));
+  if (!file) {
+    throw new Error(
+      `No shop seed file found. Provide a path argument or create one of: ${FALLBACK_FILENAMES.join(", ")}`
+    );
+  }
+  console.log(`Using shop seed file: ${file}`);
   const text = readFileSync(file, "utf-8");
   const json = JSON.parse(text);
   if (Array.isArray(json)) return json as ShopSeed[];
