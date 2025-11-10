@@ -1,4 +1,5 @@
 import React from 'react';
+import { absUrl } from '@/lib/abs-url';
 import ApiCredentialsManager from './_components/ApiCredentialsManager';
 import AdminShopsClient from './_components/AdminShopsClient';
 import { prisma } from '@/lib/prisma';
@@ -35,6 +36,22 @@ export default async function Page() {
         </div>
       </div>
     );
+  }
+
+  // Server-side fallback: if no shops returned (fresh prod DB, stale ISR), try API fetch
+  if (!shops || shops.length === 0) {
+    try {
+      const url = await absUrl('/api/shops');
+      const r = await fetch(url, { cache: 'no-store' });
+      if (r.ok) {
+        const list = await r.json();
+        if (Array.isArray(list) && list.length) {
+          shops = list.map((s: any) => ({ id: String(s.id), name: String(s.name ?? ''), platform: s.platform ?? undefined }));
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   return (
