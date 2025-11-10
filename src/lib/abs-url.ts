@@ -9,8 +9,21 @@ export async function absUrl(path: string): Promise<string> {
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "https";
   const host = h.get("x-forwarded-host") ?? h.get("host");
-  if (!host) throw new Error("Cannot determine host for server-side fetch");
-  return `${proto}://${host}${path.startsWith("/") ? path : `/${path}`}`;
+  // Fail-open: if host is unavailable (some SSR/edge contexts), try env fallbacks then return a relative URL.
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (!host) {
+    const envBase =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+      null;
+    if (envBase && /^(http|https):\/\//i.test(envBase)) {
+      return `${envBase}${normalizedPath}`;
+    }
+    // As a last resort, return a relative path. Next.js fetch in Server Components supports relative URLs.
+    return normalizedPath;
+  }
+  return `${proto}://${host}${normalizedPath}`;
 }
 
 /** Append search params only when present (avoids trailing '?') */
