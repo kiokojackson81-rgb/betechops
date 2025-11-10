@@ -252,17 +252,21 @@ export default async function OrdersPage(props: unknown) {
     const shouldIgnoreZeroKpi = kpisPendingCount === 0 && rows.length > 0;
 
     if (!shouldIgnoreZeroKpi && diff > tolerance) {
+      // Divergence detected: fall back to live refresh but KEEP snapshot rows visible until live data arrives.
       showingSynced = false;
-      syncFallbackMessage = `Cached snapshot diverges from vendor by ${diff} (${rows.length} vs ${kpisPendingCount}). Showing live data until sync catches up.`;
-      rows = [];
+      syncFallbackMessage = `Cached snapshot diverges from vendor by ${diff} (${rows.length} vs ${kpisPendingCount}). Displaying snapshot while refreshing live data.`;
+      // Do not clear rows here; client will replace them once live fetch succeeds.
       nextToken = null;
       isLastPage = false;
     }
   }
 
   // Defer live remote fetch to the client for faster initial paint when not using cached PENDING
+  const preserveRows = !showingSynced && prefersSynced && isPendingView && rows.length > 0;
   if (!showingSynced) {
-    rows = [];
+    if (!preserveRows) {
+      rows = [];
+    }
     nextToken = null;
     isLastPage = false;
   }
