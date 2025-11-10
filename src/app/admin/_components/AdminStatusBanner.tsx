@@ -21,7 +21,9 @@ export default async function AdminStatusBanner() {
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const origin = host ? `${proto}://${host}` : "";
   try {
-    const r = await fetch(`${origin}/api/health`, { cache: "no-store" });
+    const base = origin || process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+    const url = `${base || ''}/api/health`.replace(/([^:]\/)\/+/g, '$1/');
+    const r = await fetch(url, { cache: "no-store" });
     if (r.ok) health = (await r.json()) as Health;
   } catch {
     // ignore

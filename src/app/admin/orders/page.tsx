@@ -191,11 +191,19 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  const legacyShopsPromise = prisma.shop.findMany({
-    where: { isActive: true, platform: 'JUMIA' },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
+  // Shield legacy shops query so a schema/migration issue doesn't take down the whole page
+  const legacyShopsPromise = (async () => {
+    try {
+      return await prisma.shop.findMany({
+        where: { isActive: true, platform: 'JUMIA' },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+    } catch (e) {
+      console.error('[orders.page] legacy shops query failed', e);
+      return [] as Array<{ id: string; name: string }>;
+    }
+  })();
 
   let syncedShops: Array<{ id: string; name: string; account: { label: string | null } | null }> = [];
   let syncBootstrapError: unknown = null;

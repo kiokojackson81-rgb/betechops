@@ -20,8 +20,9 @@ export async function absUrl(path: string): Promise<string> {
     if (envBase && /^(http|https):\/\//i.test(envBase)) {
       return `${envBase}${normalizedPath}`;
     }
-    // As a last resort, return a relative path. Next.js fetch in Server Components supports relative URLs.
-    return normalizedPath;
+    // Last resorts: try localhost absolute URL to keep fetch happy (relative may throw in some runtimes)
+    const localhost = process.env.LOCALHOST_FALLBACK_BASE || 'http://localhost:3000';
+    return `${localhost}${normalizedPath}`;
   }
   return `${proto}://${host}${normalizedPath}`;
 }
