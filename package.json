@@ -30,7 +30,9 @@
   "set:default-providers": "ts-node --esm --transpile-only scripts/set-default-providers.ts",
   "list:shops": "ts-node --esm --transpile-only scripts/list-shops.ts",
     "shops:export": "ts-node --esm --transpile-only scripts/export-shops.ts",
-    "set:default-providers:ids": "ts-node --esm --transpile-only scripts/set-default-providers-by-id.ts"
+    "set:default-providers:ids": "ts-node --esm --transpile-only scripts/set-default-providers-by-id.ts",
+    "dedupe:shops": "ts-node --esm --transpile-only scripts/dedupe-shops.ts shops.secrets.json",
+    "fix:duplicate-betech-store": "ts-node --esm --transpile-only scripts/remove-duplicate-betech-store.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
