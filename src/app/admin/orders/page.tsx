@@ -136,7 +136,8 @@ export default async function OrdersPage(props: unknown) {
 
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
   params.status = normalizedStatus;
-  const prefersSynced = isSyncedStatus(normalizedStatus);
+  const FORCE_DB = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase() === "true";
+  const prefersSynced = FORCE_DB || isSyncedStatus(normalizedStatus);
   const isPendingView = normalizedStatus === 'PENDING';
   const statusDisplay = normalizedStatus.replace(/_/g, ' ');
   const statusHeadline = statusDisplay
@@ -231,7 +232,8 @@ export default async function OrdersPage(props: unknown) {
   let rows: OrdersRow[] = [];
   let nextToken: string | null = null;
   let isLastPage = true;
-  let showingSynced = prefersSynced && !syncBootstrapError;
+  // In DB-only mode, always show synced (database) even if the account directory lookup fails
+  let showingSynced = (prefersSynced && !syncBootstrapError) || FORCE_DB;
   let syncFallbackMessage: string | null = syncBootstrapError
     ? `Cached ${statusMessageLower} orders are not initialized yet. Showing live data until the next sync completes.`
     : null;
@@ -253,7 +255,7 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  if (prefersSynced && showingSynced && isPendingView && kpisPendingCount !== null) {
+  if (!FORCE_DB && prefersSynced && showingSynced && isPendingView && kpisPendingCount !== null) {
     const diff = Math.abs(kpisPendingCount - rows.length);
     const sample = Math.max(1, Math.min(kpisPendingCount, rows.length));
     const tolerance = Math.max(10, Math.ceil(sample * 0.15));

@@ -18,6 +18,10 @@ export function normalizeStatus(value?: string | null): string | undefined {
 
 export function isSyncedStatus(value?: string | null): value is SyncedStatus {
   const normalized = normalizeStatus(value);
+  // When forcing DB-backed orders, treat every status as synced so UI uses cached DB path.
+  if (String(process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || process.env.ORDERS_FORCE_DB || "").toLowerCase() === "true") {
+    return true as any;
+  }
   return normalized ? SYNCED_STATUS_SET.has(normalized) : false;
 }
 

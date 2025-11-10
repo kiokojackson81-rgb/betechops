@@ -92,8 +92,10 @@ export async function GET(request: Request) {
     let pendingSource: 'db' | 'snapshot' | 'snapshot-partial' | 'live' = 'db';
     try {
       const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
+      const forceDb = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || '').toLowerCase() === 'true';
+      const liveDisabledEffective = liveDisabled || forceDb;
       const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
-      const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
+      const allowLive = (!noLive && !liveDisabledEffective) || (isStale && !liveDisabledEffective);
       if (allowLive) {
         const snapshotMaxAgeMs = Math.max(30_000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60_000));
         const snapshotCandidate = await readPendingSnapshot().catch(() => null);
@@ -112,7 +114,7 @@ export async function GET(request: Request) {
           usedSnapshot = true;
         }
 
-        if (!usedSnapshot) {
+  if (!usedSnapshot) {
           const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
           const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
           const start = Date.now();
