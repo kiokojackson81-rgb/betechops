@@ -20,6 +20,7 @@ function formatTs(value?: string | null): string | null {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Africa/Nairobi",
     }).format(date);
   } catch {
     return date.toISOString();
@@ -65,4 +66,3 @@ export default function SyncedShopsList({ shops }: { shops: SyncedShop[] }) {
     </div>
   );
 }
-

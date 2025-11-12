@@ -30,7 +30,8 @@ export default function OrdersLiveData({
   const [rows, setRows] = useState<OrdersRow[]>(initialRows ?? []);
   const [nextToken, setNextToken] = useState<string | null>(initialNextToken ?? null);
   const [isLastPage, setIsLastPage] = useState<boolean>(initialIsLastPage ?? true);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now());
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(() => Date.now());
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string>('—');
   const busyRef = useRef<Promise<void> | null>(null);
   const lastFetchTsRef = useRef<number>(0);
   const MIN_INTERVAL_MS = 2500;
@@ -116,6 +117,16 @@ export default function OrdersLiveData({
   }, [disableClientFetch, query, storageKey]);
 
   useEffect(() => {
+    setLastUpdatedLabel(
+      new Date(lastUpdatedAt).toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+    );
+  }, [lastUpdatedAt]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = () => {
       // mark next fetch as fresh to bypass short-lived cache
@@ -176,7 +187,7 @@ export default function OrdersLiveData({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-slate-500">Updated: {new Date(lastUpdatedAt).toLocaleTimeString()}</div>
+      <div className="text-xs text-slate-500">Updated: {lastUpdatedLabel}</div>
       <OrdersTable rows={rows} nextToken={nextToken} isLastPage={isLastPage} />
     </div>
   );
