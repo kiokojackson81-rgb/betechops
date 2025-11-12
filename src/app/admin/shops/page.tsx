@@ -2,6 +2,7 @@ import React from 'react';
 import { absUrl } from '@/lib/abs-url';
 import ApiCredentialsManager from './_components/ApiCredentialsManager';
 import AdminShopsClient from './_components/AdminShopsClient';
+import SyncedShopsList from './_components/SyncedShopsList';
 import { prisma } from '@/lib/prisma';
 
 export default async function Page() {
@@ -13,6 +14,7 @@ export default async function Page() {
   };
 
   let shops: Shop[] = [];
+  let syncedShops: Array<{ id: string; name: string; account: { label: string | null } | null; lastOrdersUpdatedBefore: Date | null; updatedAt: Date | null }> = [];
   try {
     shops = await prisma.shop.findMany({ orderBy: { createdAt: 'desc' }, include: { userAssignments: { include: { user: true } } } });
   } catch (e) {
@@ -38,6 +40,22 @@ export default async function Page() {
     );
   }
 
+  try {
+    syncedShops = await prisma.jumiaShop.findMany({
+      select: {
+        id: true,
+        name: true,
+        account: { select: { label: true } },
+        lastOrdersUpdatedBefore: true,
+        updatedAt: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  } catch (error) {
+    console.error('Admin shops page jumiaShop error:', error);
+    syncedShops = [];
+  }
+
   // Server-side fallback: if no shops returned (fresh prod DB, stale ISR), try API fetch
   if (!shops || shops.length === 0) {
     try {
@@ -61,6 +79,25 @@ export default async function Page() {
         {/* Client wrapper handles shop creation, attendant creation and in-place updates */}
         <AdminShopsClient initial={shops.map(s => ({ id: s.id, name: s.name, platform: s.platform ?? undefined, assignedUser: s.userAssignments?.[0]?.user ? { id: s.userAssignments[0].user.id, label: (s.userAssignments[0].user.name ?? s.userAssignments[0].user.email) ?? '', roleAtShop: s.userAssignments?.[0]?.roleAtShop ?? undefined } : undefined }))} />
       </div>
+      {syncedShops.length > 0 && (
+        <div className="mt-4 p-4 border rounded">
+          <h2 className="font-semibold">Synced Jumia Shops</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            These entries come from the new Jumia account directory and are read-only today.
+          </p>
+          <div className="mt-3">
+            <SyncedShopsList
+              shops={syncedShops.map((shop) => ({
+                id: shop.id,
+                name: shop.name,
+                accountLabel: shop.account?.label ?? null,
+                lastOrdersUpdatedBefore: shop.lastOrdersUpdatedBefore ? shop.lastOrdersUpdatedBefore.toISOString() : null,
+                updatedAt: shop.updatedAt ? shop.updatedAt.toISOString() : null,
+              }))}
+            />
+          </div>
+        </div>
+      )}
       <div className="mt-4 p-4 border rounded">
         <h2 className="font-semibold">API Credentials</h2>
         <ApiCredentialsManager />
