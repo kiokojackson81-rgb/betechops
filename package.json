@@ -15,6 +15,7 @@
   "verify:no-conflicts": "node scripts/precommit-check.js",
     "set-admin": "node scripts/set-admin.js",
     "seed:shops": "node -r ts-node/register scripts/seed-shops.ts",
+  "seed:shops:remote": "ts-node --esm --transpile-only scripts/seed-shops-remote.ts",
     "test": "jest --passWithNoTests",
     "test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js",
     "smoke:local": "node scripts/smoke/test-apis.js",
