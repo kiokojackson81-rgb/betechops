@@ -1,6 +1,8 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
 import { absUrl } from "@/lib/abs-url";
+import { addDays } from "date-fns";
+import { zonedTimeToUtc } from "date-fns-tz";
 // Switch to API-based KPIs for cross-shop totals
 // Keep DB metrics local
 import Link from "next/link";
@@ -59,11 +61,43 @@ async function getStats(): Promise<Stats> {
 
     const productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
     const approxProducts = Boolean(kpis?.approx);
+    const now = new Date();
 
-    // DB-only pending to avoid live adjustments here; we'll show live separately
-    const pendingDb = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : 0;
-    const approxPending = Boolean(kpisDbOnly?.approx);
-    const pendingLive = typeof pendingDiff?.vendor?.pending === "number" ? Number(pendingDiff.vendor.pending) : null;
+    // DB-only pending to avoid live adjustments here; we'll show live separately.
+    // Fall back to a direct Prisma count if the API fetch failed (common during cold starts).
+    let pendingDb: number | null = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : null;
+    let approxPending = Boolean(kpisDbOnly?.approx);
+    if (pendingDb === null) {
+      try {
+        const DEFAULT_TZ = "Africa/Nairobi";
+        const window = Number.isFinite(pendingWindowDays) && pendingWindowDays > 0 ? pendingWindowDays : 30;
+        const since = zonedTimeToUtc(addDays(now, -window), DEFAULT_TZ);
+        pendingDb = await prisma.jumiaOrder.count({
+          where: {
+            status: { in: ["PENDING"] as any },
+            OR: [
+              { updatedAtJumia: { gte: since } },
+              { createdAtJumia: { gte: since } },
+              {
+                AND: [
+                  { updatedAtJumia: null },
+                  { createdAtJumia: null },
+                  { updatedAt: { gte: since } },
+                ],
+              },
+            ],
+          },
+        });
+        approxPending = false;
+      } catch {
+        pendingDb = 0;
+      }
+    }
+    const pendingLive = typeof pendingDiff?.vendor?.pending === "number"
+      ? Number(pendingDiff.vendor.pending)
+      : typeof kpis?.pendingAll === "number"
+        ? Number(kpis.pendingAll)
+        : null;
     const vendorShopsActiveJumia = typeof pendingDiff?.vendor?.shopsActiveJumia === "number" ? Number(pendingDiff.vendor.shopsActiveJumia) : null;
     const vendorLastStatus = typeof pendingDiff?.vendor?.lastStatus === "number" ? Number(pendingDiff.vendor.lastStatus) : null;
     const vendorLastError = typeof pendingDiff?.vendor?.lastError === "string" ? String(pendingDiff.vendor.lastError) : null;
@@ -73,7 +107,7 @@ async function getStats(): Promise<Stats> {
       productsDb: dbProducts,
       shops,
       attendants,
-      pendingDb,
+      pendingDb: pendingDb ?? 0,
       pendingLive,
       vendorShopsActiveJumia,
       vendorLastStatus,
