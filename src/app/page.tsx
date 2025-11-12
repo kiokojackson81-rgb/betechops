@@ -236,15 +236,6 @@ export default function Home() {
             finalPending = fallbackPending;
             finalApprox = false;
             usedFallback = true;
-          } else if (
-            fallbackIsNumber &&
-            typeof finalPending === "number" &&
-            Number.isFinite(finalPending) &&
-            fallbackPending > finalPending
-          ) {
-            finalPending = fallbackPending;
-            finalApprox = true;
-            usedFallback = true;
           }
 
           if (finalPending !== null && Number.isFinite(finalPending)) {

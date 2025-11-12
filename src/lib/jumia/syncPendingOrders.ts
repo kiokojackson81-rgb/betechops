@@ -9,9 +9,8 @@ const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
 const LIMIT_RPS = 4;
 // Sync window for PENDING orders. Some pending orders can linger for weeks.
-// Make this configurable via env JUMIA_PENDING_WINDOW_DAYS, defaulting to 30 days.
-// Set to a larger value (e.g., 90) if you observe older pendings in vendor.
-const WINDOW_DAYS = Number(process.env.JUMIA_PENDING_WINDOW_DAYS || 30);
+// Make this configurable via env JUMIA_PENDING_WINDOW_DAYS, defaulting to 90 days (~3 months of coverage).
+const WINDOW_DAYS = Number(process.env.JUMIA_PENDING_WINDOW_DAYS || 90);
 // The Jumia API reliably supports page sizes up to 100. Larger values can return 400s.
 // Keep this at or below 100 to avoid vendor errors.
 const PAGE_SIZE = 100;
