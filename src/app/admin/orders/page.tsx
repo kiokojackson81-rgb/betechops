@@ -137,12 +137,9 @@ export default async function OrdersPage(props: unknown) {
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
   params.status = normalizedStatus;
   const FORCE_DB = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase() === "true";
-  const prefersSynced = FORCE_DB || isSyncedStatus(normalizedStatus);
   const isPendingView = normalizedStatus === 'PENDING';
+  const prefersSynced = FORCE_DB || isPendingView;
   const statusDisplay = normalizedStatus.replace(/_/g, ' ');
-  const statusHeadline = statusDisplay
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
   const statusMessageLower = statusDisplay.toLowerCase();
   // Keep vendor-synced pending views free of implicit date filters.
   // Some orders stay pending for weeks, so forcing a lookback window causes mismatches.
@@ -309,7 +306,7 @@ export default async function OrdersPage(props: unknown) {
           <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
           <p className="text-slate-300">
             {showingSynced
-              ? `Showing cached ${statusHeadline} orders synced from Jumia accounts. Filters apply instantly.`
+              ? `Showing synced ${statusMessageLower} orders from Jumia accounts. Filters apply instantly.`
               : 'Filter by status, country, shop, and date range. Use actions to pack, mark RTS, or print labels.'}
           </p>
           {syncFallbackMessage && (
