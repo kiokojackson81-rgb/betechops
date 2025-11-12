@@ -136,9 +136,11 @@ export default async function OrdersPage(props: unknown) {
 
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
   params.status = normalizedStatus;
-  const FORCE_DB = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase() === "true";
+  const forceDbSetting = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase();
+  const forceDbAllStatuses = forceDbSetting === 'always';
+  const forceDbEnabled = forceDbSetting !== 'false'; // default: enabled unless explicitly set to "false"
   const isPendingView = normalizedStatus === 'PENDING';
-  const prefersSynced = FORCE_DB || isPendingView;
+  const prefersSynced = (isPendingView && forceDbEnabled) || forceDbAllStatuses;
   const statusDisplay = normalizedStatus.replace(/_/g, ' ');
   const statusMessageLower = statusDisplay.toLowerCase();
   // Keep vendor-synced pending views free of implicit date filters.
@@ -230,7 +232,7 @@ export default async function OrdersPage(props: unknown) {
   let nextToken: string | null = null;
   let isLastPage = true;
   // In DB-only mode, always show synced (database) even if the account directory lookup fails
-  let showingSynced = (prefersSynced && !syncBootstrapError) || FORCE_DB;
+  let showingSynced = (prefersSynced && !syncBootstrapError) || forceDbAllStatuses;
   let syncFallbackMessage: string | null = syncBootstrapError
     ? `Cached ${statusMessageLower} orders are not initialized yet. Showing live data until the next sync completes.`
     : null;
@@ -253,7 +255,7 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  if (!FORCE_DB && prefersSynced && showingSynced && isPendingView && kpisPendingCount !== null) {
+  if (!forceDbAllStatuses && prefersSynced && showingSynced && isPendingView && kpisPendingCount !== null) {
     const diff = Math.abs(kpisPendingCount - rows.length);
     const sample = Math.max(1, Math.min(kpisPendingCount, rows.length));
     const tolerance = Math.max(10, Math.ceil(sample * 0.15));
