@@ -248,6 +248,10 @@ export default async function OrdersPage(props: unknown) {
   if (prefersSynced && showingSynced) {
     try {
       rows = await fetchSyncedRows(params);
+      try {
+        const distinct = Array.from(new Set(rows.map(r => r.status || 'UNKNOWN')));
+        console.info('[orders.page] fetched synced rows count=', rows.length, 'statusFilter=', params.status, 'distinctStatuses=', distinct);
+      } catch {}
       nextToken = null;
       isLastPage = true;
       if (rows.length === 0) {
@@ -311,6 +315,23 @@ export default async function OrdersPage(props: unknown) {
 
   return (
     <div className="space-y-6">
+      {/* Debug panel: remove once status filtering issue resolved */}
+      <div
+        className="text-[10px] font-mono tracking-tight px-2 py-1 rounded bg-white/5 border border-white/10 flex flex-wrap gap-2"
+        data-debug-raw-status={rawStatus || ''}
+        data-debug-normalized-status={normalizedStatus}
+        data-debug-prefers-synced={String(prefersSynced)}
+        data-debug-showing-synced={String(showingSynced)}
+        data-debug-is-pending-view={String(isPendingView)}
+      >
+        <span>raw:{rawStatus || '∅'}</span>
+        <span>norm:{normalizedStatus}</span>
+        <span>prefersSynced:{String(prefersSynced)}</span>
+        <span>showingSynced:{String(showingSynced)}</span>
+        <span>pendingView:{String(isPendingView)}</span>
+        <span>rows:{rows.length}</span>
+        <span>distinct:{Array.from(new Set(rows.map(r => r.status || 'UNKNOWN'))).join(',')}</span>
+      </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
