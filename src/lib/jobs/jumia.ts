@@ -352,19 +352,15 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
   // Vendor-supported Order Item statuses per Jumia GOP docs for /orders.
   // Some tenants still emit legacy states such as PACKED/PROCESSING/FULFILLED; include them
   // and rely on the preflight guard below to skip any that the current tenant rejects.
+  // Vendor-supported set for our tenant; drop legacy/unsupported states to avoid 400 noise.
   const STATUS_SEQUENCE = [
     'PENDING',
     'READY_TO_SHIP',
-    'PACKED',
-    'PROCESSING',
-    'FULFILLED',
-    'COMPLETED',
     'SHIPPED',
     'DELIVERED',
     'FAILED',
     'RETURNED',
     'CANCELED', // note: single-L spelling required by vendor
-    'DISPUTED',
   ];
 
   // Cache vendor-unsupported statuses per shop to avoid repeated 400 spam.

@@ -137,43 +137,6 @@ export default async function OrdersPage(props: unknown) {
   const fallbackGet = (key: string) => fallbackQuery?.get(key) ?? undefined;
 
   const rawStatus = toStr(searchParams.status) ?? fallbackGet('status');
-  // Debug: log incoming status param to help diagnose mismatch where URL shows CANCELED but page treats as PENDING.
-  try {
-    console.info('[orders.page] incoming rawStatus param:', rawStatus);
-    const headerSnapshot: Record<string, string | null> = {};
-    const interesting = [
-      'host',
-      'referer',
-      'x-forwarded-host',
-      'x-forwarded-proto',
-      'x-forwarded-port',
-      'x-forwarded-for',
-      'x-forwarded-uri',
-      'x-original-url',
-      'x-rewrite-url',
-      'x-vercel-forwarded-for',
-      'x-vercel-forwarded-proto',
-      'x-vercel-forwarded-host',
-      'x-vercel-forwarded-pathname',
-      'x-vercel-forwarded-port',
-      'x-vercel-id',
-      'x-invoke-query',
-      'x-invoke-path',
-      'x-matched-path',
-      'x-next-route-matches',
-      'next-url',
-      'x-url',
-    ];
-    for (const key of interesting) {
-        const value = headerStore.get(key);
-      if (value !== null && value !== undefined) headerSnapshot[key] = value;
-    }
-      const fallbackDetails = fallbackQuery
-        ? Object.fromEntries(Array.from(fallbackQuery.entries()))
-        : null;
-      if (fallbackDetails) headerSnapshot['__fallback_query__'] = JSON.stringify(fallbackDetails);
-    console.info('[orders.page] header snapshot', headerSnapshot);
-  } catch {}
 
   const params: OrdersQuery = {
       status: (rawStatus ?? fallbackGet('status')) ?? DEFAULT_STATUS,
@@ -188,9 +151,6 @@ export default async function OrdersPage(props: unknown) {
 
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
   params.status = normalizedStatus;
-  try {
-    console.info('[orders.page] normalizedStatus:', normalizedStatus);
-  } catch {}
   const forceDbSetting = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase();
   const forceDbAllStatuses = forceDbSetting === 'always';
   const forceDbEnabled = forceDbSetting !== 'false'; // default: enabled unless explicitly set to "false"
@@ -296,10 +256,6 @@ export default async function OrdersPage(props: unknown) {
   if (prefersSynced && showingSynced) {
     try {
       rows = await fetchSyncedRows(params);
-      try {
-        const distinct = Array.from(new Set(rows.map(r => r.status || 'UNKNOWN')));
-        console.info('[orders.page] fetched synced rows count=', rows.length, 'statusFilter=', params.status, 'distinctStatuses=', distinct);
-      } catch {}
       nextToken = null;
       isLastPage = true;
       if (rows.length === 0) {
@@ -363,23 +319,6 @@ export default async function OrdersPage(props: unknown) {
 
   return (
     <div className="space-y-6">
-      {/* Debug panel: remove once status filtering issue resolved */}
-      <div
-        className="text-[10px] font-mono tracking-tight px-2 py-1 rounded bg-white/5 border border-white/10 flex flex-wrap gap-2"
-        data-debug-raw-status={rawStatus || ''}
-        data-debug-normalized-status={normalizedStatus}
-        data-debug-prefers-synced={String(prefersSynced)}
-        data-debug-showing-synced={String(showingSynced)}
-        data-debug-is-pending-view={String(isPendingView)}
-      >
-        <span>raw:{rawStatus || '∅'}</span>
-        <span>norm:{normalizedStatus}</span>
-        <span>prefersSynced:{String(prefersSynced)}</span>
-        <span>showingSynced:{String(showingSynced)}</span>
-        <span>pendingView:{String(isPendingView)}</span>
-        <span>rows:{rows.length}</span>
-        <span>distinct:{Array.from(new Set(rows.map(r => r.status || 'UNKNOWN'))).join(',')}</span>
-      </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Orders</h1>
