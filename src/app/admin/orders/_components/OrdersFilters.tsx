@@ -99,10 +99,18 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     router.push(`${pathname}?${q.toString()}`);
   };
 
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+    // Progressive enhancement: if JS is active, do a cleaned client-side push.
+    // If JS is unavailable or hydration fails, the native GET submit still works.
+    e.preventDefault();
+    apply();
+  };
+
   return (
-    <div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
+    <form action={pathname || undefined} method="GET" onSubmit={onSubmit} className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
       <div className="grid md:grid-cols-6 gap-3">
         <select
+          name="status"
           value={pending.status}
           onChange={(e) => setPending((prev) => ({ ...prev, status: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -116,6 +124,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
         </select>
 
         <input
+          name="country"
           value={pending.country}
           onChange={(e) => setPending((prev) => ({ ...prev, country: e.target.value }))}
           placeholder="Country (e.g. KE)"
@@ -123,6 +132,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
         />
 
         <select
+          name="shopId"
           value={pending.shopId}
           onChange={(e) => setPending((prev) => ({ ...prev, shopId: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -137,18 +147,21 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
         <input
           type="date"
+          name="dateFrom"
           value={pending.dateFrom}
           onChange={(e) => setPending((prev) => ({ ...prev, dateFrom: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
         />
         <input
           type="date"
+          name="dateTo"
           value={pending.dateTo}
           onChange={(e) => setPending((prev) => ({ ...prev, dateTo: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
         />
 
         <input
+          name="q"
           value={pending.q}
           onChange={(e) => setPending((prev) => ({ ...prev, q: e.target.value }))}
           placeholder="Search number or name."
@@ -158,6 +171,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
       <div className="flex flex-wrap items-center gap-3">
         <select
+          name="size"
           value={pending.size}
           onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -169,7 +183,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
           ))}
         </select>
         <button
-          onClick={apply}
+          type="submit"
           className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10"
         >
           Apply
@@ -181,6 +195,6 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
           Reset
         </button>
       </div>
-    </div>
+    </form>
   );
 }
