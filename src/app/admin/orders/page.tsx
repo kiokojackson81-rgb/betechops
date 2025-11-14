@@ -122,6 +122,10 @@ export default async function OrdersPage(props: unknown) {
   const searchParams: Record<string, string | string[] | undefined> = ((props as { searchParams?: Record<string, string | string[] | undefined> })?.searchParams) || {};
   const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const rawStatus = toStr(searchParams.status);
+  // Debug: log incoming status param to help diagnose mismatch where URL shows CANCELED but page treats as PENDING.
+  try {
+    console.info('[orders.page] incoming rawStatus param:', rawStatus);
+  } catch {}
 
   const params: OrdersQuery = {
     status: rawStatus ?? DEFAULT_STATUS,
@@ -136,6 +140,9 @@ export default async function OrdersPage(props: unknown) {
 
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
   params.status = normalizedStatus;
+  try {
+    console.info('[orders.page] normalizedStatus:', normalizedStatus);
+  } catch {}
   const forceDbSetting = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || "").toLowerCase();
   const forceDbAllStatuses = forceDbSetting === 'always';
   const forceDbEnabled = forceDbSetting !== 'false'; // default: enabled unless explicitly set to "false"

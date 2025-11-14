@@ -100,10 +100,12 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   };
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
-    // Progressive enhancement: if JS is active, do a cleaned client-side push.
-    // If JS is unavailable or hydration fails, the native GET submit still works.
-    e.preventDefault();
-    apply();
+    // Allow native GET submission while still cleaning params client-side for SPA navigation.
+    // We trigger apply() but do not preventDefault when JS is available, letting browser do a full request fallback if needed.
+    try {
+      apply();
+    } catch {}
+    // Do NOT prevent default: ensures server component re-runs even if router push race conditions occur.
   };
 
   return (
