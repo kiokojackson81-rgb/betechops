@@ -58,7 +58,8 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   }, [snapshot]);
 
   const apply = () => {
-    const q = new URLSearchParams(sp.toString());
+    // Build query from current pending state (do not start from existing sp to avoid stale deletes)
+    const q = new URLSearchParams();
     const assign = (key: keyof FiltersState, value: string, defaultValue: string) => {
       if (!value || value === defaultValue) {
         q.delete(key);
@@ -82,7 +83,8 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     assign("size", pending.size, sizeDefault);
 
     q.delete("nextToken");
-    router.push(`${pathname}?${q.toString()}`);
+    const queryString = q.toString();
+    router.push(queryString ? `${pathname}?${queryString}` : pathname);
   };
 
   const reset = () => {
@@ -100,12 +102,16 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   };
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
-    // Allow native GET submission while still cleaning params client-side for SPA navigation.
-    // We trigger apply() but do not preventDefault when JS is available, letting browser do a full request fallback if needed.
+    // Prevent the browser's native submission to avoid a race between router.push and form submit
+    // and instead perform a single SPA navigation using the cleaned query built from `pending`.
+    e.preventDefault();
     try {
       apply();
-    } catch {}
-    // Do NOT prevent default: ensures server component re-runs even if router push race conditions occur.
+    } catch (err) {
+      // Fallback: log and keep page as-is; native submit is avoided to prevent double navigation.
+      // eslint-disable-next-line no-console
+      console.error('[OrdersFilters] apply failed', err);
+    }
   };
 
   return (
