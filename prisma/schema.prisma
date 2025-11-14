@@ -200,6 +200,8 @@ model JumiaOrder {
   packedItems       Int?
   countryCode       String?
   isPrepayment      Boolean?
+  totalAmountLocalCurrency String? // cached currency for local total
+  totalAmountLocalValue    Float?  // cached aggregated local total value
   createdAtJumia    DateTime?
   updatedAtJumia    DateTime?
   createdAt         DateTime  @default(now())

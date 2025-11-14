@@ -284,6 +284,9 @@ async function upsertOrder(shopId: string, raw: any) {
       packedItems: parseNullableInt(raw?.packedItems),
       countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
       isPrepayment: coerceBoolean(raw?.isPrepayment),
+  // @ts-ignore Prisma type not yet reflecting new field
+  totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+      totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
       createdAtJumia: parseOptionalDate(raw?.createdAt),
       updatedAtJumia: parseOptionalDate(raw?.updatedAt),
       shopId,
@@ -297,6 +300,9 @@ async function upsertOrder(shopId: string, raw: any) {
       packedItems: parseNullableInt(raw?.packedItems),
       countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
       isPrepayment: coerceBoolean(raw?.isPrepayment),
+  // @ts-ignore Prisma type not yet reflecting new field
+  totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+      totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
       createdAtJumia: parseOptionalDate(raw?.createdAt),
       updatedAtJumia: parseOptionalDate(raw?.updatedAt),
     },

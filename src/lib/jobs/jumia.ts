@@ -534,6 +534,9 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
                   packedItems: toInt((rawObj as any).packedItems),
                   countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
                   isPrepayment: toBool((rawObj as any).isPrepayment),
+                  // @ts-ignore Prisma type not yet reflecting new field
+                  totalAmountLocalCurrency: typeof (rawObj as any).totalAmountLocalCurrency === 'string' ? String((rawObj as any).totalAmountLocalCurrency) : null,
+                  totalAmountLocalValue: (() => { const v = (rawObj as any).totalAmountLocalValue ?? (rawObj as any).totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                   createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
                   updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
                   shopId,
@@ -547,6 +550,9 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
                   packedItems: toInt((rawObj as any).packedItems),
                   countryCode: typeof (rawObj as any)?.country?.code === 'string' ? String((rawObj as any).country.code) : null,
                   isPrepayment: toBool((rawObj as any).isPrepayment),
+                  // @ts-ignore Prisma type not yet reflecting new field
+                  totalAmountLocalCurrency: typeof (rawObj as any).totalAmountLocalCurrency === 'string' ? String((rawObj as any).totalAmountLocalCurrency) : null,
+                  totalAmountLocalValue: (() => { const v = (rawObj as any).totalAmountLocalValue ?? (rawObj as any).totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                   createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
                   updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
                 },
