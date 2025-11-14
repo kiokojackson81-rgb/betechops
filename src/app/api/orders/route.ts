@@ -103,7 +103,14 @@ export async function GET(req: NextRequest) {
   if (qsOut[afterKey] && isDateOnly(qsOut[afterKey])) qsOut[afterKey] = toIsoTs(qsOut[afterKey], false);
   if (qsOut[beforeKey] && isDateOnly(qsOut[beforeKey])) qsOut[beforeKey] = toIsoTs(qsOut[beforeKey], true);
 
-  const query = new URLSearchParams(qsOut).toString();
+  // Vendor expects `token` for pagination; UI/aggregator may pass `nextToken`.
+  // Keep qsOut for ALL-shops aggregator (it strips nextToken), but translate for single-shop path below.
+  const qsVendor: Record<string, string> = { ...qsOut };
+  if (qsVendor.nextToken) {
+    qsVendor.token = qsVendor.nextToken;
+    delete (qsVendor as any).nextToken;
+  }
+  const query = new URLSearchParams(qsVendor).toString();
   const path = query ? `orders?${query}` : 'orders';
 
   // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)

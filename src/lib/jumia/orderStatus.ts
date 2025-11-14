@@ -1,9 +1,19 @@
 const RAW_SYNCED_STATUSES = [
+  // Core lifecycle
   "PENDING",
+  "PACKED",
   "READY_TO_SHIP",
+  "PROCESSING",
+  "FULFILLED",
+  "COMPLETED",
   "SHIPPED",
   "DELIVERED",
+  "FAILED",
   "RETURNED",
+  // Vendor spelling uses single-L
+  "CANCELED",
+  // Internal/partner-specific
+  "DISPUTED",
 ] as const;
 
 export type SyncedStatus = (typeof RAW_SYNCED_STATUSES)[number];

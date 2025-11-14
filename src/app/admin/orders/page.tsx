@@ -140,7 +140,8 @@ export default async function OrdersPage(props: unknown) {
   const forceDbAllStatuses = forceDbSetting === 'always';
   const forceDbEnabled = forceDbSetting !== 'false'; // default: enabled unless explicitly set to "false"
   const isPendingView = normalizedStatus === 'PENDING';
-  const prefersSynced = (isPendingView && forceDbEnabled) || forceDbAllStatuses;
+  // Prefer DB for all statuses by default (no env required). Fallback to live if DB has no rows yet.
+  const prefersSynced = forceDbEnabled;
   const statusDisplay = normalizedStatus.replace(/_/g, ' ');
   const statusMessageLower = statusDisplay.toLowerCase();
   // Keep vendor-synced pending views free of implicit date filters.

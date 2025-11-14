@@ -364,6 +364,7 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
     'FAILED',
     'RETURNED',
     'CANCELED', // note: single-L spelling required by vendor
+    'DISPUTED',
   ];
 
   // Cache vendor-unsupported statuses per shop to avoid repeated 400 spam.
