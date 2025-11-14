@@ -9,6 +9,7 @@ import BulkActions from './_components/BulkActions';
 import { fetchSyncedRows } from './_lib/fetchSyncedRows';
 import type { OrdersQuery, OrdersRow } from './_lib/types';
 import { isSyncedStatus, normalizeStatus } from '@/lib/jumia/orderStatus';
+import { headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,6 +126,36 @@ export default async function OrdersPage(props: unknown) {
   // Debug: log incoming status param to help diagnose mismatch where URL shows CANCELED but page treats as PENDING.
   try {
     console.info('[orders.page] incoming rawStatus param:', rawStatus);
+  const hdr = await headers();
+    const headerSnapshot: Record<string, string | null> = {};
+    const interesting = [
+      'host',
+      'referer',
+      'x-forwarded-host',
+      'x-forwarded-proto',
+      'x-forwarded-port',
+      'x-forwarded-for',
+      'x-forwarded-uri',
+      'x-original-url',
+      'x-rewrite-url',
+      'x-vercel-forwarded-for',
+      'x-vercel-forwarded-proto',
+      'x-vercel-forwarded-host',
+      'x-vercel-forwarded-pathname',
+      'x-vercel-forwarded-port',
+      'x-vercel-id',
+      'x-invoke-query',
+      'x-invoke-path',
+      'x-matched-path',
+      'x-next-route-matches',
+      'next-url',
+      'x-url',
+    ];
+    for (const key of interesting) {
+      const value = hdr.get(key);
+      if (value !== null && value !== undefined) headerSnapshot[key] = value;
+    }
+    console.info('[orders.page] header snapshot', headerSnapshot);
   } catch {}
 
   const params: OrdersQuery = {
