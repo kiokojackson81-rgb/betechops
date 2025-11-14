@@ -287,25 +287,8 @@ export default async function OrdersPage(props: unknown) {
     }
   }
 
-  // Server-prefetch: when synced Pending is empty, fetch the first live page to avoid blank screen.
-  if (!showingSynced && isPendingView && rows.length === 0) {
-    try {
-      const live = await fetchRemoteOrders({
-        ...params,
-        // keep the initial size modest to lower TTFB on ALL shops
-        size: params.size ?? (params.shopId === 'ALL' ? '30' : '50'),
-      });
-      const incoming = Array.isArray(live?.orders) ? (live.orders as Array<Record<string, unknown>>).map(normalizeApiOrder) : [];
-      if (incoming.length > 0) {
-        rows = incoming as OrdersRow[];
-        nextToken = typeof live?.nextToken === 'string' || live?.nextToken === null ? (live?.nextToken ?? null) : null;
-        isLastPage = typeof live?.isLastPage === 'boolean' ? Boolean(live?.isLastPage) : false;
-      }
-    } catch (e) {
-      // keep empty if live prefetch fails; client will retry
-      console.warn('[orders.page] live prefetch failed', e);
-    }
-  }
+  // Disable any live prefetch for Pending: keep DB-only for a deterministic first paint.
+  // If DB has no rows yet, we'll show empty and let the background sync populate soon.
 
   // Defer live remote fetch to the client for faster initial paint when not using cached PENDING
   const preserveRows = !showingSynced && prefersSynced && isPendingView && rows.length > 0;

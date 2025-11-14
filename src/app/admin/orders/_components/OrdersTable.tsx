@@ -194,6 +194,25 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     }
   }
 
+  function timeAgo(ts?: string) {
+    if (!ts) return "";
+    try {
+      const d = new Date(ts);
+      const now = Date.now();
+      const diff = Math.max(0, now - d.getTime());
+      const s = Math.floor(diff / 1000);
+      if (s < 60) return `${s}s ago`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      const dys = Math.floor(h / 24);
+      return `${dys}d ago`;
+    } catch {
+      return "";
+    }
+  }
+
   async function runBulk(action: "pack" | "rts" | "print") {
     if (!someSelected) return;
     setBulkBusy(action);
@@ -321,7 +340,9 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                 <td className="px-3 py-2">
                   <div>{new Date(row.createdAt).toLocaleString()}</div>
                   {row.updatedAt && (
-                    <div className="text-xs opacity-70">Updated: {new Date(row.updatedAt).toLocaleString()}</div>
+                    <div className="text-xs opacity-70">
+                      Updated: {new Date(row.updatedAt).toLocaleString()} ({timeAgo(row.updatedAt)})
+                    </div>
                   )}
                 </td>
                 <td className="px-3 py-2">
