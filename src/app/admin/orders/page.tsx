@@ -120,13 +120,26 @@ function normalizeApiOrder(raw: Record<string, unknown>): OrdersRow {
 }
 
 export default async function OrdersPage(props: unknown) {
+  const headerStore = await headers();
   const searchParams: Record<string, string | string[] | undefined> = ((props as { searchParams?: Record<string, string | string[] | undefined> })?.searchParams) || {};
   const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  const rawStatus = toStr(searchParams.status);
+
+  const fallbackQuery = (() => {
+    const referer = headerStore.get('referer');
+    if (!referer) return null;
+    try {
+      const parsed = new URL(referer);
+      return parsed.searchParams;
+    } catch {
+      return null;
+    }
+  })();
+  const fallbackGet = (key: string) => fallbackQuery?.get(key) ?? undefined;
+
+  const rawStatus = toStr(searchParams.status) ?? fallbackGet('status');
   // Debug: log incoming status param to help diagnose mismatch where URL shows CANCELED but page treats as PENDING.
   try {
     console.info('[orders.page] incoming rawStatus param:', rawStatus);
-  const hdr = await headers();
     const headerSnapshot: Record<string, string | null> = {};
     const interesting = [
       'host',
@@ -152,21 +165,25 @@ export default async function OrdersPage(props: unknown) {
       'x-url',
     ];
     for (const key of interesting) {
-      const value = hdr.get(key);
+        const value = headerStore.get(key);
       if (value !== null && value !== undefined) headerSnapshot[key] = value;
     }
+      const fallbackDetails = fallbackQuery
+        ? Object.fromEntries(Array.from(fallbackQuery.entries()))
+        : null;
+      if (fallbackDetails) headerSnapshot['__fallback_query__'] = JSON.stringify(fallbackDetails);
     console.info('[orders.page] header snapshot', headerSnapshot);
   } catch {}
 
   const params: OrdersQuery = {
-    status: rawStatus ?? DEFAULT_STATUS,
-    country: toStr(searchParams.country),
-    shopId: toStr(searchParams.shopId) ?? 'ALL',
-    dateFrom: toStr(searchParams.dateFrom),
-    dateTo: toStr(searchParams.dateTo),
-    q: toStr(searchParams.q),
-    nextToken: toStr(searchParams.nextToken),
-    size: toStr(searchParams.size),
+      status: (rawStatus ?? fallbackGet('status')) ?? DEFAULT_STATUS,
+      country: toStr(searchParams.country) ?? fallbackGet('country'),
+      shopId: (toStr(searchParams.shopId) ?? fallbackGet('shopId')) ?? 'ALL',
+      dateFrom: toStr(searchParams.dateFrom) ?? fallbackGet('dateFrom'),
+      dateTo: toStr(searchParams.dateTo) ?? fallbackGet('dateTo'),
+      q: toStr(searchParams.q) ?? fallbackGet('q'),
+      nextToken: toStr(searchParams.nextToken) ?? fallbackGet('nextToken'),
+      size: toStr(searchParams.size) ?? fallbackGet('size'),
   };
 
   const normalizedStatus = normalizeStatus(params.status) ?? DEFAULT_STATUS;
