@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.upsertNormalizedOrder = upsertNormalizedOrder;
 exports.ensureReturnCaseForOrder = ensureReturnCaseForOrder;
-const prisma_1 = require("@/lib/prisma");
+const prisma_1 = require("../prisma");
 const client_1 = require("@prisma/client");
 function mapStatus(s) {
     const ss = (s || '').toLowerCase();

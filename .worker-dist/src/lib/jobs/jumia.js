@@ -362,22 +362,17 @@ const jobs = {
     syncReturnOrders,
 };
 exports.default = jobs;
-/**
- * Incremental orders sync across shops using an updatedAfter watermark per shop.
- * Stores watermark in Config as key: `jumia:orders:${shopId}:cursor`.
- * Upserts into JumiaOrder and advances cursor to the latest vendor update timestamp seen.
- */
+function looksLikeUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 async function syncOrdersIncremental(opts) {
     // Vendor-supported Order Item statuses per Jumia GOP docs for /orders.
     // Some tenants still emit legacy states such as PACKED/PROCESSING/FULFILLED; include them
     // and rely on the preflight guard below to skip any that the current tenant rejects.
+    // Vendor-supported set for our tenant; drop legacy/unsupported states to avoid 400 noise.
     const STATUS_SEQUENCE = [
         'PENDING',
         'READY_TO_SHIP',
-        'PACKED',
-        'PROCESSING',
-        'FULFILLED',
-        'COMPLETED',
         'SHIPPED',
         'DELIVERED',
         'FAILED',
@@ -390,10 +385,13 @@ async function syncOrdersIncremental(opts) {
     globalThis.__jumiaUnsupportedCache = unsupportedByShop;
     const warnedOnce = globalThis.__jumiaUnsupportedWarned || new Set();
     globalThis.__jumiaUnsupportedWarned = warnedOnce;
-    const jumiaShops = await prisma_1.prisma.jumiaShop.findMany({
+    const jumiaShopsRaw = await prisma_1.prisma.jumiaShop.findMany({
         where: opts?.shopId ? { id: opts.shopId } : {},
         select: { id: true },
     });
+    const jumiaShops = opts?.skipNonUuid
+        ? jumiaShopsRaw.filter((shop) => looksLikeUuid(shop.id))
+        : jumiaShopsRaw;
     const summary = {};
     for (const shop of jumiaShops) {
         const shopId = shop.id;
@@ -558,6 +556,9 @@ async function syncOrdersIncremental(opts) {
                                     packedItems: toInt(rawObj.packedItems),
                                     countryCode: typeof rawObj?.country?.code === 'string' ? String(rawObj.country.code) : null,
                                     isPrepayment: toBool(rawObj.isPrepayment),
+                                    // @ts-ignore Prisma type not yet reflecting new field
+                                    totalAmountLocalCurrency: typeof rawObj.totalAmountLocalCurrency === 'string' ? String(rawObj.totalAmountLocalCurrency) : null,
+                                    totalAmountLocalValue: (() => { const v = rawObj.totalAmountLocalValue ?? rawObj.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                                     createdAtJumia: toDate(rawObj.createdAt ?? rawObj.created_at),
                                     updatedAtJumia: toDate(rawObj.updatedAt ?? rawObj.updated_at ?? rawObj.lastUpdatedAt),
                                     shopId,
@@ -571,6 +572,9 @@ async function syncOrdersIncremental(opts) {
                                     packedItems: toInt(rawObj.packedItems),
                                     countryCode: typeof rawObj?.country?.code === 'string' ? String(rawObj.country.code) : null,
                                     isPrepayment: toBool(rawObj.isPrepayment),
+                                    // @ts-ignore Prisma type not yet reflecting new field
+                                    totalAmountLocalCurrency: typeof rawObj.totalAmountLocalCurrency === 'string' ? String(rawObj.totalAmountLocalCurrency) : null,
+                                    totalAmountLocalValue: (() => { const v = rawObj.totalAmountLocalValue ?? rawObj.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                                     createdAtJumia: toDate(rawObj.createdAt ?? rawObj.created_at),
                                     updatedAtJumia: toDate(rawObj.updatedAt ?? rawObj.updated_at ?? rawObj.lastUpdatedAt),
                                 },

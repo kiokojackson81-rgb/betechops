@@ -7,7 +7,8 @@
     "noEmit": false,
     "outDir": ".worker-dist",
     "rootDir": ".",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": false
   },
   "include": [
     "scripts/jumia-sync-worker.ts",

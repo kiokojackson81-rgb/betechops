@@ -46,9 +46,10 @@ exports.getCatalogProductsCountQuickForShop = getCatalogProductsCountQuickForSho
 exports.getPendingOrdersCountQuickForShop = getPendingOrdersCountQuickForShop;
 exports.getCatalogProductsCountExactForShop = getCatalogProductsCountExactForShop;
 exports.getCatalogProductsCountExactAll = getCatalogProductsCountExactAll;
-const prisma_1 = require("@/lib/prisma");
-const oidc_1 = require("@/lib/oidc");
-const secure_json_1 = require("@/lib/crypto/secure-json");
+// Alias path rewrites for standalone execution (replace @/* with relative paths)
+const prisma_1 = require("./prisma");
+const oidc_1 = require("./oidc");
+const secure_json_1 = require("./crypto/secure-json");
 const cache = {};
 // Try to extract a numeric total from a vendor response object.
 function _extractTotal(obj) {
@@ -586,9 +587,32 @@ async function loadDefaultShopAuth() {
         return undefined;
     try {
         const shop = await prisma_1.prisma.shop.findFirst({ where: { platform: 'JUMIA', isActive: true }, select: { id: true } });
-        if (!shop)
-            return undefined;
-        return await loadShopAuthById(shop.id);
+        if (shop) {
+            const auth = await loadShopAuthById(shop.id);
+            if (auth)
+                return auth;
+        }
+        // Fallback to first Jumia account when legacy Shop records are not populated
+        const jShop = await prisma_1.prisma.jumiaShop.findFirst({
+            orderBy: { createdAt: 'asc' },
+            include: { account: true },
+        });
+        if (jShop?.account) {
+            const baseFromEnv = process.env.base_url ||
+                process.env.BASE_URL ||
+                process.env.JUMIA_API_BASE ||
+                'https://vendor-api.jumia.com';
+            const tokenUrlFromEnv = process.env.OIDC_TOKEN_URL ||
+                process.env.JUMIA_OIDC_TOKEN_URL ||
+                `${new URL(baseFromEnv).origin}/token`;
+            return {
+                platform: 'JUMIA',
+                clientId: jShop.account.clientId,
+                refreshToken: jShop.account.refreshToken,
+                tokenUrl: tokenUrlFromEnv,
+                apiBase: baseFromEnv,
+            };
+        }
     }
     catch {
         return undefined;
