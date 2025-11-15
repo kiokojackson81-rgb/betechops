@@ -6,3 +6,16 @@
 
 /* small helper to keep the header compact */
 .admin-badge { padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+
+/* horizontal nav scrollbar hiding */
+.top-nav-scroll { scrollbar-width: none; }
+.top-nav-scroll::-webkit-scrollbar { display: none; }
+
+/* nav link underline animation helper */
+.nav-link { position: relative; }
+
+@keyframes slideDown { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.animate-slideDown { animation: slideDown 0.25s ease-out; }
+
+/* mobile drawer body lock (toggle added via JS) */
+body.overflow-hidden { overflow: hidden; }
