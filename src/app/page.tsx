@@ -256,16 +256,20 @@ export default function Home() {
             const mm = String(dt.getMinutes()).padStart(2, "0");
             const source = kpis?.pendingSource;
             const snapshotDays = typeof kpis?.pendingSnapshotWindowDays === 'number' ? kpis.pendingSnapshotWindowDays : null;
+            // KPI card represents a 7-day DB lookback by design. When showing live, label it as Live (7d)
+            const KPI_WINDOW_DAYS = 7;
             let label = "Updated";
             if (!usedFallback && typeof source === 'string' && source.startsWith('snapshot')) {
               const part = source === 'snapshot-partial' ? ' partial' : '';
               label = `Snapshot${part} (${snapshotDays ?? '?'}d)`;
             } else if (finalApprox) {
-              label = 'Live';
+              label = `Live (${KPI_WINDOW_DAYS}d)`;
             } else if (usedFallback) {
-              label = 'Live fallback';
+              label = `Live fallback (${KPI_WINDOW_DAYS}d)`;
+            } else if (source === 'db') {
+              label = `DB (${KPI_WINDOW_DAYS}d)`;
             }
-              setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
+            setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
           } else {
             setPendingUpdated(null);
           }

@@ -38,9 +38,9 @@ export default async function OrdersPage() {
         <h3>Orders / Queues</h3>
         <p style={{ marginTop: 6, marginBottom: 6 }}>
           <strong>Pending orders:</strong> {kpis?.queued ?? 0}
-          {kpis?.pendingSource && (kpis?.pendingSource === 'snapshot' || kpis?.pendingSource === 'snapshot-partial') ? (
+          {kpis?.pendingSource ? (
             <span style={{ marginLeft: 8, color: '#6b7280' }}>
-              (snapshot {String(kpis?.pendingSnapshotWindowDays ?? '?')}d)
+              {kpis.pendingSource === 'live' ? `(live 7d)` : kpis.pendingSource === 'db' ? `(db 7d)` : kpis.pendingSource.startsWith('snapshot') ? `(snapshot ${String(kpis?.pendingSnapshotWindowDays ?? '?')}d)` : ''}
             </span>
           ) : null}
         </p>
