@@ -13,6 +13,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
     <nav
       className={"flex gap-1 overflow-x-auto top-nav-scroll " + (mobile ? "px-2" : "px-2 md:px-0") + " " + className}
       aria-label="Admin primary"
+      role="navigation"
     >
       {NAV.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + "/");
@@ -22,11 +23,12 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
             href={href}
             aria-current={active ? "page" : undefined}
             className={
-              "nav-link group relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium border transition-colors whitespace-nowrap " +
+              "nav-link group relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium border transition-colors whitespace-nowrap pb-2 " +
               (active
                 ? "bg-white/10 border-white/20 text-white"
                 : "border-transparent text-slate-200 hover:text-white hover:bg-white/5")
             }
+            tabIndex={0}
           >
             <Icon className="h-4 w-4 opacity-80 group-hover:opacity-100" />
             <span>{label}</span>

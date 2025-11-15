@@ -19,3 +19,20 @@
 
 /* mobile drawer body lock (toggle added via JS) */
 body.overflow-hidden { overflow: hidden; }
+
+/* focus styles for accessibility */
+.nav-link:focus-visible, .nav-link:focus {
+  outline: 3px solid rgba(99,102,241,0.12);
+  outline-offset: 2px;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+  border-radius: 8px;
+}
+
+/* backdrop fade (used for drawer) */
+.backdrop-fade { transition: opacity 200ms ease; }
+
+/* reserve underline space to avoid layout shift */
+.nav-link { padding-bottom: 8px; }
