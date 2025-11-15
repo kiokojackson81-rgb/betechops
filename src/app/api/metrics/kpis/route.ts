@@ -109,7 +109,9 @@ export async function GET(request: Request) {
           // the 7-day KPI expectation so we don't mistakenly surface a larger
           // legacy window as the live KPI value.
           const snapshotWindowDays = Number(snapshotCandidate.windowDays ?? 0);
-          const expectedWindowDays = 7;
+          // Allow snapshot acceptance to follow the configured JUMIA_PENDING_WINDOW_DAYS
+          // (background sync writes snapshots using that window, default 90 days).
+          const expectedWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 7);
           if (Number.isFinite(snapshotWindowDays) && snapshotWindowDays === expectedWindowDays) {
             const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
             if (preferVendorWhenDiff && snapshotTotal !== queued) {
