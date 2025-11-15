@@ -354,7 +354,7 @@ export async function jumiaFetch(
     }
   }
 
-  const url = `${apiBase.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
+  let url = `${apiBase.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
   const bodyPresent = fetchOpts.body !== undefined && fetchOpts.body !== null;
   const headers = new Headers((fetchOpts.headers as HeadersInit) || {});
   headers.set('Authorization', `Bearer ${accessToken}`);
@@ -372,6 +372,26 @@ export async function jumiaFetch(
     headers,
     cache: rest.cache ?? 'no-store',
   };
+
+  // Defensive: when using a shop-scoped token, do NOT send a vendor `shopId` query param
+  // Some tenants return 400/422 if both a shop-specific token and shopId query param are sent.
+  try {
+    if (tokenMeta?.source === 'SHOP') {
+      const parsed = new URL(url);
+      if (parsed.searchParams.has('shopId')) {
+        // Log to help diagnostics in production
+        console.warn('[jumiaFetch] stripping shopId query param because a SHOP-scoped token is used', {
+          original: url,
+          shopKey: perKey || undefined,
+        });
+        parsed.searchParams.delete('shopId');
+        // Rebuild url without trailing origin normalization (keep apiBase hostname)
+        url = parsed.toString();
+      }
+    }
+  } catch (e) {
+    // Non-fatal: if URL parsing fails, continue with original url
+  }
 
   // In unit tests, avoid noisy network failures for basic orders calls when using the synthetic test token.
   if (process.env.NODE_ENV === 'test') {
@@ -409,11 +429,16 @@ export async function jumiaFetch(
     _recordLatency(latency);
     if (!r.ok) {
       const msg = await r.text().catch(() => r.statusText);
+      // capture some additional helpful fields for production debugging
+      const shopCodeHeader = (requestInit.headers as Headers)?.get ? (requestInit.headers as Headers).get('X-Shop-Code') : undefined;
       console.error('[jumiaFetch] HTTP error', {
         url,
+        apiBase: apiBase || undefined,
         status: r.status,
         authSource: tokenMeta?.source,
         platform: tokenMeta?.platform,
+        shopKey: perKey || undefined,
+        shopCodeHeader: shopCodeHeader || undefined,
         body: String(msg).slice(0, 400),
       });
       const err = new Error(`Jumia ${path} failed: ${r.status} ${String(msg)}`) as ErrorWithMeta;
@@ -427,6 +452,51 @@ export async function jumiaFetch(
           if (!Number.isNaN(seconds) && seconds >= 0) err.retryAfterMs = seconds * 1000;
         }
       } catch {}
+
+      // Heuristic retry: if shop-scoped token produced a 422, try once with global/env token
+      // This helps distinguish "order not found" vs "token not authorized for this shop".
+      if (r.status === 422 && tokenMeta?.source === 'SHOP') {
+        try {
+          const globalToken = await getAccessToken();
+          const retryHeaders = new Headers(requestInit.headers as HeadersInit);
+          retryHeaders.set('Authorization', `Bearer ${globalToken}`);
+          // mark that this attempt used ENV token for observability
+          retryHeaders.set('X-Auth-Source', 'ENV');
+          const retryInit = { ...requestInit, headers: retryHeaders } as RequestInit;
+          const r2 = await fetch(url, retryInit);
+          const msg2 = await r2.text().catch(() => r2.statusText);
+          console.error('[jumiaFetch] retry-with-global-token', {
+            url,
+            status: r2.status,
+            body: String(msg2).slice(0, 400),
+          });
+          if (r2.ok) {
+            // Parse success response similarly to normal success path
+            const contentType2 = (typeof r2.headers?.get === 'function' ? r2.headers.get('content-type') : '') || '';
+            if (contentType2.includes('application/pdf') || contentType2.includes('octet-stream')) {
+              const b = await r2.arrayBuffer();
+              return { _binary: Buffer.from(b).toString('base64'), contentType: contentType2 } as any;
+            }
+            try {
+              if (typeof r2.clone === 'function' && typeof r2.json === 'function') return await r2.clone().json();
+            } catch {}
+            try {
+              if (typeof r2.json === 'function') return await r2.json();
+            } catch {}
+            try {
+              if (typeof r2.text === 'function') {
+                const t = await r2.text();
+                try { return JSON.parse(t); } catch { return t; }
+              }
+            } catch {}
+            return {} as any;
+          }
+          // include retry response in original error body for diagnostics
+          err.body = `${String(msg).slice(0, 400)}\n--- retry (${r2.status}) ---\n${String(msg2).slice(0, 400)}`;
+        } catch (e) {
+          console.error('[jumiaFetch] retry-with-global-token failed', e instanceof Error ? e.message : String(e));
+        }
+      }
       throw err;
     }
     // On success, adapt per-key rate based on vendor hints if available
