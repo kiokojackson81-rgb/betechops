@@ -84,7 +84,8 @@ export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]>
         if ((!o.shop || !o.shop.name) && o.shopId && byId.has(o.shopId)) {
           const val = byId.get(o.shopId)!;
           // Attach a synthetic `shop` shape matching the include above
-          o.shop = { name: val.name, account: { label: val.accountLabel } };
+          // Ensure `name` and `label` are strings to satisfy the expected shape from the original include
+          o.shop = { name: val.name ?? '', account: { label: val.accountLabel ?? '' } };
         }
       }
     }

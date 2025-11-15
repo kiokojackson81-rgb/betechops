@@ -3,6 +3,14 @@ import AttendantHeader from '../_components/AttendantHeader';
 
 type OrdersResult = { shops?: unknown[]; orders?: unknown[]; error?: string };
 
+type Kpis = {
+  queued: number;
+  todayPacked: number;
+  rts: number;
+  pendingSource?: string;
+  pendingSnapshotWindowDays?: number;
+};
+
 async function fetchOrdersAndKpis() {
   try {
     const [ordersRes, kpisRes] = await Promise.all([
@@ -11,13 +19,13 @@ async function fetchOrdersAndKpis() {
     ]);
 
     const orders = ordersRes.ok ? await ordersRes.json() : { shops: [], orders: [] };
-    const kpis = kpisRes.ok ? await kpisRes.json() : { queued: 0, todayPacked: 0, rts: 0 };
+    const kpis = kpisRes.ok ? (await kpisRes.json()) as Kpis : ({ queued: 0, todayPacked: 0, rts: 0 } as Kpis);
     return {
       orders: orders as OrdersResult,
-      kpis: kpis as { queued: number; todayPacked: number; rts: number; pendingSource?: string; pendingSnapshotWindowDays?: number },
+      kpis,
     };
   } catch (err) {
-    return { orders: { shops: [], orders: [] } as OrdersResult, kpis: { queued: 0, todayPacked: 0, rts: 0 }, error: String(err) };
+    return { orders: { shops: [], orders: [] } as OrdersResult, kpis: ({ queued: 0, todayPacked: 0, rts: 0 } as Kpis), error: String(err) };
   }
 }
 

@@ -294,42 +294,46 @@ async function upsertOrder(shopId: string, raw: any) {
     throw new Error("Missing order id in Jumia payload");
   }
 
-  await prisma.jumiaOrder.upsert({
-    where: { id },
-    create: {
-      id,
-      number: parseNullableInt(raw?.number),
-      status,
-      hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
-      pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
-      totalItems: parseNullableInt(raw?.totalItems),
-      packedItems: parseNullableInt(raw?.packedItems),
-      countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
-      isPrepayment: coerceBoolean(raw?.isPrepayment),
-  totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
-      totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
-      createdAtJumia: parseOptionalDate(raw?.createdAt),
-      updatedAtJumia: parseOptionalDate(raw?.updatedAt),
-      shopId,
-      // cache the vendor-provided shop name when available for stable UI display
-      shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name) ? String(raw.shop.name) : (raw?.shopName ?? raw?.shop_label ?? null),
-    },
-    update: {
-      number: parseNullableInt(raw?.number),
-      status,
-      hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
-      pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
-      totalItems: parseNullableInt(raw?.totalItems),
-      packedItems: parseNullableInt(raw?.packedItems),
-      countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
-      isPrepayment: coerceBoolean(raw?.isPrepayment),
-  totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
-      totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
-      createdAtJumia: parseOptionalDate(raw?.createdAt),
-      updatedAtJumia: parseOptionalDate(raw?.updatedAt),
-      shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name) ? String(raw.shop.name) : (raw?.shopName ?? raw?.shop_label ?? undefined),
-    },
-  });
+    await prisma.jumiaOrder.upsert({
+      where: { id },
+      create: {
+        id,
+        number: parseNullableInt(raw?.number),
+        status,
+        hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+        pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+        totalItems: parseNullableInt(raw?.totalItems),
+        packedItems: parseNullableInt(raw?.packedItems),
+        countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+        isPrepayment: coerceBoolean(raw?.isPrepayment),
+        totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+        totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
+        createdAtJumia: parseOptionalDate(raw?.createdAt),
+        updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+        shopId,
+        // cache the vendor-provided shop name when available for stable UI display
+        shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+          ? String(raw.shop.name)
+          : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : null),
+      },
+      update: {
+        number: parseNullableInt(raw?.number),
+        status,
+        hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+        pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+        totalItems: parseNullableInt(raw?.totalItems),
+        packedItems: parseNullableInt(raw?.packedItems),
+        countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+        isPrepayment: coerceBoolean(raw?.isPrepayment),
+        totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+        totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
+        createdAtJumia: parseOptionalDate(raw?.createdAt),
+        updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+        shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+          ? String(raw.shop.name)
+          : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : undefined),
+      },
+    });
 }
 
 function parseNullableInt(value: unknown): number | null {
