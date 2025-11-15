@@ -98,90 +98,89 @@ export async function GET(request: Request) {
       const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
       const allowLive = (!noLive && !liveDisabledEffective) || (isStale && !liveDisabledEffective);
       if (allowLive) {
-        const snapshotMaxAgeMs = Math.max(30_000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60_000));
-        const snapshotCandidate = await readPendingSnapshot().catch(() => null);
-        let usedSnapshot = false;
-        if (snapshotCandidate && isPendingSnapshotFresh(snapshotCandidate, snapshotMaxAgeMs)) {
-          // The KPI 'Pending Orders (All)' intentionally represents the last 7 days.
-          // The stored pending snapshot may have been generated with a different
-          // lookback window (e.g. the background sync uses JUMIA_PENDING_WINDOW_DAYS
-          // which defaults to 90). Ignore snapshots whose window doesn't match
-          // the 7-day KPI expectation so we don't mistakenly surface a larger
-          // legacy window as the live KPI value.
-          const snapshotWindowDays = Number(snapshotCandidate.windowDays ?? 0);
-          // Allow snapshot acceptance to follow the configured JUMIA_PENDING_WINDOW_DAYS
-          // (background sync writes snapshots using that window, default 90 days).
-          const expectedWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 7);
-          if (Number.isFinite(snapshotWindowDays) && snapshotWindowDays === expectedWindowDays) {
-            const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
-            if (preferVendorWhenDiff && snapshotTotal !== queued) {
-              pendingAllOut = snapshotTotal;
-              approxFlag = true;
-            } else if (snapshotTotal > pendingAllOut) {
-              pendingAllOut = snapshotTotal;
-              approxFlag = true;
+            // Attempt a live vendor aggregation first (within a tight timeout) and prefer it when available.
+            // This ensures the admin KPIs align with the vendor center counts when the vendor API responds.
+            const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
+            const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
+            const start = Date.now();
+            let pagesTotal = 0;
+            let totalLive = 0;
+            const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
+            const dateTo = now.toISOString().slice(0, 10);
+            // Vendor supports a single status filter per call; if multiple statuses were requested,
+            // call the vendor once per status and sum results (bounded by LIVE_MAX_PAGES and timeout).
+            for (const st of pendingStatuses) {
+              if (Date.now() - start >= LIVE_TIMEOUT_MS) break; // overall timeout
+              let token: string | null = null;
+              let pages = 0;
+              do {
+                const elapsed = Date.now() - start;
+                if (elapsed >= LIVE_TIMEOUT_MS) break;
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
+                try {
+                  const base = `/api/orders?status=${encodeURIComponent(st)}&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+                  const url = await absUrl(base);
+                  const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+                  if (!res.ok) break;
+                  const j: any = await res.json();
+                  const arr = Array.isArray(j?.orders)
+                    ? j.orders
+                    : Array.isArray(j?.items)
+                    ? j.items
+                    : Array.isArray(j?.data)
+                    ? j.data
+                    : [];
+                  totalLive += arr.length;
+                  pages += 1;
+                  pagesTotal += 1;
+                  token = (j?.nextToken ? String(j.nextToken) : '') || null;
+                } catch {
+                  // Abort/timeout or network error - stop live aggregation and fall back
+                  token = null;
+                  break;
+                } finally {
+                  clearTimeout(timeout);
+                }
+              } while (token && pages < LIVE_MAX_PAGES && Date.now() - start < LIVE_TIMEOUT_MS);
+              if (Date.now() - start >= LIVE_TIMEOUT_MS) break;
             }
-            if (snapshotCandidate.ok === false) approxFlag = true;
-            pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
-            usedSnapshot = true;
-            pendingSnapshotWindowDays = snapshotWindowDays;
-          } else {
-            // Skip snapshot due to window mismatch — fall through to live check.
-            // This prevents comparing a 90-day vendor snapshot against our 7-day DB count.
-          }
-        }
-
-  if (!usedSnapshot) {
-          const LIVE_TIMEOUT_MS = Number(process.env.KPIS_LIVE_TIMEOUT_MS ?? 5000);
-          const LIVE_MAX_PAGES = Math.max(1, Number(process.env.KPIS_LIVE_MAX_PAGES ?? 2));
-          const start = Date.now();
-          let pages = 0;
-          let total = 0;
-          let token: string | null = null;
-          const dateFrom = sevenDaysAgo.toISOString().slice(0, 10);
-          const dateTo = now.toISOString().slice(0, 10);
-          do {
-            const elapsed = Date.now() - start;
-            if (elapsed >= LIVE_TIMEOUT_MS) break;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), Math.max(1, LIVE_TIMEOUT_MS - elapsed));
-            try {
-              // Use vendor-side PENDING status for live boost since vendor supports a single status filter
-              const base = `/api/orders?status=PENDING&shopId=ALL&size=100&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
-              const url = await absUrl(base);
-              const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-              if (!res.ok) break;
-              const j: any = await res.json();
-              const arr = Array.isArray(j?.orders)
-                ? j.orders
-                : Array.isArray(j?.items)
-                ? j.items
-                : Array.isArray(j?.data)
-                ? j.data
-                : [];
-              total += arr.length;
-              token = (j?.nextToken ? String(j.nextToken) : '') || null;
-              pages += 1;
-            } catch {
-              // Abort/timeout or network error - stop live adjustment and keep DB value
-              break;
-            } finally {
-              clearTimeout(timeout);
+            if (pagesTotal > 0) {
+              // Prefer vendor truth when it differs from DB, unless disabled.
+              if (preferVendorWhenDiff && totalLive !== queued) {
+                pendingAllOut = totalLive;
+                approxFlag = true;
+              } else if (totalLive > pendingAllOut) {
+                pendingAllOut = totalLive;
+                approxFlag = true;
+              }
+              pendingSource = 'live';
+            } else {
+              // Live aggregation did not return in time or returned empty pages; fall back to snapshot logic.
+              const snapshotMaxAgeMs = Math.max(30_000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60_000));
+              const snapshotCandidate = await readPendingSnapshot().catch(() => null);
+              let usedSnapshot = false;
+              if (snapshotCandidate && isPendingSnapshotFresh(snapshotCandidate, snapshotMaxAgeMs)) {
+                // Snapshot window may differ from KPI expected window. We only accept snapshot when its
+                // window equals the KPI configured lookback (JUMIA_PENDING_WINDOW_DAYS defaults to 7 for KPI use).
+                const snapshotWindowDays = Number(snapshotCandidate.windowDays ?? 0);
+                const expectedWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 7);
+                if (Number.isFinite(snapshotWindowDays) && snapshotWindowDays === expectedWindowDays) {
+                  const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
+                  if (preferVendorWhenDiff && snapshotTotal !== queued) {
+                    pendingAllOut = snapshotTotal;
+                    approxFlag = true;
+                  } else if (snapshotTotal > pendingAllOut) {
+                    pendingAllOut = snapshotTotal;
+                    approxFlag = true;
+                  }
+                  if (snapshotCandidate.ok === false) approxFlag = true;
+                  pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
+                  usedSnapshot = true;
+                  pendingSnapshotWindowDays = snapshotWindowDays;
+                }
+              }
             }
-          } while (token && pages < LIVE_MAX_PAGES);
-          if (pages > 0) {
-            // Prefer vendor truth when it differs from DB, unless disabled.
-            if (preferVendorWhenDiff && total !== queued) {
-              pendingAllOut = total;
-              approxFlag = true;
-            } else if (total > pendingAllOut) {
-              // Legacy behavior: only boost upwards when vendor is higher
-              pendingAllOut = total;
-              approxFlag = true;
-            }
-            pendingSource = 'live';
-          }
-        }
       }
     } catch {
       // ignore network/vendor errors and keep DB-based value
