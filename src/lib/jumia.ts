@@ -373,6 +373,9 @@ export async function jumiaFetch(
     cache: rest.cache ?? 'no-store',
   };
 
+  // Identify per-key (per-shop) limiter key when provided by callers
+  const perKey = (fetchOpts as any)?.shopKey ? String((fetchOpts as any).shopKey) : '';
+
   // Defensive: when using a shop-scoped token, do NOT send a vendor `shopId` query param
   // Some tenants return 400/422 if both a shop-specific token and shopId query param are sent.
   try {
@@ -420,8 +423,6 @@ export async function jumiaFetch(
   }
 
   // Use the shared rate-limited queue to perform the request with retries
-  // Identify per-key (per-shop) limiter key when provided by callers
-  const perKey = (fetchOpts as any)?.shopKey ? String((fetchOpts as any).shopKey) : '';
   const attempt = async () => {
     const start = Date.now();
     const r = await fetch(url, requestInit);
