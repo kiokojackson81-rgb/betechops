@@ -37,7 +37,28 @@ async function GET(req, ctx) {
         }, { headers: { "Cache-Control": "no-store" } });
     }
     catch (error) {
+        // Improve transparency + graceful handling of common vendor edge cases.
+        const err = error;
+        const status = typeof err?.status === 'number' ? err.status : undefined;
+        const body = typeof err?.body === 'string' ? err.body : undefined;
         const msg = error instanceof Error ? error.message : String(error);
-        return server_1.NextResponse.json({ error: msg, itemsCount: 0, items: [] }, { status: 500 });
+        // Treat 404/400 (order extinct or unauthorized for specific item list) as empty list instead of hard failure.
+        if (status === 404 || status === 400) {
+            return server_1.NextResponse.json({
+                error: msg,
+                vendorStatus: status,
+                vendorBody: body?.slice(0, 400),
+                itemsCount: 0,
+                items: [],
+                soft: true,
+            }, { status: 200 });
+        }
+        return server_1.NextResponse.json({
+            error: msg,
+            vendorStatus: status,
+            vendorBody: body?.slice(0, 400),
+            itemsCount: 0,
+            items: [],
+        }, { status: 500 });
     }
 }

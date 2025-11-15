@@ -4,6 +4,7 @@ exports.runtime = exports.dynamic = void 0;
 exports.GET = GET;
 const prisma_1 = require("@/lib/prisma");
 const jumia_1 = require("@/lib/jumia");
+const orderStatus_1 = require("@/lib/jumia/orderStatus");
 exports.dynamic = 'force-dynamic';
 exports.runtime = 'nodejs';
 function parseHead(order) {
@@ -16,7 +17,7 @@ function parseHead(order) {
         return null;
     return { ts, id };
 }
-async function fetchNewestForShop(shopId, params) {
+async function fetchNewestForShopVendor(shopId, params) {
     // Build minimal query asking for one newest item for this shop
     const qs = ['size=1'];
     if (params.status)
@@ -64,10 +65,63 @@ async function fetchNewestForShop(shopId, params) {
         return null;
     }
 }
+async function fetchNewestForShopFromDb(shopId, params) {
+    const where = { shopId };
+    const status = (0, orderStatus_1.normalizeStatus)(params.status);
+    if (status && status !== 'ALL')
+        where.status = status;
+    if (params.country)
+        where.countryCode = params.country.trim().toUpperCase();
+    const dateFrom = params.dateFrom ? new Date(`${params.dateFrom}T00:00:00Z`) : null;
+    const dateTo = params.dateTo ? new Date(`${params.dateTo}T23:59:59Z`) : null;
+    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+        const range = {};
+        if (dateFrom && !Number.isNaN(dateFrom.getTime()))
+            range.gte = dateFrom;
+        if (dateTo && !Number.isNaN(dateTo.getTime()))
+            range.lte = dateTo;
+        where.OR = [
+            { updatedAtJumia: range },
+            { AND: [{ updatedAtJumia: null }, { createdAtJumia: range }] },
+            { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: range }] },
+        ];
+    }
+    try {
+        const record = await prisma_1.prisma.jumiaOrder.findFirst({
+            where,
+            orderBy: [
+                { updatedAtJumia: 'desc' },
+                { createdAtJumia: 'desc' },
+                { updatedAt: 'desc' },
+                { createdAt: 'desc' },
+            ],
+            select: {
+                id: true,
+                updatedAtJumia: true,
+                createdAtJumia: true,
+                updatedAt: true,
+                createdAt: true,
+            },
+        });
+        if (!record)
+            return null;
+        const comparable = record.updatedAtJumia ?? record.createdAtJumia ?? record.updatedAt ?? record.createdAt ?? null;
+        if (!comparable)
+            return null;
+        const ts = comparable.getTime();
+        return Number.isNaN(ts) ? null : { ts, id: record.id };
+    }
+    catch {
+        return null;
+    }
+}
 async function GET(req) {
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status') || 'PENDING';
-    const country = searchParams.get('country') || undefined;
+    const statusRaw = searchParams.get('status');
+    const normalizedStatus = (0, orderStatus_1.normalizeStatus)(statusRaw) ?? 'PENDING';
+    let useSyncedStorage = (0, orderStatus_1.isSyncedStatus)(normalizedStatus);
+    const countryParam = searchParams.get('country') || undefined;
+    const country = countryParam ? countryParam.trim().toUpperCase() : undefined;
     const shopIdParam = searchParams.get('shopId') || undefined;
     const dateFrom = searchParams.get('dateFrom') || undefined;
     const dateTo = searchParams.get('dateTo') || undefined;
@@ -77,7 +131,20 @@ async function GET(req) {
     if (shopIdParam && shopIdParam.toUpperCase() !== 'ALL') {
         shopIds = [shopIdParam];
     }
-    else {
+    else if (useSyncedStorage) {
+        try {
+            const rows = await prisma_1.prisma.jumiaShop.findMany({ select: { id: true } });
+            shopIds = rows.map((r) => r.id);
+        }
+        catch {
+            shopIds = [];
+        }
+        if (!shopIds.length) {
+            // If no synced shops exist yet, fall back to vendor polling.
+            useSyncedStorage = false;
+        }
+    }
+    if (!shopIds.length) {
         try {
             const rows = await prisma_1.prisma.shop.findMany({ where: { isActive: true, platform: 'JUMIA' }, select: { id: true } });
             shopIds = rows.map((r) => r.id);
@@ -106,7 +173,7 @@ async function GET(req) {
                 controller.enqueue(enc.encode(lines.join('\n')));
             }
             // Initial hello
-            send('hello', { ok: true, status, country, shopIds, ts: Date.now() });
+            send('hello', { ok: true, status: normalizedStatus, country, shopIds, ts: Date.now(), source: useSyncedStorage ? 'db' : 'vendor' });
             let alive = true;
             const ac = new AbortController();
             req.signal.addEventListener('abort', () => { alive = false; ac.abort(); });
@@ -122,7 +189,19 @@ async function GET(req) {
                 try {
                     let anyNew = false;
                     for (const sid of shopIds) {
-                        const head = await fetchNewestForShop(sid, { status, country, dateFrom, dateTo });
+                        const head = useSyncedStorage
+                            ? await fetchNewestForShopFromDb(sid, {
+                                status: normalizedStatus,
+                                country,
+                                dateFrom,
+                                dateTo,
+                            })
+                            : await fetchNewestForShopVendor(sid, {
+                                status: normalizedStatus,
+                                country,
+                                dateFrom,
+                                dateTo,
+                            });
                         const prev = last[sid] || null;
                         if (!prev && head) {
                             last[sid] = head;

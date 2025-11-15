@@ -143,7 +143,7 @@ function Home() {
     // Single source of truth per card to avoid inconsistent values from mixed endpoints
     const pickupPaths = (0, react_1.useMemo)(() => ["/api/returns/waiting-pickup"], []);
     const pricingPaths = (0, react_1.useMemo)(() => ["/api/orders/pending-pricing"], []);
-    const pendingPaths = (0, react_1.useMemo)(() => [], []);
+    const pendingPaths = (0, react_1.useMemo)(() => ["/api/orders?status=PENDING&shopId=ALL&fresh=1&size=200"], []);
     (0, react_1.useEffect)(() => {
         let ignore = false;
         // 1) Bypass localStorage hydration entirely for strict DB accuracy
@@ -152,11 +152,12 @@ function Home() {
         }
         const run = async () => {
             try {
-                const [c1, c2, kpis] = await Promise.all([
+                const [c1, c2, kpis, fallbackPending] = await Promise.all([
                     tryCounts(pickupPaths),
                     tryCounts(pricingPaths),
                     // DB-only accuracy: disable live vendor boost
                     fetchJsonWithTimeout("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
+                    tryCounts(pendingPaths),
                 ]);
                 if (!ignore) {
                     // Only update when we have a concrete value; keep last value on errors
@@ -168,21 +169,29 @@ function Home() {
                         ? Number(kpis.pendingAll)
                         : null;
                     const approx = Boolean(kpis?.approx);
-                    if (rawPending !== null) {
+                    const fallbackIsNumber = typeof fallbackPending === "number" && Number.isFinite(fallbackPending);
+                    let finalPending = rawPending;
+                    let finalApprox = approx;
+                    let usedFallback = false;
+                    if (finalPending === null && fallbackIsNumber) {
+                        finalPending = fallbackPending;
+                        finalApprox = false;
+                        usedFallback = true;
+                    }
+                    if (finalPending !== null && Number.isFinite(finalPending)) {
                         const prev = pendingAll;
-                        const shouldKeepPrev = approx && typeof prev === "number" && Number.isFinite(prev) && rawPending < prev;
+                        const shouldKeepPrev = finalApprox && typeof prev === "number" && Number.isFinite(prev) && finalPending < prev;
                         if (!shouldKeepPrev) {
-                            setPendingAll(rawPending);
+                            setPendingAll(finalPending);
                         }
-                        const ts = typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
+                        const ts = !usedFallback && typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
                             ? kpis.updatedAt
                             : Date.now();
                         const dt = new Date(ts);
                         const hh = String(dt.getHours()).padStart(2, "0");
                         const mm = String(dt.getMinutes()).padStart(2, "0");
-                        setPendingUpdated(approx
-                            ? `Live ${dt.toLocaleDateString()} ${hh}:${mm}`
-                            : `Updated ${dt.toLocaleDateString()} ${hh}:${mm}`);
+                        const label = finalApprox ? "Live" : usedFallback ? "Live fallback" : "Updated";
+                        setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
                     }
                     else {
                         setPendingUpdated(null);

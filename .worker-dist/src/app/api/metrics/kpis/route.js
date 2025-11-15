@@ -88,8 +88,10 @@ async function GET(request) {
         let pendingSource = 'db';
         try {
             const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
+            const forceDb = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || '').toLowerCase() === 'true';
+            const liveDisabledEffective = liveDisabled || forceDb;
             const preferVendorWhenDiff = String(process.env.KPIS_PREFER_VENDOR_WHEN_DIFF || 'true').toLowerCase() !== 'false';
-            const allowLive = (!noLive && !liveDisabled) || (isStale && !liveDisabled);
+            const allowLive = (!noLive && !liveDisabledEffective) || (isStale && !liveDisabledEffective);
             if (allowLive) {
                 const snapshotMaxAgeMs = Math.max(30000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60000));
                 const snapshotCandidate = await (0, pendingSnapshot_1.readPendingSnapshot)().catch(() => null);

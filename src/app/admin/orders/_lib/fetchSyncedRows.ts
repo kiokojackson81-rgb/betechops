@@ -105,6 +105,9 @@ export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]>
       updatedAt: updated?.toISOString?.(),
       totalItems: order.totalItems ?? undefined,
       packedItems: order.packedItems ?? undefined,
+      totalAmountLocal: order.totalAmountLocalValue !== null && order.totalAmountLocalValue !== undefined
+        ? { currency: order.totalAmountLocalCurrency ?? '', value: Number(order.totalAmountLocalValue) }
+        : undefined,
       shopName: shopLabel ?? undefined,
       shopId: order.shopId ?? undefined,
       shopIds: order.shopId ? [order.shopId] : undefined,

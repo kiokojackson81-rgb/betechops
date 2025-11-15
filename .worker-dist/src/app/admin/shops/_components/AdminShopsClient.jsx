@@ -47,6 +47,33 @@ const ShopsActionsContext_1 = require("./ShopsActionsContext");
 const AdminShopsClient_helpers_1 = require("./AdminShopsClient.helpers");
 function AdminShopsClient({ initial }) {
     const [shops, setShops] = (0, react_1.useState)(initial || []);
+    const [hydrated, setHydrated] = (0, react_1.useState)(false);
+    // Client-side hydration fallback: if server didn't provide any shops,
+    // fetch from the public API to avoid an empty panel in prod after cold deploys.
+    (0, react_1.useEffect)(() => {
+        let cancelled = false;
+        (async () => {
+            if ((initial?.length ?? 0) > 0 || hydrated)
+                return;
+            try {
+                const res = await fetch('/api/shops', { cache: 'no-store' });
+                if (!res.ok)
+                    return;
+                const list = (await res.json());
+                if (!cancelled && Array.isArray(list) && list.length) {
+                    const mapped = list.map((s) => ({ id: s.id, name: s.name, platform: s.platform ?? undefined }));
+                    setShops(mapped);
+                    setHydrated(true);
+                }
+            }
+            catch {
+                // ignore
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [initial, hydrated]);
     function onShopCreated(s) {
         setShops(prev => (0, AdminShopsClient_helpers_1.addShopToList)(prev, s));
         (0, toast_1.showToast)('Shop created', 'success');

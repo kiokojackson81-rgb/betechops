@@ -38,11 +38,13 @@ exports.default = AttendantForm;
 const react_1 = __importStar(require("react"));
 const toast_1 = require("@/lib/ui/toast");
 const ShopsActionsContext_1 = require("./ShopsActionsContext");
+const categories_1 = require("@/lib/attendants/categories");
 function AttendantForm({ shops }) {
     const [email, setEmail] = (0, react_1.useState)('');
     const [name, setName] = (0, react_1.useState)('');
     const [shopId, setShopId] = (0, react_1.useState)('');
     const [roleAtShop, setRoleAtShop] = (0, react_1.useState)('ATTENDANT');
+    const [categories, setCategories] = (0, react_1.useState)(['GENERAL']);
     const [busy, setBusy] = (0, react_1.useState)(false);
     const [err, setErr] = (0, react_1.useState)(null);
     const actions = (0, ShopsActionsContext_1.useShopsActionsSafe)();
@@ -51,7 +53,7 @@ function AttendantForm({ shops }) {
         setBusy(true);
         setErr(null);
         try {
-            const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name }) });
+            const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name, categories }) });
             const j = await res.json();
             if (!res.ok)
                 throw new Error(j?.error || 'failed');
@@ -66,6 +68,7 @@ function AttendantForm({ shops }) {
             setEmail('');
             setName('');
             setShopId('');
+            setCategories(['GENERAL']);
             (0, toast_1.showToast)('Attendant created', 'success');
             // Notify parent via context if available (provider optional).
             actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
@@ -86,6 +89,27 @@ function AttendantForm({ shops }) {
       <div>
         <label className="block">Name</label>
         <input value={name} onChange={e => setName(e.target.value)} className="border p-1"/>
+      </div>
+      <div>
+        <label className="block">Categories</label>
+        <div className="flex flex-col gap-1 border border-slate-600/40 p-2 rounded">
+          {categories_1.attendantCategoryOptions.map(opt => {
+            const checked = categories.includes(opt.id);
+            return (<label key={opt.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={checked} onChange={e => {
+                    const next = e.target.checked
+                        ? Array.from(new Set([...categories, opt.id]))
+                        : categories.filter(c => c !== opt.id);
+                    if (!next.length) {
+                        (0, toast_1.showToast)('Select at least one category', 'error');
+                        return;
+                    }
+                    setCategories(next);
+                }}/>
+                <span>{opt.label}</span>
+              </label>);
+        })}
+        </div>
       </div>
       <div>
         <label className="block">Assign to shop (optional)</label>

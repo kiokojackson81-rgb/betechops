@@ -25,7 +25,15 @@ async function POST(req) {
     let files = [];
     try {
         const all = await fs_1.promises.readdir(prismaDir);
-        files = all.filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f)).sort();
+        // Restrict to a safe allowlist to avoid executing obsolete patches
+        const allowlist = new Set([
+            "post_deploy_patch_fix_public_platform_enum.sql",
+            "post_deploy_patch_create_shop.sql",
+        ]);
+        files = all
+            .filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f))
+            .filter((f) => allowlist.has(f))
+            .sort();
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -66,7 +74,14 @@ async function GET() {
     const prismaDir = path_1.default.join(process.cwd(), "prisma");
     try {
         const all = await fs_1.promises.readdir(prismaDir);
-        const files = all.filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f)).sort();
+        const allowlist = new Set([
+            "post_deploy_patch_fix_public_platform_enum.sql",
+            "post_deploy_patch_create_shop.sql",
+        ]);
+        const files = all
+            .filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f))
+            .filter((f) => allowlist.has(f))
+            .sort();
         return server_1.NextResponse.json({ ok: true, files, timestamp: new Date().toISOString() });
     }
     catch (e) {

@@ -3,14 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchSyncedRows = fetchSyncedRows;
 const prisma_1 = require("@/lib/prisma");
 const orderHelpers_1 = require("@/lib/jumia/orderHelpers");
+const orderStatus_1 = require("@/lib/jumia/orderStatus");
 function pickComparableDate(order) {
     return order.updatedAtJumia ?? order.createdAtJumia ?? order.updatedAt ?? order.createdAt;
 }
 async function fetchSyncedRows(params) {
     // Use a flexible where type to avoid tight coupling to generated Prisma types in CI/builds
     const where = {};
-    if (params.status && params.status !== "ALL")
-        where.status = params.status;
+    const status = (0, orderStatus_1.normalizeStatus)(params.status);
+    if (status && status !== "ALL")
+        where.status = status;
     if (params.shopId && params.shopId !== "ALL")
         where.shopId = params.shopId;
     if (params.country)
@@ -98,6 +100,9 @@ async function fetchSyncedRows(params) {
             updatedAt: updated?.toISOString?.(),
             totalItems: order.totalItems ?? undefined,
             packedItems: order.packedItems ?? undefined,
+            totalAmountLocal: order.totalAmountLocalValue !== null && order.totalAmountLocalValue !== undefined
+                ? { currency: order.totalAmountLocalCurrency ?? '', value: Number(order.totalAmountLocalValue) }
+                : undefined,
             shopName: shopLabel ?? undefined,
             shopId: order.shopId ?? undefined,
             shopIds: order.shopId ? [order.shopId] : undefined,

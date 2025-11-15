@@ -12,7 +12,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "incremental": true,
+  "incremental": true,
+  "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"

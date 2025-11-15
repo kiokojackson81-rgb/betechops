@@ -196,6 +196,29 @@ function OrdersTable({ rows, nextToken, isLastPage }) {
             setSelected((prev) => ({ ...prev, ...add }));
         }
     }
+    function timeAgo(ts) {
+        if (!ts)
+            return "";
+        try {
+            const d = new Date(ts);
+            const now = Date.now();
+            const diff = Math.max(0, now - d.getTime());
+            const s = Math.floor(diff / 1000);
+            if (s < 60)
+                return `${s}s ago`;
+            const m = Math.floor(s / 60);
+            if (m < 60)
+                return `${m}m ago`;
+            const h = Math.floor(m / 60);
+            if (h < 24)
+                return `${h}h ago`;
+            const dys = Math.floor(h / 24);
+            return `${dys}d ago`;
+        }
+        catch {
+            return "";
+        }
+    }
     async function runBulk(action) {
         if (!someSelected)
             return;
@@ -276,7 +299,7 @@ function OrdersTable({ rows, nextToken, isLastPage }) {
             </th>
             <th className="px-3 py-2">Order #</th>
             <th className="px-3 py-2">Status</th>
-            <th className="px-3 py-2">Created</th>
+            <th className="px-3 py-2">Created / Updated</th>
             <th className="px-3 py-2">Items</th>
             <th className="px-3 py-2">Total</th>
             <th className="px-3 py-2">Shop</th>
@@ -301,13 +324,18 @@ function OrdersTable({ rows, nextToken, isLastPage }) {
                   <span className="px-2 py-0.5 rounded-md border border-white/10 bg-white/5">{row.status}</span>
                   {row.pendingSince && <span className="ml-2 text-xs opacity-70">- {row.pendingSince}</span>}
                 </td>
-                <td className="px-3 py-2">{new Date(row.createdAt).toLocaleString()}</td>
+                <td className="px-3 py-2">
+                  <div>{new Date(row.createdAt).toLocaleString()}</div>
+                  {row.updatedAt && (<div className="text-xs opacity-70">
+                      Updated: {new Date(row.updatedAt).toLocaleString()} ({timeAgo(row.updatedAt)})
+                    </div>)}
+                </td>
                 <td className="px-3 py-2">
                   {typeof row.packedItems === "number" && typeof row.totalItems === "number"
                     ? `${row.packedItems}/${row.totalItems}`
                     : row.totalItems ?? "-"}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 font-medium">
                   {row.totalAmountLocal
                     ? `${row.totalAmountLocal.currency ?? ""} ${row.totalAmountLocal.value.toLocaleString()}`.trim()
                     : details[row.id]?.total

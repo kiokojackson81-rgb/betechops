@@ -12,9 +12,21 @@ async function absUrl(path) {
     const h = await (0, headers_1.headers)();
     const proto = h.get("x-forwarded-proto") ?? "https";
     const host = h.get("x-forwarded-host") ?? h.get("host");
-    if (!host)
-        throw new Error("Cannot determine host for server-side fetch");
-    return `${proto}://${host}${path.startsWith("/") ? path : `/${path}`}`;
+    // Fail-open: if host is unavailable (some SSR/edge contexts), try env fallbacks then return a relative URL.
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    if (!host) {
+        const envBase = process.env.NEXT_PUBLIC_BASE_URL ||
+            process.env.APP_URL ||
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+            null;
+        if (envBase && /^(http|https):\/\//i.test(envBase)) {
+            return `${envBase}${normalizedPath}`;
+        }
+        // Last resorts: try localhost absolute URL to keep fetch happy (relative may throw in some runtimes)
+        const localhost = process.env.LOCALHOST_FALLBACK_BASE || 'http://localhost:3000';
+        return `${localhost}${normalizedPath}`;
+    }
+    return `${proto}://${host}${normalizedPath}`;
 }
 /** Append search params only when present (avoids trailing '?') */
 function withParams(base, params) {

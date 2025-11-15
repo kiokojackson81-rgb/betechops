@@ -7,6 +7,7 @@ exports.POST = POST;
 const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const secure_json_1 = require("@/lib/crypto/secure-json");
+const guards_1 = require("@/lib/db/guards");
 const api_1 = require("@/lib/api");
 const zod_1 = require("zod");
 exports.dynamic = "force-dynamic";
@@ -44,6 +45,19 @@ async function POST(request) {
         const parsed = CreateShopSchema.safeParse({ name, platform, credentials });
         if (!parsed.success) {
             return server_1.NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+        }
+        // Guard: ensure the enum type exists; if missing, guide remediation instead of raw 500
+        const enumOk = await (0, guards_1.hasPublicPlatformEnum)(prisma_1.prisma);
+        if (!enumOk) {
+            return server_1.NextResponse.json({
+                error: 'Platform enum missing in database schema',
+                remediation: [
+                    'Run: prisma migrate deploy (or migrate dev) in this environment',
+                    'If migrations already deployed, manually create enum: CREATE TYPE "public"."Platform" AS ENUM (\'JUMIA\',\'KILIMALL\');',
+                    'Then re-run the deployment so Prisma client matches DB',
+                ],
+                code: 'MISSING_PLATFORM_ENUM'
+            }, { status: 503 });
         }
         const encrypted = parsed.data.credentials ? (0, secure_json_1.encryptJsonForStorage)(parsed.data.credentials) : null;
         const shop = await prisma_1.prisma.shop.create({ data: { name: parsed.data.name, platform: parsed.data.platform, credentialsEncrypted: encrypted } });

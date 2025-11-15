@@ -11,7 +11,8 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
     const [rows, setRows] = (0, react_1.useState)(initialRows ?? []);
     const [nextToken, setNextToken] = (0, react_1.useState)(initialNextToken ?? null);
     const [isLastPage, setIsLastPage] = (0, react_1.useState)(initialIsLastPage ?? true);
-    const [lastUpdatedAt, setLastUpdatedAt] = (0, react_1.useState)(Date.now());
+    const [lastUpdatedAt, setLastUpdatedAt] = (0, react_1.useState)(() => Date.now());
+    const [lastUpdatedLabel, setLastUpdatedLabel] = (0, react_1.useState)('—');
     const busyRef = (0, react_1.useRef)(null);
     const lastFetchTsRef = (0, react_1.useRef)(0);
     const MIN_INTERVAL_MS = 2500;
@@ -98,6 +99,13 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         return busyRef.current;
     }, [disableClientFetch, query, storageKey]);
     (0, react_1.useEffect)(() => {
+        setLastUpdatedLabel(new Date(lastUpdatedAt).toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        }));
+    }, [lastUpdatedAt]);
+    (0, react_1.useEffect)(() => {
         if (typeof window === "undefined")
             return;
         const handler = () => {
@@ -151,7 +159,7 @@ function OrdersLiveData({ initialRows, initialNextToken, initialIsLastPage, para
         }
     }, [rows, nextToken, isLastPage, storageKey, disableClientFetch]);
     return (<div className="space-y-2">
-      <div className="text-xs text-slate-500">Updated: {new Date(lastUpdatedAt).toLocaleTimeString()}</div>
+      <div className="text-xs text-slate-500">Updated: {lastUpdatedLabel}</div>
       <OrdersTable_1.default rows={rows} nextToken={nextToken} isLastPage={isLastPage}/>
     </div>);
 }

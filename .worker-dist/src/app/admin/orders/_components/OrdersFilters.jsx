@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = OrdersFilters;
 const navigation_1 = require("next/navigation");
 const react_1 = require("react");
+const orderStatus_1 = require("@/lib/jumia/orderStatus");
 // Note: Jumia API uses American spelling for canceled -> "CANCELED"
 const STATUSES = ["PENDING", "PACKED", "READY_TO_SHIP", "DELIVERED", "CANCELED", "RETURNED", "DISPUTED"];
 const SIZE_OPTIONS = [25, 50, 100, 150, 200, 250, 300];
@@ -22,7 +23,12 @@ function OrdersFilters({ shops }) {
     const sp = (0, navigation_1.useSearchParams)();
     const snapshot = (0, react_1.useMemo)(() => {
         const status = sp.get("status") || DEFAULTS.status;
-        const sizeDefault = status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+        const sizeDefault = (() => {
+            if ((0, orderStatus_1.isSyncedStatus)(status)) {
+                return status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+            }
+            return DEFAULTS.size;
+        })();
         return {
             status,
             country: sp.get("country") || DEFAULTS.country,
@@ -38,7 +44,8 @@ function OrdersFilters({ shops }) {
         setPending(snapshot);
     }, [snapshot]);
     const apply = () => {
-        const q = new URLSearchParams(sp.toString());
+        // Build query from current pending state (do not start from existing sp to avoid stale deletes)
+        const q = new URLSearchParams();
         const assign = (key, value, defaultValue) => {
             if (!value || value === defaultValue) {
                 q.delete(key);
@@ -53,55 +60,79 @@ function OrdersFilters({ shops }) {
         assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
         assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
         assign("q", pending.q.trim(), DEFAULTS.q);
-        const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+        const sizeDefault = (() => {
+            if ((0, orderStatus_1.isSyncedStatus)(pending.status)) {
+                return pending.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+            }
+            return DEFAULTS.size;
+        })();
         assign("size", pending.size, sizeDefault);
         q.delete("nextToken");
-        router.push(`${pathname}?${q.toString()}`);
+        const queryString = q.toString();
+        router.push(queryString ? `${pathname}?${queryString}` : pathname);
     };
     const reset = () => {
-        const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "300" : DEFAULTS.size;
+        const sizeDefault = (() => {
+            if ((0, orderStatus_1.isSyncedStatus)(DEFAULTS.status)) {
+                return DEFAULTS.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+            }
+            return DEFAULTS.size;
+        })();
         setPending({ ...DEFAULTS, size: sizeDefault });
         const q = new URLSearchParams(sp.toString());
         Object.keys(DEFAULTS).forEach((key) => q.delete(key));
         q.delete("nextToken");
         router.push(`${pathname}?${q.toString()}`);
     };
-    return (<div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
+    const onSubmit = (e) => {
+        // Prevent the browser's native submission to avoid a race between router.push and form submit
+        // and instead perform a single SPA navigation using the cleaned query built from `pending`.
+        e.preventDefault();
+        try {
+            apply();
+        }
+        catch (err) {
+            // Fallback: log and keep page as-is; native submit is avoided to prevent double navigation.
+            // eslint-disable-next-line no-console
+            console.error('[OrdersFilters] apply failed', err);
+        }
+    };
+    return (<form action={pathname || undefined} method="GET" onSubmit={onSubmit} className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
       <div className="grid md:grid-cols-6 gap-3">
-        <select value={pending.status} onChange={(e) => setPending((prev) => ({ ...prev, status: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select name="status" value={pending.status} onChange={(e) => setPending((prev) => ({ ...prev, status: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           <option value="ALL">All Status</option>
           {STATUSES.map((s) => (<option key={s} value={s}>
               {s}
             </option>))}
         </select>
 
-        <input value={pending.country} onChange={(e) => setPending((prev) => ({ ...prev, country: e.target.value }))} placeholder="Country (e.g. KE)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input name="country" value={pending.country} onChange={(e) => setPending((prev) => ({ ...prev, country: e.target.value }))} placeholder="Country (e.g. KE)" className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
 
-        <select value={pending.shopId} onChange={(e) => setPending((prev) => ({ ...prev, shopId: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select name="shopId" value={pending.shopId} onChange={(e) => setPending((prev) => ({ ...prev, shopId: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           <option value="ALL">All Jumia</option>
           {shops.map((s) => (<option key={s.id} value={s.id}>
               {s.name}
             </option>))}
         </select>
 
-        <input type="date" value={pending.dateFrom} onChange={(e) => setPending((prev) => ({ ...prev, dateFrom: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
-        <input type="date" value={pending.dateTo} onChange={(e) => setPending((prev) => ({ ...prev, dateTo: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input type="date" name="dateFrom" value={pending.dateFrom} onChange={(e) => setPending((prev) => ({ ...prev, dateFrom: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input type="date" name="dateTo" value={pending.dateTo} onChange={(e) => setPending((prev) => ({ ...prev, dateTo: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
 
-        <input value={pending.q} onChange={(e) => setPending((prev) => ({ ...prev, q: e.target.value }))} placeholder="Search number or name." className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
+        <input name="q" value={pending.q} onChange={(e) => setPending((prev) => ({ ...prev, q: e.target.value }))} placeholder="Search number or name." className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"/>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <select value={pending.size} onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
+        <select name="size" value={pending.size} onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))} className="border border-white/10 bg-white/5 rounded-lg px-2 py-2">
           {SIZE_OPTIONS.map((n) => (<option key={n} value={n.toString()}>
               {n} / page
             </option>))}
         </select>
-        <button onClick={apply} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10">
+        <button type="submit" className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10">
           Apply
         </button>
         <button onClick={reset} className="px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10">
           Reset
         </button>
       </div>
-    </div>);
+    </form>);
 }
