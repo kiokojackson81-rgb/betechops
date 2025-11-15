@@ -202,6 +202,7 @@ model JumiaOrder {
   isPrepayment      Boolean?
   totalAmountLocalCurrency String? // cached currency for local total
   totalAmountLocalValue    Float?  // cached aggregated local total value
+  shopName          String?  // friendly shop name cached for UI stability
   createdAtJumia    DateTime?
   updatedAtJumia    DateTime?
   createdAt         DateTime  @default(now())

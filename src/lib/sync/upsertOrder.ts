@@ -70,6 +70,7 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
         createdAtJumia: new Date(orderedAt),
         updatedAtJumia: new Date(orderedAt),
         shopId: shopId,
+        shopName: undefined,
       },
       update: {
         status: status || "UNKNOWN",

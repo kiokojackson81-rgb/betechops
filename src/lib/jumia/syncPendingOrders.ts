@@ -289,6 +289,8 @@ async function upsertOrder(shopId: string, raw: any) {
       createdAtJumia: parseOptionalDate(raw?.createdAt),
       updatedAtJumia: parseOptionalDate(raw?.updatedAt),
       shopId,
+      // cache the vendor-provided shop name when available for stable UI display
+      shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name) ? String(raw.shop.name) : (raw?.shopName ?? raw?.shop_label ?? null),
     },
     update: {
       number: parseNullableInt(raw?.number),
@@ -303,6 +305,7 @@ async function upsertOrder(shopId: string, raw: any) {
       totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
       createdAtJumia: parseOptionalDate(raw?.createdAt),
       updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+      shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name) ? String(raw.shop.name) : (raw?.shopName ?? raw?.shop_label ?? undefined),
     },
   });
 }

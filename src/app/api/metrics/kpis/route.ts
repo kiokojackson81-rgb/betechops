@@ -87,9 +87,10 @@ export async function GET(request: Request) {
     // For the card, compute the 7-day DB count and also an optional live vendor aggregation across ALL
     // shops for the same window. If the live total is higher (DB window incomplete), prefer it
     // and mark as approx. Time-box the live check to avoid UI blocking.
-    let pendingAllOut = queued;
-    let approxFlag = false;
-    let pendingSource: 'db' | 'snapshot' | 'snapshot-partial' | 'live' = 'db';
+  let pendingAllOut = queued;
+  let approxFlag = false;
+  let pendingSource: 'db' | 'snapshot' | 'snapshot-partial' | 'live' = 'db';
+  let pendingSnapshotWindowDays: number | undefined = undefined;
     try {
       const liveDisabled = String(process.env.KPIS_DISABLE_LIVE_ADJUST || '').toLowerCase() === 'true';
       const forceDb = String(process.env.ORDERS_FORCE_DB || process.env.NEXT_PUBLIC_ORDERS_FORCE_DB || '').toLowerCase() === 'true';
@@ -101,17 +102,31 @@ export async function GET(request: Request) {
         const snapshotCandidate = await readPendingSnapshot().catch(() => null);
         let usedSnapshot = false;
         if (snapshotCandidate && isPendingSnapshotFresh(snapshotCandidate, snapshotMaxAgeMs)) {
-          const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
-          if (preferVendorWhenDiff && snapshotTotal !== queued) {
-            pendingAllOut = snapshotTotal;
-            approxFlag = true;
-          } else if (snapshotTotal > pendingAllOut) {
-            pendingAllOut = snapshotTotal;
-            approxFlag = true;
+          // The KPI 'Pending Orders (All)' intentionally represents the last 7 days.
+          // The stored pending snapshot may have been generated with a different
+          // lookback window (e.g. the background sync uses JUMIA_PENDING_WINDOW_DAYS
+          // which defaults to 90). Ignore snapshots whose window doesn't match
+          // the 7-day KPI expectation so we don't mistakenly surface a larger
+          // legacy window as the live KPI value.
+          const snapshotWindowDays = Number(snapshotCandidate.windowDays ?? 0);
+          const expectedWindowDays = 7;
+          if (Number.isFinite(snapshotWindowDays) && snapshotWindowDays === expectedWindowDays) {
+            const snapshotTotal = Number(snapshotCandidate.totalOrders ?? 0);
+            if (preferVendorWhenDiff && snapshotTotal !== queued) {
+              pendingAllOut = snapshotTotal;
+              approxFlag = true;
+            } else if (snapshotTotal > pendingAllOut) {
+              pendingAllOut = snapshotTotal;
+              approxFlag = true;
+            }
+            if (snapshotCandidate.ok === false) approxFlag = true;
+            pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
+            usedSnapshot = true;
+            pendingSnapshotWindowDays = snapshotWindowDays;
+          } else {
+            // Skip snapshot due to window mismatch — fall through to live check.
+            // This prevents comparing a 90-day vendor snapshot against our 7-day DB count.
           }
-          if (snapshotCandidate.ok === false) approxFlag = true;
-          pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
-          usedSnapshot = true;
         }
 
   if (!usedSnapshot) {
@@ -208,6 +223,7 @@ export async function GET(request: Request) {
       pendingAll: pendingAllOut,
       approx: approxFlag,
       pendingSource,
+      pendingSnapshotWindowDays: pendingSnapshotWindowDays ?? undefined,
       stale: isStale,
       latestPendingUpdatedAt: latestUpdatedMillis || undefined,
       // Use a fresh timestamp for the DB-based value so UI reflects DB freshness, not cache time

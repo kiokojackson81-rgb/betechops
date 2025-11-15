@@ -539,6 +539,7 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
                   createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
                   updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
                   shopId,
+                  shopName: (rawObj?.shop && typeof rawObj.shop === 'object' && rawObj.shop.name) ? String((rawObj as any).shop.name) : (rawObj?.shopName ?? rawObj?.shop_label ?? null),
                 },
                 update: {
                   number: toInt((rawObj as any).number),
@@ -553,6 +554,7 @@ export async function syncOrdersIncremental(opts?: SyncOrdersIncrementalOptions)
                   totalAmountLocalValue: (() => { const v = (rawObj as any).totalAmountLocalValue ?? (rawObj as any).totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                   createdAtJumia: toDate((rawObj as any).createdAt ?? (rawObj as any).created_at),
                   updatedAtJumia: toDate((rawObj as any).updatedAt ?? (rawObj as any).updated_at ?? (rawObj as any).lastUpdatedAt),
+                  shopName: (rawObj?.shop && typeof rawObj.shop === 'object' && rawObj.shop.name) ? String((rawObj as any).shop.name) : (rawObj?.shopName ?? rawObj?.shop_label ?? undefined),
                 },
               });
               upserted += 1;

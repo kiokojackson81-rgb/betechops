@@ -254,8 +254,18 @@ export default function Home() {
             const dt = new Date(ts);
             const hh = String(dt.getHours()).padStart(2, "0");
             const mm = String(dt.getMinutes()).padStart(2, "0");
-            const label = finalApprox ? "Live" : usedFallback ? "Live fallback" : "Updated";
-            setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
+            const source = kpis?.pendingSource;
+            const snapshotDays = typeof kpis?.pendingSnapshotWindowDays === 'number' ? kpis.pendingSnapshotWindowDays : null;
+            let label = "Updated";
+            if (!usedFallback && typeof source === 'string' && source.startsWith('snapshot')) {
+              const part = source === 'snapshot-partial' ? ' partial' : '';
+              label = `Snapshot${part} (${snapshotDays ?? '?'}d)`;
+            } else if (finalApprox) {
+              label = 'Live';
+            } else if (usedFallback) {
+              label = 'Live fallback';
+            }
+              setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
           } else {
             setPendingUpdated(null);
           }

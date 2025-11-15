@@ -58,6 +58,40 @@ export async function fetchSyncedRows(params: OrdersQuery): Promise<OrdersRow[]>
     take,
   });
 
+  // Ensure we have a best-effort shop name for every order.
+  // Some rows may lack the joined `shop` relation (or its name) depending on
+  // how/when the order was inserted. In that case, fall back to looking up
+  // the `JumiaShop` directory so the UI can consistently display a friendly
+  // shop name instead of the raw ID.
+  try {
+    const missingShopIds = Array.from(
+      new Set(
+        orders
+          .map((o: any) => o.shopId)
+          .filter((s: any) => s && (!orders.find((x: any) => x.shopId === s)?.shop || !orders.find((x: any) => x.shopId === s)?.shop?.name)),
+      ),
+    );
+    if (missingShopIds.length) {
+      const resolved = await prisma.jumiaShop.findMany({
+        where: { id: { in: missingShopIds } },
+        select: { id: true, name: true, account: { select: { label: true } } },
+      }).catch(() => [] as any[]);
+      const byId = new Map<string, { name?: string; accountLabel?: string | null }>();
+      for (const r of resolved) byId.set(r.id, { name: r.name, accountLabel: r.account?.label ?? null });
+      // Attach resolution results onto the in-memory order objects so downstream
+      // mapping can prefer these when the joined relation is absent.
+      for (const o of orders) {
+        if ((!o.shop || !o.shop.name) && o.shopId && byId.has(o.shopId)) {
+          const val = byId.get(o.shopId)!;
+          // Attach a synthetic `shop` shape matching the include above
+          o.shop = { name: val.name, account: { label: val.accountLabel } };
+        }
+      }
+    }
+  } catch {
+    // best-effort only; any failures here shouldn't block returning orders
+  }
+
   const filtered = orders.filter((order: any) => {
     const comparable = pickComparableDate(order);
     if (params.dateFrom) {
