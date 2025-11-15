@@ -7,7 +7,11 @@ type LocalUser = { role?: string };
 
 export default function ClientRedirect() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+  // in some server/edge environments or due to provider misconfiguration.
+  const _sess = useSession() as { data?: any; status?: string } | undefined;
+  const session = _sess?.data;
+  const status = _sess?.status;
 
   useEffect(() => {
     if (status === "loading") return;
