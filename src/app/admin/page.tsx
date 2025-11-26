@@ -205,6 +205,7 @@ export default async function Overview() {
           <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
             <li><Link className="underline" href="/admin/shops">Create shops, assign attendants/supervisors</Link></li>
             <li><Link className="underline" href="/admin/settings">API credentials</Link></li>
+              <li><Link className="underline" href="/admin/daily-report">Daily sales reports</Link></li>
           </ul>
         </div>
       </section>
