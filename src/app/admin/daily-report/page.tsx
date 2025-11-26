@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Button from "@/app/_components/Button";
+import Card from "@/app/_components/Card";
+import { showToast } from "@/lib/ui/toast";
 
 interface Report {
   id: string;
@@ -28,6 +31,9 @@ export default function AdminDailyReportPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string>("");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [totalCount, setTotalCount] = useState<number>(0);
 
   async function fetchReports() {
     setError("");
@@ -35,6 +41,8 @@ export default function AdminDailyReportPage() {
     if (from) params.append("from", from);
     if (to) params.append("to", to);
     if (day) params.append("day", day);
+    params.append("page", String(page));
+    params.append("pageSize", String(pageSize));
     const url = `/api/daily-report${params.toString() ? "?" + params.toString() : ""}`;
     try {
       const res = await fetch(url);
@@ -42,32 +50,35 @@ export default function AdminDailyReportPage() {
         const data = await res.json();
         setReports(data.reports ?? []);
         setSummary(data.summary ?? null);
+        setTotalCount(data.totalCount ?? 0);
+        // if empty and page>1, step back
+        if ((data.reports ?? []).length === 0 && page > 1) setPage(1);
+        showToast("Reports loaded", "success");
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to fetch reports.");
+        showToast(data.error || "Failed to fetch reports.", "error");
       }
     } catch {
       setError("Failed to fetch reports.");
+      showToast("Failed to fetch reports.", "error");
     }
   }
 
   function downloadCsv() {
     const header = ["Date", "Day", "Attendant", "Products", "Sales", "Tasks"];
+    // safer CSV: quote fields, escape quotes, preserve JSON tasks
+    const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
     const rows = reports.map((r) => {
-      const dateStr   = new Date(r.date).toISOString().split("T")[0];
+      const dateStr = new Date(r.date).toISOString().split("T")[0];
       const attendant = r.user?.name ?? "";
-      return [
-        dateStr,
-        r.day,
-        attendant,
-        String(r.productsCount),
-        String(r.totalSales),
-        JSON.stringify(r.tasks ?? {}),
-      ];
+      return [dateStr, r.day, attendant, String(r.productsCount), String(r.totalSales), JSON.stringify(r.tasks ?? {})];
     });
-    const csv = [header, ...rows].map((row) => row.join(",")).join("\n");
+    const csv = [header, ...rows]
+      .map((row) => row.map((c) => quote(c)).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", "daily_reports.csv");
@@ -111,14 +122,19 @@ export default function AdminDailyReportPage() {
             ))}
           </select>
         </div>
-        <button onClick={fetchReports} className="self-end rounded-xl bg-sky-600 hover:bg-sky-700 px-4 py-2">
-          Filter
-        </button>
-        {reports.length > 0 && (
-          <button onClick={downloadCsv} className="self-end rounded-xl bg-green-600 hover:bg-green-700 px-4 py-2">
-            Download CSV
-          </button>
-        )}
+        <div className="flex gap-2 items-end">
+          <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Filter</Button>
+          <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}) }).toString()}`; }} variant="secondary">Download CSV</Button>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <label className="text-sm">Page size</label>
+          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded-lg border border-white/10 bg-transparent px-2 py-1">
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
       </div>
       {summary && (
         <div className="mb-4 space-y-1">
@@ -126,7 +142,7 @@ export default function AdminDailyReportPage() {
             <span className="font-medium">Total Products:</span> {summary.totalProducts}
           </p>
           <p>
-            <span className="font-medium">Total Sales:</span> KES {summary.totalSales}
+            <span className="font-medium">Total Sales:</span> KES {Number(summary.totalSales).toLocaleString()}
           </p>
         </div>
       )}
@@ -150,9 +166,9 @@ export default function AdminDailyReportPage() {
                 <td className="px-3 py-2">{r.day}</td>
                 <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
                 <td className="px-3 py-2 text-right">{r.productsCount}</td>
-                <td className="px-3 py-2 text-right">{r.totalSales}</td>
-                <td className="px-3 py-2 whitespace-pre-wrap break-all">
-                  {r.tasks ? JSON.stringify(r.tasks) : "—"}
+                <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
+                <td className="px-3 py-2 whitespace-pre-wrap break-all font-mono text-xs">
+                  {r.tasks ? JSON.stringify(r.tasks, null, 2) : "—"}
                 </td>
               </tr>
             ))}
@@ -165,6 +181,13 @@ export default function AdminDailyReportPage() {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <div className="text-sm text-slate-300">Showing page {page} — {Math.min((page-1)*pageSize+1, totalCount)} to {Math.min(page*pageSize, totalCount)} of {totalCount}</div>
+        <div className="flex gap-2">
+          <Button onClick={() => { if (page>1) { setPage(page-1); } }} variant="secondary">Prev</Button>
+          <Button onClick={() => { const max = Math.max(1, Math.ceil(totalCount / pageSize)); if (page < max) setPage(page+1); }} variant="secondary">Next</Button>
+        </div>
       </div>
     </div>
   );
