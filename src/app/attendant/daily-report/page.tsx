@@ -75,6 +75,12 @@ export default function DailyReportForm() {
   const [day, setDay] = useState<string>(getTodayDay());
   const [productsCount, setProductsCount] = useState<string>("");
   const [totalSales, setTotalSales] = useState<string>("");
+  const [salesRecords, setSalesRecords] = useState<Array<{ productName: string; price: string }>>([
+    { productName: "", price: "" },
+  ]);
+  const [newUploads, setNewUploads] = useState<string>("");
+  const [copiesUploaded, setCopiesUploaded] = useState<string>("");
+  const [productsEdited, setProductsEdited] = useState<string>("");
   const [taskValues, setTaskValues] = useState<Record<string, any>>({});
   const [message, setMessage] = useState<string>("");
   const tasksForDay = dayTaskDefinitions[day] || [];
@@ -92,6 +98,12 @@ export default function DailyReportForm() {
     if (!day) errors.push("Please select the day of week.");
     if (productsCount && Number(productsCount) < 0) errors.push("Products count cannot be negative.");
     if (totalSales && Number(totalSales) < 0) errors.push("Total sales cannot be negative.");
+    // validate sales rows
+    for (let i = 0; i < salesRecords.length; i++) {
+      const r = salesRecords[i];
+      if (r.productName && r.productName.trim().length === 0) errors.push(`Sale #${i + 1}: product name is required`);
+      if (r.price && Number(r.price) < 0) errors.push(`Sale #${i + 1}: price cannot be negative`);
+    }
     if (errors.length) {
       setMessage(errors.join(" "));
       return;
@@ -109,6 +121,16 @@ export default function DailyReportForm() {
         normalizedTasks[def.name] = val || "";
       }
     }
+    // attach sales records and categorized counts into tasks
+    const normalizedSales = salesRecords
+      .filter((s) => s.productName || s.price)
+      .map((s) => ({ productName: s.productName || "", price: Number(s.price || 0) }));
+    normalizedTasks.sales = normalizedSales;
+    normalizedTasks.categories = {
+      newUploads: Number(newUploads) || 0,
+      copiesUploaded: Number(copiesUploaded) || 0,
+      productsEdited: Number(productsEdited) || 0,
+    };
     try {
       const res = await fetch("/api/daily-report", {
         method: "POST",
@@ -125,6 +147,10 @@ export default function DailyReportForm() {
         setProductsCount("");
         setTotalSales("");
         setTaskValues({});
+        setSalesRecords([{ productName: "", price: "" }]);
+        setNewUploads("");
+        setCopiesUploaded("");
+        setProductsEdited("");
           showToast("Report saved successfully.", "success");
         // briefly show success then clear
         setTimeout(() => setMessage(""), 3000);
@@ -135,6 +161,16 @@ export default function DailyReportForm() {
     } catch {
         showToast("Failed to save report.", "error");
     }
+  }
+
+  function addSaleRow() {
+    setSalesRecords((s) => [...s, { productName: "", price: "" }]);
+  }
+  function removeSaleRow(idx: number) {
+    setSalesRecords((s) => s.filter((_, i) => i !== idx));
+  }
+  function updateSaleRow(idx: number, key: "productName" | "price", value: string) {
+    setSalesRecords((s) => s.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
   }
 
   return (
@@ -216,6 +252,82 @@ export default function DailyReportForm() {
             </div>
           ))}
         </div>
+        {/* Sales records: multiple product name + selling price rows */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-medium">Sales Records</h2>
+          <div className="space-y-2">
+            {salesRecords.map((r, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-6">
+                  <input
+                    type="text"
+                    placeholder="Product name"
+                    value={r.productName}
+                    onChange={(e) => updateSaleRow(idx, "productName", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+                  />
+                </div>
+                <div className="col-span-4">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Price (KES)"
+                    value={r.price}
+                    onChange={(e) => updateSaleRow(idx, "price", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" onClick={() => removeSaleRow(idx)}>Remove</Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div>
+            <Button type="button" variant="primary" onClick={addSaleRow}>Add Sale</Button>
+          </div>
+        </div>
+
+        {/* Categorized daily operations: new uploads, copies, edited */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-medium">Categorized Operations</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm mb-1 block">New products uploaded</label>
+              <input
+                type="number"
+                min="0"
+                value={newUploads}
+                onChange={(e) => setNewUploads(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-sm mb-1 block">Copies of products uploaded</label>
+              <input
+                type="number"
+                min="0"
+                value={copiesUploaded}
+                onChange={(e) => setCopiesUploaded(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-sm mb-1 block">Products edited</label>
+              <input
+                type="number"
+                min="0"
+                value={productsEdited}
+                onChange={(e) => setProductsEdited(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
             <Button type="submit" variant="primary">Submit Report</Button>
             <Button type="button" variant="secondary" onClick={() => { setProductsCount(""); setTotalSales(""); setTaskValues({}); }}>Reset</Button>

@@ -66,13 +66,27 @@ export default function AdminDailyReportPage() {
   }
 
   function downloadCsv() {
-    const header = ["Date", "Day", "Attendant", "Products", "Sales", "Tasks"];
+    const header = ["Date", "Day", "Attendant", "Products", "Sales", "NewUploads", "CopiesUploaded", "ProductsEdited", "SalesDetails", "Tasks"];
     // safer CSV: quote fields, escape quotes, preserve JSON tasks
     const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
     const rows = reports.map((r) => {
       const dateStr = new Date(r.date).toISOString().split("T")[0];
       const attendant = r.user?.name ?? "";
-      return [dateStr, r.day, attendant, String(r.productsCount), String(r.totalSales), JSON.stringify(r.tasks ?? {})];
+      const tasks = r.tasks ?? {};
+      const categories = tasks.categories ?? {};
+      const salesDetails = Array.isArray(tasks.sales) ? JSON.stringify(tasks.sales) : "[]";
+      return [
+        dateStr,
+        r.day,
+        attendant,
+        String(r.productsCount),
+        String(r.totalSales),
+        String(categories.newUploads ?? ""),
+        String(categories.copiesUploaded ?? ""),
+        String(categories.productsEdited ?? ""),
+        salesDetails,
+        JSON.stringify(tasks ?? {}),
+      ];
     });
     const csv = [header, ...rows]
       .map((row) => row.map((c) => quote(c)).join(","))
@@ -167,8 +181,29 @@ export default function AdminDailyReportPage() {
                 <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
                 <td className="px-3 py-2 text-right">{r.productsCount}</td>
                 <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
-                <td className="px-3 py-2 whitespace-pre-wrap break-all font-mono text-xs">
-                  {r.tasks ? JSON.stringify(r.tasks, null, 2) : "—"}
+                <td className="px-3 py-2">
+                  <div className="text-sm mb-1">
+                    <strong>Categories:</strong>{' '}
+                    {r.tasks?.categories ? (
+                      <span>
+                        New: {r.tasks.categories.newUploads ?? 0} • Copies: {r.tasks.categories.copiesUploaded ?? 0} • Edited: {r.tasks.categories.productsEdited ?? 0}
+                      </span>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    <strong>Sales:</strong>
+                    {Array.isArray(r.tasks?.sales) && r.tasks.sales.length > 0 ? (
+                      <ul className="list-disc pl-5 text-xs mt-1">
+                        {r.tasks.sales.map((s: any, i: number) => (
+                          <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-xs text-slate-400">No sales recorded</div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -10,6 +10,8 @@ export async function GET(req: Request) {
   const fromStr = url.searchParams.get("from");
   const toStr = url.searchParams.get("to");
   const day     = url.searchParams.get("day");
+  const pageStr = url.searchParams.get("page");
+  const pageSizeStr = url.searchParams.get("pageSize");
 
   const where: any = {};
   if (fromStr) {
@@ -25,22 +27,31 @@ export async function GET(req: Request) {
   }
 
   try {
-    const reports = await prisma.dailyReport.findMany({
-      where,
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { date: "desc" },
-    });
+    const page = Math.max(1, Number(pageStr || 1));
+    const pageSize = Math.max(1, Math.min(1000, Number(pageSizeStr || 25)));
+    const skip = (page - 1) * pageSize;
 
-    const summary = reports.reduce(
-      (acc, r) => {
-        acc.totalProducts += r.productsCount;
-        acc.totalSales   += typeof r.totalSales === "number" ? r.totalSales : Number(r.totalSales);
-        return acc;
-      },
-      { totalProducts: 0, totalSales: 0 }
-    );
+    const [totalCount, reports, agg] = await Promise.all([
+      prisma.dailyReport.count({ where }),
+      prisma.dailyReport.findMany({
+        where,
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { date: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      prisma.dailyReport.aggregate({
+        where,
+        _sum: { productsCount: true, totalSales: true },
+      }),
+    ]);
 
-    return NextResponse.json({ reports, summary });
+    const summary = {
+      totalProducts: agg._sum.productsCount ?? 0,
+      totalSales: agg._sum.totalSales ? Number(agg._sum.totalSales) : 0,
+    };
+
+    return NextResponse.json({ reports, summary, totalCount });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? "Server error");
     return NextResponse.json({ error: msg }, { status: 500 });
