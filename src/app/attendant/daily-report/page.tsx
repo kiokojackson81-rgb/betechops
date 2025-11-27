@@ -73,15 +73,13 @@ export default function DailyReportForm() {
   const today = new Date().toISOString().split("T")[0];
   const [date, setDate] = useState<string>(today);
   const [day, setDay] = useState<string>(getTodayDay());
-  const [productsCount, setProductsCount] = useState<string>("");
-  const [totalSales, setTotalSales] = useState<string>("");
+  const [taskValues, setTaskValues] = useState<Record<string, any>>({});
   const [salesRecords, setSalesRecords] = useState<Array<{ productName: string; price: string }>>([
     { productName: "", price: "" },
   ]);
   const [newUploads, setNewUploads] = useState<string>("");
   const [copiesUploaded, setCopiesUploaded] = useState<string>("");
   const [productsEdited, setProductsEdited] = useState<string>("");
-  const [taskValues, setTaskValues] = useState<Record<string, any>>({});
   const [message, setMessage] = useState<string>("");
   const tasksForDay = dayTaskDefinitions[day] || [];
 
@@ -96,8 +94,7 @@ export default function DailyReportForm() {
     // basic validation
     const errors: string[] = [];
     if (!day) errors.push("Please select the day of week.");
-    if (productsCount && Number(productsCount) < 0) errors.push("Products count cannot be negative.");
-    if (totalSales && Number(totalSales) < 0) errors.push("Total sales cannot be negative.");
+    // Removed validation for productsCount and totalSales
     // validate sales rows
     for (let i = 0; i < salesRecords.length; i++) {
       const r = salesRecords[i];
@@ -138,14 +135,11 @@ export default function DailyReportForm() {
         body: JSON.stringify({
           date,
           day,
-          productsCount: Number(productsCount) || 0,
-          totalSales: Number(totalSales) || 0,
+          // Removed productsCount and totalSales from payload
           tasks: normalizedTasks,
         }),
       });
       if (res.ok) {
-        setProductsCount("");
-        setTotalSales("");
         setTaskValues({});
         setSalesRecords([{ productName: "", price: "" }]);
         setNewUploads("");
@@ -312,7 +306,7 @@ export default function DailyReportForm() {
 
         <div className="flex items-center gap-4">
             <Button type="submit" variant="primary">Submit Report</Button>
-            <Button type="button" variant="secondary" onClick={() => { setProductsCount(""); setTotalSales(""); setTaskValues({}); }}>Reset</Button>
+            <Button type="button" variant="secondary" onClick={() => { setTaskValues({}); }}>Reset</Button>
         </div>
         {message && (
           <div className="mt-2 text-sm">
