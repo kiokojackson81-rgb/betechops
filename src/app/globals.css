@@ -3,6 +3,14 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --card-bg: #ffffff;
+  --primary: #0ea5a4; /* teal */
+  --accent: #7c3aed; /* purple */
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 @theme inline {
@@ -16,6 +24,14 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --muted: #9ca3af;
+    --border: #27272a;
+    --card-bg: #0b0b0c;
+    --primary: #34d399;
+    --accent: #a78bfa;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #fb7185;
   }
 }
 
@@ -23,4 +39,31 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Small design tokens used across pages */
+.kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+.kpi-title {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.kpi-value {
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+.badge-success { color: var(--success); }
+.badge-warn { color: var(--warning); }
+.badge-danger { color: var(--danger); }
+
+/* Sparkline container for tiny inline charts */
+.sparkline {
+  width: 120px;
+  height: 28px;
+  display: inline-block;
 }

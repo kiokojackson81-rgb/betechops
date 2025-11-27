@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
+import Sparkline from "@/app/_components/Sparkline";
 import { showToast } from "@/lib/ui/toast";
 
 interface Report {
@@ -34,6 +35,12 @@ export default function AdminDailyReportPage() {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
+
+  // fetch on mount so header KPIs render immediately
+  useEffect(() => {
+    void fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fetchReports() {
     setError("");
@@ -136,6 +143,25 @@ export default function AdminDailyReportPage() {
   return (
     <div className="mx-auto max-w-7xl p-6 text-slate-100">
       <h1 className="text-2xl font-semibold mb-4">Daily Performance Reports</h1>
+
+      {/* KPI header */}
+      <div className="mb-4 flex items-center gap-4">
+        <Card variant="kpi">
+          <div className="kpi-title">Total products</div>
+          <div className="kpi-value">{summary ? summary.totalProducts : "—"}</div>
+        </Card>
+        <Card variant="kpi">
+          <div className="kpi-title">Total sales (KES)</div>
+          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "—"}</div>
+        </Card>
+        <div className="ml-4 text-sm opacity-70">Recent products</div>
+        <div className="sparkline">
+          <Sparkline values={reports.slice(0, 6).map((r) => r.productsCount)} color="var(--primary)" />
+        </div>
+        <div className="ml-auto">
+          <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
+        </div>
+      </div>
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <div className="flex flex-col">
           <label className="text-sm mb-1">From</label>
@@ -182,6 +208,10 @@ export default function AdminDailyReportPage() {
           </select>
         </div>
       </div>
+      
+      {/* small sparkline component for admin header */}
+      {/** kept local to avoid changing shared modules for now **/}
+      
       {summary && (
         <div className="mb-4 space-y-1">
           <p>
@@ -284,3 +314,5 @@ export default function AdminDailyReportPage() {
     </div>
   );
 }
+
+// Sparkline is now provided by `src/app/_components/Sparkline`

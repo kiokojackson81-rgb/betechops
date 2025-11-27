@@ -6,6 +6,7 @@ import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Checkbox from "@/app/_components/Checkbox";
 import Textarea from "@/app/_components/Textarea";
+import Sparkline from "@/app/_components/Sparkline";
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
@@ -108,6 +109,9 @@ export default function DailyTasksUI() {
 
   const def = dayTaskDefinitions[day];
   const adminSummary = useMemo(() => computeAdminSummary(dayState[day], market[day]), [day, dayState, market]);
+
+  const productsCountCurrent = (Number(market[day].newUploaded || 0) + Number(market[day].copiesUploaded || 0) + Number(market[day].productsEdited || 0));
+  const totalSalesCurrent = (market[day].sales || []).reduce((acc, s) => acc + (Number(s.price) || 0), 0);
 
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -227,6 +231,21 @@ export default function DailyTasksUI() {
         <p className="text-sm opacity-80">Core duties + Jumia/Kilimall operations are captured for EVERY day.</p>
       </div>
 
+      <div className="flex gap-3 items-center">
+        <div className="kpi-card">
+          <div className="kpi-title">Products (today)</div>
+          <div className="kpi-value">{productsCountCurrent}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Total sales (KES)</div>
+          <div className="kpi-value">{totalSalesCurrent.toLocaleString()}</div>
+        </div>
+        <div className="ml-4 text-sm opacity-70">Trend</div>
+        <div className="sparkline">
+          <Sparkline values={[adminSummary.mk_new as number, adminSummary.mk_copies as number, adminSummary.mk_edits as number, adminSummary.mk_sales as number, adminSummary.videos as number, adminSummary.leads as number]} color="var(--primary)" />
+        </div>
+      </div>
+
       <div className="grid grid-cols-6 gap-2 w-full">
         {Object.keys(dayTaskDefinitions).map((k) => (
           <Button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-transparent text-gray-300"}`} onClick={() => setDay(k as DayKey)} variant={day === k ? "primary" : "secondary"}>
@@ -341,3 +360,5 @@ const LabeledNumber: React.FC<{ label: string; value: number | ""; onChange: (v:
     <Input type="number" value={value === "" ? "" : String(value)} onChange={(e) => onChange((e.target as HTMLInputElement).value === "" ? "" : Number((e.target as HTMLInputElement).value))} />
   </div>
 );
+
+// Uses shared Sparkline component from `_components`

@@ -9,6 +9,8 @@ import Shortcuts from "./_components/Shortcuts";
 import Announcement from "./_components/Announcement";
 import DailySalesCard from "./_components/DailySalesCard";
 import ProductUploadsCard from "./_components/ProductUploadsCard";
+import Button from "@/app/_components/Button";
+import Sparkline from "@/app/_components/Sparkline";
 import { attendantCategoryById } from "@/lib/attendants/categories";
 import type { AttendantCategory } from "@prisma/client";
 
@@ -60,13 +62,29 @@ export default function AttendantDashboard() {
   const [loading, setLoading] = useState(true);
   const [shops, setShops] = useState<ShopSummary[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
+  const [summary, setSummary] = useState<{ totalProducts: number; totalSales: number } | null>(null);
+  const [recentReports, setRecentReports] = useState<Array<{ date: string; productsCount: number; totalSales: number }>>([]);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("shopId") || undefined : undefined;
     setShopId(saved || undefined);
     void fetchProfile();
     void fetchShops();
+    void fetchSummary();
   }, []);
+
+  async function fetchSummary() {
+    try {
+      const res = await fetch(`/api/daily-report?page=1&pageSize=6`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSummary(data.summary ?? null);
+      const reports = (data.reports ?? []).map((r: any) => ({ date: r.date, productsCount: r.productsCount ?? 0, totalSales: r.totalSales ?? 0 }));
+      setRecentReports(reports);
+    } catch {
+      // ignore
+    }
+  }
 
   async function fetchProfile() {
     try {
@@ -177,6 +195,25 @@ export default function AttendantDashboard() {
         </div>
       </div>
 
+      {/* KPI header */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="kpi-card">
+          <div className="kpi-title">Total products (recent)</div>
+          <div className="kpi-value">{summary ? summary.totalProducts : "—"}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Total sales (KES)</div>
+          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "—"}</div>
+        </div>
+        <div className="ml-4 text-sm opacity-70">Recent uploads</div>
+        <div className="sparkline">
+          <Sparkline values={recentReports.map((r) => r.productsCount)} color="var(--primary)" />
+        </div>
+        <div className="ml-auto">
+          <Button onClick={() => (window.location.href = "/attendant/daily-report")} variant="primary">Open daily report</Button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">
           Loading your workspace…
@@ -204,3 +241,5 @@ export default function AttendantDashboard() {
     </div>
   );
 }
+
+// sparkline is now provided by `src/app/_components/Sparkline`
