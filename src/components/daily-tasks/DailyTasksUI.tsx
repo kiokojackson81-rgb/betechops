@@ -108,6 +108,18 @@ export default function DailyTasksUI() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const validatePayload = (body: any) => {
+    if (!body.day) return "day is required";
+    if (body.productsCount < 0) return "productsCount must be >= 0";
+    if (body.totalSales < 0) return "totalSales must be >= 0";
+    if (!Array.isArray(body.tasks.sales)) return "sales must be an array";
+    for (const s of body.tasks.sales) {
+      if (typeof s.productName !== "string") return "each sale must have a productName";
+      if (Number(s.price) < 0) return "sale price must be >= 0";
+    }
+    return null;
+  };
+
   const handleSave = async () => {
     setBusy(true);
     setSuccess(null);
@@ -156,6 +168,13 @@ export default function DailyTasksUI() {
         },
       };
 
+      const validationErr = validatePayload(body);
+      if (validationErr) {
+        setError(validationErr);
+        setBusy(false);
+        return;
+      }
+
       const res = await fetch("/api/daily-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,8 +183,14 @@ export default function DailyTasksUI() {
       const json = await res.json();
       if (!res.ok) {
         setError(json?.error || `Server responded ${res.status}`);
+        // keep error and allow user to retry
       } else {
         setSuccess("Saved successfully");
+        // optionally clear the day's inputs
+        // setDayState((s) => ({ ...s, [day]: defaultDayState(day) }));
+        // setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() }));
+        // auto-dismiss success after a short time
+        setTimeout(() => setSuccess(null), 5000);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -174,13 +199,23 @@ export default function DailyTasksUI() {
     }
   };
 
+  const handleRetry = () => {
+    // simple retry invokes handleSave again
+    handleSave();
+  };
+
   return (
     <div className="w-full p-6 space-y-6">
       {success ? (
         <div className="p-3 rounded bg-green-100 text-green-800">{success}</div>
       ) : null}
       {error ? (
-        <div className="p-3 rounded bg-red-100 text-red-800">{error}</div>
+        <div className="p-3 rounded bg-red-100 text-red-800 flex items-center justify-between">
+          <span>{error}</span>
+          <div className="flex items-center gap-2">
+            <button className="text-sm underline" onClick={handleRetry}>Retry</button>
+          </div>
+        </div>
       ) : null}
       <div>
         <h1 className="text-2xl font-bold">Daily Task Categories (Mon–Sat)</h1>
