@@ -5,6 +5,7 @@ import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Checkbox from "@/app/_components/Checkbox";
+import Textarea from "@/app/_components/Textarea";
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
@@ -235,7 +236,7 @@ export default function DailyTasksUI() {
       </div>
 
       <div className="space-y-6">
-        <div className="shadow-md rounded-2xl p-4">
+        <Card className="shadow-md p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">{def.title}</h2>
@@ -262,14 +263,14 @@ export default function DailyTasksUI() {
                 {f.kind === "text" && (
                   <div className="w-full">
                     <label className="text-sm block mb-1">{f.label}</label>
-                    <textarea rows={3} className="border rounded px-2 py-1 w-full" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
+                    <Textarea rows={3} className="" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
                   </div>
                 )}
               </div>
             ))}
           </div>
 
-          <div className="rounded-2xl border p-4 space-y-4 bg-gray-50 mt-4">
+          <Card className="mt-4 bg-gray-50 space-y-4 p-4">
             <h3 className="font-semibold text-sm">Jumia / Kilimall Operations</h3>
             <div className="grid md:grid-cols-3 gap-3">
               <LabeledNumber label="New products uploaded" value={market[day].newUploaded} onChange={(v) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], newUploaded: v } }))} />
@@ -293,9 +294,9 @@ export default function DailyTasksUI() {
                  <Button onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
                </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-2xl border p-4 space-y-3 bg-gray-50 mt-4">
+          <Card className="mt-4 p-4 space-y-3 bg-gray-50">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Admin Summary (collapsed fields)</h3>
               <div className="text-xs opacity-70">Auto‑computed</div>
@@ -315,13 +316,13 @@ export default function DailyTasksUI() {
               <SummaryItem label="Mk Edits" value={adminSummary.mk_edits as number} />
               <SummaryItem label="Mk Sales Rows" value={adminSummary.mk_sales as number} />
             </div>
-          </div>
+          </Card>
 
-            <div className="flex gap-2 justify-end mt-4">
+            <Card className="mt-4 p-3 flex gap-2 justify-end">
               <Button variant="secondary" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</Button>
               <Button onClick={busy ? undefined : handleSave}>{busy ? "Saving..." : "Save"}</Button>
-            </div>
-        </div>
+            </Card>
+        </Card>
       </div>
     </div>
   );
