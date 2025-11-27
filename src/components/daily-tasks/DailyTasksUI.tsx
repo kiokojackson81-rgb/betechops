@@ -229,14 +229,14 @@ export default function DailyTasksUI() {
 
       <div className="grid grid-cols-6 gap-2 w-full">
         {Object.keys(dayTaskDefinitions).map((k) => (
-          <Button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-white"}`} onClick={() => setDay(k as DayKey)} variant={day === k ? "primary" : "secondary"}>
+          <Button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-transparent text-gray-300"}`} onClick={() => setDay(k as DayKey)} variant={day === k ? "primary" : "secondary"}>
             {dayTaskDefinitions[k as DayKey].title.slice(0, 3)}
           </Button>
         ))}
       </div>
 
       <div className="space-y-6">
-        <Card className="shadow-md p-4">
+        <Card className="shadow-none p-4 bg-transparent border border-gray-700/30">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">{def.title}</h2>
@@ -247,7 +247,7 @@ export default function DailyTasksUI() {
 
           <div className="grid md:grid-cols-2 gap-4 mt-4">
             {def.fields.map((f) => (
-              <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border" >
+              <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
                 {f.kind === "check" && (
                   <label className="flex items-center gap-2">
                     <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
@@ -270,7 +270,7 @@ export default function DailyTasksUI() {
             ))}
           </div>
 
-          <Card className="mt-4 bg-gray-50 space-y-4 p-4">
+          <Card className="mt-4 bg-transparent space-y-4 p-4 border border-gray-700/30 shadow-none">
             <h3 className="font-semibold text-sm">Jumia / Kilimall Operations</h3>
             <div className="grid md:grid-cols-3 gap-3">
               <LabeledNumber label="New products uploaded" value={market[day].newUploaded} onChange={(v) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], newUploaded: v } }))} />
@@ -296,7 +296,7 @@ export default function DailyTasksUI() {
             </div>
           </Card>
 
-          <Card className="mt-4 p-4 space-y-3 bg-gray-50">
+          <Card className="mt-4 p-4 space-y-3 bg-transparent border border-gray-700/30 shadow-none">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Admin Summary (collapsed fields)</h3>
               <div className="text-xs opacity-70">Auto‑computed</div>
@@ -318,7 +318,7 @@ export default function DailyTasksUI() {
             </div>
           </Card>
 
-            <Card className="mt-4 p-3 flex gap-2 justify-end">
+            <Card className="mt-4 p-3 flex gap-2 justify-end border border-gray-700/30 shadow-none">
               <Button variant="secondary" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</Button>
               <Button onClick={busy ? undefined : handleSave}>{busy ? "Saving..." : "Save"}</Button>
             </Card>
@@ -329,7 +329,7 @@ export default function DailyTasksUI() {
 }
 
 const SummaryItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="p-3 rounded-xl border bg-white">
+  <div className="p-3 rounded-xl border border-gray-700/30 bg-transparent">
     <div className="text-[11px] opacity-70 mb-1">{label}</div>
     <div className="font-semibold">{value}</div>
   </div>
