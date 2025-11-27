@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       prisma.dailyReport.count({ where }),
       prisma.dailyReport.findMany({
         where,
-        include: { user: { select: { id: true, name: true } } },
+        include: { user: { select: { id: true, name: true } }, sales: true },
         orderBy: { date: "desc" },
         skip,
         take: pageSize,
@@ -77,6 +77,21 @@ export async function POST(req: Request) {
         userId: actorId || undefined,
       },
     });
+    // persist granular sales rows if provided in tasks.sales
+    try {
+      const sales: any[] = (tasks?.sales && Array.isArray(tasks.sales)) ? tasks.sales : [];
+      if (sales.length > 0) {
+        const createMany = sales.map((s) => ({
+          dailyReportId: report.id,
+          productName: s.productName || "",
+          price: Number(s.price || 0),
+        }));
+        await prisma.dailySale.createMany({ data: createMany });
+      }
+    } catch (err) {
+      // non-fatal: log and continue
+      console.error('failed to persist daily sales rows', err);
+    }
     return NextResponse.json({ report }, { status: 201 });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? "Server error");

@@ -26,7 +26,7 @@ export async function GET(req: Request) {
         while (true) {
           const rows = await prisma.dailyReport.findMany({
             where,
-            include: { user: { select: { name: true } } },
+            include: { user: { select: { name: true } }, sales: true },
             orderBy: { date: 'asc' },
             skip: page * pageSize,
             take: pageSize,
@@ -35,8 +35,21 @@ export async function GET(req: Request) {
           for (const r of rows) {
             const dateStr = r.date.toISOString().split('T')[0];
             const attendant = r.user?.name ?? '';
-            const tasks = JSON.stringify(r.tasks ?? {});
-            const fields = [dateStr, r.day ?? '', attendant, String(r.productsCount), String(r.totalSales), tasks];
+            const tasks = r.tasks ?? {};
+            const categories = tasks.categories ?? {};
+            const salesDetails = Array.isArray(r.sales) ? JSON.stringify(r.sales) : "[]";
+            const fields = [
+              dateStr,
+              r.day ?? '',
+              attendant,
+              String(r.productsCount),
+              String(r.totalSales),
+              String(categories.newUploads ?? ''),
+              String(categories.copiesUploaded ?? ''),
+              String(categories.productsEdited ?? ''),
+              salesDetails,
+              JSON.stringify(tasks),
+            ];
             const line = fields.map((s) => `"${String(s).replace(/"/g, '""')}"`).join(',') + '\n';
             controller.enqueue(encoder.encode(line));
           }
