@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
+import Input from "@/app/_components/Input";
+import Checkbox from "@/app/_components/Checkbox";
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
@@ -247,14 +249,14 @@ export default function DailyTasksUI() {
               <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border" >
                 {f.kind === "check" && (
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={Boolean(dayState[day][f.key])} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.checked } }))} />
+                    <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
                     <span className="text-sm">{f.label}</span>
                   </label>
                 )}
                 {f.kind === "number" && (
                   <div className="w-full">
                     <label className="text-sm block mb-1">{f.label}</label>
-                    <input className="border rounded px-2 py-1 w-full" type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number(e.target.value) } }))} />
+                    <Input type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number((e.target as HTMLInputElement).value) } }))} />
                   </div>
                 )}
                 {f.kind === "text" && (
@@ -279,8 +281,8 @@ export default function DailyTasksUI() {
               <div className="text-sm font-medium">Sales Records</div>
               {market[day].sales.map((row) => (
                 <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
-                  <input className="col-span-6 border rounded px-2 py-1" placeholder="Product name" value={row.name} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, name: e.target.value } : r)) } }))} />
-                  <input className="col-span-4 border rounded px-2 py-1" type="number" placeholder="0" value={row.price === "" ? "" : String(row.price)} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, price: e.target.value === "" ? "" : Number(e.target.value) } : r)) } }))} />
+                  <Input className="col-span-6" placeholder="Product name" value={row.name} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, name: (e.target as HTMLInputElement).value } : r)) } }))} />
+                  <Input className="col-span-4" type="number" placeholder="0" value={row.price === "" ? "" : String(row.price)} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, price: (e.target as HTMLInputElement).value === "" ? "" : Number((e.target as HTMLInputElement).value) } : r)) } }))} />
                   <div className="col-span-2">
                     <Button variant="secondary" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
                   </div>
@@ -335,6 +337,6 @@ const SummaryItem: React.FC<{ label: string; value: React.ReactNode }> = ({ labe
 const LabeledNumber: React.FC<{ label: string; value: number | ""; onChange: (v: number | "") => void }> = ({ label, value, onChange }) => (
   <div>
     <label className="text-sm block mb-1">{label}</label>
-    <input type="number" className="border rounded px-2 py-1 w-full" value={value === "" ? "" : String(value)} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} />
+    <Input type="number" value={value === "" ? "" : String(value)} onChange={(e) => onChange((e.target as HTMLInputElement).value === "" ? "" : Number((e.target as HTMLInputElement).value))} />
   </div>
 );
