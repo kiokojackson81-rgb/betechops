@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // header (match fields emitted below)
-        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","SalesDetails","Tasks"\n'));
+        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","ParticipatedVideoShoot","AttendedMarketingMeeting","MarketingVideosShot","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -37,6 +37,9 @@ export async function GET(req: Request) {
             const attendant = r.user?.name ?? '';
             const tasks = r.tasks ?? {};
             const categories = (tasks as any).categories ?? {};
+            const marketing = (tasks as any).marketing ?? {};
+            const customerOps = (tasks as any).customerOperations ?? {};
+            const office = (tasks as any).officeMaintenance ?? {};
             const salesDetails = Array.isArray(r.sales) ? JSON.stringify(r.sales) : "[]";
             const fields = [
               dateStr,
@@ -47,6 +50,15 @@ export async function GET(req: Request) {
               String(categories.newUploads ?? ''),
               String(categories.copiesUploaded ?? ''),
               String(categories.productsEdited ?? ''),
+              String(marketing.participatedVideoShoot ? 'Yes' : 'No'),
+              String(marketing.attendedMarketingMeeting ? 'Yes' : 'No'),
+              String(marketing.marketingVideosShot ?? ''),
+              String(customerOps.walkInCustomers ?? ''),
+              String(customerOps.customersPurchased ?? ''),
+              String(customerOps.liveViewers ?? ''),
+              String(customerOps.livePurchases ?? ''),
+              String(office.officeCleaned ? 'Yes' : 'No'),
+              String(office.officeNotes ?? ''),
               salesDetails,
               JSON.stringify(tasks),
             ];

@@ -66,7 +66,27 @@ export default function AdminDailyReportPage() {
   }
 
   function downloadCsv() {
-    const header = ["Date", "Day", "Attendant", "Products", "Sales", "NewUploads", "CopiesUploaded", "ProductsEdited", "SalesDetails", "Tasks"];
+    const header = [
+      "Date",
+      "Day",
+      "Attendant",
+      "Products",
+      "Sales",
+      "NewUploads",
+      "CopiesUploaded",
+      "ProductsEdited",
+      "ParticipatedVideoShoot",
+      "AttendedMarketingMeeting",
+      "MarketingVideosShot",
+      "WalkInCustomers",
+      "CustomersPurchased",
+      "LiveViewers",
+      "LivePurchases",
+      "OfficeCleaned",
+      "OfficeNotes",
+      "SalesDetails",
+      "Tasks",
+    ];
     // safer CSV: quote fields, escape quotes, preserve JSON tasks
     const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
     const rows = reports.map((r) => {
@@ -74,6 +94,9 @@ export default function AdminDailyReportPage() {
       const attendant = r.user?.name ?? "";
       const tasks = r.tasks ?? {};
       const categories = tasks.categories ?? {};
+      const marketing = tasks.marketing ?? {};
+      const customerOps = tasks.customerOperations ?? {};
+      const office = tasks.officeMaintenance ?? {};
       const salesDetails = Array.isArray(tasks.sales) ? JSON.stringify(tasks.sales) : "[]";
       return [
         dateStr,
@@ -84,6 +107,15 @@ export default function AdminDailyReportPage() {
         String(categories.newUploads ?? ""),
         String(categories.copiesUploaded ?? ""),
         String(categories.productsEdited ?? ""),
+        String(marketing.participatedVideoShoot ? "Yes" : "No"),
+        String(marketing.attendedMarketingMeeting ? "Yes" : "No"),
+        String(marketing.marketingVideosShot ?? ""),
+        String(customerOps.walkInCustomers ?? ""),
+        String(customerOps.customersPurchased ?? ""),
+        String(customerOps.liveViewers ?? ""),
+        String(customerOps.livePurchases ?? ""),
+        String(office.officeCleaned ? "Yes" : "No"),
+        String(office.officeNotes ?? ""),
         salesDetails,
         JSON.stringify(tasks ?? {}),
       ];
@@ -171,45 +203,70 @@ export default function AdminDailyReportPage() {
               <th className="px-3 py-2 text-right">Products</th>
               <th className="px-3 py-2 text-right">Sales (KES)</th>
               <th className="px-3 py-2 text-left">Tasks</th>
+              <th className="px-3 py-2 text-left">Marketing</th>
+              <th className="px-3 py-2 text-left">Customer Ops</th>
+              <th className="px-3 py-2 text-left">Office</th>
             </tr>
           </thead>
           <tbody>
-            {reports.map((r) => (
-              <tr key={r.id} className="odd:bg-[#11161e] even:bg-[#0e131b]">
-                <td className="px-3 py-2">{new Date(r.date).toLocaleDateString()}</td>
-                <td className="px-3 py-2">{r.day}</td>
-                <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
-                <td className="px-3 py-2 text-right">{r.productsCount}</td>
-                <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
-                <td className="px-3 py-2">
-                  <div className="text-sm mb-1">
-                    <strong>Categories:</strong>{' '}
-                    {r.tasks?.categories ? (
-                      <span>
-                        New: {r.tasks.categories.newUploads ?? 0} • Copies: {r.tasks.categories.copiesUploaded ?? 0} • Edited: {r.tasks.categories.productsEdited ?? 0}
-                      </span>
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                  <div className="text-sm">
-                    <strong>Sales:</strong>
-                    {Array.isArray(r.tasks?.sales) && r.tasks.sales.length > 0 ? (
-                      <ul className="list-disc pl-5 text-xs mt-1">
-                        {r.tasks.sales.map((s: any, i: number) => (
-                          <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-xs text-slate-400">No sales recorded</div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {reports.map((r) => {
+              const tasks = r.tasks ?? {};
+              const categories = tasks.categories ?? {};
+              const marketing = tasks.marketing ?? {};
+              const customerOps = tasks.customerOperations ?? {};
+              const office = tasks.officeMaintenance ?? {};
+              return (
+                <tr key={r.id} className="odd:bg-[#11161e] even:bg-[#0e131b]">
+                  <td className="px-3 py-2">{new Date(r.date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2">{r.day}</td>
+                  <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">{r.productsCount}</td>
+                  <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
+                  <td className="px-3 py-2">
+                    <div className="text-sm mb-1">
+                      <strong>Categories:</strong>{' '}
+                      {categories ? (
+                        <span>
+                          New: {categories.newUploads ?? 0} • Copies: {categories.copiesUploaded ?? 0} • Edited: {categories.productsEdited ?? 0}
+                        </span>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </div>
+                    <div className="text-sm">
+                      <strong>Sales:</strong>
+                      {Array.isArray(tasks.sales) && tasks.sales.length > 0 ? (
+                        <ul className="list-disc pl-5 text-xs mt-1">
+                          {tasks.sales.map((s: any, i: number) => (
+                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-xs text-slate-400">No sales recorded</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-sm">
+                    <div>Video Shoot: {marketing.participatedVideoShoot ? 'Yes' : 'No'}</div>
+                    <div>Marketing Meeting: {marketing.attendedMarketingMeeting ? 'Yes' : 'No'}</div>
+                    <div>Videos Shot: {marketing.marketingVideosShot ?? 0}</div>
+                  </td>
+                  <td className="px-3 py-2 text-sm">
+                    <div>Walk-ins: {customerOps.walkInCustomers ?? 0}</div>
+                    <div>Customers Purchased: {customerOps.customersPurchased ?? 0}</div>
+                    <div>Live Viewers: {customerOps.liveViewers ?? 0}</div>
+                    <div>Live Purchases: {customerOps.livePurchases ?? 0}</div>
+                  </td>
+                  <td className="px-3 py-2 text-sm">
+                    <div>Cleaned: {office.officeCleaned ? 'Yes' : 'No'}</div>
+                    <div className="text-xs text-slate-400">{office.officeNotes ?? ''}</div>
+                  </td>
+                </tr>
+              );
+            })}
             {reports.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-4 text-center text-slate-400">
                   No reports found
                 </td>
               </tr>
