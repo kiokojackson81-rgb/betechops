@@ -1,12 +1,14 @@
 "use client"
 
 import React from "react";
+import dynamic from "next/dynamic";
 
-export default function DailyReportPlaceholder() {
+const DailyTasksUI = dynamic(() => import("@/components/daily-tasks/DailyTasksUI"), { ssr: false });
+
+export default function DailyReportPageWrapper() {
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Daily Tasks — placeholder</h1>
-      <p>This page was restored to a minimal placeholder to fix build errors. I will restore the full UI next.</p>
+    <div className="p-6">
+      <DailyTasksUI />
     </div>
   );
 }
