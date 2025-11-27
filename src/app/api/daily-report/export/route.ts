@@ -20,8 +20,8 @@ export async function GET(req: Request) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        // header
-        controller.enqueue(encoder.encode('"Date","Day","Attendant","Products","Sales","Tasks"\n'));
+        // header (match fields emitted below)
+        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","SalesDetails","Tasks"\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
             const dateStr = r.date.toISOString().split('T')[0];
             const attendant = r.user?.name ?? '';
             const tasks = r.tasks ?? {};
-            const categories = tasks.categories ?? {};
+            const categories = (tasks as any).categories ?? {};
             const salesDetails = Array.isArray(r.sales) ? JSON.stringify(r.sales) : "[]";
             const fields = [
               dateStr,
