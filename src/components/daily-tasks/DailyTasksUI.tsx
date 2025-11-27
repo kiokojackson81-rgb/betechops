@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useMemo, useState } from "react";
+import Button from "@/app/_components/Button";
+import Card from "@/app/_components/Card";
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
@@ -207,13 +209,13 @@ export default function DailyTasksUI() {
   return (
     <div className="w-full p-6 space-y-6">
       {success ? (
-        <div className="p-3 rounded bg-green-100 text-green-800">{success}</div>
+        <div className="p-3 rounded bg-emerald-900/10 text-emerald-300">{success}</div>
       ) : null}
       {error ? (
-        <div className="p-3 rounded bg-red-100 text-red-800 flex items-center justify-between">
+        <div className="p-3 rounded bg-rose-900/10 text-rose-300 flex items-center justify-between">
           <span>{error}</span>
           <div className="flex items-center gap-2">
-            <button className="text-sm underline" onClick={handleRetry}>Retry</button>
+            <Button variant="secondary" onClick={handleRetry}>Retry</Button>
           </div>
         </div>
       ) : null}
@@ -224,9 +226,9 @@ export default function DailyTasksUI() {
 
       <div className="grid grid-cols-6 gap-2 w-full">
         {Object.keys(dayTaskDefinitions).map((k) => (
-          <button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-white"}`} onClick={() => setDay(k as DayKey)}>
+          <Button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-white"}`} onClick={() => setDay(k as DayKey)} variant={day === k ? "primary" : "secondary"}>
             {dayTaskDefinitions[k as DayKey].title.slice(0, 3)}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -279,13 +281,15 @@ export default function DailyTasksUI() {
                 <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
                   <input className="col-span-6 border rounded px-2 py-1" placeholder="Product name" value={row.name} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, name: e.target.value } : r)) } }))} />
                   <input className="col-span-4 border rounded px-2 py-1" type="number" placeholder="0" value={row.price === "" ? "" : String(row.price)} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, price: e.target.value === "" ? "" : Number(e.target.value) } : r)) } }))} />
-                  <button className="col-span-2 bg-gray-200 rounded px-2 py-1" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</button>
+                  <div className="col-span-2">
+                    <Button variant="secondary" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
+                  </div>
                 </div>
               ))}
 
-              <div className="flex justify-end">
-                <button className="bg-blue-600 text-white px-3 py-1 rounded" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</button>
-              </div>
+               <div className="flex justify-end">
+                 <Button onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
+               </div>
             </div>
           </div>
 
@@ -311,10 +315,10 @@ export default function DailyTasksUI() {
             </div>
           </div>
 
-          <div className="flex gap-2 justify-end mt-4">
-            <button className="bg-gray-200 px-3 py-1 rounded" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</button>
-            <button className="bg-green-600 text-white px-3 py-1 rounded" onClick={handleSave} disabled={busy}>{busy ? "Saving..." : "Save"}</button>
-          </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button variant="secondary" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</Button>
+              <Button onClick={busy ? undefined : handleSave}>{busy ? "Saving..." : "Save"}</Button>
+            </div>
         </div>
       </div>
     </div>
