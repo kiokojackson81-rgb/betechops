@@ -104,12 +104,84 @@ export default function DailyTasksUI() {
   const def = dayTaskDefinitions[day];
   const adminSummary = useMemo(() => computeAdminSummary(dayState[day], market[day]), [day, dayState, market]);
 
-  const handleSave = () => {
-    console.log("save", { day, tasks: dayState[day], marketplace: market[day], adminSummary });
+  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setBusy(true);
+    setSuccess(null);
+    setError(null);
+    try {
+      // build tasks payload expected by server/export
+      const categories = {
+        newUploads: Number(market[day].newUploaded) || 0,
+        copiesUploaded: Number(market[day].copiesUploaded) || 0,
+        productsEdited: Number(market[day].productsEdited) || 0,
+      };
+      const marketing = {
+        attendedMarketingMeeting: Boolean(dayState[day]["meetingAttended"]),
+        participatedVideoShoot: Boolean(dayState[day]["videoShoot"]),
+        marketingVideosShot: Number(dayState[day]["promoVideos"]) || 0,
+      };
+      const customerOperations = {
+        walkInCustomers: Number(dayState[day]["customersServed"]) || 0,
+        customersPurchased: 0,
+        liveViewers: Number(dayState[day]["liveSessions"]) || 0,
+        livePurchases: 0,
+      };
+      const officeMaintenance = {
+        officeCleaned: Boolean(dayState[day]["officeClean"]),
+        officeNotes: String(dayState[day]["competitorNotes"] || ""),
+      };
+
+      const sales = (market[day].sales || []).map((s) => ({ productName: s.name || "", price: Number(s.price || 0) }));
+
+      const productsCount = categories.newUploads + categories.copiesUploaded + categories.productsEdited;
+      const totalSales = sales.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
+
+      const body = {
+        date: new Date().toISOString(),
+        day,
+        productsCount,
+        totalSales,
+        tasks: {
+          categories,
+          marketing,
+          customerOperations,
+          officeMaintenance,
+          sales,
+          // include the raw dayState for completeness
+          dayFields: dayState[day],
+        },
+      };
+
+      const res = await fetch("/api/daily-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json?.error || `Server responded ${res.status}`);
+      } else {
+        setSuccess("Saved successfully");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="w-full p-6 space-y-6">
+      {success ? (
+        <div className="p-3 rounded bg-green-100 text-green-800">{success}</div>
+      ) : null}
+      {error ? (
+        <div className="p-3 rounded bg-red-100 text-red-800">{error}</div>
+      ) : null}
       <div>
         <h1 className="text-2xl font-bold">Daily Task Categories (Mon–Sat)</h1>
         <p className="text-sm opacity-80">Core duties + Jumia/Kilimall operations are captured for EVERY day.</p>
@@ -206,7 +278,7 @@ export default function DailyTasksUI() {
 
           <div className="flex gap-2 justify-end mt-4">
             <button className="bg-gray-200 px-3 py-1 rounded" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</button>
-            <button className="bg-green-600 text-white px-3 py-1 rounded" onClick={handleSave}>Save</button>
+            <button className="bg-green-600 text-white px-3 py-1 rounded" onClick={handleSave} disabled={busy}>{busy ? "Saving..." : "Save"}</button>
           </div>
         </div>
       </div>
