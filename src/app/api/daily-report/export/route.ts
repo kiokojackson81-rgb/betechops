@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // header (match fields emitted below)
-        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","ParticipatedVideoShoot","AttendedMarketingMeeting","MarketingVideosShot","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
+        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -50,8 +50,8 @@ export async function GET(req: Request) {
               String(categories.newUploads ?? ''),
               String(categories.copiesUploaded ?? ''),
               String(categories.productsEdited ?? ''),
-              String(marketing.participatedVideoShoot ? 'Yes' : 'No'),
               String(marketing.attendedMarketingMeeting ? 'Yes' : 'No'),
+              String(marketing.participatedVideoShoot ? 'Yes' : 'No'),
               String(marketing.marketingVideosShot ?? ''),
               String(customerOps.walkInCustomers ?? ''),
               String(customerOps.customersPurchased ?? ''),
