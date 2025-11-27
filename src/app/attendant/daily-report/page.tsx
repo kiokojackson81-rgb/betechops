@@ -177,7 +177,7 @@ export default function DailyReportForm() {
     <div className="mx-auto max-w-3xl p-6 text-slate-100">
       <h1 className="text-2xl font-semibold mb-4">Daily Performance Report</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-1">
             <label className="text-sm mb-1 block">Date</label>
             <input
@@ -199,28 +199,45 @@ export default function DailyReportForm() {
               ))}
             </select>
           </div>
-          <div className="sm:col-span-1">
-            <label className="text-sm mb-1 block">Products</label>
-            <input
-              type="number"
-              min="0"
-              value={productsCount}
-              onChange={(e) => setProductsCount(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
-            />
-          </div>
-          <div className="sm:col-span-1">
-            <label className="text-sm mb-1 block">Total Sales (KES)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={totalSales}
-              onChange={(e) => setTotalSales(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
-            />
+          {/* Products and Total Sales fields removed from top - moved/hidden per design */}
+        </div>
+        {/* Jumia / Kilimall Operations (moved directly below date/day) */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-medium">Jumia / Kilimall Operations</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm mb-1 block">New products uploaded</label>
+              <input
+                type="number"
+                min="0"
+                value={newUploads}
+                onChange={(e) => setNewUploads(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-sm mb-1 block">Copies of products uploaded</label>
+              <input
+                type="number"
+                min="0"
+                value={copiesUploaded}
+                onChange={(e) => setCopiesUploaded(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-sm mb-1 block">Products edited</label>
+              <input
+                type="number"
+                min="0"
+                value={productsEdited}
+                onChange={(e) => setProductsEdited(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+              />
+            </div>
           </div>
         </div>
+
         {/* Dynamic tasks */}
         <div className="space-y-4">
           {tasksForDay.map((def) => (
@@ -291,42 +308,7 @@ export default function DailyReportForm() {
           </div>
         </div>
 
-        {/* Categorized daily operations: new uploads, copies, edited */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-medium">Categorized Operations</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm mb-1 block">New products uploaded</label>
-              <input
-                type="number"
-                min="0"
-                value={newUploads}
-                onChange={(e) => setNewUploads(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-sm mb-1 block">Copies of products uploaded</label>
-              <input
-                type="number"
-                min="0"
-                value={copiesUploaded}
-                onChange={(e) => setCopiesUploaded(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-sm mb-1 block">Products edited</label>
-              <input
-                type="number"
-                min="0"
-                value={productsEdited}
-                onChange={(e) => setProductsEdited(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Categorized operations block moved above; original block removed */}
 
         <div className="flex items-center gap-4">
             <Button type="submit" variant="primary">Submit Report</Button>
