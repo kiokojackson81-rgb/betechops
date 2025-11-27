@@ -80,6 +80,16 @@ export default function DailyReportForm() {
   const [newUploads, setNewUploads] = useState<string>("");
   const [copiesUploaded, setCopiesUploaded] = useState<string>("");
   const [productsEdited, setProductsEdited] = useState<string>("");
+  // Marketing / customer / office state
+  const [participatedVideoShoot, setParticipatedVideoShoot] = useState<boolean>(false);
+  const [attendedMarketingMeeting, setAttendedMarketingMeeting] = useState<boolean>(false);
+  const [marketingVideosShot, setMarketingVideosShot] = useState<string>("");
+  const [walkInCustomers, setWalkInCustomers] = useState<string>("");
+  const [customersPurchased, setCustomersPurchased] = useState<string>("");
+  const [liveViewers, setLiveViewers] = useState<string>("");
+  const [livePurchases, setLivePurchases] = useState<string>("");
+  const [officeCleaned, setOfficeCleaned] = useState<boolean>(false);
+  const [officeNotes, setOfficeNotes] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const tasksForDay = dayTaskDefinitions[day] || [];
 
@@ -127,6 +137,24 @@ export default function DailyReportForm() {
       newUploads: Number(newUploads) || 0,
       copiesUploaded: Number(copiesUploaded) || 0,
       productsEdited: Number(productsEdited) || 0,
+    };
+    // Marketing operations
+    normalizedTasks.marketing = {
+      participatedVideoShoot: Boolean(participatedVideoShoot),
+      attendedMarketingMeeting: Boolean(attendedMarketingMeeting),
+      marketingVideosShot: Number(marketingVideosShot) || 0,
+    };
+    // Customer operations / live session metrics
+    normalizedTasks.customerOperations = {
+      walkInCustomers: Number(walkInCustomers) || 0,
+      customersPurchased: Number(customersPurchased) || 0,
+      liveViewers: Number(liveViewers) || 0,
+      livePurchases: Number(livePurchases) || 0,
+    };
+    // Office maintenance
+    normalizedTasks.officeMaintenance = {
+      officeCleaned: Boolean(officeCleaned),
+      officeNotes: officeNotes || "",
     };
     try {
       const res = await fetch("/api/daily-report", {
@@ -228,6 +256,44 @@ export default function DailyReportForm() {
                 onChange={(e) => setProductsEdited(e.target.value)}
                 className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
               />
+            </div>
+          </div>
+          {/* Sales Records inside Jumia/Kilimall block */}
+          <div className="space-y-3">
+            <h3 className="text-md font-medium">Sales Records</h3>
+            <div className="space-y-2">
+              {salesRecords.map((r, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-6">
+                    <input
+                      type="text"
+                      placeholder="Product name"
+                      value={r.productName}
+                      onChange={(e) => updateSaleRow(idx, "productName", e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Price (KES)"
+                      value={r.price}
+                      onChange={(e) => updateSaleRow(idx, "price", e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <div className="flex gap-2">
+                      <Button type="button" variant="secondary" onClick={() => removeSaleRow(idx)}>Remove</Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <Button type="button" variant="primary" onClick={addSaleRow}>Add Sale</Button>
             </div>
           </div>
         </div>
