@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 // Server-side PDF generation route (scaffold).
 // Notes:
 // - This route attempts to use `puppeteer` to render a PDF from HTML.
@@ -21,8 +23,11 @@ export async function GET(req: Request) {
   let puppeteer: any;
   try {
     // dynamic import so route still works if puppeteer is not installed
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    puppeteer = require('puppeteer');
+    const mod = await import('puppeteer').catch(() => null);
+    puppeteer = (mod && (mod as any).default) ? (mod as any).default : mod;
+    if (!puppeteer) {
+      return NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
+    }
   } catch (err) {
     return NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
   }
@@ -30,7 +35,6 @@ export async function GET(req: Request) {
   const reports = data.reports || [];
   const urlObj = new URL(req.url);
   const includeJson = urlObj.searchParams.get('includeJson') || urlObj.searchParams.get('includejson') || undefined;
-  const scope = urlObj.searchParams.get('scope') || 'all';
 
   // Define marketplace shops used in CSV and admin UI so PDF matches table layout.
   const MARKETPLACE_SHOPS = [
