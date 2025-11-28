@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // header (match fields emitted below)
-        controller.enqueue(encoder.encode('"Date","Day","AttendantName","AttendantEmail","SubmittedBy","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
+        controller.enqueue(encoder.encode('"Date","Day","AttendantName","AttendantEmail","SubmittedBy","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","MarketplaceReview","Tasks"\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -65,6 +65,7 @@ export async function GET(req: Request) {
               String(office.officeCleaned ? 'Yes' : 'No'),
               String(office.officeNotes ?? ''),
               salesDetails,
+              JSON.stringify((tasks as any).marketplaceReview ?? {}),
               JSON.stringify(tasks),
             ];
             const line = fields.map((s) => `"${String(s).replace(/"/g, '""')}"`).join(',') + '\n';

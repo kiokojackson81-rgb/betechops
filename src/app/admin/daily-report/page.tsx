@@ -80,6 +80,7 @@ export default function AdminDailyReportPage() {
       "Day",
       "Attendant",
       "SubmittedBy",
+      "MarketplaceReview",
       "Products",
       "Sales",
       "NewUploads",
@@ -114,6 +115,7 @@ export default function AdminDailyReportPage() {
         r.day,
         attendant,
         submitted,
+        JSON.stringify((tasks as any).marketplaceReview ?? {}),
         String(r.productsCount),
         String(r.totalSales),
         String(categories.newUploads ?? ""),
@@ -246,6 +248,7 @@ export default function AdminDailyReportPage() {
               <th className="px-3 py-2 text-left">Day</th>
               <th className="px-3 py-2 text-left">Attendant</th>
               <th className="px-3 py-2 text-left">Submitted By</th>
+              <th className="px-3 py-2 text-left">Marketplace</th>
               <th className="px-3 py-2 text-right">Products</th>
               <th className="px-3 py-2 text-right">Sales (KES)</th>
               <th className="px-3 py-2 text-left">Tasks</th>
@@ -267,6 +270,18 @@ export default function AdminDailyReportPage() {
                   <td className="px-3 py-2">{r.day}</td>
                   <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
                   <td className="px-3 py-2">{r.tasks?.submittedBy ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const mr = r.tasks?.marketplaceReview ?? {};
+                      const shops = Object.keys(mr || {});
+                      if (!shops || shops.length === 0) return <span className="text-slate-400">—</span>;
+                      const complete = shops.filter((k) => {
+                        const s = mr[k];
+                        return s && s.stockChecked && s.pricingConfirmed && s.competitorsReviewed && s.oosReviewed;
+                      }).length;
+                      return <span>{complete}/{shops.length} shops complete</span>;
+                    })()}
+                  </td>
                   <td className="px-3 py-2 text-right">{r.productsCount}</td>
                   <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
                   <td className="px-3 py-2">
