@@ -18,10 +18,61 @@ export async function GET(req: Request) {
 
     const encoder = new TextEncoder();
 
+    const marketplaceShops = [
+      "Betech Store",
+      "JM Collection",
+      "Hitech Power",
+      "Maxton",
+      "Sky Store",
+      "Betech Solar",
+      "Kilimall",
+    ];
+
     const stream = new ReadableStream({
       async start(controller) {
         // header (match fields emitted below)
-        controller.enqueue(encoder.encode('"Date","Day","AttendantName","AttendantEmail","SubmittedBy","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","MarketplaceReview","Tasks"\n'));
+        const shopCols: string[] = [];
+        for (const shop of marketplaceShops) {
+          const safe = shop.replace(/\s+/g, '_');
+          shopCols.push(`${safe}_stockChecked`);
+          shopCols.push(`${safe}_pricingConfirmed`);
+          shopCols.push(`${safe}_competitorsReviewed`);
+          shopCols.push(`${safe}_oosReviewed`);
+          shopCols.push(`${safe}_notes`);
+        }
+
+        const header = [
+          'Date',
+          'Day',
+          'AttendantName',
+          'AttendantEmail',
+          'SubmittedBy',
+          // keep raw marketplace JSON for compatibility
+          'MarketplaceReview',
+          'ProductsCount',
+          'TotalSales',
+          'NewUploads',
+          'CopiesUploaded',
+          'ProductsEdited',
+          'Attended Marketing Meeting',
+          'Participated In Video Shoot',
+          'Marketing Videos Posted',
+          'WalkInCustomers',
+          'CustomersPurchased',
+          'LiveViewers',
+          'LivePurchases',
+          'OfficeCleaned',
+          'OfficeNotes',
+          'SalesDetails',
+          // flattened marketplace columns
+          ...shopCols,
+          // keep customerComms as JSON for now
+          'CustomerComms',
+          // full tasks JSON for completeness
+          'Tasks',
+        ];
+
+        controller.enqueue(encoder.encode(header.map((s) => `"${String(s).replace(/"/g, '""')}"`).join(',') + '\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -44,6 +95,19 @@ export async function GET(req: Request) {
             const customerOps = (tasks as any).customerOperations ?? {};
             const office = (tasks as any).officeMaintenance ?? {};
             const salesDetails = Array.isArray(r.sales) ? JSON.stringify(r.sales) : "[]";
+
+            // flattened marketplace values
+            const mr = (tasks as any).marketplaceReview || {};
+            const shopValues: string[] = [];
+            for (const shop of marketplaceShops) {
+              const state = mr[shop] || {};
+              shopValues.push(String(state.stockChecked ? 'Yes' : ''));
+              shopValues.push(String(state.pricingConfirmed ? 'Yes' : ''));
+              shopValues.push(String(state.competitorsReviewed ? 'Yes' : ''));
+              shopValues.push(String(state.oosReviewed ? 'Yes' : ''));
+              shopValues.push(String(state.notes ?? ''));
+            }
+
             const fields = [
               dateStr,
               r.day ?? '',
@@ -65,9 +129,16 @@ export async function GET(req: Request) {
               String(office.officeCleaned ? 'Yes' : 'No'),
               String(office.officeNotes ?? ''),
               salesDetails,
+              // raw marketplace JSON (compat)
               JSON.stringify((tasks as any).marketplaceReview ?? {}),
-              JSON.stringify(tasks),
+              // per-shop flattened fields
+              ...shopValues,
+              // customerComms as JSON
+              JSON.stringify((tasks as any).customerComms ?? {}),
+              // full tasks JSON
+              JSON.stringify(tasks as any),
             ];
+
             const line = fields.map((s) => `"${String(s).replace(/"/g, '""')}"`).join(',') + '\n';
             controller.enqueue(encoder.encode(line));
           }

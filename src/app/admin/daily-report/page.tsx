@@ -75,12 +75,35 @@ export default function AdminDailyReportPage() {
   }
 
   function downloadCsv() {
+    const marketplaceShops = [
+      "Betech Store",
+      "JM Collection",
+      "Hitech Power",
+      "Maxton",
+      "Sky Store",
+      "Betech Solar",
+      "Kilimall",
+    ];
+
+    const shopCols: string[] = [];
+    for (const shop of marketplaceShops) {
+      const safe = shop.replace(/\s+/g, '_');
+      shopCols.push(`${safe}_stockChecked`);
+      shopCols.push(`${safe}_pricingConfirmed`);
+      shopCols.push(`${safe}_competitorsReviewed`);
+      shopCols.push(`${safe}_oosReviewed`);
+      shopCols.push(`${safe}_notes`);
+    }
+
     const header = [
       "Date",
       "Day",
       "Attendant",
       "SubmittedBy",
+      // keep raw marketplace JSON for compatibility
       "MarketplaceReview",
+      // flattened per-shop columns
+      ...shopCols,
       "Products",
       "Sales",
       "NewUploads",
@@ -96,6 +119,8 @@ export default function AdminDailyReportPage() {
       "OfficeCleaned",
       "OfficeNotes",
       "SalesDetails",
+      // include customerComms JSON
+      "CustomerComms",
       "Tasks",
     ];
     // safer CSV: quote fields, escape quotes, preserve JSON tasks
@@ -110,12 +135,26 @@ export default function AdminDailyReportPage() {
       const customerOps = tasks.customerOperations ?? {};
       const office = tasks.officeMaintenance ?? {};
       const salesDetails = Array.isArray(tasks.sales) ? JSON.stringify(tasks.sales) : "[]";
+
+      // per-shop flattened values
+      const mr = (tasks as any).marketplaceReview || {};
+      const shopValues: string[] = [];
+      for (const shop of marketplaceShops) {
+        const s = mr[shop] || {};
+        shopValues.push(String(s.stockChecked ? 'Yes' : ''));
+        shopValues.push(String(s.pricingConfirmed ? 'Yes' : ''));
+        shopValues.push(String(s.competitorsReviewed ? 'Yes' : ''));
+        shopValues.push(String(s.oosReviewed ? 'Yes' : ''));
+        shopValues.push(String(s.notes ?? ''));
+      }
+
       return [
         dateStr,
         r.day,
         attendant,
         submitted,
-        JSON.stringify((tasks as any).marketplaceReview ?? {}),
+        // per-shop flattened columns
+        ...shopValues,
         String(r.productsCount),
         String(r.totalSales),
         String(categories.newUploads ?? ""),
@@ -131,6 +170,8 @@ export default function AdminDailyReportPage() {
         String(office.officeCleaned ? "Yes" : "No"),
         String(office.officeNotes ?? ""),
         salesDetails,
+        // customerComms JSON
+        JSON.stringify(tasks.customerComms ?? {}),
         JSON.stringify(tasks ?? {}),
       ];
     });
