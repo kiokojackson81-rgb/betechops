@@ -52,6 +52,7 @@ export default function AdminDailyReportPage() {
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [legendFilter, setLegendFilter] = useState<'all' | 'complete' | 'partial' | 'missing'>('all');
 
   // fetch on mount so header KPIs render immediately
   useEffect(() => {
@@ -261,9 +262,20 @@ export default function AdminDailyReportPage() {
     // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
     if (!present) return <div className="text-slate-400">—</div>;
+    const IconCheck = () => (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
+        <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+    const IconDash = () => (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
+        <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+
     const badge = (label: string, ok: boolean, key: string) => (
-      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-muted text-slate-300'}`}>
-        {label}
+      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-muted text-slate-300'}`}>
+        {ok ? <IconCheck /> : <IconDash />}{label}
       </span>
     );
     return (
@@ -277,6 +289,24 @@ export default function AdminDailyReportPage() {
         {s.notes ? <div className="text-xs text-slate-400 truncate max-w-[12rem]">{String(s.notes)}</div> : null}
       </div>
     );
+  }
+
+  function computeRowStatus(r: Report) {
+    const mr = (r.tasks as any)?.marketplaceReview ?? {};
+    const shops = Object.keys(mr || {});
+    if (!shops || shops.length === 0) return 'missing';
+    let anyDone = false;
+    let allComplete = true;
+    for (const k of shops) {
+      const s = mr[k] || {};
+      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
+      const done = checks.filter(Boolean).length;
+      if (done > 0) anyDone = true;
+      if (done < 4) allComplete = false;
+    }
+    if (allComplete) return 'complete';
+    if (anyDone) return 'partial';
+    return 'missing';
   }
 
   return (
@@ -353,18 +383,22 @@ export default function AdminDailyReportPage() {
         <main className="col-span-9">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-3 h-3 bg-emerald-400 rounded-full" />
+              <button onClick={() => setLegendFilter('complete')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'complete' ? 'ring-2 ring-white/20' : ''}`}>
+                <span className="inline-block w-3 h-3 bg-status-complete rounded-full" />
                 <span className="text-xs text-slate-300">Complete</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-3 h-3 bg-amber-400 rounded-full" />
+              </button>
+              <button onClick={() => setLegendFilter('partial')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'partial' ? 'ring-2 ring-white/20' : ''}`}>
+                <span className="inline-block w-3 h-3 bg-status-partial rounded-full" />
                 <span className="text-xs text-slate-300">Partial</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-3 h-3 bg-rose-500 rounded-full" />
+              </button>
+              <button onClick={() => setLegendFilter('missing')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'missing' ? 'ring-2 ring-white/20' : ''}`}>
+                <span className="inline-block w-3 h-3 bg-status-missing rounded-full" />
                 <span className="text-xs text-slate-300">Missing</span>
-              </div>
+              </button>
+              <button onClick={() => setLegendFilter('all')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'all' ? 'ring-2 ring-white/20' : ''}`}>
+                <span className="inline-block w-3 h-3 bg-status-muted rounded-full" />
+                <span className="text-xs text-slate-300">All</span>
+              </button>
             </div>
             <div className="text-xs text-slate-400">Showing page {page} — {Math.min((page-1)*pageSize+1, totalCount)} to {Math.min(page*pageSize, totalCount)} of {totalCount}</div>
           </div>
@@ -393,6 +427,8 @@ export default function AdminDailyReportPage() {
           </thead>
           <tbody>
             {reports.map((r) => {
+              const rowStatus = computeRowStatus(r);
+              if (legendFilter !== 'all' && rowStatus !== legendFilter) return null;
               const tasks = r.tasks ?? {};
               const categories = tasks.categories ?? {};
               const marketing = tasks.marketing ?? {};
