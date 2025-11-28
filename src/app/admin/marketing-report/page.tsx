@@ -1,0 +1,287 @@
+import MarketingReportFilterBar from "./FilterBar";
+import { getMarketingReport } from "@/lib/marketingReport";
+
+export const dynamic = "force-dynamic";
+
+const currency = (n: number) => `KES ${Math.round(n).toLocaleString()}`;
+const check = (v: boolean) => (v ? "✓" : "✖");
+
+function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; color?: string }) {
+  const w = 220;
+  const h = 60;
+  if (!values.length) return <svg width={w} height={h} />;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = w / Math.max(1, values.length - 1);
+  const points = values.map((v, i) => {
+    const x = Math.round(i * step);
+    const y = Math.round(h - ((v - min) / range) * h);
+    return `${x},${y}`;
+  });
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <polyline fill="none" stroke={color} strokeWidth={2} points={points.join(" ")} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default async function MarketingReportPage({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
+  const fromStr = typeof searchParams?.from === "string" ? searchParams?.from : "";
+  const toStr = typeof searchParams?.to === "string" ? searchParams?.to : "";
+  const dow = typeof searchParams?.dow === "string" ? searchParams?.dow : "";
+
+  const from = fromStr ? new Date(fromStr) : undefined;
+  const to = toStr ? new Date(toStr) : undefined;
+
+  const { entries, aggregates } = await getMarketingReport({ from, to, dayOfWeek: dow || undefined });
+  const totalDays = aggregates.totalDaysLogged || entries.length;
+  const exportParams = new URLSearchParams();
+  if (fromStr) exportParams.set("from", fromStr);
+  if (toStr) exportParams.set("to", toStr);
+  if (dow) exportParams.set("dow", dow);
+  const exportUrl = `/api/marketing/report/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
+
+  const trend = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
+  const salesSeries = trend.map((e) => e.totalSales);
+  const liveSeries = trend.map((e) => e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0);
+
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6 text-slate-100">
+      <header className="space-y-1">
+        <h1 className="text-3xl font-semibold">Marketing report</h1>
+        <p className="text-slate-300">
+          Admin view of the Marketing Performance Tracker with daily logs, channel completeness, and live session health.
+        </p>
+      </header>
+
+      <MarketingReportFilterBar initialFrom={fromStr} initialTo={toStr} initialDay={dow} />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        {[
+          { label: "Total days logged", value: totalDays },
+          { label: "Completion rate", value: `${aggregates.completionRate}%` },
+          { label: "Total sales", value: currency(aggregates.totalSales) },
+          { label: "Total profit", value: currency(aggregates.totalProfit) },
+          { label: "Total live sessions", value: aggregates.totalLiveSessions },
+          { label: "Total estimated viewers", value: aggregates.totalEstimatedViewers },
+        ].map((kpi) => (
+          <div
+            key={kpi.label}
+            className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20"
+          >
+            <div className="text-xs uppercase tracking-wide text-slate-400">{kpi.label}</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{kpi.value}</div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Channel performance snapshot</h2>
+            <span className="text-xs text-slate-400">vs {totalDays || 1} days</span>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">TikTok</div>
+              <div className="mt-1 flex justify-between text-slate-200">
+                <span>Posted</span>
+                <span>
+                  {aggregates.channelStats.tiktokPostedDays} / {totalDays}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span>Replied</span>
+                <span>
+                  {aggregates.channelStats.tiktokRepliedDays} / {totalDays}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">IG / FB / YT</div>
+              <div className="mt-1 flex justify-between text-slate-200">
+                <span>Posted</span>
+                <span>
+                  {aggregates.channelStats.igFbYtPostedDays} / {totalDays}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span>Replied</span>
+                <span>
+                  {aggregates.channelStats.igFbYtRepliedDays} / {totalDays}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">WhatsApp</div>
+              <div className="mt-1 flex justify-between text-slate-200">
+                <span>Status posted</span>
+                <span>
+                  {aggregates.channelStats.waStatusDays} / {totalDays}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span>Contacts added</span>
+                <span>
+                  {aggregates.channelStats.waContactsDays} / {totalDays}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span>All replied</span>
+                <span>
+                  {aggregates.channelStats.waRepliedDays} / {totalDays}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-4">
+          <div className="text-lg font-semibold">Live sessions summary</div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Total live sessions</div>
+              <div className="text-xl font-semibold text-white">{aggregates.totalLiveSessions}</div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Avg duration (min)</div>
+              <div className="text-xl font-semibold text-white">{aggregates.avgLiveDurationMinutes}</div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Top platform</div>
+              <div className="text-xl font-semibold text-white">{aggregates.topLivePlatform || "–"}</div>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Estimated viewers</div>
+              <div className="text-xl font-semibold text-white">{aggregates.totalEstimatedViewers}</div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
+            Stock ready: {aggregates.stockStats.stockEnoughDays} / {totalDays} days &middot; Shop ready:{" "}
+            {aggregates.shopStats.shopCleanedDays} / {totalDays} cleaned
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Trend (sales vs live viewers)</h3>
+            <p className="text-xs text-slate-400">Last {trend.length} entries</p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</div>
+            <InlineSparkline values={salesSeries} color="#f59e0b" />
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Live viewers</div>
+            <InlineSparkline values={liveSeries} color="#22c55e" />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">Daily breakdown</h3>
+            <p className="text-xs text-slate-400">One row per MarketingDailyEntry</p>
+          </div>
+          <a
+            className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
+            href={exportUrl}
+          >
+            Export CSV
+          </a>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-950/80 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                {[
+                  "Date",
+                  "Day",
+                  "Total sales",
+                  "Total profit",
+                  "TikTok",
+                  "IG/FB/YT",
+                  "WhatsApp",
+                  "Live summary",
+                  "Stock enough?",
+                  "Shop ready?",
+                  "Weekly comment",
+                ].map((col) => (
+                  <th key={col} className="px-3 py-2">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => {
+                const dateStr = e.date.split("T")[0];
+                const tikTokDone = e.tiktokPosted2Videos || e.tiktokPosted4ExplanatoryVideos || e.shot4ProductVideos;
+                const igDone = e.igFbYtPosted2VideosEach;
+                const igReplied = e.igFbYtRepliedAll;
+                const waDone = e.waPostedStatus || e.waPosted10Statuses;
+                const waReplied = e.waRespondedAll;
+                const liveSummary = `${e.liveSessionsCount ?? (e.liveSessionsEstimatedViewers || e.liveViewers ? 1 : 0)} sessions / ${
+                  e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0
+                } viewers`;
+                const stockOk = Boolean(e.stockEnoughFastMovers);
+                const shopReady = Boolean(e.shopCleaned && e.shopWellArranged && e.displayWellLabeled);
+                return (
+                  <tr key={e.id} className="border-t border-slate-800 odd:bg-slate-950/40">
+                    <td className="px-3 py-2 text-slate-200">{dateStr}</td>
+                    <td className="px-3 py-2 text-slate-200">{e.dayOfWeek}</td>
+                    <td className="px-3 py-2 font-semibold text-white">{currency(e.totalSales)}</td>
+                    <td className="px-3 py-2 text-slate-100">{currency(e.totalProfit)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <span title="Posted">{check(Boolean(tikTokDone))}</span>
+                        <span title="Replied">{check(Boolean(e.tiktokRepliedAll))}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <span title="Posted">{check(Boolean(igDone))}</span>
+                        <span title="Replied">{check(Boolean(igReplied))}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <span title="Status/contacts">{check(Boolean(waDone))}</span>
+                        <span title="Replied all">{check(Boolean(waReplied))}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-slate-200">{liveSummary}</td>
+                    <td className="px-3 py-2 text-center">{check(stockOk)}</td>
+                    <td className="px-3 py-2 text-center">{check(shopReady)}</td>
+                    <td className="px-3 py-2 text-slate-300" title={e.weeklyComment || ""}>
+                      {(e.weeklyComment || "").slice(0, 40)}
+                      {(e.weeklyComment || "").length > 40 ? "…" : ""}
+                    </td>
+                  </tr>
+                );
+              })}
+              {entries.length === 0 && (
+                <tr>
+                  <td className="px-3 py-6 text-center text-slate-400" colSpan={11}>
+                    No marketing entries for this range yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}

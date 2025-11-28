@@ -108,6 +108,8 @@ model User {
   assignments ShopAssignment[]
   // daily reports submitted by this user
   dailyReports DailyReport[]
+  // marketing tracker entries submitted by this user
+  marketingEntries MarketingDailyEntry[]
 }
 
 model AttendantActivity {
@@ -161,6 +163,47 @@ model DailySale {
   dailyReport   DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
 
   @@index([dailyReportId])
+}
+
+model MarketingDailyEntry {
+  id                          String   @id @default(cuid())
+  date                        DateTime
+  dayOfWeek                   String
+  totalSales                  Decimal  @db.Decimal(14,2) @default(0)
+  totalProfit                 Decimal  @db.Decimal(14,2) @default(0)
+  photoUrl                    String?
+  tiktokPosted2Videos         Boolean?
+  tiktokRepliedAll            Boolean?
+  igFbYtPosted2VideosEach     Boolean?
+  igFbYtRepliedAll            Boolean?
+  waPostedStatus              Boolean?
+  waSavedContacts             Boolean?
+  waRespondedAll              Boolean?
+  waPosted10Statuses          Boolean?
+  waSaved10Contacts           Boolean?
+  stockEnoughFastMovers       Boolean?
+  shot4ProductVideos          Boolean?
+  tiktokPosted4ExplanatoryVideos Boolean?
+  liveViewers                 Int?
+  liveSessionsCount           Int?
+  liveSessionsEstimatedViewers Int?
+  liveSessionDurationMinutes  Int?
+  liveSessionPlatform         String?
+  shopCleaned                 Boolean?
+  shopWellArranged            Boolean?
+  displayWellLabeled          Boolean?
+  weeklyComment               String?
+  payload                     Json?
+  submittedById               String?
+  submittedBy                 User?    @relation(fields: [submittedById], references: [id])
+  submittedByName             String?
+  submittedByEmail            String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([date])
+  @@index([dayOfWeek])
+  @@index([submittedById])
 }
 
 model Shop {
