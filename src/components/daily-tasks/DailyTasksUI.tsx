@@ -424,6 +424,96 @@ function WednesdayLiveCard({ value, onChange }: { value?: WednesdayLiveContent; 
   );
 }
 
+// TODO (Copilot) — THURSDAY RIGHT-SIDE CARD IMPLEMENTATION
+//
+// The Thursday layout should match Monday–Wednesday:
+//   - Left column = Customer & Communications Activity (already correct)
+//   - Right column = A full-height card titled "Thursday – Weekly Marketing & Office Ops"
+//
+// INSTRUCTIONS:
+//
+// 1. Replace the current single checkbox field on the right 
+//    ("Weekly marketing meeting attended") with a full card component.
+//
+// 2. Wrap the Thursday content in a right-side <section> with the same 
+//    container classes used for Tuesday/Wednesday:
+//       className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm"
+//
+// 3. The card MUST appear in the right-hand grid column exactly like Tuesday/Wednesday.
+//    Ensure the parent layout uses a 2-column grid such as:
+//       grid grid-cols-1 lg:grid-cols-2 gap-6
+//
+// 4. Inside the right-column card, build the following fields:
+//
+//    Title: "Thursday – Weekly Marketing & Office Ops"
+//    Subtitle: "Track meeting attendance, video shoot, content posted, and workspace organization."
+//
+//    Fields:
+//    - Weekly marketing meeting attended  (checkbox)
+//    - Participated in weekly video shoot (checkbox)
+//    - Promotional / marketing video posted (number input)
+//    - Office / Display / Photo area cleaned & organized (checkbox)
+//    - Notes textarea (label: "Notes (challenges, highlights, ideas)")
+//
+// 5. Remove the old single checkbox entirely from the Thursday right side.
+//
+// 6. Match all inputs and checkboxes with the same style as:
+//      • FB comments replied
+//      • IG comments replied
+//      • Instagram inbox cleared
+//
+// 7. Ensure the right-side Thursday card vertically aligns with the left card 
+//    by using the same spacing (mt-6 where appropriate).
+//
+// 8. Keep the card responsive so on mobile it stacks under the left column.
+//
+// 9. Example wrapper for the right side:
+//
+// <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+//   ... Thursday fields ...
+// </div>
+//
+// This ensures the Thursday card appears properly positioned on the RIGHT side.
+
+function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: any) => void }) {
+  const v = value || {};
+  const setField = (k: string, val: any) => onChange({ ...v, [k]: val });
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Thursday – Weekly Marketing &amp; Office Ops</h3>
+      <p className="mt-1 text-xs text-gray-400">Track meeting attendance, video shoot, content posted, and workspace organization.</p>
+
+      <div className="mt-4 space-y-3">
+        <label className="flex items-center gap-2">
+          <Checkbox checked={Boolean(v.meetingAttended)} onCheckedChange={(val) => setField('meetingAttended', Boolean(val))} />
+          <span className="text-sm">Weekly marketing meeting attended</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <Checkbox checked={Boolean(v.videoShoot)} onCheckedChange={(val) => setField('videoShoot', Boolean(val))} />
+          <span className="text-sm">Participated in weekly video shoot</span>
+        </label>
+
+        <div>
+          <label className="text-sm block mb-1">Promotional / marketing video posted</label>
+          <Input type="number" min={0} value={String(v.promoVideos ?? 0)} onChange={(e) => setField('promoVideos', Number((e.target as HTMLInputElement).value || 0))} />
+        </div>
+
+        <label className="flex items-center gap-2">
+          <Checkbox checked={Boolean(v.officeClean)} onCheckedChange={(val) => setField('officeClean', Boolean(val))} />
+          <span className="text-sm">Office / Display / Photo area cleaned &amp; organized</span>
+        </label>
+
+        <div>
+          <label className="text-sm block mb-1">Notes (challenges, highlights, ideas)</label>
+          <Textarea rows={3} placeholder="Notes (challenges, highlights, ideas)" value={String(v.thursdayNotes ?? '')} onChange={(e) => setField('thursdayNotes', e.target.value)} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DailyTasksUI() {
   const [day, setDay] = useState<DayKey>("monday");
   const [dayState, setDayState] = useState<Record<DayKey, Record<string, number | boolean | string>>>({
@@ -975,6 +1065,17 @@ export default function DailyTasksUI() {
                 skipKeys.add("demoRecorded");
                 skipKeys.add("commentsDMs");
               }
+              if (day === "wednesday") {
+                // we render the WednesdayLiveCard so skip the old liveSessions field
+                skipKeys.add("liveSessions");
+              }
+              if (day === "thursday") {
+                // We'll render a full Thursday weekly card on the right; skip the individual fields
+                skipKeys.add("meetingAttended");
+                skipKeys.add("videoShoot");
+                skipKeys.add("promoVideos");
+                skipKeys.add("officeClean");
+              }
               return (
                 <>
                   <div className="w-full">
@@ -1022,6 +1123,15 @@ export default function DailyTasksUI() {
                             return { ...prev, [day]: { ...prev[day], ...rest, ...flattened } };
                           })
                         }
+                      />
+                    </div>
+                  )}
+
+                  {day === "thursday" && (
+                    <div className="w-full">
+                      <ThursdayWeeklyCard
+                        value={dayState[day] as any}
+                        onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
                       />
                     </div>
                   )}
