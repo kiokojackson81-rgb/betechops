@@ -263,6 +263,9 @@ export default function AdminDailyReportPage() {
         <div className="ml-auto">
           <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
         </div>
+        <div className="ml-4 text-xs text-slate-400 max-w-xl">
+          CSV columns include: `SubmittedBy`; per-shop flattened columns (e.g. `Betech_Store_stockChecked`, `Betech_Store_pricingConfirmed`, `..._notes`); new Saturday columns: `liveSessionsHosted`, `officeCleanOrganized`, `saturdayNotes`; and raw JSON fields `MarketplaceReview`, `CustomerComms`, `Tasks` for full data.
+        </div>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <div className="flex flex-col">
