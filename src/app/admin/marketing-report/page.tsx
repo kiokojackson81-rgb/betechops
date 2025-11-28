@@ -26,14 +26,12 @@ function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; colo
   );
 }
 
-type PageSearchParams = Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined> | undefined;
-
 export default async function MarketingReportPage({
   searchParams,
 }: {
-  searchParams?: PageSearchParams;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const resolved = (await searchParams) as Record<string, string | string[] | undefined> | undefined;
+  const resolved = (await searchParams) || undefined;
   const fromStr = typeof resolved?.from === "string" ? resolved?.from : "";
   const toStr = typeof resolved?.to === "string" ? resolved?.to : "";
   const dow = typeof resolved?.dow === "string" ? resolved?.dow : "";
