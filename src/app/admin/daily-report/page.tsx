@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Sparkline from "@/app/_components/Sparkline";
+import Modal from "@/app/_components/Modal";
 import { showToast } from "@/lib/ui/toast";
 
 interface Report {
@@ -50,6 +51,7 @@ export default function AdminDailyReportPage() {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [showCsvModal, setShowCsvModal] = useState(false);
 
   // fetch on mount so header KPIs render immediately
   useEffect(() => {
@@ -242,6 +244,41 @@ export default function AdminDailyReportPage() {
     document.body.removeChild(link);
   }
 
+  const CSV_COLUMNS = [
+    'Date', 'Day', 'Attendant', 'SubmittedBy', 'MarketplaceReview (JSON)',
+    // per-shop flattened
+    ...MARKETPLACE_SHOPS.flatMap((s) => {
+      const safe = s.replace(/\s+/g, '_');
+      return [`${safe}_stockChecked`, `${safe}_pricingConfirmed`, `${safe}_competitorsReviewed`, `${safe}_oosReviewed`, `${safe}_notes`];
+    }),
+    'Products', 'Sales', 'NewUploads', 'CopiesUploaded', 'ProductsEdited',
+    'Attended Marketing Meeting', 'Participated In Video Shoot', 'Marketing Videos Posted',
+    'WalkInCustomers', 'CustomersPurchased', 'LiveViewers', 'LivePurchases',
+    'OfficeCleaned', 'OfficeNotes', 'CustomerComms (JSON)', 'Tasks (JSON)'
+  ];
+
+  function renderShopBadges(s: any) {
+    // s: marketplace shop object with boolean flags
+    const present = Boolean(s && Object.keys(s).length > 0);
+    if (!present) return <div className="text-slate-400">—</div>;
+    const badge = (label: string, ok: boolean, key: string) => (
+      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-muted text-slate-300'}`}>
+        {label}
+      </span>
+    );
+    return (
+      <div>
+        <div className="mb-1">
+          {badge('Stock', Boolean(s.stockChecked), 'stock')}
+          {badge('Pricing', Boolean(s.pricingConfirmed), 'pricing')}
+          {badge('Competitors', Boolean(s.competitorsReviewed), 'comp')}
+          {badge('OOS', Boolean(s.oosReviewed), 'oos')}
+        </div>
+        {s.notes ? <div className="text-xs text-slate-400 truncate max-w-[12rem]">{String(s.notes)}</div> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-8xl p-6 text-slate-100">
       <div className="flex items-start gap-6 mb-6">
@@ -258,7 +295,8 @@ export default function AdminDailyReportPage() {
             <div className="text-xs text-slate-400">Total sales (KES)</div>
             <div className="text-lg font-semibold">{summary ? Number(summary.totalSales).toLocaleString() : '—'}</div>
           </div>
-          <div className="ml-6">
+          <div className="ml-6 flex items-center gap-3">
+            <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
             <Button onClick={downloadCsv} variant="primary">Download CSV</Button>
           </div>
         </div>
@@ -384,13 +422,9 @@ export default function AdminDailyReportPage() {
                   {MARKETPLACE_SHOPS.map((shop) => {
                     const mr = (r.tasks as any)?.marketplaceReview ?? {};
                     const s = mr[shop] || {};
-                    const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
-                    const done = checks.filter(Boolean).length;
-                    const notes = String(s.notes ?? "").trim();
                     return (
-                      <td key={shop} className="px-3 py-2 text-sm hidden sm:table-cell" title={notes || undefined}>
-                        <div className="font-mono">{done}/4</div>
-                        {notes ? <div className="text-xs text-slate-400 truncate max-w-[12rem]">{notes}</div> : null}
+                      <td key={shop} className="px-3 py-2 text-sm hidden sm:table-cell" title={String(s.notes ?? '') || undefined}>
+                        {renderShopBadges(s)}
                       </td>
                     );
                   })}
@@ -462,6 +496,14 @@ export default function AdminDailyReportPage() {
               </select>
             </div>
           </div>
+          <Modal title="CSV Columns Included" open={showCsvModal} onClose={() => setShowCsvModal(false)}>
+            <div className="space-y-2 text-sm text-slate-200">
+              <p className="text-slate-300">This export includes the following columns (flattened per-shop columns are named using the shop label):</p>
+              <ul className="list-disc pl-5">
+                {CSV_COLUMNS.map((c) => <li key={c} className="py-0.5">{c}</li>)}
+              </ul>
+            </div>
+          </Modal>
         </main>
       </div>
     </div>
