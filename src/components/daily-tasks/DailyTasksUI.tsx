@@ -1124,8 +1124,8 @@ export default function DailyTasksUI() {
                 </div>
               ))}
 
-               <div className="flex justify-end">
-                 <Button variant="primary" className="px-5 py-2 text-sm font-semibold" aria-label="Add sales row" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
+               <div className="flex justify-end" style={{ zIndex: 2 }}>
+                 <Button variant="primary" className="px-5 py-2 text-sm font-semibold btn-primary" style={{ backgroundColor: "var(--betech-orange)", color: "#000" }} aria-label="Add sales row" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
                </div>
             </div>
           </Card>
@@ -1340,7 +1340,7 @@ export default function DailyTasksUI() {
                   <div className="text-xs text-slate-400" aria-live="polite">
                     {autosaveStatus === "saved" && savedAt ? `Saved at ${savedAt}` : autosaveStatus}
                   </div>
-                  <Button variant="primary" aria-label="Submit report" onClick={busy ? undefined : handleSave}>{busy ? "Submitting..." : "Submit report"}</Button>
+                  <Button variant="primary" className="btn-primary" style={{ backgroundColor: "var(--betech-orange)", color: "#000" }} aria-label="Submit report" onClick={busy ? undefined : handleSave}>{busy ? "Submitting..." : "Submit report"}</Button>
                 </div>
             </Card>
         </Card>
