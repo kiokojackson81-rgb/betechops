@@ -110,9 +110,9 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
 
   return {
     videos: num("promoVideosPosted") + num("demoVideosRecorded"),
-    lives: num("liveSessions") + num("liveSessionsTotal") + num("liveSessionsHosted"),
-    // prefer new live-session generated leads; fallback to legacy key for old data
-    leads: num("liveSessionsLeadsGenerated") || num("leadsFollowed"),
+    lives: num("liveSessions") + num("liveSessionsTotal") + num("liveSessionsCount"),
+    // prefer new live-session generated leads (legacy fallback removed)
+    leads: num("liveSessionsLeadsGenerated"),
     customers: num("customersServed"),
     maintenance: yes("officeClean"),
     stockCheck: yes("stockChecked"),
@@ -186,12 +186,22 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
       <p className="mt-1 text-xs text-gray-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
 
       <div className="mt-4">
-        <div className="mt-2 overflow-x-auto -mx-2 px-2">
-          <div className="flex gap-2 whitespace-nowrap">
+        <div className="mt-2 overflow-x-auto -mx-2 px-2 snap-x snap-mandatory" role="tablist" aria-label="Marketplace shops" style={{ scrollSnapType: 'x mandatory' }}>
+          <div className="flex gap-2 whitespace-nowrap" style={{ padding: 6 }}>
             {marketplaceShopsTyped.map((shop) => {
               const active = selected === shop;
               return (
-                <button key={shop} type="button" className={`${tabClass(active)} min-w-[120px]`} onClick={() => setSelected(shop)}>
+                <button
+                  key={shop}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-label={`Select shop ${shop}`}
+                  aria-controls={`shop-panel-${shop.replace(/\s+/g, '-')}`}
+                  onClick={() => setSelected(shop)}
+                  className={`${tabClass(active)} snap-start min-w-[160px] px-5 py-3`}
+                  style={{ scrollSnapAlign: 'start' }}
+                >
                   {shop}
                 </button>
               );
@@ -239,22 +249,22 @@ function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: 
         <div className="text-xs opacity-70">Track walk-ins, messages and cleared inboxes</div>
       </div>
       <div className="grid md:grid-cols-2 gap-3 mt-3">
-        <div className="space-y-2">
-          <label className="text-xs">Walk-in served</label>
-          <Input type="number" value={String(value.walkInServed ?? 0)} onChange={(e) => onChange({ ...value, walkInServed: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">Walk-ins who purchased</label>
-          <Input type="number" value={String(value.walkInsWhoPurchased ?? 0)} onChange={(e) => onChange({ ...value, walkInsWhoPurchased: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">Calls handled</label>
-          <Input type="number" value={String(value.callsHandled ?? 0)} onChange={(e) => onChange({ ...value, callsHandled: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">WhatsApp/SMS replied</label>
-          <Input type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
-        </div>
+          <div className="space-y-2">
+            <label className="text-xs">Walk-in served</label>
+            <Input aria-label="Walk-in served" type="number" value={String(value.walkInServed ?? 0)} onChange={(e) => onChange({ ...value, walkInServed: Number((e.target as HTMLInputElement).value || 0) })} />
+            <label className="text-xs">Walk-ins who purchased</label>
+            <Input aria-label="Walk-ins who purchased" type="number" value={String(value.walkInsWhoPurchased ?? 0)} onChange={(e) => onChange({ ...value, walkInsWhoPurchased: Number((e.target as HTMLInputElement).value || 0) })} />
+            <label className="text-xs">Calls handled</label>
+            <Input aria-label="Calls handled" type="number" value={String(value.callsHandled ?? 0)} onChange={(e) => onChange({ ...value, callsHandled: Number((e.target as HTMLInputElement).value || 0) })} />
+            <label className="text-xs">WhatsApp/SMS replied</label>
+            <Input aria-label="WhatsApp SMS replied" type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+          </div>
         <div className="space-y-3">
           <div className="space-y-2">
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
+            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="FB comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
+            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="FB DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
+            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="IG comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
+            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="IG DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
           </div>
 
           <div className="space-y-2">
@@ -1115,7 +1125,7 @@ export default function DailyTasksUI() {
               ))}
 
                <div className="flex justify-end">
-                 <Button onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
+                 <Button variant="primary" className="px-5 py-2 text-sm font-semibold" aria-label="Add sales row" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
                </div>
             </div>
           </Card>
@@ -1259,8 +1269,6 @@ export default function DailyTasksUI() {
                               liveSessionsPlatform: String(rest.platform || ""),
                               liveSessionsEstimatedViewers: Number(rest.estimatedViewers || 0),
                               liveSessionsLeadsGenerated: Number(rest.leadsGenerated || 0),
-                              // legacy compatibility
-                              liveSessionsHosted: Number(rest.count || 0),
                               officeCleanOrganized: Boolean(rest.officeCleanOrganized || false),
                               saturdayNotes: String(rest.notes || ""),
                             } as Record<string, any>;
@@ -1332,7 +1340,7 @@ export default function DailyTasksUI() {
                   <div className="text-xs text-slate-400" aria-live="polite">
                     {autosaveStatus === "saved" && savedAt ? `Saved at ${savedAt}` : autosaveStatus}
                   </div>
-                  <Button onClick={busy ? undefined : handleSave}>{busy ? "Saving..." : "Save"}</Button>
+                  <Button variant="primary" aria-label="Submit report" onClick={busy ? undefined : handleSave}>{busy ? "Submitting..." : "Submit report"}</Button>
                 </div>
             </Card>
         </Card>
