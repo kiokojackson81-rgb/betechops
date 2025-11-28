@@ -38,9 +38,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, dayOfWeek, totalSales, totalProfit, yesNo = {}, numeric = {}, text = {}, photoDataUrl, photoFilename } = body || {};
+  const { date, dayOfWeek, sales = [], yesNo = {}, numeric = {}, text = {}, photoDataUrl, photoFilename } = body || {};
   if (!dayOfWeek || !allowedDays.includes(dayOfWeek)) {
-    return NextResponse.json({ error: "dayOfWeek must be Monday–Saturday" }, { status: 400 });
+    return NextResponse.json({ error: "dayOfWeek must be Monday-Saturday" }, { status: 400 });
   }
 
   const yesNoValues: Record<string, boolean> = {};
@@ -59,13 +59,36 @@ export async function POST(req: Request) {
     textValues[k] = typeof raw === "string" ? raw : "";
   });
 
+  const saleRows =
+    Array.isArray(sales) && sales.length
+      ? sales
+          .map((s: any) => ({
+            product: typeof s.product === "string" ? s.product.trim() : "",
+            buyingPrice: toNumber(s.buyingPrice),
+            sellingPrice: toNumber(s.sellingPrice),
+            receiptNumber: typeof s.receiptNumber === "string" ? s.receiptNumber.trim() : "",
+            paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
+          }))
+          .filter(
+            (s) =>
+              s.product ||
+              Number.isFinite(s.buyingPrice) ||
+              Number.isFinite(s.sellingPrice) ||
+              (s.receiptNumber ?? "") ||
+              false
+          )
+      : [];
+
+  const totalSales = saleRows.reduce((sum, s) => sum + toNumber(s.sellingPrice), 0);
+  const totalProfit = saleRows.reduce((sum, s) => sum + (toNumber(s.sellingPrice) - toNumber(s.buyingPrice)), 0);
+
   try {
     const entry = await prisma.marketingDailyEntry.create({
       data: {
         date: date ? new Date(date) : new Date(),
         dayOfWeek,
-        totalSales: toNumber(totalSales),
-        totalProfit: toNumber(totalProfit),
+        totalSales,
+        totalProfit,
         photoUrl: typeof photoDataUrl === "string" ? photoDataUrl : null,
         payload: { yesNo: yesNoValues, numeric: numericValues, text: textValues, photoFilename: photoFilename || null },
         submittedById: actorId,
@@ -96,7 +119,17 @@ export async function POST(req: Request) {
         liveSessionDurationMinutes: toInt(numericValues.liveSessionDurationMinutes),
         liveSessionPlatform: textValues.liveSessionPlatform || null,
         liveViewers: toInt((numeric as Record<string, unknown>)["liveViewers"] ?? numericValues.liveSessionsEstimatedViewers),
+        sales: {
+          create: saleRows.map((s) => ({
+            product: s.product,
+            buyingPrice: toNumber(s.buyingPrice),
+            sellingPrice: toNumber(s.sellingPrice),
+            receiptNumber: s.receiptNumber || null,
+            paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
+          })),
+        },
       },
+      include: { sales: true },
     });
     return NextResponse.json({ entry }, { status: 201 });
   } catch (err: unknown) {

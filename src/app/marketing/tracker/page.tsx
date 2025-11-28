@@ -11,11 +11,19 @@ import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes }
 type MarketingDailyFormState = {
   date: string;
   dayOfWeek: DayName;
-  totalSales: string;
-  totalProfit: string;
   photoFile: File | null;
   photoDataUrl: string | null;
-} & Record<string, boolean | number | string | File | null>;
+  fields: Record<string, boolean | number | string | null>;
+};
+
+type SaleRow = {
+  id: string;
+  product: string;
+  buyingPrice: number | "";
+  sellingPrice: number | "";
+  receiptNumber: string;
+  paymentMethod: "MPESA" | "CASH";
+};
 
 const dayOptions: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -39,13 +47,20 @@ const defaultFormState = (): MarketingDailyFormState => {
   return {
     date: todayStr,
     dayOfWeek: day,
-    totalSales: "",
-    totalProfit: "",
     photoFile: null,
     photoDataUrl: null,
-    ...dynamic,
+    fields: { ...dynamic },
   };
 };
+
+const newSaleRow = (): SaleRow => ({
+  id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+  product: "",
+  buyingPrice: "",
+  sellingPrice: "",
+  receiptNumber: "",
+  paymentMethod: "MPESA",
+});
 
 const pillClass = (checked: boolean) =>
   `rounded-full border px-4 py-2 text-sm font-medium transition ${
@@ -56,6 +71,7 @@ const pillClass = (checked: boolean) =>
 
 export default function MarketingTrackerPage() {
   const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
+  const [sales, setSales] = useState<SaleRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
 
   const config = useMemo(() => marketingDayConfigs.find((c) => c.day === form.dayOfWeek) ?? marketingDayConfigs[0], [form.dayOfWeek]);
@@ -74,7 +90,7 @@ export default function MarketingTrackerPage() {
   }, [config]);
 
   const updateField = (key: string, value: boolean | number | string | null) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   };
 
   const handleFileChange = (fileList: FileList | null) => {
@@ -90,6 +106,20 @@ export default function MarketingTrackerPage() {
     reader.readAsDataURL(file);
   };
 
+  const totals = useMemo(() => {
+    const clean = sales.filter((s) => typeof s.sellingPrice === "number" && typeof s.buyingPrice === "number");
+    const totalSales = clean.reduce((sum, s) => sum + Number(s.sellingPrice || 0), 0);
+    const totalProfit = clean.reduce((sum, s) => sum + (Number(s.sellingPrice || 0) - Number(s.buyingPrice || 0)), 0);
+    return { totalSales, totalProfit };
+  }, [sales]);
+
+  const updateSale = (id: string, patch: Partial<SaleRow>) => {
+    setSales((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+
+  const addSale = () => setSales((rows) => [...rows, newSaleRow()]);
+  const removeSale = (id: string) => setSales((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -98,17 +128,40 @@ export default function MarketingTrackerPage() {
       const numeric: Record<string, number> = {};
       const text: Record<string, string> = {};
       Object.entries(marketingFieldTypes).forEach(([key, type]) => {
-        const raw = form[key];
+        const raw = form.fields[key];
         if (type === "yesno") yesNo[key] = Boolean(raw);
         else if (type === "numeric") numeric[key] = Number(raw || 0);
         else text[key] = typeof raw === "string" ? raw : "";
       });
 
+      const cleanedSales = sales
+        .map((s) => ({
+          product: s.product.trim(),
+          buyingPrice: typeof s.buyingPrice === "number" ? Math.max(0, s.buyingPrice) : Number(s.buyingPrice || 0),
+          sellingPrice: typeof s.sellingPrice === "number" ? Math.max(0, s.sellingPrice) : Number(s.sellingPrice || 0),
+          receiptNumber: s.receiptNumber.trim(),
+          paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
+        }))
+        .filter(
+          (s) =>
+            s.product ||
+            Number.isFinite(s.buyingPrice) ||
+            Number.isFinite(s.sellingPrice) ||
+            s.receiptNumber
+        );
+
+      const totalSales = cleanedSales.reduce((sum, s) => sum + (Number.isFinite(s.sellingPrice) ? s.sellingPrice : 0), 0);
+      const totalProfit = cleanedSales.reduce(
+        (sum, s) => sum + ((Number.isFinite(s.sellingPrice) ? s.sellingPrice : 0) - (Number.isFinite(s.buyingPrice) ? s.buyingPrice : 0)),
+        0
+      );
+
       const payload = {
         date: form.date,
         dayOfWeek: form.dayOfWeek,
-        totalSales: Number(form.totalSales || 0),
-        totalProfit: Number(form.totalProfit || 0),
+        totalSales,
+        totalProfit,
+        sales: cleanedSales,
         yesNo,
         numeric,
         text,
@@ -124,6 +177,7 @@ export default function MarketingTrackerPage() {
       if (res.ok) {
         showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
+        setSales([newSaleRow()]);
       } else {
         const err = await res.json().catch(() => ({}));
         showToast(err.error || "Failed to submit entry", "error");
@@ -152,7 +206,7 @@ export default function MarketingTrackerPage() {
               <Input
                 type="date"
                 value={form.date}
-                onChange={(e) => updateField("date", e.target.value)}
+                onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
                 className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
               />
             </div>
@@ -160,7 +214,7 @@ export default function MarketingTrackerPage() {
               <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
               <select
                 value={form.dayOfWeek}
-                onChange={(e) => updateField("dayOfWeek", e.target.value as DayName)}
+                onChange={(e) => setForm((prev) => ({ ...prev, dayOfWeek: e.target.value as DayName }))}
                 className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
               >
                 {dayOptions.map((day) => (
@@ -169,30 +223,6 @@ export default function MarketingTrackerPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Total Sales (KES)</label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.totalSales}
-                onChange={(e) => updateField("totalSales", e.target.value)}
-                placeholder="0"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Total Profit (KES)</label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.totalProfit}
-                onChange={(e) => updateField("totalProfit", e.target.value)}
-                placeholder="0"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-              />
             </div>
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-wide text-slate-400">Photo upload</label>
@@ -208,6 +238,98 @@ export default function MarketingTrackerPage() {
                 <p className="text-xs text-slate-500">Optional: image proof of display or content.</p>
               )}
             </div>
+          </div>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Sales records</p>
+            <h2 className="text-xl font-semibold">Add each sale for today</h2>
+            <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {sales.map((sale) => (
+              <div
+                key={sale.id}
+                className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-5 md:items-end"
+              >
+                <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Product</label>
+                  <Input
+                    value={sale.product}
+                    onChange={(e) => updateSale(sale.id, { product: e.target.value })}
+                    placeholder="Product name"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Buying price (KES)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={sale.buyingPrice === "" ? "" : sale.buyingPrice}
+                    onChange={(e) =>
+                      updateSale(sale.id, { buyingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
+                    }
+                    placeholder="0"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Selling price (KES)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={sale.sellingPrice === "" ? "" : sale.sellingPrice}
+                    onChange={(e) =>
+                      updateSale(sale.id, { sellingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
+                    }
+                    placeholder="0"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number</label>
+                  <Input
+                    value={sale.receiptNumber}
+                    onChange={(e) => updateSale(sale.id, { receiptNumber: e.target.value })}
+                    placeholder="Optional"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Payment method</label>
+                  <div className="flex gap-2">
+                    {(["MPESA", "CASH"] as const).map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => updateSale(sale.id, { paymentMethod: method })}
+                        className={pillClass(sale.paymentMethod === method)}
+                      >
+                        {method === "MPESA" ? "MPESA" : "Cash"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="md:col-span-5 flex justify-end">
+                  <Button variant="secondary" type="button" className="px-3 py-2 text-xs" onClick={() => removeSale(sale.id)}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
+            <div className="space-y-1">
+              <div>Total sales (KES): {totals.totalSales.toLocaleString()}</div>
+              <div>Total profit (KES): {totals.totalProfit.toLocaleString()}</div>
+            </div>
+            <Button type="button" variant="secondary" className="px-4" onClick={addSale}>
+              + Add sale
+            </Button>
           </div>
         </Card>
 
@@ -233,8 +355,8 @@ export default function MarketingTrackerPage() {
                     <button
                       type="button"
                       key={f.key}
-                      onClick={() => updateField(f.key, !Boolean(form[f.key]))}
-                      className={pillClass(Boolean(form[f.key]))}
+                      onClick={() => updateField(f.key, !Boolean(form.fields[f.key]))}
+                      className={pillClass(Boolean(form.fields[f.key]))}
                     >
                       {f.label}
                     </button>
@@ -253,7 +375,7 @@ export default function MarketingTrackerPage() {
                       <Input
                         type="number"
                         min={f.min}
-                        value={String(form[f.key] ?? "")}
+                        value={String(form.fields[f.key] ?? "")}
                         onChange={(e) => updateField(f.key, e.target.value)}
                         className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
                       />
@@ -271,7 +393,7 @@ export default function MarketingTrackerPage() {
                     <div key={f.key} className="space-y-2">
                       <label className="text-xs uppercase tracking-wide text-slate-400">{f.label}</label>
                       <Textarea
-                        value={String(form[f.key] ?? "")}
+                        value={String(form.fields[f.key] ?? "")}
                         onChange={(e) => updateField(f.key, e.target.value)}
                         placeholder={f.placeholder}
                         rows={3}

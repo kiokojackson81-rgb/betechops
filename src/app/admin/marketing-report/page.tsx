@@ -29,9 +29,9 @@ function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; colo
 export default async function MarketingReportPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const resolved = (await searchParams) || undefined;
+  const resolved = searchParams || undefined;
   const fromStr = typeof resolved?.from === "string" ? resolved?.from : "";
   const toStr = typeof resolved?.to === "string" ? resolved?.to : "";
   const dow = typeof resolved?.dow === "string" ? resolved?.dow : "";
@@ -70,6 +70,8 @@ export default async function MarketingReportPage({
           { label: "Total profit", value: currency(aggregates.totalProfit) },
           { label: "Total live sessions", value: aggregates.totalLiveSessions },
           { label: "Total estimated viewers", value: aggregates.totalEstimatedViewers },
+          { label: "Sales via MPESA", value: currency(aggregates.paymentStats.totalSalesMpesa) },
+          { label: "Sales via Cash", value: currency(aggregates.paymentStats.totalSalesCash) },
         ].map((kpi) => (
           <div
             key={kpi.label}
@@ -211,6 +213,7 @@ export default async function MarketingReportPage({
                   "Day",
                   "Total sales",
                   "Total profit",
+                  "Sales rows",
                   "TikTok",
                   "IG/FB/YT",
                   "WhatsApp",
@@ -244,6 +247,7 @@ export default async function MarketingReportPage({
                     <td className="px-3 py-2 text-slate-200">{e.dayOfWeek}</td>
                     <td className="px-3 py-2 font-semibold text-white">{currency(e.totalSales)}</td>
                     <td className="px-3 py-2 text-slate-100">{currency(e.totalProfit)}</td>
+                    <td className="px-3 py-2 text-slate-200">{`${e.sales?.length ?? 0} items / ${currency(e.totalSales)}`}</td>
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
                         <span title="Posted">{check(Boolean(tikTokDone))}</span>
@@ -274,7 +278,7 @@ export default async function MarketingReportPage({
               })}
               {entries.length === 0 && (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-400" colSpan={11}>
+                  <td className="px-3 py-6 text-center text-slate-400" colSpan={12}>
                     No marketing entries for this range yet.
                   </td>
                 </tr>

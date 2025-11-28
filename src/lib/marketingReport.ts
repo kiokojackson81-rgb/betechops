@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { MarketingDailyEntry } from "@prisma/client";
+import type { MarketingDailyEntry, MarketingSale, PaymentMethod } from "@prisma/client";
 
 export type MarketingReportFilters = {
   from?: Date;
@@ -13,6 +13,7 @@ export type MarketingReportEntry = Omit<MarketingDailyEntry, "totalSales" | "tot
   date: string;
   createdAt?: string;
   updatedAt?: string;
+  sales?: MarketingSale[];
 };
 
 export type MarketingReportAggregates = {
@@ -24,6 +25,12 @@ export type MarketingReportAggregates = {
   totalEstimatedViewers: number;
   avgLiveDurationMinutes: number;
   topLivePlatform: string | null;
+  paymentStats: {
+    totalSalesMpesa: number;
+    totalSalesCash: number;
+    countMpesaReceipts: number;
+    countCashReceipts: number;
+  };
   channelStats: {
     tiktokPostedDays: number;
     tiktokRepliedDays: number;
@@ -51,13 +58,14 @@ const toNumber = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const normalizeEntry = (entry: MarketingDailyEntry): MarketingReportEntry => ({
+const normalizeEntry = (entry: MarketingDailyEntry & { sales?: MarketingSale[] }): MarketingReportEntry => ({
   ...entry,
   date: entry.date.toISOString(),
   totalSales: toNumber(entry.totalSales),
   totalProfit: toNumber(entry.totalProfit),
   createdAt: entry.createdAt.toISOString?.() ?? undefined,
   updatedAt: entry.updatedAt.toISOString?.() ?? undefined,
+  sales: entry.sales,
 });
 
 export async function getMarketingReport(params: MarketingReportFilters): Promise<MarketingReportResult> {
@@ -69,6 +77,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
   const entriesRaw = await prisma.marketingDailyEntry.findMany({
     where,
     orderBy: { date: "desc" },
+    include: { sales: true },
   });
   const entries = entriesRaw.map(normalizeEntry);
 
@@ -116,6 +125,30 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
     displayWellLabeledDays: entries.filter((e) => e.displayWellLabeled).length,
   };
 
+  const salesByPayment = await prisma.marketingSale.groupBy({
+    by: ["paymentMethod"],
+    _sum: { sellingPrice: true },
+    _count: { id: true },
+    where: { entry: where },
+  });
+
+  const paymentStats = salesByPayment.reduce(
+    (acc, row) => {
+      const method = row.paymentMethod as PaymentMethod;
+      const sum = toNumber(row._sum?.sellingPrice);
+      const count = row._count?.id || 0;
+      if (method === "CASH") {
+        acc.totalSalesCash += sum;
+        acc.countCashReceipts += count;
+      } else {
+        acc.totalSalesMpesa += sum;
+        acc.countMpesaReceipts += count;
+      }
+      return acc;
+    },
+    { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 }
+  );
+
   const coreTasks = ["tiktokPosted2Videos", "tiktokRepliedAll", "waPostedStatus", "waRespondedAll", "stockEnoughFastMovers"];
   const completionRate =
     totalDaysLogged === 0
@@ -135,6 +168,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       totalEstimatedViewers,
       avgLiveDurationMinutes,
       topLivePlatform,
+      paymentStats,
       channelStats,
       stockStats,
       shopStats,

@@ -48,6 +48,11 @@ enum PriceSource {
   LEARNED
 }
 
+enum PaymentMethod {
+  CASH
+  MPESA
+}
+
 enum DiscrepancyType {
   ORDER_NOT_IN_PAYOUT
   AMOUNT_MISMATCH
@@ -169,8 +174,8 @@ model MarketingDailyEntry {
   id                          String   @id @default(cuid())
   date                        DateTime
   dayOfWeek                   String
-  totalSales                  Decimal  @db.Decimal(14,2) @default(0)
-  totalProfit                 Decimal  @db.Decimal(14,2) @default(0)
+  totalSales                  Int      @default(0)
+  totalProfit                 Int      @default(0)
   photoUrl                    String?
   tiktokPosted2Videos         Boolean?
   tiktokRepliedAll            Boolean?
@@ -200,10 +205,25 @@ model MarketingDailyEntry {
   submittedByEmail            String?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
+  sales                       MarketingSale[]
 
   @@index([date])
   @@index([dayOfWeek])
   @@index([submittedById])
+}
+
+model MarketingSale {
+  id            String           @id @default(cuid())
+  entry         MarketingDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entryId       String
+  product       String
+  buyingPrice   Int
+  sellingPrice  Int
+  receiptNumber String?
+  paymentMethod PaymentMethod
+  createdAt     DateTime         @default(now())
+
+  @@index([entryId])
 }
 
 model Shop {
