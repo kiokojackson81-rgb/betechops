@@ -25,6 +25,17 @@ interface Summary {
 // attendant page, update this list accordingly.
 const DAY_KEYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
+// Marketplace shop list used for CSV export and admin table columns
+const MARKETPLACE_SHOPS = [
+  "Betech Store",
+  "JM Collection",
+  "Hitech Power",
+  "Maxton",
+  "Sky Store",
+  "Betech Solar",
+  "Kilimall",
+];
+
 export default function AdminDailyReportPage() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
@@ -291,6 +302,9 @@ export default function AdminDailyReportPage() {
               <th className="px-3 py-2 text-left">Submitted By</th>
               <th className="px-3 py-2 text-left">Marketplace</th>
               <th className="px-3 py-2 text-left">Marketplace (JSON)</th>
+              {MARKETPLACE_SHOPS.map((s) => (
+                <th key={s} className="px-3 py-2 text-left hidden sm:table-cell">{s}</th>
+              ))}
               <th className="px-3 py-2 text-right">Products</th>
               <th className="px-3 py-2 text-right">Sales (KES)</th>
               <th className="px-3 py-2 text-left">Tasks</th>
@@ -327,6 +341,19 @@ export default function AdminDailyReportPage() {
                   <td className="px-3 py-2">
                     <pre className="text-xs whitespace-pre-wrap max-w-[28rem] max-h-28 overflow-auto bg-black/20 p-2 rounded">{JSON.stringify((r.tasks as any)?.marketplaceReview ?? {}, null, 0)}</pre>
                   </td>
+                  {MARKETPLACE_SHOPS.map((shop) => {
+                    const mr = (r.tasks as any)?.marketplaceReview ?? {};
+                    const s = mr[shop] || {};
+                    const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
+                    const done = checks.filter(Boolean).length;
+                    const notes = String(s.notes ?? "").trim();
+                    return (
+                      <td key={shop} className="px-3 py-2 text-sm hidden sm:table-cell" title={notes || undefined}>
+                        <div className="font-mono">{done}/4</div>
+                        {notes ? <div className="text-xs text-slate-400 truncate max-w-[12rem]">{notes}</div> : null}
+                      </td>
+                    );
+                  })}
                   <td className="px-3 py-2 text-right">{r.productsCount}</td>
                   <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
                   <td className="px-3 py-2">
