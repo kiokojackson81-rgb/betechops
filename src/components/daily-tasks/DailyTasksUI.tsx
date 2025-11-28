@@ -513,6 +513,48 @@ function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: an
   );
 }
 
+// Types for Friday weekend prep card
+type FridayWeekendPrep = {
+  promoVideosPosted?: number;
+  weekendPromosScheduled?: number;
+  officeCleanOrganized?: boolean;
+  notes?: string;
+};
+
+function FridayWeekendPrepCard({ value, onChange }: { value?: FridayWeekendPrep; onChange: (v: FridayWeekendPrep) => void }) {
+  const v = value || {};
+  const update = (patch: Partial<FridayWeekendPrep>) => onChange({ ...v, ...patch });
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Friday – Weekend Content &amp; Store Prep</h3>
+      <p className="mt-1 text-xs text-gray-400">Track videos posted, weekend promos, and workspace readiness.</p>
+
+      <div className="mt-4 space-y-4">
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-200">Promotional / product videos posted</label>
+          <Input type="number" min={0} value={String(v.promoVideosPosted ?? 0)} onChange={(e) => update({ promoVideosPosted: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-200">Weekend promos prepared / posts scheduled</label>
+          <Input type="number" min={0} value={String(v.weekendPromosScheduled ?? 0)} onChange={(e) => update({ weekendPromosScheduled: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <label className="flex items-center gap-2">
+          <Checkbox checked={Boolean(v.officeCleanOrganized)} onCheckedChange={(val) => update({ officeCleanOrganized: Boolean(val) })} />
+          <span className="text-sm">Office / display / photo area cleaned &amp; organized</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Notes (weekend plan, issues, ideas)</label>
+          <Textarea rows={3} placeholder="Key promos, reminders for Saturday/Monday…" value={String(v.notes ?? '')} onChange={(e) => update({ notes: e.target.value })} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DailyTasksUI() {
   const [day, setDay] = useState<DayKey>("monday");
   const [dayState, setDayState] = useState<Record<DayKey, Record<string, number | boolean | string>>>({
@@ -1075,6 +1117,12 @@ export default function DailyTasksUI() {
                 skipKeys.add("promoVideos");
                 skipKeys.add("officeClean");
               }
+              if (day === "friday") {
+                // We'll render a full Friday weekend prep card on the right; skip the individual fields
+                skipKeys.add("promoVideos");
+                skipKeys.add("weekendPromos");
+                skipKeys.add("officeClean");
+              }
               return (
                 <>
                   <div className="w-full">
@@ -1131,6 +1179,28 @@ export default function DailyTasksUI() {
                       <ThursdayWeeklyCard
                         value={dayState[day] as any}
                         onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
+                      />
+                    </div>
+                  )}
+
+                  {day === "friday" && (
+                    <div className="w-full">
+                      <FridayWeekendPrepCard
+                        value={dayState[day] as any}
+                        onChange={(next) =>
+                          setDayState((prev) => ({
+                            ...prev,
+                            [day]: {
+                              ...prev[day],
+                              // write both the specific keys and maintain legacy keys for exports
+                              promoVideos: Number((next as any).promoVideosPosted ?? prev[day].promoVideos ?? 0),
+                              weekendPromos: Number((next as any).weekendPromosScheduled ?? prev[day].weekendPromos ?? 0),
+                              officeClean: Boolean((next as any).officeCleanOrganized ?? prev[day].officeClean ?? false),
+                              weekendNotes: String((next as any).notes ?? prev[day].weekendNotes ?? ""),
+                              ...next,
+                            },
+                          }))
+                        }
                       />
                     </div>
                   )}
