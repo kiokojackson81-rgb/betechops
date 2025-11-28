@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       prisma.dailyReport.count({ where }),
       prisma.dailyReport.findMany({
         where,
-        include: { user: { select: { id: true, name: true } }, sales: true },
+        include: { user: { select: { id: true, name: true, email: true } }, sales: true },
         orderBy: { date: "desc" },
         skip,
         take: pageSize,
@@ -67,18 +67,20 @@ export async function POST(req: Request) {
     if (!day) {
       return NextResponse.json({ error: "day is required" }, { status: 400 });
     }
-    // merge submittedBy into tasks if provided so exports can include the submitter
+    // merge submittedBy into tasks for backward compatibility and also store in a dedicated column
     const tasksWithSubmit = { ...(tasks || {}), ...(submittedBy ? { submittedBy } : {}) };
 
     const report = await prisma.dailyReport.create({
+      // Cast to `any` to avoid TypeScript issues until Prisma client is regenerated after schema change
       data: {
         date: date ? new Date(date) : new Date(),
         day: String(day),
         productsCount: Number(productsCount) || 0,
         totalSales: Number(totalSales) || 0,
         tasks: tasksWithSubmit,
+        submittedBy: submittedBy || null,
         userId: actorId || undefined,
-      },
+      } as any,
     });
     // persist granular sales rows if provided in tasks.sales
     try {

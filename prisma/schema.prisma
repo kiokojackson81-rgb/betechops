@@ -136,6 +136,8 @@ model DailyReport {
   /// Dynamic task results keyed by field name, stored as JSON
   tasks         Json?
   userId        String?
+  /// Free-text submitter (keeps a copy of whatever the client provided)
+  submittedBy   String?
   productsCount Int
   totalSales    Decimal  @db.Decimal(12,2)
   createdAt     DateTime @default(now())
