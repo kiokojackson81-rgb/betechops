@@ -71,8 +71,6 @@ type DayDefinition = {
 const shared: Record<string, TaskField> = {
   customersServed: { kind: "number", key: "customersServed", label: "Customers served (walk-in/online)", min: 0, step: 1 },
   commentsDMs: { kind: "number", key: "commentsDMs", label: "Engagements (comments/DMs)", min: 0, step: 1 },
-  promoVideos: { kind: "number", key: "promoVideos", label: "Promotional/product videos posted", min: 0, step: 1 },
-  demoRecorded: { kind: "number", key: "demoRecorded", label: "Product demo videos recorded", min: 0, step: 1 },
   liveSessions: { kind: "number", key: "liveSessions", label: "Live sessions hosted", min: 0, step: 1 },
   leadsFollowed: { kind: "number", key: "leadsFollowed", label: "Leads followed-up", min: 0, step: 1 },
   officeClean: { kind: "check", key: "officeClean", label: "Office/display/photo area cleaned & organized" },
@@ -88,10 +86,10 @@ const shared: Record<string, TaskField> = {
 
 export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   monday: { title: "Monday", focus: "Product & Stock Management", targetUploads: 50, fields: [shared.stockChecked, shared.inboxCleared, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
-  tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.promoVideos, shared.demoRecorded, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
-  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.promoVideos, shared.leadsFollowed, shared.customersServed] },
+  tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
+  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.leadsFollowed, shared.customersServed] },
   thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.officeClean, shared.customersServed] },
-  friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.promoVideos, shared.customersServed, shared.officeClean, shared.weekendPromos, shared.improvementIdeas] },
+  friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.customersServed, shared.officeClean, shared.improvementIdeas] },
   saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed, shared.weeklySummary] },
 };
 
@@ -110,7 +108,7 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
   }, 0);
 
   return {
-    videos: num("promoVideos") + num("demoRecorded"),
+    videos: num("promoVideosPosted") + num("demoVideosRecorded"),
     lives: num("liveSessions") + num("liveSessionsTotal"),
     leads: num("leadsFollowed"),
     customers: num("customersServed"),
@@ -321,14 +319,14 @@ function ProductMarketingVideosCard({ value, onChange }: { value?: any; onChange
       <h3 className="text-lg font-semibold text-gray-100">Product Marketing Output (Videos)</h3>
       <p className="mt-1 text-xs text-gray-400">Track promotional videos posted + demo videos recorded.</p>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
           <label className="text-xs block mb-1">Promotional/product videos posted</label>
-          <Input type="number" value={String(v.promoVideos ?? 0)} onChange={(e) => setField("promoVideos", Number((e.target as HTMLInputElement).value || 0))} />
+          <Input type="number" value={String(v.promoVideosPosted ?? 0)} onChange={(e) => setField("promoVideosPosted", Number((e.target as HTMLInputElement).value || 0))} />
         </div>
         <div>
           <label className="text-xs block mb-1">Product demo videos recorded</label>
-          <Input type="number" value={String(v.demoRecorded ?? 0)} onChange={(e) => setField("demoRecorded", Number((e.target as HTMLInputElement).value || 0))} />
+          <Input type="number" value={String(v.demoVideosRecorded ?? 0)} onChange={(e) => setField("demoVideosRecorded", Number((e.target as HTMLInputElement).value || 0))} />
         </div>
       </div>
 
@@ -709,7 +707,7 @@ export default function DailyTasksUI() {
       const marketing = {
         attendedMarketingMeeting: Boolean(dayState[day]["meetingAttended"]),
         participatedVideoShoot: Boolean(dayState[day]["videoShoot"]),
-        marketingVideosShot: Number(dayState[day]["promoVideos"]) || 0,
+        marketingVideosShot: (Number(dayState[day]["promoVideosPosted"]) || 0) + (Number(dayState[day]["demoVideosRecorded"]) || 0),
       };
       const customerOperations = {
         walkInCustomers: Number(dayState[day]["customersServed"]) || 0,
@@ -839,7 +837,7 @@ export default function DailyTasksUI() {
           const marketing = {
             attendedMarketingMeeting: Boolean(dayState[day]["meetingAttended"]),
             participatedVideoShoot: Boolean(dayState[day]["videoShoot"]),
-            marketingVideosShot: Number(dayState[day]["promoVideos"]) || 0,
+            marketingVideosShot: (Number(dayState[day]["promoVideosPosted"]) || 0) + (Number(dayState[day]["demoVideosRecorded"]) || 0),
           };
           const customerOperations = {
             walkInCustomers: Number(dayState[day]["customersServed"]) || 0,
@@ -1102,7 +1100,7 @@ export default function DailyTasksUI() {
               // ProductMarketingVideosCard in place of individual promo/demo fields.
               const skipKeys = new Set(["customersServed", "inboxCleared", "competitorNotes", "improvementIdeas"]);
               if (day === "tuesday") {
-                skipKeys.add("promoVideos");
+                // promo/demo handled by ProductMarketingVideosCard
                 skipKeys.add("demoRecorded");
                 skipKeys.add("commentsDMs");
               }
@@ -1114,12 +1112,10 @@ export default function DailyTasksUI() {
                 // We'll render a full Thursday weekly card on the right; skip the individual fields
                 skipKeys.add("meetingAttended");
                 skipKeys.add("videoShoot");
-                skipKeys.add("promoVideos");
                 skipKeys.add("officeClean");
               }
               if (day === "friday") {
                 // We'll render a full Friday weekend prep card on the right; skip the individual fields
-                skipKeys.add("promoVideos");
                 skipKeys.add("weekendPromos");
                 skipKeys.add("officeClean");
               }
@@ -1146,6 +1142,7 @@ export default function DailyTasksUI() {
                             };
                             const rest = { ...next } as any;
                             delete rest.platforms;
+                            // prefer new keys `promoVideosPosted` and `demoVideosRecorded`
                             return { ...prev, [day]: { ...prev[day], ...rest, ...flattened } };
                           })
                         }
@@ -1189,17 +1186,17 @@ export default function DailyTasksUI() {
                         value={dayState[day] as any}
                         onChange={(next) =>
                           setDayState((prev) => ({
-                            ...prev,
-                            [day]: {
-                              ...prev[day],
-                              // write both the specific keys and maintain legacy keys for exports
-                              promoVideos: Number((next as any).promoVideosPosted ?? prev[day].promoVideos ?? 0),
-                              weekendPromos: Number((next as any).weekendPromosScheduled ?? prev[day].weekendPromos ?? 0),
-                              officeClean: Boolean((next as any).officeCleanOrganized ?? prev[day].officeClean ?? false),
-                              weekendNotes: String((next as any).notes ?? prev[day].weekendNotes ?? ""),
-                              ...next,
-                            },
-                          }))
+                        ...prev,
+                        [day]: {
+                          ...prev[day],
+                          // write new keys produced by the Friday card
+                          promoVideosPosted: Number((next as any).promoVideosPosted ?? 0),
+                          weekendPromosScheduled: Number((next as any).weekendPromosScheduled ?? 0),
+                          officeCleanOrganized: Boolean((next as any).officeCleanOrganized ?? false),
+                          weekendNotes: String((next as any).notes ?? ""),
+                          ...next,
+                        },
+                      }))
                         }
                       />
                     </div>
@@ -1315,6 +1312,7 @@ function renderIconForKey(key: string) {
   // map a few common keys to icons
   switch (key) {
     case "demoRecorded":
+    case "demoVideosRecorded":
     case "officeClean":
       return <CheckSquare className="w-4 h-4 opacity-80" />;
     case "commentsDMs":

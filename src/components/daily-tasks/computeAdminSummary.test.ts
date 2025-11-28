@@ -2,10 +2,10 @@ import { computeAdminSummary } from "./DailyTasksUI";
 
 describe("computeAdminSummary", () => {
   test("normal numeric input", () => {
-    const dayState = { promoVideos: 2, demoRecorded: true, liveSessions: 1, leadsFollowed: 3, customersServed: 5, officeClean: true, stockChecked: false, meetingAttended: true, videoShoot: false, weekendPromos: false };
+    const dayState = { promoVideosPosted: 2, demoVideosRecorded: 1, liveSessions: 1, leadsFollowed: 3, customersServed: 5, officeClean: true, stockChecked: false, meetingAttended: true, videoShoot: false, weekendPromosScheduled: false };
     const market = { newUploaded: 4, copiesUploaded: 2, productsEdited: 1, sales: [{ id: "1", name: "a", price: 100 }, { id: "2", name: "b", price: 200 }] };
     const s = computeAdminSummary(dayState as any, market as any);
-    expect(s.videos).toBe(3); // promoVideos + demoRecorded
+    expect(s.videos).toBe(3); // promoVideosPosted + demoVideosRecorded
     expect(s.lives).toBe(1);
     expect(s.leads).toBe(3);
     expect(s.customers).toBe(5);
@@ -41,7 +41,7 @@ describe("computeAdminSummary", () => {
   });
 
   test("stringified numbers and missing fields", () => {
-    const dayState = { promoVideos: "1", demoRecorded: false } as any;
+    const dayState = { promoVideosPosted: "1", demoVideosRecorded: false } as any;
     const market = { newUploaded: "3", copiesUploaded: "", productsEdited: undefined, sales: [{ id: "1", name: "a", price: "50" }] } as any;
     const s = computeAdminSummary(dayState, market);
     expect(s.videos).toBe(1);
