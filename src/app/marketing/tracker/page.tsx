@@ -15,7 +15,7 @@ type MarketingDailyFormState = {
   totalProfit: string;
   photoFile: File | null;
   photoDataUrl: string | null;
-} & Record<string, boolean | number | string | null>;
+} & Record<string, boolean | number | string | File | null>;
 
 const dayOptions: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
