@@ -81,7 +81,7 @@ const shared: Record<string, TaskField> = {
   weekendPromos: { kind: "check", key: "weekendPromos", label: "Weekend promos prepared / posts scheduled" },
   stockChecked: { kind: "check", key: "stockChecked", label: "Stock & pricing confirmed (Jumia/Kilimall)" },
   inboxCleared: { kind: "check", key: "inboxCleared", label: "WhatsApp/calls/inquiries cleared" },
-  weeklySummary: { kind: "text", key: "weeklySummary", label: "Weekly performance summary (Sat)", placeholder: "Total videos, lives, leads, pending follow-ups…" },
+  // weeklySummary removed — Saturday now uses a dedicated card
 };
 
 export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
@@ -90,7 +90,7 @@ export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.leadsFollowed, shared.customersServed] },
   thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.officeClean, shared.customersServed] },
   friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.customersServed, shared.officeClean, shared.improvementIdeas] },
-  saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed, shared.weeklySummary] },
+  saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed] },
 };
 
 const defaultDayState = (day: DayKey) => Object.fromEntries(dayTaskDefinitions[day].fields.map((f) => [f.key, f.kind === "number" ? 0 : f.kind === "check" ? false : ""])) as Record<string, number | boolean | string>;
@@ -109,7 +109,7 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
 
   return {
     videos: num("promoVideosPosted") + num("demoVideosRecorded"),
-    lives: num("liveSessions") + num("liveSessionsTotal"),
+    lives: num("liveSessions") + num("liveSessionsTotal") + num("liveSessionsHosted"),
     leads: num("leadsFollowed"),
     customers: num("customersServed"),
     maintenance: yes("officeClean"),
@@ -547,6 +547,42 @@ function FridayWeekendPrepCard({ value, onChange }: { value?: FridayWeekendPrep;
         <div>
           <label className="block text-sm font-medium text-gray-200">Notes (weekend plan, issues, ideas)</label>
           <Textarea rows={3} placeholder="Key promos, reminders for Saturday/Monday…" value={String(v.notes ?? '')} onChange={(e) => update({ notes: e.target.value })} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Types for Saturday live & store card
+type SaturdayLiveAndStore = {
+  liveSessionsHosted?: number;
+  officeCleanOrganized?: boolean;
+  notes?: string;
+};
+
+function SaturdayLiveAndStoreCard({ value, onChange }: { value?: SaturdayLiveAndStore; onChange: (v: SaturdayLiveAndStore) => void }) {
+  const v = value || {};
+  const update = (patch: Partial<SaturdayLiveAndStore>) => onChange({ ...v, ...patch });
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Saturday – Live Sessions &amp; Store Readiness</h3>
+      <p className="mt-1 text-xs text-gray-400">Track live sessions and ensure the store is ready for the weekend.</p>
+
+      <div className="mt-4 space-y-4">
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-200">Live sessions hosted</label>
+          <Input type="number" min={0} value={String(v.liveSessionsHosted ?? 0)} onChange={(e) => update({ liveSessionsHosted: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <label className="flex items-center gap-2">
+          <Checkbox checked={Boolean(v.officeCleanOrganized)} onCheckedChange={(val) => update({ officeCleanOrganized: Boolean(val) })} />
+          <span className="text-sm">Office / display / photo area cleaned &amp; organized</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Notes (highlights, issues, ideas)</label>
+          <Textarea rows={3} placeholder="Anything notable from today's live or store setup…" value={String(v.notes ?? '')} onChange={(e) => update({ notes: e.target.value })} />
         </div>
       </div>
     </section>
@@ -1119,6 +1155,13 @@ export default function DailyTasksUI() {
                 skipKeys.add("weekendPromos");
                 skipKeys.add("officeClean");
               }
+              if (day === "saturday") {
+                // We'll render a full Saturday live & store card on the right; skip legacy fields
+                skipKeys.add("liveSessions");
+                skipKeys.add("officeClean");
+                skipKeys.add("weeklySummary");
+              }
+
               return (
                 <>
                   <div className="w-full">
@@ -1197,6 +1240,26 @@ export default function DailyTasksUI() {
                           ...next,
                         },
                       }))
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {day === "saturday" && (
+                    <div className="w-full">
+                      <SaturdayLiveAndStoreCard
+                        value={dayState[day] as any}
+                        onChange={(next) =>
+                          setDayState((prev) => ({
+                            ...prev,
+                            [day]: {
+                              ...prev[day],
+                              liveSessionsHosted: Number((next as any).liveSessionsHosted ?? 0),
+                              officeCleanOrganized: Boolean((next as any).officeCleanOrganized ?? false),
+                              saturdayNotes: String((next as any).notes ?? ""),
+                              ...next,
+                            },
+                          }))
                         }
                       />
                     </div>
