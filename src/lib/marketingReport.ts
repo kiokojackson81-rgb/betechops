@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import type { MarketingDailyEntry, MarketingSale, PaymentMethod } from "@prisma/client";
+import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
+import { calculateCumulativeCommission } from "./commission";
 
 export type MarketingReportFilters = {
   from?: Date;
   to?: Date;
   dayOfWeek?: string;
+  tradingPeriodKey?: string;
 };
 
 export type MarketingReportEntry = Omit<MarketingDailyEntry, "totalSales" | "totalProfit" | "date" | "createdAt" | "updatedAt"> & {
@@ -17,6 +20,7 @@ export type MarketingReportEntry = Omit<MarketingDailyEntry, "totalSales" | "tot
 };
 
 export type MarketingReportAggregates = {
+  period: TradingPeriod;
   totalDaysLogged: number;
   completionRate: number;
   totalSales: number;
@@ -46,6 +50,12 @@ export type MarketingReportAggregates = {
     displayWellArrangedDays: number;
     displayWellLabeledDays: number;
   };
+  commission: {
+    commission: number;
+    tiersReached: string[];
+    nextTarget: number | null;
+    nextTierReward: number | null;
+  };
 };
 
 export type MarketingReportResult = {
@@ -69,7 +79,14 @@ const normalizeEntry = (entry: MarketingDailyEntry & { sales?: MarketingSale[] }
 });
 
 export async function getMarketingReport(params: MarketingReportFilters): Promise<MarketingReportResult> {
-  const where: Record<string, any> = {};
+  const period =
+    (params.tradingPeriodKey &&
+      getRecentTradingPeriods(12).find((p) => p.key === params.tradingPeriodKey)) ||
+    getTradingPeriodFor(new Date());
+
+  const where: Record<string, any> = {
+    date: { gte: period.start, lte: period.end },
+  };
   if (params.from) where.date = { ...(where.date || {}), gte: params.from };
   if (params.to) where.date = { ...(where.date || {}), lte: params.to };
   if (params.dayOfWeek) where.dayOfWeek = params.dayOfWeek;
@@ -157,9 +174,12 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
           (entries.filter((e) => coreTasks.every((key) => Boolean((e as any)[key]))).length / totalDaysLogged) * 100
         );
 
+  const commission = calculateCumulativeCommission(totalSales);
+
   return {
     entries,
     aggregates: {
+      period,
       totalDaysLogged,
       completionRate,
       totalSales,
@@ -172,6 +192,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       channelStats,
       stockStats,
       shopStats,
+      commission,
     },
   };
 }

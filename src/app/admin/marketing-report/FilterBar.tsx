@@ -1,27 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
-import Input from "@/app/_components/Input";
 import { useRouter } from "next/navigation";
+import { getRecentTradingPeriods } from "@/lib/tradingPeriod";
 
 type Props = {
-  initialFrom?: string;
-  initialTo?: string;
+  initialPeriod?: string;
   initialDay?: string;
 };
 
-export default function MarketingReportFilterBar({ initialFrom = "", initialTo = "", initialDay = "" }: Props) {
-  const [from, setFrom] = useState(initialFrom);
-  const [to, setTo] = useState(initialTo);
+export default function MarketingReportFilterBar({ initialPeriod = "", initialDay = "" }: Props) {
+  const periods = useMemo(() => getRecentTradingPeriods(6), []);
+  const defaultPeriodKey = initialPeriod || periods[0]?.key || "";
+  const [periodKey, setPeriodKey] = useState(defaultPeriodKey);
   const [day, setDay] = useState(initialDay);
   const router = useRouter();
 
   const apply = (e: React.FormEvent) => {
     e.preventDefault();
     const qs = new URLSearchParams();
-    if (from) qs.set("from", from);
-    if (to) qs.set("to", to);
+    if (periodKey) qs.set("period", periodKey);
     if (day) qs.set("dow", day);
     const url = `/admin/marketing-report${qs.toString() ? `?${qs.toString()}` : ""}`;
     router.push(url);
@@ -30,24 +29,20 @@ export default function MarketingReportFilterBar({ initialFrom = "", initialTo =
   return (
     <form onSubmit={apply} className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
       <div className="text-sm font-semibold text-slate-200">Filters</div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
-          <label className="text-xs uppercase tracking-wide text-slate-400">From</label>
-          <Input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+          <label className="text-xs uppercase tracking-wide text-slate-400">Trading period</label>
+          <select
+            value={periodKey}
+            onChange={(e) => setPeriodKey(e.target.value)}
             className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs uppercase tracking-wide text-slate-400">To</label>
-          <Input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-          />
+          >
+            {periods.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1">
           <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>

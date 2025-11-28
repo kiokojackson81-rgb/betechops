@@ -1,10 +1,11 @@
 import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
+import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
 
 const currency = (n: number) => `KES ${Math.round(n).toLocaleString()}`;
-const check = (v: boolean) => (v ? "✓" : "✖");
+const check = (v: boolean) => (v ? "✔" : "✗");
 
 function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; color?: string }) {
   const w = 220;
@@ -32,24 +33,29 @@ export default async function MarketingReportPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const resolved = searchParams || undefined;
-  const fromStr = typeof resolved?.from === "string" ? resolved?.from : "";
-  const toStr = typeof resolved?.to === "string" ? resolved?.to : "";
+  const periodKey = typeof resolved?.period === "string" ? resolved?.period : "";
   const dow = typeof resolved?.dow === "string" ? resolved?.dow : "";
 
-  const from = fromStr ? new Date(fromStr) : undefined;
-  const to = toStr ? new Date(toStr) : undefined;
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const selectedPeriod =
+    (periodKey && getRecentTradingPeriods(12).find((p) => p.key === periodKey)) || currentPeriod;
 
-  const { entries, aggregates } = await getMarketingReport({ from, to, dayOfWeek: dow || undefined });
+  const { entries, aggregates } = await getMarketingReport({
+    tradingPeriodKey: selectedPeriod.key,
+    dayOfWeek: dow || undefined,
+  });
   const totalDays = aggregates.totalDaysLogged || entries.length;
   const exportParams = new URLSearchParams();
-  if (fromStr) exportParams.set("from", fromStr);
-  if (toStr) exportParams.set("to", toStr);
+  if (selectedPeriod?.key) exportParams.set("period", selectedPeriod.key);
   if (dow) exportParams.set("dow", dow);
-  const exportUrl = `/api/marketing/report/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
+  const exportUrl = `/api/admin/marketing-report/export-period${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
+  const exportPdfUrl = `/api/admin/marketing-report/export-period-pdf${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
   const trend = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
   const salesSeries = trend.map((e) => e.totalSales);
   const liveSeries = trend.map((e) => e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0);
+  const nextTarget = aggregates.commission.nextTarget;
+  const progress = nextTarget ? Math.min(1, aggregates.totalSales / nextTarget) : 1;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6 text-slate-100">
@@ -60,7 +66,73 @@ export default async function MarketingReportPage({
         </p>
       </header>
 
-      <MarketingReportFilterBar initialFrom={fromStr} initialTo={toStr} initialDay={dow} />
+      <MarketingReportFilterBar initialPeriod={selectedPeriod.key} initialDay={dow} />
+
+      <section className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
+            <div className="text-lg font-semibold">{aggregates.period.label}</div>
+          </div>
+          <div className="flex gap-2">
+            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href={exportUrl}>
+              Export period CSV
+            </a>
+            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href={exportPdfUrl}>
+              Export period PDF
+            </a>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4 text-sm">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Period sales</div>
+            <div className="text-xl font-semibold text-white">{currency(aggregates.totalSales)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Period profit</div>
+            <div className="text-xl font-semibold text-white">{currency(aggregates.totalProfit)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">MPESA vs Cash</div>
+            <div className="text-sm text-slate-200">
+              MPESA {currency(aggregates.paymentStats.totalSalesMpesa)}
+              <br />
+              Cash {currency(aggregates.paymentStats.totalSalesCash)}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Commission (cumulative)</div>
+            <div className="text-xl font-semibold text-white">{currency(aggregates.commission.commission)}</div>
+            <div className="text-xs text-emerald-300">
+              {aggregates.commission.tiersReached.length
+                ? `Tiers: ${aggregates.commission.tiersReached.join(", ")}`
+                : "No tiers reached yet"}
+            </div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              Commission is a discretionary incentive based on the current Betech Solar commission memo and may be reviewed or adjusted.
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-300">
+            <span>
+              Progress toward next tier{" "}
+              {nextTarget ? `(KES ${aggregates.totalSales.toLocaleString()} / ${nextTarget.toLocaleString()})` : "(Top tier reached)"}
+            </span>
+            {aggregates.commission.nextTierReward && nextTarget ? (
+              <span className="text-emerald-300">Next reward: KES {aggregates.commission.nextTierReward.toLocaleString()}</span>
+            ) : (
+              <span className="text-emerald-300">All tiers unlocked</span>
+            )}
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-all"
+              style={{ width: `${Math.max(5, progress * 100)}%` }}
+            />
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         {[
@@ -221,6 +293,7 @@ export default async function MarketingReportPage({
                   "Stock enough?",
                   "Shop ready?",
                   "Weekly comment",
+                  "Export",
                 ].map((col) => (
                   <th key={col} className="px-3 py-2">
                     {col}
@@ -248,19 +321,19 @@ export default async function MarketingReportPage({
                     <td className="px-3 py-2 font-semibold text-white">{currency(e.totalSales)}</td>
                     <td className="px-3 py-2 text-slate-100">{currency(e.totalProfit)}</td>
                     <td className="px-3 py-2 text-slate-200">{`${e.sales?.length ?? 0} items / ${currency(e.totalSales)}`}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-slate-200">
                       <div className="flex gap-2">
                         <span title="Posted">{check(Boolean(tikTokDone))}</span>
                         <span title="Replied">{check(Boolean(e.tiktokRepliedAll))}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-slate-200">
                       <div className="flex gap-2">
                         <span title="Posted">{check(Boolean(igDone))}</span>
                         <span title="Replied">{check(Boolean(igReplied))}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-slate-200">
                       <div className="flex gap-2">
                         <span title="Status/contacts">{check(Boolean(waDone))}</span>
                         <span title="Replied all">{check(Boolean(waReplied))}</span>
@@ -271,14 +344,22 @@ export default async function MarketingReportPage({
                     <td className="px-3 py-2 text-center">{check(shopReady)}</td>
                     <td className="px-3 py-2 text-slate-300" title={e.weeklyComment || ""}>
                       {(e.weeklyComment || "").slice(0, 40)}
-                      {(e.weeklyComment || "").length > 40 ? "…" : ""}
+                      {(e.weeklyComment || "").length > 40 ? "." : ""}
+                    </td>
+                    <td className="px-3 py-2">
+                      <a
+                        href={`/api/admin/marketing-report/export-day?entryId=${e.id}`}
+                        className="text-xs text-emerald-300 underline hover:text-emerald-200"
+                      >
+                        Export day CSV
+                      </a>
                     </td>
                   </tr>
                 );
               })}
               {entries.length === 0 && (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-400" colSpan={12}>
+                  <td className="px-3 py-6 text-center text-slate-400" colSpan={13}>
                     No marketing entries for this range yet.
                   </td>
                 </tr>
