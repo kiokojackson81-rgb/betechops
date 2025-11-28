@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // header (match fields emitted below)
-        controller.enqueue(encoder.encode('"Date","Day","Attendant","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
+        controller.enqueue(encoder.encode('"Date","Day","Attendant","SubmittedBy","ProductsCount","TotalSales","NewUploads","CopiesUploaded","ProductsEdited","Attended Marketing Meeting","Participated In Video Shoot","Marketing Videos Posted","WalkInCustomers","CustomersPurchased","LiveViewers","LivePurchases","OfficeCleaned","OfficeNotes","SalesDetails","Tasks"\n'));
         let page = 0;
         while (true) {
           const rows = await prisma.dailyReport.findMany({
@@ -35,7 +35,9 @@ export async function GET(req: Request) {
           for (const r of rows) {
             const dateStr = r.date.toISOString().split('T')[0];
             const attendant = r.user?.name ?? '';
+            // prefer tasks.submittedBy (recent client wiring) but fallback to linked user name
             const tasks = r.tasks ?? {};
+            const submittedBy = (tasks as any).submittedBy ?? '';
             const categories = (tasks as any).categories ?? {};
             const marketing = (tasks as any).marketing ?? {};
             const customerOps = (tasks as any).customerOperations ?? {};
@@ -45,6 +47,7 @@ export async function GET(req: Request) {
               dateStr,
               r.day ?? '',
               attendant,
+              submittedBy,
               String(r.productsCount),
               String(r.totalSales),
               String(categories.newUploads ?? ''),

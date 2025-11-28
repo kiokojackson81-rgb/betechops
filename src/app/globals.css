@@ -39,6 +39,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 /* Small design tokens used across pages */
@@ -66,4 +68,54 @@ body {
   width: 120px;
   height: 28px;
   display: inline-block;
+}
+
+/* Accessible palette tweaks: slightly tempered tones for contrast */
+:root {
+  --bg-panel: #0f1720; /* dark panel */
+  --text-high: #e6eef7; /* high-contrast text on dark */
+  --muted: #9aa6b2;
+  --border-2: #23303a;
+  --primary-strong: #06b6d4; /* teal bright */
+}
+
+progress {
+  appearance: none;
+}
+progress[value]::-webkit-progress-bar {
+  background-color: rgba(255,255,255,0.04);
+  border-radius: 999px;
+}
+progress[value]::-webkit-progress-value {
+  background-color: var(--primary-strong);
+  border-radius: 999px;
+}
+progress {
+  outline: none;
+}
+
+.progressbar-root label { font-size: 12px; }
+.progressbar-root .text-xs { color: var(--muted); }
+
+
+/* Layout for combined attendant + CS page */
+.att-cs-root {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.25rem;
+  padding: 1rem;
+}
+.att-cs-left {
+  min-width: 0;
+}
+.att-cs-right {
+  position: sticky;
+  top: 1rem;
+}
+.header-row { display:flex; gap:0.75rem; }
+.spark-wrap { background: transparent; padding: 0.5rem; border-radius: 0.5rem; }
+
+@media (max-width: 900px) {
+  .att-cs-root { grid-template-columns: 1fr; }
+  .att-cs-right { position: relative; }
 }

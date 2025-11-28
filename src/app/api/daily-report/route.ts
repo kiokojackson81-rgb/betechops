@@ -63,17 +63,20 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.res;
   const actorId = await getActorId();
   try {
-    const { date, day, productsCount, totalSales, tasks } = await req.json();
+    const { date, day, productsCount, totalSales, tasks, submittedBy } = await req.json();
     if (!day) {
       return NextResponse.json({ error: "day is required" }, { status: 400 });
     }
+    // merge submittedBy into tasks if provided so exports can include the submitter
+    const tasksWithSubmit = { ...(tasks || {}), ...(submittedBy ? { submittedBy } : {}) };
+
     const report = await prisma.dailyReport.create({
       data: {
         date: date ? new Date(date) : new Date(),
         day: String(day),
         productsCount: Number(productsCount) || 0,
         totalSales: Number(totalSales) || 0,
-        tasks: tasks || {},
+        tasks: tasksWithSubmit,
         userId: actorId || undefined,
       },
     });
