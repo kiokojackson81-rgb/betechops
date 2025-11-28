@@ -64,6 +64,12 @@ export async function GET(req: Request) {
           'OfficeCleaned',
           'OfficeNotes',
           // Saturday-specific flattened fields
+          'Saturday Live Sessions Count',
+          'Saturday Live Sessions Duration Minutes',
+          'Saturday Live Sessions Platform',
+          'Saturday Live Sessions Estimated Viewers',
+          'Saturday Live Sessions Leads Generated',
+          // legacy/compat
           'Saturday Live Sessions Hosted',
           'Saturday Office Cleaned',
           'Saturday Notes',
@@ -150,18 +156,19 @@ export async function GET(req: Request) {
               JSON.stringify((tasks as any).marketplaceReview ?? {}),
               // per-shop flattened fields
               ...shopValues,
-              // flattened customerComms values
+              // flattened customerComms values (compat: prefer new keys; format booleans as Yes/No)
               (() => {
                 const cc = (tasks as any).customerComms || {};
+                const walkInsPurchased = cc.walkInsWhoPurchased ?? cc.onlineServed ?? '';
                 return [
                   String(cc.walkInServed ?? ''),
-                  String(cc.onlineServed ?? ''),
+                  String(walkInsPurchased ?? ''),
                   String(cc.callsHandled ?? ''),
                   String(cc.whatsappSmsReplied ?? ''),
-                  String(cc.fbCommentsReplied ?? ''),
-                  String(cc.fbDmsReplied ?? ''),
-                  String(cc.igCommentsReplied ?? ''),
-                  String(cc.igDmsReplied ?? ''),
+                  String(cc.fbCommentsReplied ? 'Yes' : ''),
+                  String(cc.fbDmsReplied ? 'Yes' : ''),
+                  String(cc.igCommentsReplied ? 'Yes' : ''),
+                  String(cc.igDmsReplied ? 'Yes' : ''),
                   String(cc.fbAllCleared ? 'Yes' : ''),
                   String(cc.igAllCleared ? 'Yes' : ''),
                   String(cc.competitorNotes ?? ''),
@@ -170,10 +177,20 @@ export async function GET(req: Request) {
               })(),
               // customerComms as JSON
               JSON.stringify((tasks as any).customerComms ?? {}),
-              // Saturday flattened columns (read from dayFields)
+              // Saturday flattened columns (read from dayFields) — include new live-session fields and keep legacy hosted value
               (() => {
                 const df = (tasks as any).dayFields || {};
-                return [String(df.liveSessionsHosted ?? ''), String(df.officeCleanOrganized ? 'Yes' : ''), String(df.saturdayNotes ?? '')];
+                return [
+                  String(df.liveSessionsCount ?? ''),
+                  String(df.liveSessionsDurationMinutes ?? ''),
+                  String(df.liveSessionsPlatform ?? ''),
+                  String(df.liveSessionsEstimatedViewers ?? ''),
+                  String(df.liveSessionsLeadsGenerated ?? ''),
+                  // legacy compatibility
+                  String(df.liveSessionsHosted ?? ''),
+                  String(df.officeCleanOrganized ? 'Yes' : ''),
+                  String(df.saturdayNotes ?? ''),
+                ];
               })(),
               // full tasks JSON
               JSON.stringify(tasks as any),
