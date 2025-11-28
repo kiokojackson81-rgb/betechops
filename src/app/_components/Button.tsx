@@ -17,11 +17,11 @@ export default function Button({
   type?: "button" | "submit" | "reset";
   style?: React.CSSProperties;
 }) {
-  const base = "rounded-xl px-4 py-2 focus:outline-none inline-flex items-center justify-center gap-2";
+  const base = "rounded-xl px-4 py-2 focus:outline-none inline-flex items-center justify-center gap-2 text-sm";
   const variants: Record<string, string> = {
-    primary: "btn-primary",
+    primary: "bg-betech-orange text-black font-semibold hover:brightness-95",
     secondary: "border border-white/10 text-slate-200 bg-transparent hover:bg-white/5",
-    danger: "btn-danger",
+    danger: "bg-betech-maroon text-white font-semibold hover:opacity-95",
     muted: "border border-white/5 text-slate-300 bg-transparent",
   };
 

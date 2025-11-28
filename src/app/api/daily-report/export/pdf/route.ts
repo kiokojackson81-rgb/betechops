@@ -28,21 +28,40 @@ export async function GET(req: Request) {
   }
 
   const reports = data.reports || [];
+  const urlObj = new URL(req.url);
+  const includeJson = urlObj.searchParams.get('includeJson') || urlObj.searchParams.get('includejson') || undefined;
+  const scope = urlObj.searchParams.get('scope') || 'all';
 
+  // Define marketplace shops used in CSV and admin UI so PDF matches table layout.
+  const MARKETPLACE_SHOPS = [
+    "Betech Store",
+    "JM Collection",
+    "Hitech Power",
+    "Maxton",
+    "Sky Store",
+    "Betech Solar",
+    "Kilimall",
+  ];
+
+  // Build rows including per-shop flattened marketplace columns
   const rows = reports.map((r: any) => {
     const dateStr = new Date(r.date).toISOString().split('T')[0];
     const attendant = r.user?.name ?? '';
-    const products = r.tasks?.categories ?? {};
-    const sales = Array.isArray(r.tasks?.sales) ? r.tasks.sales : [];
+    const mr = (r.tasks || {}).marketplaceReview || {};
+    const shopCells = MARKETPLACE_SHOPS.map((s) => {
+      const v = mr[s] || {};
+      return `<td style="padding:6px;border:1px solid #ddd">${v.stockChecked ? 'Yes' : ''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${v.pricingConfirmed ? 'Yes' : ''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${v.competitorsReviewed ? 'Yes' : ''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${v.oosReviewed ? 'Yes' : ''}</td>`;
+    }).join('');
+
     return `<tr>
       <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
       <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
       <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
       <td style="padding:6px;border:1px solid #ddd">${r.tasks?.submittedBy ?? ''}</td>
-      <td style="padding:6px;border:1px solid #ddd">${products.newUploads ?? ''}</td>
-      <td style="padding:6px;border:1px solid #ddd">${products.copiesUploaded ?? ''}</td>
-      <td style="padding:6px;border:1px solid #ddd">${products.productsEdited ?? ''}</td>
-      <td style="padding:6px;border:1px solid #ddd">${sales.length}</td>
+      ${shopCells}
     </tr>`;
   }).join('');
 
@@ -62,12 +81,22 @@ export async function GET(req: Request) {
         <h1>Daily Reports Export</h1>
         <table>
           <thead>
-            <tr><th>Date</th><th>Day</th><th>Attendant</th><th>SubmittedBy</th><th>NewUploads</th><th>Copies</th><th>Edited</th><th>SalesCount</th></tr>
+            <tr>
+              <th rowspan="2">Date</th>
+              <th rowspan="2">Day</th>
+              <th rowspan="2">Attendant</th>
+              <th rowspan="2">SubmittedBy</th>
+              ${MARKETPLACE_SHOPS.map((s)=>`<th colspan="4" style="padding:6px;border:1px solid #ddd">${s}</th>`).join('')}
+            </tr>
+            <tr>
+              ${MARKETPLACE_SHOPS.map(()=>`<th>Stock</th><th>Pricing</th><th>Comp</th><th>OOS</th>`).join('')}
+            </tr>
           </thead>
           <tbody>
             ${rows}
           </tbody>
         </table>
+        ${includeJson ? `<h2 style="margin-top:18px">Full JSON</h2><pre style="background:#f8f8f8;padding:8px;border:1px solid #eee;white-space:pre-wrap;font-size:11px">${JSON.stringify(reports, null, 2)}</pre>` : ''}
       </body>
     </html>`;
 

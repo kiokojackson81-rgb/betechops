@@ -5,6 +5,7 @@ import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Sparkline from "@/app/_components/Sparkline";
 import Modal from "@/app/_components/Modal";
+import { computeRowStatus } from '@/lib/dailyReportHelpers';
 import { showToast } from "@/lib/ui/toast";
 
 interface Report {
@@ -52,6 +53,9 @@ export default function AdminDailyReportPage() {
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [exportScope, setExportScope] = useState<'page' | 'all' | 'json'>('all');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>('');
   const [legendFilters, setLegendFilters] = useState<Array<'complete' | 'partial' | 'missing'>>(['complete','partial','missing']);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailReport, setDetailReport] = useState<Report | null>(null);
@@ -325,6 +329,99 @@ export default function AdminDailyReportPage() {
     setTimeout(() => { w.print(); }, 350);
   }
 
+  // New: generate HTML for chosen scope and optionally include JSON block
+  function generateExportHtml(scope: 'page' | 'all' | 'json') {
+    let sourceReports: Report[] = [];
+    if (scope === 'page') {
+      sourceReports = reports; // current page
+    } else if (scope === 'all' || scope === 'json') {
+      sourceReports = filteredReportsForAgg; // all filtered
+    }
+
+    const marketplaceShops = MARKETPLACE_SHOPS;
+
+    const rows = sourceReports.map((r) => {
+      const dateStr = new Date(r.date).toISOString().split('T')[0];
+      const attendant = r.user?.name ?? '';
+      const submitted = r.tasks?.submittedBy ?? '';
+      // flattened per-shop columns
+      const mr = (r.tasks as any)?.marketplaceReview || {};
+      const shopVals = marketplaceShops.map((s) => {
+        const v = mr[s] || {};
+        return `<td style="padding:6px;border:1px solid #ddd">${v.stockChecked ? 'Yes' : ''}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.pricingConfirmed ? 'Yes' : ''}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.competitorsReviewed ? 'Yes' : ''}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.oosReviewed ? 'Yes' : ''}</td>`;
+      }).join('');
+
+      return `<tr>
+        <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
+        <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
+        <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
+        <td style="padding:6px;border:1px solid #ddd">${submitted}</td>
+        ${shopVals}
+      </tr>`;
+    }).join('');
+
+    const shopHeaderCells = MARKETPLACE_SHOPS.map((s) => `<th colspan="4" style="padding:6px;border:1px solid #ddd">${s}</th>`).join('');
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Daily Reports</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; color:#111; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            th { background: #f4f4f4; }
+            pre.json { background:#f8f8f8; padding:8px; border:1px solid #eee; font-size:11px; white-space:pre-wrap; }
+          </style>
+        </head>
+        <body>
+          <h2>Daily Reports — Export (${scope})</h2>
+          <p>Exported ${sourceReports.length} reports</p>
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">Date</th><th rowspan="2">Day</th><th rowspan="2">Attendant</th><th rowspan="2">SubmittedBy</th>
+                ${shopHeaderCells}
+              </tr>
+              <tr>
+                ${MARKETPLACE_SHOPS.map(() => '<th>Stock</th><th>Pricing</th><th>Comp</th><th>OOS</th>').join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          ${scope === 'json' ? `<h3>Full JSON</h3><pre class="json">${JSON.stringify(sourceReports.map(r=>({ id:r.id,date:r.date,day:r.day,tasks:r.tasks,user:r.user })), null, 2)}</pre>` : ''}
+        </body>
+      </html>`;
+
+    return html;
+  }
+
+  function openPreview(scope: 'page'|'all'|'json'){
+    const html = generateExportHtml(scope);
+    setPreviewHtml(html);
+    setShowPreviewModal(true);
+  }
+
+  async function downloadServerPdf(scope: 'page'|'all'|'json'){
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    if (day) params.append('day', day);
+    if (submittedBy) params.append('user', submittedBy);
+    if (shopFilter) params.append('shop', shopFilter);
+    if (scope === 'json') params.append('includeJson', '1');
+    params.append('scope', scope);
+    const url = `/api/daily-report/export/pdf?${params.toString()}`;
+    const w = window.open(url, '_blank');
+    if (!w) showToast('Unable to open PDF in a new tab', 'error');
+  }
+
   function renderShopBadges(s: any) {
     // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
@@ -358,23 +455,7 @@ export default function AdminDailyReportPage() {
     );
   }
 
-  function computeRowStatus(r: Report) {
-    const mr = (r.tasks as any)?.marketplaceReview ?? {};
-    const shops = Object.keys(mr || {});
-    if (!shops || shops.length === 0) return 'missing';
-    let anyDone = false;
-    let allComplete = true;
-    for (const k of shops) {
-      const s = mr[k] || {};
-      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
-      const done = checks.filter(Boolean).length;
-      if (done > 0) anyDone = true;
-      if (done < 4) allComplete = false;
-    }
-    if (allComplete) return 'complete';
-    if (anyDone) return 'partial';
-    return 'missing';
-  }
+  // computeRowStatus moved to `src/lib/dailyReportHelpers.ts` for reuse and testing
 
   return (
     <div className="mx-auto max-w-8xl p-6 text-slate-100">
@@ -399,14 +480,16 @@ export default function AdminDailyReportPage() {
               <div>Edited: <strong className="text-white">{aggEdited}</strong></div>
               <div>Sales Count: <strong className="text-white">{aggSalesCount}</strong></div>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-[rgba(255,255,255,0.02)] rounded-md p-1">
+                <button onClick={() => setExportScope('page')} className={`px-3 py-1 rounded ${exportScope === 'page' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Current page</button>
+                <button onClick={() => setExportScope('all')} className={`px-3 py-1 rounded ${exportScope === 'all' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>All filtered</button>
+                <button onClick={() => setExportScope('json')} className={`px-3 py-1 rounded ${exportScope === 'json' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Full JSON</button>
+              </div>
               <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
-            </div>
-            <div>
               <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
-            </div>
-            <div>
-              <Button onClick={downloadPdf} variant="primary">Download PDF</Button>
+              <Button onClick={() => openPreview(exportScope)} variant="muted">Preview</Button>
+              <Button onClick={() => downloadServerPdf(exportScope)} variant="primary">Download PDF</Button>
             </div>
           </div>
         </div>
@@ -630,6 +713,18 @@ export default function AdminDailyReportPage() {
               <ul className="list-disc pl-5">
                 {CSV_COLUMNS.map((c) => <li key={c} className="py-0.5">{c}</li>)}
               </ul>
+            </div>
+          </Modal>
+          <Modal title="Export Preview" open={showPreviewModal} onClose={() => setShowPreviewModal(false)}>
+            <div className="space-y-3">
+              <div className="text-sm text-slate-300">Preview the export layout below. Use Print to open the browser print dialog.</div>
+              <div className="border border-white/6 rounded bg-black/10 p-3 max-h-[60vh] overflow-auto">
+                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button onClick={() => { const w = window.open('', '_blank'); if (!w) return; w.document.write(previewHtml); w.document.close(); setTimeout(() => w.print(), 250); }} variant="primary">Print</Button>
+                <Button onClick={() => setShowPreviewModal(false)} variant="secondary">Close</Button>
+              </div>
             </div>
           </Modal>
           <Modal title="Report Details" open={showDetailModal} onClose={() => { setShowDetailModal(false); setDetailReport(null); }}>
