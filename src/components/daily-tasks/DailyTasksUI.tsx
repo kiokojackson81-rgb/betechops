@@ -23,59 +23,8 @@ type MarketplaceReview = {
 
 type MarketplaceReviewState = Record<string, MarketplaceReview>;
 
-function MarketplaceReviewSection({
-  value,
-  onChange,
-}: {
-  value: MarketplaceReviewState | Record<string, any> | undefined;
-  onChange: (next: MarketplaceReviewState) => void;
-}) {
-  const v = value || {};
-  const updateShop = (shop: string, patch: Partial<MarketplaceReview>) => {
-    onChange({
-      ...v,
-      [shop]: { ...(v[shop] || { stockChecked: false, pricingConfirmed: false, competitorsReviewed: false, oosReviewed: false, notes: "" }), ...patch },
-    });
-  };
-
-  return (
-    <section className="mt-2 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-100">Marketplace Review (Daily)</h3>
-      <div className="grid gap-4 md:grid-cols-2">
-        {marketplaceShops.map((shop) => {
-          const shopState: MarketplaceReview = (v as any)[shop] ?? { stockChecked: false, pricingConfirmed: false, competitorsReviewed: false, oosReviewed: false, notes: "" };
-          return (
-            <div key={shop} className="rounded-2xl border border-gray-800 bg-gray-900/40 p-4 shadow-sm">
-              <h4 className="mb-3 text-base font-semibold text-gray-100">{shop}</h4>
-              <div className="space-y-2 text-sm text-gray-200">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.stockChecked} onChange={(e) => updateShop(shop, { stockChecked: e.target.checked })} />
-                  <span>Stock checked</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.pricingConfirmed} onChange={(e) => updateShop(shop, { pricingConfirmed: e.target.checked })} />
-                  <span>Pricing confirmed</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.competitorsReviewed} onChange={(e) => updateShop(shop, { competitorsReviewed: e.target.checked })} />
-                  <span>Competitor prices reviewed</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.oosReviewed} onChange={(e) => updateShop(shop, { oosReviewed: e.target.checked })} />
-                  <span>Out-of-stock review done</span>
-                </label>
-              </div>
-              <div className="mt-3">
-                <label className="text-xs font-medium text-gray-400">Notes</label>
-                <textarea rows={2} className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" value={shopState.notes} onChange={(e) => updateShop(shop, { notes: e.target.value })} placeholder="Key issues, competitors, or actions…" />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
+// NOTE: `MarketplaceReviewSection` was removed — replaced by the
+// `MarketplaceStockPricingCard` below which is the canonical implementation.
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
@@ -232,26 +181,54 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
             <div key={shop} className="space-y-2 rounded-xl border border-gray-800 bg-black/30 p-3">
               <h4 className="text-sm font-semibold text-gray-100">{shop}</h4>
 
-              <div className="space-y-1 text-xs text-gray-200">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.stockChecked)} onChange={(e) => updateShop(shop, { stockChecked: e.target.checked })} />
-                  <span>Stock checked</span>
-                </label>
+              <div className="flex flex-wrap gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(shopState.stockChecked)}
+                    onClick={() => updateShop(shop, { stockChecked: !Boolean(shopState.stockChecked) })}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.stockChecked ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-200"}`}
+                  >
+                    Stock
+                  </button>
+                  <span className="text-xs text-gray-200">Stock checked</span>
+                </div>
 
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.pricingConfirmed)} onChange={(e) => updateShop(shop, { pricingConfirmed: e.target.checked })} />
-                  <span>Pricing confirmed</span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(shopState.pricingConfirmed)}
+                    onClick={() => updateShop(shop, { pricingConfirmed: !Boolean(shopState.pricingConfirmed) })}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.pricingConfirmed ? "bg-amber-500 text-white" : "bg-gray-700 text-gray-200"}`}
+                  >
+                    Price
+                  </button>
+                  <span className="text-xs text-gray-200">Pricing confirmed</span>
+                </div>
 
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.competitorsReviewed)} onChange={(e) => updateShop(shop, { competitorsReviewed: e.target.checked })} />
-                  <span>Competitor prices reviewed</span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(shopState.competitorsReviewed)}
+                    onClick={() => updateShop(shop, { competitorsReviewed: !Boolean(shopState.competitorsReviewed) })}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.competitorsReviewed ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-200"}`}
+                  >
+                    Comp
+                  </button>
+                  <span className="text-xs text-gray-200">Competitors reviewed</span>
+                </div>
 
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.oosReviewed)} onChange={(e) => updateShop(shop, { oosReviewed: e.target.checked })} />
-                  <span>Out-of-stock review done</span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(shopState.oosReviewed)}
+                    onClick={() => updateShop(shop, { oosReviewed: !Boolean(shopState.oosReviewed) })}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.oosReviewed ? "bg-rose-600 text-white" : "bg-gray-700 text-gray-200"}`}
+                  >
+                    OOS
+                  </button>
+                  <span className="text-xs text-gray-200">OOS review</span>
+                </div>
               </div>
 
               <div className="pt-1">
@@ -408,6 +385,27 @@ export default function DailyTasksUI() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  // Derive the overall `stockChecked` flag for the day from per-shop review.
+  // The derived flag is true only when every configured shop has both
+  // `stockChecked` AND `pricingConfirmed` set to true. This keeps backward
+  // compatibility with the older `stockChecked` day field used by exports.
+  useEffect(() => {
+    try {
+      const review = market[day].review as Partial<Record<string, ShopReview>> | undefined;
+      let derived = false;
+      if (review) {
+        derived = marketplaceShopsTyped.every((s) => Boolean((review as any)[s]?.stockChecked) && Boolean((review as any)[s]?.pricingConfirmed));
+      }
+      setDayState((prev) => {
+        if (prev[day] && prev[day]["stockChecked"] === derived) return prev;
+        return { ...prev, [day]: { ...prev[day], stockChecked: derived } };
+      });
+    } catch (e) {
+      // defensive: don't crash the UI
+    }
+    // only watch market[day] and day
+  }, [market, day]);
   const autosaveTimer = useRef<number | null>(null);
   const lastAutoSaved = useRef<string | null>(null);
   const isAutoSaving = useRef(false);
@@ -596,6 +594,9 @@ export default function DailyTasksUI() {
           const totalSales = sales.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
           const trimmedDayFields = { ...dayState[day], competitorNotes: String((dayState[day]["competitorNotes"] || "")).trim(), improvementIdeas: String((dayState[day]["improvementIdeas"] || "")).trim() };
 
+          const marketplaceReview = market[day].review || undefined;
+          const customerCommsForDay = customerComms[day] || undefined;
+
           const body = {
             date: new Date().toISOString(),
             day,
@@ -609,6 +610,8 @@ export default function DailyTasksUI() {
               officeMaintenance,
               sales,
               dayFields: trimmedDayFields,
+              marketplaceReview,
+              customerComms: customerCommsForDay,
             },
           };
 
