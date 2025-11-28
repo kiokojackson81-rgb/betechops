@@ -17,7 +17,7 @@ export default function Card({
       ? "border border-[var(--border)] bg-[var(--card-bg)]"
       : variant === "muted"
       ? "border border-white/5 bg-transparent"
-      : "border border-white/10 bg-[var(--card,#171b23)]";
+      : "border border-white/10 bg-[var(--card,#171b23)] card-top-accent";
 
   return (
     <div className={`${base} ${variantClass} ${className}`}>

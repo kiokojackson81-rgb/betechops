@@ -14,7 +14,7 @@ export default function Checkbox({ checked = false, onCheckedChange, className =
       type="checkbox"
       checked={checked}
       onChange={(e) => onCheckedChange && onCheckedChange(e.target.checked)}
-      className={className}
+      className={`w-4 h-4 rounded ${className}`}
     />
   );
 }

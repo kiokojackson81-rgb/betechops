@@ -478,11 +478,19 @@ export default function DailyTasksUI() {
       </div>
 
       <div className="grid grid-cols-6 gap-2 w-full">
-        {Object.keys(dayTaskDefinitions).map((k) => (
-          <Button key={k} className={`py-2 px-3 text-xs ${day === k ? "bg-gray-800 text-white" : "bg-transparent text-gray-300"}`} onClick={() => setDay(k as DayKey)} variant={day === k ? "primary" : "secondary"}>
-            {dayTaskDefinitions[k as DayKey].title.slice(0, 3)}
-          </Button>
-        ))}
+        {Object.keys(dayTaskDefinitions).map((k) => {
+          const isActive = day === k;
+          return (
+            <Button
+              key={k}
+              onClick={() => setDay(k as DayKey)}
+              variant={isActive ? "secondary" : "secondary"}
+              className={`py-2 px-3 text-xs ${isActive ? "tab-active" : "text-gray-300 hover:text-[var(--betech-orange)]"}`}
+            >
+              {dayTaskDefinitions[k as DayKey].title.slice(0, 3)}
+            </Button>
+          );
+        })}
       </div>
 
       <div className="space-y-6">
@@ -574,7 +582,7 @@ export default function DailyTasksUI() {
                     />
                   </div>
                   <div className="col-span-2 pt-6">
-                    <Button variant="secondary" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
+                    <Button variant="danger" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
                   </div>
                 </div>
               ))}

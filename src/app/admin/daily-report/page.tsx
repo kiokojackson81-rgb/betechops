@@ -29,6 +29,7 @@ export default function AdminDailyReportPage() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [day, setDay] = useState<string>("");
+  const [submittedBy, setSubmittedBy] = useState<string>("");
   const [reports, setReports] = useState<Report[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string>("");
@@ -48,6 +49,7 @@ export default function AdminDailyReportPage() {
     if (from) params.append("from", from);
     if (to) params.append("to", to);
     if (day) params.append("day", day);
+    if (submittedBy) params.append("user", submittedBy);
     params.append("page", String(page));
     params.append("pageSize", String(pageSize));
     const url = `/api/daily-report${params.toString() ? "?" + params.toString() : ""}`;
@@ -77,6 +79,7 @@ export default function AdminDailyReportPage() {
       "Date",
       "Day",
       "Attendant",
+      "SubmittedBy",
       "Products",
       "Sales",
       "NewUploads",
@@ -99,6 +102,7 @@ export default function AdminDailyReportPage() {
     const rows = reports.map((r) => {
       const dateStr = new Date(r.date).toISOString().split("T")[0];
       const attendant = r.user?.name ?? "";
+      const submitted = r.tasks?.submittedBy ?? "";
       const tasks = r.tasks ?? {};
       const categories = tasks.categories ?? {};
       const marketing = tasks.marketing ?? {};
@@ -109,6 +113,7 @@ export default function AdminDailyReportPage() {
         dateStr,
         r.day,
         attendant,
+        submitted,
         String(r.productsCount),
         String(r.totalSales),
         String(categories.newUploads ?? ""),
@@ -194,9 +199,19 @@ export default function AdminDailyReportPage() {
             ))}
           </select>
         </div>
+        <div className="flex flex-col">
+          <label className="text-sm mb-1">Submitted by</label>
+          <input
+            type="text"
+            value={submittedBy}
+            onChange={(e) => setSubmittedBy(e.target.value)}
+            placeholder="Name or email"
+            className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
+          />
+        </div>
         <div className="flex gap-2 items-end">
           <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Filter</Button>
-          <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}) }).toString()}`; }} variant="secondary">Download CSV</Button>
+          <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}), ...(submittedBy?{user:submittedBy}:{}) }).toString()}`; }} variant="secondary">Download CSV</Button>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <label className="text-sm">Page size</label>
@@ -230,6 +245,7 @@ export default function AdminDailyReportPage() {
               <th className="px-3 py-2 text-left">Date</th>
               <th className="px-3 py-2 text-left">Day</th>
               <th className="px-3 py-2 text-left">Attendant</th>
+              <th className="px-3 py-2 text-left">Submitted By</th>
               <th className="px-3 py-2 text-right">Products</th>
               <th className="px-3 py-2 text-right">Sales (KES)</th>
               <th className="px-3 py-2 text-left">Tasks</th>
@@ -250,6 +266,7 @@ export default function AdminDailyReportPage() {
                   <td className="px-3 py-2">{new Date(r.date).toLocaleDateString()}</td>
                   <td className="px-3 py-2">{r.day}</td>
                   <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
+                  <td className="px-3 py-2">{r.tasks?.submittedBy ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{r.productsCount}</td>
                   <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
                   <td className="px-3 py-2">
@@ -296,7 +313,7 @@ export default function AdminDailyReportPage() {
             })}
             {reports.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-4 text-center text-slate-400">
+                <td colSpan={10} className="px-3 py-4 text-center text-slate-400">
                   No reports found
                 </td>
               </tr>

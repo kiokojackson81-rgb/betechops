@@ -6,11 +6,15 @@
   --muted: #6b7280;
   --border: #e5e7eb;
   --card-bg: #ffffff;
-  --primary: #0ea5a4; /* teal */
-  --accent: #7c3aed; /* purple */
+  /* Betech Solar brand tokens */
+  --betech-orange: #F59E0B; /* primary - the "Sun" */
+  --betech-maroon: #7f1d1d; /* secondary - the "Roof" */
+  --betech-warmcharcoal: #1c1917; /* warm charcoal background */
+  --primary: var(--betech-orange);
+  --accent: #7c3aed;
   --success: #16a34a;
   --warning: #f59e0b;
-  --danger: #ef4444;
+  --danger: #7f1d1d;
 }
 
 @theme inline {
@@ -22,16 +26,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --muted: #9ca3af;
-    --border: #27272a;
-    --card-bg: #0b0b0c;
-    --primary: #34d399;
+    --background: var(--betech-warmcharcoal);
+    --foreground: #efece9;
+    --muted: #9aa6b2;
+    --border: #2b2625;
+    --card-bg: #0f0d0d;
+    --primary: var(--betech-orange);
     --accent: #a78bfa;
     --success: #4ade80;
     --warning: #fbbf24;
-    --danger: #fb7185;
+    --danger: #7f1d1d;
   }
 }
 
@@ -87,12 +91,46 @@ progress[value]::-webkit-progress-bar {
   border-radius: 999px;
 }
 progress[value]::-webkit-progress-value {
-  background-color: var(--primary-strong);
+  /* use gradient from maroon to orange */
+  background-image: linear-gradient(90deg, var(--betech-maroon), var(--betech-orange));
   border-radius: 999px;
 }
 progress {
   outline: none;
 }
+
+/* Style native checkboxes to use brand accent color when checked */
+input[type="checkbox"] {
+  accent-color: var(--betech-orange);
+}
+
+/* Card top border (2px) mimicking the "roof" */
+.card-top-accent { border-top-width: 2px; border-top-style: solid; border-top-color: var(--betech-maroon); }
+
+/* Button utilities fallback when using CSS variables in components */
+.btn-primary { background-color: var(--betech-orange); color: #000; font-weight: 700; }
+.btn-primary:hover { filter: brightness(0.95); }
+.btn-danger { background-color: var(--betech-maroon); color: #fff; }
+
+/* Progress bar root tweaks */
+.progressbar-root progress[value]::-webkit-progress-bar { background-color: rgba(255,255,255,0.03); }
+.progressbar-root progress[value]::-moz-progress-bar { background-image: linear-gradient(90deg, var(--betech-maroon), var(--betech-orange)); }
+
+/* Tab active state: maroon -> red gradient with subtle orange shadow */
+.tab-active {
+  background: linear-gradient(90deg, var(--betech-maroon), #b91c1c);
+  color: #fff !important;
+  box-shadow: 0 4px 0 0 rgba(245,158,11,0.65);
+}
+
+@layer utilities {
+  .tab-active {
+    @apply text-white;
+    background-image: linear-gradient(90deg, #7f1d1d, #b91c1c);
+    box-shadow: 0 4px 0 0 rgba(245,158,11,0.65);
+  }
+}
+
 
 .progressbar-root label { font-size: 12px; }
 .progressbar-root .text-xs { color: var(--muted); }

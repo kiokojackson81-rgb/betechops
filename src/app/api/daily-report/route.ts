@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   const fromStr = url.searchParams.get("from");
   const toStr = url.searchParams.get("to");
   const day     = url.searchParams.get("day");
+  const userQ  = url.searchParams.get("user");
   const pageStr = url.searchParams.get("page");
   const pageSizeStr = url.searchParams.get("pageSize");
 
@@ -24,6 +25,14 @@ export async function GET(req: Request) {
   }
   if (day) {
     where.day = day;
+  }
+  if (userQ) {
+    // allow filtering by submittedBy free-text or attendant name/email
+    where.OR = [
+      { submittedBy: { contains: userQ, mode: "insensitive" } },
+      { user: { is: { name: { contains: userQ, mode: "insensitive" } } } },
+      { user: { is: { email: { contains: userQ, mode: "insensitive" } } } },
+    ];
   }
 
   try {
@@ -71,7 +80,6 @@ export async function POST(req: Request) {
     const tasksWithSubmit = { ...(tasks || {}), ...(submittedBy ? { submittedBy } : {}) };
 
     const report = await prisma.dailyReport.create({
-      // Cast to `any` to avoid TypeScript issues until Prisma client is regenerated after schema change
       data: {
         date: date ? new Date(date) : new Date(),
         day: String(day),
@@ -80,7 +88,7 @@ export async function POST(req: Request) {
         tasks: tasksWithSubmit,
         submittedBy: submittedBy || null,
         userId: actorId || undefined,
-      } as any,
+      },
     });
     // persist granular sales rows if provided in tasks.sales
     try {
