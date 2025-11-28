@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     "Kilimall",
   ];
 
-  // Build rows including per-shop flattened marketplace columns
+  // Build rows including per-shop flattened marketplace columns, customer comms, and Saturday live-session fields
   const rows = reports.map((r: any) => {
     const dateStr = new Date(r.date).toISOString().split('T')[0];
     const attendant = r.user?.name ?? '';
@@ -60,12 +60,50 @@ export async function GET(req: Request) {
               <td style="padding:6px;border:1px solid #ddd">${v.oosReviewed ? 'Yes' : ''}</td>`;
     }).join('');
 
+    // customer communications
+    const cc = (r.tasks || {}).customerComms || {};
+    const walkInServed = cc.walkInServed ?? '';
+    const walkInsPurchased = cc.walkInsWhoPurchased ?? cc.onlineServed ?? '';
+    const callsHandled = cc.callsHandled ?? '';
+    const whatsappSmsReplied = cc.whatsappSmsReplied ? 'Yes' : '';
+    const fbComments = cc.fbCommentsReplied ? 'Yes' : '';
+    const fbDms = cc.fbDmsReplied ? 'Yes' : '';
+    const igComments = cc.igCommentsReplied ? 'Yes' : '';
+    const igDms = cc.igDmsReplied ? 'Yes' : '';
+
+    // saturday / dayFields
+    const df = (r.tasks || {}).dayFields || {};
+    const satCount = df.liveSessionsCount ?? '';
+    const satDuration = df.liveSessionsDurationMinutes ?? '';
+    const satPlatform = df.liveSessionsPlatform ?? '';
+    const satViewers = df.liveSessionsEstimatedViewers ?? '';
+    const satLeads = df.liveSessionsLeadsGenerated ?? '';
+    const satHostedLegacy = df.liveSessionsHosted ?? '';
+    const satOfficeClean = df.officeCleanOrganized ? 'Yes' : '';
+    const satNotes = df.saturdayNotes ?? '';
+
     return `<tr>
       <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
       <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
       <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
       <td style="padding:6px;border:1px solid #ddd">${r.tasks?.submittedBy ?? ''}</td>
       ${shopCells}
+      <td style="padding:6px;border:1px solid #ddd">${walkInServed}</td>
+      <td style="padding:6px;border:1px solid #ddd">${walkInsPurchased}</td>
+      <td style="padding:6px;border:1px solid #ddd">${callsHandled}</td>
+      <td style="padding:6px;border:1px solid #ddd">${whatsappSmsReplied}</td>
+      <td style="padding:6px;border:1px solid #ddd">${fbComments}</td>
+      <td style="padding:6px;border:1px solid #ddd">${fbDms}</td>
+      <td style="padding:6px;border:1px solid #ddd">${igComments}</td>
+      <td style="padding:6px;border:1px solid #ddd">${igDms}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satCount}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satDuration}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satPlatform}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satViewers}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satLeads}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satHostedLegacy}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satOfficeClean}</td>
+      <td style="padding:6px;border:1px solid #ddd">${satNotes}</td>
     </tr>`;
   }).join('');
 
@@ -94,6 +132,22 @@ export async function GET(req: Request) {
             </tr>
             <tr>
               ${MARKETPLACE_SHOPS.map(()=>`<th>Stock</th><th>Pricing</th><th>Comp</th><th>OOS</th>`).join('')}
+              <th>WalkIn Served</th>
+              <th>WalkIns Purchased</th>
+              <th>Calls Handled</th>
+              <th>WhatsApp/SMS Replied</th>
+              <th>FB Comments</th>
+              <th>FB DMs</th>
+              <th>IG Comments</th>
+              <th>IG DMs</th>
+              <th>Sat: Count</th>
+              <th>Sat: Duration (min)</th>
+              <th>Sat: Platform</th>
+              <th>Sat: Estimated Viewers</th>
+              <th>Sat: Leads</th>
+              <th>Sat: Legacy Hosted</th>
+              <th>Sat: Office Cleaned</th>
+              <th>Sat: Notes</th>
             </tr>
           </thead>
           <tbody>
