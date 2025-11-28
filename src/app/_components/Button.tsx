@@ -9,6 +9,7 @@ export default function Button({
   className = "",
   type = "button",
   style,
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: (e: any) => void;
@@ -16,6 +17,7 @@ export default function Button({
   className?: string;
   type?: "button" | "submit" | "reset";
   style?: React.CSSProperties;
+  disabled?: boolean;
 }) {
   const base = "rounded-xl px-4 py-2 focus:outline-none inline-flex items-center justify-center gap-2 text-sm";
   const variants: Record<string, string> = {
@@ -26,7 +28,7 @@ export default function Button({
   };
 
   return (
-    <button type={type} onClick={onClick} style={style} className={`${base} ${variants[variant]} ${className}`}>
+    <button type={type} onClick={onClick} style={style} disabled={disabled} className={`${base} ${variants[variant]} ${className} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}>
       {children}
     </button>
   );
