@@ -186,15 +186,17 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
       <p className="mt-1 text-xs text-gray-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
 
       <div className="mt-4">
-        <div className="mt-2 flex flex-wrap gap-2">
-          {marketplaceShopsTyped.map((shop) => {
-            const active = selected === shop;
-            return (
-              <button key={shop} type="button" className={tabClass(active)} onClick={() => setSelected(shop)}>
-                {shop}
-              </button>
-            );
-          })}
+        <div className="mt-2 overflow-x-auto -mx-2 px-2">
+          <div className="flex gap-2 whitespace-nowrap">
+            {marketplaceShopsTyped.map((shop) => {
+              const active = selected === shop;
+              return (
+                <button key={shop} type="button" className={`${tabClass(active)} min-w-[120px]`} onClick={() => setSelected(shop)}>
+                  {shop}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="mt-6">
@@ -247,24 +249,25 @@ function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: 
           <label className="text-xs">WhatsApp/SMS replied</label>
           <Input type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
-        <div className="space-y-2">
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
-        </div>
-      </div>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" className="w-4 h-4" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
+          </div>
 
-      <div className="grid md:grid-cols-2 gap-3 mt-3">
-        <div className="space-y-2">
-          <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.fbAllCleared)} onCheckedChange={(v) => onChange({ ...value, fbAllCleared: Boolean(v) })} /> <span className="text-sm">Facebook inbox cleared</span></label>
-          <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.igAllCleared)} onCheckedChange={(v) => onChange({ ...value, igAllCleared: Boolean(v) })} /> <span className="text-sm">Instagram inbox cleared</span></label>
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs">Competitor notes</label>
-          <Textarea rows={3} value={String(value.competitorNotes ?? "")} onChange={(e) => onChange({ ...value, competitorNotes: e.target.value })} />
-          <label className="text-xs">Improvement suggestions</label>
-          <Textarea rows={3} value={String(value.improvementSuggestions ?? "")} onChange={(e) => onChange({ ...value, improvementSuggestions: e.target.value })} />
+          <div className="space-y-2">
+            <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.fbAllCleared)} onCheckedChange={(v) => onChange({ ...value, fbAllCleared: Boolean(v) })} /> <span className="text-sm">Facebook inbox cleared</span></label>
+            <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.igAllCleared)} onCheckedChange={(v) => onChange({ ...value, igAllCleared: Boolean(v) })} /> <span className="text-sm">Instagram inbox cleared</span></label>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs">Competitor notes</label>
+            <Textarea rows={3} value={String(value.competitorNotes ?? "")} onChange={(e) => onChange({ ...value, competitorNotes: e.target.value })} />
+            <label className="text-xs">Improvement suggestions</label>
+            <Textarea rows={3} value={String(value.improvementSuggestions ?? "")} onChange={(e) => onChange({ ...value, improvementSuggestions: e.target.value })} />
+          </div>
         </div>
       </div>
     </section>
