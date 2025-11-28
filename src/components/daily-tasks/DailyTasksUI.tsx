@@ -89,7 +89,7 @@ const shared: Record<string, TaskField> = {
 export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   monday: { title: "Monday", focus: "Product & Stock Management", targetUploads: 50, fields: [shared.stockChecked, shared.inboxCleared, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
   tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.promoVideos, shared.demoRecorded, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
-  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.liveSessions, shared.promoVideos, shared.leadsFollowed, shared.customersServed, shared.commentsDMs] },
+  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.promoVideos, shared.leadsFollowed, shared.customersServed] },
   thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.promoVideos, shared.officeClean, shared.customersServed] },
   friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.promoVideos, shared.customersServed, shared.officeClean, shared.weekendPromos, shared.improvementIdeas] },
   saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed, shared.weeklySummary] },
@@ -111,7 +111,7 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
 
   return {
     videos: num("promoVideos") + num("demoRecorded"),
-    lives: num("liveSessions"),
+    lives: num("liveSessions") + num("liveSessionsTotal"),
     leads: num("leadsFollowed"),
     customers: num("customersServed"),
     maintenance: yes("officeClean"),
@@ -355,6 +355,70 @@ function ProductMarketingVideosCard({ value, onChange }: { value?: any; onChange
       <div className="mt-3">
         <label className="text-xs block mb-1">Notes / Content ideas</label>
         <Textarea rows={3} value={String(v.videoNotes ?? "")} onChange={(e) => setField("videoNotes", e.target.value)} placeholder="Ideas, issues, or content plan…" />
+      </div>
+    </section>
+  );
+}
+
+// Types for Wednesday live card
+type LivePlatforms = {
+  facebook?: boolean;
+  tiktok?: boolean;
+  instagram?: boolean;
+};
+
+type WednesdayLiveContent = {
+  liveSessionsTotal?: number;
+  platforms?: LivePlatforms;
+  promoClipsPosted?: number;
+  leadsFollowedUp?: number;
+  notes?: string;
+};
+
+function WednesdayLiveCard({ value, onChange }: { value?: WednesdayLiveContent; onChange: (v: WednesdayLiveContent) => void }) {
+  const v = value || {};
+  const update = (patch: Partial<WednesdayLiveContent>) => onChange({ ...v, ...patch });
+  const updatePlatforms = (patch: Partial<LivePlatforms>) => update({ platforms: { ...(v.platforms || {}), ...patch } });
+
+  const pillClass = (active?: boolean) =>
+    `inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition ${active ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-300" : "border-gray-700 bg-black/40 text-gray-300"}`;
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Wednesday – Live sessions &amp; content output</h3>
+      <p className="text-xs text-gray-400">Track live sessions, promo clips and lead follow-ups.</p>
+
+      <div className="mt-4 space-y-2">
+        <label className="block text-sm font-medium text-gray-200">Live sessions hosted (total)</label>
+        <Input type="number" min={0} value={String(v.liveSessionsTotal ?? 0)} onChange={(e) => update({ liveSessionsTotal: Number((e.target as HTMLInputElement).value || 0) })} />
+
+        <div className="mt-2 text-xs font-medium text-gray-400">Platforms used</div>
+        <div className="mt-1 flex flex-wrap gap-2">
+          <button type="button" className={pillClass(Boolean(v.platforms?.facebook))} onClick={() => updatePlatforms({ facebook: !v.platforms?.facebook })}>
+            Facebook
+          </button>
+          <button type="button" className={pillClass(Boolean(v.platforms?.tiktok))} onClick={() => updatePlatforms({ tiktok: !v.platforms?.tiktok })}>
+            TikTok
+          </button>
+          <button type="button" className={pillClass(Boolean(v.platforms?.instagram))} onClick={() => updatePlatforms({ instagram: !v.platforms?.instagram })}>
+            Instagram
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-1">
+        <label className="block text-sm font-medium text-gray-200">Promotional / product clips posted</label>
+        <Input type="number" min={0} value={String(v.promoClipsPosted ?? 0)} onChange={(e) => update({ promoClipsPosted: Number((e.target as HTMLInputElement).value || 0) })} />
+      </div>
+
+      <div className="mt-4 space-y-1">
+        <label className="block text-sm font-medium text-gray-200">Leads followed-up from live sessions</label>
+        <Input type="number" min={0} value={String(v.leadsFollowedUp ?? 0)} onChange={(e) => update({ leadsFollowedUp: Number((e.target as HTMLInputElement).value || 0) })} />
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-gray-200">Top-performing content / issues / ideas</label>
+        <Textarea rows={3} placeholder="Best clips, questions asked, or improvements for next live…" value={String(v.notes ?? "")} onChange={(e) => update({ notes: e.target.value })} />
       </div>
     </section>
   );
@@ -921,9 +985,18 @@ export default function DailyTasksUI() {
                   </div>
 
                   {day === "tuesday" && (
+                        <div className="w-full">
+                          <ProductMarketingVideosCard
+                            value={dayState[day]}
+                            onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
+                          />
+                        </div>
+                      )}
+
+                  {day === "wednesday" && (
                     <div className="w-full">
-                      <ProductMarketingVideosCard
-                        value={dayState[day]}
+                      <WednesdayLiveCard
+                        value={dayState[day] as any}
                         onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
                       />
                     </div>
