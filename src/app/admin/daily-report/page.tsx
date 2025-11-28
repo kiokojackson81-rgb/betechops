@@ -53,6 +53,29 @@ export default function AdminDailyReportPage() {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [legendFilters, setLegendFilters] = useState<Array<'complete' | 'partial' | 'missing'>>(['complete','partial','missing']);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailReport, setDetailReport] = useState<Report | null>(null);
+
+  function getFilteredReports() {
+    return (reports || []).filter((r) => {
+      if (!shopFilter) return true;
+      const mr = (r.tasks as any)?.marketplaceReview ?? {};
+      const s = mr[shopFilter] || {};
+      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
+      const done = checks.filter(Boolean).length;
+      return done >= (minComplete || 0);
+    }).sort((a, b) => {
+      if (!sortByCompleteness) return 0;
+      // compare by selected shop completeness (desc)
+      const sa = (a.tasks as any)?.marketplaceReview ?? {};
+      const sb = (b.tasks as any)?.marketplaceReview ?? {};
+      const aa = (sa[shopFilter] || {});
+      const bb = (sb[shopFilter] || {});
+      const ca = [aa.stockChecked, aa.pricingConfirmed, aa.competitorsReviewed, aa.oosReviewed].filter(Boolean).length;
+      const cb = [bb.stockChecked, bb.pricingConfirmed, bb.competitorsReviewed, bb.oosReviewed].filter(Boolean).length;
+      return cb - ca;
+    });
+  }
 
   // fetch on mount so header KPIs render immediately
   useEffect(() => {
@@ -143,24 +166,7 @@ export default function AdminDailyReportPage() {
     // safer CSV: quote fields, escape quotes, preserve JSON tasks
     const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
     // filtered + sorted reports for table and CSV export
-    const filteredReports = (reports || []).filter((r) => {
-      if (!shopFilter) return true;
-      const mr = (r.tasks as any)?.marketplaceReview ?? {};
-      const s = mr[shopFilter] || {};
-      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
-      const done = checks.filter(Boolean).length;
-      return done >= (minComplete || 0);
-    }).sort((a, b) => {
-      if (!sortByCompleteness) return 0;
-      // compare by selected shop completeness (desc)
-      const sa = (a.tasks as any)?.marketplaceReview ?? {};
-      const sb = (b.tasks as any)?.marketplaceReview ?? {};
-      const aa = (sa[shopFilter] || {});
-      const bb = (sb[shopFilter] || {});
-      const ca = [aa.stockChecked, aa.pricingConfirmed, aa.competitorsReviewed, aa.oosReviewed].filter(Boolean).length;
-      const cb = [bb.stockChecked, bb.pricingConfirmed, bb.competitorsReviewed, bb.oosReviewed].filter(Boolean).length;
-      return cb - ca;
-    });
+    const filteredReports = getFilteredReports();
 
     const csvSource = filteredReports;
 
@@ -258,6 +264,67 @@ export default function AdminDailyReportPage() {
     'OfficeCleaned', 'OfficeNotes', 'CustomerComms (JSON)', 'Tasks (JSON)'
   ];
 
+  // Aggregates for currently filtered reports (used in header KPIs and PDF export)
+  const filteredReportsForAgg = getFilteredReports();
+  const aggNewUploads = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.newUploads) ? Number(r.tasks.categories.newUploads) : 0), 0);
+  const aggCopies = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.copiesUploaded) ? Number(r.tasks.categories.copiesUploaded) : 0), 0);
+  const aggEdited = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.productsEdited) ? Number(r.tasks.categories.productsEdited) : 0), 0);
+  const aggSalesCount = filteredReportsForAgg.reduce((sum, r) => sum + ((Array.isArray(r.tasks?.sales)) ? r.tasks.sales.length : 0), 0);
+
+  function downloadPdf() {
+    const rows = filteredReportsForAgg.map((r) => {
+      const dateStr = new Date(r.date).toISOString().split('T')[0];
+      const attendant = r.user?.name ?? '';
+      const submitted = r.tasks?.submittedBy ?? '';
+      const products = r.tasks?.categories ?? {};
+      const sales = Array.isArray(r.tasks?.sales) ? r.tasks.sales : [];
+      return `<tr>
+        <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
+        <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
+        <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
+        <td style="padding:6px;border:1px solid #ddd">${submitted}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.newUploads ?? ''}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.copiesUploaded ?? ''}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.productsEdited ?? ''}</td>
+        <td style="padding:6px;border:1px solid #ddd">${sales.length}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Daily Reports</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; color:#111; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            th { background: #f4f4f4; }
+          </style>
+        </head>
+        <body>
+          <h2>Daily Reports — Export</h2>
+          <p>Exported ${filteredReportsForAgg.length} reports</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Day</th><th>Attendant</th><th>SubmittedBy</th><th>NewUploads</th><th>Copies</th><th>Edited</th><th>SalesCount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </body>
+      </html>`;
+
+    const w = window.open('', '_blank', 'noopener');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.print(); }, 350);
+  }
+
   function renderShopBadges(s: any) {
     // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
@@ -326,8 +393,21 @@ export default function AdminDailyReportPage() {
             <div className="text-lg font-semibold">{summary ? Number(summary.totalSales).toLocaleString() : '—'}</div>
           </div>
           <div className="ml-6 flex items-center gap-3">
-            <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
-            <Button onClick={downloadCsv} variant="primary">Download CSV</Button>
+            <div className="text-sm text-slate-300 text-right">
+              <div>New uploads: <strong className="text-white">{aggNewUploads}</strong></div>
+              <div>Copies: <strong className="text-white">{aggCopies}</strong></div>
+              <div>Edited: <strong className="text-white">{aggEdited}</strong></div>
+              <div>Sales Count: <strong className="text-white">{aggSalesCount}</strong></div>
+            </div>
+            <div>
+              <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
+            </div>
+            <div>
+              <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
+            </div>
+            <div>
+              <Button onClick={downloadPdf} variant="primary">Download PDF</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,6 +593,9 @@ export default function AdminDailyReportPage() {
                   <td className="px-3 py-2 text-sm">
                     <div>Cleaned: {office.officeCleaned ? 'Yes' : 'No'}</div>
                     <div className="text-xs text-slate-400">{office.officeNotes ?? ''}</div>
+                    <div className="mt-2">
+                      <Button onClick={() => { setDetailReport(r); setShowDetailModal(true); }} variant="secondary">View</Button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -548,6 +631,42 @@ export default function AdminDailyReportPage() {
                 {CSV_COLUMNS.map((c) => <li key={c} className="py-0.5">{c}</li>)}
               </ul>
             </div>
+          </Modal>
+          <Modal title="Report Details" open={showDetailModal} onClose={() => { setShowDetailModal(false); setDetailReport(null); }}>
+            {detailReport ? (
+              <div className="space-y-3 text-sm">
+                <div><strong>Date:</strong> {new Date(detailReport.date).toLocaleDateString()} — <strong>Day:</strong> {detailReport.day}</div>
+                <div><strong>Attendant:</strong> {detailReport.user?.name ?? '—'} — <strong>Submitted By:</strong> {detailReport.tasks?.submittedBy ?? '—'}</div>
+                <div>
+                  <strong>Marketplace Review:</strong>
+                  <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks?.marketplaceReview ?? {}, null, 2)}</pre>
+                </div>
+                <div>
+                  <strong>Categories:</strong>
+                  <div className="text-xs mt-1">New: {detailReport.tasks?.categories?.newUploads ?? 0} • Copies: {detailReport.tasks?.categories?.copiesUploaded ?? 0} • Edited: {detailReport.tasks?.categories?.productsEdited ?? 0}</div>
+                </div>
+                <div>
+                  <strong>Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):</strong>
+                  {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
+                    <ul className="list-disc pl-5 text-xs mt-1">
+                      {detailReport.tasks.sales.map((s: any, i: number) => (
+                        <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
+                      ))}
+                    </ul>
+                  ) : <div className="text-xs text-slate-400">No sales recorded</div>}
+                </div>
+                <div>
+                  <strong>Customer Comms:</strong>
+                  <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks?.customerComms ?? {}, null, 2)}</pre>
+                </div>
+                <div>
+                  <strong>Full Tasks JSON:</strong>
+                  <pre className="text-xs whitespace-pre-wrap max-h-60 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks ?? {}, null, 2)}</pre>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm">No report selected.</div>
+            )}
           </Modal>
         </main>
       </div>
