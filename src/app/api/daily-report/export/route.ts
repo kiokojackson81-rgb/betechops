@@ -63,6 +63,10 @@ export async function GET(req: Request) {
           'LivePurchases',
           'OfficeCleaned',
           'OfficeNotes',
+          // Saturday-specific flattened fields
+          'Saturday Live Sessions Hosted',
+          'Saturday Office Cleaned',
+          'Saturday Notes',
           'SalesDetails',
           // flattened marketplace columns
           ...shopCols,
@@ -166,6 +170,11 @@ export async function GET(req: Request) {
               })(),
               // customerComms as JSON
               JSON.stringify((tasks as any).customerComms ?? {}),
+              // Saturday flattened columns (read from dayFields)
+              (() => {
+                const df = (tasks as any).dayFields || {};
+                return [String(df.liveSessionsHosted ?? ''), String(df.officeCleanOrganized ? 'Yes' : ''), String(df.saturdayNotes ?? '')];
+              })(),
               // full tasks JSON
               JSON.stringify(tasks as any),
             ];
