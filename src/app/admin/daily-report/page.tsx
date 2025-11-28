@@ -52,7 +52,7 @@ export default function AdminDailyReportPage() {
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
-  const [legendFilter, setLegendFilter] = useState<'all' | 'complete' | 'partial' | 'missing'>('all');
+  const [legendFilters, setLegendFilters] = useState<Array<'complete' | 'partial' | 'missing'>>(['complete','partial','missing']);
 
   // fetch on mount so header KPIs render immediately
   useEffect(() => {
@@ -267,15 +267,15 @@ export default function AdminDailyReportPage() {
         <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
-    const IconDash = () => (
+    const IconX = () => (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
-        <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
 
     const badge = (label: string, ok: boolean, key: string) => (
-      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-muted text-slate-300'}`}>
-        {ok ? <IconCheck /> : <IconDash />}{label}
+      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-missing text-white'}`}>
+        {ok ? <IconCheck /> : <IconX />}{label}
       </span>
     );
     return (
@@ -383,19 +383,28 @@ export default function AdminDailyReportPage() {
         <main className="col-span-9">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={() => setLegendFilter('complete')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'complete' ? 'ring-2 ring-white/20' : ''}`}>
+              <button onClick={() => {
+                  const s = legendFilters.includes('complete') ? (legendFilters.filter(x => x !== 'complete') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'complete'] as Array<'complete'|'partial'|'missing'>);
+                  setLegendFilters(s);
+                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('complete') ? 'ring-2 ring-white/20' : ''}`}>
                 <span className="inline-block w-3 h-3 bg-status-complete rounded-full" />
                 <span className="text-xs text-slate-300">Complete</span>
               </button>
-              <button onClick={() => setLegendFilter('partial')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'partial' ? 'ring-2 ring-white/20' : ''}`}>
+              <button onClick={() => {
+                  const s = legendFilters.includes('partial') ? (legendFilters.filter(x => x !== 'partial') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'partial'] as Array<'complete'|'partial'|'missing'>);
+                  setLegendFilters(s);
+                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('partial') ? 'ring-2 ring-white/20' : ''}`}>
                 <span className="inline-block w-3 h-3 bg-status-partial rounded-full" />
                 <span className="text-xs text-slate-300">Partial</span>
               </button>
-              <button onClick={() => setLegendFilter('missing')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'missing' ? 'ring-2 ring-white/20' : ''}`}>
+              <button onClick={() => {
+                  const s = legendFilters.includes('missing') ? (legendFilters.filter(x => x !== 'missing') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'missing'] as Array<'complete'|'partial'|'missing'>);
+                  setLegendFilters(s);
+                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('missing') ? 'ring-2 ring-white/20' : ''}`}>
                 <span className="inline-block w-3 h-3 bg-status-missing rounded-full" />
                 <span className="text-xs text-slate-300">Missing</span>
               </button>
-              <button onClick={() => setLegendFilter('all')} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilter === 'all' ? 'ring-2 ring-white/20' : ''}`}>
+              <button onClick={() => setLegendFilters(['complete','partial','missing'])} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.length === 3 ? 'ring-2 ring-white/20' : ''}`}>
                 <span className="inline-block w-3 h-3 bg-status-muted rounded-full" />
                 <span className="text-xs text-slate-300">All</span>
               </button>
@@ -428,7 +437,7 @@ export default function AdminDailyReportPage() {
           <tbody>
             {reports.map((r) => {
               const rowStatus = computeRowStatus(r);
-              if (legendFilter !== 'all' && rowStatus !== legendFilter) return null;
+              if (!legendFilters.includes(rowStatus as any)) return null;
               const tasks = r.tasks ?? {};
               const categories = tasks.categories ?? {};
               const marketing = tasks.marketing ?? {};
