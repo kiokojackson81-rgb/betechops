@@ -159,83 +159,68 @@ const defaultShopReview = (): ShopReview => ({ stockChecked: false, pricingConfi
 
 function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Record<string, any>>; onChange: (next: MarketplaceShopReviewState) => void }) {
   const v = (value || {}) as Record<string, any>;
+  const [selected, setSelected] = useState<Shops>(marketplaceShopsTyped[0]);
+
+  const ensureFull = () =>
+    marketplaceShopsTyped.reduce((acc, s) => ({ ...acc, [s]: { ...(v[s] || defaultShopReview()) } }), {} as any) as MarketplaceShopReviewState;
+
   const updateShop = (shop: Shops, patch: Partial<ShopReview>) => {
-    onChange({
-      // ensure we return a full typed record — callers often merge into tasks
-      ...(marketplaceShopsTyped.reduce((acc, s) => ({ ...acc, [s]: { ...(v[s] || defaultShopReview()) } }), {} as any) as any),
-      [shop]: { ...(v[shop] || defaultShopReview()), ...patch },
-    });
+    const full = ensureFull();
+    const next = { ...full, [shop]: { ...(full[shop] || defaultShopReview()), ...patch } } as any;
+    onChange(next);
   };
+
+  const current: ShopReview = (v[selected] as ShopReview) ?? defaultShopReview();
+
+  const tabClass = (active: boolean) =>
+    `px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${active ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`;
+
+  const badgeClass = (active: boolean) =>
+    `inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-emerald-500 text-black' : 'bg-slate-700 text-gray-100'}`;
 
   return (
     <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
       <h3 className="text-lg font-semibold text-gray-100">Marketplace stock &amp; pricing review</h3>
       <p className="mt-1 text-xs text-gray-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {marketplaceShopsTyped.map((shop) => {
-          const shopState: ShopReview = (v[shop] as ShopReview) ?? defaultShopReview();
-          return (
-            <div key={shop} className="space-y-2 rounded-xl border border-gray-800 bg-black/30 p-3">
-              <h4 className="text-sm font-semibold text-gray-100">{shop}</h4>
+      <div className="mt-4">
+        <div className="mt-2 flex flex-wrap gap-2">
+          {marketplaceShopsTyped.map((shop) => {
+            const active = selected === shop;
+            return (
+              <button key={shop} type="button" className={tabClass(active)} onClick={() => setSelected(shop)}>
+                {shop}
+              </button>
+            );
+          })}
+        </div>
 
-              <div className="flex flex-wrap gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={Boolean(shopState.stockChecked)}
-                    onClick={() => updateShop(shop, { stockChecked: !Boolean(shopState.stockChecked) })}
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.stockChecked ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-200"}`}
-                  >
-                    Stock
-                  </button>
-                  <span className="text-xs text-gray-200">Stock checked</span>
-                </div>
+        <div className="mt-6">
+          <div className="flex flex-wrap gap-3 items-center">
+            <button type="button" className={badgeClass(Boolean(current.stockChecked))} onClick={() => updateShop(selected, { stockChecked: !Boolean(current.stockChecked) })}>Stock</button>
+            <span className="text-sm text-gray-200">Stock checked</span>
+          </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={Boolean(shopState.pricingConfirmed)}
-                    onClick={() => updateShop(shop, { pricingConfirmed: !Boolean(shopState.pricingConfirmed) })}
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.pricingConfirmed ? "bg-amber-500 text-white" : "bg-gray-700 text-gray-200"}`}
-                  >
-                    Price
-                  </button>
-                  <span className="text-xs text-gray-200">Pricing confirmed</span>
-                </div>
+          <div className="flex flex-wrap gap-3 items-center mt-3">
+            <button type="button" className={badgeClass(Boolean(current.pricingConfirmed))} onClick={() => updateShop(selected, { pricingConfirmed: !Boolean(current.pricingConfirmed) })}>Price</button>
+            <span className="text-sm text-gray-200">Pricing confirmed</span>
+          </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={Boolean(shopState.competitorsReviewed)}
-                    onClick={() => updateShop(shop, { competitorsReviewed: !Boolean(shopState.competitorsReviewed) })}
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.competitorsReviewed ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-200"}`}
-                  >
-                    Comp
-                  </button>
-                  <span className="text-xs text-gray-200">Competitors reviewed</span>
-                </div>
+          <div className="flex flex-wrap gap-3 items-center mt-3">
+            <button type="button" className={badgeClass(Boolean(current.competitorsReviewed))} onClick={() => updateShop(selected, { competitorsReviewed: !Boolean(current.competitorsReviewed) })}>Comp</button>
+            <span className="text-sm text-gray-200">Competitors reviewed</span>
+          </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={Boolean(shopState.oosReviewed)}
-                    onClick={() => updateShop(shop, { oosReviewed: !Boolean(shopState.oosReviewed) })}
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${shopState.oosReviewed ? "bg-rose-600 text-white" : "bg-gray-700 text-gray-200"}`}
-                  >
-                    OOS
-                  </button>
-                  <span className="text-xs text-gray-200">OOS review</span>
-                </div>
-              </div>
+          <div className="flex flex-wrap gap-3 items-center mt-3">
+            <button type="button" className={badgeClass(Boolean(current.oosReviewed))} onClick={() => updateShop(selected, { oosReviewed: !Boolean(current.oosReviewed) })}>OOS</button>
+            <span className="text-sm text-gray-200">OOS review</span>
+          </div>
 
-              <div className="pt-1">
-                <label className="text-[11px] font-medium text-gray-400">Notes</label>
-                <textarea rows={2} className="mt-1 w-full rounded-lg border border-gray-800 bg-black/40 p-2 text-xs text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="Key issues or actions for this shop…" value={String(shopState.notes ?? '')} onChange={(e) => updateShop(shop, { notes: e.target.value })} />
-              </div>
-            </div>
-          );
-        })}
+          <div className="mt-4">
+            <label className="text-[11px] font-medium text-gray-400">Notes (for {selected})</label>
+            <textarea rows={3} className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="Key issues or actions for this shop…" value={String(current.notes ?? '')} onChange={(e) => updateShop(selected, { notes: e.target.value })} />
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -253,22 +238,18 @@ function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: 
         <div className="space-y-2">
           <label className="text-xs">Walk-in served</label>
           <Input type="number" value={String(value.walkInServed ?? 0)} onChange={(e) => onChange({ ...value, walkInServed: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">Online served</label>
-          <Input type="number" value={String(value.onlineServed ?? 0)} onChange={(e) => onChange({ ...value, onlineServed: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">Walk-ins who purchased</label>
+          <Input type="number" value={String(value.walkInsWhoPurchased ?? 0)} onChange={(e) => onChange({ ...value, walkInsWhoPurchased: Number((e.target as HTMLInputElement).value || 0) })} />
           <label className="text-xs">Calls handled</label>
           <Input type="number" value={String(value.callsHandled ?? 0)} onChange={(e) => onChange({ ...value, callsHandled: Number((e.target as HTMLInputElement).value || 0) })} />
           <label className="text-xs">WhatsApp/SMS replied</label>
           <Input type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
         <div className="space-y-2">
-          <label className="text-xs">FB comments replied</label>
-          <Input type="number" value={String(value.fbCommentsReplied ?? 0)} onChange={(e) => onChange({ ...value, fbCommentsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">FB DMs replied</label>
-          <Input type="number" value={String(value.fbDmsReplied ?? 0)} onChange={(e) => onChange({ ...value, fbDmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">IG comments replied</label>
-          <Input type="number" value={String(value.igCommentsReplied ?? 0)} onChange={(e) => onChange({ ...value, igCommentsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
-          <label className="text-xs">IG DMs replied</label>
-          <Input type="number" value={String(value.igDmsReplied ?? 0)} onChange={(e) => onChange({ ...value, igDmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
+          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
+          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
+          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
         </div>
       </div>
 
@@ -366,57 +347,64 @@ type LivePlatforms = {
 };
 
 type WednesdayLiveContent = {
-  liveSessionsTotal?: number;
-  platforms?: LivePlatforms;
+  count?: number;
+  durationMinutes?: number;
+  platform?: "Facebook" | "Instagram" | "TikTok" | "Other";
+  estimatedViewers?: number;
+  leadsGenerated?: number;
   promoClipsPosted?: number;
-  leadsFollowedUp?: number;
   notes?: string;
 };
 
 function WednesdayLiveCard({ value, onChange }: { value?: WednesdayLiveContent; onChange: (v: WednesdayLiveContent) => void }) {
   const v = value || {};
   const update = (patch: Partial<WednesdayLiveContent>) => onChange({ ...v, ...patch });
-  const updatePlatforms = (patch: Partial<LivePlatforms>) => update({ platforms: { ...(v.platforms || {}), ...patch } });
-
-  const pillClass = (active?: boolean) =>
-    `inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition ${active ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-300" : "border-gray-700 bg-black/40 text-gray-300"}`;
 
   return (
     <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
       <h3 className="text-lg font-semibold text-gray-100">Wednesday – Live sessions &amp; content output</h3>
-      <p className="text-xs text-gray-400">Track live sessions, promo clips and lead follow-ups.</p>
+      <p className="text-xs text-gray-400">Track live sessions with duration, platform and leads generated.</p>
 
-      <div className="mt-4 space-y-2">
-        <label className="block text-sm font-medium text-gray-200">Live sessions hosted (total)</label>
-        <Input type="number" min={0} value={String(v.liveSessionsTotal ?? 0)} onChange={(e) => update({ liveSessionsTotal: Number((e.target as HTMLInputElement).value || 0) })} />
-
-        <div className="mt-2 text-xs font-medium text-gray-400">Platforms used</div>
-        <div className="mt-1 flex flex-wrap gap-2">
-          <button type="button" className={pillClass(Boolean(v.platforms?.facebook))} onClick={() => updatePlatforms({ facebook: !v.platforms?.facebook })}>
-            Facebook
-          </button>
-          <button type="button" className={pillClass(Boolean(v.platforms?.tiktok))} onClick={() => updatePlatforms({ tiktok: !v.platforms?.tiktok })}>
-            TikTok
-          </button>
-          <button type="button" className={pillClass(Boolean(v.platforms?.instagram))} onClick={() => updatePlatforms({ instagram: !v.platforms?.instagram })}>
-            Instagram
-          </button>
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Live sessions hosted (count)</label>
+          <Input type="number" min={0} value={String(v.count ?? 0)} onChange={(e) => update({ count: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
-      </div>
 
-      <div className="mt-4 space-y-1">
-        <label className="block text-sm font-medium text-gray-200">Promotional / product clips posted</label>
-        <Input type="number" min={0} value={String(v.promoClipsPosted ?? 0)} onChange={(e) => update({ promoClipsPosted: Number((e.target as HTMLInputElement).value || 0) })} />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Session duration (minutes)</label>
+          <Input type="number" min={0} value={String(v.durationMinutes ?? 0)} onChange={(e) => update({ durationMinutes: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
 
-      <div className="mt-4 space-y-1">
-        <label className="block text-sm font-medium text-gray-200">Leads followed-up from live sessions</label>
-        <Input type="number" min={0} value={String(v.leadsFollowedUp ?? 0)} onChange={(e) => update({ leadsFollowedUp: Number((e.target as HTMLInputElement).value || 0) })} />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Platform</label>
+          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 w-full">
+            <option>Facebook</option>
+            <option>Instagram</option>
+            <option>TikTok</option>
+            <option>Other</option>
+          </select>
+        </div>
 
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-200">Top-performing content / issues / ideas</label>
-        <Textarea rows={3} placeholder="Best clips, questions asked, or improvements for next live…" value={String(v.notes ?? "")} onChange={(e) => update({ notes: e.target.value })} />
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Estimated viewers</label>
+          <Input type="number" min={0} value={String(v.estimatedViewers ?? 0)} onChange={(e) => update({ estimatedViewers: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Leads generated from live</label>
+          <Input type="number" min={0} value={String(v.leadsGenerated ?? 0)} onChange={(e) => update({ leadsGenerated: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Promotional / product clips posted</label>
+          <Input type="number" min={0} value={String(v.promoClipsPosted ?? 0)} onChange={(e) => update({ promoClipsPosted: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Top-performing content / issues / ideas</label>
+          <Textarea rows={3} placeholder="Best clips, questions asked, or improvements for next live…" value={String(v.notes ?? "")} onChange={(e) => update({ notes: e.target.value })} />
+        </div>
       </div>
     </section>
   );
@@ -555,7 +543,11 @@ function FridayWeekendPrepCard({ value, onChange }: { value?: FridayWeekendPrep;
 
 // Types for Saturday live & store card
 type SaturdayLiveAndStore = {
-  liveSessionsHosted?: number;
+  count?: number;
+  durationMinutes?: number;
+  platform?: "Facebook" | "Instagram" | "TikTok" | "Other";
+  estimatedViewers?: number;
+  leadsGenerated?: number;
   officeCleanOrganized?: boolean;
   notes?: string;
 };
@@ -569,10 +561,35 @@ function SaturdayLiveAndStoreCard({ value, onChange }: { value?: SaturdayLiveAnd
       <h3 className="text-lg font-semibold text-gray-100">Saturday – Live Sessions &amp; Store Readiness</h3>
       <p className="mt-1 text-xs text-gray-400">Track live sessions and ensure the store is ready for the weekend.</p>
 
-      <div className="mt-4 space-y-4">
-        <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-200">Live sessions hosted</label>
-          <Input type="number" min={0} value={String(v.liveSessionsHosted ?? 0)} onChange={(e) => update({ liveSessionsHosted: Number((e.target as HTMLInputElement).value || 0) })} />
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Live sessions hosted (count)</label>
+          <Input type="number" min={0} value={String(v.count ?? 0)} onChange={(e) => update({ count: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Session duration (minutes)</label>
+          <Input type="number" min={0} value={String(v.durationMinutes ?? 0)} onChange={(e) => update({ durationMinutes: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Platform</label>
+          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 w-full">
+            <option>Facebook</option>
+            <option>Instagram</option>
+            <option>TikTok</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Estimated viewers</label>
+          <Input type="number" min={0} value={String(v.estimatedViewers ?? 0)} onChange={(e) => update({ estimatedViewers: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-200">Leads generated from live</label>
+          <Input type="number" min={0} value={String(v.leadsGenerated ?? 0)} onChange={(e) => update({ leadsGenerated: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <label className="flex items-center gap-2">
@@ -612,14 +629,14 @@ export default function DailyTasksUI() {
   // Customer & Communications activity per day
   type CustomerCommsActivity = {
     walkInServed: number;
-    onlineServed: number;
+    walkInsWhoPurchased: number;
     callsHandled: number;
     whatsappSmsReplied: number;
 
-    fbCommentsReplied: number;
-    fbDmsReplied: number;
-    igCommentsReplied: number;
-    igDmsReplied: number;
+    fbCommentsReplied: boolean;
+    fbDmsReplied: boolean;
+    igCommentsReplied: boolean;
+    igDmsReplied: boolean;
     fbAllCleared: boolean;
     igAllCleared: boolean;
 
@@ -629,13 +646,13 @@ export default function DailyTasksUI() {
 
   const defaultCustomerComms = (): CustomerCommsActivity => ({
     walkInServed: 0,
-    onlineServed: 0,
+    walkInsWhoPurchased: 0,
     callsHandled: 0,
     whatsappSmsReplied: 0,
-    fbCommentsReplied: 0,
-    fbDmsReplied: 0,
-    igCommentsReplied: 0,
-    igDmsReplied: 0,
+    fbCommentsReplied: false,
+    fbDmsReplied: false,
+    igCommentsReplied: false,
+    igDmsReplied: false,
     fbAllCleared: false,
     igAllCleared: false,
     competitorNotes: "",
@@ -997,50 +1014,13 @@ export default function DailyTasksUI() {
       ) : null}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Daily Task Categories (Mon–Sat)</h1>
-          <p className="text-sm opacity-80">Core duties + Jumia/Kilimall operations are captured for EVERY day.</p>
+          <h1 className="text-2xl font-bold">Daily Task Ops  (Mon–Sat)</h1>
+          <p className="text-sm opacity-80">Every task you complete brings you closer to your next reward</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            aria-label="Your name"
-            placeholder="Your name (optional)"
-            value={submitter}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSubmitter(v);
-              try {
-                localStorage.setItem("betech_submitter", v);
-              } catch {}
-            }}
-            className="text-sm px-2 py-1 rounded bg-gray-800 border border-gray-700/40"
-          />
-          <Button
-            variant="secondary"
-            onClick={() => {
-              const url = submitter ? `/admin/daily-report?user=${encodeURIComponent(submitter)}` : "/admin/daily-report";
-              window.open(url, "_blank");
-            }}
-            className="text-sm"
-          >
-            View admin reports
-          </Button>
-        </div>
+        <div />
       </div>
 
-      <div className="flex gap-3 items-center">
-        <div className="kpi-card">
-          <div className="kpi-title">Products (today)</div>
-          <div className="kpi-value">{productsCountCurrent}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-title">Total sales (KES)</div>
-          <div className="kpi-value">{totalSalesCurrent.toLocaleString()}</div>
-        </div>
-        <div className="ml-4 text-sm opacity-70">Trend</div>
-        <div className="sparkline">
-          <Sparkline values={[adminSummary.mk_new as number, adminSummary.mk_copies as number, adminSummary.mk_edits as number, adminSummary.mk_sales as number, adminSummary.videos as number, adminSummary.leads as number]} color="var(--primary)" />
-        </div>
-      </div>
+      {/* Top KPI summary removed — page focuses on task inputs per design */}
 
       <div className="grid grid-cols-6 gap-2 w-full">
         {Object.keys(dayTaskDefinitions).map((k) => {
@@ -1199,15 +1179,26 @@ export default function DailyTasksUI() {
                         value={dayState[day] as any}
                         onChange={(next) =>
                           setDayState((prev) => {
-                            const platforms = (next as any).platforms || {};
-                            const flattened = {
-                              platforms_facebook: Boolean(platforms.facebook),
-                              platforms_instagram: Boolean(platforms.instagram),
-                              platforms_tiktok: Boolean(platforms.tiktok),
-                            };
                             const rest = { ...next } as any;
-                            delete rest.platforms;
-                            return { ...prev, [day]: { ...prev[day], ...rest, ...flattened } };
+                            // normalize live session details into primitive keys
+                            const mapped = {
+                              liveSessionsCount: Number(rest.count || 0),
+                              liveSessionsDurationMinutes: Number(rest.durationMinutes || 0),
+                              liveSessionsPlatform: String(rest.platform || ""),
+                              liveSessionsEstimatedViewers: Number(rest.estimatedViewers || 0),
+                              liveSessionsLeadsGenerated: Number(rest.leadsGenerated || 0),
+                              promoClipsPosted: Number(rest.promoClipsPosted || 0),
+                              liveNotes: String(rest.notes || ""),
+                            };
+                            // remove nested keys we mapped
+                            delete rest.count;
+                            delete rest.durationMinutes;
+                            delete rest.platform;
+                            delete rest.estimatedViewers;
+                            delete rest.leadsGenerated;
+                            delete rest.promoClipsPosted;
+                            delete rest.notes;
+                            return { ...prev, [day]: { ...prev[day], ...rest, ...mapped } };
                           })
                         }
                       />
@@ -1250,16 +1241,29 @@ export default function DailyTasksUI() {
                       <SaturdayLiveAndStoreCard
                         value={dayState[day] as any}
                         onChange={(next) =>
-                          setDayState((prev) => ({
-                            ...prev,
-                            [day]: {
-                              ...prev[day],
-                              liveSessionsHosted: Number((next as any).liveSessionsHosted ?? 0),
-                              officeCleanOrganized: Boolean((next as any).officeCleanOrganized ?? false),
-                              saturdayNotes: String((next as any).notes ?? ""),
-                              ...next,
-                            },
-                          }))
+                          setDayState((prev) => {
+                            const rest = { ...next } as any;
+                            const mapped = {
+                              liveSessionsCount: Number(rest.count || 0),
+                              liveSessionsDurationMinutes: Number(rest.durationMinutes || 0),
+                              liveSessionsPlatform: String(rest.platform || ""),
+                              liveSessionsEstimatedViewers: Number(rest.estimatedViewers || 0),
+                              liveSessionsLeadsGenerated: Number(rest.leadsGenerated || 0),
+                              // legacy compatibility
+                              liveSessionsHosted: Number(rest.count || 0),
+                              officeCleanOrganized: Boolean(rest.officeCleanOrganized || false),
+                              saturdayNotes: String(rest.notes || ""),
+                            } as Record<string, any>;
+                            // remove nested keys we mapped
+                            delete rest.count;
+                            delete rest.durationMinutes;
+                            delete rest.platform;
+                            delete rest.estimatedViewers;
+                            delete rest.leadsGenerated;
+                            delete rest.officeCleanOrganized;
+                            delete rest.notes;
+                            return { ...prev, [day]: { ...prev[day], ...rest, ...mapped } };
+                          })
                         }
                       />
                     </div>
@@ -1310,32 +1314,7 @@ export default function DailyTasksUI() {
             })()}
           </div>
 
-          <Card className="mt-4 p-4 space-y-3 bg-transparent border border-gray-700/30 shadow-none">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Admin Summary (collapsed fields)</h3>
-              <div className="text-xs opacity-70">Auto‑computed</div>
-            </div>
-
-            <div className="grid md:grid-cols-5 gap-3 text-sm">
-              <SummaryItem label="Videos" value={adminSummary.videos} />
-              <SummaryItem label="Live Sessions" value={adminSummary.lives} />
-              <SummaryItem label="Leads" value={adminSummary.leads} />
-              <SummaryItem label="Customers" value={adminSummary.customers} />
-              <SummaryItem label="Maintenance" value={adminSummary.maintenance ? "Yes" : "No"} />
-            </div>
-
-            <div className="grid md:grid-cols-4 gap-3 text-sm mt-3">
-              <SummaryItem label="Mk New" value={adminSummary.mk_new as number} />
-              <SummaryItem label="Mk Copies" value={adminSummary.mk_copies as number} />
-              <SummaryItem label="Mk Edits" value={adminSummary.mk_edits as number} />
-              <SummaryItem label="Mk Sales Rows" value={adminSummary.mk_sales as number} />
-            </div>
-
-            <div className="mt-3 text-sm">
-              <div className="text-xs opacity-70 mb-1">Total Sales (KES)</div>
-              <div className="font-semibold">KES {Number(adminSummary.totalSalesKES || 0).toLocaleString()}</div>
-            </div>
-          </Card>
+          {/* Admin summary removed from daily entry page per design */}
 
             <Card className="mt-4 p-3 flex gap-2 justify-end border border-gray-700/30 shadow-none">
               <Button variant="secondary" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</Button>
@@ -1343,9 +1322,6 @@ export default function DailyTasksUI() {
                   <div className="text-xs text-slate-400" aria-live="polite">
                     {autosaveStatus === "saved" && savedAt ? `Saved at ${savedAt}` : autosaveStatus}
                   </div>
-                  <Button variant="secondary" onClick={() => window.open('/admin/daily-report', '_blank')}>
-                    View admin reports
-                  </Button>
                   <Button onClick={busy ? undefined : handleSave}>{busy ? "Saving..." : "Save"}</Button>
                 </div>
             </Card>
