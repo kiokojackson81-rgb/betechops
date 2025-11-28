@@ -72,7 +72,7 @@ const shared: Record<string, TaskField> = {
   customersServed: { kind: "number", key: "customersServed", label: "Customers served (walk-in/online)", min: 0, step: 1 },
   commentsDMs: { kind: "number", key: "commentsDMs", label: "Engagements (comments/DMs)", min: 0, step: 1 },
   promoVideos: { kind: "number", key: "promoVideos", label: "Promotional/product videos posted", min: 0, step: 1 },
-  demoRecorded: { kind: "check", key: "demoRecorded", label: "Product demo video recorded" },
+  demoRecorded: { kind: "number", key: "demoRecorded", label: "Product demo videos recorded", min: 0, step: 1 },
   liveSessions: { kind: "number", key: "liveSessions", label: "Live sessions hosted", min: 0, step: 1 },
   leadsFollowed: { kind: "number", key: "leadsFollowed", label: "Leads followed-up", min: 0, step: 1 },
   officeClean: { kind: "check", key: "officeClean", label: "Office/display/photo area cleaned & organized" },
@@ -88,7 +88,7 @@ const shared: Record<string, TaskField> = {
 
 export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   monday: { title: "Monday", focus: "Product & Stock Management", targetUploads: 50, fields: [shared.stockChecked, shared.inboxCleared, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
-  tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.promoVideos, shared.demoRecorded, shared.commentsDMs, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
+  tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.promoVideos, shared.demoRecorded, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
   wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.liveSessions, shared.promoVideos, shared.leadsFollowed, shared.customersServed, shared.commentsDMs] },
   thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.promoVideos, shared.officeClean, shared.customersServed] },
   friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.promoVideos, shared.customersServed, shared.officeClean, shared.weekendPromos, shared.improvementIdeas] },
@@ -110,7 +110,7 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
   }, 0);
 
   return {
-    videos: num("promoVideos") + yes("demoRecorded"),
+    videos: num("promoVideos") + num("demoRecorded"),
     lives: num("liveSessions"),
     leads: num("leadsFollowed"),
     customers: num("customersServed"),
@@ -285,6 +285,76 @@ function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: 
           <label className="text-xs">Improvement suggestions</label>
           <Textarea rows={3} value={String(value.improvementSuggestions ?? "")} onChange={(e) => onChange({ ...value, improvementSuggestions: e.target.value })} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+// TODO (Copilot):
+// Replace the current Tuesday right-side box with a new combined card
+// called "Product Marketing Output (Videos)". This card should collect:
+//
+// 1. Promotional/product videos posted (number input)
+// 2. Product demo videos recorded (number input)
+// 3. Platforms posted to (toggle chips: Facebook, Instagram, TikTok)
+//    Use small rounded pill buttons styled like the Marketplace review pills.
+// 4. Video links / titles (optional) -> small textarea
+// 5. Notes / content ideas -> small textarea
+//
+// This replaces:
+//   - Promotional/product videos posted
+//   - Product demo video recorded
+// And removes:
+//   - Engagements (comments/DMs)
+//
+// Follow same styling used in Customer & Communications Activity.
+// Use a 2-column layout for number inputs and full-width for textareas.
+// Card styling: rounded-2xl, border-gray-800, bg-gray-900/40, p-5.
+// Follow dark theme UI consistent with the rest of the dashboard.
+
+function ProductMarketingVideosCard({ value, onChange }: { value?: any; onChange: (next: any) => void }) {
+  const v = value || {};
+  const setField = (key: string, val: any) => onChange({ ...v, [key]: val });
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Product Marketing Output (Videos)</h3>
+      <p className="mt-1 text-xs text-gray-400">Track promotional videos posted + demo videos recorded.</p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs block mb-1">Promotional/product videos posted</label>
+          <Input type="number" value={String(v.promoVideos ?? 0)} onChange={(e) => setField("promoVideos", Number((e.target as HTMLInputElement).value || 0))} />
+        </div>
+        <div>
+          <label className="text-xs block mb-1">Product demo videos recorded</label>
+          <Input type="number" value={String(v.demoRecorded ?? 0)} onChange={(e) => setField("demoRecorded", Number((e.target as HTMLInputElement).value || 0))} />
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="text-xs mb-2">Platforms posted to:</div>
+        <div className="flex items-center gap-2">
+          <button type="button" aria-pressed={Boolean(v.platforms?.facebook)} onClick={() => setField("platforms", { ...(v.platforms || {}), facebook: !Boolean(v.platforms?.facebook) })} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${v.platforms?.facebook ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-200"}`}>
+            Facebook
+          </button>
+          <button type="button" aria-pressed={Boolean(v.platforms?.instagram)} onClick={() => setField("platforms", { ...(v.platforms || {}), instagram: !Boolean(v.platforms?.instagram) })} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${v.platforms?.instagram ? "bg-pink-600 text-white" : "bg-gray-700 text-gray-200"}`}>
+            Instagram
+          </button>
+          <button type="button" aria-pressed={Boolean(v.platforms?.tiktok)} onClick={() => setField("platforms", { ...(v.platforms || {}), tiktok: !Boolean(v.platforms?.tiktok) })} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${v.platforms?.tiktok ? "bg-black text-white" : "bg-gray-700 text-gray-200"}`}>
+            TikTok
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <label className="text-xs block mb-1">Video links / titles (optional)</label>
+        <Textarea rows={3} value={String(v.videoLinks ?? "")} onChange={(e) => setField("videoLinks", e.target.value)} placeholder="Paste links or titles for quick reference…" />
+      </div>
+
+      <div className="mt-3">
+        <label className="text-xs block mb-1">Notes / Content ideas</label>
+        <Textarea rows={3} value={String(v.videoNotes ?? "")} onChange={(e) => setField("videoNotes", e.target.value)} placeholder="Ideas, issues, or content plan…" />
       </div>
     </section>
   );
@@ -831,10 +901,16 @@ export default function DailyTasksUI() {
             </div>
           </Card>
 
-          <div className="grid md:grid-cols-2 gap-4 mt-4">
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
             {(() => {
-              // Render the CustomerCommsActivityCard in place of the older fields
+              // Render the CustomerCommsActivityCard and (for Tuesday) the
+              // ProductMarketingVideosCard in place of individual promo/demo fields.
               const skipKeys = new Set(["customersServed", "inboxCleared", "competitorNotes", "improvementIdeas"]);
+              if (day === "tuesday") {
+                skipKeys.add("promoVideos");
+                skipKeys.add("demoRecorded");
+                skipKeys.add("commentsDMs");
+              }
               return (
                 <>
                   <div className="w-full">
@@ -843,6 +919,16 @@ export default function DailyTasksUI() {
                       onChange={(next) => setCustomerComms((prev) => ({ ...prev, [day]: next }))}
                     />
                   </div>
+
+                  {day === "tuesday" && (
+                    <div className="w-full">
+                      <ProductMarketingVideosCard
+                        value={dayState[day]}
+                        onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
+                      />
+                    </div>
+                  )}
+
                   {def.fields.map((f) => {
                     if (skipKeys.has(f.key)) return null;
                     // Replace the single stockChecked checkbox with the per-shop card
