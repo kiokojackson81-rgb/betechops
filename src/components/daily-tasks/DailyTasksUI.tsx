@@ -90,7 +90,7 @@ export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   monday: { title: "Monday", focus: "Product & Stock Management", targetUploads: 50, fields: [shared.stockChecked, shared.inboxCleared, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
   tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.promoVideos, shared.demoRecorded, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
   wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.promoVideos, shared.leadsFollowed, shared.customersServed] },
-  thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.promoVideos, shared.officeClean, shared.customersServed] },
+  thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.officeClean, shared.customersServed] },
   friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.promoVideos, shared.customersServed, shared.officeClean, shared.weekendPromos, shared.improvementIdeas] },
   saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed, shared.weeklySummary] },
 };
@@ -496,8 +496,7 @@ function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: an
         </label>
 
         <div>
-          <label className="text-sm block mb-1">Promotional / marketing video posted</label>
-          <Input type="number" min={0} value={String(v.promoVideos ?? 0)} onChange={(e) => setField('promoVideos', Number((e.target as HTMLInputElement).value || 0))} />
+          {/* Promotional / marketing videos removed from Thursday per request */}
         </div>
 
         <label className="flex items-center gap-2">
