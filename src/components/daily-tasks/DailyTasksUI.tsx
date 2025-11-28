@@ -513,35 +513,7 @@ export default function DailyTasksUI() {
             ) : null}
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 mt-4">
-            {def.fields.map((f) => (
-              <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
-                {f.kind === "check" && (
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
-                    <span className="text-sm flex items-center gap-2">
-                      {renderIconForKey(f.key)}
-                      <span>{f.label}</span>
-                    </span>
-                  </label>
-                )}
-                {f.kind === "number" && (
-                  <div className="w-full">
-                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
-                    <Input type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number((e.target as HTMLInputElement).value) } }))} />
-                  </div>
-                )}
-                {f.kind === "text" && (
-                  <div className="w-full">
-                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
-                    <Textarea rows={3} className="" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Marketplace block placed above admin summary for visual hierarchy */}
+          {/* Marketplace block placed above task fields for visual priority */}
           <Card className="mt-4 bg-transparent space-y-4 p-4 border border-gray-700/30 shadow-none">
             <h3 className="font-semibold text-sm">Jumia / Kilimall Operations</h3>
             <div className="grid md:grid-cols-3 gap-3">
@@ -592,6 +564,34 @@ export default function DailyTasksUI() {
                </div>
             </div>
           </Card>
+
+          <div className="grid md:grid-cols-2 gap-4 mt-4">
+            {def.fields.map((f) => (
+              <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
+                {f.kind === "check" && (
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
+                    <span className="text-sm flex items-center gap-2">
+                      {renderIconForKey(f.key)}
+                      <span>{f.label}</span>
+                    </span>
+                  </label>
+                )}
+                {f.kind === "number" && (
+                  <div className="w-full">
+                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
+                    <Input type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number((e.target as HTMLInputElement).value) } }))} />
+                  </div>
+                )}
+                {f.kind === "text" && (
+                  <div className="w-full">
+                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
+                    <Textarea rows={3} className="" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
 
           <Card className="mt-4 p-4 space-y-3 bg-transparent border border-gray-700/30 shadow-none">
             <div className="flex items-center justify-between">
