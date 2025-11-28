@@ -243,82 +243,60 @@ export default function AdminDailyReportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl p-6 text-slate-100">
-      <h1 className="text-2xl font-semibold mb-4">Daily Performance Reports</h1>
-
-      {/* KPI header */}
-      <div className="mb-4 flex items-center gap-4">
-        <Card variant="kpi">
-          <div className="kpi-title">Total products</div>
-          <div className="kpi-value">{summary ? summary.totalProducts : "—"}</div>
-        </Card>
-        <Card variant="kpi">
-          <div className="kpi-title">Total sales (KES)</div>
-          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "—"}</div>
-        </Card>
-        <div className="ml-4 text-sm opacity-70">Recent products</div>
-        <div className="sparkline">
-          <Sparkline values={reports.slice(0, 6).map((r) => r.productsCount)} color="var(--primary)" />
+    <div className="mx-auto max-w-8xl p-6 text-slate-100">
+      <div className="flex items-start gap-6 mb-6">
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold">Daily Performance Reports</h1>
+          <p className="text-sm text-slate-400 mt-1">Team submissions, marketplace checks, and operational notes — at a glance.</p>
         </div>
-        <div className="ml-auto">
-          <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
-        </div>
-        <div className="ml-4 text-xs text-slate-400 max-w-xl">
-          CSV columns include: `SubmittedBy`; per-shop flattened columns (e.g. `Betech_Store_stockChecked`, `Betech_Store_pricingConfirmed`, `..._notes`); new Saturday columns: `liveSessionsHosted`, `officeCleanOrganized`, `saturdayNotes`; and raw JSON fields `MarketplaceReview`, `CustomerComms`, `Tasks` for full data.
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-slate-400">Total products</div>
+            <div className="text-lg font-semibold">{summary ? summary.totalProducts : '—'}</div>
+          </div>
+          <div className="text-right ml-4">
+            <div className="text-xs text-slate-400">Total sales (KES)</div>
+            <div className="text-lg font-semibold">{summary ? Number(summary.totalSales).toLocaleString() : '—'}</div>
+          </div>
+          <div className="ml-6">
+            <Button onClick={downloadCsv} variant="primary">Download CSV</Button>
+          </div>
         </div>
       </div>
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">From</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
-          />
-        </div>
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">To</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
-          />
-        </div>
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">Day of Week</label>
-          <select
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
-          >
-            <option value="">All</option>
-            {DAY_KEYS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">Submitted by</label>
-          <input
-            type="text"
-            value={submittedBy}
-            onChange={(e) => setSubmittedBy(e.target.value)}
-            placeholder="Name or email"
-            className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
-          />
-        </div>
-          <div className="flex flex-col">
-            <label className="text-sm mb-1">Filter shop</label>
-            <select value={shopFilter} onChange={(e) => setShopFilter(e.target.value)} className="rounded-lg border border-white/10 bg-transparent px-3 py-2">
+
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left: filters */}
+        <aside className="col-span-3 bg-[rgba(255,255,255,0.02)] border border-white/6 rounded-lg p-4 space-y-4">
+          <div className="text-sm font-medium mb-2">Filters</div>
+          <div>
+            <label className="text-xs text-slate-400">From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Day</label>
+            <select value={day} onChange={(e) => setDay(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
+              <option value="">All</option>
+              {DAY_KEYS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Submitted by</label>
+            <input type="text" value={submittedBy} onChange={(e) => setSubmittedBy(e.target.value)} placeholder="Name or email" className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Filter shop</label>
+            <select value={shopFilter} onChange={(e) => setShopFilter(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
               <option value="">All shops</option>
               {MARKETPLACE_SHOPS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <div className="flex flex-col">
-            <label className="text-sm mb-1">Min checks</label>
-            <select value={String(minComplete)} onChange={(e) => setMinComplete(Number(e.target.value))} className="rounded-lg border border-white/10 bg-transparent px-3 py-2">
+          <div>
+            <label className="text-xs text-slate-400">Min checks</label>
+            <select value={String(minComplete)} onChange={(e) => setMinComplete(Number(e.target.value))} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
               <option value={0}>0</option>
               <option value={1}>1</option>
               <option value={2}>2</option>
@@ -326,41 +304,36 @@ export default function AdminDailyReportPage() {
               <option value={4}>4</option>
             </select>
           </div>
-          <div className="flex items-end">
-            <label className="text-sm mr-2">Sort by shop completeness</label>
-            <input type="checkbox" checked={sortByCompleteness} onChange={(e) => setSortByCompleteness(e.target.checked)} />
+          <div className="flex gap-2">
+            <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Apply</Button>
+            <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}), ...(submittedBy?{user:submittedBy}:{}) }).toString()}`; }} variant="secondary">Export</Button>
           </div>
-        <div className="flex gap-2 items-end">
-          <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Filter</Button>
-          <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}), ...(submittedBy?{user:submittedBy}:{}) }).toString()}`; }} variant="secondary">Download CSV</Button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm">Page size</label>
-          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded-lg border border-white/10 bg-transparent px-2 py-1">
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-      </div>
-      
-      {/* small sparkline component for admin header */}
-      {/** kept local to avoid changing shared modules for now **/}
-      
-      {summary && (
-        <div className="mb-4 space-y-1">
-          <p>
-            <span className="font-medium">Total Products:</span> {summary.totalProducts}
-          </p>
-          <p>
-            <span className="font-medium">Total Sales:</span> KES {Number(summary.totalSales).toLocaleString()}
-          </p>
-        </div>
-      )}
-      {error && <p className="text-red-400 mb-4">{error}</p>}
-      <div className="overflow-auto border border-white/10 rounded-lg">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
+          <div className="text-xs text-slate-500 pt-2">Tip: use the CSV export for bulk analysis. New flattened shop columns and Saturday fields are included.</div>
+        </aside>
+
+        {/* Main: table */}
+        <main className="col-span-9">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 bg-emerald-400 rounded-full" />
+                <span className="text-xs text-slate-300">Complete</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 bg-amber-400 rounded-full" />
+                <span className="text-xs text-slate-300">Partial</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 bg-rose-500 rounded-full" />
+                <span className="text-xs text-slate-300">Missing</span>
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">Showing page {page} — {Math.min((page-1)*pageSize+1, totalCount)} to {Math.min(page*pageSize, totalCount)} of {totalCount}</div>
+          </div>
+
+          {error && <p className="text-red-400 mb-4">{error}</p>}
+          <div className="overflow-auto border border-white/6 rounded-lg bg-[rgba(255,255,255,0.01)]">
+            <table className="min-w-full divide-y divide-white/6 text-sm">
           <thead className="bg-[var(--panel,#121723)]">
             <tr>
               <th className="px-3 py-2 text-left">Date</th>
@@ -475,12 +448,21 @@ export default function AdminDailyReportPage() {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <div className="text-sm text-slate-300">Showing page {page} — {Math.min((page-1)*pageSize+1, totalCount)} to {Math.min(page*pageSize, totalCount)} of {totalCount}</div>
-        <div className="flex gap-2">
-          <Button onClick={() => { if (page>1) { setPage(page-1); } }} variant="secondary">Prev</Button>
-          <Button onClick={() => { const max = Math.max(1, Math.ceil(totalCount / pageSize)); if (page < max) setPage(page+1); }} variant="secondary">Next</Button>
-        </div>
+          <div className="mt-3 flex items-center justify-between">
+            <div className="flex gap-2">
+              <Button onClick={() => { if (page>1) { setPage(page-1); fetchReports(); } }} variant="secondary">Prev</Button>
+              <Button onClick={() => { const max = Math.max(1, Math.ceil(totalCount / pageSize)); if (page < max) { setPage(page+1); fetchReports(); } }} variant="secondary">Next</Button>
+            </div>
+            <div className="text-xs text-slate-500">Page size
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded ml-2 border border-white/10 bg-transparent px-2 py-1">
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
