@@ -178,6 +178,94 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
   };
 }
 
+// Shop review types and helper
+type Shops =
+  | "Betech Store"
+  | "JM Collection"
+  | "Hitech Power"
+  | "Maxton"
+  | "Sky Store"
+  | "Betech Solar"
+  | "Kilimall";
+
+type ShopReview = {
+  stockChecked: boolean;
+  pricingConfirmed: boolean;
+  competitorsReviewed: boolean;
+  oosReviewed: boolean;
+  notes: string;
+};
+
+type MarketplaceShopReviewState = Record<Shops, ShopReview>;
+
+const marketplaceShopsTyped: Shops[] = [
+  "Betech Store",
+  "JM Collection",
+  "Hitech Power",
+  "Maxton",
+  "Sky Store",
+  "Betech Solar",
+  "Kilimall",
+];
+
+const defaultShopReview = (): ShopReview => ({ stockChecked: false, pricingConfirmed: false, competitorsReviewed: false, oosReviewed: false, notes: "" });
+
+function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Record<string, any>>; onChange: (next: MarketplaceShopReviewState) => void }) {
+  const v = (value || {}) as Record<string, any>;
+  const updateShop = (shop: Shops, patch: Partial<ShopReview>) => {
+    onChange({
+      // ensure we return a full typed record — callers often merge into tasks
+      ...(marketplaceShopsTyped.reduce((acc, s) => ({ ...acc, [s]: { ...(v[s] || defaultShopReview()) } }), {} as any) as any),
+      [shop]: { ...(v[shop] || defaultShopReview()), ...patch },
+    });
+  };
+
+  return (
+    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-100">Marketplace stock &amp; pricing review</h3>
+      <p className="mt-1 text-xs text-gray-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {marketplaceShopsTyped.map((shop) => {
+          const shopState: ShopReview = (v[shop] as ShopReview) ?? defaultShopReview();
+          return (
+            <div key={shop} className="space-y-2 rounded-xl border border-gray-800 bg-black/30 p-3">
+              <h4 className="text-sm font-semibold text-gray-100">{shop}</h4>
+
+              <div className="space-y-1 text-xs text-gray-200">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.stockChecked)} onChange={(e) => updateShop(shop, { stockChecked: e.target.checked })} />
+                  <span>Stock checked</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.pricingConfirmed)} onChange={(e) => updateShop(shop, { pricingConfirmed: e.target.checked })} />
+                  <span>Pricing confirmed</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.competitorsReviewed)} onChange={(e) => updateShop(shop, { competitorsReviewed: e.target.checked })} />
+                  <span>Competitor prices reviewed</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={Boolean(shopState.oosReviewed)} onChange={(e) => updateShop(shop, { oosReviewed: e.target.checked })} />
+                  <span>Out-of-stock review done</span>
+                </label>
+              </div>
+
+              <div className="pt-1">
+                <label className="text-[11px] font-medium text-gray-400">Notes</label>
+                <textarea rows={2} className="mt-1 w-full rounded-lg border border-gray-800 bg-black/40 p-2 text-xs text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="Key issues or actions for this shop…" value={String(shopState.notes ?? '')} onChange={(e) => updateShop(shop, { notes: e.target.value })} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: (next: any) => void }) {
   if (!value) value = {};
   return (
@@ -754,6 +842,18 @@ export default function DailyTasksUI() {
                   </div>
                   {def.fields.map((f) => {
                     if (skipKeys.has(f.key)) return null;
+                    // Replace the single stockChecked checkbox with the per-shop card
+                    if (f.kind === "check" && f.key === "stockChecked") {
+                      return (
+                        <div key={f.key} className="w-full">
+                          <MarketplaceStockPricingCard
+                            value={market[day].review}
+                            onChange={(next) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], review: next } }))}
+                          />
+                        </div>
+                      );
+                    }
+
                     return (
                       <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30">
                         {f.kind === "check" && (
