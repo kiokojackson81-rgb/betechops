@@ -985,19 +985,43 @@ export default function DailyTasksUI() {
                   </div>
 
                   {day === "tuesday" && (
-                        <div className="w-full">
-                          <ProductMarketingVideosCard
-                            value={dayState[day]}
-                            onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
-                          />
-                        </div>
-                      )}
+                    <div className="w-full">
+                      <ProductMarketingVideosCard
+                        value={dayState[day]}
+                        onChange={(next) =>
+                          setDayState((prev) => {
+                            const platforms = (next as any).platforms || {};
+                            const flattened = {
+                              platforms_facebook: Boolean(platforms.facebook),
+                              platforms_instagram: Boolean(platforms.instagram),
+                              platforms_tiktok: Boolean(platforms.tiktok),
+                            };
+                            const rest = { ...next } as any;
+                            delete rest.platforms;
+                            return { ...prev, [day]: { ...prev[day], ...rest, ...flattened } };
+                          })
+                        }
+                      />
+                    </div>
+                  )}
 
                   {day === "wednesday" && (
                     <div className="w-full">
                       <WednesdayLiveCard
                         value={dayState[day] as any}
-                        onChange={(next) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], ...next } }))}
+                        onChange={(next) =>
+                          setDayState((prev) => {
+                            const platforms = (next as any).platforms || {};
+                            const flattened = {
+                              platforms_facebook: Boolean(platforms.facebook),
+                              platforms_instagram: Boolean(platforms.instagram),
+                              platforms_tiktok: Boolean(platforms.tiktok),
+                            };
+                            const rest = { ...next } as any;
+                            delete rest.platforms;
+                            return { ...prev, [day]: { ...prev[day], ...rest, ...flattened } };
+                          })
+                        }
                       />
                     </div>
                   )}
