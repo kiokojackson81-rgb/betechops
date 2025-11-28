@@ -290,6 +290,7 @@ export default function AdminDailyReportPage() {
               <th className="px-3 py-2 text-left">Attendant</th>
               <th className="px-3 py-2 text-left">Submitted By</th>
               <th className="px-3 py-2 text-left">Marketplace</th>
+              <th className="px-3 py-2 text-left">Marketplace (JSON)</th>
               <th className="px-3 py-2 text-right">Products</th>
               <th className="px-3 py-2 text-right">Sales (KES)</th>
               <th className="px-3 py-2 text-left">Tasks</th>
@@ -322,6 +323,9 @@ export default function AdminDailyReportPage() {
                       }).length;
                       return <span>{complete}/{shops.length} shops complete</span>;
                     })()}
+                  </td>
+                  <td className="px-3 py-2">
+                    <pre className="text-xs whitespace-pre-wrap max-w-[28rem] max-h-28 overflow-auto bg-black/20 p-2 rounded">{JSON.stringify((r.tasks as any)?.marketplaceReview ?? {}, null, 0)}</pre>
                   </td>
                   <td className="px-3 py-2 text-right">{r.productsCount}</td>
                   <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
