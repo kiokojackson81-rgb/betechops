@@ -94,6 +94,7 @@ export async function GET(req: Request) {
       <td style="padding:6px;border:1px solid #ddd">${whatsappSmsReplied}</td>
       <td style="padding:6px;border:1px solid #ddd">${fbComments}</td>
       <td style="padding:6px;border:1px solid #ddd">${fbDms}</td>
+      <td style="padding:6px;border:1px solid #ddd">${((r.tasks||{}).dayFields||{}).videosParticipated ?? ''}</td>
       <td style="padding:6px;border:1px solid #ddd">${igComments}</td>
       <td style="padding:6px;border:1px solid #ddd">${igDms}</td>
       <td style="padding:6px;border:1px solid #ddd">${satCount}</td>
@@ -138,6 +139,7 @@ export async function GET(req: Request) {
               <th>WhatsApp/SMS Replied</th>
               <th>FB Comments</th>
               <th>FB DMs</th>
+              <th>Thu: Videos Participated</th>
               <th>IG Comments</th>
               <th>IG DMs</th>
               <th>Sat: Count</th>

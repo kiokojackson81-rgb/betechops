@@ -72,8 +72,9 @@ const shared: Record<string, TaskField> = {
   customersServed: { kind: "number", key: "customersServed", label: "Customers served (walk-in/online)", min: 0, step: 1 },
   commentsDMs: { kind: "number", key: "commentsDMs", label: "Engagements (comments/DMs)", min: 0, step: 1 },
   liveSessions: { kind: "number", key: "liveSessions", label: "Live sessions hosted", min: 0, step: 1 },
-  leadsFollowed: { kind: "number", key: "leadsFollowed", label: "Leads followed-up", min: 0, step: 1 },
+  // legacy numeric `leadsFollowed` removed — richer live session objects are used instead
   officeClean: { kind: "check", key: "officeClean", label: "Office/display/photo area cleaned & organized" },
+  videosParticipated: { kind: "number", key: "videosParticipated", label: "Number of videos participated in", min: 0, step: 1 },
   competitorNotes: { kind: "text", key: "competitorNotes", label: "Notes on competitors / market observations", placeholder: "Pricing, offers, content ideas…" },
   improvementIdeas: { kind: "text", key: "improvementIdeas", label: "Improvement suggestions", placeholder: "Actionable ideas from the week/day" },
   meetingAttended: { kind: "check", key: "meetingAttended", label: "Weekly marketing meeting attended" },
@@ -87,10 +88,10 @@ const shared: Record<string, TaskField> = {
 export const dayTaskDefinitions: Record<DayKey, DayDefinition> = {
   monday: { title: "Monday", focus: "Product & Stock Management", targetUploads: 50, fields: [shared.stockChecked, shared.inboxCleared, shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
   tuesday: { title: "Tuesday", focus: "Product Marketing & Engagement", targetUploads: 50, fields: [shared.customersServed, shared.competitorNotes, shared.improvementIdeas] },
-  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.leadsFollowed, shared.customersServed] },
+  wednesday: { title: "Wednesday", focus: "Live Session & Sales Day", targetUploads: 50, fields: [shared.customersServed] },
   thursday: { title: "Thursday", focus: "Weekly Marketing & Video Shoot", targetUploads: 50, fields: [shared.meetingAttended, shared.videoShoot, shared.officeClean, shared.customersServed] },
   friday: { title: "Friday", focus: "Promotion & Sales Push", targetUploads: 50, fields: [shared.customersServed, shared.officeClean, shared.improvementIdeas] },
-  saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean, shared.leadsFollowed] },
+  saturday: { title: "Saturday", focus: "Customer Service & Summary", targetUploads: 50, fields: [shared.customersServed, shared.liveSessions, shared.officeClean] },
 };
 
 const defaultDayState = (day: DayKey) => Object.fromEntries(dayTaskDefinitions[day].fields.map((f) => [f.key, f.kind === "number" ? 0 : f.kind === "check" ? false : ""])) as Record<string, number | boolean | string>;
@@ -110,7 +111,8 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
   return {
     videos: num("promoVideosPosted") + num("demoVideosRecorded"),
     lives: num("liveSessions") + num("liveSessionsTotal") + num("liveSessionsHosted"),
-    leads: num("leadsFollowed"),
+    // prefer new live-session generated leads; fallback to legacy key for old data
+    leads: num("liveSessionsLeadsGenerated") || num("leadsFollowed"),
     customers: num("customersServed"),
     maintenance: yes("officeClean"),
     stockCheck: yes("stockChecked"),
@@ -480,6 +482,11 @@ function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: an
           <Checkbox checked={Boolean(v.videoShoot)} onCheckedChange={(val) => setField('videoShoot', Boolean(val))} />
           <span className="text-sm">Participated in weekly video shoot</span>
         </label>
+
+        <div>
+          <label className="text-sm block mb-1">Number of videos participated in</label>
+          <Input type="number" min={0} value={String(v.videosParticipated ?? 0)} onChange={(e) => setField('videosParticipated', Number((e.target as HTMLInputElement).value || 0))} />
+        </div>
 
         <div>
           {/* Promotional / marketing videos removed from Thursday per request */}

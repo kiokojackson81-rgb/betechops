@@ -2,7 +2,7 @@ import { computeAdminSummary } from "./DailyTasksUI";
 
 describe("computeAdminSummary", () => {
   test("normal numeric input", () => {
-    const dayState = { promoVideosPosted: 2, demoVideosRecorded: 1, liveSessions: 1, leadsFollowed: 3, customersServed: 5, officeClean: true, stockChecked: false, meetingAttended: true, videoShoot: false, weekendPromosScheduled: false };
+    const dayState = { promoVideosPosted: 2, demoVideosRecorded: 1, liveSessions: 1, liveSessionsLeadsGenerated: 3, customersServed: 5, officeClean: true, stockChecked: false, meetingAttended: true, videoShoot: false, weekendPromosScheduled: false };
     const market = { newUploaded: 4, copiesUploaded: 2, productsEdited: 1, sales: [{ id: "1", name: "a", price: 100 }, { id: "2", name: "b", price: 200 }] };
     const s = computeAdminSummary(dayState as any, market as any);
     expect(s.videos).toBe(3); // promoVideosPosted + demoVideosRecorded

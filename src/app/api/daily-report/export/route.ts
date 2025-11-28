@@ -57,6 +57,7 @@ export async function GET(req: Request) {
           'Attended Marketing Meeting',
           'Participated In Video Shoot',
           'Marketing Videos Posted',
+          'Videos participated (Thu)',
           'WalkInCustomers',
           'CustomersPurchased',
           'LiveViewers',
@@ -145,6 +146,8 @@ export async function GET(req: Request) {
               String(marketing.attendedMarketingMeeting ? 'Yes' : 'No'),
               String(marketing.participatedVideoShoot ? 'Yes' : 'No'),
               String(marketing.marketingVideosShot ?? ''),
+              // Thursday-specific videos participated (from dayFields)
+              String(((tasks as any).dayFields || {}).videosParticipated ?? ''),
               String(customerOps.walkInCustomers ?? ''),
               String(customerOps.customersPurchased ?? ''),
               String(customerOps.liveViewers ?? ''),
