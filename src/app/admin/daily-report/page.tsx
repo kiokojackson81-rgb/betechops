@@ -37,6 +37,9 @@ const MARKETPLACE_SHOPS = [
 ];
 
 export default function AdminDailyReportPage() {
+  const [shopFilter, setShopFilter] = useState<string>("");
+  const [minComplete, setMinComplete] = useState<number>(0);
+  const [sortByCompleteness, setSortByCompleteness] = useState<boolean>(false);
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [day, setDay] = useState<string>("");
@@ -136,7 +139,29 @@ export default function AdminDailyReportPage() {
     ];
     // safer CSV: quote fields, escape quotes, preserve JSON tasks
     const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
-    const rows = reports.map((r) => {
+    // filtered + sorted reports for table and CSV export
+    const filteredReports = (reports || []).filter((r) => {
+      if (!shopFilter) return true;
+      const mr = (r.tasks as any)?.marketplaceReview ?? {};
+      const s = mr[shopFilter] || {};
+      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
+      const done = checks.filter(Boolean).length;
+      return done >= (minComplete || 0);
+    }).sort((a, b) => {
+      if (!sortByCompleteness) return 0;
+      // compare by selected shop completeness (desc)
+      const sa = (a.tasks as any)?.marketplaceReview ?? {};
+      const sb = (b.tasks as any)?.marketplaceReview ?? {};
+      const aa = (sa[shopFilter] || {});
+      const bb = (sb[shopFilter] || {});
+      const ca = [aa.stockChecked, aa.pricingConfirmed, aa.competitorsReviewed, aa.oosReviewed].filter(Boolean).length;
+      const cb = [bb.stockChecked, bb.pricingConfirmed, bb.competitorsReviewed, bb.oosReviewed].filter(Boolean).length;
+      return cb - ca;
+    });
+
+    const csvSource = filteredReports;
+
+    const rows = filteredReports.map((r) => {
       const dateStr = new Date(r.date).toISOString().split("T")[0];
       const attendant = r.user?.name ?? "";
       const submitted = r.tasks?.submittedBy ?? "";
@@ -158,6 +183,22 @@ export default function AdminDailyReportPage() {
         shopValues.push(String(s.oosReviewed ? 'Yes' : ''));
         shopValues.push(String(s.notes ?? ''));
       }
+
+      const cc = (tasks as any).customerComms || {};
+      const ccValues = [
+        String(cc.walkInServed ?? ''),
+        String(cc.onlineServed ?? ''),
+        String(cc.callsHandled ?? ''),
+        String(cc.whatsappSmsReplied ?? ''),
+        String(cc.fbCommentsReplied ?? ''),
+        String(cc.fbDmsReplied ?? ''),
+        String(cc.igCommentsReplied ?? ''),
+        String(cc.igDmsReplied ?? ''),
+        String(cc.fbAllCleared ? 'Yes' : ''),
+        String(cc.igAllCleared ? 'Yes' : ''),
+        String(cc.competitorNotes ?? ''),
+        String(cc.improvementSuggestions ?? ''),
+      ];
 
       return [
         dateStr,
@@ -181,6 +222,8 @@ export default function AdminDailyReportPage() {
         String(office.officeCleaned ? "Yes" : "No"),
         String(office.officeNotes ?? ""),
         salesDetails,
+        // flattened customerComms
+        ...ccValues,
         // customerComms JSON
         JSON.stringify(tasks.customerComms ?? {}),
         JSON.stringify(tasks ?? {}),
@@ -263,6 +306,27 @@ export default function AdminDailyReportPage() {
             className="rounded-lg border border-white/10 bg-transparent px-3 py-2"
           />
         </div>
+          <div className="flex flex-col">
+            <label className="text-sm mb-1">Filter shop</label>
+            <select value={shopFilter} onChange={(e) => setShopFilter(e.target.value)} className="rounded-lg border border-white/10 bg-transparent px-3 py-2">
+              <option value="">All shops</option>
+              {MARKETPLACE_SHOPS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm mb-1">Min checks</label>
+            <select value={String(minComplete)} onChange={(e) => setMinComplete(Number(e.target.value))} className="rounded-lg border border-white/10 bg-transparent px-3 py-2">
+              <option value={0}>0</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+              <option value={4}>4</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <label className="text-sm mr-2">Sort by shop completeness</label>
+            <input type="checkbox" checked={sortByCompleteness} onChange={(e) => setSortByCompleteness(e.target.checked)} />
+          </div>
         <div className="flex gap-2 items-end">
           <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Filter</Button>
           <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}), ...(submittedBy?{user:submittedBy}:{}) }).toString()}`; }} variant="secondary">Download CSV</Button>

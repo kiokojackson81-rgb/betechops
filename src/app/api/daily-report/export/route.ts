@@ -66,7 +66,20 @@ export async function GET(req: Request) {
           'SalesDetails',
           // flattened marketplace columns
           ...shopCols,
-          // keep customerComms as JSON for now
+          // flattened customerComms columns
+          'walkInServed',
+          'onlineServed',
+          'callsHandled',
+          'whatsappSmsReplied',
+          'fbCommentsReplied',
+          'fbDmsReplied',
+          'igCommentsReplied',
+          'igDmsReplied',
+          'fbAllCleared',
+          'igAllCleared',
+          'competitorNotes',
+          'improvementSuggestions',
+          // keep customerComms as JSON
           'CustomerComms',
           // full tasks JSON for completeness
           'Tasks',
@@ -133,6 +146,24 @@ export async function GET(req: Request) {
               JSON.stringify((tasks as any).marketplaceReview ?? {}),
               // per-shop flattened fields
               ...shopValues,
+              // flattened customerComms values
+              (() => {
+                const cc = (tasks as any).customerComms || {};
+                return [
+                  String(cc.walkInServed ?? ''),
+                  String(cc.onlineServed ?? ''),
+                  String(cc.callsHandled ?? ''),
+                  String(cc.whatsappSmsReplied ?? ''),
+                  String(cc.fbCommentsReplied ?? ''),
+                  String(cc.fbDmsReplied ?? ''),
+                  String(cc.igCommentsReplied ?? ''),
+                  String(cc.igDmsReplied ?? ''),
+                  String(cc.fbAllCleared ? 'Yes' : ''),
+                  String(cc.igAllCleared ? 'Yes' : ''),
+                  String(cc.competitorNotes ?? ''),
+                  String(cc.improvementSuggestions ?? ''),
+                ];
+              })(),
               // customerComms as JSON
               JSON.stringify((tasks as any).customerComms ?? {}),
               // full tasks JSON
