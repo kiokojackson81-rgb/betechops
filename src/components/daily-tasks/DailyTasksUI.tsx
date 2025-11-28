@@ -12,6 +12,71 @@ import ProgressBar from "@/app/_components/ProgressBar";
 import { computeUploadProgress } from "./utils";
 import { CheckSquare, MessageSquare, Users, Lightbulb, ClipboardList } from "lucide-react";
 
+// Marketplace review shops and types
+type MarketplaceReview = {
+  stockChecked: boolean;
+  pricingConfirmed: boolean;
+  competitorsReviewed: boolean;
+  oosReviewed: boolean;
+  notes: string;
+};
+
+type MarketplaceReviewState = Record<string, MarketplaceReview>;
+
+function MarketplaceReviewSection({
+  value,
+  onChange,
+}: {
+  value: MarketplaceReviewState | Record<string, any> | undefined;
+  onChange: (next: MarketplaceReviewState) => void;
+}) {
+  const v = value || {};
+  const updateShop = (shop: string, patch: Partial<MarketplaceReview>) => {
+    onChange({
+      ...v,
+      [shop]: { ...(v[shop] || { stockChecked: false, pricingConfirmed: false, competitorsReviewed: false, oosReviewed: false, notes: "" }), ...patch },
+    });
+  };
+
+  return (
+    <section className="mt-2 space-y-4">
+      <h3 className="text-lg font-semibold text-gray-100">Marketplace Review (Daily)</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        {marketplaceShops.map((shop) => {
+          const shopState: MarketplaceReview = (v as any)[shop] ?? { stockChecked: false, pricingConfirmed: false, competitorsReviewed: false, oosReviewed: false, notes: "" };
+          return (
+            <div key={shop} className="rounded-2xl border border-gray-800 bg-gray-900/40 p-4 shadow-sm">
+              <h4 className="mb-3 text-base font-semibold text-gray-100">{shop}</h4>
+              <div className="space-y-2 text-sm text-gray-200">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.stockChecked} onChange={(e) => updateShop(shop, { stockChecked: e.target.checked })} />
+                  <span>Stock checked</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.pricingConfirmed} onChange={(e) => updateShop(shop, { pricingConfirmed: e.target.checked })} />
+                  <span>Pricing confirmed</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.competitorsReviewed} onChange={(e) => updateShop(shop, { competitorsReviewed: e.target.checked })} />
+                  <span>Competitor prices reviewed</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-700 bg-gray-900" checked={shopState.oosReviewed} onChange={(e) => updateShop(shop, { oosReviewed: e.target.checked })} />
+                  <span>Out-of-stock review done</span>
+                </label>
+              </div>
+              <div className="mt-3">
+                <label className="text-xs font-medium text-gray-400">Notes</label>
+                <textarea rows={2} className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" value={shopState.notes} onChange={(e) => updateShop(shop, { notes: e.target.value })} placeholder="Key issues, competitors, or actions…" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
 export type SaleRow = { id: string; name: string; price: number | "" };
@@ -21,6 +86,7 @@ export type MarketplaceState = {
   copiesUploaded: number | "";
   productsEdited: number | "";
   sales: SaleRow[];
+  review?: Record<string, { stockChecked: boolean; pricingConfirmed: boolean; competitorsReviewed: boolean; oosReviewed: boolean; notes: string }>;
 };
 
 const defaultMarketplaceState = (): MarketplaceState => ({
@@ -28,7 +94,18 @@ const defaultMarketplaceState = (): MarketplaceState => ({
   copiesUploaded: "",
   productsEdited: "",
   sales: [{ id: crypto.randomUUID(), name: "", price: "" }],
+  review: undefined,
 });
+
+const marketplaceShops = [
+  "Betech Store",
+  "JM Collection",
+  "Hitech Power",
+  "Maxton",
+  "Sky Store",
+  "Betech Solar",
+  "Kilimall",
+];
 
 type TaskField =
   | { kind: "check"; key: string; label: string }
@@ -168,6 +245,7 @@ export default function DailyTasksUI() {
     if (body.productsCount < 0) return "productsCount must be >= 0";
     if (body.totalSales < 0) return "totalSales must be >= 0";
     if (!Array.isArray(body.tasks.sales)) return "sales must be an array";
+    if (body.tasks.marketplaceReview && typeof body.tasks.marketplaceReview !== "object") return "marketplaceReview must be object";
     if (body.submittedBy && typeof body.submittedBy !== "string") return "submittedBy must be a string";
     for (const s of body.tasks.sales) {
       if (typeof s.productName !== "string") return "each sale must have a productName";
@@ -203,6 +281,9 @@ export default function DailyTasksUI() {
         officeNotes: String((dayState[day]["competitorNotes"] || "").toString().trim()),
       };
 
+      // include marketplace review data (per-shop) if present
+      const marketplaceReview = market[day].review || undefined;
+
       // Trim improvement ideas for saved payload
       const trimmedDayFields = { ...dayState[day], competitorNotes: String((dayState[day]["competitorNotes"] || "")).trim(), improvementIdeas: String((dayState[day]["improvementIdeas"] || "")).trim() };
 
@@ -236,6 +317,7 @@ export default function DailyTasksUI() {
           marketing,
           customerOperations,
           officeMaintenance,
+          marketplaceReview,
           sales,
           // include trimmed fields in dayFields for completeness
           dayFields: trimmedDayFields,
@@ -567,16 +649,25 @@ export default function DailyTasksUI() {
 
           <div className="grid md:grid-cols-2 gap-4 mt-4">
             {def.fields.map((f) => (
-              <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
-                {f.kind === "check" && (
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
-                    <span className="text-sm flex items-center gap-2">
-                      {renderIconForKey(f.key)}
-                      <span>{f.label}</span>
-                    </span>
-                  </label>
-                )}
+                <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
+                  {f.kind === "check" && f.key === "stockChecked" && day === "monday" ? (
+                    // render the MarketplaceReviewSection in place of the single stockChecked checkbox on Mondays
+                    <div className="w-full">
+                      <MarketplaceReviewSection
+                        value={market[day].review ?? {}}
+                        onChange={(next) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], review: next } }))}
+                      />
+                    </div>
+                  ) : null}
+                  {f.kind === "check" && !(f.key === "stockChecked" && day === "monday") && (
+                    <label className="flex items-center gap-2">
+                      <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
+                      <span className="text-sm flex items-center gap-2">
+                        {renderIconForKey(f.key)}
+                        <span>{f.label}</span>
+                      </span>
+                    </label>
+                  )}
                 {f.kind === "number" && (
                   <div className="w-full">
                     <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
