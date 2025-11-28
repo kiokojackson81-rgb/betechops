@@ -178,6 +178,53 @@ export function computeAdminSummary(dayState: Record<string, number | boolean | 
   };
 }
 
+function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: (next: any) => void }) {
+  if (!value) value = {};
+  return (
+    <section className="rounded-2xl border border-gray-700/30 p-3 bg-transparent">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Customer & Communications Activity</h3>
+        <div className="text-xs opacity-70">Track walk-ins, messages and cleared inboxes</div>
+      </div>
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="space-y-2">
+          <label className="text-xs">Walk-in served</label>
+          <Input type="number" value={String(value.walkInServed ?? 0)} onChange={(e) => onChange({ ...value, walkInServed: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">Online served</label>
+          <Input type="number" value={String(value.onlineServed ?? 0)} onChange={(e) => onChange({ ...value, onlineServed: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">Calls handled</label>
+          <Input type="number" value={String(value.callsHandled ?? 0)} onChange={(e) => onChange({ ...value, callsHandled: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">WhatsApp/SMS replied</label>
+          <Input type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs">FB comments replied</label>
+          <Input type="number" value={String(value.fbCommentsReplied ?? 0)} onChange={(e) => onChange({ ...value, fbCommentsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">FB DMs replied</label>
+          <Input type="number" value={String(value.fbDmsReplied ?? 0)} onChange={(e) => onChange({ ...value, fbDmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">IG comments replied</label>
+          <Input type="number" value={String(value.igCommentsReplied ?? 0)} onChange={(e) => onChange({ ...value, igCommentsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+          <label className="text-xs">IG DMs replied</label>
+          <Input type="number" value={String(value.igDmsReplied ?? 0)} onChange={(e) => onChange({ ...value, igDmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.fbAllCleared)} onCheckedChange={(v) => onChange({ ...value, fbAllCleared: Boolean(v) })} /> <span className="text-sm">Facebook inbox cleared</span></label>
+          <label className="flex items-center gap-2"><Checkbox checked={Boolean(value.igAllCleared)} onCheckedChange={(v) => onChange({ ...value, igAllCleared: Boolean(v) })} /> <span className="text-sm">Instagram inbox cleared</span></label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs">Competitor notes</label>
+          <Textarea rows={3} value={String(value.competitorNotes ?? "")} onChange={(e) => onChange({ ...value, competitorNotes: e.target.value })} />
+          <label className="text-xs">Improvement suggestions</label>
+          <Textarea rows={3} value={String(value.improvementSuggestions ?? "")} onChange={(e) => onChange({ ...value, improvementSuggestions: e.target.value })} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DailyTasksUI() {
   const [day, setDay] = useState<DayKey>("monday");
   const [dayState, setDayState] = useState<Record<DayKey, Record<string, number | boolean | string>>>({
@@ -196,6 +243,48 @@ export default function DailyTasksUI() {
     thursday: defaultMarketplaceState(),
     friday: defaultMarketplaceState(),
     saturday: defaultMarketplaceState(),
+  });
+
+  // Customer & Communications activity per day
+  type CustomerCommsActivity = {
+    walkInServed: number;
+    onlineServed: number;
+    callsHandled: number;
+    whatsappSmsReplied: number;
+
+    fbCommentsReplied: number;
+    fbDmsReplied: number;
+    igCommentsReplied: number;
+    igDmsReplied: number;
+    fbAllCleared: boolean;
+    igAllCleared: boolean;
+
+    competitorNotes: string;
+    improvementSuggestions: string;
+  };
+
+  const defaultCustomerComms = (): CustomerCommsActivity => ({
+    walkInServed: 0,
+    onlineServed: 0,
+    callsHandled: 0,
+    whatsappSmsReplied: 0,
+    fbCommentsReplied: 0,
+    fbDmsReplied: 0,
+    igCommentsReplied: 0,
+    igDmsReplied: 0,
+    fbAllCleared: false,
+    igAllCleared: false,
+    competitorNotes: "",
+    improvementSuggestions: "",
+  });
+
+  const [customerComms, setCustomerComms] = useState<Record<DayKey, CustomerCommsActivity>>({
+    monday: defaultCustomerComms(),
+    tuesday: defaultCustomerComms(),
+    wednesday: defaultCustomerComms(),
+    thursday: defaultCustomerComms(),
+    friday: defaultCustomerComms(),
+    saturday: defaultCustomerComms(),
   });
 
   const def = dayTaskDefinitions[day];
@@ -246,6 +335,7 @@ export default function DailyTasksUI() {
     if (body.totalSales < 0) return "totalSales must be >= 0";
     if (!Array.isArray(body.tasks.sales)) return "sales must be an array";
     if (body.tasks.marketplaceReview && typeof body.tasks.marketplaceReview !== "object") return "marketplaceReview must be object";
+    if (body.tasks.customerComms && typeof body.tasks.customerComms !== "object") return "customerComms must be object";
     if (body.submittedBy && typeof body.submittedBy !== "string") return "submittedBy must be a string";
     for (const s of body.tasks.sales) {
       if (typeof s.productName !== "string") return "each sale must have a productName";
@@ -283,6 +373,8 @@ export default function DailyTasksUI() {
 
       // include marketplace review data (per-shop) if present
       const marketplaceReview = market[day].review || undefined;
+      // include customer & communications activity for the day
+      const customerCommsForDay = customerComms[day] || undefined;
 
       // Trim improvement ideas for saved payload
       const trimmedDayFields = { ...dayState[day], competitorNotes: String((dayState[day]["competitorNotes"] || "")).trim(), improvementIdeas: String((dayState[day]["improvementIdeas"] || "")).trim() };
@@ -318,6 +410,7 @@ export default function DailyTasksUI() {
           customerOperations,
           officeMaintenance,
           marketplaceReview,
+          customerComms: customerCommsForDay,
           sales,
           // include trimmed fields in dayFields for completeness
           dayFields: trimmedDayFields,
@@ -648,40 +741,48 @@ export default function DailyTasksUI() {
           </Card>
 
           <div className="grid md:grid-cols-2 gap-4 mt-4">
-            {def.fields.map((f) => (
-                <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30" >
-                  {f.kind === "check" && f.key === "stockChecked" && day === "monday" ? (
-                    // render the MarketplaceReviewSection in place of the single stockChecked checkbox on Mondays
-                    <div className="w-full">
-                      <MarketplaceReviewSection
-                        value={market[day].review ?? {}}
-                        onChange={(next) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], review: next } }))}
-                      />
-                    </div>
-                  ) : null}
-                  {f.kind === "check" && !(f.key === "stockChecked" && day === "monday") && (
-                    <label className="flex items-center gap-2">
-                      <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
-                      <span className="text-sm flex items-center gap-2">
-                        {renderIconForKey(f.key)}
-                        <span>{f.label}</span>
-                      </span>
-                    </label>
-                  )}
-                {f.kind === "number" && (
+            {(() => {
+              // Render the CustomerCommsActivityCard in place of the older fields
+              const skipKeys = new Set(["customersServed", "inboxCleared", "competitorNotes", "improvementIdeas"]);
+              return (
+                <>
                   <div className="w-full">
-                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
-                    <Input type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number((e.target as HTMLInputElement).value) } }))} />
+                    <CustomerCommsActivityCard
+                      value={customerComms[day]}
+                      onChange={(next) => setCustomerComms((prev) => ({ ...prev, [day]: next }))}
+                    />
                   </div>
-                )}
-                {f.kind === "text" && (
-                  <div className="w-full">
-                    <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
-                    <Textarea rows={3} className="" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
-                  </div>
-                )}
-              </div>
-            ))}
+                  {def.fields.map((f) => {
+                    if (skipKeys.has(f.key)) return null;
+                    return (
+                      <div key={f.key} className="flex items-start gap-3 p-3 rounded-2xl border border-gray-700/30">
+                        {f.kind === "check" && (
+                          <label className="flex items-center gap-2">
+                            <Checkbox checked={Boolean(dayState[day][f.key])} onCheckedChange={(v) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: v } }))} />
+                            <span className="text-sm flex items-center gap-2">
+                              {renderIconForKey(f.key)}
+                              <span>{f.label}</span>
+                            </span>
+                          </label>
+                        )}
+                        {f.kind === "number" && (
+                          <div className="w-full">
+                            <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
+                            <Input type="number" min={f.min} step={f.step} value={String(dayState[day][f.key] || 0)} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: Number((e.target as HTMLInputElement).value) } }))} />
+                          </div>
+                        )}
+                        {f.kind === "text" && (
+                          <div className="w-full">
+                            <label className="text-sm block mb-1 flex items-center gap-2">{renderIconForKey(f.key)}{f.label}</label>
+                            <Textarea rows={3} className="" placeholder={f.placeholder} value={String(dayState[day][f.key] || "")} onChange={(e) => setDayState((prev) => ({ ...prev, [day]: { ...prev[day], [f.key]: e.target.value } }))} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
           </div>
 
           <Card className="mt-4 p-4 space-y-3 bg-transparent border border-gray-700/30 shadow-none">
