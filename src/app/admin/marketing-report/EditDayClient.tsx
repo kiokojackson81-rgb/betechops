@@ -43,6 +43,10 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to save");
+      // If API returns the updated entry, refresh local state
+      if (data?.entry && Array.isArray(data.entry.receipts)) {
+        setReceipts(data.entry.receipts.map((r: any) => ({ ...r })));
+      }
       setMessage("Saved successfully");
     } catch (err: any) {
       setMessage(err?.message || "Save failed");

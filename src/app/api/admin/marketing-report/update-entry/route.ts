@@ -4,6 +4,7 @@ import type { PaymentMethod } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getMarketingReport } from "@/lib/marketingReport";
+import { getActorId } from "@/lib/api";
 import { z } from "zod";
 
 const ReceiptItemSchema = z.object({
@@ -47,6 +48,11 @@ export async function POST(req: Request) {
       const w = WipeSchema.parse(body);
 
       const entryId = w.entryId;
+
+      // Capture 'before' snapshot for audit
+      const before = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId }, include: { receipts: { include: { items: true } } } });
+      if (!before) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
       // Delete items then receipts for the entry
       await prisma.marketingReceiptItem.deleteMany({ where: { receipt: { dailyEntryId: entryId } } });
       await prisma.marketingReceipt.deleteMany({ where: { dailyEntryId: entryId } });
@@ -54,10 +60,17 @@ export async function POST(req: Request) {
       // Reset totals on the daily entry
       await prisma.marketingDailyEntry.update({ where: { id: entryId }, data: { totalSales: 0, totalProfit: 0 } });
 
+      // Audit log the wipe (best-effort)
+      try {
+        const actorId = await getActorId();
+        await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "WIPE_RECEIPTS", before: before as any, after: undefined } });
+      } catch (e) {
+        console.warn("failed to write actionLog for marketing wipe", e);
+      }
+
       // Return updated period report
       const entryAfter = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId } });
-      if (!entryAfter) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-      const period = getTradingPeriodFor(entryAfter.date);
+      const period = getTradingPeriodFor(entryAfter!.date);
       const report = await getMarketingReport({ tradingPeriodKey: period.key });
       return NextResponse.json({ wiped: true, report }, { status: 200 });
     } catch (err: unknown) {
