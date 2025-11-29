@@ -24,7 +24,9 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
     if (!date) return;
     const p = periods.find((p) => p.key === periodKey);
     if (!p) return;
-    if (date < p.start || date > p.end) {
+    const dateObj = new Date(date);
+    if (Number.isNaN(dateObj.getTime())) return;
+    if (dateObj < p.start || dateObj > p.end) {
       setDate(undefined);
     }
   }, [periodKey]);
@@ -81,8 +83,8 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
                 setDate(v);
                 if (v) setDay(deriveDayOfWeek(v));
               }}
-              min={periods.find((p) => p.key === periodKey)?.start}
-              max={periods.find((p) => p.key === periodKey)?.end}
+              min={periods.find((p) => p.key === periodKey)?.start.toISOString().split("T")[0]}
+              max={periods.find((p) => p.key === periodKey)?.end.toISOString().split("T")[0]}
               className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
             />
             {date ? (
