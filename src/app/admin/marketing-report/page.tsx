@@ -1,5 +1,8 @@
 import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
+import SummaryPanelClient from "./SummaryPanelClient";
+import { startOfDay, endOfDay, formatISO } from "date-fns";
+import { auth } from "@/lib/auth";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +47,16 @@ export default async function MarketingReportPage({
     tradingPeriodKey: selectedPeriod.key,
     dayOfWeek: dow || undefined,
   });
+
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+  const initialFrom = formatISO(todayStart);
+  const initialTo = formatISO(todayEnd);
+
+  // Determine if current user is ADMIN to show admin-only client panels (profit should be admin-only)
+  const session = await auth();
+  const role = (session?.user as any)?.role as string | undefined;
+  const isAdmin = role === "ADMIN";
   const totalDays = aggregates.totalDaysLogged || entries.length;
   const exportParams = new URLSearchParams();
   if (selectedPeriod?.key) exportParams.set("period", selectedPeriod.key);
@@ -67,6 +80,8 @@ export default async function MarketingReportPage({
       </header>
 
       <MarketingReportFilterBar initialPeriod={selectedPeriod.key} initialDay={dow} />
+
+      {isAdmin ? <SummaryPanelClient initialFrom={initialFrom} initialTo={initialTo} /> : null}
 
       <section className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
         <div className="flex flex-wrap items-center justify-between gap-3">

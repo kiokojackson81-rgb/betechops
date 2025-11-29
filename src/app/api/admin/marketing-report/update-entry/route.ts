@@ -25,19 +25,56 @@ const UpdateEntrySchema = z.object({
   receipts: z.array(ReceiptSchema),
 });
 
+const WipeSchema = z.object({
+  entryId: z.string(),
+  action: z.literal("wipe"),
+});
+
 export async function POST(req: Request) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
 
+  let body: any;
+  try {
+    body = await req.json();
+  } catch (err) {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Support wipe action
+  if (body?.action === "wipe") {
+    try {
+      const w = WipeSchema.parse(body);
+
+      const entryId = w.entryId;
+      // Delete items then receipts for the entry
+      await prisma.marketingReceiptItem.deleteMany({ where: { receipt: { dailyEntryId: entryId } } });
+      await prisma.marketingReceipt.deleteMany({ where: { dailyEntryId: entryId } });
+
+      // Reset totals on the daily entry
+      await prisma.marketingDailyEntry.update({ where: { id: entryId }, data: { totalSales: 0, totalProfit: 0 } });
+
+      // Return updated period report
+      const entryAfter = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId } });
+      if (!entryAfter) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+      const period = getTradingPeriodFor(entryAfter.date);
+      const report = await getMarketingReport({ tradingPeriodKey: period.key });
+      return NextResponse.json({ wiped: true, report }, { status: 200 });
+    } catch (err: unknown) {
+      if (err instanceof z.ZodError) return NextResponse.json({ error: "Validation failed", details: err.errors }, { status: 400 });
+      console.error("wipe failed", err);
+      return NextResponse.json({ error: err instanceof Error ? err.message : "wipe failed" }, { status: 500 });
+    }
+  }
+
   let parsed: z.infer<typeof UpdateEntrySchema>;
   try {
-    const json = await req.json();
-    parsed = UpdateEntrySchema.parse(json);
+    parsed = UpdateEntrySchema.parse(body);
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation failed", details: err.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   const { entryId, receipts } = parsed;

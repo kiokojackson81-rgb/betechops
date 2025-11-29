@@ -2,6 +2,30 @@ import { prisma } from "@/lib/prisma";
 import type { MarketingDailyEntry, MarketingSale, PaymentMethod, MarketingReceipt, MarketingReceiptItem } from "@prisma/client";
 import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
 import { calculateCumulativeCommission } from "./commission";
+import { COMMISSION_LADDER } from "./commission";
+
+export type MarketingSummaryDay = {
+  date: string; // 'YYYY-MM-DD'
+  totalSales: number;
+  totalProfit: number;
+  items: number;
+  mpesaTotal: number;
+  cashTotal: number;
+};
+
+export type MarketingSummary = {
+  periodFrom: string; // ISO
+  periodTo: string; // ISO
+  totalSales: number;
+  totalProfit: number;
+  totalItems: number;
+  mpesaTotal: number;
+  cashTotal: number;
+  commissionCumulative: number;
+  nextCommissionTier: number | null;
+  progressToNextTier: number; // 0-1
+  days: MarketingSummaryDay[];
+};
 
 export type MarketingReportFilters = {
   from?: Date;
@@ -231,5 +255,108 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       shopStats,
       commission,
     },
+  };
+}
+
+export async function getMarketingSummary(opts: { from: Date; to: Date }): Promise<MarketingSummary> {
+  const { from, to } = opts;
+
+  const entries = await prisma.marketingDailyEntry.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { receipts: { include: { items: true } }, sales: true },
+    orderBy: { date: "asc" },
+  });
+
+  const daysMap: Record<string, MarketingSummaryDay> = {};
+
+  let totalSales = 0;
+  let totalProfit = 0;
+  let totalItems = 0;
+  let mpesaTotal = 0;
+  let cashTotal = 0;
+
+  for (const e of entries) {
+    const dateKey = e.date.toISOString().split("T")[0];
+    let daySales = 0;
+    let dayProfit = 0;
+    let dayItems = 0;
+    let dayMpesa = 0;
+    let dayCash = 0;
+
+    if (e.receipts && e.receipts.length) {
+      for (const r of e.receipts) {
+        const sell = Number(r.sellingTotal) || 0;
+        daySales += sell;
+        if ((String(r.paymentMethod || "").toUpperCase() as any) === "CASH") {
+          dayCash += sell;
+        } else {
+          dayMpesa += sell;
+        }
+        const itemsSum = (r.items || []).reduce((s, it) => s + (Number(it.buyingPrice) || 0), 0);
+        dayProfit += sell - itemsSum;
+        dayItems += (r.items || []).length;
+      }
+    } else if (e.sales && e.sales.length) {
+      for (const s of e.sales) {
+        const sell = Number((s as any).sellingPrice ?? (s as any).sellingPrice) || Number((s as any).sellingPrice ?? 0) || 0;
+        daySales += sell;
+        if (String(((s as any).paymentMethod || "").toUpperCase()) === "CASH") {
+          dayCash += sell;
+        } else {
+          dayMpesa += sell;
+        }
+        dayItems += Number((s as any).itemsCount ?? 1) || 0;
+        // For legacy sales we don't compute per-item buyingPrice profit reliably; fallback to entry.totalProfit later
+      }
+      // fall back profit if entry.totalProfit present
+      dayProfit = Number(e.totalProfit ?? 0) || 0;
+    } else {
+      daySales = Number(e.totalSales ?? 0) || 0;
+      dayProfit = Number(e.totalProfit ?? 0) || 0;
+    }
+
+    daysMap[dateKey] = {
+      date: dateKey,
+      totalSales: Number(daySales) || 0,
+      totalProfit: Number(dayProfit) || 0,
+      items: Number(dayItems) || 0,
+      mpesaTotal: Number(dayMpesa) || 0,
+      cashTotal: Number(dayCash) || 0,
+    };
+
+    totalSales += daysMap[dateKey].totalSales;
+    totalProfit += daysMap[dateKey].totalProfit;
+    totalItems += daysMap[dateKey].items;
+    mpesaTotal += daysMap[dateKey].mpesaTotal;
+    cashTotal += daysMap[dateKey].cashTotal;
+  }
+
+  const days = Object.values(daysMap).sort((a, b) => a.date.localeCompare(b.date));
+
+  const commissionInfo = calculateCumulativeCommission(totalSales);
+
+  // compute progress to next tier
+  const nextTarget = commissionInfo.nextTarget;
+  let progressToNextTier = 0;
+  if (nextTarget == null) {
+    progressToNextTier = 1;
+  } else {
+    const prevTierMin = (COMMISSION_LADDER.filter((t) => t.min <= totalSales).map((t) => t.min).sort((a, b) => b - a)[0]) || 0;
+    const denom = Math.max(1, nextTarget - prevTierMin);
+    progressToNextTier = Math.max(0, Math.min(1, (totalSales - prevTierMin) / denom));
+  }
+
+  return {
+    periodFrom: from.toISOString(),
+    periodTo: to.toISOString(),
+    totalSales: Number(totalSales) || 0,
+    totalProfit: Number(totalProfit) || 0,
+    totalItems: Number(totalItems) || 0,
+    mpesaTotal: Number(mpesaTotal) || 0,
+    cashTotal: Number(cashTotal) || 0,
+    commissionCumulative: Number(commissionInfo.commission) || 0,
+    nextCommissionTier: commissionInfo.nextTarget ?? null,
+    progressToNextTier,
+    days,
   };
 }

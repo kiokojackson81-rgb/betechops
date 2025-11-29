@@ -4,8 +4,14 @@ import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditDayPage({ params }: { params: Promise<{ entryId: string }> }) {
-  const { entryId } = await params;
+type PageProps = {
+  params: {
+    entryId: string;
+  };
+};
+
+export default async function EditDayPage({ params }: PageProps) {
+  const { entryId } = params;
   const entry = await prisma.marketingDailyEntry.findUnique({
     where: { id: entryId },
     include: { receipts: { include: { items: true } } },
@@ -28,7 +34,6 @@ export default async function EditDayPage({ params }: { params: Promise<{ entryI
   return (
     <div className="mx-auto max-w-4xl p-6 text-slate-100">
       <h1 className="text-2xl font-semibold mb-4">Edit marketing entry — {entry.date.toISOString().split("T")[0]}</h1>
-      {/* @ts-ignore server -> client prop */}
       <EditDayClient initialData={payload} />
     </div>
   );

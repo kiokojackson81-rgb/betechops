@@ -51,6 +51,28 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
     }
   };
 
+  const wipeAll = async () => {
+    const ok = window.confirm("This will delete all receipts and items for this day. Are you sure?");
+    if (!ok) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/marketing-report/update-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: initialData.id, action: "wipe" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to wipe");
+      setReceipts([]);
+      setMessage("Wiped receipts for the day.");
+    } catch (err: any) {
+      setMessage(err?.message || "Wipe failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {receipts.map((r, ri) => (
@@ -85,6 +107,9 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving} className="rounded px-4 py-2 bg-emerald-500 text-black">
           {saving ? "Saving..." : "Save changes"}
+        </button>
+        <button onClick={wipeAll} disabled={saving} className="rounded px-4 py-2 bg-rose-600 text-white">
+          {saving ? "Working..." : "Wipe all receipts"}
         </button>
         {message && <div className="text-sm">{message}</div>}
       </div>
