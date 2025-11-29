@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { PaymentMethod } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getMarketingReport } from "@/lib/marketingReport";
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
       const normalized = {
         receiptNumber: r.receiptNumber || null,
         sellingTotal: Number(r.sellingTotal) || 0,
-        paymentMethod: (String(r.paymentMethod || "")).toUpperCase() === "CASH" ? "CASH" : "MPESA",
+        paymentMethod: ((String(r.paymentMethod || "")).toUpperCase() === "CASH" ? "CASH" : "MPESA") as PaymentMethod,
       };
 
       if (r.id && existingReceiptIds.includes(r.id)) {
