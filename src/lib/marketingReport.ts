@@ -124,11 +124,15 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
   const totalDaysLogged = entries.length;
   const totalSales = entries.reduce((acc, e) => acc + toNumber(e.totalSales), 0);
   const totalProfit = entries.reduce((acc, e) => acc + toNumber(e.totalProfit), 0);
-  const totalItems = entries.reduce((acc, e) => acc + (e.receipts?.reduce((s, r) => s + (r.items?.length || 0), 0) ?? e.sales?.length ?? 0), 0);
-  const totalItems = entries.reduce(
-    (acc, e) => acc + (e.sales || []).reduce((sum, s) => sum + toNumber((s as any).itemsCount || 1), 0),
-    0
-  );
+  const totalItems = entries.reduce((acc, e) => {
+    if (e.receipts && e.receipts.length) {
+      return acc + e.receipts.reduce((s, r) => s + (r.items?.length || 0), 0);
+    }
+    if (e.sales && e.sales.length) {
+      return acc + (e.sales || []).reduce((sum, s) => sum + toNumber((s as any).itemsCount || 1), 0);
+    }
+    return acc;
+  }, 0);
   const totalEstimatedViewers = entries.reduce(
     (acc, e) => acc + (e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0),
     0
