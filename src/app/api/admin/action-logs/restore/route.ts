@@ -9,6 +9,7 @@ import { z } from "zod";
 const RestoreSchema = z.object({
   actionLogId: z.string(),
   force: z.boolean().optional(),
+  confirmToken: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { actionLogId, force } = parsed;
+    const { actionLogId, force, confirmToken } = parsed;
     const log = await prisma.actionLog.findUnique({ where: { id: actionLogId } });
     if (!log) return NextResponse.json({ error: "ActionLog not found" }, { status: 404 });
 
@@ -53,6 +54,35 @@ export async function POST(req: Request) {
 
     if ((currentEntry.receipts || []).length > 0 && !force) {
       return NextResponse.json({ error: "Entry already has receipts; pass force=true to override" }, { status: 409 });
+    }
+
+    // If caller requested a forced restore, require a valid confirmation token.
+    if (force) {
+      if (!confirmToken) return NextResponse.json({ error: "confirmToken required for force restore" }, { status: 400 });
+      // validate confirmation token exists, is for this wipe, not expired and not consumed
+      const actorId = await getActorId();
+      const now = new Date();
+      const confirmLog = await prisma.actionLog.findFirst({
+        where: {
+          action: 'REQUEST_RESTORE_CONFIRM',
+          actorId: actorId || undefined,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!confirmLog) return NextResponse.json({ error: 'No restore confirmation found; request a confirmation token first' }, { status: 403 });
+      const after = (confirmLog.after as any) || {};
+      if (after.consumed) return NextResponse.json({ error: 'Confirmation token already used' }, { status: 409 });
+      if (after.expiresAt && new Date(after.expiresAt) < now) return NextResponse.json({ error: 'Confirmation token expired' }, { status: 410 });
+      if (after.originalWipeId !== actionLogId) return NextResponse.json({ error: 'Confirmation token not valid for this wipe' }, { status: 403 });
+      if (after.token !== confirmToken) return NextResponse.json({ error: 'Invalid confirmation token' }, { status: 403 });
+
+      // mark confirmation consumed
+      try {
+        await prisma.actionLog.update({ where: { id: confirmLog.id }, data: { after: { ...(confirmLog.after as any || {}), consumed: true } as any } });
+      } catch (e) {
+        console.warn('failed to mark confirmation as consumed', e);
+      }
     }
 
     // Parse before snapshot — it's stored as JSON in actionLog.before
@@ -99,7 +129,9 @@ export async function POST(req: Request) {
       const actorId = await getActorId();
       const session = await auth();
       const actorEmail = (session?.user as any)?.email || "";
-      restoreLog = await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "RESTORE_RECEIPTS", before: beforeSnapshot as any, after: restored as any } });
+      // include a reference back to the original wipe so we can list restores by wipe
+      const afterWithRef = { ...(restored as any), originalWipeId: actionLogId };
+      restoreLog = await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "RESTORE_RECEIPTS", before: beforeSnapshot as any, after: afterWithRef as any } });
 
       // Mark original actionLog as restored (best-effort)
       try {
