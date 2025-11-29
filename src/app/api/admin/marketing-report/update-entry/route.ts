@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getActorId } from "@/lib/api";
+import { auth } from "@/lib/auth";
 import { z } from "zod";
 
 const ReceiptItemSchema = z.object({
@@ -32,8 +33,8 @@ const WipeSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = await requireRole("ADMIN");
-  if (!auth.ok) return auth.res;
+  const authz = await requireRole("ADMIN");
+  if (!authz.ok) return authz.res;
 
   let body: any;
   try {
@@ -60,19 +61,31 @@ export async function POST(req: Request) {
       // Reset totals on the daily entry
       await prisma.marketingDailyEntry.update({ where: { id: entryId }, data: { totalSales: 0, totalProfit: 0 } });
 
-      // Audit log the wipe (best-effort)
+      // Audit log the wipe (best-effort) with extra context
       try {
         const actorId = await getActorId();
-        await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "WIPE_RECEIPTS", before: before as any, after: undefined } });
+        const session = await auth();
+        const actorEmail = (session?.user as any)?.email || "";
+        const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+        await prisma.actionLog.create({
+          data: {
+            actorId: actorId || "",
+            entity: "MarketingDailyEntry",
+            entityId: entryId,
+            action: "WIPE_RECEIPTS",
+            before: before as any,
+            after: { actorEmail, requestPayload: body, ip } as any,
+          },
+        });
       } catch (e) {
         console.warn("failed to write actionLog for marketing wipe", e);
       }
 
-      // Return updated period report
-      const entryAfter = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId } });
+      // Return updated entry and period report
+      const entryAfter = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId }, include: { receipts: { include: { items: true } } } });
       const period = getTradingPeriodFor(entryAfter!.date);
       const report = await getMarketingReport({ tradingPeriodKey: period.key });
-      return NextResponse.json({ wiped: true, report }, { status: 200 });
+      return NextResponse.json({ wiped: true, entry: entryAfter, report }, { status: 200 });
     } catch (err: unknown) {
       if (err instanceof z.ZodError) return NextResponse.json({ error: "Validation failed", details: err.errors }, { status: 400 });
       console.error("wipe failed", err);
@@ -158,11 +171,13 @@ export async function POST(req: Request) {
 
     await prisma.marketingDailyEntry.update({ where: { id: entryId }, data: { totalSales, totalProfit } });
 
-    // Return updated aggregates for the trading period
-    const period = getTradingPeriodFor(entryWithReceipts.date);
+    // Return updated entry and aggregates for the trading period
+    const entryAfter = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId }, include: { receipts: { include: { items: true } } } });
+    if (!entryAfter) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    const period = getTradingPeriodFor(entryAfter.date);
     const report = await getMarketingReport({ tradingPeriodKey: period.key });
 
-    return NextResponse.json({ updated: true, report }, { status: 200 });
+    return NextResponse.json({ updated: true, entry: entryAfter, report }, { status: 200 });
   } catch (err: unknown) {
     console.error("admin update marketing entry failed", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
