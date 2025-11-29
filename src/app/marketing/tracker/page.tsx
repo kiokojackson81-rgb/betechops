@@ -307,9 +307,6 @@ export default function MarketingTrackerPage() {
                   onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
                   className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
                 />
-                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200">
-                  {form.dayOfWeek}
-                </span>
               </div>
             </div>
             <div className="space-y-2">
@@ -409,7 +406,7 @@ export default function MarketingTrackerPage() {
           <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">
             Reset
           </Button>
-          <Button type="submit" variant="primary" className="px-5" disabled={submitting}>
+          <Button type="submit" variant="primary" className="px-5 bg-emerald-500 text-black hover:brightness-95" disabled={submitting}>
             {submitting ? "Submitting..." : "Submit report"}
           </Button>
         </div>
