@@ -68,7 +68,12 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to wipe");
-      setReceipts([]);
+      // Prefer server-canonical entry if returned
+      if (data?.entry && Array.isArray(data.entry.receipts)) {
+        setReceipts(data.entry.receipts.map((r: any) => ({ ...r })));
+      } else {
+        setReceipts([]);
+      }
       setMessage("Wiped receipts for the day.");
     } catch (err: any) {
       setMessage(err?.message || "Wipe failed");
