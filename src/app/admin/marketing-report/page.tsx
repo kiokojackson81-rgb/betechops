@@ -38,6 +38,7 @@ export default async function MarketingReportPage({
   const sp = searchParams ? await searchParams : undefined;
   const periodKey = typeof sp?.period === "string" ? sp.period : "";
   const dow = typeof sp?.dow === "string" ? sp.dow : "";
+  const dateStr = typeof sp?.date === "string" ? sp.date : "";
 
   const currentPeriod = getTradingPeriodFor(new Date());
   const selectedPeriod =
@@ -46,6 +47,8 @@ export default async function MarketingReportPage({
   const { entries, aggregates } = await getMarketingReport({
     tradingPeriodKey: selectedPeriod.key,
     dayOfWeek: dow || undefined,
+    from: dateStr ? new Date(dateStr) : undefined,
+    to: dateStr ? new Date(dateStr) : undefined,
   });
 
   const todayStart = startOfDay(new Date());
@@ -79,7 +82,7 @@ export default async function MarketingReportPage({
         </p>
       </header>
 
-      <MarketingReportFilterBar initialPeriod={selectedPeriod.key} initialDay={dow} />
+          <MarketingReportFilterBar initialPeriod={selectedPeriod.key} initialDay={dow} initialDate={dateStr} />
 
       {isAdmin ? <SummaryPanelClient initialFrom={initialFrom} initialTo={initialTo} /> : null}
 
