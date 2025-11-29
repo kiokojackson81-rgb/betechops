@@ -25,6 +25,11 @@ const igFbYtPosts: YesNoField[] = [
 ];
 
 const tikTokReplies: YesNoField = { key: "tiktokRepliedAll", label: "Replied to all TikTok comments & DMs", section: "TikTok" };
+const shopNeatness: YesNoField[] = [
+  { key: "shopCleaned", label: "Shop cleaned", section: "Shop neatness" },
+  { key: "shopWellArranged", label: "Shop well arranged", section: "Shop neatness" },
+  { key: "displayWellLabeled", label: "Display well labeled", section: "Shop neatness" },
+];
 
 export const marketingDayConfigs: DayConfig[] = [
   {
@@ -33,11 +38,12 @@ export const marketingDayConfigs: DayConfig[] = [
       { key: "tiktokPosted2Videos", label: "Posted 2 TikTok videos", section: "TikTok" },
       tikTokReplies,
       ...igFbYtPosts,
+      ...shopNeatness,
     ],
   },
   {
     day: "Tuesday",
-    yesNoFields: [...whatsappCore, stockChecklist],
+    yesNoFields: [...whatsappCore, stockChecklist, ...shopNeatness],
     numericFields: [
       { key: "liveSessionsCount", label: "Live sessions hosted", min: 0 },
       { key: "liveSessionsEstimatedViewers", label: "How many people viewed live session(s)", min: 0 },
@@ -55,6 +61,7 @@ export const marketingDayConfigs: DayConfig[] = [
       tikTokReplies,
       ...igFbYtPosts,
       stockChecklist,
+      ...shopNeatness,
     ],
   },
   {
@@ -75,9 +82,6 @@ export const marketingDayConfigs: DayConfig[] = [
   {
     day: "Friday",
     yesNoFields: [
-      { key: "shopCleaned", label: "Shop cleaned", section: "Shop neatness" },
-      { key: "shopWellArranged", label: "Shop well arranged", section: "Shop neatness" },
-      { key: "displayWellLabeled", label: "Display well labeled", section: "Shop neatness" },
       ...whatsappCore,
       stockChecklist,
     ],
@@ -96,9 +100,6 @@ export const marketingDayConfigs: DayConfig[] = [
       ...igFbYtPosts,
       ...whatsappCore,
       stockChecklist,
-      { key: "shopCleaned", label: "Shop cleaned", section: "Shop neatness" },
-      { key: "shopWellArranged", label: "Shop well arranged", section: "Shop neatness" },
-      { key: "displayWellLabeled", label: "Display well labeled", section: "Shop neatness" },
     ],
     numericFields: [
       { key: "liveSessionsCount", label: "Live sessions hosted", min: 0 },

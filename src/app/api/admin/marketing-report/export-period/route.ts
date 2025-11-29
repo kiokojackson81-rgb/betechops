@@ -38,13 +38,16 @@ export async function GET(req: Request) {
 
   let mpesaTotal = 0;
   let cashTotal = 0;
+  let itemsTotal = 0;
 
   entries.forEach((e) => {
     const dateStr = e.date.toISOString().split("T")[0];
     const mpesa = e.sales.filter((s) => s.paymentMethod === "MPESA").reduce((sum, s) => sum + toNumber(s.sellingPrice), 0);
     const cash = e.sales.filter((s) => s.paymentMethod === "CASH").reduce((sum, s) => sum + toNumber(s.sellingPrice), 0);
+    const items = e.sales.reduce((sum, s) => sum + (Number((s as any).itemsCount) || 1), 0);
     mpesaTotal += mpesa;
     cashTotal += cash;
+    itemsTotal += items;
     rows.push(
       [
         quote(dateStr),
@@ -53,7 +56,7 @@ export async function GET(req: Request) {
         toNumber(e.totalProfit),
         mpesa,
         cash,
-        e.sales.length,
+        items,
       ].join(",")
     );
   });
@@ -62,7 +65,7 @@ export async function GET(req: Request) {
   const periodProfit = entries.reduce((sum, e) => sum + toNumber(e.totalProfit), 0);
   const commission = calculateCumulativeCommission(periodSales);
 
-  rows.push(["TOTAL", "", periodSales, periodProfit, mpesaTotal, cashTotal, ""].join(","));
+  rows.push(["TOTAL", "", periodSales, periodProfit, mpesaTotal, cashTotal, itemsTotal].join(","));
   rows.push(["COMMISSION", "", commission.commission, "", "", "", ""].join(","));
 
   const csv = rows.join("\n");

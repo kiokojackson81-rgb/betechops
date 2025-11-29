@@ -17,10 +17,10 @@ export async function GET(req: Request) {
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
   const rows: string[] = [];
-  rows.push(["Product", "BuyingPrice", "SellingPrice", "Profit", "Receipt", "PaymentMethod"].join(","));
+  rows.push(["Product", "BuyingPrice", "SellingPrice", "Profit", "ItemsCount", "Receipt", "PaymentMethod"].join(","));
   entry.sales.forEach((s) => {
     const profit = (s.sellingPrice || 0) - (s.buyingPrice || 0);
-    rows.push([s.product, s.buyingPrice, s.sellingPrice, profit, s.receiptNumber || "", s.paymentMethod].join(","));
+    rows.push([s.product, s.buyingPrice, s.sellingPrice, profit, (s as any).itemsCount ?? 1, s.receiptNumber || "", s.paymentMethod].join(","));
   });
   const csv = rows.join("\n");
   const dateStr = entry.date.toISOString().split("T")[0];

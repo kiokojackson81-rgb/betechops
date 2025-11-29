@@ -25,6 +25,11 @@ const toInt = (value: unknown): number | null => {
   if (!Number.isFinite(n)) return null;
   return Math.max(0, Math.round(n));
 };
+const toPositiveInt = (value: unknown, fallback = 1): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.round(n));
+};
 
 export async function POST(req: Request) {
   const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
@@ -68,6 +73,7 @@ export async function POST(req: Request) {
             sellingPrice: toNumber(s.sellingPrice),
             receiptNumber: typeof s.receiptNumber === "string" ? s.receiptNumber.trim() : "",
             paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
+            itemsCount: toPositiveInt(s.itemsCount, 1),
           }))
           .filter(
             (s) =>
@@ -126,6 +132,7 @@ export async function POST(req: Request) {
             sellingPrice: toNumber(s.sellingPrice),
             receiptNumber: s.receiptNumber || null,
             paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
+            itemsCount: toPositiveInt(s.itemsCount, 1),
           })),
         },
       },

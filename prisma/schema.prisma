@@ -221,6 +221,7 @@ model MarketingSale {
   sellingPrice  Int
   receiptNumber String?
   paymentMethod PaymentMethod
+  itemsCount    Int              @default(1)
   createdAt     DateTime         @default(now())
 
   @@index([entryId])

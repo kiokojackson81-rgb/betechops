@@ -11,8 +11,6 @@ import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes }
 type MarketingDailyFormState = {
   date: string;
   dayOfWeek: DayName;
-  photoFile: File | null;
-  photoDataUrl: string | null;
   fields: Record<string, boolean | number | string | null>;
 };
 
@@ -22,6 +20,7 @@ type SaleRow = {
   buyingPrice: number | "";
   sellingPrice: number | "";
   receiptNumber: string;
+  itemsCount: number | "";
   paymentMethod: "MPESA" | "CASH";
 };
 
@@ -47,8 +46,6 @@ const defaultFormState = (): MarketingDailyFormState => {
   return {
     date: todayStr,
     dayOfWeek: day,
-    photoFile: null,
-    photoDataUrl: null,
     fields: { ...dynamic },
   };
 };
@@ -59,6 +56,7 @@ const newSaleRow = (): SaleRow => ({
   buyingPrice: "",
   sellingPrice: "",
   receiptNumber: "",
+  itemsCount: 1,
   paymentMethod: "MPESA",
 });
 
@@ -73,12 +71,22 @@ export default function MarketingTrackerPage() {
   const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
   const [sales, setSales] = useState<SaleRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
+  const [periodSummary, setPeriodSummary] = useState<null | {
+    period: { key: string; label: string; start: string; end: string };
+    aggregates: { totalSales: number; totalItems: number; paymentStats: { totalSalesMpesa: number; totalSalesCash: number }; commission: { commission: number } };
+  }>(null);
 
   const config = useMemo(() => marketingDayConfigs.find((c) => c.day === form.dayOfWeek) ?? marketingDayConfigs[0], [form.dayOfWeek]);
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, dayOfWeek: deriveDayOfWeek(prev.date) }));
   }, [form.date]);
+
+  useEffect(() => {
+    if (!periodSummary) return;
+    const timer = setTimeout(() => setPeriodSummary(null), 5 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [periodSummary]);
 
   const groupedYesNo = useMemo(() => {
     const groups = new Map<string, typeof config.yesNoFields>();
@@ -93,24 +101,12 @@ export default function MarketingTrackerPage() {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   };
 
-  const handleFileChange = (fileList: FileList | null) => {
-    const file = fileList && fileList[0] ? fileList[0] : null;
-    if (!file) {
-      setForm((prev) => ({ ...prev, photoFile: null, photoDataUrl: null }));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm((prev) => ({ ...prev, photoFile: file, photoDataUrl: typeof reader.result === "string" ? reader.result : null }));
-    };
-    reader.readAsDataURL(file);
-  };
-
   const totals = useMemo(() => {
     const clean = sales.filter((s) => typeof s.sellingPrice === "number" && typeof s.buyingPrice === "number");
     const totalSales = clean.reduce((sum, s) => sum + Number(s.sellingPrice || 0), 0);
     const totalProfit = clean.reduce((sum, s) => sum + (Number(s.sellingPrice || 0) - Number(s.buyingPrice || 0)), 0);
-    return { totalSales, totalProfit };
+    const totalItems = sales.reduce((sum, s) => sum + (typeof s.itemsCount === "number" && s.itemsCount > 0 ? s.itemsCount : 0), 0);
+    return { totalSales, totalProfit, totalItems };
   }, [sales]);
 
   const updateSale = (id: string, patch: Partial<SaleRow>) => {
@@ -140,6 +136,7 @@ export default function MarketingTrackerPage() {
           buyingPrice: typeof s.buyingPrice === "number" ? Math.max(0, s.buyingPrice) : Number(s.buyingPrice || 0),
           sellingPrice: typeof s.sellingPrice === "number" ? Math.max(0, s.sellingPrice) : Number(s.sellingPrice || 0),
           receiptNumber: s.receiptNumber.trim(),
+          itemsCount: typeof s.itemsCount === "number" && s.itemsCount > 0 ? Math.round(s.itemsCount) : Math.max(1, Number(s.itemsCount || 1)),
           paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
         }))
         .filter(
@@ -165,8 +162,6 @@ export default function MarketingTrackerPage() {
         yesNo,
         numeric,
         text,
-        photoDataUrl: form.photoDataUrl,
-        photoFilename: form.photoFile?.name ?? null,
       };
 
       const res = await fetch("/api/marketing/submit", {
@@ -178,6 +173,15 @@ export default function MarketingTrackerPage() {
         showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
         setSales([newSaleRow()]);
+        try {
+          const summaryRes = await fetch(`/api/marketing/report/summary?date=${encodeURIComponent(form.date)}`);
+          if (summaryRes.ok) {
+            const data = await summaryRes.json();
+            setPeriodSummary(data);
+          }
+        } catch (err) {
+          console.error("Failed to fetch summary", err);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         showToast(err.error || "Failed to submit entry", "error");
@@ -193,22 +197,66 @@ export default function MarketingTrackerPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <form onSubmit={handleSubmit} className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
         <header className="space-y-2">
-          <h1 className="text-3xl font-semibold">Marketing Performance – Daily Tracker</h1>
-          <p className="text-sm text-slate-300">
-            Fill this once every day. Every task you complete brings you closer to your next reward.
-          </p>
+          <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+          <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
         </header>
+
+        {periodSummary && (
+          <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-200">Summary so far for this trading period</p>
+                  <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
+                  <p className="text-xs text-emerald-200">
+                    {periodSummary.period.start.split("T")[0]} → {periodSummary.period.end.split("T")[0]}
+                  </p>
+                </div>
+                <Button type="button" variant="secondary" onClick={() => setPeriodSummary(null)}>
+                  Hide
+                </Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
+                <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">Period sales</div>
+                  <div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.totalSales.toLocaleString()}</div>
+                </div>
+                <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">Total items</div>
+                  <div className="text-xl font-semibold text-white">{periodSummary.aggregates.totalItems.toLocaleString()}</div>
+                </div>
+                <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">MPESA vs Cash</div>
+                  <div className="text-sm">MPESA KES {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}</div>
+                  <div className="text-sm">Cash KES {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}</div>
+                </div>
+                <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">Commission so far</div>
+                  <div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.commission.commission.toLocaleString()}</div>
+                </div>
+              </div>
+              <p className="text-xs text-emerald-200">
+                This panel auto-hides after 5 minutes. Commission shown is cumulative for the current trading period.
+              </p>
+            </div>
+          </Card>
+        )}
 
         <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
-              <Input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-              />
+              <div className="flex items-center gap-3">
+                <Input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                />
+                <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200">
+                  {form.dayOfWeek}
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
@@ -223,20 +271,6 @@ export default function MarketingTrackerPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Photo upload</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e.target.files)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-slate-100"
-              />
-              {form.photoFile ? (
-                <p className="text-xs text-emerald-300">Selected: {form.photoFile.name}</p>
-              ) : (
-                <p className="text-xs text-slate-500">Optional: image proof of display or content.</p>
-              )}
             </div>
           </div>
         </Card>
@@ -290,6 +324,19 @@ export default function MarketingTrackerPage() {
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">No. of items in this receipt</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={sale.itemsCount === "" ? "" : sale.itemsCount}
+                    onChange={(e) =>
+                      updateSale(sale.id, { itemsCount: e.target.value === "" ? "" : Math.max(1, Number(e.target.value)) })
+                    }
+                    placeholder="1"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number</label>
                   <Input
                     value={sale.receiptNumber}
@@ -326,6 +373,7 @@ export default function MarketingTrackerPage() {
             <div className="space-y-1">
               <div>Total sales (KES): {totals.totalSales.toLocaleString()}</div>
               <div>Total profit (KES): {totals.totalProfit.toLocaleString()}</div>
+              <div>Total items: {totals.totalItems}</div>
             </div>
             <Button type="button" variant="secondary" className="px-4" onClick={addSale}>
               + Add sale
@@ -407,12 +455,12 @@ export default function MarketingTrackerPage() {
           </div>
         </Card>
 
-        <div className="flex items-center justify-end gap-3">
+        <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
           <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">
             Reset
           </Button>
           <Button type="submit" variant="primary" className="px-5" disabled={submitting}>
-            {submitting ? "Submitting…" : "Submit day"}
+            {submitting ? "Submitting..." : "Submit day"}
           </Button>
         </div>
       </form>

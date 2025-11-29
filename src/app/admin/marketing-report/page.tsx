@@ -5,7 +5,7 @@ import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPerio
 export const dynamic = "force-dynamic";
 
 const currency = (n: number) => `KES ${Math.round(n).toLocaleString()}`;
-const check = (v: boolean) => (v ? "✔" : "✗");
+const check = (v: boolean) => (v ? "Y" : "N");
 
 function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; color?: string }) {
   const w = 220;
@@ -83,7 +83,7 @@ export default async function MarketingReportPage({
             </a>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-4 text-sm">
+        <div className="grid gap-3 md:grid-cols-5 text-sm">
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <div className="text-xs uppercase tracking-wide text-slate-400">Period sales</div>
             <div className="text-xl font-semibold text-white">{currency(aggregates.totalSales)}</div>
@@ -91,6 +91,10 @@ export default async function MarketingReportPage({
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <div className="text-xs uppercase tracking-wide text-slate-400">Period profit</div>
             <div className="text-xl font-semibold text-white">{currency(aggregates.totalProfit)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Items sold</div>
+            <div className="text-xl font-semibold text-white">{aggregates.totalItems.toLocaleString()}</div>
           </div>
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <div className="text-xs uppercase tracking-wide text-slate-400">MPESA vs Cash</div>
@@ -140,6 +144,7 @@ export default async function MarketingReportPage({
           { label: "Completion rate", value: `${aggregates.completionRate}%` },
           { label: "Total sales", value: currency(aggregates.totalSales) },
           { label: "Total profit", value: currency(aggregates.totalProfit) },
+          { label: "Total items", value: aggregates.totalItems.toLocaleString() },
           { label: "Total live sessions", value: aggregates.totalLiveSessions },
           { label: "Total estimated viewers", value: aggregates.totalEstimatedViewers },
           { label: "Sales via MPESA", value: currency(aggregates.paymentStats.totalSalesMpesa) },
@@ -320,7 +325,7 @@ export default async function MarketingReportPage({
                     <td className="px-3 py-2 text-slate-200">{e.dayOfWeek}</td>
                     <td className="px-3 py-2 font-semibold text-white">{currency(e.totalSales)}</td>
                     <td className="px-3 py-2 text-slate-100">{currency(e.totalProfit)}</td>
-                    <td className="px-3 py-2 text-slate-200">{`${e.sales?.length ?? 0} items / ${currency(e.totalSales)}`}</td>
+                    <td className="px-3 py-2 text-slate-200">{`${(e.sales || []).reduce((sum, s) => sum + ((s as any).itemsCount || 1), 0)} items / ${currency(e.totalSales)}`}</td>
                     <td className="px-3 py-2 text-slate-200">
                       <div className="flex gap-2">
                         <span title="Posted">{check(Boolean(tikTokDone))}</span>

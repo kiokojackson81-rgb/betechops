@@ -25,6 +25,7 @@ export type MarketingReportAggregates = {
   completionRate: number;
   totalSales: number;
   totalProfit: number;
+  totalItems: number;
   totalLiveSessions: number;
   totalEstimatedViewers: number;
   avgLiveDurationMinutes: number;
@@ -101,6 +102,10 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
   const totalDaysLogged = entries.length;
   const totalSales = entries.reduce((acc, e) => acc + toNumber(e.totalSales), 0);
   const totalProfit = entries.reduce((acc, e) => acc + toNumber(e.totalProfit), 0);
+  const totalItems = entries.reduce(
+    (acc, e) => acc + (e.sales || []).reduce((sum, s) => sum + toNumber((s as any).itemsCount || 1), 0),
+    0
+  );
   const totalEstimatedViewers = entries.reduce(
     (acc, e) => acc + (e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0),
     0
@@ -184,6 +189,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       completionRate,
       totalSales,
       totalProfit,
+      totalItems,
       totalLiveSessions,
       totalEstimatedViewers,
       avgLiveDurationMinutes,
