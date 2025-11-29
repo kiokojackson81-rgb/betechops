@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditDayPage({ params }: { params: { entryId: string } }) {
-  const { entryId } = params;
+export default async function EditDayPage({ params }: { params: Promise<{ entryId: string }> }) {
+  const { entryId } = await params;
   const entry = await prisma.marketingDailyEntry.findUnique({
     where: { id: entryId },
     include: { receipts: { include: { items: true } } },
