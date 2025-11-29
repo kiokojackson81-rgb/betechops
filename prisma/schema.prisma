@@ -206,6 +206,7 @@ model MarketingDailyEntry {
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
   sales                       MarketingSale[]
+  receipts                    MarketingReceipt[]
 
   @@index([date])
   @@index([dayOfWeek])
@@ -225,6 +226,32 @@ model MarketingSale {
   createdAt     DateTime         @default(now())
 
   @@index([entryId])
+}
+
+model MarketingReceipt {
+  id            String              @id @default(cuid())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  dailyEntryId  String
+  dailyEntry    MarketingDailyEntry @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  receiptNumber String?
+  sellingTotal  Int
+  paymentMethod PaymentMethod
+  items         MarketingReceiptItem[]
+
+  @@index([dailyEntryId])
+}
+
+model MarketingReceiptItem {
+  id          String           @id @default(cuid())
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  receiptId   String
+  receipt     MarketingReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  productName String
+  buyingPrice Int
+
+  @@index([receiptId])
 }
 
 model Shop {

@@ -14,14 +14,13 @@ type MarketingDailyFormState = {
   fields: Record<string, boolean | number | string | null>;
 };
 
-type SaleRow = {
+type ReceiptItem = { id: string; productName: string; buyingPrice: number | "" };
+type ReceiptRow = {
   id: string;
-  product: string;
-  buyingPrice: number | "";
-  sellingPrice: number | "";
   receiptNumber: string;
-  itemsCount: number | "";
+  sellingTotal: number | "";
   paymentMethod: "MPESA" | "CASH";
+  items: ReceiptItem[];
 };
 
 const dayOptions: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -52,12 +51,16 @@ const defaultFormState = (): MarketingDailyFormState => {
 
 const newSaleRow = (): SaleRow => ({
   id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
-  product: "",
-  buyingPrice: "",
-  sellingPrice: "",
   receiptNumber: "",
-  itemsCount: 1,
+  sellingTotal: "",
   paymentMethod: "MPESA",
+  items: [
+    {
+      id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      productName: "",
+      buyingPrice: "",
+    },
+  ],
 });
 
 const pillClass = (checked: boolean) =>
@@ -69,7 +72,7 @@ const pillClass = (checked: boolean) =>
 
 export default function MarketingTrackerPage() {
   const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
-  const [sales, setSales] = useState<SaleRow[]>([newSaleRow()]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
   const [periodSummary, setPeriodSummary] = useState<null | {
     period: { key: string; label: string; start: string; end: string };
@@ -102,19 +105,70 @@ export default function MarketingTrackerPage() {
   };
 
   const totals = useMemo(() => {
-    const clean = sales.filter((s) => typeof s.sellingPrice === "number" && typeof s.buyingPrice === "number");
-    const totalSales = clean.reduce((sum, s) => sum + Number(s.sellingPrice || 0), 0);
-    const totalProfit = clean.reduce((sum, s) => sum + (Number(s.sellingPrice || 0) - Number(s.buyingPrice || 0)), 0);
-    const totalItems = sales.reduce((sum, s) => sum + (typeof s.itemsCount === "number" && s.itemsCount > 0 ? s.itemsCount : 0), 0);
+    const totalSales = receipts.reduce((sum, r) => sum + (typeof r.sellingTotal === "number" ? r.sellingTotal : Number(r.sellingTotal || 0)), 0);
+    const totalProfit = receipts.reduce(
+      (sum, r) =>
+        sum +
+        ((typeof r.sellingTotal === "number" ? r.sellingTotal : Number(r.sellingTotal || 0)) -
+          r.items.reduce((s, it) => s + (typeof it.buyingPrice === "number" ? it.buyingPrice : Number(it.buyingPrice || 0)), 0)),
+      0
+    );
+    const totalItems = receipts.reduce((sum, r) => sum + r.items.length, 0);
     return { totalSales, totalProfit, totalItems };
-  }, [sales]);
+  }, [receipts]);
 
-  const updateSale = (id: string, patch: Partial<SaleRow>) => {
-    setSales((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
+    setReceipts((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addSale = () => setSales((rows) => [...rows, newSaleRow()]);
-  const removeSale = (id: string) => setSales((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+  const addReceipt = () => setReceipts((rows) => [...rows, newSaleRow()]);
+  const removeReceipt = (id: string) => setReceipts((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+
+  const addItem = (receiptId: string) => {
+    setReceipts((rows) =>
+      rows.map((r) =>
+        r.id === receiptId
+          ? {
+              ...r,
+              items: [
+                ...r.items,
+                {
+                  id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                  productName: "",
+                  buyingPrice: "",
+                },
+              ],
+            }
+          : r
+      )
+    );
+  };
+
+  const updateItem = (receiptId: string, itemId: string, patch: Partial<ReceiptItem>) => {
+    setReceipts((rows) =>
+      rows.map((r) =>
+        r.id === receiptId
+          ? { ...r, items: r.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)) }
+          : r
+      )
+    );
+  };
+
+  const removeItem = (receiptId: string, itemId: string) => {
+    setReceipts((rows) =>
+      rows.map((r) =>
+        r.id === receiptId
+          ? {
+              ...r,
+              items:
+                r.items.filter((it) => it.id !== itemId).length > 0
+                  ? r.items.filter((it) => it.id !== itemId)
+                  : r.items,
+            }
+          : r
+      )
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,41 +184,24 @@ export default function MarketingTrackerPage() {
         else text[key] = typeof raw === "string" ? raw : "";
       });
 
-      const cleanedSales = sales
-        .map((s) => ({
-          product: s.product.trim(),
-          buyingPrice: typeof s.buyingPrice === "number" ? Math.max(0, s.buyingPrice) : Number(s.buyingPrice || 0),
-          sellingPrice: typeof s.sellingPrice === "number" ? Math.max(0, s.sellingPrice) : Number(s.sellingPrice || 0),
-          receiptNumber: s.receiptNumber.trim(),
-          itemsCount: typeof s.itemsCount === "number" && s.itemsCount > 0 ? Math.round(s.itemsCount) : Math.max(1, Number(s.itemsCount || 1)),
-          paymentMethod: s.paymentMethod === "CASH" ? "CASH" : "MPESA",
-        }))
-        .filter(
-          (s) =>
-            s.product ||
-            Number.isFinite(s.buyingPrice) ||
-            Number.isFinite(s.sellingPrice) ||
-            s.receiptNumber
-        );
-
-      const totalSales = cleanedSales.reduce((sum, s) => sum + (Number.isFinite(s.sellingPrice) ? s.sellingPrice : 0), 0);
-      const totalProfit = cleanedSales.reduce(
-        (sum, s) => sum + ((Number.isFinite(s.sellingPrice) ? s.sellingPrice : 0) - (Number.isFinite(s.buyingPrice) ? s.buyingPrice : 0)),
-        0
-      );
-
       const payload = {
         date: form.date,
         dayOfWeek: form.dayOfWeek,
-        totalSales,
-        totalProfit,
-        sales: cleanedSales,
+        receipts: receipts.map((r) => ({
+          receiptNumber: r.receiptNumber,
+          sellingTotal: r.sellingTotal === "" ? 0 : Math.max(0, Number(r.sellingTotal)),
+          paymentMethod: r.paymentMethod,
+          items: r.items.map((it) => ({
+            productName: it.productName.trim(),
+            buyingPrice: it.buyingPrice === "" ? 0 : Math.max(0, Number(it.buyingPrice)),
+          })),
+        })),
         yesNo,
         numeric,
         text,
       };
 
-      const res = await fetch("/api/marketing/submit", {
+      const res = await fetch("/api/marketing/daily", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -172,15 +209,26 @@ export default function MarketingTrackerPage() {
       if (res.ok) {
         showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
-        setSales([newSaleRow()]);
-        try {
-          const summaryRes = await fetch(`/api/marketing/report/summary?date=${encodeURIComponent(form.date)}`);
-          if (summaryRes.ok) {
-            const data = await summaryRes.json();
-            setPeriodSummary(data);
-          }
-        } catch (err) {
-          console.error("Failed to fetch summary", err);
+        setReceipts([newSaleRow()]);
+        const data = await res.json().catch(() => null);
+        if (data?.periodSummary) {
+          setPeriodSummary({
+            period: {
+              key: "",
+              label: data.periodSummary.periodLabel,
+              start: "",
+              end: "",
+            },
+            aggregates: {
+              totalSales: data.periodSummary.periodSales,
+              totalItems: data.periodSummary.totalItems ?? 0,
+              paymentStats: {
+                totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
+                totalSalesCash: data.periodSummary.cashTotal ?? 0,
+              },
+              commission: { commission: data.periodSummary.commission ?? 0 },
+            },
+          });
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -208,9 +256,7 @@ export default function MarketingTrackerPage() {
                 <div>
                   <p className="text-xs uppercase tracking-wide text-emerald-200">Summary so far for this trading period</p>
                   <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
-                  <p className="text-xs text-emerald-200">
-                    {periodSummary.period.start.split("T")[0]} → {periodSummary.period.end.split("T")[0]}
-                  </p>
+                  <p className="text-xs text-emerald-200">{periodSummary.period.label}</p>
                 </div>
                 <Button type="button" variant="secondary" onClick={() => setPeriodSummary(null)}>
                   Hide
@@ -278,91 +324,92 @@ export default function MarketingTrackerPage() {
         <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4">
           <div className="flex flex-col gap-1">
             <p className="text-xs uppercase tracking-wide text-slate-400">Sales records</p>
-            <h2 className="text-xl font-semibold">Add each sale for today</h2>
+            <h2 className="text-xl font-semibold">Add each receipt for today</h2>
             <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
           </div>
 
           <div className="flex flex-col gap-3">
-            {sales.map((sale) => (
-              <div
-                key={sale.id}
-                className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-5 md:items-end"
-              >
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Product</label>
-                  <Input
-                    value={sale.product}
-                    onChange={(e) => updateSale(sale.id, { product: e.target.value })}
-                    placeholder="Product name"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                  />
+            {receipts.map((receipt) => (
+              <div key={receipt.id} className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-200">Receipt</div>
+                  <Button variant="secondary" type="button" className="px-3 py-2 text-xs" onClick={() => removeReceipt(receipt.id)}>
+                    Remove receipt
+                  </Button>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Buying price (KES)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={sale.buyingPrice === "" ? "" : sale.buyingPrice}
-                    onChange={(e) =>
-                      updateSale(sale.id, { buyingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
-                    }
-                    placeholder="0"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Selling price (KES)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={sale.sellingPrice === "" ? "" : sale.sellingPrice}
-                    onChange={(e) =>
-                      updateSale(sale.id, { sellingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
-                    }
-                    placeholder="0"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">No. of items in this receipt</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={sale.itemsCount === "" ? "" : sale.itemsCount}
-                    onChange={(e) =>
-                      updateSale(sale.id, { itemsCount: e.target.value === "" ? "" : Math.max(1, Number(e.target.value)) })
-                    }
-                    placeholder="1"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number</label>
-                  <Input
-                    value={sale.receiptNumber}
-                    onChange={(e) => updateSale(sale.id, { receiptNumber: e.target.value })}
-                    placeholder="Optional"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Payment method</label>
-                  <div className="flex gap-2">
-                    {(["MPESA", "CASH"] as const).map((method) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => updateSale(sale.id, { paymentMethod: method })}
-                        className={pillClass(sale.paymentMethod === method)}
-                      >
-                        {method === "MPESA" ? "MPESA" : "Cash"}
-                      </button>
-                    ))}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Selling total (KES)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={receipt.sellingTotal === "" ? "" : receipt.sellingTotal}
+                      onChange={(e) =>
+                        updateReceipt(receipt.id, {
+                          sellingTotal: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)),
+                        })
+                      }
+                      placeholder="0"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number</label>
+                    <Input
+                      value={receipt.receiptNumber}
+                      onChange={(e) => updateReceipt(receipt.id, { receiptNumber: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Payment method</label>
+                    <div className="flex gap-2">
+                      {(["MPESA", "CASH"] as const).map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => updateReceipt(receipt.id, { paymentMethod: method })}
+                          className={pillClass(receipt.paymentMethod === method)}
+                        >
+                          {method === "MPESA" ? "MPESA" : "Cash"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div className="md:col-span-5 flex justify-end">
-                  <Button variant="secondary" type="button" className="px-3 py-2 text-xs" onClick={() => removeSale(sale.id)}>
-                    Remove
+
+                <div className="space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</div>
+                  <div className="flex flex-col gap-2">
+                    {receipt.items.map((item) => (
+                      <div key={item.id} className="grid gap-2 md:grid-cols-[2fr_1fr_auto] md:items-center">
+                        <Input
+                          value={item.productName}
+                          onChange={(e) => updateItem(receipt.id, item.id, { productName: e.target.value })}
+                          placeholder="Product name"
+                          className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          value={item.buyingPrice === "" ? "" : item.buyingPrice}
+                          onChange={(e) =>
+                            updateItem(receipt.id, item.id, {
+                              buyingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)),
+                            })
+                          }
+                          placeholder="Buying price (KES)"
+                          className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                        />
+                        <Button variant="secondary" type="button" className="px-3 py-2 text-xs" onClick={() => removeItem(receipt.id, item.id)}>
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button type="button" variant="secondary" className="px-3 py-2 text-xs" onClick={() => addItem(receipt.id)}>
+                    + Add product to this receipt
                   </Button>
                 </div>
               </div>
@@ -371,12 +418,13 @@ export default function MarketingTrackerPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
             <div className="space-y-1">
+              <div>Total receipts: {receipts.length}</div>
               <div>Total sales (KES): {totals.totalSales.toLocaleString()}</div>
               <div>Total profit (KES): {totals.totalProfit.toLocaleString()}</div>
               <div>Total items: {totals.totalItems}</div>
             </div>
-            <Button type="button" variant="secondary" className="px-4" onClick={addSale}>
-              + Add sale
+            <Button type="button" variant="secondary" className="px-4" onClick={addReceipt}>
+              + Add receipt
             </Button>
           </div>
         </Card>

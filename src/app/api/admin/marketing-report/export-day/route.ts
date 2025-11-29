@@ -12,16 +12,30 @@ export async function GET(req: Request) {
 
   const entry = await prisma.marketingDailyEntry.findUnique({
     where: { id: entryId },
-    include: { sales: true },
+    include: { receipts: { include: { items: true } }, sales: true },
   });
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
   const rows: string[] = [];
-  rows.push(["Product", "BuyingPrice", "SellingPrice", "Profit", "ItemsCount", "Receipt", "PaymentMethod"].join(","));
-  entry.sales.forEach((s) => {
-    const profit = (s.sellingPrice || 0) - (s.buyingPrice || 0);
-    rows.push([s.product, s.buyingPrice, s.sellingPrice, profit, (s as any).itemsCount ?? 1, s.receiptNumber || "", s.paymentMethod].join(","));
-  });
+  rows.push(["ReceiptNumber", "Product", "BuyingPrice", "ReceiptSellingTotal", "Profit", "PaymentMethod"].join(","));
+  if (entry.receipts.length) {
+    entry.receipts.forEach((r) => {
+      const buyingSum = r.items.reduce((sum, it) => sum + (it.buyingPrice || 0), 0);
+      const profit = (r.sellingTotal || 0) - buyingSum;
+      if (r.items.length === 0) {
+        rows.push([r.receiptNumber || "", "", "", r.sellingTotal, profit, r.paymentMethod].join(","));
+      } else {
+        r.items.forEach((it) => {
+          rows.push([r.receiptNumber || "", it.productName, it.buyingPrice, r.sellingTotal, profit, r.paymentMethod].join(","));
+        });
+      }
+    });
+  } else {
+    entry.sales.forEach((s) => {
+      const profit = (s.sellingPrice || 0) - (s.buyingPrice || 0);
+      rows.push([s.receiptNumber || "", s.product, s.buyingPrice, s.sellingPrice, profit, s.paymentMethod].join(","));
+    });
+  }
   const csv = rows.join("\n");
   const dateStr = entry.date.toISOString().split("T")[0];
   const filename = `marketing-sales-${dateStr}.csv`;

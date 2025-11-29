@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { MarketingDailyEntry, MarketingSale, PaymentMethod } from "@prisma/client";
+import type { MarketingDailyEntry, MarketingSale, PaymentMethod, MarketingReceipt, MarketingReceiptItem } from "@prisma/client";
 import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
 import { calculateCumulativeCommission } from "./commission";
 
@@ -10,7 +10,10 @@ export type MarketingReportFilters = {
   tradingPeriodKey?: string;
 };
 
-export type MarketingReportEntry = Omit<MarketingDailyEntry, "totalSales" | "totalProfit" | "date" | "createdAt" | "updatedAt"> & {
+export type MarketingReportEntry = Omit<
+  MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[] },
+  "totalSales" | "totalProfit" | "date" | "createdAt" | "updatedAt"
+> & {
   totalSales: number;
   totalProfit: number;
   date: string;
@@ -69,15 +72,34 @@ const toNumber = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const normalizeEntry = (entry: MarketingDailyEntry & { sales?: MarketingSale[] }): MarketingReportEntry => ({
-  ...entry,
-  date: entry.date.toISOString(),
-  totalSales: toNumber(entry.totalSales),
-  totalProfit: toNumber(entry.totalProfit),
-  createdAt: entry.createdAt.toISOString?.() ?? undefined,
-  updatedAt: entry.updatedAt.toISOString?.() ?? undefined,
-  sales: entry.sales,
-});
+const computeEntryTotals = (entry: MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[]; sales?: MarketingSale[] }) => {
+  if (entry.receipts && entry.receipts.length) {
+    const totalSales = entry.receipts.reduce((sum, r) => sum + toNumber(r.sellingTotal), 0);
+    const totalProfit = entry.receipts.reduce(
+      (sum, r) => sum + (toNumber(r.sellingTotal) - r.items.reduce((s, it) => s + toNumber(it.buyingPrice), 0)),
+      0
+    );
+    return { totalSales, totalProfit, totalItems: entry.receipts.reduce((s, r) => s + (r.items?.length || 0), 0) };
+  }
+  const totalSales = toNumber(entry.totalSales);
+  const totalProfit = toNumber(entry.totalProfit);
+  const totalItems = entry.sales?.length ?? 0;
+  return { totalSales, totalProfit, totalItems };
+};
+
+const normalizeEntry = (entry: MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[]; sales?: MarketingSale[] }): MarketingReportEntry => {
+  const totals = computeEntryTotals(entry);
+  return {
+    ...entry,
+    date: entry.date.toISOString(),
+    totalSales: totals.totalSales,
+    totalProfit: totals.totalProfit,
+    createdAt: entry.createdAt.toISOString?.() ?? undefined,
+    updatedAt: entry.updatedAt.toISOString?.() ?? undefined,
+    sales: entry.sales,
+    receipts: entry.receipts,
+  };
+};
 
 export async function getMarketingReport(params: MarketingReportFilters): Promise<MarketingReportResult> {
   const period =
@@ -95,13 +117,14 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
   const entriesRaw = await prisma.marketingDailyEntry.findMany({
     where,
     orderBy: { date: "desc" },
-    include: { sales: true },
+    include: { sales: true, receipts: { include: { items: true } } },
   });
   const entries = entriesRaw.map(normalizeEntry);
 
   const totalDaysLogged = entries.length;
   const totalSales = entries.reduce((acc, e) => acc + toNumber(e.totalSales), 0);
   const totalProfit = entries.reduce((acc, e) => acc + toNumber(e.totalProfit), 0);
+  const totalItems = entries.reduce((acc, e) => acc + (e.receipts?.reduce((s, r) => s + (r.items?.length || 0), 0) ?? e.sales?.length ?? 0), 0);
   const totalItems = entries.reduce(
     (acc, e) => acc + (e.sales || []).reduce((sum, s) => sum + toNumber((s as any).itemsCount || 1), 0),
     0
@@ -147,24 +170,28 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
     displayWellLabeledDays: entries.filter((e) => e.displayWellLabeled).length,
   };
 
-  const salesByPayment = await prisma.marketingSale.groupBy({
-    by: ["paymentMethod"],
-    _sum: { sellingPrice: true },
-    _count: { id: true },
-    where: { entry: where },
-  });
-
-  const paymentStats = salesByPayment.reduce(
-    (acc, row) => {
-      const method = row.paymentMethod as PaymentMethod;
-      const sum = toNumber(row._sum?.sellingPrice);
-      const count = row._count?.id || 0;
-      if (method === "CASH") {
-        acc.totalSalesCash += sum;
-        acc.countCashReceipts += count;
-      } else {
-        acc.totalSalesMpesa += sum;
-        acc.countMpesaReceipts += count;
+  const paymentStats = entries.reduce(
+    (acc, e) => {
+      if (e.receipts && e.receipts.length) {
+        e.receipts.forEach((r) => {
+          if ((r.paymentMethod as PaymentMethod) === "CASH") {
+            acc.totalSalesCash += toNumber(r.sellingTotal);
+            acc.countCashReceipts += 1;
+          } else {
+            acc.totalSalesMpesa += toNumber(r.sellingTotal);
+            acc.countMpesaReceipts += 1;
+          }
+        });
+      } else if (e.sales && e.sales.length) {
+        e.sales.forEach((s) => {
+          if ((s.paymentMethod as PaymentMethod) === "CASH") {
+            acc.totalSalesCash += toNumber(s.sellingPrice);
+            acc.countCashReceipts += 1;
+          } else {
+            acc.totalSalesMpesa += toNumber(s.sellingPrice);
+            acc.countMpesaReceipts += 1;
+          }
+        });
       }
       return acc;
     },
