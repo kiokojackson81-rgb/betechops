@@ -174,10 +174,32 @@ export default function MarketingTrackerPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // Require receipt numbers for every receipt before submitting
-    const missingReceiptNumber = receipts.some((r) => !r.receiptNumber || r.receiptNumber.trim() === "");
-    if (missingReceiptNumber) {
-      showToast("Please provide a receipt number for every receipt before submitting.", "error");
+
+    const errors: string[] = [];
+
+    // Validate receipts and items
+    receipts.forEach((r, i) => {
+      if (!r.receiptNumber || r.receiptNumber.trim() === "") errors.push(`Receipt ${i + 1}: missing receipt number`);
+      if (r.sellingTotal === "" || Number.isNaN(Number(r.sellingTotal))) errors.push(`Receipt ${i + 1}: invalid selling total`);
+      if (!r.paymentMethod) errors.push(`Receipt ${i + 1}: missing payment method`);
+      r.items.forEach((it, j) => {
+        if (!it.productName || it.productName.trim() === "") errors.push(`Receipt ${i + 1}, item ${j + 1}: missing product name`);
+        if (it.buyingPrice === "" || Number.isNaN(Number(it.buyingPrice))) errors.push(`Receipt ${i + 1}, item ${j + 1}: invalid buying price`);
+      });
+    });
+
+    // Validate marketing form fields (text and numeric required)
+    Object.entries(marketingFieldTypes).forEach(([key, type]) => {
+      const raw = form.fields[key];
+      if (type === "text") {
+        if (!raw || String(raw).trim() === "") errors.push(`${key}: required`);
+      } else if (type === "numeric") {
+        if (raw === "" || raw === null || raw === undefined || Number.isNaN(Number(raw))) errors.push(`${key}: required numeric`);
+      }
+    });
+
+    if (errors.length > 0) {
+      showToast(errors.slice(0, 5).join("; "), "error");
       setSubmitting(false);
       return;
     }
