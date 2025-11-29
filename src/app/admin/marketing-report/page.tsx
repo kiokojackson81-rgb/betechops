@@ -1,3 +1,4 @@
+import type { PageProps } from "next";
 import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
@@ -27,12 +28,8 @@ function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; colo
   );
 }
 
-export default async function MarketingReportPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  const resolved = searchParams || undefined;
+export default async function MarketingReportPage({ searchParams }: PageProps) {
+  const resolved = (await Promise.resolve(searchParams)) as Record<string, string | string[] | undefined> | undefined;
   const periodKey = typeof resolved?.period === "string" ? resolved?.period : "";
   const dow = typeof resolved?.dow === "string" ? resolved?.dow : "";
 
