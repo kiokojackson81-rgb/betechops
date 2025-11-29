@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { formatISO } from 'date-fns';
+import RestoreButtonClient from './RestoreButtonClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,9 @@ export default async function ActionLogsPage() {
                 </td>
                 <td className="px-3 py-2 text-slate-200" title={JSON.stringify(l.after || {}).slice(0, 1000)}>
                   <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">{JSON.stringify(l.after || {}, null, 2)}</pre>
+                </td>
+                <td className="px-3 py-2">
+                  {l.action === 'WIPE_RECEIPTS' ? <RestoreButtonClient actionLogId={l.id} /> : null}
                 </td>
               </tr>
             ))}
