@@ -120,12 +120,12 @@ export default function ReceiptsEditor({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number</label>
+                <label className="text-xs uppercase tracking-wide text-emerald-200">Receipt number (required)</label>
                 <Input
                   value={receipt.receiptNumber}
                   onChange={(e) => updateReceipt(receipt.id, { receiptNumber: e.target.value })}
-                  placeholder="Optional"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                  placeholder="Required"
+                  className="w-full rounded-xl border border-emerald-500 bg-emerald-900/10 px-3 py-2 text-emerald-200"
                 />
               </div>
               <div className="space-y-1">

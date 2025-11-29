@@ -174,6 +174,13 @@ export default function MarketingTrackerPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    // Require receipt numbers for every receipt before submitting
+    const missingReceiptNumber = receipts.some((r) => !r.receiptNumber || r.receiptNumber.trim() === "");
+    if (missingReceiptNumber) {
+      showToast("Please provide a receipt number for every receipt before submitting.", "error");
+      setSubmitting(false);
+      return;
+    }
     try {
       const yesNo: Record<string, boolean> = {};
       const numeric: Record<string, number> = {};
@@ -205,10 +212,10 @@ export default function MarketingTrackerPage() {
       const res = await fetch("/api/marketing/daily", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+          body: JSON.stringify(payload),
       });
       if (res.ok) {
-        showToast("Marketing daily tracker submitted", "success");
+          showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
         setReceipts([newSaleRow()]);
         const data = await res.json().catch(() => null);
@@ -403,7 +410,7 @@ export default function MarketingTrackerPage() {
             Reset
           </Button>
           <Button type="submit" variant="primary" className="px-5" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit day"}
+            {submitting ? "Submitting..." : "Submit report"}
           </Button>
         </div>
       </form>
