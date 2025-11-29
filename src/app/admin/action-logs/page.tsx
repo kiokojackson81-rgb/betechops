@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { formatISO } from 'date-fns';
 import RestoreButtonClient from './RestoreButtonClient';
+import UndoLastWipeClient from './UndoLastWipeClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,10 @@ export default async function ActionLogsPage() {
   return (
     <div className="mx-auto max-w-6xl p-6 text-slate-100">
       <h1 className="text-2xl font-semibold mb-4">Action logs</h1>
-      <p className="text-sm text-slate-400 mb-4">Recent actions for MarketingDailyEntry and wipes. Useful for audits and reversals.</p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-slate-400">Recent actions for MarketingDailyEntry and wipes. Useful for audits and reversals.</p>
+        <UndoLastWipeClient lastWipeId={logs.find((x) => x.action === 'WIPE_RECEIPTS')?.id} />
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 p-2">
         <table className="min-w-full text-sm">

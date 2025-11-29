@@ -41,6 +41,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "ActionLog is not a wipe of marketing receipts" }, { status: 400 });
     }
 
+    // Prevent repeated restores: if original log.after has 'restored' flag and force not set, fail
+    const alreadyRestored = (log.after as any)?.restored;
+    if (alreadyRestored && !force) {
+      return NextResponse.json({ error: "This action log was already restored" }, { status: 409 });
+    }
+
     const entryId = log.entityId;
     const currentEntry = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId }, include: { receipts: true } });
     if (!currentEntry) return NextResponse.json({ error: "Marketing entry not found" }, { status: 404 });
@@ -87,12 +93,21 @@ export async function POST(req: Request) {
 
     const restored = await prisma.marketingDailyEntry.findUnique({ where: { id: entryId }, include: { receipts: { include: { items: true } } } });
 
-    // Audit the restore
+    // Audit the restore: create a RESTORE_RECEIPTS actionLog and then mark the original log as restored
+    let restoreLog: any = null;
     try {
       const actorId = await getActorId();
       const session = await auth();
       const actorEmail = (session?.user as any)?.email || "";
-      await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "RESTORE_RECEIPTS", before: beforeSnapshot as any, after: restored as any } });
+      restoreLog = await prisma.actionLog.create({ data: { actorId: actorId || "", entity: "MarketingDailyEntry", entityId: entryId, action: "RESTORE_RECEIPTS", before: beforeSnapshot as any, after: restored as any } });
+
+      // Mark original actionLog as restored (best-effort)
+      try {
+        const mergedAfter = { ...(log.after as any || {}), restored: true, restoredAt: new Date(), restoredBy: restoreLog.id };
+        await prisma.actionLog.update({ where: { id: actionLogId }, data: { after: mergedAfter as any } });
+      } catch (e) {
+        console.warn("failed to mark original actionLog as restored", e);
+      }
     } catch (e) {
       console.warn("failed to write actionLog for restore", e);
     }
