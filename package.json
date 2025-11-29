@@ -49,6 +49,7 @@
     "p-limit": "^4.0.0",
     "pino": "^8.0.0",
     "prom-client": "^14.0.0",
+    "puppeteer-core": "^24.31.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "zod": "^3.23.8"
@@ -73,8 +74,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
-  }
-  ,
+  },
   "optionalDependencies": {
     "puppeteer": "^21.11.0"
   }
