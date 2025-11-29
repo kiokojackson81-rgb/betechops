@@ -30,10 +30,11 @@ function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; colo
 export default async function MarketingReportPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const periodKey = typeof searchParams?.period === "string" ? searchParams.period : "";
-  const dow = typeof searchParams?.dow === "string" ? searchParams.dow : "";
+  const sp = searchParams ? await searchParams : undefined;
+  const periodKey = typeof sp?.period === "string" ? sp.period : "";
+  const dow = typeof sp?.dow === "string" ? sp.dow : "";
 
   const currentPeriod = getTradingPeriodFor(new Date());
   const selectedPeriod =
