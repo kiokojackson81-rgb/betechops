@@ -73,9 +73,13 @@ export async function GET(req: Request) {
     let browser: any = null;
     const html = renderHtml(report);
 
-    // try puppeteer first (local dev)
+    // try puppeteer first (local dev). Use indirect imports (import by
+    // variable) to avoid static analysis attempting to resolve optional
+    // packages during the Next.js build on environments where they are not
+    // installed.
     try {
-      puppeteer = await import("puppeteer");
+      const puppeteerName = "puppeteer";
+      puppeteer = await import(puppeteerName);
     } catch (e) {
       puppeteer = null;
     }
@@ -84,16 +88,30 @@ export async function GET(req: Request) {
       browser = await puppeteer.launch({ headless: true, defaultViewport: { width: 1200, height: 800 } });
     } else {
       // fallback to chrome-aws-lambda + puppeteer-core for serverless
-      chromium = await import("chrome-aws-lambda");
-      const pcore = await import("puppeteer-core");
-      const executablePath = (chromium && (await chromium.executablePath)) || undefined;
-      const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
-      browser = await pcore.launch({
-        args,
-        defaultViewport: { width: 1200, height: 800 },
-        executablePath: await (executablePath ? executablePath() : Promise.resolve(undefined)),
-        headless: true,
-      });
+      try {
+        const chromiumName = "chrome-aws-lambda";
+        const pcoreName = "puppeteer-core";
+        // import by name so Turbopack/Next won't try to statically resolve
+        // these optional packages at build-time
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        chromium = await import(chromiumName);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const pcore = await import(pcoreName);
+        const executablePath = (chromium && (await chromium.executablePath)) || undefined;
+        const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
+        browser = await pcore.launch({
+          args,
+          defaultViewport: { width: 1200, height: 800 },
+          executablePath: await (executablePath ? executablePath() : Promise.resolve(undefined)),
+          headless: true,
+        });
+      } catch (e) {
+        // Optional runtime packages are missing — return 501 with guidance
+        return NextResponse.json(
+          { error: "PDF export not available: missing optional browser dependencies (puppeteer or chrome-aws-lambda)." },
+          { status: 501 }
+        );
+      }
     }
 
     const page = await browser.newPage();
