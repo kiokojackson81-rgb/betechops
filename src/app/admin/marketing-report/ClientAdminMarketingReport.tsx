@@ -363,7 +363,7 @@ export default function ClientAdminMarketingReport({
                   <div className="mt-3 space-y-2">
                     {selectedEntry.sales.map((sale, idx) => (
                       <div key={idx} className="flex justify-between text-sm text-white/80">
-                        <span>{sale.product || sale.productName || "—"}</span>
+                          <span>{sale.product || "—"}</span>
                         <span>{formatKES(Number((sale as any).sellingPrice ?? 0))}</span>
                       </div>
                     ))}
