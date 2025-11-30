@@ -45,172 +45,176 @@ type SectionDef = {
   fields: FieldDef[];
 };
 
-// Configuration of all checklist sections per weekday.  This object
-// enumerates every input from the original daily report.  Booleans
-// correspond to checkboxes; numbers capture counts (e.g. products uploaded or
-// walk‑ins); select fields allow choosing a platform; and text fields
-// capture freeform notes.
+const livePlatformOptions = ["Facebook", "Instagram", "TikTok", "YouTube"];
+
 const dayConfig: Record<string, SectionDef[]> = {
   Monday: [
     {
-      title: "Walk‑ins & Shop Neatness",
-      fields: [
-        { key: "walkInsWhoPurchased", label: "Walk‑ins who purchased", type: "number" },
-        { key: "shopCleaned", label: "Shop cleaned", type: "boolean" },
-        { key: "shopNeatness", label: "Shop neatness", type: "boolean" },
-        { key: "displayLabeled", label: "Display labeled", type: "boolean" },
-      ],
-    },
-    {
       title: "Product & Stock Management",
       fields: [
-        { key: "productsUploaded", label: "Products uploaded", type: "number" },
-        { key: "productsEdited", label: "Products edited", type: "number" },
-        { key: "productsCopied", label: "Products copied", type: "number" },
+        { key: "mondayProductsUploadedCount", label: "Products uploaded (target 50)", type: "number" },
+        { key: "mondayStockChecked", label: "Stock levels checked (Jumia/Kilimall)", type: "boolean" },
+        { key: "mondayPricingChecked", label: "Pricing confirmed across marketplaces", type: "boolean" },
       ],
     },
     {
-      title: "Customer & Communications",
+      title: "Customer Servicing",
       fields: [
-        { key: "fbCommentsReplied", label: "Replied to FB comments", type: "boolean" },
-        { key: "fbDmsReplied", label: "Replied to FB DMs", type: "boolean" },
-        { key: "igCommentsReplied", label: "Replied to IG comments", type: "boolean" },
-        { key: "igDmsReplied", label: "Replied to IG DMs", type: "boolean" },
-        { key: "fbInboxCleared", label: "Cleared FB inbox", type: "boolean" },
-        { key: "igInboxCleared", label: "Cleared IG inbox", type: "boolean" },
+        { key: "mondayCustomersServedCount", label: "Customers served (walk-in / online)", type: "number" },
+        { key: "mondayRespondedToWhatsApp", label: "WhatsApp cleared", type: "boolean" },
+        { key: "mondayRespondedToCalls", label: "Calls handled", type: "boolean" },
       ],
     },
     {
-      title: "Marketplace Review",
+      title: "Market Intelligence",
       fields: [
-        { key: "stockChecked", label: "Stock checked", type: "boolean" },
-        { key: "pricingConfirmed", label: "Pricing confirmed", type: "boolean" },
-        { key: "competitorsReviewed", label: "Competitors reviewed", type: "boolean" },
-        { key: "oosReview", label: "Out of stock review", type: "boolean" },
+        { key: "mondayCompetitorNotes", label: "Competitor notes", type: "text" },
+        { key: "mondayImprovementIdeas", label: "Improvement ideas", type: "text" },
       ],
     },
   ],
   Tuesday: [
     {
-      title: "Product Marketing Output (Videos)",
+      title: "Product Marketing & Engagement",
       fields: [
-        { key: "recordedPromotionalVideos", label: "Recorded promotional videos", type: "boolean" },
-        { key: "recordedDemoVideos", label: "Recorded demo videos", type: "boolean" },
-        { key: "postedFacebookVideos", label: "Posted videos to Facebook", type: "boolean" },
-        { key: "postedInstagramVideos", label: "Posted videos to Instagram", type: "boolean" },
-        { key: "postedTikTokVideos", label: "Posted videos to TikTok", type: "boolean" },
+        { key: "tuesdayProductsUploadedCount", label: "Products uploaded / updated", type: "number" },
+        { key: "tuesdayPromoVideoPosted", label: "Promo video posted", type: "boolean" },
+        { key: "tuesdayDemoVideoRecorded", label: "Demo video recorded", type: "boolean" },
+        { key: "tuesdayEngagementsDone", label: "Engagement replies (comments/DMs/stories)", type: "number" },
       ],
     },
     {
-      title: "Customer & Communications",
+      title: "Customer Service",
       fields: [
-        { key: "fbCommentsReplied", label: "Replied to FB comments", type: "boolean" },
-        { key: "fbDmsReplied", label: "Replied to FB DMs", type: "boolean" },
-        { key: "igCommentsReplied", label: "Replied to IG comments", type: "boolean" },
-        { key: "igDmsReplied", label: "Replied to IG DMs", type: "boolean" },
-        { key: "fbInboxCleared", label: "Cleared FB inbox", type: "boolean" },
-        { key: "igInboxCleared", label: "Cleared IG inbox", type: "boolean" },
+        { key: "tuesdayCustomersServedCount", label: "Customers served (walk-in/online/WhatsApp)", type: "number" },
+      ],
+    },
+    {
+      title: "Market Intelligence",
+      fields: [
+        { key: "tuesdayCompetitorNotes", label: "Competitor notes", type: "text" },
+        { key: "tuesdayImprovementIdeas", label: "Improvement ideas", type: "text" },
       ],
     },
   ],
   Wednesday: [
     {
-      title: "Live Session & Content Output",
+      title: "Live Session & Sales Focus",
       fields: [
-        { key: "liveSessionHostedWednesday", label: "Hosted live session", type: "boolean" },
-        { key: "producedProductClips", label: "Produced product clips", type: "boolean" },
-        { key: "generatedLeadsWednesday", label: "Generated leads", type: "boolean" },
-        { key: "postedPromotionalClips", label: "Posted promotional clips", type: "boolean" },
+        { key: "wednesdayProductsUploadedCount", label: "Products uploaded", type: "number" },
+        { key: "wednesdayMarketingClipsPosted", label: "Marketing clips posted", type: "boolean" },
+        { key: "wednesdayFollowUpsCompleted", label: "Follow-ups completed", type: "boolean" },
+        { key: "wednesdayCustomersServedCount", label: "Customers served", type: "number" },
       ],
     },
     {
       title: "Live Session Details",
       fields: [
-        { key: "liveDurationWednesday", label: "Live session duration (minutes)", type: "number" },
-        { key: "livePlatformWednesday", label: "Platform", type: "select", options: ["Facebook", "Instagram", "TikTok", "YouTube"] },
-        { key: "liveEstimatedViewersWednesday", label: "Estimated viewers", type: "number" },
-        { key: "liveLeadsGeneratedWednesday", label: "Leads generated", type: "number" },
-        { key: "liveNotesWednesday", label: "Notes", type: "text" },
+        { key: "wednesdayLiveSessionHosted", label: "Hosted live session", type: "boolean" },
+        { key: "wednesdayLiveDuration", label: "Live session duration (minutes)", type: "number" },
+        { key: "wednesdayLivePlatform", label: "Platform", type: "select", options: livePlatformOptions },
+        { key: "wednesdayLiveViewers", label: "Estimated viewers", type: "number" },
+        { key: "wednesdayLiveLeadsGenerated", label: "Leads generated", type: "number" },
+        { key: "wednesdayLiveNotes", label: "Live session notes", type: "text" },
       ],
     },
     {
-      title: "Customer & Communications",
+      title: "Engagement Insights",
       fields: [
-        { key: "fbCommentsReplied", label: "Replied to FB comments", type: "boolean" },
-        { key: "fbDmsReplied", label: "Replied to FB DMs", type: "boolean" },
-        { key: "igCommentsReplied", label: "Replied to IG comments", type: "boolean" },
-        { key: "igDmsReplied", label: "Replied to IG DMs", type: "boolean" },
-        { key: "fbInboxCleared", label: "Cleared FB inbox", type: "boolean" },
-        { key: "igInboxCleared", label: "Cleared IG inbox", type: "boolean" },
+        { key: "wednesdayEngagementInsights", label: "Engagement insights", type: "text" },
       ],
     },
   ],
   Thursday: [
     {
-      title: "Weekly Marketing Activities",
+      title: "Weekly Marketing & Video Shoot",
       fields: [
-        { key: "weeklyMeetingAttended", label: "Weekly marketing meeting attended", type: "boolean" },
-        { key: "videoShootParticipated", label: "Participated in weekly video shoot", type: "boolean" },
-        { key: "weeklyVideoCount", label: "Number of videos participated in", type: "number" },
-        { key: "promoVideosUploadedThursday", label: "Uploaded promo videos", type: "boolean" },
+        { key: "thursdayMeetingAttended", label: "Weekly marketing meeting attended", type: "boolean" },
+        { key: "thursdayVideoShootParticipated", label: "Participated in weekly video shoot", type: "boolean" },
+        { key: "thursdayProductsUploadedCount", label: "Products uploaded (target 50)", type: "number" },
+        { key: "thursdayListingsUpdated", label: "Listings updated", type: "boolean" },
+        { key: "thursdayMarketingVideoPosted", label: "Marketing video posted", type: "boolean" },
       ],
     },
     {
       title: "Office & Display",
       fields: [
-        { key: "officeDisplayCleanedThursday", label: "Office/Display cleaned & organised", type: "boolean" },
+        { key: "thursdayOfficeCleaned", label: "Office cleaned", type: "boolean" },
+        { key: "thursdayDisplayOrganised", label: "Display organised", type: "boolean" },
       ],
     },
     {
-      title: "Customer & Communications",
+      title: "Customer Service",
       fields: [
-        { key: "fbCommentsReplied", label: "Replied to FB comments", type: "boolean" },
-        { key: "fbDmsReplied", label: "Replied to FB DMs", type: "boolean" },
-        { key: "igCommentsReplied", label: "Replied to IG comments", type: "boolean" },
-        { key: "igDmsReplied", label: "Replied to IG DMs", type: "boolean" },
-        { key: "fbInboxCleared", label: "Cleared FB inbox", type: "boolean" },
-        { key: "igInboxCleared", label: "Cleared IG inbox", type: "boolean" },
+        { key: "thursdayCustomersServedCount", label: "Customers served today", type: "number" },
+      ],
+    },
+    {
+      title: "Observations & Improvements",
+      fields: [
+        { key: "thursdayObservations", label: "Notes / improvement ideas", type: "text" },
       ],
     },
   ],
   Friday: [
     {
-      title: "Promotional Preparation",
+      title: "Promotion & Sales Push",
       fields: [
-        { key: "shotPromotionalVideos", label: "Shot promotional videos", type: "boolean" },
-        { key: "officeCleanedFriday", label: "Office cleaned", type: "boolean" },
-        { key: "weekendPromosPrepared", label: "Weekend promos prepared / posts scheduled", type: "boolean" },
+        { key: "fridayProductsUploadedCount", label: "Products uploaded (target 50)", type: "number" },
+        { key: "fridayPromoVideosPosted", label: "Promo videos posted or testimonials", type: "boolean" },
+        { key: "fridayWeekendPromotionsPrepared", label: "Weekend promos prepared / scheduled", type: "boolean" },
       ],
     },
     {
-      title: "Customer & Communications",
+      title: "Office & Display",
       fields: [
-        { key: "fbCommentsReplied", label: "Replied to FB comments", type: "boolean" },
-        { key: "fbDmsReplied", label: "Replied to FB DMs", type: "boolean" },
-        { key: "igCommentsReplied", label: "Replied to IG comments", type: "boolean" },
-        { key: "igDmsReplied", label: "Replied to IG DMs", type: "boolean" },
-        { key: "fbInboxCleared", label: "Cleared FB inbox", type: "boolean" },
-        { key: "igInboxCleared", label: "Cleared IG inbox", type: "boolean" },
+        { key: "fridayOfficeCleaned", label: "Office cleaned", type: "boolean" },
+        { key: "fridayDisplayOrganised", label: "Display organised", type: "boolean" },
+      ],
+    },
+    {
+      title: "Customer Insights",
+      fields: [
+        { key: "fridayCustomersServedCount", label: "Customers served", type: "number" },
+      ],
+    },
+    {
+      title: "Improvement Ideas",
+      fields: [
+        { key: "fridayImprovementIdeas", label: "Improvement ideas", type: "text" },
       ],
     },
   ],
   Saturday: [
     {
-      title: "Live Sessions & Weekend Prep",
+      title: "Customer Service & Summary",
       fields: [
-        { key: "liveSessionHostedSaturday", label: "Hosted live session", type: "boolean" },
-        { key: "officeCleanedSaturday", label: "Office cleaned", type: "boolean" },
-        { key: "storeOrganised", label: "Organised store", type: "boolean" },
+        { key: "saturdayProductsUpdatedCount", label: "Products updated / final uploads", type: "number" },
+        { key: "saturdayWalkInCustomersServed", label: "Walk-in customers served", type: "number" },
+        { key: "saturdayPendingFollowUpsHandled", label: "Pending follow-ups handled", type: "boolean" },
       ],
     },
     {
-      title: "Live Session Details",
+      title: "Light Live Session",
       fields: [
-        { key: "liveDurationSaturday", label: "Live session duration (minutes)", type: "number" },
-        { key: "livePlatformSaturday", label: "Platform", type: "select", options: ["Facebook", "Instagram", "TikTok", "YouTube"] },
-        { key: "liveEstimatedViewersSaturday", label: "Estimated viewers", type: "number" },
-        { key: "liveLeadsGeneratedSaturday", label: "Leads generated", type: "number" },
-        { key: "liveNotesSaturday", label: "Notes", type: "text" },
+        { key: "saturdayLightLiveSession", label: "Hosted light live session", type: "boolean" },
+        { key: "saturdayLiveDuration", label: "Live duration (minutes)", type: "number" },
+        { key: "saturdayLivePlatform", label: "Platform", type: "select", options: livePlatformOptions },
+        { key: "saturdayLiveViewers", label: "Estimated viewers", type: "number" },
+        { key: "saturdayLiveNotes", label: "Light live notes", type: "text" },
+      ],
+    },
+    {
+      title: "Office & Display",
+      fields: [
+        { key: "saturdayOfficeCleaned", label: "Office cleaned", type: "boolean" },
+        { key: "saturdayDisplayOrganised", label: "Display organised", type: "boolean" },
+      ],
+    },
+    {
+      title: "Weekly Summary",
+      fields: [
+        { key: "saturdayWeeklySummary", label: "Weekly summary (uploads, videos, leads, follow-ups)", type: "text" },
       ],
     },
   ],
@@ -231,6 +235,7 @@ function createInitialState(): Record<string, any> {
       });
     });
   });
+  state["notes"] = "";
   return state;
 }
 

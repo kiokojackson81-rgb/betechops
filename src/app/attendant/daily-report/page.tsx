@@ -1,7 +1,7 @@
 "use client";
 
-import DailyReportStyled from "../../../components/daily-report-styled";
+import DailyReportFinal from "@/components/daily-report-final";
 
 export default function AttendantDailyReportPage() {
-  return <DailyReportStyled />;
+  return <DailyReportFinal />;
 }

@@ -10,14 +10,16 @@ type Props = {
   initialPeriod?: string;
   initialDay?: string;
   initialDate?: string;
+  initialUser?: string;
 };
 
-export default function MarketingReportFilterBar({ initialPeriod = "", initialDay = "", initialDate = "" }: Props) {
+export default function MarketingReportFilterBar({ initialPeriod = "", initialDay = "", initialDate = "", initialUser = "" }: Props) {
   const periods = useMemo(() => getRecentTradingPeriods(6), []);
   const defaultPeriodKey = initialPeriod || periods[0]?.key || "";
   const [periodKey, setPeriodKey] = useState(defaultPeriodKey);
   const [day, setDay] = useState(initialDay);
   const [date, setDate] = useState<string | undefined>(initialDate || undefined);
+  const [user, setUser] = useState(initialUser);
   const router = useRouter();
 
   useEffect(() => {
@@ -31,6 +33,10 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
       setDate(undefined);
     }
   }, [periodKey]);
+
+  useEffect(() => {
+    setUser(initialUser);
+  }, [initialUser]);
 
   const deriveDayOfWeek = (dateStr: string) => {
     try {
@@ -64,6 +70,8 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
     if (periodKey) qs.set("period", periodKey);
     if (day) qs.set("dow", day);
     if (date) qs.set("date", date);
+    const trimmedUser = user.trim();
+    if (trimmedUser) qs.set("user", trimmedUser);
     const url = `/admin/marketing-report${qs.toString() ? `?${qs.toString()}` : ""}`;
     router.push(url);
   };
@@ -71,7 +79,7 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
   return (
     <form onSubmit={apply} className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
       <div className="text-sm font-semibold text-slate-200">Filters</div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <div className="space-y-1">
           <label className="text-xs uppercase tracking-wide text-slate-400">Trading period</label>
           <select
@@ -130,6 +138,15 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
               </option>
             ))}
           </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase tracking-wide text-slate-400">User filter</label>
+          <input
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            placeholder="Attendant name or email"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+          />
         </div>
         <div className="flex items-end">
           <Button

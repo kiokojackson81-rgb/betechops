@@ -1,5 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import type { MarketingDailyEntry, MarketingSale, PaymentMethod, MarketingReceipt, MarketingReceiptItem } from "@prisma/client";
+import type {
+  DailyReport,
+  DailySale,
+  MarketingDailyEntry,
+  MarketingReceipt,
+  MarketingReceiptItem,
+  MarketingSale,
+  PaymentMethod,
+} from "@prisma/client";
 import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
 import { calculateCumulativeCommission } from "./commission";
 import { COMMISSION_LADDER } from "./commission";
@@ -33,6 +41,7 @@ export type MarketingReportFilters = {
   dayOfWeek?: string;
   tradingPeriodKey?: string;
   submittedById?: string;
+  userFilter?: string;
 };
 
 export type MarketingReportEntry = Omit<
@@ -45,6 +54,7 @@ export type MarketingReportEntry = Omit<
   createdAt?: string;
   updatedAt?: string;
   sales?: MarketingSale[];
+  source: "MARKETING" | "ATTENDANT";
 };
 
 export type MarketingReportAggregates = {
@@ -123,6 +133,70 @@ const normalizeEntry = (entry: MarketingDailyEntry & { receipts?: (MarketingRece
     updatedAt: entry.updatedAt.toISOString?.() ?? undefined,
     sales: entry.sales,
     receipts: entry.receipts,
+    source: "MARKETING",
+  };
+};
+
+type AttendantEntry = DailyReport & {
+  sales: DailySale[];
+  user?: { id: string; name?: string | null; email?: string | null };
+};
+
+const normalizeAttendantEntry = (entry: AttendantEntry): MarketingReportEntry => {
+  const sales = entry.sales ?? [];
+  const guaranteedTotalSales = toNumber(entry.totalSales) || sales.reduce((sum, sale) => sum + toNumber(sale.price), 0);
+  const costSum = sales.reduce((sum, sale) => sum + toNumber(sale.price), 0);
+  const receipts =
+    sales.length > 0
+      ? [
+          {
+            id: undefined,
+            receiptNumber: sales[0].receiptNumber || entry.id,
+            sellingTotal: guaranteedTotalSales,
+            paymentMethod: (sales[0].paymentMethod as PaymentMethod) ?? "MPESA",
+            items: sales.map((sale) => ({
+              id: sale.id,
+              productName: sale.productName,
+              buyingPrice: toNumber(sale.price),
+            })),
+          },
+        ]
+      : [];
+  const totalProfit = receipts.reduce(
+    (sum, receipt) => sum + (toNumber(receipt.sellingTotal) - receipt.items.reduce((acc, it) => acc + toNumber(it.buyingPrice), 0)),
+    0
+  );
+  const normalizedSales: MarketingSale[] = sales.map((sale) => {
+    const cost = toNumber(sale.price);
+    const share =
+      sales.length > 0
+        ? costSum > 0
+          ? (cost / costSum) * guaranteedTotalSales
+          : guaranteedTotalSales / sales.length
+        : 0;
+    return {
+      product: sale.productName,
+      buyingPrice: cost,
+      sellingPrice: share,
+      paymentMethod: (sale.paymentMethod as PaymentMethod) ?? "MPESA",
+      itemsCount: 1,
+    };
+  });
+  return {
+    id: entry.id,
+    date: entry.date.toISOString(),
+    dayOfWeek: entry.day,
+    totalSales: guaranteedTotalSales,
+    totalProfit,
+    receipts,
+    sales: normalizedSales,
+    submittedById: entry.userId ?? undefined,
+    submittedByName: entry.user?.name ?? entry.submittedBy ?? undefined,
+    submittedByEmail: entry.user?.email ?? undefined,
+    source: "ATTENDANT",
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
+    day: entry.day,
   };
 };
 
@@ -132,20 +206,60 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       getRecentTradingPeriods(12).find((p) => p.key === params.tradingPeriodKey)) ||
     getTradingPeriodFor(new Date());
 
-  const where: Record<string, any> = {
+  const marketingWhere: Record<string, any> = {
     date: { gte: period.start, lte: period.end },
   };
-  if (params.from) where.date = { ...(where.date || {}), gte: params.from };
-  if (params.to) where.date = { ...(where.date || {}), lte: params.to };
-  if (params.dayOfWeek) where.dayOfWeek = params.dayOfWeek;
-  if (params.submittedById) where.submittedById = params.submittedById;
+  const dailyWhere: Record<string, any> = {
+    date: { gte: period.start, lte: period.end },
+  };
 
-  const entriesRaw = await prisma.marketingDailyEntry.findMany({
-    where,
-    orderBy: { date: "desc" },
-    include: { sales: true, receipts: { include: { items: true } } },
-  });
-  const entries = entriesRaw.map(normalizeEntry);
+  if (params.from) {
+    marketingWhere.date = { ...(marketingWhere.date || {}), gte: params.from };
+    dailyWhere.date = { ...(dailyWhere.date || {}), gte: params.from };
+  }
+  if (params.to) {
+    marketingWhere.date = { ...(marketingWhere.date || {}), lte: params.to };
+    dailyWhere.date = { ...(dailyWhere.date || {}), lte: params.to };
+  }
+  if (params.dayOfWeek) {
+    marketingWhere.dayOfWeek = params.dayOfWeek;
+    dailyWhere.day = params.dayOfWeek;
+  }
+  if (params.submittedById) {
+    marketingWhere.submittedById = params.submittedById;
+    dailyWhere.userId = params.submittedById;
+  }
+  const userFilter = params.userFilter?.trim();
+  if (userFilter) {
+    marketingWhere.OR = [
+      { submittedBy: { contains: userFilter, mode: "insensitive" } },
+      { submittedByName: { contains: userFilter, mode: "insensitive" } },
+      { submittedByEmail: { contains: userFilter, mode: "insensitive" } },
+      { submittedById: { contains: userFilter, mode: "insensitive" } },
+    ];
+    dailyWhere.OR = [
+      { submittedBy: { contains: userFilter, mode: "insensitive" } },
+      { user: { is: { name: { contains: userFilter, mode: "insensitive" } } } },
+      { user: { is: { email: { contains: userFilter, mode: "insensitive" } } } },
+    ];
+  }
+
+  const [marketingRaw, dailyRaw] = await Promise.all([
+    prisma.marketingDailyEntry.findMany({
+      where: marketingWhere,
+      orderBy: { date: "desc" },
+      include: { sales: true, receipts: { include: { items: true } } },
+    }),
+    prisma.dailyReport.findMany({
+      where: dailyWhere,
+      orderBy: { date: "desc" },
+      include: { sales: true, user: { select: { id: true, name: true, email: true } } },
+    }),
+  ]);
+
+  const marketingEntries = marketingRaw.map(normalizeEntry);
+  const attendantEntries = dailyRaw.map((entry) => normalizeAttendantEntry(entry));
+  const entries = [...marketingEntries, ...attendantEntries].sort((a, b) => b.date.localeCompare(a.date));
 
   const totalDaysLogged = entries.length;
   const totalSales = entries.reduce((acc, e) => acc + toNumber(e.totalSales), 0);
@@ -331,6 +445,49 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
     totalItems += daysMap[dateKey].items;
     mpesaTotal += daysMap[dateKey].mpesaTotal;
     cashTotal += daysMap[dateKey].cashTotal;
+  }
+
+  const dailyReports = await prisma.dailyReport.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { sales: true },
+    orderBy: { date: "asc" },
+  });
+  for (const report of dailyReports) {
+    const dateKey = report.date.toISOString().split("T")[0];
+    const sales = report.sales ?? [];
+    const daySales = toNumber(report.totalSales) || sales.reduce((sum, sale) => sum + toNumber(sale.price), 0);
+    const dayItems = sales.length;
+    const costSum = sales.reduce((sum, sale) => sum + toNumber(sale.price), 0);
+    const dayProfit = daySales - costSum;
+    let dayMpesa = 0;
+    let dayCash = 0;
+    sales.forEach((sale) => {
+      const method = String(sale.paymentMethod ?? "MPESA").toUpperCase();
+      const price = toNumber(sale.price);
+      if (method === "CASH") dayCash += price;
+      else dayMpesa += price;
+    });
+
+    const existing = daysMap[dateKey] ?? {
+      date: dateKey,
+      totalSales: 0,
+      totalProfit: 0,
+      items: 0,
+      mpesaTotal: 0,
+      cashTotal: 0,
+    };
+    existing.totalSales += daySales;
+    existing.totalProfit += dayProfit;
+    existing.items += dayItems;
+    existing.mpesaTotal += dayMpesa;
+    existing.cashTotal += dayCash;
+    daysMap[dateKey] = existing;
+
+    totalSales += daySales;
+    totalProfit += dayProfit;
+    totalItems += dayItems;
+    mpesaTotal += dayMpesa;
+    cashTotal += dayCash;
   }
 
   const days = Object.values(daysMap).sort((a, b) => a.date.localeCompare(b.date));
