@@ -3,9 +3,11 @@ import ClientAdminMarketingReport from "./ClientAdminMarketingReport";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getRecentTradingPeriods, getTradingPeriodFor } from "@/lib/tradingPeriod";
 
-type SearchParams = Record<string, string | string[] | undefined> | undefined;
+type AdminSearchParams = Record<string, string | string[] | undefined> | undefined;
 
-export default async function AdminMarketingReportPage({ searchParams }: { searchParams?: SearchParams }) {
+const AdminMarketingReportPage = async (...args: any[]) => {
+  const props = args[0] ?? {};
+  const searchParams = (props?.searchParams as AdminSearchParams) ?? undefined;
   const periods = getRecentTradingPeriods(12);
   const selectedPeriod =
     (searchParams?.period &&
@@ -43,6 +45,8 @@ export default async function AdminMarketingReportPage({ searchParams }: { searc
     </main>
   </div>
   );
-}
+};
+
+export default AdminMarketingReportPage;
 
 export const dynamic = "force-dynamic";
