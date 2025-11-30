@@ -46,6 +46,9 @@ const defaultMarketplaceState = (): MarketplaceState => ({
   review: undefined,
 });
 
+const cardClasses =
+  "rounded-2xl p-4 border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
+
 const marketplaceShops = [
   "Betech Store",
   "JM Collection",
@@ -177,13 +180,13 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
   const tabClass = (active: boolean) =>
     `px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${active ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`;
 
-  const badgeClass = (active: boolean) =>
-    `inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-emerald-500 text-black' : 'bg-slate-700 text-gray-100'}`;
+  const badgeClass = (_active: boolean) =>
+    `inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-slate-800 text-gray-100`;
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Marketplace stock &amp; pricing review</h3>
-      <p className="mt-1 text-xs text-gray-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Marketplace stock &amp; pricing review</h3>
+      <p className="mt-1 text-xs text-slate-400">Confirm stock, pricing, competitors &amp; out-of-stock per shop.</p>
 
       <div className="mt-4">
         <div className="mt-2 overflow-x-auto -mx-2 px-2 snap-x snap-mandatory" role="tablist" aria-label="Marketplace shops" style={{ scrollSnapType: 'x mandatory' }}>
@@ -210,29 +213,29 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
         </div>
 
         <div className="mt-6">
-          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex flex-wrap gap-3 items-center">
             <button type="button" className={badgeClass(Boolean(current.stockChecked))} onClick={() => updateShop(selected, { stockChecked: !Boolean(current.stockChecked) })}>Stock</button>
-            <span className="text-sm text-gray-200">Stock checked</span>
+            <span className="text-sm text-slate-100">Stock checked</span>
           </div>
 
           <div className="flex flex-wrap gap-3 items-center mt-3">
             <button type="button" className={badgeClass(Boolean(current.pricingConfirmed))} onClick={() => updateShop(selected, { pricingConfirmed: !Boolean(current.pricingConfirmed) })}>Price</button>
-            <span className="text-sm text-gray-200">Pricing confirmed</span>
+            <span className="text-sm text-slate-100">Pricing confirmed</span>
           </div>
 
           <div className="flex flex-wrap gap-3 items-center mt-3">
             <button type="button" className={badgeClass(Boolean(current.competitorsReviewed))} onClick={() => updateShop(selected, { competitorsReviewed: !Boolean(current.competitorsReviewed) })}>Comp</button>
-            <span className="text-sm text-gray-200">Competitors reviewed</span>
+            <span className="text-sm text-slate-100">Competitors reviewed</span>
           </div>
 
           <div className="flex flex-wrap gap-3 items-center mt-3">
             <button type="button" className={badgeClass(Boolean(current.oosReviewed))} onClick={() => updateShop(selected, { oosReviewed: !Boolean(current.oosReviewed) })}>OOS</button>
-            <span className="text-sm text-gray-200">OOS review</span>
+            <span className="text-sm text-slate-100">OOS review</span>
           </div>
 
-          <div className="mt-4">
-            <label className="text-[11px] font-medium text-gray-400">Notes (for {selected})</label>
-            <textarea rows={3} className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="Key issues or actions for this shop…" value={String(current.notes ?? '')} onChange={(e) => updateShop(selected, { notes: e.target.value })} />
+            <div className="mt-4">
+            <label className="text-[11px] font-medium text-slate-400">Notes (for {selected})</label>
+            <textarea rows={3} className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Key issues or actions for this shop…" value={String(current.notes ?? '')} onChange={(e) => updateShop(selected, { notes: e.target.value })} />
           </div>
         </div>
       </div>
@@ -243,28 +246,28 @@ function MarketplaceStockPricingCard({ value, onChange }: { value?: Partial<Reco
 function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: (next: any) => void }) {
   if (!value) value = {};
   return (
-    <section className="rounded-2xl border border-gray-700/30 p-3 bg-transparent">
+    <section className={cardClasses + " p-4"}>
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Customer & Communications Activity</h3>
-        <div className="text-xs opacity-70">Track walk-ins, messages and cleared inboxes</div>
+        <h3 className="text-sm uppercase tracking-wide text-slate-400">Customer & Communications Activity</h3>
+        <div className="text-xs text-slate-400">Track walk-ins, messages and cleared inboxes</div>
       </div>
       <div className="grid md:grid-cols-2 gap-3 mt-3">
           <div className="space-y-2">
-            <label className="text-xs">Walk-in served</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">Walk-in served</label>
             <Input aria-label="Walk-in served" type="number" value={String(value.walkInServed ?? 0)} onChange={(e) => onChange({ ...value, walkInServed: Number((e.target as HTMLInputElement).value || 0) })} />
-            <label className="text-xs">Walk-ins who purchased</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">Walk-ins who purchased</label>
             <Input aria-label="Walk-ins who purchased" type="number" value={String(value.walkInsWhoPurchased ?? 0)} onChange={(e) => onChange({ ...value, walkInsWhoPurchased: Number((e.target as HTMLInputElement).value || 0) })} />
-            <label className="text-xs">Calls handled</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">Calls handled</label>
             <Input aria-label="Calls handled" type="number" value={String(value.callsHandled ?? 0)} onChange={(e) => onChange({ ...value, callsHandled: Number((e.target as HTMLInputElement).value || 0) })} />
-            <label className="text-xs">WhatsApp/SMS replied</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">WhatsApp/SMS replied</label>
             <Input aria-label="WhatsApp SMS replied" type="number" value={String(value.whatsappSmsReplied ?? 0)} onChange={(e) => onChange({ ...value, whatsappSmsReplied: Number((e.target as HTMLInputElement).value || 0) })} />
           </div>
-        <div className="space-y-3">
+          <div className="space-y-3">
           <div className="space-y-2">
-            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="FB comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span>FB comments replied</span></label>
-            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="FB DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span>FB DMs replied</span></label>
-            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="IG comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span>IG comments replied</span></label>
-            <label className="text-xs flex items-center gap-2 py-2"><input aria-label="IG DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span>IG DMs replied</span></label>
+            <label className="text-xs font-medium text-slate-400 mb-1 flex items-center gap-2 py-2"><input aria-label="FB comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbCommentsReplied)} onChange={(e) => onChange({ ...value, fbCommentsReplied: e.target.checked })} /> <span className="text-sm text-slate-100">FB comments replied</span></label>
+            <label className="text-xs font-medium text-slate-400 mb-1 flex items-center gap-2 py-2"><input aria-label="FB DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.fbDmsReplied)} onChange={(e) => onChange({ ...value, fbDmsReplied: e.target.checked })} /> <span className="text-sm text-slate-100">FB DMs replied</span></label>
+            <label className="text-xs font-medium text-slate-400 mb-1 flex items-center gap-2 py-2"><input aria-label="IG comments replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igCommentsReplied)} onChange={(e) => onChange({ ...value, igCommentsReplied: e.target.checked })} /> <span className="text-sm text-slate-100">IG comments replied</span></label>
+            <label className="text-xs font-medium text-slate-400 mb-1 flex items-center gap-2 py-2"><input aria-label="IG DMs replied" type="checkbox" className="w-5 h-5" checked={Boolean(value.igDmsReplied)} onChange={(e) => onChange({ ...value, igDmsReplied: e.target.checked })} /> <span className="text-sm text-slate-100">IG DMs replied</span></label>
           </div>
 
           <div className="space-y-2">
@@ -273,9 +276,9 @@ function CustomerCommsActivityCard({ value, onChange }: { value: any; onChange: 
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs">Competitor notes</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">Competitor notes</label>
             <Textarea rows={3} value={String(value.competitorNotes ?? "")} onChange={(e) => onChange({ ...value, competitorNotes: e.target.value })} />
-            <label className="text-xs">Improvement suggestions</label>
+            <label className="text-xs font-medium text-slate-400 mb-1 block">Improvement suggestions</label>
             <Textarea rows={3} value={String(value.improvementSuggestions ?? "")} onChange={(e) => onChange({ ...value, improvementSuggestions: e.target.value })} />
           </div>
         </div>
@@ -311,23 +314,23 @@ function ProductMarketingVideosCard({ value, onChange }: { value?: any; onChange
   const setField = (key: string, val: any) => onChange({ ...v, [key]: val });
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Product Marketing Output (Videos)</h3>
-      <p className="mt-1 text-xs text-gray-400">Track promotional videos posted + demo videos recorded.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Product Marketing Output (Videos)</h3>
+      <p className="mt-1 text-xs text-slate-400">Track promotional videos posted + demo videos recorded.</p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs block mb-1">Promotional/product videos posted</label>
+          <label className="text-xs font-medium text-slate-400 mb-1 block">Promotional/product videos posted</label>
           <Input type="number" value={String(v.promoVideosPosted ?? 0)} onChange={(e) => setField("promoVideosPosted", Number((e.target as HTMLInputElement).value || 0))} />
         </div>
         <div>
-          <label className="text-xs block mb-1">Product demo videos recorded</label>
+          <label className="text-xs font-medium text-slate-400 mb-1 block">Product demo videos recorded</label>
           <Input type="number" value={String(v.demoVideosRecorded ?? 0)} onChange={(e) => setField("demoVideosRecorded", Number((e.target as HTMLInputElement).value || 0))} />
         </div>
       </div>
 
       <div className="mt-3">
-        <div className="text-xs mb-2">Platforms posted to:</div>
+      <div className="text-xs text-slate-400 mb-2">Platforms posted to:</div>
         <div className="flex items-center gap-2">
           <button type="button" aria-pressed={Boolean(v.platforms?.facebook)} onClick={() => setField("platforms", { ...(v.platforms || {}), facebook: !Boolean(v.platforms?.facebook) })} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${v.platforms?.facebook ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-200"}`}>
             Facebook
@@ -341,13 +344,13 @@ function ProductMarketingVideosCard({ value, onChange }: { value?: any; onChange
         </div>
       </div>
 
-      <div className="mt-3">
-        <label className="text-xs block mb-1">Video links / titles (optional)</label>
+        <div className="mt-3">
+        <label className="text-xs font-medium text-slate-400 mb-1 block">Video links / titles (optional)</label>
         <Textarea rows={3} value={String(v.videoLinks ?? "")} onChange={(e) => setField("videoLinks", e.target.value)} placeholder="Paste links or titles for quick reference…" />
       </div>
 
       <div className="mt-3">
-        <label className="text-xs block mb-1">Notes / Content ideas</label>
+        <label className="text-xs font-medium text-slate-400 mb-1 block">Notes / Content ideas</label>
         <Textarea rows={3} value={String(v.videoNotes ?? "")} onChange={(e) => setField("videoNotes", e.target.value)} placeholder="Ideas, issues, or content plan…" />
       </div>
     </section>
@@ -376,24 +379,24 @@ function WednesdayLiveCard({ value, onChange }: { value?: WednesdayLiveContent; 
   const update = (patch: Partial<WednesdayLiveContent>) => onChange({ ...v, ...patch });
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Wednesday – Live sessions &amp; content output</h3>
-      <p className="text-xs text-gray-400">Track live sessions with duration, platform and leads generated.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Wednesday – Live sessions &amp; content output</h3>
+      <p className="text-xs text-slate-400">Track live sessions with duration, platform and leads generated.</p>
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-200">Live sessions hosted (count)</label>
+          <label className="block text-sm font-medium text-slate-400">Live sessions hosted (count)</label>
           <Input type="number" min={0} value={String(v.count ?? 0)} onChange={(e) => update({ count: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Session duration (minutes)</label>
+          <label className="block text-sm font-medium text-slate-400">Session duration (minutes)</label>
           <Input type="number" min={0} value={String(v.durationMinutes ?? 0)} onChange={(e) => update({ durationMinutes: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Platform</label>
-          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 w-full">
+          <label className="block text-sm font-medium text-slate-400">Platform</label>
+          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-lg border border-slate-700 bg-black/30 p-2 text-sm text-slate-100 w-full">
             <option>Facebook</option>
             <option>Instagram</option>
             <option>TikTok</option>
@@ -402,22 +405,22 @@ function WednesdayLiveCard({ value, onChange }: { value?: WednesdayLiveContent; 
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Estimated viewers</label>
+          <label className="block text-sm font-medium text-slate-400">Estimated viewers</label>
           <Input type="number" min={0} value={String(v.estimatedViewers ?? 0)} onChange={(e) => update({ estimatedViewers: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Leads generated from live</label>
+          <label className="block text-sm font-medium text-slate-400">Leads generated from live</label>
           <Input type="number" min={0} value={String(v.leadsGenerated ?? 0)} onChange={(e) => update({ leadsGenerated: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Promotional / product clips posted</label>
+          <label className="block text-sm font-medium text-slate-400">Promotional / product clips posted</label>
           <Input type="number" min={0} value={String(v.promoClipsPosted ?? 0)} onChange={(e) => update({ promoClipsPosted: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Top-performing content / issues / ideas</label>
+          <label className="block text-sm font-medium text-slate-400">Top-performing content / issues / ideas</label>
           <Textarea rows={3} placeholder="Best clips, questions asked, or improvements for next live…" value={String(v.notes ?? "")} onChange={(e) => update({ notes: e.target.value })} />
         </div>
       </div>
@@ -481,23 +484,23 @@ function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: an
   const setField = (k: string, val: any) => onChange({ ...v, [k]: val });
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Thursday – Weekly Marketing &amp; Office Ops</h3>
-      <p className="mt-1 text-xs text-gray-400">Track meeting attendance, video shoot, content posted, and workspace organization.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Thursday – Weekly Marketing &amp; Office Ops</h3>
+      <p className="mt-1 text-xs text-slate-400">Track meeting attendance, video shoot, content posted, and workspace organization.</p>
 
       <div className="mt-4 space-y-3">
         <label className="flex items-center gap-2">
           <Checkbox checked={Boolean(v.meetingAttended)} onCheckedChange={(val) => setField('meetingAttended', Boolean(val))} />
-          <span className="text-sm">Weekly marketing meeting attended</span>
+          <span className="text-sm text-slate-100">Weekly marketing meeting attended</span>
         </label>
 
         <label className="flex items-center gap-2">
           <Checkbox checked={Boolean(v.videoShoot)} onCheckedChange={(val) => setField('videoShoot', Boolean(val))} />
-          <span className="text-sm">Participated in weekly video shoot</span>
+          <span className="text-sm text-slate-100">Participated in weekly video shoot</span>
         </label>
 
         <div>
-          <label className="text-sm block mb-1">Number of videos participated in</label>
+          <label className="text-sm font-medium text-slate-400 block mb-1">Number of videos participated in</label>
           <Input type="number" min={0} value={String(v.videosParticipated ?? 0)} onChange={(e) => setField('videosParticipated', Number((e.target as HTMLInputElement).value || 0))} />
         </div>
 
@@ -507,11 +510,11 @@ function ThursdayWeeklyCard({ value, onChange }: { value?: any; onChange: (v: an
 
         <label className="flex items-center gap-2">
           <Checkbox checked={Boolean(v.officeClean)} onCheckedChange={(val) => setField('officeClean', Boolean(val))} />
-          <span className="text-sm">Office / Display / Photo area cleaned &amp; organized</span>
+          <span className="text-sm text-slate-100">Office / Display / Photo area cleaned &amp; organized</span>
         </label>
 
         <div>
-          <label className="text-sm block mb-1">Notes (challenges, highlights, ideas)</label>
+          <label className="text-sm font-medium text-slate-400 block mb-1">Notes (challenges, highlights, ideas)</label>
           <Textarea rows={3} placeholder="Notes (challenges, highlights, ideas)" value={String(v.thursdayNotes ?? '')} onChange={(e) => setField('thursdayNotes', e.target.value)} />
         </div>
       </div>
@@ -532,28 +535,28 @@ function FridayWeekendPrepCard({ value, onChange }: { value?: FridayWeekendPrep;
   const update = (patch: Partial<FridayWeekendPrep>) => onChange({ ...v, ...patch });
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Friday – Weekend Content &amp; Store Prep</h3>
-      <p className="mt-1 text-xs text-gray-400">Track videos posted, weekend promos, and workspace readiness.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Friday – Weekend Content &amp; Store Prep</h3>
+      <p className="mt-1 text-xs text-slate-400">Track videos posted, weekend promos, and workspace readiness.</p>
 
       <div className="mt-4 space-y-4">
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-200">Promotional / product videos posted</label>
+          <label className="block text-sm font-medium text-slate-400">Promotional / product videos posted</label>
           <Input type="number" min={0} value={String(v.promoVideosPosted ?? 0)} onChange={(e) => update({ promoVideosPosted: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-200">Weekend promos prepared / posts scheduled</label>
+          <label className="block text-sm font-medium text-slate-400">Weekend promos prepared / posts scheduled</label>
           <Input type="number" min={0} value={String(v.weekendPromosScheduled ?? 0)} onChange={(e) => update({ weekendPromosScheduled: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <label className="flex items-center gap-2">
           <Checkbox checked={Boolean(v.officeCleanOrganized)} onCheckedChange={(val) => update({ officeCleanOrganized: Boolean(val) })} />
-          <span className="text-sm">Office / display / photo area cleaned &amp; organized</span>
+          <span className="text-sm text-slate-100">Office / display / photo area cleaned &amp; organized</span>
         </label>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Notes (weekend plan, issues, ideas)</label>
+          <label className="block text-sm font-medium text-slate-400">Notes (weekend plan, issues, ideas)</label>
           <Textarea rows={3} placeholder="Key promos, reminders for Saturday/Monday…" value={String(v.notes ?? '')} onChange={(e) => update({ notes: e.target.value })} />
         </div>
       </div>
@@ -577,24 +580,24 @@ function SaturdayLiveAndStoreCard({ value, onChange }: { value?: SaturdayLiveAnd
   const update = (patch: Partial<SaturdayLiveAndStore>) => onChange({ ...v, ...patch });
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5 shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-100">Saturday – Live Sessions &amp; Store Readiness</h3>
-      <p className="mt-1 text-xs text-gray-400">Track live sessions and ensure the store is ready for the weekend.</p>
+    <section className={cardClasses + " p-5"}>
+      <h3 className="text-lg font-semibold text-slate-100">Saturday – Live Sessions &amp; Store Readiness</h3>
+      <p className="mt-1 text-xs text-slate-400">Track live sessions and ensure the store is ready for the weekend.</p>
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-200">Live sessions hosted (count)</label>
+          <label className="block text-sm font-medium text-slate-400">Live sessions hosted (count)</label>
           <Input type="number" min={0} value={String(v.count ?? 0)} onChange={(e) => update({ count: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Session duration (minutes)</label>
+          <label className="block text-sm font-medium text-slate-400">Session duration (minutes)</label>
           <Input type="number" min={0} value={String(v.durationMinutes ?? 0)} onChange={(e) => update({ durationMinutes: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Platform</label>
-          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-xl border border-gray-800 bg-black/40 p-2 text-sm text-gray-100 w-full">
+          <label className="block text-sm font-medium text-slate-400">Platform</label>
+          <select value={v.platform || "Facebook"} onChange={(e) => update({ platform: (e.target as HTMLSelectElement).value as any })} className="mt-1 rounded-lg border border-slate-700 bg-black/30 p-2 text-sm text-slate-100 w-full">
             <option>Facebook</option>
             <option>Instagram</option>
             <option>TikTok</option>
@@ -603,22 +606,22 @@ function SaturdayLiveAndStoreCard({ value, onChange }: { value?: SaturdayLiveAnd
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Estimated viewers</label>
+          <label className="block text-sm font-medium text-slate-400">Estimated viewers</label>
           <Input type="number" min={0} value={String(v.estimatedViewers ?? 0)} onChange={(e) => update({ estimatedViewers: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Leads generated from live</label>
+          <label className="block text-sm font-medium text-slate-400">Leads generated from live</label>
           <Input type="number" min={0} value={String(v.leadsGenerated ?? 0)} onChange={(e) => update({ leadsGenerated: Number((e.target as HTMLInputElement).value || 0) })} />
         </div>
 
         <label className="flex items-center gap-2">
           <Checkbox checked={Boolean(v.officeCleanOrganized)} onCheckedChange={(val) => update({ officeCleanOrganized: Boolean(val) })} />
-          <span className="text-sm">Office / display / photo area cleaned &amp; organized</span>
+          <span className="text-sm text-slate-100">Office / display / photo area cleaned &amp; organized</span>
         </label>
 
         <div>
-          <label className="block text-sm font-medium text-gray-200">Notes (highlights, issues, ideas)</label>
+          <label className="block text-sm font-medium text-slate-400">Notes (highlights, issues, ideas)</label>
           <Textarea rows={3} placeholder="Anything notable from today's live or store setup…" value={String(v.notes ?? '')} onChange={(e) => update({ notes: e.target.value })} />
         </div>
       </div>
@@ -1020,7 +1023,8 @@ export default function DailyTasksUI() {
   }, [dayState, market, day]);
 
   return (
-    <div className="w-full p-6 space-y-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-6xl p-6 space-y-6">
       {success ? (
         <div className="p-3 rounded bg-emerald-900/10 text-emerald-300">{success}</div>
       ) : null}
@@ -1034,8 +1038,8 @@ export default function DailyTasksUI() {
       ) : null}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Daily Task Ops  (Mon–Sat)</h1>
-          <p className="text-sm opacity-80">Every task you complete brings you closer to your next reward</p>
+          <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+          <p className="text-sm text-slate-400">Every task you complete brings you closer to your next reward.</p>
         </div>
         <div />
       </div>
@@ -1045,12 +1049,14 @@ export default function DailyTasksUI() {
       <div className="grid grid-cols-6 gap-2 w-full">
         {Object.keys(dayTaskDefinitions).map((k) => {
           const isActive = day === k;
+          const activeCls = "rounded-xl inline-flex items-center justify-center gap-2 text-xs border border-white/10 text-slate-200 bg-white/5 px-3 py-2";
+          const inactiveCls = "rounded-xl inline-flex items-center justify-center gap-2 text-xs border border-white/10 text-slate-300 bg-transparent hover:bg-white/5 px-3 py-2";
           return (
             <Button
               key={k}
               onClick={() => setDay(k as DayKey)}
               variant={isActive ? "secondary" : "secondary"}
-              className={`py-2 px-3 text-xs ${isActive ? "tab-active" : "text-gray-300 hover:text-[var(--betech-orange)]"}`}
+              className={isActive ? activeCls : inactiveCls}
             >
               {dayTaskDefinitions[k as DayKey].title.slice(0, 3)}
             </Button>
@@ -1059,7 +1065,7 @@ export default function DailyTasksUI() {
       </div>
 
       <div className="space-y-6">
-        <Card className="shadow-none p-4 bg-transparent border border-gray-700/30">
+        <Card className={cardClasses}>
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">{def.title}</h2>
@@ -1079,8 +1085,8 @@ export default function DailyTasksUI() {
           </div>
 
           {/* Marketplace block placed above task fields for visual priority */}
-          <Card className="mt-4 bg-transparent space-y-4 p-4 border border-gray-700/30 shadow-none">
-            <h3 className="font-semibold text-sm">Jumia / Kilimall Operations</h3>
+          <Card className={cardClasses + " mt-4 space-y-4"}>
+            <h3 className="font-semibold text-sm text-slate-400">Jumia / Kilimall Operations</h3>
             <div className="grid md:grid-cols-3 gap-3">
               <LabeledNumber label="New products uploaded" value={market[day].newUploaded} onChange={(v) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], newUploaded: v } }))} />
               <LabeledNumber label="Copies of products uploaded" value={market[day].copiesUploaded} onChange={(v) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], copiesUploaded: v } }))} />
@@ -1090,7 +1096,7 @@ export default function DailyTasksUI() {
             <div className="space-y-2 mt-3">
               <div className="text-sm font-medium">Sales Records</div>
               {market[day].sales.map((row) => (
-                <div key={row.id} className="rounded-2xl border border-gray-700/30 p-4 mb-4 bg-transparent">
+                <div key={row.id} className={cardClasses + " mb-4"}>
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-sm font-semibold">Receipt</h3>
@@ -1103,7 +1109,7 @@ export default function DailyTasksUI() {
 
                   <div className="grid grid-cols-12 gap-4 mt-4 items-center">
                     <div className="col-span-4">
-                      <label className="text-xs">Selling total (KES)</label>
+                      <label className="text-xs font-medium text-slate-400 mb-1 block">Selling total (KES)</label>
                       <Input value={row.price === "" ? "" : String(row.price)} type="number" onChange={(e) => {
                         const raw = (e.target as HTMLInputElement).value;
                         const parsed = raw === "" ? 0 : Number(raw);
@@ -1113,12 +1119,12 @@ export default function DailyTasksUI() {
                     </div>
 
                     <div className="col-span-5">
-                      <label className="text-xs">Receipt number</label>
+                      <label className="text-xs font-medium text-slate-400 mb-1 block">Receipt number</label>
                       <Input value={row.receiptNumber || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, receiptNumber: (e.target as HTMLInputElement).value } : r) } }))} placeholder="Required" />
                     </div>
 
                     <div className="col-span-3">
-                      <label className="text-xs">Payment method</label>
+                      <label className="text-xs font-medium text-slate-400 mb-1 block">Payment method</label>
                       <div className="flex items-center gap-2 mt-2">
                         <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'MPESA' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'MPESA' } : r) } }))}>MPESA</button>
                         <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'CASH' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'CASH' } : r) } }))}>Cash</button>
@@ -1130,11 +1136,11 @@ export default function DailyTasksUI() {
                     <div className="text-sm font-medium">Products in this receipt</div>
                     <div className="mt-2 grid grid-cols-12 gap-2 items-start">
                       <div className="col-span-8">
-                        <label className="text-xs mb-1 block">Product name</label>
+                        <label className="text-xs font-medium text-slate-400 mb-1 block">Product name</label>
                         <Input placeholder="Product name" value={row.name || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, name: (e.target as HTMLInputElement).value } : r) } }))} />
                       </div>
                       <div className="col-span-3">
-                        <label className="text-xs mb-1 block">Buying price (KES)</label>
+                        <label className="text-xs font-medium text-slate-400 mb-1 block">Buying price (KES)</label>
                         <Input type="number" value={String((row as any).buyingPrice ?? '')} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, buyingPrice: Number((e.target as HTMLInputElement).value || 0) } : r) } }))} />
                       </div>
                       <div className="col-span-1 flex items-center">
@@ -1142,14 +1148,14 @@ export default function DailyTasksUI() {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <button type="button" className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: '', price: '', paymentMethod: 'MPESA', receiptNumber: '' }] } }))}>+ Add product to this receipt</button>
+                      <button type="button" className="rounded-xl border border-white/10 text-slate-200 bg-transparent hover:bg-white/5 text-sm px-3 py-2 inline-flex items-center justify-center gap-2" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: '', price: '', paymentMethod: 'MPESA', receiptNumber: '' }] } }))}>+ Add product to this receipt</button>
                     </div>
                   </div>
                 </div>
               ))}
 
                <div className="flex justify-end" style={{ zIndex: 2 }}>
-                 <Button variant="primary" className="px-5 py-2 text-sm font-semibold btn-primary" style={{ backgroundColor: "var(--betech-orange)", color: "#000" }} aria-label="Add sales row" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
+                 <Button variant="primary" className="rounded-xl px-4 py-2 bg-emerald-500 text-black font-semibold hover:brightness-95 inline-flex items-center justify-center gap-2 text-sm" aria-label="Add sales row" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }))}>Add row</Button>
                </div>
             </div>
           </Card>
@@ -1358,18 +1364,36 @@ export default function DailyTasksUI() {
 
           {/* Admin summary removed from daily entry page per design */}
 
-            <Card className="mt-4 p-3 flex gap-2 justify-end border border-gray-700/30 shadow-none">
-              <Button variant="secondary" onClick={() => { setDayState((s) => ({ ...s, [day]: defaultDayState(day) })); setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() })); }}>Reset day</Button>
-                <div className="flex items-center gap-3">
-                  <div className="text-xs text-slate-400" aria-live="polite">
-                    {autosaveStatus === "saved" && savedAt ? `Saved at ${savedAt}` : autosaveStatus}
-                  </div>
-                  <Button variant="primary" className="btn-primary" style={{ backgroundColor: "var(--betech-orange)", color: "#000" }} aria-label="Submit report" onClick={busy ? undefined : handleSave}>{busy ? "Submitting..." : "Submit report"}</Button>
-                </div>
-            </Card>
+          <Card className={cardClasses + " mt-4 flex gap-2 justify-end"}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDayState((s) => ({ ...s, [day]: defaultDayState(day) }));
+                setMarket((m) => ({ ...m, [day]: defaultMarketplaceState() }));
+              }}
+            >
+              Reset day
+            </Button>
+
+            <div className="flex items-center gap-3">
+              <div aria-live="polite" className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200">
+                {autosaveStatus === "saved" && savedAt ? `Saved at ${savedAt}` : autosaveStatus || "Autosave paused"}
+              </div>
+
+              <Button
+                variant="primary"
+                className="rounded-xl px-4 py-2 bg-emerald-500 text-black font-semibold hover:brightness-95 inline-flex items-center justify-center gap-2 text-sm"
+                aria-label="Submit report"
+                onClick={busy ? undefined : handleSave}
+              >
+                {busy ? "Submitting..." : "Submit report"}
+              </Button>
+            </div>
+          </Card>
         </Card>
       </div>
-    </div>
+    </main>
+  </div>
   );
 }
 
@@ -1382,7 +1406,7 @@ const SummaryItem: React.FC<{ label: string; value: React.ReactNode }> = ({ labe
 
 const LabeledNumber: React.FC<{ label: string; value: number | ""; onChange: (v: number | "") => void }> = ({ label, value, onChange }) => (
   <div>
-    <label className="text-sm block mb-1">{label}</label>
+    <label className="text-sm font-medium text-slate-400 mb-1 block">{label}</label>
     <Input type="number" value={value === "" ? "" : String(value)} onChange={(e) => onChange((e.target as HTMLInputElement).value === "" ? "" : Number((e.target as HTMLInputElement).value))} />
   </div>
 );
@@ -1390,7 +1414,6 @@ const LabeledNumber: React.FC<{ label: string; value: number | ""; onChange: (v:
 // Uses shared Sparkline component from `_components`
 
 function renderIconForKey(key: string) {
-  // map a few common keys to icons
   switch (key) {
     case "demoRecorded":
     case "demoVideosRecorded":
