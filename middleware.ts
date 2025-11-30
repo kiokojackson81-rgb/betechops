@@ -18,7 +18,12 @@ export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
 
-  if (pathname === "/attendant/login" || pathname === "/admin/login" || pathname === "/not-authorized") {
+  if (
+    pathname === "/attendant/login" ||
+    pathname === "/admin/login" ||
+    pathname === "/login" ||
+    pathname === "/not-authorized"
+  ) {
     return NextResponse.next();
   }
 

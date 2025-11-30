@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import type { AttendantCategory } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -10,67 +11,109 @@ async function main() {
     shop = await prisma.shop.create({ data: { name: "Main Shop", location: "Nairobi CBD", phone: "+254722151083", email: "shop@betech.co.ke" } });
   }
 
-  // Create baseline attendants with categories to showcase dashboards
-  const attendants = [
+  const seedUsers = [
     {
-      email: "attendant@betech.co.ke",
-      name: "Default Attendant",
-      categories: ["DIRECT_SALES_OPS"],
+      email: "jackson@betech.co.ke",
+      name: "Jackson",
+      role: "ADMIN" as const,
+      categories: ["BETECH_OPS" as AttendantCategory],
+      password: "Ads0k015@#",
+    },
+    {
+      email: "jeniffer@betech.co.ke",
+      name: "Jeniffer",
+      role: "ATTENDANT" as const,
+      categories: ["DIRECT_SALES_OPS", "MARKETING_OPS"] as unknown as AttendantCategory[],
+      password: "Jeniffer@#2020",
+    },
+    {
+      email: "stephen@betech.co.ke",
+      name: "Stephen",
+      role: "ATTENDANT" as const,
+      categories: ["JUMIA_KILIMALL_OPS" as AttendantCategory],
+      password: "stephen@#2020",
+    },
+    {
+      email: "brendah@betech.co.ke",
+      name: "Brendah",
+      role: "ATTENDANT" as const,
+      categories: ["MARKETING_OPS" as AttendantCategory],
+      password: "brendah@#2020",
+    },
+    {
+      email: "benjamin@betech.co.ke",
+      name: "Benjamin",
+      role: "ATTENDANT" as const,
+      categories: ["BETECH_OPS" as AttendantCategory],
+      password: "benjamin@#2020",
     },
     {
       email: "sales@betech.co.ke",
       name: "Direct Sales Lead",
-      categories: ["DIRECT_SALES_OPS", "MARKETING_OPS"],
+      role: "ATTENDANT" as const,
+      categories: ["DIRECT_SALES_OPS", "MARKETING_OPS"] as unknown as AttendantCategory[],
+      password: "sales@#2020",
     },
     {
       email: "jumia.ops@betech.co.ke",
       name: "Jumia Ops Specialist",
-      categories: ["JUMIA_KILIMALL_OPS"],
+      role: "ATTENDANT" as const,
+      categories: ["JUMIA_KILIMALL_OPS" as AttendantCategory],
+      password: "jumiaops@#2020",
     },
     {
       email: "catalog@betech.co.ke",
       name: "Catalog Uploader",
-      categories: ["MARKETING_OPS"],
+      role: "ATTENDANT" as const,
+      categories: ["MARKETING_OPS" as AttendantCategory],
+      password: "catalog@#2020",
     },
     {
       email: "support@betech.co.ke",
       name: "Support Specialist",
-      categories: ["SUPPORT_OPS"],
+      role: "ATTENDANT" as const,
+      categories: ["SUPPORT_OPS" as AttendantCategory],
+      password: "support@#2020",
     },
   ] as const;
 
-  const attendantRecords = await Promise.all(
-    attendants.map(async (att) => {
-    const primary = att.categories[0] ?? "DIRECT_SALES_OPS";
-      const user = await prisma.user.upsert({
-        where: { email: att.email },
-        update: { attendantCategory: primary as any, isActive: true },
-        create: {
-          email: att.email,
-          name: att.name,
-          role: "ATTENDANT",
-          attendantCategory: primary as any,
-          isActive: true,
-        },
-      });
+  const attendantRecords = [];
+  for (const userDef of seedUsers) {
+    const hashed = await bcrypt.hash(userDef.password, 10);
+    const primary = userDef.categories[0] ?? ("DIRECT_SALES_OPS" as AttendantCategory);
+    const user = await prisma.user.upsert({
+      where: { email: userDef.email },
+      update: {
+        name: userDef.name,
+        role: userDef.role,
+        isActive: true,
+        attendantCategory: primary,
+      },
+      create: {
+        email: userDef.email,
+        name: userDef.name,
+        role: userDef.role,
+        isActive: true,
+        attendantCategory: primary,
+      },
+    });
 
-      const desired = Array.from(new Set(att.categories)) as unknown as AttendantCategory[];
-      await prisma.attendantCategoryAssignment.deleteMany({
-        where: { userId: user.id, category: { notIn: desired as AttendantCategory[] } },
-      });
-      await Promise.all(
-        desired.map((category) =>
-          prisma.attendantCategoryAssignment.upsert({
-            where: { userId_category: { userId: user.id, category: category as AttendantCategory } },
-            update: {},
-            create: { userId: user.id, category: category as AttendantCategory },
-          })
-        )
-      );
+    const desired = Array.from(new Set(userDef.categories)) as AttendantCategory[];
+    await prisma.attendantCategoryAssignment.deleteMany({
+      where: { userId: user.id, category: { notIn: desired } },
+    });
+    await Promise.all(
+      desired.map((category) =>
+        prisma.attendantCategoryAssignment.upsert({
+          where: { userId_category: { userId: user.id, category } },
+          update: {},
+          create: { userId: user.id, category },
+        })
+      )
+    );
 
-      return user;
-    })
-  );
+    attendantRecords.push(user);
+  }
 
   // Create Product
   const product = await prisma.product.upsert({

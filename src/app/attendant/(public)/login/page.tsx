@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import EmailLoginForm from "@/components/EmailLoginForm";
+import CredentialLoginForm from "@/components/CredentialLoginForm";
 
 export default function AttendantLoginPage() {
   return (
@@ -24,13 +24,8 @@ export default function AttendantLoginPage() {
 
             <h1 className="mb-3 text-3xl font-semibold leading-tight md:text-4xl">Attendant Login</h1>
             <p className="max-w-md text-slate-400">
-              Sign in with your company email to access marketing trackers and shop dashboards.
+              Sign in with your company email and password to manage your daily tasks.
             </p>
-
-            <div className="mt-6 w-full md:hidden">
-              <EmailLoginForm callbackUrl="/attendant" />
-            </div>
-
             <div className="mt-6 text-xs text-slate-500 md:mt-10">
               <Link href="/" className="underline underline-offset-2 text-slate-300 hover:text-white">
                 Back to Home
@@ -38,18 +33,15 @@ export default function AttendantLoginPage() {
             </div>
           </section>
 
-          <section className="hidden items-center justify-center md:flex">
+          <section className="flex items-center justify-center">
             <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(18,22,32,.9),rgba(18,22,32,.7))] p-6 shadow-[0_10px_30px_rgba(0,0,0,.35)] backdrop-blur">
-              <EmailLoginForm callbackUrl="/attendant" />
-
+              <CredentialLoginForm
+                defaultRedirect="/attendant"
+                title="Credential login"
+                description="Use your @betech.co.ke email and password."
+              />
               <div className="mt-4 text-center text-xs text-slate-400">
-                We'll send a secure magic link to your email.
-              </div>
-
-              <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-              <div className="mt-6 space-y-2 text-xs text-slate-500">
-                <p>Having trouble? Contact your admin for help.</p>
+                Need help? Contact your admin.
               </div>
             </div>
           </section>
