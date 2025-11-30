@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Dialog } from "@/app/_components/Dialog";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
