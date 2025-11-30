@@ -50,6 +50,7 @@
     "pino": "^8.0.0",
     "prom-client": "^14.0.0",
     "puppeteer-core": "^24.31.0",
+    "puppeteer": "^24.31.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "zod": "^3.23.8"
