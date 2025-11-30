@@ -139,7 +139,7 @@ const normalizeEntry = (entry: MarketingDailyEntry & { receipts?: (MarketingRece
 
 type AttendantEntry = DailyReport & {
   sales: DailySale[];
-  user?: { id: string; name?: string | null; email?: string | null };
+  user?: { id: string; name?: string | null; email?: string | null } | null;
 };
 
 const normalizeAttendantEntry = (entry: AttendantEntry): MarketingReportEntry => {
@@ -162,11 +162,13 @@ const normalizeAttendantEntry = (entry: AttendantEntry): MarketingReportEntry =>
           },
         ]
       : [];
+  // Cast receipts to the Prisma type shape expected by the report
+  const receiptsCasted = receipts as unknown as (MarketingReceipt & { items: MarketingReceiptItem[] })[];
   const totalProfit = receipts.reduce(
     (sum, receipt) => sum + (toNumber(receipt.sellingTotal) - receipt.items.reduce((acc, it) => acc + toNumber(it.buyingPrice), 0)),
     0
   );
-  const normalizedSales: MarketingSale[] = sales.map((sale) => {
+  const normalizedSales = sales.map((sale) => {
     const cost = toNumber(sale.price);
     const share =
       sales.length > 0
@@ -182,22 +184,24 @@ const normalizeAttendantEntry = (entry: AttendantEntry): MarketingReportEntry =>
       itemsCount: 1,
     };
   });
-  return {
+  // Cast to MarketingSale[] for compatibility with reporting types
+  const normalizedSalesCasted = normalizedSales as unknown as MarketingSale[];
+  const result = {
     id: entry.id,
     date: entry.date.toISOString(),
     dayOfWeek: entry.day,
     totalSales: guaranteedTotalSales,
     totalProfit,
-    receipts,
-    sales: normalizedSales,
-    submittedById: entry.userId ?? undefined,
-    submittedByName: entry.user?.name ?? entry.submittedBy ?? undefined,
-    submittedByEmail: entry.user?.email ?? undefined,
+    receipts: receiptsCasted,
+    sales: normalizedSalesCasted,
+    submittedById: entry.userId ?? null,
+    submittedByName: entry.user?.name ?? entry.submittedBy ?? null,
+    submittedByEmail: entry.user?.email ?? null,
     source: "ATTENDANT",
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
-    day: entry.day,
-  };
+  } as unknown as MarketingReportEntry;
+  return result;
 };
 
 export async function getMarketingReport(params: MarketingReportFilters): Promise<MarketingReportResult> {
