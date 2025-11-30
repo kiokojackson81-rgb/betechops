@@ -128,7 +128,7 @@ export default function AttendantDashboard() {
   }
 
   const categoryOrder = useMemo<AttendantCategory[]>(() => {
-    const fallback = profile?.attendantCategory ?? "GENERAL";
+    const fallback = profile?.attendantCategory ?? "DIRECT_SALES_OPS";
     const raw = profile?.categories ?? [];
     const ordered = [fallback, ...raw].filter(Boolean) as AttendantCategory[];
     return Array.from(new Set(ordered)) as AttendantCategory[];
@@ -136,9 +136,9 @@ export default function AttendantDashboard() {
 
   const definitions = useMemo(() => {
     if (categoryOrder.length) {
-      return categoryOrder.map((cat) => attendantCategoryById[cat] ?? attendantCategoryById.GENERAL);
+      return categoryOrder.map((cat) => (attendantCategoryById as any)[cat] ?? (attendantCategoryById as any)["DIRECT_SALES_OPS"]);
     }
-    return [attendantCategoryById.GENERAL];
+    return [(attendantCategoryById as any)["DIRECT_SALES_OPS"]];
   }, [categoryOrder]);
 
   const widgets = useMemo(() => {

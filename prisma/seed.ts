@@ -41,7 +41,7 @@ async function main() {
 
   const attendantRecords = await Promise.all(
     attendants.map(async (att) => {
-      const primary = att.categories[0] ?? "GENERAL";
+    const primary = att.categories[0] ?? "DIRECT_SALES_OPS";
       const user = await prisma.user.upsert({
         where: { email: att.email },
         update: { attendantCategory: primary as any, isActive: true },

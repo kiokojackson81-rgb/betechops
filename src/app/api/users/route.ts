@@ -66,9 +66,9 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.toLowerCase().trim();
   const primaryCandidate = body.category?.toUpperCase();
-  const fallbackPrimary = primaryCandidate && categoryValues.has(primaryCandidate as AttendantCategory) ? (primaryCandidate as AttendantCategory) : AttendantCategory.GENERAL;
+  const fallbackPrimary = primaryCandidate && categoryValues.has(primaryCandidate as AttendantCategory) ? (primaryCandidate as AttendantCategory) : ("DIRECT_SALES_OPS" as any);
   const desiredCategories = sanitizeCategories(body.categories ?? (primaryCandidate ? [primaryCandidate] : []), fallbackPrimary);
-  const primaryCategory = desiredCategories[0] ?? AttendantCategory.GENERAL;
+  const primaryCategory = desiredCategories[0] ?? ("DIRECT_SALES_OPS" as any);
 
   const user = await prisma.$transaction(async (tx) => {
     const saved = await tx.user.upsert({
