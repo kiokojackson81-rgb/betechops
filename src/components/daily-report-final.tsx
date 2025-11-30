@@ -335,21 +335,59 @@ export default function DailyReportFinal() {
   }, 0);
 
   // Submit handler – build payload with date, day, receipts, and checklist fields
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Open confirm modal (preserves original behavior until confirmed)
   const handleSubmit = () => {
-    const payload = {
-      date: selectedDate.toISOString().split("T")[0],
-      day: dayName,
-      receipts: receipts.map((r) => ({
-        receiptNumber: r.receiptNumber,
-        sellingTotal: r.sellingTotal,
-        paymentMethod: r.paymentMethod,
-        items: r.items,
-      })),
-      fields: fieldsState,
-    };
-    console.log("Submitting payload", payload);
-    // TODO: call your API to save the report
-    alert(`Report submitted for ${dayName} – check the console for payload.`);
+    setShowConfirm(true);
+  };
+
+  // Actual API submit logic executed when user confirms
+  const submitToApi = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      // Build tasks payload: include existing fields and convert receipts into sales rows
+      const sales = receipts.map((r) => ({
+        productName: (r.items && r.items.length) ? r.items.map((it) => it.name).filter(Boolean).join(", ") : undefined,
+        price: Number(r.sellingTotal || 0),
+        paymentMethod: r.paymentMethod || undefined,
+        receiptNumber: r.receiptNumber || undefined,
+      }));
+
+      const body = {
+        date: selectedDate.toISOString().split("T")[0],
+        day: dayName,
+        productsCount: totalItems,
+        totalSales: totalSales,
+        tasks: { ...fieldsState, sales },
+      } as any;
+
+      const res = await fetch("/api/daily-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      // Success — reset or give feedback
+      const json = await res.json().catch(() => null);
+      setShowConfirm(false);
+      setIsSubmitting(false);
+      alert(`Report submitted for ${dayName}.`);
+      // Optionally reset the form
+      resetDay();
+      return json;
+    } catch (err: unknown) {
+      setIsSubmitting(false);
+      const msg = err instanceof Error ? err.message : String(err ?? "Unknown error");
+      setSubmitError(msg);
+      console.error("daily report submit failed", err);
+    }
   };
 
   // Reset all state to initial values
@@ -364,17 +402,15 @@ export default function DailyReportFinal() {
   const sections = dayConfig[dayName] ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-8">
-      {/* Date & Day selector bar */}
-      <div className={cardClasses + " p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
-        {/* Date selector */}
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-          <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      {/* Header: date + day pills */}
+      <div className={cardClasses + " p-4 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <CalendarIcon size={16} className="text-slate-400" />
             <input
               type="date"
-              className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+              className="rounded-full border border-slate-700 bg-black/30 px-3 py-1 text-sm text-slate-100"
               value={selectedDate.toISOString().split("T")[0]}
               onChange={(e) => {
                 const d = new Date(e.target.value);
@@ -382,23 +418,8 @@ export default function DailyReportFinal() {
               }}
             />
           </div>
-        </div>
-        {/* Day selector */}
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-          <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
-          <select
-            className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-            value={dayName}
-            onChange={(e) => {
-              const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-              const targetIndex = days.indexOf(e.target.value);
-              const next = new Date(selectedDate);
-              const currentIndex = next.getDay();
-              const diff = targetIndex - currentIndex;
-              next.setDate(next.getDate() + diff);
-              setSelectedDate(next);
-            }}
-          >
+          <div className="hidden md:flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Day</span>
             {[
               "Sunday",
               "Monday",
@@ -407,234 +428,334 @@ export default function DailyReportFinal() {
               "Thursday",
               "Friday",
               "Saturday",
-            ].map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* Action buttons */}
-        <div className="flex items-end gap-4">
-          <button
-            type="button"
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-            onClick={resetDay}
-          >
-            Reset day
-          </button>
-          <button
-            type="button"
-            className="rounded-xl px-4 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
-            onClick={handleSubmit}
-          >
-            Submit report
-          </button>
-        </div>
-      </div>
-
-      {/* Receipt entry section */}
-      <div className={cardClasses + " p-6 space-y-4"}>
-        <h2 className="text-lg font-semibold">Add each receipt for today</h2>
-        <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
-        {receipts.map((receipt, rIndex) => (
-          <div key={rIndex} className="border border-slate-700 rounded-xl p-4 space-y-4 bg-black/20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Selling total (KES)</label>
-                <input
-                  type="number"
-                  className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                  value={receipt.sellingTotal}
-                  onChange={(e) => updateReceiptField(rIndex, "sellingTotal", parseFloat(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number (required)</label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                  placeholder="Required"
-                  value={receipt.receiptNumber}
-                  onChange={(e) => updateReceiptField(rIndex, "receiptNumber", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Payment method (required)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      receipt.paymentMethod === "MPESA"
-                        ? "bg-emerald-500 text-black border-emerald-600"
-                        : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                    }`}
-                    onClick={() => updateReceiptField(rIndex, "paymentMethod", "MPESA")}
-                  >
-                    MPESA
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      receipt.paymentMethod === "CASH"
-                        ? "bg-emerald-500 text-black border-emerald-600"
-                        : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                    }`}
-                    onClick={() => updateReceiptField(rIndex, "paymentMethod", "CASH")}
-                  >
-                    Cash
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* Items list */}
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</label>
-              {receipt.items.map((item, iIndex) => (
-                <div
-                  key={iIndex}
-                  className="grid grid-cols-1 md:grid-cols-[3fr_1fr_auto] gap-2 items-center"
+            ].map((d) => {
+              const active = d === dayName;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => {
+                    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                    const targetIndex = days.indexOf(d);
+                    const next = new Date(selectedDate);
+                    const currentIndex = next.getDay();
+                    const diff = targetIndex - currentIndex;
+                    next.setDate(next.getDate() + diff);
+                    setSelectedDate(next);
+                  }}
+                  className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+                    active
+                      ? "bg-emerald-500 text-black border-emerald-600"
+                      : "bg-transparent text-slate-200 border-slate-700 hover:bg-white/5"
+                  }`}
                 >
-                  <input
-                    type="text"
-                    value={item.name}
-                    className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                    onChange={(e) => updateReceiptItem(rIndex, iIndex, "name", e.target.value)}
-                  />
-                  <input
-                    type="number"
-                    value={item.buyingPrice}
-                    className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                    onChange={(e) => updateReceiptItem(rIndex, iIndex, "buyingPrice", parseFloat(e.target.value) || 0)}
-                  />
-                  <button
-                    type="button"
-                    className="text-xs text-red-400 hover:text-red-300"
-                    onClick={() => removeItemFromReceipt(rIndex, iIndex)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="mt-2 inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-                onClick={() => addItemToReceipt(rIndex)}
-              >
-                + Add product to this receipt
-              </button>
-            </div>
-            {/* Remove receipt button */}
-            {receipts.length > 1 && (
-              <button
-                type="button"
-                className="text-xs text-red-400 hover:text-red-300"
-                onClick={() => removeReceipt(rIndex)}
-              >
-                Remove receipt
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-          onClick={addReceipt}
-        >
-          + Add receipt
-        </button>
-
-        {/* Totals summary */}
-        <div className="mt-4 flex flex-col gap-1 text-sm text-slate-400">
-          <span>Total receipts: {totalReceipts}</span>
-          <span>Total sales (KES): {totalSales.toLocaleString()}</span>
-          <span>Total profit (KES): {totalProfit.toLocaleString()}</span>
-          <span>Total items: {totalItems}</span>
-        </div>
-      </div>
-
-      {/* Dynamic checklist sections based on day */}
-      {sections.map((section) => (
-        <div key={section.title} className={cardClasses + " p-6 space-y-4"}>
-          <h3 className="text-lg font-semibold">{section.title}</h3>
-          {/* Fields rendering */}
-          <div className="space-y-4">
-            {section.fields.map((field) => {
-              const value = fieldsState[field.key];
-              if (field.type === "boolean") {
-                return (
-                  <label key={field.key} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500"
-                      checked={value}
-                      onChange={(e) => handleFieldChange(field.key, e.target.checked)}
-                    />
-                    <span className="text-sm">{field.label}</span>
-                  </label>
-                );
-              }
-              if (field.type === "number") {
-                return (
-                  <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2">
-                    <label className="text-sm md:w-1/2">{field.label}</label>
-                    <input
-                      type="number"
-                      className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                      value={value}
-                      onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                );
-              }
-              if (field.type === "text") {
-                return (
-                  <div key={field.key} className="flex flex-col gap-2">
-                    <label className="text-sm">{field.label}</label>
-                    <textarea
-                      rows={3}
-                      className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                      value={value}
-                      onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                    />
-                  </div>
-                );
-              }
-              if (field.type === "select" && field.options) {
-                return (
-                  <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2">
-                    <label className="text-sm md:w-1/2">{field.label}</label>
-                    <select
-                      className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                      value={value}
-                      onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                    >
-                      {field.options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              }
-              return null;
+                  {d.slice(0, 3)}
+                </button>
+              );
             })}
           </div>
         </div>
-      ))}
 
-      {/* Notes / Summary */}
-      <div className={cardClasses + " p-6 space-y-2"}>
-        <label className="text-sm font-semibold">Notes / Summary</label>
-        <textarea
-          rows={4}
-          className="w-full rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-          placeholder="Any additional comments, highlights or issues…"
-          value={fieldsState["notes"] || ""}
-          onChange={(e) => handleFieldChange("notes", e.target.value)}
-        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/5"
+            onClick={resetDay}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="rounded-full px-4 py-1 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+          >
+            Submit
+          </button>
+        </div>
       </div>
+
+      {/* Top grid: receipts (2/3) and right column stats/communications (1/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: receipts - spans 2 columns on large screens */}
+        <div className="lg:col-span-2">
+          <div className={cardClasses + " p-6 space-y-4"}>
+            <h2 className="text-lg font-semibold">Receipts</h2>
+            <p className="text-sm text-slate-400">Add each receipt for today. Totals calculate automatically.</p>
+            {receipts.map((receipt, rIndex) => (
+              <div key={rIndex} className="border border-slate-700 rounded-xl p-4 space-y-3 bg-black/20">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Selling (KES)</label>
+                    <input
+                      type="number"
+                      className="w-full rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                      value={receipt.sellingTotal}
+                      onChange={(e) => updateReceiptField(rIndex, "sellingTotal", parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Receipt #</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                      placeholder="Required"
+                      value={receipt.receiptNumber}
+                      onChange={(e) => updateReceiptField(rIndex, "receiptNumber", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Payment</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          receipt.paymentMethod === "MPESA"
+                            ? "bg-emerald-500 text-black border-emerald-600"
+                            : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                        }`}
+                        onClick={() => updateReceiptField(rIndex, "paymentMethod", "MPESA")}
+                      >
+                        MPESA
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          receipt.paymentMethod === "CASH"
+                            ? "bg-emerald-500 text-black border-emerald-600"
+                            : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                        }`}
+                        onClick={() => updateReceiptField(rIndex, "paymentMethod", "CASH")}
+                      >
+                        Cash
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items list */}
+                <div className="space-y-2">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Products</label>
+                  {receipt.items.map((item, iIndex) => (
+                    <div key={iIndex} className="grid grid-cols-1 md:grid-cols-[3fr_1fr_auto] gap-2 items-center">
+                      <input
+                        type="text"
+                        value={item.name}
+                        className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                        onChange={(e) => updateReceiptItem(rIndex, iIndex, "name", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        value={item.buyingPrice}
+                        className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                        onChange={(e) => updateReceiptItem(rIndex, iIndex, "buyingPrice", parseFloat(e.target.value) || 0)}
+                      />
+                      <button
+                        type="button"
+                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={() => removeItemFromReceipt(rIndex, iIndex)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/5"
+                      onClick={() => addItemToReceipt(rIndex)}
+                    >
+                      + Add product
+                    </button>
+                    {receipts.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={() => removeReceipt(rIndex)}
+                      >
+                        Remove receipt
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                onClick={addReceipt}
+              >
+                + Add receipt
+              </button>
+            </div>
+
+            {/* Totals */}
+            <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
+              <div className="px-3 py-1 bg-black/20 rounded-md">Receipts: {totalReceipts}</div>
+              <div className="px-3 py-1 bg-black/20 rounded-md">Sales: KES {totalSales.toLocaleString()}</div>
+              <div className="px-3 py-1 bg-black/20 rounded-md">Profit: KES {totalProfit.toLocaleString()}</div>
+              <div className="px-3 py-1 bg-black/20 rounded-md">Items: {totalItems}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: stats & communications */}
+        <div>
+          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+            <h3 className="text-lg font-semibold">Quick Stats</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
+              <div className="bg-black/20 p-3 rounded-md">Receipts<br/><span className="text-lg text-emerald-400">{totalReceipts}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Sales<br/><span className="text-lg text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Profit<br/><span className="text-lg text-emerald-400">KES {totalProfit.toLocaleString()}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Items<br/><span className="text-lg text-emerald-400">{totalItems}</span></div>
+            </div>
+          </div>
+
+          <div className={cardClasses + " p-6 space-y-4"}>
+            <h3 className="text-lg font-semibold">Communications</h3>
+            <p className="text-sm text-slate-400">Short notes to marketing / ops teams</p>
+            <textarea
+              rows={4}
+              className="w-full rounded-md border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              placeholder="Mention follow-ups, urgent issues, or highlights..."
+              value={fieldsState["notes"] || ""}
+              onChange={(e) => handleFieldChange("notes", e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom grid: live session (left) + notes / day sections (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        <div className="lg:col-span-2">
+          {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
+          {sections.map((section) => (
+            <div key={section.title} className={cardClasses + " p-6 mb-4 space-y-4"}>
+              <h3 className="text-lg font-semibold">{section.title}</h3>
+              <div className="space-y-3">
+                {section.fields.map((field) => {
+                  const value = fieldsState[field.key];
+                  if (field.type === "boolean") {
+                    return (
+                      <label key={field.key} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500"
+                          checked={value}
+                          onChange={(e) => handleFieldChange(field.key, e.target.checked)}
+                        />
+                        <span className="text-sm">{field.label}</span>
+                      </label>
+                    );
+                  }
+                  if (field.type === "number") {
+                    return (
+                      <div key={field.key} className="flex items-center gap-3">
+                        <label className="text-sm w-1/2">{field.label}</label>
+                        <input
+                          type="number"
+                          className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                          value={value}
+                          onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    );
+                  }
+                  if (field.type === "text") {
+                    return (
+                      <div key={field.key} className="flex flex-col gap-2">
+                        <label className="text-sm">{field.label}</label>
+                        <textarea
+                          rows={3}
+                          className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                          value={value}
+                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                        />
+                      </div>
+                    );
+                  }
+                  if (field.type === "select" && field.options) {
+                    return (
+                      <div key={field.key} className="flex items-center gap-3">
+                        <label className="text-sm w-1/2">{field.label}</label>
+                        <select
+                          className="w-40 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                          value={value}
+                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                        >
+                          {field.options.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <div className={cardClasses + " p-6 space-y-4"}>
+            <h3 className="text-lg font-semibold">Notes / Summary</h3>
+            <textarea
+              rows={8}
+              className="w-full rounded-md border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              placeholder="Any additional comments, highlights or issues…"
+              value={fieldsState["notes"] || ""}
+              onChange={(e) => handleFieldChange("notes", e.target.value)}
+            />
+            <div className="flex justify-center">
+              <button
+                type="button"
+                className="mt-2 rounded-full px-6 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+                onClick={handleSubmit}
+              >
+                Submit report
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Confirmation modal for submit */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !isSubmitting && setShowConfirm(false)} />
+          <div className={cardClasses + " z-60 p-6 w-full max-w-lg mx-4"} role="dialog" aria-modal="true">
+            <h3 className="text-lg font-semibold">Confirm submit</h3>
+            <p className="text-sm text-slate-300 mt-2">You're about to submit the report for <strong>{dayName}</strong> ({selectedDate.toISOString().split('T')[0]}).</p>
+            <div className="mt-4 text-sm text-slate-300 space-y-2">
+              <div>Receipts: <strong className="text-emerald-400">{totalReceipts}</strong></div>
+              <div>Total sales: <strong className="text-emerald-400">KES {totalSales.toLocaleString()}</strong></div>
+              <div>Total items: <strong className="text-emerald-400">{totalItems}</strong></div>
+            </div>
+            {submitError && <div className="mt-3 text-sm text-red-400">Error: {submitError}</div>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/5"
+                onClick={() => !isSubmitting && setShowConfirm(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-full px-4 py-1 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+                onClick={() => !isSubmitting && submitToApi()}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Submitting…" : "Confirm & Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
