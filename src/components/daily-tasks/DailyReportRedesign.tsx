@@ -1,10 +1,10 @@
 "use client";
 import React from "react";
-import DailyTasksUI from "./DailyTasksUI";
+import DailyReportRedesignDraft from "./DailyReportRedesignDraft";
 
 export default function DailyReportRedesign() {
-  // Keep the redesign as a safe wrapper that renders the canonical
-  // `DailyTasksUI` component so all fields, autosave and submit behavior
-  // are preserved exactly. We can progressively restyle later.
-  return <DailyTasksUI />;
+  // Swap the wrapper to render the redesign draft so the new UX is shown.
+  // The draft preserves the original payload/autosave behavior; after
+  // QA we can remove the draft and clean up types.
+  return <DailyReportRedesignDraft />;
 }
