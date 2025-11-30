@@ -1,422 +1,367 @@
-import MarketingReportFilterBar from "./FilterBar";
-import { getMarketingReport } from "@/lib/marketingReport";
-import SummaryPanelClient from "./SummaryPanelClient";
-import WipeButtonClient from "./WipeButtonClient";
-import DeleteEntryClient from "./DeleteEntryClient";
-import MultiDayExportClient from "./MultiDayExportClient";
-import WipeAllButtonClient from "./WipeAllButtonClient";
-import { startOfDay, endOfDay, formatISO } from "date-fns";
-import { auth } from "@/lib/auth";
-import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
+"use client";
 
-export const dynamic = "force-dynamic";
+import React from "react";
+import Card from "@/app/_components/Card";
+import ProgressBar from "@/app/_components/ProgressBar";
 
-const currency = (n: number) => `KES ${Math.round(n).toLocaleString()}`;
-const check = (v: boolean) => (v ? "Y" : "N");
+// Define a reusable set of classes for cards to match the tracker aesthetic.
+const cardClasses =
+  "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
 
-function InlineSparkline({ values, color = "#f59e0b" }: { values: number[]; color?: string }) {
-  const w = 220;
-  const h = 60;
-  if (!values.length) return <svg width={w} height={h} />;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const step = w / Math.max(1, values.length - 1);
-  const points = values.map((v, i) => {
-    const x = Math.round(i * step);
-    const y = Math.round(h - ((v - min) / range) * h);
-    return `${x},${y}`;
-  });
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <polyline fill="none" stroke={color} strokeWidth={2} points={points.join(" ")} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const AdminMarketingReportPage: React.FC = () => {
+  // Placeholder data – replace these with real values from your API
+  const tradingPeriods = [
+    "Nov\u00A025,\u00A02025\u00A0\u2013\u00A0Dec\u00A024,\u00A02025",
+    "Oct\u00A025,\u00A02025\u00A0\u2013\u00A0Nov\u00A024,\u00A02025",
+    "Sep\u00A025,\u00A02025\u00A0\u2013\u00A0Oct\u00A024,\u00A02025",
+  ];
+  const currentPeriod = tradingPeriods[0];
+  const summary = {
+    sales: 0,
+    profit: 0,
+    items: 0,
+    mpesa: 0,
+    cash: 0,
+    commission: 0,
+    nextTarget: 1_000_000,
+    nextReward: 10_000,
+    daysLogged: 0,
+    completionRate: 0,
+    liveSessions: 0,
+    liveViewers: 0,
+  };
+  const channelSnapshot = {
+    tiktok: { posted: "0 / 0", replied: "0 / 0" },
+    igfb: { posted: "0 / 0", replied: "0 / 0" },
+    whatsapp: { status: "0 / 0", contacts: "0 / 0", replied: "0 / 0" },
+  };
+  const liveSummary = {
+    totalSessions: 0,
+    avgDuration: 0,
+    topPlatform: "–",
+    estimatedViewers: 0,
+  };
+  const dailyEntries: Array<{
+    date: string;
+    day: string;
+    totalSales: number;
+    totalProfit: number;
+    items: number;
+    tiktok: { posted: string; replied: string };
+    igfb: { posted: string; replied: string };
+    whatsapp: { status: string; replied: string };
+    live: { sessions: number; viewers: number };
+    stockOk: boolean;
+    shopReady: boolean;
+  }> = [];
 
-export default async function MarketingReportPage({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sp = searchParams ? await searchParams : undefined;
-  const periodKey = typeof sp?.period === "string" ? sp.period : "";
-  const dow = typeof sp?.dow === "string" ? sp.dow : "";
-  const dateStr = typeof sp?.date === "string" ? sp.date : "";
-  const userFilter = typeof sp?.user === "string" ? sp.user : "";
-
-  const currentPeriod = getTradingPeriodFor(new Date());
-  const selectedPeriod =
-    (periodKey && getRecentTradingPeriods(12).find((p) => p.key === periodKey)) || currentPeriod;
-
-  const { entries, aggregates } = await getMarketingReport({
-    tradingPeriodKey: selectedPeriod.key,
-    dayOfWeek: dow || undefined,
-    from: dateStr ? new Date(dateStr) : undefined,
-    to: dateStr ? new Date(dateStr) : undefined,
-    submittedById: userFilter || undefined,
-  });
-
-  const todayStart = startOfDay(new Date());
-  const todayEnd = endOfDay(new Date());
-  const initialFrom = formatISO(todayStart);
-  const initialTo = formatISO(todayEnd);
-
-  // Determine if current user is ADMIN to show admin-only client panels (profit should be admin-only)
-  const session = await auth();
-  const role = (session?.user as any)?.role as string | undefined;
-  const isAdmin = role === "ADMIN";
-  const totalDays = aggregates.totalDaysLogged || entries.length;
-  const exportParams = new URLSearchParams();
-  if (selectedPeriod?.key) exportParams.set("period", selectedPeriod.key);
-  if (dow) exportParams.set("dow", dow);
-  if (userFilter) exportParams.set("user", userFilter);
-  const exportUrl = `/api/admin/marketing-report/export-period${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
-  const exportPdfUrl = `/api/admin/marketing-report/export-period-pdf${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
-
-  const trend = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
-  const salesSeries = trend.map((e) => e.totalSales);
-  const liveSeries = trend.map((e) => e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0);
-  const nextTarget = aggregates.commission.nextTarget;
-  const progress = nextTarget ? Math.min(1, aggregates.totalSales / nextTarget) : 1;
+  // Helper to format currency
+  const formatKES = (value: number) => `KES ${value.toLocaleString("en-KE")}`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6 text-slate-100">
-      <header className="space-y-1">
-        <h1 className="text-3xl font-semibold">Marketing report</h1>
-        <p className="text-slate-300">
-          Admin view of the Marketing Performance Tracker with daily logs, channel completeness, and live session health.
-        </p>
-      </header>
-
-          <MarketingReportFilterBar initialPeriod={selectedPeriod.key} initialDay={dow} initialDate={dateStr} />
-
-      {isAdmin ? <SummaryPanelClient initialFrom={initialFrom} initialTo={initialTo} /> : null}
-
-      <section className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
-            <div className="text-lg font-semibold">{aggregates.period.label}</div>
-          </div>
-          <div className="flex gap-2">
-            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href={exportUrl}>
-              Export period CSV
-            </a>
-            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href={exportPdfUrl}>
-              Export period PDF
-            </a>
-            <MultiDayExportClient periodKey={selectedPeriod?.key} userFilter={userFilter || undefined} />
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-5 text-sm">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Period sales</div>
-            <div className="text-xl font-semibold text-white">{currency(aggregates.totalSales)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Period profit</div>
-            <div className="text-xl font-semibold text-white">{currency(aggregates.totalProfit)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Items sold</div>
-            <div className="text-xl font-semibold text-white">{aggregates.totalItems.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">MPESA vs Cash</div>
-            <div className="text-sm text-slate-200">
-              MPESA {currency(aggregates.paymentStats.totalSalesMpesa)}
-              <br />
-              Cash {currency(aggregates.paymentStats.totalSalesCash)}
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Commission (cumulative)</div>
-            <div className="text-xl font-semibold text-white">{currency(aggregates.commission.commission)}</div>
-            <div className="text-xs text-emerald-300">
-              {aggregates.commission.tiersReached.length
-                ? `Tiers: ${aggregates.commission.tiersReached.join(", ")}`
-                : "No tiers reached yet"}
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              Commission is a discretionary incentive based on the current Betech Solar commission memo and may be reviewed or adjusted.
-            </div>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-300">
-            <span>
-              Progress toward next tier{" "}
-              {nextTarget ? `(KES ${aggregates.totalSales.toLocaleString()} / ${nextTarget.toLocaleString()})` : "(Top tier reached)"}
-            </span>
-            {aggregates.commission.nextTierReward && nextTarget ? (
-              <span className="text-emerald-300">Next reward: KES {aggregates.commission.nextTierReward.toLocaleString()}</span>
-            ) : (
-              <span className="text-emerald-300">All tiers unlocked</span>
-            )}
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-all"
-              style={{ width: `${Math.max(5, progress * 100)}%` }}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        {[
-          { label: "Total days logged", value: totalDays },
-          { label: "Completion rate", value: `${aggregates.completionRate}%` },
-          { label: "Total sales", value: currency(aggregates.totalSales) },
-          { label: "Total profit", value: currency(aggregates.totalProfit) },
-          { label: "Total items", value: aggregates.totalItems.toLocaleString() },
-          { label: "Total live sessions", value: aggregates.totalLiveSessions },
-          { label: "Total estimated viewers", value: aggregates.totalEstimatedViewers },
-          { label: "Sales via MPESA", value: currency(aggregates.paymentStats.totalSalesMpesa) },
-          { label: "Sales via Cash", value: currency(aggregates.paymentStats.totalSalesCash) },
-        ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20"
-          >
-            <div className="text-xs uppercase tracking-wide text-slate-400">{kpi.label}</div>
-            <div className="mt-2 text-2xl font-semibold text-white">{kpi.value}</div>
-          </div>
-        ))}
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Channel performance snapshot</h2>
-            <span className="text-xs text-slate-400">vs {totalDays || 1} days</span>
-          </div>
-          <div className="space-y-2 text-sm">
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">TikTok</div>
-              <div className="mt-1 flex justify-between text-slate-200">
-                <span>Posted</span>
-                <span>
-                  {aggregates.channelStats.tiktokPostedDays} / {totalDays}
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-200">
-                <span>Replied</span>
-                <span>
-                  {aggregates.channelStats.tiktokRepliedDays} / {totalDays}
-                </span>
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">IG / FB / YT</div>
-              <div className="mt-1 flex justify-between text-slate-200">
-                <span>Posted</span>
-                <span>
-                  {aggregates.channelStats.igFbYtPostedDays} / {totalDays}
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-200">
-                <span>Replied</span>
-                <span>
-                  {aggregates.channelStats.igFbYtRepliedDays} / {totalDays}
-                </span>
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">WhatsApp</div>
-              <div className="mt-1 flex justify-between text-slate-200">
-                <span>Status posted</span>
-                <span>
-                  {aggregates.channelStats.waStatusDays} / {totalDays}
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-200">
-                <span>Contacts added</span>
-                <span>
-                  {aggregates.channelStats.waContactsDays} / {totalDays}
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-200">
-                <span>All replied</span>
-                <span>
-                  {aggregates.channelStats.waRepliedDays} / {totalDays}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-7xl p-6 space-y-6">
+        {/* Page title */}
+        <div>
+          <h1 className="text-3xl font-semibold mb-1">Marketing Report</h1>
+          <p className="text-sm text-slate-400">
+            Admin view of the Marketing Performance Tracker with daily logs,
+            channel completeness and live session health.
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-4">
-          <div className="text-lg font-semibold">Live sessions summary</div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Total live sessions</div>
-              <div className="text-xl font-semibold text-white">{aggregates.totalLiveSessions}</div>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Avg duration (min)</div>
-              <div className="text-xl font-semibold text-white">{aggregates.avgLiveDurationMinutes}</div>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Top platform</div>
-              <div className="text-xl font-semibold text-white">{aggregates.topLivePlatform || "–"}</div>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Estimated viewers</div>
-              <div className="text-xl font-semibold text-white">{aggregates.totalEstimatedViewers}</div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
-            Stock ready: {aggregates.stockStats.stockEnoughDays} / {totalDays} days &middot; Shop ready:{" "}
-            {aggregates.shopStats.shopCleanedDays} / {totalDays} cleaned
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold">Trend (sales vs live viewers)</h3>
-            <p className="text-xs text-slate-400">Last {trend.length} entries</p>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</div>
-            <InlineSparkline values={salesSeries} color="#f59e0b" />
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Live viewers</div>
-            <InlineSparkline values={liveSeries} color="#22c55e" />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold">Daily breakdown</h3>
-            <p className="text-xs text-slate-400">One row per MarketingDailyEntry</p>
-          </div>
-          <a
-            className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
-            href={exportUrl}
-          >
-            Export CSV
-          </a>
-        </div>
-
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-950/80 text-left text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                {[
-                  "Date",
-                  "Day",
-                  "Total sales",
-                  "Total profit",
-                  "Sales rows",
-                  "TikTok",
-                  "IG/FB/YT",
-                  "WhatsApp",
-                  "Live summary",
-                  "Stock enough?",
-                  "Shop ready?",
-                  "Weekly comment",
-                  "Export",
-                ].map((col) => (
-                  <th key={col} className="px-3 py-2">
-                    {col}
-                  </th>
+        {/* Filters and export actions */}
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            {/* Trading period select */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Trading period
+              </label>
+              <select
+                className="w-56 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                value={currentPeriod}
+                onChange={() => {}}
+              >
+                {tradingPeriods.map((period) => (
+                  <option key={period}>{period}</option>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => {
-                const dateStr = e.date.split("T")[0];
-                const tikTokDone = e.tiktokPosted2Videos || e.tiktokPosted4ExplanatoryVideos || e.shot4ProductVideos;
-                const igDone = e.igFbYtPosted2VideosEach;
-                const igReplied = e.igFbYtRepliedAll;
-                const waDone = e.waPostedStatus || e.waPosted10Statuses;
-                const waReplied = e.waRespondedAll;
-                const liveSummary = `${e.liveSessionsCount ?? (e.liveSessionsEstimatedViewers || e.liveViewers ? 1 : 0)} sessions / ${
-                  e.liveSessionsEstimatedViewers ?? e.liveViewers ?? 0
-                } viewers`;
-                const stockOk = Boolean(e.stockEnoughFastMovers);
-                const shopReady = Boolean(e.shopCleaned && e.shopWellArranged && e.displayWellLabeled);
-                return (
-                  <tr key={e.id} className="border-t border-slate-800 odd:bg-slate-950/40">
-                    <td className="px-3 py-2 text-slate-200">{dateStr}</td>
-                    <td className="px-3 py-2 text-slate-200">{e.dayOfWeek}</td>
-                    <td className="px-3 py-2 font-semibold text-white">{currency(e.totalSales)}</td>
-                    <td className="px-3 py-2 text-slate-100">{currency(e.totalProfit)}</td>
-                    <td className="px-3 py-2 text-slate-200">{`${(e.sales || []).reduce((sum, s) => sum + ((s as any).itemsCount || 1), 0)} items / ${currency(e.totalSales)}`}</td>
-                    <td className="px-3 py-2 text-slate-200">
-                      <div className="flex gap-2">
-                        <span title="Posted">{check(Boolean(tikTokDone))}</span>
-                        <span title="Replied">{check(Boolean(e.tiktokRepliedAll))}</span>
-                      </div>
+              </select>
+            </div>
+
+            {/* Day of week filter chips */}
+            <div className="flex flex-wrap gap-2">
+              {['All days', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(
+                (day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className="rounded-full px-4 py-2 text-xs border border-white/10 bg-slate-800 text-slate-200 hover:bg-slate-700 focus:bg-emerald-500 focus:text-black focus:border-emerald-600"
+                    onClick={() => {}}
+                  >
+                    {day}
+                  </button>
+                ),
+              )}
+            </div>
+
+            {/* Apply filters button */}
+            <button
+              type="button"
+              className="rounded-xl px-4 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+            >
+              Apply filters
+            </button>
+          </div>
+
+          {/* Export actions */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="rounded-xl px-3 py-2 text-sm border border-white/10 text-slate-200 bg-transparent hover:bg-white/5"
+            >
+              Export period CSV
+            </button>
+            <button
+              type="button"
+              className="rounded-xl px-3 py-2 text-sm border border-white/10 text-slate-200 bg-transparent hover:bg-white/5"
+            >
+              Export period PDF
+            </button>
+          </div>
+        </section>
+
+        {/* Summary KPIs */}
+        <section className={`${cardClasses} p-4`}>          
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Period Sales */}
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Period sales
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {formatKES(summary.sales)}
+              </p>
+            </div>
+            {/* Period Profit */}
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Period profit
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {formatKES(summary.profit)}
+              </p>
+            </div>
+            {/* Items sold */}
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Items sold
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {summary.items.toLocaleString('en-KE')}
+              </p>
+            </div>
+            {/* MPESA vs Cash */}
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                MPESA vs Cash
+              </p>
+              <p className="text-lg font-medium text-white flex items-baseline gap-2">
+                <span>MPESA {formatKES(summary.mpesa)}</span>
+                <span className="opacity-50">·</span>
+                <span>Cash {formatKES(summary.cash)}</span>
+              </p>
+            </div>
+            {/* Commission */}
+            <div className="sm:col-span-2 md:col-span-2 lg:col-span-4 flex flex-col gap-2 mt-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Commission (cumulative)
+              </p>
+              <p className="text-xl font-semibold text-white">
+                {formatKES(summary.commission)}
+              </p>
+              <p className="text-sm text-slate-400">
+                {summary.commission === 0
+                  ? 'No tiers reached yet'
+                  : `Next reward: KES ${summary.nextReward.toLocaleString('en-KE')}`}
+              </p>
+              <div>
+                <label className="text-[11px] opacity-70 mb-1 block">
+                  Progress toward next tier (KES {summary.commission.toLocaleString('en-KE')} /{' '}
+                  {summary.nextTarget.toLocaleString('en-KE')})
+                </label>
+                <ProgressBar value={summary.commission} max={summary.nextTarget} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Channel performance snapshot */}
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <h2 className="text-xl font-semibold mb-2">Channel performance snapshot</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* TikTok card */}
+            <div className="p-4 rounded-xl border border-white/10 bg-slate-900/60 space-y-2">
+              <h3 className="text-sm font-semibold">TikTok</h3>
+              <p className="text-sm text-slate-400">
+                Posted: <span className="text-emerald-300">{channelSnapshot.tiktok.posted}</span>
+              </p>
+              <p className="text-sm text-slate-400">
+                Replied: <span className="text-emerald-300">{channelSnapshot.tiktok.replied}</span>
+              </p>
+            </div>
+            {/* IG/FB/YT card */}
+            <div className="p-4 rounded-xl border border-white/10 bg-slate-900/60 space-y-2">
+              <h3 className="text-sm font-semibold">Instagram / Facebook / YouTube</h3>
+              <p className="text-sm text-slate-400">
+                Posted: <span className="text-emerald-300">{channelSnapshot.igfb.posted}</span>
+              </p>
+              <p className="text-sm text-slate-400">
+                Replied: <span className="text-emerald-300">{channelSnapshot.igfb.replied}</span>
+              </p>
+            </div>
+            {/* WhatsApp card */}
+            <div className="p-4 rounded-xl border border-white/10 bg-slate-900/60 space-y-2">
+              <h3 className="text-sm font-semibold">WhatsApp</h3>
+              <p className="text-sm text-slate-400">
+                Status posted: <span className="text-emerald-300">{channelSnapshot.whatsapp.status}</span>
+              </p>
+              <p className="text-sm text-slate-400">
+                Contacts added: <span className="text-emerald-300">{channelSnapshot.whatsapp.contacts}</span>
+              </p>
+              <p className="text-sm text-slate-400">
+                All replied: <span className="text-emerald-300">{channelSnapshot.whatsapp.replied}</span>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Live sessions summary */}
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <h2 className="text-xl font-semibold">Live sessions summary</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Total live sessions
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {liveSummary.totalSessions}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Avg duration (min)
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {liveSummary.avgDuration}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Top platform
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {liveSummary.topPlatform}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Estimated viewers
+              </p>
+              <p className="text-2xl font-semibold text-white">
+                {liveSummary.estimatedViewers}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Trend chart placeholder */}
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <h2 className="text-xl font-semibold">Trend (sales vs live viewers)</h2>
+          <p className="text-sm text-slate-400">Last {dailyEntries.length} entries</p>
+          <div className="h-40 flex items-center justify-center text-slate-500 border border-slate-800 rounded-xl">
+            {/* Replace this with an actual chart using recharts, chart.js, etc. */}
+            <span className="text-sm">Chart goes here</span>
+          </div>
+        </section>
+
+        {/* Daily breakdown table */}
+        <section className={`${cardClasses} p-4 overflow-x-auto`}>
+          <h2 className="text-xl font-semibold mb-3">Daily breakdown</h2>
+          {dailyEntries.length === 0 ? (
+            <p className="text-sm text-slate-400">No marketing entries for this range yet.</p>
+          ) : (
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-900/70 border-b border-slate-800">
+                <tr className="text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Day</th>
+                  <th className="px-3 py-2 text-right">Total sales</th>
+                  <th className="px-3 py-2 text-right">Total profit</th>
+                  <th className="px-3 py-2">Items</th>
+                  <th className="px-3 py-2">TikTok</th>
+                  <th className="px-3 py-2">IG / FB / YT</th>
+                  <th className="px-3 py-2">WhatsApp</th>
+                  <th className="px-3 py-2">Live summary</th>
+                  <th className="px-3 py-2 text-center">Stock OK?</th>
+                  <th className="px-3 py-2 text-center">Shop ready?</th>
+                  <th className="px-3 py-2">Export</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyEntries.map((entry, idx) => (
+                  <tr
+                    key={entry.date}
+                    className={`border-t border-slate-800 ${idx % 2 === 0 ? 'bg-slate-950/40' : 'bg-slate-900/40'}`}
+                  >
+                    <td className="px-3 py-2 text-slate-200">{entry.date}</td>
+                    <td className="px-3 py-2 text-slate-200">{entry.day}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-white">
+                      {formatKES(entry.totalSales)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-100">
+                      {formatKES(entry.totalProfit)}
                     </td>
                     <td className="px-3 py-2 text-slate-200">
-                      <div className="flex gap-2">
-                        <span title="Posted">{check(Boolean(igDone))}</span>
-                        <span title="Replied">{check(Boolean(igReplied))}</span>
-                      </div>
+                      {entry.items} items
                     </td>
                     <td className="px-3 py-2 text-slate-200">
-                      <div className="flex gap-2">
-                        <span title="Status/contacts">{check(Boolean(waDone))}</span>
-                        <span title="Replied all">{check(Boolean(waReplied))}</span>
-                      </div>
+                      {entry.tiktok.posted} / {entry.tiktok.replied}
                     </td>
-                    <td className="px-3 py-2 text-slate-200">{liveSummary}</td>
-                    <td className="px-3 py-2 text-center">{check(stockOk)}</td>
-                    <td className="px-3 py-2 text-center">{check(shopReady)}</td>
-                    <td className="px-3 py-2 text-slate-300" title={e.weeklyComment || ""}>
-                      {(e.weeklyComment || "").slice(0, 40)}
-                      {(e.weeklyComment || "").length > 40 ? "." : ""}
+                    <td className="px-3 py-2 text-slate-200">
+                      {entry.igfb.posted} / {entry.igfb.replied}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-slate-200">
+                      {entry.whatsapp.status} / {entry.whatsapp.replied}
+                    </td>
+                    <td className="px-3 py-2 text-slate-200">
+                      {entry.live.sessions} sessions / {entry.live.viewers} viewers
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {entry.stockOk ? '✔' : '✖'}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {entry.shopReady ? '✔' : '✖'}
+                    </td>
+                    <td className="px-3 py-2 text-slate-300">
                       <div className="flex gap-2 items-center">
-                        <a
-                          href={`/api/admin/marketing-report/export-day?entryId=${e.id}`}
-                          className="text-xs text-emerald-300 underline hover:text-emerald-200"
-                        >
+                        <button className="text-xs text-emerald-300 underline hover:text-emerald-200">
                           Export day CSV
-                        </a>
-                        <a href={`/admin/marketing-report/${e.id}/edit`} className="text-xs text-sky-300 underline hover:text-sky-200">
+                        </button>
+                        <button className="text-xs text-sky-300 underline hover:text-sky-200">
                           Edit
-                        </a>
-                        <WipeButtonClient entryId={e.id} />
-                        <DeleteEntryClient entryId={e.id} />
-                        {e.submittedById ? (
-                          <>
-                            <WipeAllButtonClient userId={e.submittedById} periodKey={selectedPeriod?.key} />
-                            <a
-                              href={`/admin/marketing-report?user=${encodeURIComponent(e.submittedById)}`}
-                              className="text-xs text-slate-300 underline hover:text-slate-200"
-                            >
-                              Filter by attendant
-                            </a>
-                          </>
-                        ) : null}
+                        </button>
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-              {entries.length === 0 && (
-                <tr>
-                  <td className="px-3 py-6 text-center text-slate-400" colSpan={13}>
-                    No marketing entries for this range yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </main>
     </div>
   );
-}
+};
+
+export default AdminMarketingReportPage;
