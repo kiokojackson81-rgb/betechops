@@ -118,7 +118,11 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
           </select>
         </div>
         <div className="flex items-end">
-          <Button type="submit" variant="primary" className="w-full justify-center">
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full justify-center bg-emerald-500 text-white hover:brightness-95"
+          >
             Apply filters
           </Button>
         </div>
