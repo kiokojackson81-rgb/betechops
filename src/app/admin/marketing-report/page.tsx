@@ -41,6 +41,7 @@ export default async function MarketingReportPage({
   const periodKey = typeof sp?.period === "string" ? sp.period : "";
   const dow = typeof sp?.dow === "string" ? sp.dow : "";
   const dateStr = typeof sp?.date === "string" ? sp.date : "";
+  const userFilter = typeof sp?.user === "string" ? sp.user : "";
 
   const currentPeriod = getTradingPeriodFor(new Date());
   const selectedPeriod =
@@ -51,6 +52,7 @@ export default async function MarketingReportPage({
     dayOfWeek: dow || undefined,
     from: dateStr ? new Date(dateStr) : undefined,
     to: dateStr ? new Date(dateStr) : undefined,
+    submittedById: userFilter || undefined,
   });
 
   const todayStart = startOfDay(new Date());
@@ -66,6 +68,7 @@ export default async function MarketingReportPage({
   const exportParams = new URLSearchParams();
   if (selectedPeriod?.key) exportParams.set("period", selectedPeriod.key);
   if (dow) exportParams.set("dow", dow);
+  if (userFilter) exportParams.set("user", userFilter);
   const exportUrl = `/api/admin/marketing-report/export-period${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
   const exportPdfUrl = `/api/admin/marketing-report/export-period-pdf${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
@@ -383,7 +386,17 @@ export default async function MarketingReportPage({
                           Edit
                         </a>
                         <WipeButtonClient entryId={e.id} />
-                        {e.submittedById ? <WipeAllButtonClient userId={e.submittedById} periodKey={selectedPeriod?.key} /> : null}
+                        {e.submittedById ? (
+                          <>
+                            <WipeAllButtonClient userId={e.submittedById} periodKey={selectedPeriod?.key} />
+                            <a
+                              href={`/admin/marketing-report?user=${encodeURIComponent(e.submittedById)}`}
+                              className="text-xs text-slate-300 underline hover:text-slate-200"
+                            >
+                              Filter by attendant
+                            </a>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

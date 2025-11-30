@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDialog, showToast } from "@/lib/ui/toast";
 
 export default function WipeButtonClient({ entryId }: { entryId: string }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const wipe = async () => {
-    const ok = window.confirm("This will delete all receipts and items for this day. Continue?");
+    const ok = await confirmDialog("This will delete all receipts and items for this day. Continue?");
     if (!ok) return;
     setLoading(true);
     try {
@@ -23,9 +24,9 @@ export default function WipeButtonClient({ entryId }: { entryId: string }) {
       }
       // refresh to reflect wiped state
       router.refresh();
-      alert('Wipe completed');
+      showToast('Wipe completed', 'success');
     } catch (err: any) {
-      alert(err?.message || 'Wipe failed');
+      showToast(err?.message || 'Wipe failed', 'error');
     } finally {
       setLoading(false);
     }

@@ -32,6 +32,7 @@ export type MarketingReportFilters = {
   to?: Date;
   dayOfWeek?: string;
   tradingPeriodKey?: string;
+  submittedById?: string;
 };
 
 export type MarketingReportEntry = Omit<
@@ -137,6 +138,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
   if (params.from) where.date = { ...(where.date || {}), gte: params.from };
   if (params.to) where.date = { ...(where.date || {}), lte: params.to };
   if (params.dayOfWeek) where.dayOfWeek = params.dayOfWeek;
+  if (params.submittedById) where.submittedById = params.submittedById;
 
   const entriesRaw = await prisma.marketingDailyEntry.findMany({
     where,

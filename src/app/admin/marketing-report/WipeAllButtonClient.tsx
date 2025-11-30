@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDialog, showToast } from "@/lib/ui/toast";
 
 export default function WipeAllButtonClient({ userId, periodKey }: { userId: string; periodKey?: string }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const wipeAll = async () => {
-    const ok = window.confirm("This will delete receipts for all entries submitted by this attendant in the selected period. Continue?");
+    const ok = await confirmDialog("This will delete receipts for all entries submitted by this attendant in the selected period. Continue?");
     if (!ok) return;
     setLoading(true);
     try {
@@ -19,10 +20,10 @@ export default function WipeAllButtonClient({ userId, periodKey }: { userId: str
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || 'Wipe failed');
-      alert(`Wiped ${j.wiped || 0} entries (batch ${j.batchId || ''})`);
+      showToast(`Wiped ${j.wiped || 0} entries (batch ${j.batchId || ''})`, 'success');
       router.refresh();
     } catch (err: any) {
-      alert(err?.message || 'Wipe failed');
+      showToast(err?.message || 'Wipe failed', 'error');
     } finally {
       setLoading(false);
     }

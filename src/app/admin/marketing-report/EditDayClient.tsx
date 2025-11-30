@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { confirmDialog, showToast } from "@/lib/ui/toast";
 
 type Item = { id?: string; productName: string; buyingPrice: number };
 type Receipt = { id?: string; receiptNumber?: string | null; sellingTotal: number; paymentMethod: "MPESA" | "CASH"; items: Item[] };
@@ -18,10 +19,11 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
     setReceipts((r) => [...r, { receiptNumber: "", sellingTotal: 0, paymentMethod: "MPESA", items: [{ productName: "", buyingPrice: 0 }] }]);
   };
 
-  const removeReceipt = (index: number) => {
-    const ok = window.confirm("Remove this receipt? This will delete its items too.");
+  const removeReceipt = async (index: number) => {
+    const ok = await confirmDialog("Remove this receipt? This will delete its items too.");
     if (!ok) return;
     setReceipts((r) => r.filter((_, i) => i !== index));
+    showToast("Receipt removed", "info");
   };
 
   const updateItem = (rIndex: number, iIndex: number, patch: Partial<Item>) => {
@@ -56,7 +58,7 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
   };
 
   const wipeAll = async () => {
-    const ok = window.confirm("This will delete all receipts and items for this day. Are you sure?");
+    const ok = await confirmDialog("This will delete all receipts and items for this day. Are you sure?");
     if (!ok) return;
     setSaving(true);
     setMessage(null);
@@ -75,8 +77,10 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
         setReceipts([]);
       }
       setMessage("Wiped receipts for the day.");
+      showToast("Wiped receipts for the day.", "success");
     } catch (err: any) {
       setMessage(err?.message || "Wipe failed");
+      showToast(err?.message || "Wipe failed", "error");
     } finally {
       setSaving(false);
     }
