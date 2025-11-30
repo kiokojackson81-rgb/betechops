@@ -57,7 +57,7 @@ export default function DailySalesCard() {
           metric: "DAILY_SALES",
           numericValue: value,
           notes: notes.trim() ? notes.trim() : undefined,
-          category: "DIRECT_SALES",
+          category: "DIRECT_SALES_OPS",
         }),
       });
 

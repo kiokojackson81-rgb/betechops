@@ -17,12 +17,11 @@ enum Role {
 }
 
 enum AttendantCategory {
-  GENERAL
-  DIRECT_SALES
-  JUMIA_OPERATIONS
-  KILIMALL_OPERATIONS
-  PRODUCT_UPLOAD
-  SUPPORT
+  DIRECT_SALES_OPS
+  MARKETING_OPS
+  SUPPORT_OPS
+  JUMIA_KILIMALL_OPS
+  BETECH_OPS
 }
 
 enum Platform {
@@ -87,7 +86,7 @@ model User {
   image     String?
   role      Role     @default(ATTENDANT)
   isActive  Boolean  @default(true)
-  attendantCategory AttendantCategory @default(GENERAL)
+  attendantCategory AttendantCategory @default(DIRECT_SALES_OPS)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

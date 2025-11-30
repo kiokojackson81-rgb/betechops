@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 import { useShopsActionsSafe } from './ShopsActionsContext';
-import { attendantCategoryOptions } from '@/lib/attendants/categories';
+import { attendantCategoryOptions } from '@/lib/attendants/definitions';
 
 type AttendantProps = {
   shops: { id: string; name: string }[];
@@ -14,7 +14,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
   const [roleAtShop, setRoleAtShop] = useState('ATTENDANT');
-  const [categories, setCategories] = useState<string[]>(['GENERAL']);
+  const [categories, setCategories] = useState<string[]>(['DIRECT_SALES_OPS']);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const actions = useShopsActionsSafe();

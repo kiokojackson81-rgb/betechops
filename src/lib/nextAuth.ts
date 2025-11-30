@@ -2,83 +2,122 @@ import NextAuth from "next-auth/next";
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
+import EmailProvider from "next-auth/providers/email";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_EMAILS } from "@/lib/auth";
+import type { AttendantCategory } from "@prisma/client";
+
+const ALLOWED_DOMAINS = ["betech.co.ke", "yourcompany.com"];
+
+function isAllowedDomain(email: string) {
+  return ALLOWED_DOMAINS.some((domain) => email.endsWith(`@${domain}`));
+}
+
+function inferCategory(email: string): AttendantCategory {
+  const prefix = email.split("@")[0].toLowerCase();
+  if (prefix.includes("marketing") || prefix.includes("mkt")) return "MARKETING_OPS";
+  if (prefix.includes("support")) return "SUPPORT_OPS";
+  if (prefix.includes("jumia") || prefix.includes("kilimall")) return "JUMIA_KILIMALL_OPS";
+  if (prefix.includes("ops") || prefix.includes("betech")) return "BETECH_OPS";
+  return "DIRECT_SALES_OPS";
+}
+
+type ExtendedToken = {
+  email?: string;
+  sub?: string;
+  role?: string;
+  attendantCategory?: AttendantCategory;
+};
 
 export const authOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
+    EmailProvider({
+      server: process.env.EMAIL_SERVER || "",
+      from: process.env.EMAIL_FROM || "",
+    }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
   callbacks: {
-    // signIn: upsert user and force ADMIN for any configured ADMIN_EMAILS
-    async signIn({ user }: { user: { email?: string; name?: string | null; image?: string | null } }) {
-      const emails = ADMIN_EMAILS;
+    async signIn({ user, account }: { user: { email?: string; name?: string | null; image?: string | null }; account?: { provider: string } }) {
       const email = (user.email || "").toLowerCase();
       if (!email) return false;
-      try {
-        if (emails.includes(email)) {
-          // Force ADMIN
-          await prisma.user.upsert({
-            where: { email },
-            update: { role: "ADMIN", isActive: true },
-            create: { email, name: user.name ?? "Admin", image: user.image ?? "", role: "ADMIN", attendantCategory: "GENERAL", isActive: true },
-          });
-          return true;
-        }
 
-        // Default: ATTENDANT
-        await prisma.user.upsert({
-          where: { email },
-          update: { role: "ATTENDANT", isActive: true },
-          create: { email, name: user.name ?? email.split("@")[0], image: user.image ?? "", role: "ATTENDANT", attendantCategory: "GENERAL", isActive: true },
+      const isAdmin = ADMIN_EMAILS.includes(email);
+      if (account?.provider === "google" && !isAdmin) return false;
+      if (!isAdmin && !isAllowedDomain(email)) return false;
+
+      const category: AttendantCategory = isAdmin ? "BETECH_OPS" : inferCategory(email);
+      const displayName = user.name ?? email.split("@")[0];
+      await prisma.user.upsert({
+        where: { email },
+        update: {
+          role: isAdmin ? "ADMIN" : "ATTENDANT",
+          isActive: true,
+          attendantCategory: category,
+          name: displayName,
+          image: user.image ?? "",
+        },
+        create: {
+          email,
+          name: displayName,
+          image: user.image ?? "",
+          role: isAdmin ? "ADMIN" : "ATTENDANT",
+          attendantCategory: category,
+          isActive: true,
+        },
+      });
+      return true;
+    },
+
+    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: AttendantCategory; email?: string; id?: string } }) {
+      if (user) {
+        token.role = user.role ?? token.role;
+        if (user.attendantCategory) token.attendantCategory = user.attendantCategory;
+        if (user.email) token.email = user.email;
+        if (user.id) token.sub = user.id;
+        return token as JWT;
+      }
+
+      const email = (token.email || "").toLowerCase();
+      try {
+        let dbUser = null;
+        if (token.sub) {
+        dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { id: true, role: true, attendantCategory: true, email: true },
         });
-        return true;
+        }
+        if (!dbUser && email) {
+          dbUser = await prisma.user.findUnique({
+            where: { email },
+          select: { id: true, role: true, attendantCategory: true, email: true },
+          });
+        }
+        if (dbUser) {
+          token.role = dbUser.role ?? token.role;
+          token.attendantCategory = dbUser.attendantCategory ?? token.attendantCategory;
+          token.email = dbUser.email ?? token.email;
+          if (!token.sub && "id" in dbUser && dbUser.id) token.sub = dbUser.id;
+        }
       } catch {
-        // If DB not ready, still allow sign-in but roles will be resolved later via fallback
-        return true;
+        token.role = token.role ?? "ATTENDANT";
+        token.attendantCategory = token.attendantCategory ?? "DIRECT_SALES_OPS";
       }
+
+      return token as JWT;
     },
 
-    // jwt: attach DB role to token (lookup by sub (id) or email)
-    async jwt({ token, user }: { token: unknown; user?: { email?: string } }) {
-      // ensure email is set on token when user logs in
-      const t0 = token as { email?: string; role?: string; sub?: string };
-      if (user?.email) t0.email = user.email;
-      const email = (t0.email || "").toLowerCase();
-
-      // If it's the owner email, force ADMIN in the token (no DB needed)
-      if (email === "kiokojackson81@gmail.com") {
-        t0.role = "ADMIN";
-        return token as unknown as JWT;
-      }
-
-      // Otherwise, best-effort fetch from DB; fall back to ATTENDANT if it fails
-      try {
-        let dbUser: { role?: string } | null = null;
-        const t = token as { sub?: string; email?: string; role?: string };
-        if (t.sub) {
-          dbUser = await prisma.user.findUnique({ where: { id: t.sub }, select: { role: true } });
-        }
-        if (!dbUser && t.email) {
-          dbUser = await prisma.user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true } });
-        }
-        t0.role = dbUser?.role || "ATTENDANT";
-      } catch {
-        t0.role = "ATTENDANT";
-      }
-      return token as unknown as JWT;
-    },
-
-    // session: expose role from token
-    async session({ session, token }: { session: unknown; token: unknown }) {
-      const s = session as { user?: Record<string, unknown> };
-      const t = token as { role?: string };
+    async session({ session, token }: { session: Session | Record<string, unknown>; token: ExtendedToken }) {
+      const s = session as Session;
       if (!s.user) s.user = {};
-      (s.user as { role?: string }).role = t.role ?? "ATTENDANT";
-      return s as unknown as Session;
+      (s.user as Record<string, unknown>).role = token.role ?? "ATTENDANT";
+      (s.user as Record<string, unknown>).attendantCategory = token.attendantCategory ?? "DIRECT_SALES_OPS";
+      return s;
     },
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.SECRET || "",

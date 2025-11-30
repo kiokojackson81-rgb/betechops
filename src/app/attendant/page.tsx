@@ -11,7 +11,7 @@ import DailySalesCard from "./_components/DailySalesCard";
 import ProductUploadsCard from "./_components/ProductUploadsCard";
 import Button from "@/app/_components/Button";
 import Sparkline from "@/app/_components/Sparkline";
-import { attendantCategoryById } from "@/lib/attendants/categories";
+import { attendantCategoryById } from "@/lib/attendants/definitions";
 import type { AttendantCategory } from "@prisma/client";
 
 type ProfileResponse = {

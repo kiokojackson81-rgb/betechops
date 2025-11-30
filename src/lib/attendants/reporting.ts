@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { AttendantCategory } from "@prisma/client";
-import { attendantCategories } from "./categories";
+import { attendantCategoryDefinitions } from "./definitions";
 
 type TotalsByCategory = Record<
   AttendantCategory,
@@ -47,7 +47,7 @@ export async function getAttendantCategorySummary(days: number) {
     }),
   ]);
 
-  const totalsByCategory = attendantCategories.reduce<TotalsByCategory>((acc, def) => {
+  const totalsByCategory = attendantCategoryDefinitions.reduce<TotalsByCategory>((acc, def) => {
     acc[def.id] = { users: 0, metrics: {} };
     return acc;
   }, {} as TotalsByCategory);
@@ -84,11 +84,15 @@ export async function getAttendantCategorySummary(days: number) {
     kilimallCounts[row.status] = row._count;
   }
 
-  if (totalsByCategory.JUMIA_OPERATIONS) {
-    totalsByCategory.JUMIA_OPERATIONS.orderCounts = jumiaCounts;
+  const combinedOrderCounts: Record<string, number> = {};
+  for (const row of jumiaOrders) {
+    combinedOrderCounts[`JUMIA ${row.status}`] = row._count;
   }
-  if (totalsByCategory.KILIMALL_OPERATIONS) {
-    totalsByCategory.KILIMALL_OPERATIONS.orderCounts = kilimallCounts;
+  for (const row of kilimallOrders) {
+    combinedOrderCounts[`KILIMALL ${row.status}`] = row._count;
+  }
+  if (totalsByCategory.JUMIA_KILIMALL_OPS) {
+    totalsByCategory.JUMIA_KILIMALL_OPS.orderCounts = combinedOrderCounts;
   }
 
   return {

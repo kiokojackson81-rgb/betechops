@@ -1,4 +1,4 @@
-import { attendantCategories } from "@/lib/attendants/categories";
+import { attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 import { getAttendantCategorySummary } from "@/lib/attendants/reporting";
 
 function formatDateRange(start: Date, days: number) {
@@ -29,7 +29,7 @@ export default async function ReportsPage() {
       </header>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {attendantCategories.map((cat) => {
+        {attendantCategoryDefinitions.map((cat) => {
           const data = summary.categories[cat.id];
           const dailySales = data?.metrics?.DAILY_SALES?.numericSum ?? 0;
           const uploads = data?.metrics?.PRODUCT_UPLOADS?.intSum ?? 0;

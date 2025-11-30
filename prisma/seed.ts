@@ -15,22 +15,27 @@ async function main() {
     {
       email: "attendant@betech.co.ke",
       name: "Default Attendant",
-      categories: ["GENERAL"],
+      categories: ["DIRECT_SALES_OPS"],
     },
     {
       email: "sales@betech.co.ke",
       name: "Direct Sales Lead",
-      categories: ["GENERAL", "DIRECT_SALES"],
+      categories: ["DIRECT_SALES_OPS", "MARKETING_OPS"],
     },
     {
       email: "jumia.ops@betech.co.ke",
       name: "Jumia Ops Specialist",
-      categories: ["JUMIA_OPERATIONS"],
+      categories: ["JUMIA_KILIMALL_OPS"],
     },
     {
       email: "catalog@betech.co.ke",
       name: "Catalog Uploader",
-      categories: ["PRODUCT_UPLOAD"],
+      categories: ["MARKETING_OPS"],
+    },
+    {
+      email: "support@betech.co.ke",
+      name: "Support Specialist",
+      categories: ["SUPPORT_OPS"],
     },
   ] as const;
 
@@ -39,17 +44,17 @@ async function main() {
       const primary = att.categories[0] ?? "GENERAL";
       const user = await prisma.user.upsert({
         where: { email: att.email },
-        update: { attendantCategory: primary, isActive: true },
+        update: { attendantCategory: primary as any, isActive: true },
         create: {
           email: att.email,
           name: att.name,
           role: "ATTENDANT",
-          attendantCategory: primary,
+          attendantCategory: primary as any,
           isActive: true,
         },
       });
 
-      const desired = Array.from(new Set(att.categories)) as AttendantCategory[];
+      const desired = Array.from(new Set(att.categories)) as unknown as AttendantCategory[];
       await prisma.attendantCategoryAssignment.deleteMany({
         where: { userId: user.id, category: { notIn: desired as AttendantCategory[] } },
       });
@@ -102,7 +107,7 @@ async function main() {
       await prisma.attendantActivity.create({
         data: {
           userId: directSales.id,
-          category: "DIRECT_SALES",
+          category: "DIRECT_SALES_OPS" as any,
           metric: "DAILY_SALES",
           numericValue: 18500,
           notes: "Walk-ins and MPESA collections",
@@ -114,7 +119,7 @@ async function main() {
       await prisma.attendantActivity.create({
         data: {
           userId: jumiaOps.id,
-          category: "JUMIA_OPERATIONS",
+          category: "JUMIA_KILIMALL_OPS" as any,
           metric: "ORDER_PROCESSING",
           intValue: 24,
           notes: "Orders confirmed and packed today",
@@ -126,7 +131,7 @@ async function main() {
       await prisma.attendantActivity.create({
         data: {
           userId: catalog.id,
-          category: "PRODUCT_UPLOAD",
+          category: "MARKETING_OPS" as any,
           metric: "PRODUCT_UPLOADS",
           intValue: 18,
           notes: "Inverters & batteries batch upload",

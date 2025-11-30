@@ -53,7 +53,7 @@ export default function ProductUploadsCard() {
           metric: "PRODUCT_UPLOADS",
           intValue: value,
           notes: notes.trim() ? notes.trim() : undefined,
-          category: "PRODUCT_UPLOAD",
+          category: "MARKETING_OPS",
         }),
       });
       if (!res.ok) {

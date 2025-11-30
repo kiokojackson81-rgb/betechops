@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { attendantCategories, attendantCategoryOptions } from "@/lib/attendants/categories";
+import { attendantCategoryOptions, attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 import { showToast } from "@/lib/ui/toast";
 
-type AttendantLite = {
+type UserLite = {
   id: string;
   name: string | null;
   email: string;
@@ -18,13 +18,13 @@ type AttendantLite = {
 const categoryFilters = [{ id: "ALL", label: "All categories" }, ...attendantCategoryOptions];
 
 function formatDate(input: string) {
-  const d = new Date(input);
-  if (!Number.isFinite(d.valueOf())) return "—";
-  return d.toLocaleDateString();
+  const date = new Date(input);
+  if (!Number.isFinite(date.valueOf())) return "-";
+  return date.toLocaleDateString();
 }
 
-export default function AttendantsManager({ initial }: { initial: AttendantLite[] }) {
-  const [rows, setRows] = useState<AttendantLite[]>(initial);
+export default function UsersManager({ initial }: { initial: UserLite[] }) {
+  const [rows, setRows] = useState<UserLite[]>(initial);
   const [filter, setFilter] = useState<string>("ALL");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
         acc[cat] = (acc[cat] || 0) + 1;
       }
       return acc;
-    }, {});
+    }, {} as Record<string, number>);
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -52,9 +52,7 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
     const previous = rows.map((row) => ({ ...row }));
     const primary = categories[0];
     setRows((prev) =>
-      prev.map((row) =>
-        row.id === id ? { ...row, categories: categories.slice(), attendantCategory: primary } : row
-      )
+      prev.map((row) => (row.id === id ? { ...row, categories: categories.slice(), attendantCategory: primary } : row)),
     );
 
     const res = await fetch(`/api/users/${id}`, {
@@ -68,7 +66,7 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
       showToast(json?.error || "Failed to update categories", "error");
       setRows(previous);
     } else {
-      showToast("Attendant categories updated", "success");
+      showToast("Categories updated", "success");
     }
     setBusy(null);
   }
@@ -109,7 +107,7 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
           <tbody className="divide-y divide-white/5 bg-[#0f141f] text-slate-200">
             {filtered.map((row) => {
               const activeDefs = row.categories
-                .map((cat) => attendantCategories.find((c) => c.id === cat))
+                .map((cat) => attendantCategoryDefinitions.find((c) => c.id === cat))
                 .filter(Boolean);
               return (
                 <tr key={row.id} className="hover:bg-white/5">
@@ -135,7 +133,7 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
                                     ? Array.from(new Set([...row.categories, opt.id]))
                                     : row.categories.filter((c) => c !== opt.id);
                                   if (!next.length) {
-                                    showToast("Attendant must have at least one category", "error");
+                                    showToast("User must have at least one category", "error");
                                     return;
                                   }
                                   updateCategories(row.id, next);
@@ -157,7 +155,11 @@ export default function AttendantsManager({ initial }: { initial: AttendantLite[
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-1 text-xs ${row.isActive ? "bg-emerald-600/20 text-emerald-300" : "bg-red-600/20 text-red-300"}`}>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        row.isActive ? "bg-emerald-600/20 text-emerald-300" : "bg-red-600/20 text-red-300"
+                      }`}
+                    >
                       {row.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>

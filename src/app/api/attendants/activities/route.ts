@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActorId, requireRole } from "@/lib/api";
-import { ATTENDANT_ACTIVITY_METRICS } from "@/lib/attendants/categories";
+import { ATTENDANT_ACTIVITY_METRICS } from "@/lib/attendants/definitions";
 import { AttendantCategory } from "@prisma/client";
 
 const metricValues = new Set(Object.keys(ATTENDANT_ACTIVITY_METRICS));

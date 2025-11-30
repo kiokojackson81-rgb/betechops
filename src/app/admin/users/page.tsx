@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import AttendantsManager from "./AttendantsManager";
-import { attendantCategories } from "@/lib/attendants/categories";
+import UsersManager from "./UsersManager";
+import { attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 
-export default async function AttendantsPage() {
+export default async function UsersPage() {
   const attendants = await prisma.user.findMany({
     where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
     orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
@@ -29,11 +29,10 @@ export default async function AttendantsPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold">Attendants &amp; Categories</h1>
         <p className="text-slate-300">
-          Assign each attendant to all categories that match their day-to-day work. Categories drive the attendant dashboard widgets and the admin reports
-          below.
+          Assign each attendant to the categories that match their day-to-day responsibilities.
         </p>
         <div className="flex flex-wrap gap-3 text-sm text-slate-400">
-          {attendantCategories.map((cat) => (
+          {attendantCategoryDefinitions.map((cat) => (
             <span key={cat.id} className="rounded-full border border-white/10 px-3 py-1">
               <span className="font-medium text-white">{cat.label}</span>
               <span className="mx-2 text-slate-500">-</span>
@@ -43,7 +42,7 @@ export default async function AttendantsPage() {
         </div>
       </header>
 
-      <AttendantsManager initial={prepared} />
+      <UsersManager initial={prepared} />
     </div>
   );
 }
