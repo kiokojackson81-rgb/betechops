@@ -27,6 +27,10 @@ const DailyPayloadSchema = z.object({
   yesNo: z.record(z.string(), z.any()).optional(),
   numeric: z.record(z.string(), z.any()).optional(),
   text: z.record(z.string(), z.any()).optional(),
+  // Optional top-level weekly fields (convenience)
+  weeklyMeetingAttended: z.boolean().optional(),
+  weeklyVideoShootParticipated: z.boolean().optional(),
+  weeklyVideoCount: z.number().optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -108,6 +112,11 @@ export async function POST(req: Request) {
     if (type === "text") textValues[key] = typeof raw?.[key] === "string" ? raw[key] : "";
   });
 
+  // Accept convenience top-level weekly fields and normalize them.
+  const weeklyMeetingAttendedRaw = (yesNo?.weeklyMeetingAttended ?? body.weeklyMeetingAttended) as unknown;
+  const weeklyVideoShootParticipatedRaw = (yesNo?.weeklyVideoShootParticipated ?? body.weeklyVideoShootParticipated) as unknown;
+  const weeklyVideoCountRaw = (numeric?.weeklyVideoCount ?? body.weeklyVideoCount) as unknown;
+
   const receiptsClean = normalizeReceipts(receipts);
   const totalSales = receiptsClean.reduce((sum, r) => sum + r.sellingTotal, 0);
   const totalProfit = receiptsClean.reduce(
@@ -119,13 +128,31 @@ export async function POST(req: Request) {
   const cashTotal = receiptsClean.filter((r) => r.paymentMethod === "CASH").reduce((s, r) => s + r.sellingTotal, 0);
 
   try {
+    // Ensure Thursday-only weekly fields are only persisted for Thursday.
+    const isThursday = resolvedDay === "Thursday";
+
+    // Compose final yesNo/numeric values with Thursday-only guards.
+    const finalYesNo = { ...yesNoValues } as Record<string, boolean>;
+    const finalNumeric = { ...numericValues } as Record<string, number>;
+
+    if (isThursday) {
+      if (typeof weeklyMeetingAttendedRaw === "boolean") finalYesNo["weeklyMeetingAttended"] = weeklyMeetingAttendedRaw as boolean;
+      if (typeof weeklyVideoShootParticipatedRaw === "boolean") finalYesNo["weeklyVideoShootParticipated"] = weeklyVideoShootParticipatedRaw as boolean;
+      if (typeof weeklyVideoCountRaw !== "undefined") finalNumeric["weeklyVideoCount"] = toNumber(weeklyVideoCountRaw);
+    } else {
+      // Ensure these keys are present with sensible defaults on non-Thursday days
+      finalYesNo["weeklyMeetingAttended"] = false;
+      finalYesNo["weeklyVideoShootParticipated"] = false;
+      finalNumeric["weeklyVideoCount"] = 0;
+    }
+
     const entry = await prisma.marketingDailyEntry.create({
       data: {
         date: entryDate,
         dayOfWeek: resolvedDay,
         totalSales,
         totalProfit,
-        payload: { yesNo: yesNoValues, numeric: numericValues, text: textValues },
+        payload: { yesNo: finalYesNo, numeric: finalNumeric, text: textValues },
         submittedById: actorId,
         submittedByName: (auth.session?.user as any)?.name ?? null,
         submittedByEmail: (auth.session?.user as any)?.email ?? null,

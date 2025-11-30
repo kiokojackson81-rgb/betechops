@@ -194,6 +194,9 @@ model MarketingDailyEntry {
   liveSessionsEstimatedViewers Int?
   liveSessionDurationMinutes  Int?
   liveSessionPlatform         String?
+  weeklyMeetingAttended       Boolean? @default(false)
+  weeklyVideoShootParticipated Boolean? @default(false)
+  weeklyVideoCount            Int?     @default(0)
   shopCleaned                 Boolean?
   shopWellArranged            Boolean?
   displayWellLabeled          Boolean?

@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const periodKey = url.searchParams.get("period") || undefined;
   const dow = url.searchParams.get("dow") || undefined;
+  const dows = url.searchParams.get("dows") || undefined; // comma-separated days
 
   const current = getTradingPeriodFor(new Date());
   const period =
@@ -26,6 +27,10 @@ export async function GET(req: Request) {
     date: { gte: period.start, lte: period.end },
   };
   if (dow) where.dayOfWeek = dow;
+  if (dows) {
+    const arr = dows.split(",").map((s) => s.trim()).filter(Boolean);
+    if (arr.length) where.dayOfWeek = { in: arr };
+  }
 
   const entries = await prisma.marketingDailyEntry.findMany({
     where,

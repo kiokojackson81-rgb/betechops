@@ -2,6 +2,8 @@ import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
 import SummaryPanelClient from "./SummaryPanelClient";
 import WipeButtonClient from "./WipeButtonClient";
+import DeleteEntryClient from "./DeleteEntryClient";
+import MultiDayExportClient from "./MultiDayExportClient";
 import WipeAllButtonClient from "./WipeAllButtonClient";
 import { startOfDay, endOfDay, formatISO } from "date-fns";
 import { auth } from "@/lib/auth";
@@ -104,6 +106,7 @@ export default async function MarketingReportPage({
             <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href={exportPdfUrl}>
               Export period PDF
             </a>
+            <MultiDayExportClient periodKey={selectedPeriod?.key} userFilter={userFilter || undefined} />
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-5 text-sm">
@@ -386,6 +389,7 @@ export default async function MarketingReportPage({
                           Edit
                         </a>
                         <WipeButtonClient entryId={e.id} />
+                        <DeleteEntryClient entryId={e.id} />
                         {e.submittedById ? (
                           <>
                             <WipeAllButtonClient userId={e.submittedById} periodKey={selectedPeriod?.key} />
