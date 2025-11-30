@@ -2,17 +2,9 @@ import { startOfDay, endOfDay } from "date-fns";
 import ClientAdminMarketingReport from "./ClientAdminMarketingReport";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getRecentTradingPeriods, getTradingPeriodFor } from "@/lib/tradingPeriod";
+import type { PageProps } from "next";
 
-export default async function AdminMarketingReportPage({
-  searchParams,
-}: {
-  searchParams?: {
-    period?: string;
-    dow?: string;
-    date?: string;
-    user?: string;
-  };
-}) {
+export default async function AdminMarketingReportPage({ searchParams }: PageProps) {
   const periods = getRecentTradingPeriods(12);
   const selectedPeriod =
     (searchParams?.period &&
