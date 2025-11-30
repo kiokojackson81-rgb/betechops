@@ -654,7 +654,7 @@ export default function AdminDailyReportPage() {
                       {Array.isArray(tasks.sales) && tasks.sales.length > 0 ? (
                         <ul className="list-disc pl-5 text-xs mt-1">
                           {tasks.sales.map((s: any, i: number) => (
-                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
+                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? `• ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''}</li>
                           ))}
                         </ul>
                       ) : (
@@ -742,13 +742,13 @@ export default function AdminDailyReportPage() {
                 </div>
                 <div>
                   <strong>Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):</strong>
-                  {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
-                    <ul className="list-disc pl-5 text-xs mt-1">
-                      {detailReport.tasks.sales.map((s: any, i: number) => (
-                        <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()}</li>
-                      ))}
-                    </ul>
-                  ) : <div className="text-xs text-slate-400">No sales recorded</div>}
+                      {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
+                        <ul className="list-disc pl-5 text-xs mt-1">
+                          {detailReport.tasks.sales.map((s: any, i: number) => (
+                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? `• ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''}</li>
+                          ))}
+                        </ul>
+                      ) : <div className="text-xs text-slate-400">No sales recorded</div>}
                 </div>
                 <div>
                   <strong>Customer Comms:</strong>

@@ -28,7 +28,7 @@ type MarketplaceReviewState = Record<string, MarketplaceReview>;
 
 export type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
 
-export type SaleRow = { id: string; name: string; price: number | "" };
+export type SaleRow = { id: string; name: string; price: number | ""; paymentMethod?: "MPESA" | "CASH" | ""; receiptNumber?: string };
 
 export type MarketplaceState = {
   newUploaded: number | "";
@@ -42,7 +42,7 @@ const defaultMarketplaceState = (): MarketplaceState => ({
   newUploaded: "",
   copiesUploaded: "",
   productsEdited: "",
-  sales: [{ id: crypto.randomUUID(), name: "", price: "" }],
+  sales: [{ id: crypto.randomUUID(), name: "", price: "", paymentMethod: "MPESA", receiptNumber: "" }],
   review: undefined,
 });
 
@@ -1120,6 +1120,24 @@ export default function DailyTasksUI() {
                   </div>
                   <div className="col-span-2 pt-6">
                     <Button variant="danger" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* New: payment method and receipt number per sale row (rendered inline under price) */}
+              {market[day].sales.map((row) => (
+                <div key={`meta-${row.id}`} className="grid grid-cols-12 gap-2 items-center mt-2">
+                  <div className="col-span-6" />
+                  <div className="col-span-4 flex items-center gap-2">
+                    <label className="text-xs mr-2">Payment</label>
+                    <div className="flex gap-2">
+                      <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'MPESA' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'MPESA' } : r) } }))}>MPESA</button>
+                      <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'CASH' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'CASH' } : r) } }))}>Cash</button>
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs mb-1 block">Receipt #</label>
+                    <Input value={row.receiptNumber || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, receiptNumber: (e.target as HTMLInputElement).value } : r) } }))} />
                   </div>
                 </div>
               ))}

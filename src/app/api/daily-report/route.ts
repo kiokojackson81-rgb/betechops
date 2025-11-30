@@ -98,6 +98,8 @@ export async function POST(req: Request) {
           dailyReportId: report.id,
           productName: s.productName || "",
           price: Number(s.price || 0),
+          paymentMethod: s.paymentMethod || undefined,
+          receiptNumber: s.receiptNumber || undefined,
         }));
         await prisma.dailySale.createMany({ data: createMany });
       }
