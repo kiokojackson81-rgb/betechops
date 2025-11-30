@@ -1090,54 +1090,60 @@ export default function DailyTasksUI() {
             <div className="space-y-2 mt-3">
               <div className="text-sm font-medium">Sales Records</div>
               {market[day].sales.map((row) => (
-                <div key={row.id} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-6">
-                    <label htmlFor={`sale-name-${row.id}`} className="text-xs mb-1 block">Product</label>
-                    <Input id={`sale-name-${row.id}`} placeholder="Solar Panel 200W" value={row.name} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, name: (e.target as HTMLInputElement).value } : r)) } }))} />
-                    {salesErrors[row.id] ? <div className="text-xs text-rose-400 mt-1">{salesErrors[row.id]}</div> : null}
+                <div key={row.id} className="rounded-2xl border border-gray-700/30 p-4 mb-4 bg-transparent">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">Receipt</h3>
+                      <div className="text-xs text-slate-400">Totals are calculated automatically.</div>
+                    </div>
+                    <div>
+                      <Button variant="secondary" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove receipt</Button>
+                    </div>
                   </div>
-                  <div className="col-span-4">
-                    <label htmlFor={`sale-price-${row.id}`} className="text-xs mb-1 block">Price (KES)</label>
-                    <Input
-                      id={`sale-price-${row.id}`}
-                      className="w-full"
-                      type="number"
-                      placeholder="12500"
-                      value={row.price === "" ? "" : String(row.price)}
-                      onChange={(e) => {
+
+                  <div className="grid grid-cols-12 gap-4 mt-4 items-center">
+                    <div className="col-span-4">
+                      <label className="text-xs">Selling total (KES)</label>
+                      <Input value={row.price === "" ? "" : String(row.price)} type="number" onChange={(e) => {
                         const raw = (e.target as HTMLInputElement).value;
                         const parsed = raw === "" ? 0 : Number(raw);
                         const safe = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
                         setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => (r.id === row.id ? { ...r, price: safe } : r)) } }));
-                      }}
-                      onKeyDown={(e) => {
-                        const isLast = market[day].sales[market[day].sales.length - 1]?.id === row.id;
-                        if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && isLast) {
-                          setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: "", price: "" }] } }));
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-2 pt-6">
-                    <Button variant="danger" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
-                  </div>
-                </div>
-              ))}
+                      }} />
+                    </div>
 
-              {/* New: payment method and receipt number per sale row (rendered inline under price) */}
-              {market[day].sales.map((row) => (
-                <div key={`meta-${row.id}`} className="grid grid-cols-12 gap-2 items-center mt-2">
-                  <div className="col-span-6" />
-                  <div className="col-span-4 flex items-center gap-2">
-                    <label className="text-xs mr-2">Payment</label>
-                    <div className="flex gap-2">
-                      <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'MPESA' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'MPESA' } : r) } }))}>MPESA</button>
-                      <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'CASH' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'CASH' } : r) } }))}>Cash</button>
+                    <div className="col-span-5">
+                      <label className="text-xs">Receipt number</label>
+                      <Input value={row.receiptNumber || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, receiptNumber: (e.target as HTMLInputElement).value } : r) } }))} placeholder="Required" />
+                    </div>
+
+                    <div className="col-span-3">
+                      <label className="text-xs">Payment method</label>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'MPESA' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'MPESA' } : r) } }))}>MPESA</button>
+                        <button type="button" className={`px-3 py-1 rounded-full text-xs ${row.paymentMethod === 'CASH' ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-gray-200'}`} onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, paymentMethod: 'CASH' } : r) } }))}>Cash</button>
+                      </div>
                     </div>
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-xs mb-1 block">Receipt #</label>
-                    <Input value={row.receiptNumber || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, receiptNumber: (e.target as HTMLInputElement).value } : r) } }))} />
+
+                  <div className="mt-4">
+                    <div className="text-sm font-medium">Products in this receipt</div>
+                    <div className="mt-2 grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-8">
+                        <label className="text-xs mb-1 block">Product name</label>
+                        <Input placeholder="Product name" value={row.name || ''} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, name: (e.target as HTMLInputElement).value } : r) } }))} />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="text-xs mb-1 block">Buying price (KES)</label>
+                        <Input type="number" value={String((row as any).buyingPrice ?? '')} onChange={(e) => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.map((r) => r.id === row.id ? { ...r, buyingPrice: Number((e.target as HTMLInputElement).value || 0) } : r) } }))} />
+                      </div>
+                      <div className="col-span-1 flex items-center">
+                        <Button variant="danger" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: prev[day].sales.filter((r) => r.id !== row.id) } }))}>Remove</Button>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <button type="button" className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm" onClick={() => setMarket((prev) => ({ ...prev, [day]: { ...prev[day], sales: [...prev[day].sales, { id: crypto.randomUUID(), name: '', price: '', paymentMethod: 'MPESA', receiptNumber: '' }] } }))}>+ Add product to this receipt</button>
+                    </div>
                   </div>
                 </div>
               ))}
