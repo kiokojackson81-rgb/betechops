@@ -20,7 +20,7 @@ type ReceiptRow = {
   id: string;
   receiptNumber: string;
   sellingTotal: number | "";
-  paymentMethod: "MPESA" | "CASH";
+  paymentMethod: "MPESA" | "CASH" | "";
   items: ReceiptItem[];
 };
 
