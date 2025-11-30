@@ -1,6 +1,7 @@
 import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
 import SummaryPanelClient from "./SummaryPanelClient";
+import WipeButtonClient from "./WipeButtonClient";
 import { startOfDay, endOfDay, formatISO } from "date-fns";
 import { auth } from "@/lib/auth";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
@@ -370,12 +371,18 @@ export default async function MarketingReportPage({
                       {(e.weeklyComment || "").length > 40 ? "." : ""}
                     </td>
                     <td className="px-3 py-2">
-                      <a
-                        href={`/api/admin/marketing-report/export-day?entryId=${e.id}`}
-                        className="text-xs text-emerald-300 underline hover:text-emerald-200"
-                      >
-                        Export day CSV
-                      </a>
+                      <div className="flex gap-2 items-center">
+                        <a
+                          href={`/api/admin/marketing-report/export-day?entryId=${e.id}`}
+                          className="text-xs text-emerald-300 underline hover:text-emerald-200"
+                        >
+                          Export day CSV
+                        </a>
+                        <a href={`/admin/marketing-report/${e.id}/edit`} className="text-xs text-sky-300 underline hover:text-sky-200">
+                          Edit
+                        </a>
+                        <WipeButtonClient entryId={e.id} />
+                      </div>
                     </td>
                   </tr>
                 );
