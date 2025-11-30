@@ -42,6 +42,7 @@ export default async function MarketingReportPage({ searchParams }: { searchPara
       selectedPeriodKey={selectedPeriod?.key}
       dow={dow}
       dateStr={dateStr}
+      userFilter={userFilter}
       initialFrom={initialFrom}
       initialTo={initialTo}
       isAdmin={isAdmin}

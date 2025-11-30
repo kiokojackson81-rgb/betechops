@@ -17,6 +17,7 @@ type Props = {
   initialFrom?: string;
   initialTo?: string;
   isAdmin?: boolean;
+  userFilter?: string;
 };
 
 export default function ClientAdminMarketingReport({
@@ -28,6 +29,7 @@ export default function ClientAdminMarketingReport({
   initialFrom = "",
   initialTo = "",
   isAdmin = false,
+  userFilter = undefined,
 }: Props) {
   const summary = aggregates ?? {
     totalSales: 0,
@@ -54,7 +56,7 @@ export default function ClientAdminMarketingReport({
             <div className="text-lg font-semibold">{aggregates?.period?.label ?? selectedPeriodKey ?? "—"}</div>
           </div>
           <div className="flex items-center gap-2">
-            <MultiDayExportClient periodKey={selectedPeriodKey} userFilter={undefined} />
+            <MultiDayExportClient periodKey={selectedPeriodKey} userFilter={userFilter} />
           </div>
         </div>
 
@@ -67,13 +69,17 @@ export default function ClientAdminMarketingReport({
             <>
               <a
                 className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
-                href={`/api/admin/marketing-report/export-period?period=${encodeURIComponent(selectedPeriodKey)}${dow ? `&dow=${encodeURIComponent(dow)}` : ""}`}
+                href={`/api/admin/marketing-report/export-period?period=${encodeURIComponent(selectedPeriodKey)}${dow ? `&dow=${encodeURIComponent(dow)}` : ""}${userFilter ? `&user=${encodeURIComponent(userFilter)}` : ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 Export period CSV
               </a>
               <a
                 className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
-                href={`/api/admin/marketing-report/export-period-pdf?tradingPeriodKey=${encodeURIComponent(selectedPeriodKey)}`}
+                href={`/api/admin/marketing-report/export-period-pdf?tradingPeriodKey=${encodeURIComponent(selectedPeriodKey)}${userFilter ? `&user=${encodeURIComponent(userFilter)}` : ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 Export period PDF
               </a>
