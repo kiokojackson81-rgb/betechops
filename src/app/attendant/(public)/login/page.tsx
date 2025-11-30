@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+import React, { Suspense } from "react";
 import Link from "next/link";
 import CredentialLoginForm from "@/components/CredentialLoginForm";
 
@@ -35,14 +38,10 @@ export default function AttendantLoginPage() {
 
           <section className="flex items-center justify-center">
             <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(18,22,32,.9),rgba(18,22,32,.7))] p-6 shadow-[0_10px_30px_rgba(0,0,0,.35)] backdrop-blur">
-              <CredentialLoginForm
-                defaultRedirect="/attendant"
-                title="Credential login"
-                description="Use your @betech.co.ke email and password."
-              />
-              <div className="mt-4 text-center text-xs text-slate-400">
-                Need help? Contact your admin.
-              </div>
+              <Suspense fallback={<div className="py-6">Loading…</div>}>
+                <CredentialLoginForm defaultRedirect="/attendant" title="Credential login" description="Use your @betech.co.ke email and password." />
+              </Suspense>
+              <div className="mt-4 text-center text-xs text-slate-400">Need help? Contact your admin.</div>
             </div>
           </section>
         </div>
