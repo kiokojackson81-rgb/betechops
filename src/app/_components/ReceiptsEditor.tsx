@@ -10,7 +10,7 @@ type ReceiptRow = {
   id: string;
   receiptNumber: string;
   sellingTotal: number | "";
-  paymentMethod: "MPESA" | "CASH";
+  paymentMethod: "MPESA" | "CASH" | "";
   items: ReceiptItem[];
 };
 
@@ -34,7 +34,7 @@ export default function ReceiptsEditor({
     id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
     receiptNumber: "",
     sellingTotal: "",
-    paymentMethod: "MPESA",
+    paymentMethod: "",
     items: [
       {
         id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
@@ -129,10 +129,15 @@ export default function ReceiptsEditor({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Payment method</label>
+                <label className="text-xs uppercase tracking-wide text-slate-400">Payment method <span className="text-rose-400">(required)</span></label>
                 <div className="flex gap-2">
                   {(["MPESA", "CASH"] as const).map((method) => (
-                    <button key={method} type="button" onClick={() => updateReceipt(receipt.id, { paymentMethod: method })} className={pillClass(receipt.paymentMethod === method)}>
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => updateReceipt(receipt.id, { paymentMethod: method })}
+                      className={pillClass(receipt.paymentMethod === method)}
+                    >
                       {method === "MPESA" ? "MPESA" : "Cash"}
                     </button>
                   ))}

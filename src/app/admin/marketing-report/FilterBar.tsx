@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
+import { showToast } from "@/lib/ui/toast";
 import { useRouter } from "next/navigation";
 import { getRecentTradingPeriods } from "@/lib/tradingPeriod";
 
@@ -46,6 +47,19 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
 
   const apply = (e: React.FormEvent) => {
     e.preventDefault();
+    // require all filters to be set
+    if (!periodKey) {
+      showToast("Please select a trading period", "error");
+      return;
+    }
+    if (!date) {
+      showToast("Please select a date", "error");
+      return;
+    }
+    if (!day) {
+      showToast("Please select a day of week", "error");
+      return;
+    }
     const qs = new URLSearchParams();
     if (periodKey) qs.set("period", periodKey);
     if (day) qs.set("dow", day);
