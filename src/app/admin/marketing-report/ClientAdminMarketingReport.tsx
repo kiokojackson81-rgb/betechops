@@ -2,6 +2,8 @@
 
 import React from "react";
 import ProgressBar from "@/app/_components/ProgressBar";
+import MarketingReportFilterBar from "./FilterBar";
+import MultiDayExportClient from "./MultiDayExportClient";
 
 const cardClasses =
   "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
@@ -45,20 +47,40 @@ export default function ClientAdminMarketingReport({
       </header>
 
       {/* Filters are still server-side controlled; client shows period label when available */}
-      <section className={`${cardClasses} p-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className={`${cardClasses} p-4 space-y-4`}>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] items-start">
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
             <div className="text-lg font-semibold">{aggregates?.period?.label ?? selectedPeriodKey ?? "—"}</div>
           </div>
-          <div className="flex gap-2">
-            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href="#">
-              Export period CSV
-            </a>
-            <a className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500" href="#">
-              Export period PDF
-            </a>
+          <div className="flex items-center gap-2">
+            <MultiDayExportClient periodKey={selectedPeriodKey} userFilter={undefined} />
           </div>
+        </div>
+
+        {/* Server-controlled filter bar (hydrates to allow applying filters which navigate) */}
+        <MarketingReportFilterBar initialPeriod={selectedPeriodKey} initialDay={dow} initialDate={dateStr} />
+
+        <div className="flex gap-2">
+          {/* Wire export links to server endpoints using the server-provided period/day values */}
+          {selectedPeriodKey ? (
+            <>
+              <a
+                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
+                href={`/api/admin/marketing-report/export-period?period=${encodeURIComponent(selectedPeriodKey)}${dow ? `&dow=${encodeURIComponent(dow)}` : ""}`}
+              >
+                Export period CSV
+              </a>
+              <a
+                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm hover:border-slate-500"
+                href={`/api/admin/marketing-report/export-period-pdf?tradingPeriodKey=${encodeURIComponent(selectedPeriodKey)}`}
+              >
+                Export period PDF
+              </a>
+            </>
+          ) : (
+            <div className="text-sm text-slate-400">Select a trading period to enable exports</div>
+          )}
         </div>
 
         <div className="grid gap-3 md:grid-cols-5 text-sm mt-4">
