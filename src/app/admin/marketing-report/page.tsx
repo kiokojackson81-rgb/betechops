@@ -2,6 +2,7 @@ import MarketingReportFilterBar from "./FilterBar";
 import { getMarketingReport } from "@/lib/marketingReport";
 import SummaryPanelClient from "./SummaryPanelClient";
 import WipeButtonClient from "./WipeButtonClient";
+import WipeAllButtonClient from "./WipeAllButtonClient";
 import { startOfDay, endOfDay, formatISO } from "date-fns";
 import { auth } from "@/lib/auth";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
@@ -382,6 +383,7 @@ export default async function MarketingReportPage({
                           Edit
                         </a>
                         <WipeButtonClient entryId={e.id} />
+                        {e.submittedById ? <WipeAllButtonClient userId={e.submittedById} periodKey={selectedPeriod?.key} /> : null}
                       </div>
                     </td>
                   </tr>
