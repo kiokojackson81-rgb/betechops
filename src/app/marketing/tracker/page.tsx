@@ -188,14 +188,14 @@ export default function MarketingTrackerPage() {
       });
     });
 
-    // Validate marketing form fields (text and numeric required)
-    Object.entries(marketingFieldTypes).forEach(([key, type]) => {
-      const raw = form.fields[key];
-      if (type === "text") {
-        if (!raw || String(raw).trim() === "") errors.push(`${key}: required`);
-      } else if (type === "numeric") {
-        if (raw === "" || raw === null || raw === undefined || Number.isNaN(Number(raw))) errors.push(`${key}: required numeric`);
-      }
+    // Validate only the fields for the selected day (text + numeric)
+    (config.textFields || []).forEach((f) => {
+      const raw = form.fields[f.key];
+      if (!raw || String(raw).trim() === "") errors.push(`${f.key}: required`);
+    });
+    (config.numericFields || []).forEach((f) => {
+      const raw = form.fields[f.key];
+      if (raw === "" || raw === null || raw === undefined || Number.isNaN(Number(raw))) errors.push(`${f.key}: required numeric`);
     });
 
     if (errors.length > 0) {
