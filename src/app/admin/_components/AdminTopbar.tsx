@@ -45,6 +45,8 @@ export default function AdminTopbar() {
 
       <Link href="/admin/reports" className="px-3 py-1 rounded bg-white/5">Reports</Link>
 
+      <Link href="/admin/marketing-report" className="px-3 py-1 rounded bg-white/5">Marketing Report</Link>
+
       <Link href="/admin/returns" className="px-3 py-1 rounded bg-white/5 relative">
         Returns
         {waitingPickup !== null && (
