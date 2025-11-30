@@ -75,6 +75,9 @@ export default function MarketingTrackerPage() {
   const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
   const [receipts, setReceipts] = useState<ReceiptRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
+  const [weeklyMeetingAttended, setWeeklyMeetingAttended] = useState(false);
+  const [weeklyVideoShootParticipated, setWeeklyVideoShootParticipated] = useState(false);
+  const [weeklyVideoCount, setWeeklyVideoCount] = useState<number | "">("");
   const [periodSummary, setPeriodSummary] = useState<null | {
     period: { key: string; label: string; start: string; end: string };
     aggregates: { totalSales: number; totalItems: number; paymentStats: { totalSalesMpesa: number; totalSalesCash: number }; commission: { commission: number } };
@@ -229,6 +232,10 @@ export default function MarketingTrackerPage() {
         yesNo,
         numeric,
         text,
+        // Thursday-only weekly fields (explicit)
+        weeklyMeetingAttended,
+        weeklyVideoShootParticipated,
+        weeklyVideoCount: weeklyVideoCount ? Number(weeklyVideoCount) : 0,
       };
 
       const res = await fetch("/api/marketing/daily", {
@@ -240,6 +247,10 @@ export default function MarketingTrackerPage() {
           showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
         setReceipts([newSaleRow()]);
+        // reset weekly state
+        setWeeklyMeetingAttended(false);
+        setWeeklyVideoShootParticipated(false);
+        setWeeklyVideoCount("");
         const data = await res.json().catch(() => null);
         if (data?.periodSummary) {
           setPeriodSummary({
@@ -381,6 +392,89 @@ export default function MarketingTrackerPage() {
                 </div>
               </div>
             ))}
+
+            {form.dayOfWeek === "Thursday" && (
+              <section className="mt-6 border border-red-500/30 rounded-xl p-4">
+                <h3 className="text-sm font-semibold mb-3">Weekly Marketing Activities (Thursday)</h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">Weekly meeting</label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyMeetingAttended(true);
+                            updateField("weeklyMeetingAttended", true);
+                          }}
+                          className={pillClass(weeklyMeetingAttended)}
+                        >
+                          Attended weekly marketing meeting
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyMeetingAttended(false);
+                            updateField("weeklyMeetingAttended", false);
+                          }}
+                          className={pillClass(!weeklyMeetingAttended)}
+                        >
+                          Did not attend
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">Video shoot</label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyVideoShootParticipated(true);
+                            updateField("weeklyVideoShootParticipated", true);
+                          }}
+                          className={pillClass(weeklyVideoShootParticipated)}
+                        >
+                          Participated in weekly video shoot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyVideoShootParticipated(false);
+                            updateField("weeklyVideoShootParticipated", false);
+                          }}
+                          className={pillClass(!weeklyVideoShootParticipated)}
+                        >
+                          Did not participate
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">Number of videos participated in (shooting)</label>
+                      <div className="mt-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={String(weeklyVideoCount)}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? "" : Math.max(0, Number(e.target.value));
+                            setWeeklyVideoCount(v === "" ? "" : Number(v));
+                            updateField("weeklyVideoCount", v === "" ? "" : Number(v));
+                          }}
+                          className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {(config.numericFields || []).length > 0 && (
               <div className="space-y-3">

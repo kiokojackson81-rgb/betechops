@@ -74,23 +74,18 @@ export const marketingDayConfigs: DayConfig[] = [
       stockChecklist,
     ],
     numericFields: [
-      { key: "liveSessionsCount", label: "Live sessions hosted", min: 0 },
-      { key: "liveSessionsEstimatedViewers", label: "Estimated viewers across live(s)", min: 0 },
+      // Thursday does not track live sessions here; weekly video count will be captured in an explicit UI block
     ],
-    textFields: [{ key: "liveSessionPlatform", label: "Platform used for live session", placeholder: "TikTok / IG / FB / YT" }],
+    textFields: [],
   },
   {
     day: "Friday",
-    yesNoFields: [
-      ...whatsappCore,
-      stockChecklist,
-    ],
+    yesNoFields: [...whatsappCore, stockChecklist],
     numericFields: [
       { key: "liveSessionsCount", label: "Live sessions hosted", min: 0 },
       { key: "liveSessionsEstimatedViewers", label: "Live viewers", min: 0 },
-      { key: "liveSessionDurationMinutes", label: "Live session duration (minutes)", min: 0 },
     ],
-    textFields: [{ key: "liveSessionPlatform", label: "Platform used for live session", placeholder: "TikTok / IG / FB / YT" }],
+    textFields: [],
   },
   {
     day: "Saturday",
@@ -101,10 +96,7 @@ export const marketingDayConfigs: DayConfig[] = [
       ...whatsappCore,
       stockChecklist,
     ],
-    numericFields: [
-      { key: "liveSessionsCount", label: "Live sessions hosted", min: 0 },
-      { key: "liveSessionsEstimatedViewers", label: "Live viewers", min: 0 },
-    ],
+    numericFields: [],
     textFields: [
       { key: "weeklyComment", label: "Weekly comment or complaints", placeholder: "Summarize any complaints or highlights" },
     ],
