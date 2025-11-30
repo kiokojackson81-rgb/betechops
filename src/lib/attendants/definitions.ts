@@ -3,7 +3,7 @@ import type { AttendantCategory } from "@prisma/client";
 export type AttendantActivityMetric = "DAILY_SALES" | "PRODUCT_UPLOADS" | "ORDER_PROCESSING" | "CUSTOM";
 
 export interface AttendantCategoryDefinition {
-  id: AttendantCategory;
+  id: string;
   label: string;
   description: string;
   primaryMetrics: AttendantActivityMetric[];
@@ -61,12 +61,10 @@ export const attendantCategoryDefinitions: AttendantCategoryDefinition[] = [
   },
 ];
 
-export const attendantCategoryById = attendantCategoryDefinitions.reduce<
-  Record<AttendantCategory, AttendantCategoryDefinition>
->((acc, def) => {
+export const attendantCategoryById = attendantCategoryDefinitions.reduce<Record<string, AttendantCategoryDefinition>>((acc, def) => {
   acc[def.id] = def;
   return acc;
-}, {} as Record<AttendantCategory, AttendantCategoryDefinition>);
+}, {} as Record<string, AttendantCategoryDefinition>);
 
 export const attendantCategoryOptions = attendantCategoryDefinitions.map((def) => ({
   id: def.id,
@@ -75,6 +73,6 @@ export const attendantCategoryOptions = attendantCategoryDefinitions.map((def) =
 }));
 
 export function getCategoryDefinition(category: AttendantCategory | null | undefined): AttendantCategoryDefinition {
-  if (!category) return attendantCategoryById.DIRECT_SALES_OPS;
-  return attendantCategoryById[category] ?? attendantCategoryById.DIRECT_SALES_OPS;
+  if (!category) return (attendantCategoryById as any)["DIRECT_SALES_OPS"];
+  return (attendantCategoryById as any)[category as any] ?? (attendantCategoryById as any)["DIRECT_SALES_OPS"];
 }

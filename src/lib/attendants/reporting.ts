@@ -48,28 +48,28 @@ export async function getAttendantCategorySummary(days: number) {
   ]);
 
   const totalsByCategory = attendantCategoryDefinitions.reduce<TotalsByCategory>((acc, def) => {
-    acc[def.id] = { users: 0, metrics: {} };
+    (acc as any)[def.id] = { users: 0, metrics: {} };
     return acc;
   }, {} as TotalsByCategory);
 
   for (const row of assignmentCounts) {
     const cat = row.category as AttendantCategory;
-    if (!totalsByCategory[cat]) totalsByCategory[cat] = { users: 0, metrics: {} };
-    totalsByCategory[cat].users += row._count._all;
+    if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
+    (totalsByCategory as any)[cat].users += row._count._all;
   }
 
   for (const user of fallbackUsers) {
     const cat = user.attendantCategory as AttendantCategory;
-    if (!totalsByCategory[cat]) totalsByCategory[cat] = { users: 0, metrics: {} };
-    totalsByCategory[cat].users += 1;
+    if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
+    (totalsByCategory as any)[cat].users += 1;
   }
 
   for (const agg of activityAgg) {
     const cat = agg.category as AttendantCategory;
-    if (!totalsByCategory[cat]) totalsByCategory[cat] = { users: 0, metrics: {} };
+    if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
     const numeric = agg._sum.numericValue;
     const numericSum = numeric ? Number(numeric) : 0;
-    totalsByCategory[cat].metrics[agg.metric] = {
+    (totalsByCategory as any)[cat].metrics[agg.metric] = {
       numericSum,
       intSum: agg._sum.intValue ?? 0,
     };
@@ -91,8 +91,8 @@ export async function getAttendantCategorySummary(days: number) {
   for (const row of kilimallOrders) {
     combinedOrderCounts[`KILIMALL ${row.status}`] = row._count;
   }
-  if (totalsByCategory.JUMIA_KILIMALL_OPS) {
-    totalsByCategory.JUMIA_KILIMALL_OPS.orderCounts = combinedOrderCounts;
+  if ((totalsByCategory as any)["JUMIA_KILIMALL_OPS"]) {
+    (totalsByCategory as any)["JUMIA_KILIMALL_OPS"].orderCounts = combinedOrderCounts;
   }
 
   return {

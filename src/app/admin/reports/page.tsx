@@ -30,7 +30,7 @@ export default async function ReportsPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         {attendantCategoryDefinitions.map((cat) => {
-          const data = summary.categories[cat.id];
+          const data = (summary.categories as any)[cat.id];
           const dailySales = data?.metrics?.DAILY_SALES?.numericSum ?? 0;
           const uploads = data?.metrics?.PRODUCT_UPLOADS?.intSum ?? 0;
           const cardsBase = "rounded-2xl border border-white/10 bg-white/5 p-5 shadow";
@@ -67,7 +67,7 @@ export default async function ReportsPage() {
                       {Object.entries(data.orderCounts).map(([status, count]) => (
                         <div key={status} className="flex flex-col rounded bg-white/5 px-2 py-2">
                           <dt className="text-[10px] uppercase tracking-widest text-slate-400">{status}</dt>
-                          <dd className="text-base font-semibold text-white">{count}</dd>
+                          <dd className="text-base font-semibold text-white">{String(count)}</dd>
                         </div>
                       ))}
                     </dl>
