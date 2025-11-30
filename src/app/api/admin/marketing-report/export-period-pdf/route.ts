@@ -73,13 +73,12 @@ export async function GET(req: Request) {
     let browser: any = null;
     const html = renderHtml(report);
 
-    // try puppeteer first (local dev). Use indirect imports (import by
-    // variable) to avoid static analysis attempting to resolve optional
-    // packages during the Next.js build on environments where they are not
-    // installed.
+    // try puppeteer first (local dev). Use a guarded dynamic import so the
+    // route still builds when the package is not installed.
     try {
-      const puppeteerName = "puppeteer";
-      puppeteer = await import(puppeteerName);
+      // prefer full puppeteer (includes a Chromium binary)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      puppeteer = await import("puppeteer");
     } catch (e) {
       puppeteer = null;
     }
@@ -89,14 +88,11 @@ export async function GET(req: Request) {
     } else {
       // fallback to chrome-aws-lambda + puppeteer-core for serverless
       try {
-        const chromiumName = "chrome-aws-lambda";
-        const pcoreName = "puppeteer-core";
-        // import by name so Turbopack/Next won't try to statically resolve
-        // these optional packages at build-time
+        // fallback to chrome-aws-lambda + puppeteer-core for serverless
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        chromium = await import(chromiumName);
+        chromium = await import("chrome-aws-lambda");
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const pcore = await import(pcoreName);
+        const pcore = await import("puppeteer-core");
         const executablePath = (chromium && (await chromium.executablePath)) || undefined;
         const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
         browser = await pcore.launch({
