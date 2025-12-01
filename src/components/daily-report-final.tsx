@@ -562,7 +562,7 @@ export default function DailyReportFinal() {
         </div>
       </div>
 
-      <div className="md:grid md:grid-cols-2 md:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.95fr)] gap-6">
         <div className="flex flex-col gap-6">
           <div className={cardClasses + " p-6 space-y-5"}>
             <div>
@@ -701,50 +701,28 @@ export default function DailyReportFinal() {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-6">
-          <div className={cardClasses + " p-6 space-y-3"}>
+        <div className="flex flex-col gap-5">
+          <div className={cardClasses + " p-5 space-y-3 self-stretch"}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Quick Stats</h2>
               <span className="text-xs text-slate-400">Trading period: {tradingPeriod}</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Receipts</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{totalReceipts}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Sales</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">New products</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{newProducts}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Products edited</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{productsEditedCount}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Copies uploaded</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{copiesUploaded}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Walk-ins served</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{walkInServed}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Purchases made</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{purchasesMade}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Live sessions held</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">{liveSessionsCount}</h3>
-              </div>
-              <div className="bg-black/20 rounded-2xl p-3">
-                <span className="text-sm opacity-70">Commission earned</span>
-                <h3 className="text-2xl font-semibold text-emerald-400">KES {commissionEarned.toLocaleString()}</h3>
-                <p className="text-[10px] text-slate-500">Placeholder</p>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {[
+                { label: "Receipts", value: totalReceipts },
+                { label: "Sales", value: `KES ${totalSales.toLocaleString()}` },
+                { label: "New products", value: newProducts },
+                { label: "Copies uploaded", value: copiesUploaded },
+                { label: "Walk-ins served", value: walkInServed },
+                { label: "Purchases made", value: purchasesMade },
+                { label: "Live sessions held", value: liveSessionsCount },
+                { label: "Commission earned", value: `KES ${commissionEarned.toLocaleString()}` },
+              ].map((stat) => (
+                <div key={stat.label} className="bg-black/20 rounded-2xl p-3 flex flex-col gap-1">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">{stat.label}</span>
+                  <h3 className="text-2xl font-semibold text-emerald-400">{stat.value}</h3>
+                </div>
+              ))}
             </div>
           </div>
           <div className={cardClasses + " p-6 space-y-3"}>
