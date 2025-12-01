@@ -2,7 +2,8 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import { attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 
-export default async function CategoryConcernsPage({ params }: { params: { category: string } }) {
+export default async function CategoryConcernsPage(props: any) {
+  const params = props?.params ?? {};
   const catId = params.category as any;
   const catDef = attendantCategoryDefinitions.find((c) => c.id === catId);
   if (!catDef) {
