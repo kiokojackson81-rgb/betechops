@@ -27,21 +27,29 @@ export const authOptions = {
         const email = (credentials?.email || "").trim().toLowerCase();
         const password = credentials?.password || "";
 
-        if (!email || !password || !email.endsWith(REQUIRED_DOMAIN)) {
+        if (!email || !password) return null;
+        if (!email.endsWith(REQUIRED_DOMAIN)) {
+          // enforce corporate domain
           return null;
         }
 
         const user = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, email: true, role: true, attendantCategory: true, isActive: true },
+          select: { id: true, email: true, name: true, password: true, role: true, attendantCategory: true, isActive: true },
         });
-        if (!user || !user.isActive) return null;
 
-        // Credentials-based auth is disabled here because the schema does not
-        // expose a password column on the User model. Return null to indicate
-        // authorization failed when using plain credentials. OAuth providers
-        // or other configured providers will continue to work.
-        return null;
+        if (!user || !user.isActive || !user.password) return null;
+
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          attendantCategory: user.attendantCategory,
+        } as any;
       },
     }),
   ],
