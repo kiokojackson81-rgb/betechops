@@ -7,11 +7,18 @@ import type { AttendantCategory } from "@prisma/client";
 // the generated Prisma client enum differs from the schema during local
 // development. The runtime checks still cast into `AttendantCategory` when
 // enforcing permissions.
+// Route permissions mapped to the database enum labels. The project may use
+// different enum identifiers locally vs in the deployed DB; use a tolerant
+// mapping so middleware enforcements remain correct regardless of naming.
 const routePermissions: Array<{ prefix: string; categories: string[] }> = [
-  { prefix: "/marketing/tracker", categories: ["DIRECT_SALES_OPS"] },
-  { prefix: "/attendant/daily-report", categories: ["MARKETING_OPS"] },
-  { prefix: "/support/dashboard", categories: ["SUPPORT_OPS"] },
-  { prefix: "/attendant", categories: ["JUMIA_KILIMALL_OPS", "BETECH_OPS"] },
+  // Marketing tracker is owned by direct sales
+  { prefix: "/marketing/tracker", categories: ["DIRECT_SALES", "DIRECT_SALES_OPS"] },
+  // Daily report is used by product upload / marketing staff
+  { prefix: "/attendant/daily-report", categories: ["PRODUCT_UPLOAD", "MARKETING_OPS"] },
+  // Support dashboard
+  { prefix: "/support/dashboard", categories: ["SUPPORT", "SUPPORT_OPS"] },
+  // Attendant top-level routes for marketplace ops
+  { prefix: "/attendant", categories: ["JUMIA_OPERATIONS", "KILIMALL_OPERATIONS", "GENERAL", "BETECH_OPS", "JUMIA_KILIMALL_OPS"] },
 ];
 
 export async function middleware(req: NextRequest) {
