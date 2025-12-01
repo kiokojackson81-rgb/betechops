@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import type { AttendantCategory } from "@prisma/client";
+import getLandingPage from "@/lib/getLandingPage";
 
 // Use string[] for the permissions list to avoid a TypeScript mismatch when
 // the generated Prisma client enum differs from the schema during local
@@ -35,6 +36,12 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  // Not logged in → send to sign-in
+  if (!token) {
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const role = (token as any)?.role ?? (token as any)?.user?.role;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,7 +59,9 @@ export async function middleware(req: NextRequest) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       if (role === "ADMIN") return NextResponse.next();
       if (!category || !categories.includes(category as AttendantCategory)) {
-        url.pathname = "/not-authorized";
+        // Wrong category → send to their home instead of /not-authorized
+        const home = getLandingPage(category as any, role as string);
+        url.pathname = home;
         return NextResponse.redirect(url);
       }
       break;
