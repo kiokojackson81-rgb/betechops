@@ -437,7 +437,7 @@ export default function DailyReportFinal() {
   const sections = dayConfig[dayName] ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
+    <div className="bg-slate-950 text-slate-100 p-4">
       {/* Header: date + day pills */}
       <div className={cardClasses + " p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"}>
         <div className="flex items-center gap-4">
@@ -510,7 +510,7 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Top grid: receipts (2/3) and right column stats/communications (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 items-start">
         {/* Left: receipts - spans 2 columns on large screens */}
         <div className="lg:col-span-2">
           <div className={cardClasses + " p-4 space-y-2"}>
@@ -636,9 +636,9 @@ export default function DailyReportFinal() {
 
         {/* Right column: stats & communications */}
         <div>
-          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
+          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
             <h3 className="text-lg font-semibold">Quick Stats</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-slate-300">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-sm text-slate-300">
               <div className="bg-black/20 p-3 rounded-md flex flex-col">Receipts <span className="mt-1 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
               <div className="bg-black/20 p-3 rounded-md flex flex-col">Sales <span className="mt-1 text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
               <div className="bg-black/20 p-3 rounded-md flex flex-col">New products <span className="mt-1 text-2xl font-semibold text-emerald-400">{newProducts}</span></div>
@@ -664,7 +664,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Product & Stock Management card */}
-          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
+          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
             <h3 className="text-lg font-semibold">Product & Stock</h3>
             <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
             <div className="space-y-3">
@@ -688,7 +688,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Customer Servicing compact card */}
-          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
+          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
             <h3 className="text-lg font-semibold">Customer Servicing</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -731,11 +731,11 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Bottom grid: live session (left) + notes / day sections (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mt-2 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 mt-1 items-start">
         <div className="lg:col-span-2">
           {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
           {sections.map((section) => (
-            <div key={section.title} className={cardClasses + " p-4 mb-2 space-y-2"}>
+            <div key={section.title} className={cardClasses + " p-4 mb-1 space-y-2"}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
               <div className="space-y-3">
                 {section.fields.map((field) => {
