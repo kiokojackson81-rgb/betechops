@@ -301,10 +301,22 @@ export default function AdminDailyReportPage() {
   const aggCopies = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.copiesUploaded) ? Number(r.tasks.categories.copiesUploaded) : 0), 0);
   const aggEdited = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.productsEdited) ? Number(r.tasks.categories.productsEdited) : 0), 0);
   const aggSalesCount = filteredReportsForAgg.reduce((sum, r) => sum + ((Array.isArray(r.tasks?.sales)) ? r.tasks.sales.length : 0), 0);
-  const aggWalkIns = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.walkInServed ?? 0), 0);
-  const aggPurchases = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.purchasesMade ?? 0), 0);
-  const aggLiveSessions = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.liveSessionsCount ?? 0), 0);
-  const aggCommissionEarned = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.commissionEarned ?? 0), 0);
+  const aggWalkIns = filteredReportsForAgg.reduce((sum, r) => {
+    const metrics = r.tasks?.metrics ?? {};
+    return sum + Number(metrics.walkInServed ?? 0);
+  }, 0);
+  const aggPurchases = filteredReportsForAgg.reduce((sum, r) => {
+    const metrics = r.tasks?.metrics ?? {};
+    return sum + Number(metrics.purchasesMade ?? 0);
+  }, 0);
+  const aggLiveSessions = filteredReportsForAgg.reduce((sum, r) => {
+    const metrics = r.tasks?.metrics ?? {};
+    return sum + Number(metrics.liveSessionsCount ?? 0);
+  }, 0);
+  const aggCommissionEarned = filteredReportsForAgg.reduce((sum, r) => {
+    const metrics = r.tasks?.metrics ?? {};
+    return sum + Number(metrics.commissionEarned ?? 0);
+  }, 0);
   const tradingRange = getTradingRange();
   const stats = {
     totalProducts: Number(summary?.totalProducts ?? 0),
