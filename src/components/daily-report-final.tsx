@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CalendarIcon } from "lucide-react";
 
 const cardClasses =
-  "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
+  "rounded-2xl border border-white/5 bg-slate-950/70 shadow-lg shadow-black/20";
 
 function getWeekday(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "long" });
@@ -147,102 +147,348 @@ export default function DailyReportFinal() {
   const resetDay = () => { setFieldsState(createInitialState()); setReceipts([{ receiptNumber: "", sellingTotal: 0, paymentMethod: "MPESA", items: [] }]); };
 
   const sections = dayConfig[dayName] ?? [];
+  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const handleDayChange = (target: string) => {
+    const targetIndex = daysOfWeek.indexOf(target);
+    const currentIndex = selectedDate.getDay();
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + (targetIndex - currentIndex));
+    setSelectedDate(next);
+  };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-8">
-      <div className={cardClasses + " p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-          <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
-          <div className="flex items-center gap-2">
-            <CalendarIcon size={16} className="text-slate-400" />
-            <input type="date" className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={selectedDate.toISOString().split("T")[0]} onChange={(e) => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) setSelectedDate(d); }} />
-          </div>
+  const dateInput = (
+    <div className="flex items-center gap-2">
+      <CalendarIcon size={16} className="text-slate-400" />
+      <input
+        type="date"
+        className="rounded-lg border border-slate-700 bg-black/30 px-3 py-1 text-sm text-slate-100"
+        value={selectedDate.toISOString().split("T")[0]}
+        onChange={(e) => {
+          const d = new Date(e.target.value);
+          if (!isNaN(d.getTime())) setSelectedDate(d);
+        }}
+      />
+    </div>
+  );
+
+  const daySelect = (
+    <select
+      className="rounded-lg border border-slate-700 bg-black/30 px-3 py-1 text-sm text-slate-100"
+      value={dayName}
+      onChange={(e) => handleDayChange(e.target.value)}
+    >
+      {daysOfWeek.map((day) => (
+        <option key={day} value={day}>
+          {day}
+        </option>
+      ))}
+    </select>
+  );
+
+  const resetButton = (
+    <button
+      type="button"
+      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+      onClick={resetDay}
+    >
+      Reset day
+    </button>
+  );
+
+  const submitButton = (
+    <button
+      type="button"
+      className="rounded-xl px-4 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+      onClick={handleSubmit}
+    >
+      Submit report
+    </button>
+  );
+
+  const renderFieldControl = (field: FieldDef) => {
+    const value = fieldsState[field.key];
+    if (field.type === "boolean") {
+      return (
+        <label key={field.key} className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500"
+            checked={value}
+            onChange={(e) => handleFieldChange(field.key, e.target.checked)}
+          />
+          <span className="text-sm">{field.label}</span>
+        </label>
+      );
+    }
+    if (field.type === "number") {
+      return (
+        <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm md:w-1/2">{field.label}</label>
+          <input
+            type="number"
+            className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value}
+            onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
+          />
         </div>
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-          <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
-          <select className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={sections.length ? sections[0].title : getWeekday(selectedDate)} onChange={() => {}}>
-            {Object.keys(dayConfig).map((d) => <option key={d} value={d}>{d}</option>)}
+      );
+    }
+    if (field.type === "text") {
+      return (
+        <div key={field.key} className="flex flex-col gap-2">
+          <label className="text-sm">{field.label}</label>
+          <textarea
+            rows={3}
+            className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+          />
+        </div>
+      );
+    }
+    if (field.type === "select" && field.options) {
+      return (
+        <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm md:w-1/2">{field.label}</label>
+          <select
+            className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+          >
+            {field.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
           </select>
         </div>
-        <div className="flex items-end gap-4">
-          <button type="button" className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5" onClick={resetDay}>Reset day</button>
-          <button type="button" className="rounded-xl px-4 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95" onClick={handleSubmit}>Submit report</button>
-        </div>
-      </div>
+      );
+    }
+    return null;
+  };
 
-      <div className={cardClasses + " p-6 space-y-4"}>
-        <h2 className="text-lg font-semibold">Add each receipt for today</h2>
-        <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
-        {receipts.map((receipt, rIndex) => (
-          <div key={rIndex} className="border border-slate-700 rounded-xl p-4 space-y-4 bg-black/20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Selling total (KES)</label>
-                <input type="number" className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={receipt.sellingTotal} onChange={(e) => updateReceiptField(rIndex, "sellingTotal", parseFloat(e.target.value) || 0)} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number (required)</label>
-                <input type="text" className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" placeholder="Required" value={receipt.receiptNumber} onChange={(e) => updateReceiptField(rIndex, "receiptNumber", e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-wide text-slate-400">Payment method (required)</label>
-                <div className="flex items-center gap-2">
-                  <button type="button" className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${receipt.paymentMethod === "MPESA" ? "bg-emerald-500 text-black border-emerald-600" : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"}`} onClick={() => updateReceiptField(rIndex, "paymentMethod", "MPESA")}>MPESA</button>
-                  <button type="button" className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${receipt.paymentMethod === "CASH" ? "bg-emerald-500 text-black border-emerald-600" : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"}`} onClick={() => updateReceiptField(rIndex, "paymentMethod", "CASH")}>Cash</button>
-                </div>
+  const renderSectionFields = (section: SectionDef) => (
+    <div className="space-y-4">{section.fields.map((field) => renderFieldControl(field))}</div>
+  );
+
+  const walkinsSection = sections.find((section) => section.title === "Walk-ins & Shop Neatness");
+  const productStockSection = sections.find((section) => section.title === "Product & Stock Management");
+  const customerCommsSection = sections.find((section) => section.title === "Customer & Communications");
+  const marketplaceReviewSection = sections.find((section) => section.title === "Marketplace Review");
+
+  const totalNewProducts = fieldsState["productsUploaded"] ?? 0;
+  const totalEditedProducts = fieldsState["productsEdited"] ?? 0;
+  const totalCopiedProducts = fieldsState["productsCopied"] ?? 0;
+  const totalWalkinsServed = fieldsState["walkInsWhoPurchased"] ?? 0;
+  const totalWalkinsPurchased = fieldsState["walkInsWhoPurchased"] ?? 0;
+  const totalLiveSessions = ["liveSessionHostedWednesday", "liveSessionHostedSaturday"].reduce(
+    (sum, key) => sum + (fieldsState[key] ? 1 : 0),
+    0
+  );
+
+  const quickStats = [
+    { label: "Receipts", value: totalReceipts },
+    { label: "Sales (KES)", value: `KES ${totalSales.toLocaleString()}` },
+    { label: "Products uploaded", value: totalNewProducts },
+    { label: "Products edited", value: totalEditedProducts },
+    { label: "Copies uploaded", value: totalCopiedProducts },
+    { label: "Walk-ins served", value: totalWalkinsServed },
+    { label: "Walk-ins purchased", value: totalWalkinsPurchased },
+    { label: "Live sessions held", value: totalLiveSessions },
+  ];
+
+  const receiptsSection = (
+    <>
+      <h2 className="text-lg font-semibold">Add each receipt for today</h2>
+      <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
+      {receipts.map((receipt, rIndex) => (
+        <div key={rIndex} className="border border-slate-700 rounded-xl p-4 space-y-4 bg-black/20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Selling total (KES)</label>
+              <input
+                type="number"
+                className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                value={receipt.sellingTotal}
+                onChange={(e) => updateReceiptField(rIndex, "sellingTotal", parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number (required)</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                placeholder="Required"
+                value={receipt.receiptNumber}
+                onChange={(e) => updateReceiptField(rIndex, "receiptNumber", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Payment method (required)</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    receipt.paymentMethod === "MPESA"
+                      ? "bg-emerald-500 text-black border-emerald-600"
+                      : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                  }`}
+                  onClick={() => updateReceiptField(rIndex, "paymentMethod", "MPESA")}
+                >
+                  MPESA
+                </button>
+                <button
+                  type="button"
+                  className={`px-4 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    receipt.paymentMethod === "CASH"
+                      ? "bg-emerald-500 text-black border-emerald-600"
+                      : "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                  }`}
+                  onClick={() => updateReceiptField(rIndex, "paymentMethod", "CASH")}
+                >
+                  Cash
+                </button>
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</label>
-              {receipt.items.map((item, iIndex) => (
-                <div key={iIndex} className="grid grid-cols-1 md:grid-cols-[3fr_1fr_auto] gap-2 items-center">
-                  <input type="text" value={item.name} className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" onChange={(e) => updateReceiptItem(rIndex, iIndex, "name", e.target.value)} />
-                  <input type="number" value={item.buyingPrice} className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" onChange={(e) => updateReceiptItem(rIndex, iIndex, "buyingPrice", parseFloat(e.target.value) || 0)} />
-                  <button type="button" className="text-xs text-red-400 hover:text-red-300" onClick={() => removeItemFromReceipt(rIndex, iIndex)}>Remove</button>
-                </div>
-              ))}
-              <button type="button" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5" onClick={() => addItemToReceipt(rIndex)}>+ Add product to this receipt</button>
-            </div>
-            {receipts.length > 1 && <button type="button" className="text-xs text-red-400 hover:text-red-300" onClick={() => removeReceipt(rIndex)}>Remove receipt</button>}
           </div>
-        ))}
-        <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5" onClick={addReceipt}>+ Add receipt</button>
-        <div className="mt-4 flex flex-col gap-1 text-sm text-slate-400">
-          <span>Total receipts: {totalReceipts}</span>
-          <span>Total sales (KES): {totalSales.toLocaleString()}</span>
-          <span>Total profit (KES): {totalProfit.toLocaleString()}</span>
-          <span>Total items: {totalItems}</span>
-        </div>
-      </div>
-
-      {sections.map((section) => (
-        <div key={section.title} className={cardClasses + " p-6 space-y-4"}>
-          <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="space-y-4">
-            {section.fields.map((field) => {
-              const value = fieldsState[field.key];
-              if (field.type === "boolean") return (
-                <label key={field.key} className="flex items-center gap-3"><input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500" checked={value} onChange={(e) => handleFieldChange(field.key, e.target.checked)} /><span className="text-sm">{field.label}</span></label>
-              );
-              if (field.type === "number") return (
-                <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2"><label className="text-sm md:w-1/2">{field.label}</label><input type="number" className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={value} onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)} /></div>
-              );
-              if (field.type === "text") return (
-                <div key={field.key} className="flex flex-col gap-2"><label className="text-sm">{field.label}</label><textarea rows={3} className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={value} onChange={(e) => handleFieldChange(field.key, e.target.value)} /></div>
-              );
-              if (field.type === "select" && field.options) return (
-                <div key={field.key} className="flex flex-col md:flex-row md:items-center gap-2"><label className="text-sm md:w-1/2">{field.label}</label><select className="md:w-1/2 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={value} onChange={(e) => handleFieldChange(field.key, e.target.value)}>{field.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
-              );
-              return null;
-            })}
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</label>
+            {receipt.items.map((item, iIndex) => (
+              <div key={iIndex} className="grid grid-cols-1 md:grid-cols-[3fr_1fr_auto] gap-2 items-center">
+                <input
+                  type="text"
+                  value={item.name}
+                  className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  onChange={(e) => updateReceiptItem(rIndex, iIndex, "name", e.target.value)}
+                />
+                <input
+                  type="number"
+                  value={item.buyingPrice}
+                  className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  onChange={(e) => updateReceiptItem(rIndex, iIndex, "buyingPrice", parseFloat(e.target.value) || 0)}
+                />
+                <button type="button" className="text-xs text-red-400 hover:text-red-300" onClick={() => removeItemFromReceipt(rIndex, iIndex)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+              onClick={() => addItemToReceipt(rIndex)}
+            >
+              + Add product to this receipt
+            </button>
           </div>
+          {receipts.length > 1 && (
+            <button type="button" className="text-xs text-red-400 hover:text-red-300" onClick={() => removeReceipt(rIndex)}>
+              Remove receipt
+            </button>
+          )}
         </div>
       ))}
-
-      <div className={cardClasses + " p-6 space-y-2"}>
-        <label className="text-sm font-semibold">Notes / Summary</label>
-        <textarea rows={4} className="w-full rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500" placeholder="Any additional comments, highlights or issues…" value={fieldsState["notes"] || ""} onChange={(e) => handleFieldChange("notes", e.target.value)} />
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+        onClick={addReceipt}
+      >
+        + Add receipt
+      </button>
+      <div className="mt-4 flex flex-col gap-1 text-sm text-slate-400">
+        <span>Total receipts: {totalReceipts}</span>
+        <span>Total sales (KES): {totalSales.toLocaleString()}</span>
+        <span>Total profit (KES): {totalProfit.toLocaleString()}</span>
+        <span>Total items: {totalItems}</span>
       </div>
+    </>
+  );
+
+  const notesSection = (
+    <>
+      <label className="text-sm font-semibold">Notes / Summary</label>
+      <textarea
+        rows={4}
+        className="w-full rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+        placeholder="Any additional comments, highlights or issues…"
+        value={fieldsState["notes"] || ""}
+        onChange={(e) => handleFieldChange("notes", e.target.value)}
+      />
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-50 px-6 py-8 space-y-6">
+      <div className={cardClasses + " px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"}>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Date</span>
+            {dateInput}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Day of week</span>
+            {daySelect}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 self-end md:self-auto">
+          {resetButton}
+          {submitButton}
+        </div>
+      </div>
+
+      <div className={cardClasses + " px-6 py-4"}>
+        <h2 className="text-sm font-semibold mb-3">Quick stats</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          {quickStats.map((stat) => (
+            <StatTile key={stat.label} label={stat.label} value={stat.value} />
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <div className="xl:col-span-7 space-y-5">
+          <div className={cardClasses + " px-6 py-5"}>
+            {receiptsSection}
+          </div>
+        </div>
+        <div className="xl:col-span-5 space-y-5">
+          {walkinsSection && (
+            <div className={cardClasses + " px-6 py-5"}>
+              <h3 className="text-lg font-semibold mb-3">Walk-ins & Shop Neatness</h3>
+              {renderSectionFields(walkinsSection)}
+            </div>
+          )}
+          {productStockSection && (
+            <div className={cardClasses + " px-6 py-5"}>
+              <h3 className="text-lg font-semibold mb-3">Product & Stock Management</h3>
+              {renderSectionFields(productStockSection)}
+            </div>
+          )}
+          {customerCommsSection && (
+            <div className={cardClasses + " px-6 py-5"}>
+              <h3 className="text-lg font-semibold mb-3">Customer & Communications</h3>
+              {renderSectionFields(customerCommsSection)}
+            </div>
+          )}
+          {marketplaceReviewSection && (
+            <div className={cardClasses + " px-6 py-5"}>
+              <h3 className="text-lg font-semibold mb-3">Marketplace Review</h3>
+              {renderSectionFields(marketplaceReviewSection)}
+            </div>
+          )}
+          <div className={cardClasses + " px-6 py-5"}>
+            {notesSection}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl bg-slate-900/70 border border-white/5 px-4 py-3 flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="text-sm font-semibold text-emerald-400 truncate">{value || 0}</span>
     </div>
   );
 }
