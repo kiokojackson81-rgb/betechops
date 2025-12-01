@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Final redesign for the marketing attendant daily report page.
  *
@@ -10,8 +12,6 @@
  * object keyed by field identifiers, making it easy to construct a
  * submission payload matching the existing API.
  */
-
-"use client";
 
 import { useState } from "react";
 import {
