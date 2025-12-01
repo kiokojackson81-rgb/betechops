@@ -78,7 +78,6 @@
     "typescript": "^5"
   },
   "optionalDependencies": {
-    "chrome-aws-lambda": "npm:null@^11.0.0",
     "puppeteer": "^21.11.0",
     "puppeteer-core": "^24.31.0"
   }
