@@ -445,7 +445,7 @@ export default function DailyReportFinal() {
               <CalendarIcon size={16} className="text-slate-400" />
               <input
                 type="date"
-                className="rounded-full border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100"
+                className="rounded-full border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
                 value={selectedDate.toISOString().split("T")[0]}
                 onChange={(e) => {
                   const d = new Date(e.target.value);
@@ -502,7 +502,7 @@ export default function DailyReportFinal() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="rounded-full px-4 py-1.5 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+              className="rounded-full px-4 py-1.5 text-sm font-semibold bg-emerald-600 text-white hover:brightness-105"
             >
               Submit
             </button>
@@ -670,15 +670,15 @@ export default function DailyReportFinal() {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">New products uploaded</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
+                    <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">Products edited</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">Copies uploaded</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm">Competitiveness confirmed</label>
@@ -710,15 +710,15 @@ export default function DailyReportFinal() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Promo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Demo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Engagement replies</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm">All comments replied</label>

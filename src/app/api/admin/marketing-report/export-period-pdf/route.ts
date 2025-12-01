@@ -88,17 +88,29 @@ export async function GET(req: Request) {
     } else {
       // fallback to chrome-aws-lambda + puppeteer-core for serverless
       try {
-        // fallback to chrome-aws-lambda + puppeteer-core for serverless
+        // Build the module names dynamically to avoid bundlers statically
+        // resolving the optional packages during build time. This prevents
+        // Turbopack from failing when the optional serverless chrome libs
+        // are not present in the environment.
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        chromium = await import("chrome-aws-lambda");
+        // e.g. import("chrome-aws-lambda") -> import("chrome-" + "aws" + "-lambda")
+        const chromeModuleName = "chrome-" + "aws" + "-lambda";
+        const puppeteerCoreName = "puppeteer-" + "core";
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const pcore = await import("puppeteer-core");
-        const executablePath = (chromium && (await chromium.executablePath)) || undefined;
+        chromium = await (Function("m","return import(m)"))(chromeModuleName);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const pcore = await (Function("m","return import(m)"))(puppeteerCoreName);
+
+        // chrome-aws-lambda exposes an async executablePath() function and
+        // an args array. Guard access safely.
+        const executablePathFn = chromium && chromium.executablePath ? chromium.executablePath : undefined;
         const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
+        const execPath = executablePathFn ? await executablePathFn() : undefined;
+
         browser = await pcore.launch({
           args,
           defaultViewport: { width: 1200, height: 800 },
-          executablePath: await (executablePath ? executablePath() : Promise.resolve(undefined)),
+          executablePath: execPath,
           headless: true,
         });
       } catch (e) {
