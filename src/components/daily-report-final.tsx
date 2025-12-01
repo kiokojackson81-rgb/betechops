@@ -445,7 +445,7 @@ export default function DailyReportFinal() {
               <CalendarIcon size={16} className="text-slate-400" />
               <input
                 type="date"
-                className="rounded-full border border-slate-700 bg-black/30 px-4 py-2 text-sm text-slate-100"
+                className="rounded-full border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100"
                 value={selectedDate.toISOString().split("T")[0]}
                 onChange={(e) => {
                   const d = new Date(e.target.value);
@@ -478,7 +478,7 @@ export default function DailyReportFinal() {
                     next.setDate(next.getDate() + diff);
                     setSelectedDate(next);
                   }}
-                  className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                     active
                       ? "bg-emerald-500 text-black border-emerald-600"
                       : "bg-transparent text-slate-200 border-slate-700 hover:bg-white/5"
@@ -491,7 +491,7 @@ export default function DailyReportFinal() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <button
               type="button"
               className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
@@ -502,7 +502,7 @@ export default function DailyReportFinal() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="rounded-full px-5 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+              className="rounded-full px-4 py-1.5 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
             >
               Submit
             </button>
@@ -710,15 +710,15 @@ export default function DailyReportFinal() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Promo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Demo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm w-1/2">Engagement replies</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm">All comments replied</label>
@@ -817,7 +817,7 @@ export default function DailyReportFinal() {
             <div className="flex justify-center">
               <button
                 type="button"
-                className="mt-2 rounded-full px-6 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+                className="mt-2 rounded-full px-5 py-1.5 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
                 onClick={handleSubmit}
               >
                 Submit report
