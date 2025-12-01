@@ -10,7 +10,7 @@
     "prisma:seed": "node prisma/seed.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "postinstall": "npm run prisma:generate && npm run setup:hooks",
+    "postinstall": "node ./scripts/postinstall.js",
     "setup:hooks": "git config core.hooksPath .githooks",
     "verify:no-conflicts": "node scripts/precommit-check.js",
     "set-admin": "node scripts/set-admin.js",
@@ -52,7 +52,6 @@
     "p-limit": "^4.0.0",
     "pino": "^8.0.0",
     "prom-client": "^14.0.0",
-    "puppeteer-core": "^24.31.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "zod": "^3.23.8"
@@ -79,7 +78,8 @@
     "typescript": "^5"
   },
   "optionalDependencies": {
+    "chrome-aws-lambda": "npm:null@^11.0.0",
     "puppeteer": "^21.11.0",
-    "chrome-aws-lambda": "^11.0.0"
+    "puppeteer-core": "^24.31.0"
   }
 }
