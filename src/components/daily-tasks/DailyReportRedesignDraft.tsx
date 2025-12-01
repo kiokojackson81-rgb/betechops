@@ -251,6 +251,21 @@ export default function DailyReportRedesignDraft() {
     { id: crypto.randomUUID(), sellingTotal: 0, receiptNumber: "", paymentMethod: "MPESA", products: [] },
   ]);
   const [notes, setNotes] = useState("");
+  // New metrics/state per final instructions
+  const [newProducts, setNewProducts] = useState<number>(0);
+  const [productsEdited, setProductsEdited] = useState<number>(0);
+  const [copiesUploaded, setCopiesUploaded] = useState<number>(0);
+  const [walkInServed, setWalkInServed] = useState<number>(0);
+  const [purchasesMade, setPurchasesMade] = useState<number>(0);
+  const [liveSessionsCount, setLiveSessionsCount] = useState<number>(0);
+  const [commissionEarned, setCommissionEarned] = useState<number>(0);
+  // Tuesday market engagement
+  const [promoVideos, setPromoVideos] = useState<number>(0);
+  const [demoVideos, setDemoVideos] = useState<number>(0);
+  const [engagementReplies, setEngagementReplies] = useState<number>(0);
+  const [allCommentsReplied, setAllCommentsReplied] = useState<boolean>(false);
+  // Weekly concerns / summary
+  const [concernsText, setConcernsText] = useState<string>("");
   const [autosaveStatus, setAutosaveStatus] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const autosaveTimer = useRef<number | null>(null);
@@ -281,6 +296,7 @@ export default function DailyReportRedesignDraft() {
   const sections = dayItems[dayName] ?? dayItems.Monday;
 
   const totalSales = useMemo(() => receipts.reduce((acc, r) => acc + Number(r.sellingTotal || 0), 0), [receipts]);
+  const totalReceipts = receipts.length;
   const [salesErrors, setSalesErrors] = useState<Record<string, string | null>>({});
 
   const validatePayload = (body: any) => {
@@ -374,6 +390,21 @@ export default function DailyReportRedesignDraft() {
         productsCount,
         totalSales,
         submittedBy: null,
+        // top-level metrics per final instructions
+        newProducts: Number(newProducts) || 0,
+        productsEdited: Number(productsEdited) || 0,
+        copiesUploaded: Number(copiesUploaded) || 0,
+        walkInServed: Number(walkInServed) || 0,
+        purchasesMade: Number(purchasesMade) || 0,
+        liveSessionsCount: Number(liveSessionsCount) || 0,
+        commissionEarned: Number(commissionEarned) || 0,
+        marketEngagement: {
+          promoVideos: Number(promoVideos) || 0,
+          demoVideos: Number(demoVideos) || 0,
+          engagementReplies: Number(engagementReplies) || 0,
+          allCommentsReplied: Boolean(allCommentsReplied),
+        },
+        concerns: String(concernsText || ""),
         tasks: {
           categories,
           marketing,
@@ -469,15 +500,118 @@ export default function DailyReportRedesignDraft() {
         </div>
       </div>
 
+      {/* Quick Stats card */}
+      <div className={cardClasses + " p-6"}>
+        <h2 className="text-xl font-semibold">Quick Stats</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 grid-flow-row-dense">
+          <div>
+            <span className="text-sm opacity-70">Receipts</span>
+            <h3 className="text-2xl">{totalReceipts}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Sales</span>
+            <h3 className="text-2xl">KES {totalSales.toLocaleString()}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">New Products</span>
+            <h3 className="text-2xl">{newProducts}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Products Edited</span>
+            <h3 className="text-2xl">{productsEdited}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Copies Uploaded</span>
+            <h3 className="text-2xl">{copiesUploaded}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Walk‑ins Served</span>
+            <h3 className="text-2xl">{walkInServed}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Live Sessions Held</span>
+            <h3 className="text-2xl">{liveSessionsCount}</h3>
+          </div>
+          <div>
+            <span className="text-sm opacity-70">Commission Earned</span>
+            <h3 className="text-2xl">KES {commissionEarned.toLocaleString()}</h3>
+          </div>
+        </div>
+      </div>
+
       <ReceiptSection receipts={receipts} setReceipts={setReceipts} salesErrors={salesErrors} />
 
       {sections.map((sec) => (
         <DayChecklist key={sec.title} title={sec.title} items={sec.items} dayKey={dayName.toLowerCase() as DayKey} dayState={dayState} setDayState={setDayState} />
       ))}
 
+      {/* Product & Stock Management card - replace or augment existing where appropriate */}
+      <div className={cardClasses + " p-6 space-y-4"}>
+        <h3 className="text-lg font-semibold">Product & Stock Management</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 grid-flow-row-dense">
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Products uploaded (target 50)</label>
+            <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || '0'))} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Products edited</label>
+            <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={productsEdited} onChange={(e) => setProductsEdited(parseInt(e.target.value || '0'))} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Copies uploaded</label>
+            <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || '0'))} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm">Confirmed competitiveness</label>
+            <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={Boolean(dayState[dayName.toLowerCase() as DayKey]?.['pricing_confirmed'])} onChange={(e) => setDayState((prev) => ({ ...prev, [dayName.toLowerCase() as DayKey]: { ...prev[dayName.toLowerCase() as DayKey], pricing_confirmed: e.target.checked } }))} />
+          </div>
+        </div>
+      </div>
+
+      {/* Customer Servicing card (all days) */}
+      <div className={cardClasses + " p-6 space-y-4"}>
+        <h3 className="text-lg font-semibold">Customer Servicing</h3>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center justify-between w-48">
+            <label className="text-sm">Walk‑in customers served</label>
+            <input type="number" className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={walkInServed} onChange={(e) => setWalkInServed(parseInt(e.target.value || '0'))} />
+          </div>
+          <div className="flex items-center justify-between w-48">
+            <label className="text-sm">Purchases made</label>
+            <input type="number" className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={purchasesMade} onChange={(e) => setPurchasesMade(parseInt(e.target.value || '0'))} />
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 mt-2">Record visitors and how many completed a purchase.</p>
+      </div>
+
+      {/* Tuesday-only Market & Engagement card */}
+      {dayName === "Tuesday" && (
+        <div className={cardClasses + " p-6 space-y-4"}>
+          <h3 className="text-lg font-semibold">Market & Engagement</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm">Promo videos posted</label>
+              <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || '0'))} />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm">Demo videos recorded</label>
+              <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || '0'))} />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm">Engagement replies</label>
+              <input type="number" className="w-24 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || '0'))} />
+            </div>
+            <div className="flex items-center justify-between md:col-span-3">
+              <label className="text-sm">All comments/DMs replied</label>
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={allCommentsReplied} onChange={(e) => setAllCommentsReplied(e.target.checked)} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={cardClasses + " p-6 space-y-2"}>
-        <label className="text-sm font-semibold">Notes / Summary</label>
-        <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500" placeholder="Any additional comments, highlights or issues…" />
+        <label className="text-sm font-semibold">Any concern / comment / complaint / suggestion / improvement</label>
+        <textarea rows={4} value={concernsText} onChange={(e) => setConcernsText(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500" placeholder="Any additional comments, highlights or issues…" />
       </div>
     </div>
   );
