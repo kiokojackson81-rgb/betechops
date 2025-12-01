@@ -246,4 +246,3 @@ export default function DailyReportFinal() {
     </div>
   );
 }
-              {receipts.length > 1 && <button type="button" className="text-xs text-red-400 hover:text-red-300" onClick={() => removeReceipt(rIndex)}>Remove receipt</button>}
