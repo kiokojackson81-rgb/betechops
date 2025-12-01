@@ -510,10 +510,10 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Top grid: receipts (2/3) and right column stats/communications (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 items-start">
         {/* Left: receipts - spans 2 columns on large screens */}
         <div className="lg:col-span-2">
-          <div className={cardClasses + " p-4 space-y-3"}>
+          <div className={cardClasses + " p-4 space-y-2"}>
             <h2 className="text-lg font-semibold">Receipts</h2>
             <p className="text-sm text-slate-400">Add each receipt for today. Totals calculate automatically.</p>
             {receipts.map((receipt, rIndex) => (
@@ -636,7 +636,7 @@ export default function DailyReportFinal() {
 
         {/* Right column: stats & communications */}
         <div>
-          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
+          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
             <h3 className="text-lg font-semibold">Quick Stats</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-slate-300">
               <div className="bg-black/20 p-3 rounded-md flex flex-col">Receipts <span className="mt-1 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
@@ -651,7 +651,7 @@ export default function DailyReportFinal() {
             </div>
           </div>
 
-          <div className={cardClasses + " p-4 space-y-3"}>
+          <div className={cardClasses + " p-4 space-y-2"}>
             <h3 className="text-lg font-semibold">Communications</h3>
             <p className="text-sm text-slate-400">Short notes to marketing / ops teams</p>
             <textarea
@@ -664,7 +664,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Product & Stock Management card */}
-          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
+          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
             <h3 className="text-lg font-semibold">Product & Stock</h3>
             <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
             <div className="space-y-3">
@@ -688,7 +688,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Customer Servicing compact card */}
-          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
+          <div className={cardClasses + " p-4 mb-2 space-y-2"}>
             <h3 className="text-lg font-semibold">Customer Servicing</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -731,11 +731,11 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Bottom grid: live session (left) + notes / day sections (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mt-2 items-start">
         <div className="lg:col-span-2">
           {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
           {sections.map((section) => (
-            <div key={section.title} className={cardClasses + " p-4 mb-3 space-y-3"}>
+            <div key={section.title} className={cardClasses + " p-4 mb-2 space-y-2"}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
               <div className="space-y-3">
                 {section.fields.map((field) => {
