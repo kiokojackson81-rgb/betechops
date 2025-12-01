@@ -438,7 +438,7 @@ export default function DailyReportRedesignDraft() {
   }, [receipts, notes, selectedDate]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
       <div className={cardClasses + " p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
         <div className="flex flex-col gap-2 w-full md:w-auto">
           <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
