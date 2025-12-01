@@ -437,9 +437,9 @@ export default function DailyReportFinal() {
   const sections = dayConfig[dayName] ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
       {/* Header: date + day pills */}
-      <div className={cardClasses + " p-4 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
+      <div className={cardClasses + " p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
               <CalendarIcon size={16} className="text-slate-400" />
@@ -510,10 +510,10 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Top grid: receipts (2/3) and right column stats/communications (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Left: receipts - spans 2 columns on large screens */}
         <div className="lg:col-span-2">
-          <div className={cardClasses + " p-6 space-y-4"}>
+          <div className={cardClasses + " p-4 space-y-3"}>
             <h2 className="text-lg font-semibold">Receipts</h2>
             <p className="text-sm text-slate-400">Add each receipt for today. Totals calculate automatically.</p>
             {receipts.map((receipt, rIndex) => (
@@ -636,22 +636,22 @@ export default function DailyReportFinal() {
 
         {/* Right column: stats & communications */}
         <div>
-          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
             <h3 className="text-lg font-semibold">Quick Stats</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-300">
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Receipts <span className="mt-2 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Sales <span className="mt-2 text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">New products <span className="mt-2 text-2xl font-semibold text-emerald-400">{newProducts}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Products edited <span className="mt-2 text-2xl font-semibold text-emerald-400">{productsEditedCount}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Copies uploaded <span className="mt-2 text-2xl font-semibold text-emerald-400">{copiesUploaded}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Walk-ins served <span className="mt-2 text-2xl font-semibold text-emerald-400">{walkInServed}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Purchases made <span className="mt-2 text-2xl font-semibold text-emerald-400">{purchasesMade}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Live sessions <span className="mt-2 text-2xl font-semibold text-emerald-400">{liveSessionsCount}</span></div>
-              <div className="bg-black/20 p-4 rounded-md flex flex-col">Commission <span className="mt-2 text-2xl font-semibold text-emerald-400">KES {commissionEarned}</span></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-slate-300">
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Receipts <span className="mt-1 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Sales <span className="mt-1 text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">New products <span className="mt-1 text-2xl font-semibold text-emerald-400">{newProducts}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Products edited <span className="mt-1 text-2xl font-semibold text-emerald-400">{productsEditedCount}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Copies uploaded <span className="mt-1 text-2xl font-semibold text-emerald-400">{copiesUploaded}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Walk-ins served <span className="mt-1 text-2xl font-semibold text-emerald-400">{walkInServed}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Purchases made <span className="mt-1 text-2xl font-semibold text-emerald-400">{purchasesMade}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Live sessions <span className="mt-1 text-2xl font-semibold text-emerald-400">{liveSessionsCount}</span></div>
+              <div className="bg-black/20 p-3 rounded-md flex flex-col">Commission <span className="mt-1 text-2xl font-semibold text-emerald-400">KES {commissionEarned}</span></div>
             </div>
           </div>
 
-          <div className={cardClasses + " p-6 space-y-4"}>
+          <div className={cardClasses + " p-4 space-y-3"}>
             <h3 className="text-lg font-semibold">Communications</h3>
             <p className="text-sm text-slate-400">Short notes to marketing / ops teams</p>
             <textarea
@@ -664,7 +664,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Product & Stock Management card */}
-          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
             <h3 className="text-lg font-semibold">Product & Stock</h3>
             <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
             <div className="space-y-3">
@@ -688,7 +688,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Customer Servicing compact card */}
-          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+          <div className={cardClasses + " p-4 mb-3 space-y-3"}>
             <h3 className="text-lg font-semibold">Customer Servicing</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -704,7 +704,7 @@ export default function DailyReportFinal() {
 
           {/* Tuesday-only Market & Engagement card */}
           {dayName === "Tuesday" && (
-            <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+            <div className={cardClasses + " p-4 mb-3 space-y-3"}>
               <h3 className="text-lg font-semibold">Tuesday — Market & Engagement</h3>
               <p className="text-sm text-slate-400">Record video outputs and engagement actions for Tuesday.</p>
               <div className="space-y-3">
@@ -731,11 +731,11 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Bottom grid: live session (left) + notes / day sections (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
         <div className="lg:col-span-2">
           {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
           {sections.map((section) => (
-            <div key={section.title} className={cardClasses + " p-6 mb-4 space-y-4"}>
+            <div key={section.title} className={cardClasses + " p-4 mb-3 space-y-3"}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
               <div className="space-y-3">
                 {section.fields.map((field) => {
@@ -805,7 +805,7 @@ export default function DailyReportFinal() {
         </div>
 
         <div>
-          <div className={cardClasses + " p-6 space-y-4"}>
+          <div className={cardClasses + " p-4 space-y-3"}>
             <h3 className="text-lg font-semibold">Notes / Summary</h3>
             <textarea
               rows={8}
@@ -830,7 +830,7 @@ export default function DailyReportFinal() {
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60" onClick={() => !isSubmitting && setShowConfirm(false)} />
-          <div className={cardClasses + " z-60 p-6 w-full max-w-lg mx-4"} role="dialog" aria-modal="true">
+          <div className={cardClasses + " z-60 p-4 w-full max-w-lg mx-4"} role="dialog" aria-modal="true">
             <h3 className="text-lg font-semibold">Confirm submit</h3>
             <p className="text-sm text-slate-300 mt-2">You're about to submit the report for <strong>{dayName}</strong> ({selectedDate.toISOString().split('T')[0]}).</p>
             <div className="mt-4 text-sm text-slate-300 space-y-2">
