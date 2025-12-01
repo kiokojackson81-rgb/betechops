@@ -11,10 +11,46 @@ type TotalsByCategory = Record<
   }
 >;
 
-export async function getAttendantCategorySummary(days: number) {
-  const rangeDays = Math.min(90, Math.max(1, days));
-  const since = new Date();
-  since.setDate(since.getDate() - rangeDays + 1);
+type SummaryOptions =
+  | number
+  | {
+      days?: number;
+      tradingPeriod?: boolean;
+      refDate?: string; // ISO date string to compute trading period around
+    };
+
+export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
+  let rangeDays = 7;
+  let since = new Date();
+
+  if (typeof opts === "number") {
+    rangeDays = Math.min(90, Math.max(1, opts));
+    since = new Date();
+    since.setDate(since.getDate() - rangeDays + 1);
+  } else {
+    const days = opts.days ?? 7;
+    if (opts.tradingPeriod) {
+      const ref = opts.refDate ? new Date(opts.refDate) : new Date();
+      // Trading period runs 25th -> 24th. Determine the period that contains ref.
+      const year = ref.getFullYear();
+      const month = ref.getMonth(); // 0-indexed
+      if (ref.getDate() >= 25) {
+        // start is 25th of current month
+        since = new Date(year, month, 25);
+        const end = new Date(year, month + 1, 24);
+        rangeDays = Math.ceil((end.getTime() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      } else {
+        // start is 25th of previous month
+        since = new Date(year, month - 1, 25);
+        const end = new Date(year, month, 24);
+        rangeDays = Math.ceil((end.getTime() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      }
+    } else {
+      rangeDays = Math.min(90, Math.max(1, days));
+      since = new Date();
+      since.setDate(since.getDate() - rangeDays + 1);
+    }
+  }
 
   const [activityAgg, assignmentCounts, fallbackUsers, jumiaOrders, kilimallOrders] = await Promise.all([
     prisma.attendantActivity.groupBy({

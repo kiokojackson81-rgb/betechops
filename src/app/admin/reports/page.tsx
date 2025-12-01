@@ -2,7 +2,8 @@ import { attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 import { getAttendantCategorySummary } from "@/lib/attendants/reporting";
 
 function formatDateRange(start: Date, days: number) {
-  const end = new Date();
+  const end = new Date(start);
+  end.setDate(start.getDate() + days - 1);
   const startStr = start.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const endStr = end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `${startStr} - ${endStr} (${days} days)`;
@@ -12,8 +13,14 @@ function formatCurrency(value: number) {
   return `KES ${new Intl.NumberFormat().format(Math.round(value))}`;
 }
 
-export default async function ReportsPage() {
-  const summary = await getAttendantCategorySummary(7);
+export default async function ReportsPage({ searchParams }: { searchParams?: { trading?: string; days?: string; ref?: string } }) {
+  const isTrading = Boolean(searchParams?.trading);
+  const days = searchParams?.days ? parseInt(searchParams.days, 10) || 7 : 7;
+  const refDate = searchParams?.ref;
+
+  const summary = isTrading
+    ? await getAttendantCategorySummary({ tradingPeriod: true, refDate })
+    : await getAttendantCategorySummary(days);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-8 text-slate-100">
@@ -23,8 +30,24 @@ export default async function ReportsPage() {
           Monitor how each attendant category is performing. These summaries combine direct activity logs (daily sales, product uploads) with live order
           queues.
         </p>
-        <div className="inline-flex rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest text-slate-400">
-          {formatDateRange(summary.since, summary.days)}
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-widest text-slate-400">
+            {formatDateRange(summary.since, summary.days)}
+          </div>
+          <nav className="inline-flex items-center gap-2 text-xs">
+            <a
+              className={`rounded-md px-2 py-1 ${!isTrading ? "bg-white/5" : "bg-transparent"}`}
+              href={`?days=${days}`}
+            >
+              Last {days} days
+            </a>
+            <a
+              className={`rounded-md px-2 py-1 ${isTrading ? "bg-white/5" : "bg-transparent"}`}
+              href={`?trading=1${refDate ? `&ref=${encodeURIComponent(refDate)}` : ""}`}
+            >
+              Trading period (25th–24th)
+            </a>
+          </nav>
         </div>
       </header>
 
@@ -74,7 +97,36 @@ export default async function ReportsPage() {
                   </div>
                 ) : null}
 
-                {!dailySales && !uploads && !data?.orderCounts && (
+                {/* extra numeric metrics introduced by daily report */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    ["newProducts", "New products"],
+                    ["productsEdited", "Products edited"],
+                    ["copiesUploaded", "Copies uploaded"],
+                    ["walkInServed", "Walk-ins served"],
+                    ["purchasesMade", "Purchases"],
+                    ["liveSessionsCount", "Live sessions"],
+                    ["commissionEarned", "Commission earned"],
+                    ["confirmedCompetitiveness", "Confirmed competitiveness"],
+                    ["promoVideos", "Promo videos"],
+                    ["demoVideos", "Demo videos"],
+                    ["engagementReplies", "Engagement replies"],
+                    ["allCommentsReplied", "All comments replied"],
+                  ].map(([metricKey, label]) => {
+                    const snake = String(metricKey).replace(/([A-Z])/g, "_$1").toUpperCase();
+                    const raw = data?.metrics?.[metricKey] ?? data?.metrics?.[snake];
+                    const val = raw ? (raw.numericSum ?? raw.intSum ?? 0) : 0;
+                    if (!val) return null;
+                    return (
+                      <div key={String(metricKey)} className="flex items-center justify-between rounded bg-white/5 px-2 py-2">
+                        <dt className="text-[10px] uppercase tracking-widest text-slate-400">{label}</dt>
+                        <dd className="text-sm font-semibold text-white">{String(Math.round(val))}</dd>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!dailySales && !uploads && !data?.orderCounts && Object.keys(data?.metrics ?? {}).length === 0 && (
                   <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-slate-500">
                     No tracked activity yet for this category.
                   </div>
