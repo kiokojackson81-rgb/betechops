@@ -8,6 +8,7 @@ type TotalsByCategory = Record<
     users: number;
     metrics: Record<string, { numericSum: number; intSum: number }>;
     orderCounts?: Record<string, number>;
+    concerns?: { count: number; recent: string[] };
   }
 >;
 
@@ -83,6 +84,13 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
     }),
   ]);
 
+  // fetch DailyReport concerns with user category (limit recent rows)
+  const concernsRows = await prisma.dailyReport.findMany({
+    where: { date: { gte: since }, concerns: { not: null } },
+    select: { concerns: true, user: { select: { attendantCategory: true } }, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
   const totalsByCategory = attendantCategoryDefinitions.reduce<TotalsByCategory>((acc, def) => {
     (acc as any)[def.id] = { users: 0, metrics: {} };
     return acc;
@@ -129,6 +137,19 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
   }
   if ((totalsByCategory as any)["JUMIA_KILIMALL_OPS"]) {
     (totalsByCategory as any)["JUMIA_KILIMALL_OPS"].orderCounts = combinedOrderCounts;
+  }
+
+  // group concerns by attendant category
+  for (const r of concernsRows) {
+    const cat = (r.user?.attendantCategory ?? ("DIRECT_SALES_OPS" as AttendantCategory)) as AttendantCategory;
+    if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
+    const c = (totalsByCategory as any)[cat].concerns ?? { count: 0, recent: [] };
+    c.count += 1;
+    if (r.concerns) {
+      // keep up to 5 recent concerns
+      if (c.recent.length < 5) c.recent.push(String(r.concerns));
+    }
+    (totalsByCategory as any)[cat].concerns = c;
   }
 
   return {

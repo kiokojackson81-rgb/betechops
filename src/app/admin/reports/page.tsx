@@ -131,6 +131,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: { t
                     No tracked activity yet for this category.
                   </div>
                 )}
+                {data?.concerns && data.concerns.count > 0 && (
+                  <div className="mt-2 rounded-lg border border-yellow-600/20 bg-yellow-900/5 px-3 py-2">
+                    <div className="text-xs uppercase tracking-widest text-yellow-300">Concerns</div>
+                    <div className="mt-2 text-sm text-slate-200">
+                      <div className="text-xs text-slate-400">{data.concerns.count} total</div>
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {data.concerns.recent.slice(0, 3).map((c: string, i: number) => (
+                          <li key={i} className="rounded bg-white/3 px-2 py-1 text-slate-200">{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           );
