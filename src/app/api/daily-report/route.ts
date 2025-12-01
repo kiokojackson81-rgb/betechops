@@ -111,8 +111,27 @@ export async function POST(req: Request) {
     if (!day) {
       return NextResponse.json({ error: "day is required" }, { status: 400 });
     }
-    // merge submittedBy into tasks for backward compatibility and also store in a dedicated column
-    const tasksWithSubmit = { ...(tasks || {}), ...(submittedBy ? { submittedBy } : {}) };
+    // merge submittedBy into tasks for backward compatibility
+    // Also embed the new metrics inside the tasks JSON so reports are preserved
+    // even when the database schema migration has not yet been applied.
+    const metricsPayload = {
+      newProducts: typeof newProducts !== "undefined" ? Number(newProducts || 0) : undefined,
+      productsEdited: typeof productsEdited !== "undefined" ? Number(productsEdited || 0) : undefined,
+      copiesUploaded: typeof copiesUploaded !== "undefined" ? Number(copiesUploaded || 0) : undefined,
+      walkInServed: typeof walkInServed !== "undefined" ? Number(walkInServed || 0) : undefined,
+      purchasesMade: typeof purchasesMade !== "undefined" ? Number(purchasesMade || 0) : undefined,
+      liveSessionsCount: typeof liveSessionsCount !== "undefined" ? Number(liveSessionsCount || 0) : undefined,
+      commissionEarned: typeof commissionEarned !== "undefined" ? Number(commissionEarned || 0) : undefined,
+      confirmedCompetitiveness: typeof confirmedCompetitiveness !== "undefined" ? Boolean(confirmedCompetitiveness) : undefined,
+      marketEngagement: marketEngagement ? marketEngagement : undefined,
+      concerns: concerns ?? undefined,
+    } as any;
+
+    const tasksWithSubmit = {
+      ...(tasks || {}),
+      ...(submittedBy ? { submittedBy } : {}),
+      metrics: { ...(tasks?.metrics || {}), ...metricsPayload },
+    };
 
     const report = await prisma.dailyReport.create({
       data: {
@@ -120,17 +139,7 @@ export async function POST(req: Request) {
         day: String(day),
         productsCount: Number(productsCount) || 0,
         totalSales: Number(totalSales) || 0,
-        // persist new metric fields when provided
-        newProducts: typeof newProducts !== "undefined" ? Number(newProducts || 0) : undefined,
-        productsEdited: typeof productsEdited !== "undefined" ? Number(productsEdited || 0) : undefined,
-        copiesUploaded: typeof copiesUploaded !== "undefined" ? Number(copiesUploaded || 0) : undefined,
-        walkInServed: typeof walkInServed !== "undefined" ? Number(walkInServed || 0) : undefined,
-        purchasesMade: typeof purchasesMade !== "undefined" ? Number(purchasesMade || 0) : undefined,
-        liveSessionsCount: typeof liveSessionsCount !== "undefined" ? Number(liveSessionsCount || 0) : undefined,
-        commissionEarned: typeof commissionEarned !== "undefined" ? Number(commissionEarned || 0) : undefined,
-        confirmedCompetitiveness: typeof confirmedCompetitiveness !== "undefined" ? Boolean(confirmedCompetitiveness) : undefined,
-        marketEngagement: marketEngagement ? marketEngagement : undefined,
-        concerns: concerns ?? undefined,
+        // store metrics inside tasks JSON for backwards compatibility
         tasks: tasksWithSubmit,
         submittedBy: submittedBy || null,
         userId: actorId || undefined,
