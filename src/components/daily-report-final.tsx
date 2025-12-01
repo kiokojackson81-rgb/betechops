@@ -260,6 +260,25 @@ export default function DailyReportFinal() {
   // Checklist state for all fields
   const [fieldsState, setFieldsState] = useState<Record<string, any>>(() => createInitialState());
 
+  // New metrics state requested in spec
+  const [newProducts, setNewProducts] = useState<number>(0);
+  const [productsEditedCount, setProductsEditedCount] = useState<number>(0);
+  const [copiesUploaded, setCopiesUploaded] = useState<number>(0);
+  const [walkInServed, setWalkInServed] = useState<number>(0);
+  const [purchasesMade, setPurchasesMade] = useState<number>(0);
+  const [liveSessionsCount, setLiveSessionsCount] = useState<number>(0);
+  const [commissionEarned, setCommissionEarned] = useState<number>(0);
+  const [confirmedCompetitiveness, setConfirmedCompetitiveness] = useState<boolean>(false);
+
+  // Tuesday / engagement metrics
+  const [promoVideos, setPromoVideos] = useState<number>(0);
+  const [demoVideos, setDemoVideos] = useState<number>(0);
+  const [engagementReplies, setEngagementReplies] = useState<number>(0);
+  const [allCommentsReplied, setAllCommentsReplied] = useState<boolean>(false);
+
+  // Concerns / weekly summary renamed
+  const [concernsText, setConcernsText] = useState<string>(fieldsState["notes"] || "");
+
   // Receipt list state.  Users can add multiple receipts, each with multiple items.
   const [receipts, setReceipts] = useState<Receipt[]>([{
     receiptNumber: "",
@@ -360,9 +379,25 @@ export default function DailyReportFinal() {
       const body = {
         date: selectedDate.toISOString().split("T")[0],
         day: dayName,
+        receipts: receipts.map((r) => ({ ...r })),
+        newProducts,
+        productsEdited: productsEditedCount,
+        copiesUploaded,
+        walkInServed,
+        purchasesMade,
+        liveSessionsCount,
+        commissionEarned,
+        marketEngagement: {
+          promoVideos,
+          demoVideos,
+          engagementReplies,
+          allCommentsReplied,
+        },
+        concerns: concernsText,
+        // keep original tasks for backward compatibility
+        tasks: { ...fieldsState, sales },
         productsCount: totalItems,
         totalSales: totalSales,
-        tasks: { ...fieldsState, sales },
       } as any;
 
       const res = await fetch("/api/daily-report", {
@@ -590,11 +625,10 @@ export default function DailyReportFinal() {
               </button>
             </div>
 
-            {/* Totals */}
+            {/* Totals (compact) */}
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
               <div className="px-3 py-1 bg-black/20 rounded-md">Receipts: {totalReceipts}</div>
               <div className="px-3 py-1 bg-black/20 rounded-md">Sales: KES {totalSales.toLocaleString()}</div>
-              <div className="px-3 py-1 bg-black/20 rounded-md">Profit: KES {totalProfit.toLocaleString()}</div>
               <div className="px-3 py-1 bg-black/20 rounded-md">Items: {totalItems}</div>
             </div>
           </div>
@@ -607,8 +641,13 @@ export default function DailyReportFinal() {
             <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
               <div className="bg-black/20 p-3 rounded-md">Receipts<br/><span className="text-lg text-emerald-400">{totalReceipts}</span></div>
               <div className="bg-black/20 p-3 rounded-md">Sales<br/><span className="text-lg text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Profit<br/><span className="text-lg text-emerald-400">KES {totalProfit.toLocaleString()}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Items<br/><span className="text-lg text-emerald-400">{totalItems}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">New products<br/><span className="text-lg text-emerald-400">{newProducts}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Products edited<br/><span className="text-lg text-emerald-400">{productsEditedCount}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Copies uploaded<br/><span className="text-lg text-emerald-400">{copiesUploaded}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Walk-ins served<br/><span className="text-lg text-emerald-400">{walkInServed}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Purchases made<br/><span className="text-lg text-emerald-400">{purchasesMade}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Live sessions<br/><span className="text-lg text-emerald-400">{liveSessionsCount}</span></div>
+              <div className="bg-black/20 p-3 rounded-md">Commission<br/><span className="text-lg text-emerald-400">KES {commissionEarned}</span></div>
             </div>
           </div>
 
@@ -623,6 +662,71 @@ export default function DailyReportFinal() {
               onChange={(e) => handleFieldChange("notes", e.target.value)}
             />
           </div>
+
+          {/* Product & Stock Management card */}
+          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+            <h3 className="text-lg font-semibold">Product & Stock</h3>
+            <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <label className="text-sm w-1/2">New products uploaded</label>
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm w-1/2">Products edited</label>
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm w-1/2">Copies uploaded</label>
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm">Competitiveness confirmed</label>
+                <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={confirmedCompetitiveness} onChange={(e) => setConfirmedCompetitiveness(e.target.checked)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Servicing compact card */}
+          <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+            <h3 className="text-lg font-semibold">Customer Servicing</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <label className="text-sm w-1/2">Walk-ins served</label>
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={walkInServed} onChange={(e) => setWalkInServed(parseInt(e.target.value || "0", 10))} />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm w-1/2">Purchases made</label>
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={purchasesMade} onChange={(e) => setPurchasesMade(parseInt(e.target.value || "0", 10))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Tuesday-only Market & Engagement card */}
+          {dayName === "Tuesday" && (
+            <div className={cardClasses + " p-6 mb-6 space-y-4"}>
+              <h3 className="text-lg font-semibold">Tuesday — Market & Engagement</h3>
+              <p className="text-sm text-slate-400">Record video outputs and engagement actions for Tuesday.</p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm w-1/2">Promo videos</label>
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm w-1/2">Demo videos</label>
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm w-1/2">Engagement replies</label>
+                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm">All comments replied</label>
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={allCommentsReplied} onChange={(e) => setAllCommentsReplied(e.target.checked)} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
