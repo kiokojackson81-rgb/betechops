@@ -731,7 +731,7 @@ export default function DailyReportFinal() {
       </div>
 
       {/* Bottom grid: live session (left) + notes / day sections (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-2">
         <div className="lg:col-span-2">
           {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
           {sections.map((section) => (
