@@ -747,6 +747,83 @@ export default function DailyReportFinal() {
               </div>
             </div>
           </div>
+          <div className={cardClasses + " p-6 space-y-3"}>
+            <h3 className="text-lg font-semibold">Product & Stock Management</h3>
+            <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">New products uploaded</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={newProducts}
+                  onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Products edited</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={productsEditedCount}
+                  onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Copies uploaded</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={copiesUploaded}
+                  onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Confirm competitiveness</label>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500"
+                  checked={confirmedCompetitiveness}
+                  onChange={(e) => setConfirmedCompetitiveness(e.target.checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Commission earned (KES)</label>
+                <input
+                  type="number"
+                  className="w-28 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={commissionEarned}
+                  onChange={(e) => setCommissionEarned(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Report uploads, edits and copies with accurate counts.</p>
+          </div>
+          <div className={cardClasses + " p-6 space-y-3"}>
+            <h3 className="text-lg font-semibold">Customer Servicing</h3>
+            <p className="text-sm text-slate-400">Log walk-in visitors and conversions.</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Walk-in customers served</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={walkInServed}
+                  onChange={(e) => setWalkInServed(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Purchases made</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={purchasesMade}
+                  onChange={(e) => setPurchasesMade(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Include visitors who walked in and completed purchases.</p>
+          </div>
           {dayName === "Tuesday" && (
             <div className={cardClasses + " p-6 space-y-3"}>
               <h3 className="text-lg font-semibold">Market & Engagement</h3>
