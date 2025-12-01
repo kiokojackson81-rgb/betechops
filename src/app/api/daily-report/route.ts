@@ -51,13 +51,30 @@ export async function GET(req: Request) {
       }),
       prisma.dailyReport.aggregate({
         where,
-        _sum: { productsCount: true, totalSales: true },
+        _sum: {
+          productsCount: true,
+          totalSales: true,
+          newProducts: true,
+          productsEdited: true,
+          copiesUploaded: true,
+          walkInServed: true,
+          purchasesMade: true,
+          liveSessionsCount: true,
+          commissionEarned: true,
+        },
       }),
     ]);
 
     const summary = {
       totalProducts: agg._sum.productsCount ?? 0,
       totalSales: agg._sum.totalSales ? Number(agg._sum.totalSales) : 0,
+      totalNewProducts: agg._sum.newProducts ?? 0,
+      totalProductsEdited: agg._sum.productsEdited ?? 0,
+      totalCopiesUploaded: agg._sum.copiesUploaded ?? 0,
+      totalWalkInsServed: agg._sum.walkInServed ?? 0,
+      totalPurchasesMade: agg._sum.purchasesMade ?? 0,
+      totalLiveSessions: agg._sum.liveSessionsCount ?? 0,
+      totalCommissionEarned: agg._sum.commissionEarned ? Number(agg._sum.commissionEarned) : 0,
     };
 
     return NextResponse.json({ reports, summary, totalCount });
@@ -72,7 +89,25 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.res;
   const actorId = await getActorId();
   try {
-    const { date, day, productsCount, totalSales, tasks, submittedBy } = await req.json();
+    const {
+      date,
+      day,
+      productsCount,
+      totalSales,
+      tasks,
+      submittedBy,
+      // new fields
+      newProducts,
+      productsEdited,
+      copiesUploaded,
+      walkInServed,
+      purchasesMade,
+      liveSessionsCount,
+      commissionEarned,
+      confirmedCompetitiveness,
+      marketEngagement,
+      concerns,
+    } = await req.json();
     if (!day) {
       return NextResponse.json({ error: "day is required" }, { status: 400 });
     }
@@ -85,6 +120,17 @@ export async function POST(req: Request) {
         day: String(day),
         productsCount: Number(productsCount) || 0,
         totalSales: Number(totalSales) || 0,
+        // persist new metric fields when provided
+        newProducts: typeof newProducts !== "undefined" ? Number(newProducts || 0) : undefined,
+        productsEdited: typeof productsEdited !== "undefined" ? Number(productsEdited || 0) : undefined,
+        copiesUploaded: typeof copiesUploaded !== "undefined" ? Number(copiesUploaded || 0) : undefined,
+        walkInServed: typeof walkInServed !== "undefined" ? Number(walkInServed || 0) : undefined,
+        purchasesMade: typeof purchasesMade !== "undefined" ? Number(purchasesMade || 0) : undefined,
+        liveSessionsCount: typeof liveSessionsCount !== "undefined" ? Number(liveSessionsCount || 0) : undefined,
+        commissionEarned: typeof commissionEarned !== "undefined" ? Number(commissionEarned || 0) : undefined,
+        confirmedCompetitiveness: typeof confirmedCompetitiveness !== "undefined" ? Boolean(confirmedCompetitiveness) : undefined,
+        marketEngagement: marketEngagement ? marketEngagement : undefined,
+        concerns: concerns ?? undefined,
         tasks: tasksWithSubmit,
         submittedBy: submittedBy || null,
         userId: actorId || undefined,

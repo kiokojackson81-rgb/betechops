@@ -20,6 +20,13 @@ interface Report {
 interface Summary {
   totalProducts: number;
   totalSales: number;
+  totalNewProducts?: number;
+  totalProductsEdited?: number;
+  totalCopiesUploaded?: number;
+  totalWalkInsServed?: number;
+  totalPurchasesMade?: number;
+  totalLiveSessions?: number;
+  totalCommissionEarned?: number;
 }
 
 // Define the days with tasks for drop‑down options.  This mirrors the keys
@@ -473,12 +480,16 @@ export default function AdminDailyReportPage() {
             <div className="text-xs text-slate-400">Total sales (KES)</div>
             <div className="text-lg font-semibold">{summary ? Number(summary.totalSales).toLocaleString() : '—'}</div>
           </div>
-          <div className="ml-6 flex items-center gap-3">
+            <div className="ml-6 flex items-center gap-3">
             <div className="text-sm text-slate-300 text-right">
-              <div>New uploads: <strong className="text-white">{aggNewUploads}</strong></div>
-              <div>Copies: <strong className="text-white">{aggCopies}</strong></div>
-              <div>Edited: <strong className="text-white">{aggEdited}</strong></div>
+              <div>New uploads: <strong className="text-white">{summary?.totalNewProducts ?? aggNewUploads}</strong></div>
+              <div>Copies: <strong className="text-white">{summary?.totalCopiesUploaded ?? aggCopies}</strong></div>
+              <div>Edited: <strong className="text-white">{summary?.totalProductsEdited ?? aggEdited}</strong></div>
               <div>Sales Count: <strong className="text-white">{aggSalesCount}</strong></div>
+              <div>Walk-ins served: <strong className="text-white">{summary?.totalWalkInsServed ?? '—'}</strong></div>
+              <div>Purchases made: <strong className="text-white">{summary?.totalPurchasesMade ?? '—'}</strong></div>
+              <div>Live sessions: <strong className="text-white">{summary?.totalLiveSessions ?? '—'}</strong></div>
+              <div>Commission (KES): <strong className="text-white">{summary?.totalCommissionEarned ? Number(summary.totalCommissionEarned).toLocaleString() : '—'}</strong></div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center bg-[rgba(255,255,255,0.02)] rounded-md p-1">

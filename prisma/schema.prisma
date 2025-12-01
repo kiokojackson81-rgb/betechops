@@ -147,6 +147,19 @@ model DailyReport {
   submittedBy   String?
   productsCount Int
   totalSales    Decimal  @db.Decimal(12,2)
+  // New metrics persisted from attendee reports
+  newProducts        Int?      @default(0)
+  productsEdited     Int?      @default(0)
+  copiesUploaded     Int?      @default(0)
+  walkInServed       Int?      @default(0)
+  purchasesMade      Int?      @default(0)
+  liveSessionsCount  Int?      @default(0)
+  commissionEarned   Decimal?  @db.Decimal(12,2)
+  confirmedCompetitiveness Boolean? @default(false)
+  // Market engagement details (promo/demo counts, replies, flags)
+  marketEngagement   Json?
+  // Freeform weekly concerns / summary
+  concerns           String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
