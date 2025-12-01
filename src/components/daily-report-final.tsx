@@ -442,16 +442,16 @@ export default function DailyReportFinal() {
       <div className={cardClasses + " p-4 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <CalendarIcon size={16} className="text-slate-400" />
-            <input
-              type="date"
-              className="rounded-full border border-slate-700 bg-black/30 px-3 py-1 text-sm text-slate-100"
-              value={selectedDate.toISOString().split("T")[0]}
-              onChange={(e) => {
-                const d = new Date(e.target.value);
-                if (!isNaN(d.getTime())) setSelectedDate(d);
-              }}
-            />
+              <CalendarIcon size={16} className="text-slate-400" />
+              <input
+                type="date"
+                className="rounded-full border border-slate-700 bg-black/30 px-4 py-2 text-sm text-slate-100"
+                value={selectedDate.toISOString().split("T")[0]}
+                onChange={(e) => {
+                  const d = new Date(e.target.value);
+                  if (!isNaN(d.getTime())) setSelectedDate(d);
+                }}
+              />
           </div>
           <div className="hidden md:flex items-center gap-2">
             <span className="text-xs uppercase tracking-wide text-slate-400">Day</span>
@@ -478,7 +478,7 @@ export default function DailyReportFinal() {
                     next.setDate(next.getDate() + diff);
                     setSelectedDate(next);
                   }}
-                  className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+                  className={`text-xs px-2 py-1 rounded-full border transition-colors ${
                     active
                       ? "bg-emerald-500 text-black border-emerald-600"
                       : "bg-transparent text-slate-200 border-slate-700 hover:bg-white/5"
@@ -492,20 +492,20 @@ export default function DailyReportFinal() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/5"
-            onClick={resetDay}
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="rounded-full px-4 py-1 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
-          >
-            Submit
-          </button>
+            <button
+              type="button"
+              className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+              onClick={resetDay}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="rounded-full px-5 py-2 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+            >
+              Submit
+            </button>
         </div>
       </div>
 
@@ -638,16 +638,16 @@ export default function DailyReportFinal() {
         <div>
           <div className={cardClasses + " p-6 mb-6 space-y-4"}>
             <h3 className="text-lg font-semibold">Quick Stats</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
-              <div className="bg-black/20 p-3 rounded-md">Receipts<br/><span className="text-lg text-emerald-400">{totalReceipts}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Sales<br/><span className="text-lg text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">New products<br/><span className="text-lg text-emerald-400">{newProducts}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Products edited<br/><span className="text-lg text-emerald-400">{productsEditedCount}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Copies uploaded<br/><span className="text-lg text-emerald-400">{copiesUploaded}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Walk-ins served<br/><span className="text-lg text-emerald-400">{walkInServed}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Purchases made<br/><span className="text-lg text-emerald-400">{purchasesMade}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Live sessions<br/><span className="text-lg text-emerald-400">{liveSessionsCount}</span></div>
-              <div className="bg-black/20 p-3 rounded-md">Commission<br/><span className="text-lg text-emerald-400">KES {commissionEarned}</span></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-300">
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Receipts <span className="mt-2 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Sales <span className="mt-2 text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">New products <span className="mt-2 text-2xl font-semibold text-emerald-400">{newProducts}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Products edited <span className="mt-2 text-2xl font-semibold text-emerald-400">{productsEditedCount}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Copies uploaded <span className="mt-2 text-2xl font-semibold text-emerald-400">{copiesUploaded}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Walk-ins served <span className="mt-2 text-2xl font-semibold text-emerald-400">{walkInServed}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Purchases made <span className="mt-2 text-2xl font-semibold text-emerald-400">{purchasesMade}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Live sessions <span className="mt-2 text-2xl font-semibold text-emerald-400">{liveSessionsCount}</span></div>
+              <div className="bg-black/20 p-4 rounded-md flex flex-col">Commission <span className="mt-2 text-2xl font-semibold text-emerald-400">KES {commissionEarned}</span></div>
             </div>
           </div>
 
@@ -670,15 +670,15 @@ export default function DailyReportFinal() {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">New products uploaded</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">Products edited</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm w-1/2">Copies uploaded</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
+                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 p-3 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-sm">Competitiveness confirmed</label>
