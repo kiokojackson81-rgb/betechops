@@ -139,16 +139,16 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
     (totalsByCategory as any)["JUMIA_KILIMALL_OPS"].orderCounts = combinedOrderCounts;
   }
 
-  // group concerns by attendant category
+  // group concerns by attendant category (trim and ignore empty values)
   for (const r of concernsRows) {
     const cat = (r.user?.attendantCategory ?? ("DIRECT_SALES_OPS" as AttendantCategory)) as AttendantCategory;
     if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
     const c = (totalsByCategory as any)[cat].concerns ?? { count: 0, recent: [] };
+    const text = r.concerns ? String(r.concerns).trim() : "";
+    if (text.length === 0) continue;
     c.count += 1;
-    if (r.concerns) {
-      // keep up to 5 recent concerns
-      if (c.recent.length < 5) c.recent.push(String(r.concerns));
-    }
+    // keep up to 5 recent concerns
+    if (c.recent.length < 5) c.recent.push(text);
     (totalsByCategory as any)[cat].concerns = c;
   }
 

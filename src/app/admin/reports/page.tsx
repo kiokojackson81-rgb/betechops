@@ -13,7 +13,8 @@ function formatCurrency(value: number) {
   return `KES ${new Intl.NumberFormat().format(Math.round(value))}`;
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams?: { trading?: string; days?: string; ref?: string } }) {
+export default async function ReportsPage(props: any) {
+  const searchParams = props?.searchParams ?? {};
   const isTrading = Boolean(searchParams?.trading);
   const days = searchParams?.days ? parseInt(searchParams.days, 10) || 7 : 7;
   const refDate = searchParams?.ref;
