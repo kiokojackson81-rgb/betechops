@@ -29,6 +29,24 @@ function getWeekday(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "long" });
 }
 
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getTradingPeriodFor(date: Date): string {
+  const start = new Date(date);
+  start.setDate(1);
+  start.setMonth(start.getMonth() - 1);
+  start.setDate(25);
+
+  const end = new Date(date);
+  end.setDate(1);
+  end.setMonth(end.getMonth() + 1);
+  end.setDate(24);
+
+  return `${formatShortDate(start)} – ${formatShortDate(end)}`;
+}
+
 // Field definition type for dynamic rendering of checklists.  Each field has
 // a unique key, a label for display, and a type.  Select fields may
 // optionally specify an array of options.
@@ -54,7 +72,6 @@ const dayConfig: Record<string, SectionDef[]> = {
       fields: [
         { key: "mondayProductsUploadedCount", label: "Products uploaded (target 50)", type: "number" },
         { key: "mondayStockChecked", label: "Stock levels checked (Jumia/Kilimall)", type: "boolean" },
-        { key: "mondayPricingChecked", label: "Pricing confirmed across marketplaces", type: "boolean" },
       ],
     },
     {
@@ -63,13 +80,6 @@ const dayConfig: Record<string, SectionDef[]> = {
         { key: "mondayCustomersServedCount", label: "Customers served (walk-in / online)", type: "number" },
         { key: "mondayRespondedToWhatsApp", label: "WhatsApp cleared", type: "boolean" },
         { key: "mondayRespondedToCalls", label: "Calls handled", type: "boolean" },
-      ],
-    },
-    {
-      title: "Market Intelligence",
-      fields: [
-        { key: "mondayCompetitorNotes", label: "Competitor notes", type: "text" },
-        { key: "mondayImprovementIdeas", label: "Improvement ideas", type: "text" },
       ],
     },
   ],
@@ -87,13 +97,6 @@ const dayConfig: Record<string, SectionDef[]> = {
       title: "Customer Service",
       fields: [
         { key: "tuesdayCustomersServedCount", label: "Customers served (walk-in/online/WhatsApp)", type: "number" },
-      ],
-    },
-    {
-      title: "Market Intelligence",
-      fields: [
-        { key: "tuesdayCompetitorNotes", label: "Competitor notes", type: "text" },
-        { key: "tuesdayImprovementIdeas", label: "Improvement ideas", type: "text" },
       ],
     },
   ],
@@ -116,12 +119,6 @@ const dayConfig: Record<string, SectionDef[]> = {
         { key: "wednesdayLiveViewers", label: "Estimated viewers", type: "number" },
         { key: "wednesdayLiveLeadsGenerated", label: "Leads generated", type: "number" },
         { key: "wednesdayLiveNotes", label: "Live session notes", type: "text" },
-      ],
-    },
-    {
-      title: "Engagement Insights",
-      fields: [
-        { key: "wednesdayEngagementInsights", label: "Engagement insights", type: "text" },
       ],
     },
   ],
@@ -211,12 +208,6 @@ const dayConfig: Record<string, SectionDef[]> = {
         { key: "saturdayDisplayOrganised", label: "Display organised", type: "boolean" },
       ],
     },
-    {
-      title: "Weekly Summary",
-      fields: [
-        { key: "saturdayWeeklySummary", label: "Weekly summary (uploads, videos, leads, follow-ups)", type: "text" },
-      ],
-    },
   ],
 };
 
@@ -275,9 +266,6 @@ export default function DailyReportFinal() {
   const [demoVideos, setDemoVideos] = useState<number>(0);
   const [engagementReplies, setEngagementReplies] = useState<number>(0);
   const [allCommentsReplied, setAllCommentsReplied] = useState<boolean>(false);
-
-  // Concerns / weekly summary renamed
-  const [concernsText, setConcernsText] = useState<string>(fieldsState["notes"] || "");
 
   // Receipt list state.  Users can add multiple receipts, each with multiple items.
   const [receipts, setReceipts] = useState<Receipt[]>([{
@@ -348,10 +336,6 @@ export default function DailyReportFinal() {
   const totalReceipts = receipts.length;
   const totalSales = receipts.reduce((sum, r) => sum + r.sellingTotal, 0);
   const totalItems = receipts.reduce((sum, r) => sum + r.items.length, 0);
-  const totalProfit = receipts.reduce((profit, r) => {
-    const cost = r.items.reduce((s, i) => s + i.buyingPrice, 0);
-    return profit + (r.sellingTotal - cost);
-  }, 0);
 
   // Submit handler – build payload with date, day, receipts, and checklist fields
   const [showConfirm, setShowConfirm] = useState(false);
@@ -387,13 +371,14 @@ export default function DailyReportFinal() {
         purchasesMade,
         liveSessionsCount,
         commissionEarned,
+        confirmedCompetitiveness,
         marketEngagement: {
           promoVideos,
           demoVideos,
           engagementReplies,
           allCommentsReplied,
         },
-        concerns: concernsText,
+        concerns: fieldsState["notes"] || "",
         // keep original tasks for backward compatibility
         tasks: { ...fieldsState, sales },
         productsCount: totalItems,
@@ -431,115 +416,186 @@ export default function DailyReportFinal() {
     setReceipts([
       { receiptNumber: "", sellingTotal: 0, paymentMethod: "MPESA", items: [] },
     ]);
+    setNewProducts(0);
+    setProductsEditedCount(0);
+    setCopiesUploaded(0);
+    setWalkInServed(0);
+    setPurchasesMade(0);
+    setLiveSessionsCount(0);
+    setCommissionEarned(0);
+    setConfirmedCompetitiveness(false);
+    setPromoVideos(0);
+    setDemoVideos(0);
+    setEngagementReplies(0);
+    setAllCommentsReplied(false);
   };
 
   // Determine which sections to show for the selected day
   const sections = dayConfig[dayName] ?? [];
+  const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const liveSectionTitle =
+    dayName === "Wednesday"
+      ? "Live Session Details"
+      : dayName === "Saturday"
+      ? "Light Live Session"
+      : null;
+  const liveSection = liveSectionTitle
+    ? sections.find((section) => section.title === liveSectionTitle)
+    : undefined;
+  const sectionsToShow = liveSectionTitle
+    ? sections.filter((section) => section.title !== liveSectionTitle)
+    : sections;
+  const tradingPeriod = getTradingPeriodFor(selectedDate);
+
+  const renderFieldControl = (field: FieldDef) => {
+    const value = fieldsState[field.key];
+    if (field.type === "boolean") {
+      return (
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500"
+            checked={Boolean(value)}
+            onChange={(e) => handleFieldChange(field.key, e.target.checked)}
+          />
+          <span className="text-sm">{field.label}</span>
+        </label>
+      );
+    }
+    if (field.type === "number") {
+      return (
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <span className="text-sm md:w-1/2">{field.label}</span>
+          <input
+            type="number"
+            className="md:w-1/2 w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value ?? 0}
+            onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
+          />
+        </div>
+      );
+    }
+    if (field.type === "text") {
+      return (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm">{field.label}</span>
+          <textarea
+            rows={3}
+            className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value ?? ""}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+          />
+        </div>
+      );
+    }
+    if (field.type === "select" && field.options) {
+      return (
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <span className="text-sm md:w-1/2">{field.label}</span>
+          <select
+            className="md:w-1/2 w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={value ?? field.options[0]}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+          >
+            {field.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="bg-slate-950 text-slate-100 p-4">
-      {/* Header: date + day pills */}
-      <div className={cardClasses + " p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"}>
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
+      <div className={cardClasses + " p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"}>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
           <div className="flex items-center gap-2">
-              <CalendarIcon size={16} className="text-slate-400" />
-              <input
-                type="date"
-                className="rounded-full border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                value={selectedDate.toISOString().split("T")[0]}
-                onChange={(e) => {
-                  const d = new Date(e.target.value);
-                  if (!isNaN(d.getTime())) setSelectedDate(d);
-                }}
-              />
-          </div>
-          <div className="hidden md:flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-slate-400">Day</span>
-            {[
-              "Sunday",
-              "Monday",
-              "Tuesday",
-              "Wednesday",
-              "Thursday",
-              "Friday",
-              "Saturday",
-            ].map((d) => {
-              const active = d === dayName;
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => {
-                    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                    const targetIndex = days.indexOf(d);
-                    const next = new Date(selectedDate);
-                    const currentIndex = next.getDay();
-                    const diff = targetIndex - currentIndex;
-                    next.setDate(next.getDate() + diff);
-                    setSelectedDate(next);
-                  }}
-                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                    active
-                      ? "bg-emerald-500 text-black border-emerald-600"
-                      : "bg-transparent text-slate-200 border-slate-700 hover:bg-white/5"
-                  }`}
-                >
-                  {d.slice(0, 3)}
-                </button>
-              );
-            })}
+            <CalendarIcon size={16} className="text-slate-400" />
+            <input
+              type="date"
+              className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+              value={selectedDate.toISOString().split("T")[0]}
+              onChange={(e) => {
+                const d = new Date(e.target.value);
+                if (!isNaN(d.getTime())) setSelectedDate(d);
+              }}
+            />
           </div>
         </div>
-
-            <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
-              onClick={resetDay}
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="rounded-full px-4 py-1.5 text-sm font-semibold bg-emerald-600 text-white hover:brightness-105"
-            >
-              Submit
-            </button>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
+          <select
+            className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+            value={dayName}
+            onChange={(e) => {
+              const targetIndex = weekDays.indexOf(e.target.value);
+              const next = new Date(selectedDate);
+              const diff = targetIndex - next.getDay();
+              next.setDate(next.getDate() + diff);
+              setSelectedDate(next);
+            }}
+          >
+            {weekDays.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+            onClick={resetDay}
+          >
+            Reset day
+          </button>
+          <button
+            type="button"
+            className="rounded-full px-4 py-1.5 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
+            onClick={handleSubmit}
+          >
+            Submit report
+          </button>
         </div>
       </div>
 
-      {/* Top grid: receipts (2/3) and right column stats/communications (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 items-start">
-        {/* Left: receipts - spans 2 columns on large screens */}
-        <div className="lg:col-span-2">
-          <div className={cardClasses + " p-4 space-y-2"}>
-            <h2 className="text-lg font-semibold">Receipts</h2>
-            <p className="text-sm text-slate-400">Add each receipt for today. Totals calculate automatically.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 grid-flow-row-dense">
+        <div className="flex flex-col gap-6">
+          <div className={cardClasses + " p-6 space-y-5"}>
+            <div>
+              <h2 className="text-2xl font-semibold">Receipts</h2>
+              <p className="text-sm text-slate-400">Add each receipt for today. Totals calculate automatically.</p>
+            </div>
             {receipts.map((receipt, rIndex) => (
-              <div key={rIndex} className="border border-slate-700 rounded-xl p-4 space-y-3 bg-black/20">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                  <div>
-                    <label className="text-xs uppercase tracking-wide text-slate-400">Selling (KES)</label>
+              <div key={rIndex} className="border border-slate-800 bg-black/20 rounded-2xl p-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Selling total (KES)</label>
                     <input
                       type="number"
-                      className="w-full rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                      className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
                       value={receipt.sellingTotal}
                       onChange={(e) => updateReceiptField(rIndex, "sellingTotal", parseFloat(e.target.value) || 0)}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs uppercase tracking-wide text-slate-400">Receipt #</label>
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Receipt number (required)</label>
                     <input
                       type="text"
-                      className="w-full rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                      className="w-full rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
                       placeholder="Required"
                       value={receipt.receiptNumber}
                       onChange={(e) => updateReceiptField(rIndex, "receiptNumber", e.target.value)}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs uppercase tracking-wide text-slate-400">Payment</label>
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-wide text-slate-400">Payment method (required)</label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -566,22 +622,20 @@ export default function DailyReportFinal() {
                     </div>
                   </div>
                 </div>
-
-                {/* Items list */}
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Products</label>
+                <div className="space-y-3">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</label>
                   {receipt.items.map((item, iIndex) => (
                     <div key={iIndex} className="grid grid-cols-1 md:grid-cols-[3fr_1fr_auto] gap-2 items-center">
                       <input
                         type="text"
                         value={item.name}
-                        className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                        className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
                         onChange={(e) => updateReceiptItem(rIndex, iIndex, "name", e.target.value)}
                       />
                       <input
                         type="number"
                         value={item.buyingPrice}
-                        className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                        className="rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
                         onChange={(e) => updateReceiptItem(rIndex, iIndex, "buyingPrice", parseFloat(e.target.value) || 0)}
                       />
                       <button
@@ -593,29 +647,26 @@ export default function DailyReportFinal() {
                       </button>
                     </div>
                   ))}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/5"
-                      onClick={() => addItemToReceipt(rIndex)}
-                    >
-                      + Add product
-                    </button>
-                    {receipts.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-xs text-red-400 hover:text-red-300"
-                        onClick={() => removeReceipt(rIndex)}
-                      >
-                        Remove receipt
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                    onClick={() => addItemToReceipt(rIndex)}
+                  >
+                    + Add product to this receipt
+                  </button>
                 </div>
+                {receipts.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-400 hover:text-red-300"
+                    onClick={() => removeReceipt(rIndex)}
+                  >
+                    Remove receipt
+                  </button>
+                )}
               </div>
             ))}
-
-            <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
@@ -623,209 +674,233 @@ export default function DailyReportFinal() {
               >
                 + Add receipt
               </button>
-            </div>
-
-            {/* Totals (compact) */}
-            <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
-              <div className="px-3 py-1 bg-black/20 rounded-md">Receipts: {totalReceipts}</div>
-              <div className="px-3 py-1 bg-black/20 rounded-md">Sales: KES {totalSales.toLocaleString()}</div>
-              <div className="px-3 py-1 bg-black/20 rounded-md">Items: {totalItems}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column: stats & communications */}
-        <div>
-          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
-            <h3 className="text-lg font-semibold">Quick Stats</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-sm text-slate-300">
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Receipts <span className="mt-1 text-2xl font-semibold text-emerald-400">{totalReceipts}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Sales <span className="mt-1 text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">New products <span className="mt-1 text-2xl font-semibold text-emerald-400">{newProducts}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Products edited <span className="mt-1 text-2xl font-semibold text-emerald-400">{productsEditedCount}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Copies uploaded <span className="mt-1 text-2xl font-semibold text-emerald-400">{copiesUploaded}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Walk-ins served <span className="mt-1 text-2xl font-semibold text-emerald-400">{walkInServed}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Purchases made <span className="mt-1 text-2xl font-semibold text-emerald-400">{purchasesMade}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Live sessions <span className="mt-1 text-2xl font-semibold text-emerald-400">{liveSessionsCount}</span></div>
-              <div className="bg-black/20 p-3 rounded-md flex flex-col">Commission <span className="mt-1 text-2xl font-semibold text-emerald-400">KES {commissionEarned}</span></div>
-            </div>
-          </div>
-
-          <div className={cardClasses + " p-4 space-y-2"}>
-            <h3 className="text-lg font-semibold">Communications</h3>
-            <p className="text-sm text-slate-400">Short notes to marketing / ops teams</p>
-            <textarea
-              rows={4}
-              className="w-full rounded-md border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-              placeholder="Mention follow-ups, urgent issues, or highlights..."
-              value={fieldsState["notes"] || ""}
-              onChange={(e) => handleFieldChange("notes", e.target.value)}
-            />
-          </div>
-
-          {/* Product & Stock Management card */}
-          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
-            <h3 className="text-lg font-semibold">Product & Stock</h3>
-            <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <label className="text-sm w-1/2">New products uploaded</label>
-                    <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={newProducts} onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))} />
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm w-1/2">Products edited</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={productsEditedCount} onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))} />
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm w-1/2">Copies uploaded</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={copiesUploaded} onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))} />
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm">Competitiveness confirmed</label>
-                <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={confirmedCompetitiveness} onChange={(e) => setConfirmedCompetitiveness(e.target.checked)} />
+              <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+                <span>Receipts: {totalReceipts}</span>
+                <span>Sales: KES {totalSales.toLocaleString()}</span>
+                <span>Items: {totalItems}</span>
               </div>
             </div>
           </div>
-
-          {/* Customer Servicing compact card */}
-          <div className={cardClasses + " p-4 mb-1 space-y-2"}>
-            <h3 className="text-lg font-semibold">Customer Servicing</h3>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <label className="text-sm w-1/2">Walk-ins served</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={walkInServed} onChange={(e) => setWalkInServed(parseInt(e.target.value || "0", 10))} />
+          {liveSection && (
+            <div className={cardClasses + " p-6 space-y-4"}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">{liveSection.title}</h3>
+                <span className="text-xs text-slate-400">Live details for {dayName}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm w-1/2">Purchases made</label>
-                <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={purchasesMade} onChange={(e) => setPurchasesMade(parseInt(e.target.value || "0", 10))} />
-              </div>
-            </div>
-          </div>
-
-          {/* Tuesday-only Market & Engagement card */}
-          {dayName === "Tuesday" && (
-            <div className={cardClasses + " p-4 mb-3 space-y-3"}>
-              <h3 className="text-lg font-semibold">Tuesday — Market & Engagement</h3>
-              <p className="text-sm text-slate-400">Record video outputs and engagement actions for Tuesday.</p>
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm w-1/2">Promo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={promoVideos} onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))} />
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm w-1/2">Demo videos</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={demoVideos} onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))} />
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm w-1/2">Engagement replies</label>
-                  <input type="number" className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100" value={engagementReplies} onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))} />
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm">All comments replied</label>
-                  <input type="checkbox" className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500" checked={allCommentsReplied} onChange={(e) => setAllCommentsReplied(e.target.checked)} />
+                {liveSection.fields.map((field) => (
+                  <div key={field.key}>{renderFieldControl(field)}</div>
+                ))}
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm">Live sessions held</label>
+                  <input
+                    type="number"
+                    className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                    value={liveSessionsCount}
+                    onChange={(e) => setLiveSessionsCount(parseInt(e.target.value || "0", 10))}
+                  />
                 </div>
               </div>
             </div>
           )}
         </div>
+        <div className="flex flex-col gap-6">
+          <div className={cardClasses + " p-6 space-y-3"}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Quick Stats</h2>
+              <span className="text-xs text-slate-400">Trading period: {tradingPeriod}</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Receipts</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{totalReceipts}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Sales</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">KES {totalSales.toLocaleString()}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">New products</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{newProducts}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Products edited</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{productsEditedCount}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Copies uploaded</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{copiesUploaded}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Walk-ins served</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{walkInServed}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Purchases made</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{purchasesMade}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Live sessions held</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">{liveSessionsCount}</h3>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3">
+                <span className="text-sm opacity-70">Commission earned</span>
+                <h3 className="text-2xl font-semibold text-emerald-400">KES {commissionEarned.toLocaleString()}</h3>
+                <p className="text-[10px] text-slate-500">Placeholder</p>
+              </div>
+            </div>
+          </div>
+          <div className={cardClasses + " p-6 space-y-3"}>
+            <h3 className="text-lg font-semibold">Product & Stock Management</h3>
+            <p className="text-sm text-slate-400">Track uploads, edits and copies for the day.</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">New products uploaded</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={newProducts}
+                  onChange={(e) => setNewProducts(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Products edited</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={productsEditedCount}
+                  onChange={(e) => setProductsEditedCount(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Copies uploaded</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={copiesUploaded}
+                  onChange={(e) => setCopiesUploaded(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Confirm competitiveness</label>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500"
+                  checked={confirmedCompetitiveness}
+                  onChange={(e) => setConfirmedCompetitiveness(e.target.checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Commission earned (KES)</label>
+                <input
+                  type="number"
+                  className="w-28 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={commissionEarned}
+                  onChange={(e) => setCommissionEarned(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Report uploads, edits and copies with accurate counts.</p>
+          </div>
+          <div className={cardClasses + " p-6 space-y-3"}>
+            <h3 className="text-lg font-semibold">Customer Servicing</h3>
+            <p className="text-sm text-slate-400">Log walk-in visitors and conversions.</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Walk-in customers served</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={walkInServed}
+                  onChange={(e) => setWalkInServed(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm">Purchases made</label>
+                <input
+                  type="number"
+                  className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                  value={purchasesMade}
+                  onChange={(e) => setPurchasesMade(parseInt(e.target.value || "0", 10))}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Include visitors who walked in and completed purchases.</p>
+          </div>
+          {dayName === "Tuesday" && (
+            <div className={cardClasses + " p-6 space-y-3"}>
+              <h3 className="text-lg font-semibold">Market & Engagement</h3>
+              <p className="text-sm text-slate-400">Document Tuesday video outputs and engagement actions.</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm">Promo videos posted</label>
+                  <input
+                    type="number"
+                    className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                    value={promoVideos}
+                    onChange={(e) => setPromoVideos(parseInt(e.target.value || "0", 10))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm">Demo videos recorded</label>
+                  <input
+                    type="number"
+                    className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                    value={demoVideos}
+                    onChange={(e) => setDemoVideos(parseInt(e.target.value || "0", 10))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm">Engagement replies</label>
+                  <input
+                    type="number"
+                    className="w-20 rounded-lg border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
+                    value={engagementReplies}
+                    onChange={(e) => setEngagementReplies(parseInt(e.target.value || "0", 10))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm">All comments replied</label>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500"
+                    checked={allCommentsReplied}
+                    onChange={(e) => setAllCommentsReplied(e.target.checked)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">Confirm every FB/IG comment and DM was handled today.</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Bottom grid: live session (left) + notes / day sections (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 mt-1 items-start">
-        <div className="lg:col-span-2">
-          {/* Render only the Live/Wednesday, Thursday weekly activities etc. as cards */}
-          {sections.map((section) => (
-            <div key={section.title} className={cardClasses + " p-4 mb-1 space-y-2"}>
+      {sectionsToShow.length > 0 && (
+        <div className="space-y-6">
+          {sectionsToShow.map((section) => (
+            <div key={section.title} className={cardClasses + " p-6 space-y-4"}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
-              <div className="space-y-3">
-                {section.fields.map((field) => {
-                  const value = fieldsState[field.key];
-                  if (field.type === "boolean") {
-                    return (
-                      <label key={field.key} className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-700 bg-black/30 text-emerald-500 focus:ring-emerald-500"
-                          checked={value}
-                          onChange={(e) => handleFieldChange(field.key, e.target.checked)}
-                        />
-                        <span className="text-sm">{field.label}</span>
-                      </label>
-                    );
-                  }
-                  if (field.type === "number") {
-                    return (
-                      <div key={field.key} className="flex items-center gap-3">
-                        <label className="text-sm w-1/2">{field.label}</label>
-                        <input
-                          type="number"
-                          className="w-24 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                          value={value}
-                          onChange={(e) => handleFieldChange(field.key, parseFloat(e.target.value) || 0)}
-                        />
-                      </div>
-                    );
-                  }
-                  if (field.type === "text") {
-                    return (
-                      <div key={field.key} className="flex flex-col gap-2">
-                        <label className="text-sm">{field.label}</label>
-                        <textarea
-                          rows={3}
-                          className="rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                          value={value}
-                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                        />
-                      </div>
-                    );
-                  }
-                  if (field.type === "select" && field.options) {
-                    return (
-                      <div key={field.key} className="flex items-center gap-3">
-                        <label className="text-sm w-1/2">{field.label}</label>
-                        <select
-                          className="w-40 rounded-md border border-slate-700 bg-black/30 px-2 py-1 text-sm text-slate-100"
-                          value={value}
-                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                        >
-                          {field.options.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-                  return null;
-                })}
+              <div className="space-y-4">
+                {section.fields.map((field) => (
+                  <div key={field.key}>{renderFieldControl(field)}</div>
+                ))}
               </div>
             </div>
           ))}
         </div>
+      )}
 
-        <div>
-          <div className={cardClasses + " p-4 space-y-3"}>
-            <h3 className="text-lg font-semibold">Notes / Summary</h3>
-            <textarea
-              rows={8}
-              className="w-full rounded-md border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-              placeholder="Any additional comments, highlights or issues…"
-              value={fieldsState["notes"] || ""}
-              onChange={(e) => handleFieldChange("notes", e.target.value)}
-            />
-            <div className="flex justify-center">
-              <button
-                type="button"
-                className="mt-2 rounded-full px-5 py-1.5 text-sm font-semibold bg-emerald-500 text-black hover:brightness-95"
-                onClick={handleSubmit}
-              >
-                Submit report
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className={cardClasses + " p-6 space-y-3"}>
+        <h3 className="text-lg font-semibold">Any concern / comment / complaint / suggestion / improvement</h3>
+        <textarea
+          rows={5}
+          className="w-full rounded-2xl border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+          placeholder="Share observations, blockers, or ideas for improvement."
+          value={fieldsState["notes"] || ""}
+          onChange={(e) => handleFieldChange("notes", e.target.value)}
+        />
       </div>
+
       {/* Confirmation modal for submit */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

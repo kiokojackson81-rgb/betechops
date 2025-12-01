@@ -45,6 +45,26 @@ const MARKETPLACE_SHOPS = [
   "Kilimall",
 ];
 
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getTradingRange(date = new Date()) {
+  const start = new Date(date);
+  start.setDate(1);
+  start.setMonth(start.getMonth() - 1);
+  start.setDate(25);
+  const end = new Date(date);
+  end.setDate(1);
+  end.setMonth(end.getMonth() + 1);
+  end.setDate(24);
+  return {
+    start: start.toISOString().split("T")[0],
+    end: end.toISOString().split("T")[0],
+    label: `${formatShortDate(start)} – ${formatShortDate(end)}`,
+  };
+}
+
 export default function AdminDailyReportPage() {
   const [shopFilter, setShopFilter] = useState<string>("");
   const [minComplete, setMinComplete] = useState<number>(0);
@@ -281,6 +301,22 @@ export default function AdminDailyReportPage() {
   const aggCopies = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.copiesUploaded) ? Number(r.tasks.categories.copiesUploaded) : 0), 0);
   const aggEdited = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.productsEdited) ? Number(r.tasks.categories.productsEdited) : 0), 0);
   const aggSalesCount = filteredReportsForAgg.reduce((sum, r) => sum + ((Array.isArray(r.tasks?.sales)) ? r.tasks.sales.length : 0), 0);
+  const aggWalkIns = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.walkInServed ?? 0), 0);
+  const aggPurchases = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.purchasesMade ?? 0), 0);
+  const aggLiveSessions = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.liveSessionsCount ?? 0), 0);
+  const aggCommissionEarned = filteredReportsForAgg.reduce((sum, r) => sum + Number(r.commissionEarned ?? 0), 0);
+  const tradingRange = getTradingRange();
+  const stats = {
+    totalProducts: Number(summary?.totalProducts ?? 0),
+    totalSales: Number(summary?.totalSales ?? 0),
+    totalNewProducts: Number(summary?.totalNewProducts ?? aggNewUploads),
+    totalProductsEdited: Number(summary?.totalProductsEdited ?? aggEdited),
+    totalCopiesUploaded: Number(summary?.totalCopiesUploaded ?? aggCopies),
+    totalWalkInsServed: Number(summary?.totalWalkInsServed ?? aggWalkIns),
+    totalPurchasesMade: Number(summary?.totalPurchasesMade ?? aggPurchases),
+    totalLiveSessions: Number(summary?.totalLiveSessions ?? aggLiveSessions),
+    totalCommissionEarned: Number(summary?.totalCommissionEarned ?? aggCommissionEarned),
+  };
 
   function downloadPdf() {
     const rows = filteredReportsForAgg.map((r) => {
@@ -466,46 +502,90 @@ export default function AdminDailyReportPage() {
 
   return (
     <div className="mx-auto max-w-8xl p-6 text-slate-100">
-      <div className="flex items-start gap-6 mb-6">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">Daily Performance Reports</h1>
-          <p className="text-sm text-slate-400 mt-1">Team submissions, marketplace checks, and operational notes — at a glance.</p>
+      <div className="space-y-6 mb-6">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex-1">
+            <h1 className="text-2xl font-semibold">Daily Performance Reports</h1>
+            <p className="text-sm text-slate-400 mt-1">Team submissions, marketplace checks, and operational notes - at a glance.</p>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-xs text-slate-400">Total products</div>
-            <div className="text-lg font-semibold">{summary ? summary.totalProducts : '—'}</div>
-          </div>
-          <div className="text-right ml-4">
-            <div className="text-xs text-slate-400">Total sales (KES)</div>
-            <div className="text-lg font-semibold">{summary ? Number(summary.totalSales).toLocaleString() : '—'}</div>
-          </div>
-            <div className="ml-6 flex items-center gap-3">
-            <div className="text-sm text-slate-300 text-right">
-              <div>New uploads: <strong className="text-white">{summary?.totalNewProducts ?? aggNewUploads}</strong></div>
-              <div>Copies: <strong className="text-white">{summary?.totalCopiesUploaded ?? aggCopies}</strong></div>
-              <div>Edited: <strong className="text-white">{summary?.totalProductsEdited ?? aggEdited}</strong></div>
-              <div>Sales Count: <strong className="text-white">{aggSalesCount}</strong></div>
-              <div>Walk-ins served: <strong className="text-white">{summary?.totalWalkInsServed ?? '—'}</strong></div>
-              <div>Purchases made: <strong className="text-white">{summary?.totalPurchasesMade ?? '—'}</strong></div>
-              <div>Live sessions: <strong className="text-white">{summary?.totalLiveSessions ?? '—'}</strong></div>
-              <div>Commission (KES): <strong className="text-white">{summary?.totalCommissionEarned ? Number(summary.totalCommissionEarned).toLocaleString() : '—'}</strong></div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center bg-[rgba(255,255,255,0.02)] rounded-md p-1">
-                <button onClick={() => setExportScope('page')} className={`px-3 py-1 rounded ${exportScope === 'page' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Current page</button>
-                <button onClick={() => setExportScope('all')} className={`px-3 py-1 rounded ${exportScope === 'all' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>All filtered</button>
-                <button onClick={() => setExportScope('json')} className={`px-3 py-1 rounded ${exportScope === 'json' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Full JSON</button>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="bg-[var(--panel,#121723)] border border-white/10 p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Total products</div>
+                <div className="text-2xl font-semibold">{stats.totalProducts}</div>
               </div>
-              <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
-              <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
-              <Button onClick={() => openPreview(exportScope)} variant="muted">Preview</Button>
-              <Button onClick={() => downloadServerPdf(exportScope)} variant="primary">Download PDF</Button>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Total sales (KES)</div>
+                <div className="text-2xl font-semibold">KES {stats.totalSales.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Live sessions</div>
+                <div className="text-2xl font-semibold">{stats.totalLiveSessions}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Commission (KES)</div>
+                <div className="text-2xl font-semibold">KES {stats.totalCommissionEarned.toLocaleString()}</div>
+              </div>
             </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">New products</div>
+                <div className="text-lg font-semibold">{stats.totalNewProducts}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Products edited</div>
+                <div className="text-lg font-semibold">{stats.totalProductsEdited}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Copies uploaded</div>
+                <div className="text-lg font-semibold">{stats.totalCopiesUploaded}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Walk-ins served</div>
+                <div className="text-lg font-semibold">{stats.totalWalkInsServed}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-400">Purchases made</div>
+                <div className="text-lg font-semibold">{stats.totalPurchasesMade}</div>
+              </div>
+            </div>
+          </Card>
+          <Card className="bg-[var(--panel,#121723)] border border-white/10 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase text-slate-400">Trading period</div>
+                <div className="text-lg font-semibold">{tradingRange.label}</div>
+                <div className="text-xs text-slate-500">25th to 24th</div>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide hover:border-white/40"
+                onClick={() => {
+                  setFrom(tradingRange.start);
+                  setTo(tradingRange.end);
+                  setPage(1);
+                  void fetchReports();
+                }}
+              >
+                Apply period
+              </button>
+            </div>
+          </Card>
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center bg-[rgba(255,255,255,0.02)] rounded-md p-1">
+            <button onClick={() => setExportScope('page')} className={`px-3 py-1 rounded ${exportScope === 'page' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Current page</button>
+            <button onClick={() => setExportScope('all')} className={`px-3 py-1 rounded ${exportScope === 'all' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>All filtered</button>
+            <button onClick={() => setExportScope('json')} className={`px-3 py-1 rounded ${exportScope === 'json' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Full JSON</button>
           </div>
+          <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
+          <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
+          <Button onClick={() => openPreview(exportScope)} variant="muted">Preview</Button>
+          <Button onClick={() => downloadServerPdf(exportScope)} variant="primary">Download PDF</Button>
         </div>
       </div>
-
       <div className="grid grid-cols-12 gap-6">
         {/* Left: filters */}
         <aside className="col-span-3 bg-[rgba(255,255,255,0.02)] border border-white/6 rounded-lg p-4 space-y-4">
@@ -650,6 +730,10 @@ export default function AdminDailyReportPage() {
                   <td className="px-3 py-2 text-right">{r.productsCount}</td>
                   <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
                   <td className="px-3 py-2">
+                    <div className="text-sm mb-1">
+                      <strong>Receipts:</strong>{' '}
+                      {Array.isArray(tasks.sales) ? tasks.sales.length : 0}
+                    </div>
                     <div className="text-sm mb-1">
                       <strong>Categories:</strong>{' '}
                       {categories ? (
