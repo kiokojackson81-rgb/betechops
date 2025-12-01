@@ -442,9 +442,6 @@ export default function DailyReportFinal() {
   const liveSection = liveSectionTitle
     ? sections.find((section) => section.title === liveSectionTitle)
     : undefined;
-  const sectionsToShow = liveSectionTitle
-    ? sections.filter((section) => section.title !== liveSectionTitle)
-    : sections;
   const tradingPeriod = getTradingPeriodFor(selectedDate);
 
   const renderFieldControl = (field: FieldDef) => {
@@ -565,7 +562,7 @@ export default function DailyReportFinal() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 grid-flow-row-dense">
+      <div className="md:grid md:grid-cols-2 md:gap-6">
         <div className="flex flex-col gap-6">
           <div className={cardClasses + " p-6 space-y-5"}>
             <div>
@@ -796,32 +793,6 @@ export default function DailyReportFinal() {
             </div>
           )}
         </div>
-      </div>
-
-      {sectionsToShow.length > 0 && (
-        <div className="space-y-6">
-          {sectionsToShow.map((section) => (
-            <div key={section.title} className={cardClasses + " p-6 space-y-4"}>
-              <h3 className="text-lg font-semibold">{section.title}</h3>
-              <div className="space-y-4">
-                {section.fields.map((field) => (
-                  <div key={field.key}>{renderFieldControl(field)}</div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className={cardClasses + " p-6 space-y-3"}>
-        <h3 className="text-lg font-semibold">Any concern / comment / complaint / suggestion / improvement</h3>
-        <textarea
-          rows={5}
-          className="w-full rounded-2xl border border-slate-700 bg-black/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-          placeholder="Share observations, blockers, or ideas for improvement."
-          value={fieldsState["notes"] || ""}
-          onChange={(e) => handleFieldChange("notes", e.target.value)}
-        />
       </div>
 
       {/* Confirmation modal for submit */}
