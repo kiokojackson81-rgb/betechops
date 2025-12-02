@@ -62,12 +62,13 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
   const categoryPool = user.categoryAssignments.map((c) => c.category);
-  if (!categoryPool.includes(user.attendantCategory)) categoryPool.unshift(user.attendantCategory);
+  // user.attendantCategory may be null; only add when present
+  if (user.attendantCategory && !categoryPool.includes(user.attendantCategory)) categoryPool.unshift(user.attendantCategory as AttendantCategory);
   const requestedCategory = body.category?.toUpperCase() || undefined;
   const effectiveCategory =
     requestedCategory && categoryPool.includes(requestedCategory as AttendantCategory)
       ? (requestedCategory as AttendantCategory)
-      : categoryPool[0] ?? user.attendantCategory;
+      : (categoryPool[0] ?? user.attendantCategory ?? (categoryPool[0] as AttendantCategory) ?? "DIRECT_SALES_OPS");
 
   const numericValue =
     typeof body.numericValue === "number" && Number.isFinite(body.numericValue) ? Number(body.numericValue.toFixed(2)) : undefined;
