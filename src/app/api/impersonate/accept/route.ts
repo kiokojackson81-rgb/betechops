@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
+import * as jwt from "jsonwebtoken";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -21,7 +20,7 @@ export async function GET(req: Request) {
   if (!secret) return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 
   try {
-    const payload = jwt.verify(token, secret) as any;
+    const payload = (jwt as any).verify(token, secret) as any;
     // payload.a is admin id, payload.t is target id
     if (!payload || payload.a !== admin.id) return NextResponse.json({ error: "Invalid token" }, { status: 403 });
 
