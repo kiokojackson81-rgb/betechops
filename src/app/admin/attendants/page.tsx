@@ -19,7 +19,8 @@ export default async function AdminAttendantsPage() {
   const prepared = attendants.map((a) => ({
     ...a,
     createdAt: a.createdAt.toISOString(),
+    categoryLabel: getCategoryLabel(a.attendantCategory),
   }));
 
-  return <AttendantsClient attendants={prepared} getCategoryLabel={getCategoryLabel} />;
+  return <AttendantsClient attendants={prepared} />;
 }

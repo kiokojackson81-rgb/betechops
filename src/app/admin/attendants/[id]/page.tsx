@@ -10,5 +10,10 @@ export default async function AttendantEditPage({ params }: { params: any }) {
   });
   if (!attendant) return <div className="p-8">Attendant not found</div>;
 
-  return <AttendantEditorClient attendant={attendant} getCategoryLabel={getCategoryLabel} />;
+  const prepared = {
+    ...attendant,
+    categoryLabel: getCategoryLabel(attendant.attendantCategory),
+  };
+
+  return <AttendantEditorClient attendant={prepared} />;
 }

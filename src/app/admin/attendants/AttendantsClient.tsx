@@ -7,11 +7,12 @@ type AttendantRow = {
   name: string | null;
   email: string;
   attendantCategory: string | null;
+  categoryLabel?: string;
   isActive: boolean;
   createdAt?: string;
 };
 
-export default function AttendantsClient({ attendants, getCategoryLabel }: { attendants: AttendantRow[]; getCategoryLabel: (c?: any) => string }) {
+export default function AttendantsClient({ attendants }: { attendants: AttendantRow[] }) {
   const router = useRouter();
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
@@ -63,7 +64,7 @@ export default function AttendantsClient({ attendants, getCategoryLabel }: { att
               <tr key={a.id} className="border-t border-white/5">
                 <td className="px-4 py-3">{a.name || "-"}</td>
                 <td className="px-4 py-3">{a.email}</td>
-                <td className="px-4 py-3">{getCategoryLabel(a.attendantCategory)}</td>
+                <td className="px-4 py-3">{a.categoryLabel ?? (a.attendantCategory ?? "Unassigned")}</td>
                 <td className="px-4 py-3">
                   <span className={
                     "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " +

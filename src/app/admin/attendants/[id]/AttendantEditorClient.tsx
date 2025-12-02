@@ -8,10 +8,11 @@ type Attendant = {
   name: string | null;
   email: string;
   attendantCategory: string | null;
+  categoryLabel?: string;
   isActive: boolean;
 };
 
-export default function AttendantEditorClient({ attendant, getCategoryLabel }: { attendant: Attendant; getCategoryLabel: (c?: any) => string }) {
+export default function AttendantEditorClient({ attendant }: { attendant: Attendant }) {
   const router = useRouter();
   const [state, setState] = useState({ category: attendant.attendantCategory ?? "", isActive: attendant.isActive, password: "" });
   const [saving, setSaving] = useState(false);
@@ -39,6 +40,7 @@ export default function AttendantEditorClient({ attendant, getCategoryLabel }: {
       <h2 className="text-xl font-semibold mb-2">Edit attendant</h2>
       <div className="mb-4">Name: <strong>{attendant.name || "-"}</strong></div>
       <div className="mb-4">Email: <strong>{attendant.email}</strong></div>
+      <div className="mb-4">Category: <strong>{attendant.categoryLabel ?? (attendant.attendantCategory ?? "Unassigned")}</strong></div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <select className="col-span-1 rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm" value={state.category ?? ""} onChange={(e) => setState((s) => ({ ...s, category: e.target.value }))}>
