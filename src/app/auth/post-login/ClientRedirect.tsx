@@ -40,8 +40,28 @@ export default function ClientRedirect() {
       return;
     }
 
-    const target = getLandingPage(user?.attendantCategory, role);
-    router.replace(target);
+    // If the session doesn't include an attendantCategory (token may be
+    // stale), try a server lookup to get the authoritative value before
+    // choosing a landing page. This avoids redirecting Direct Sales Ops
+    // attendants to the generic `/attendant` page when the DB says they
+    // should go to `/marketing/tracker`.
+    (async () => {
+      try {
+        let category = user?.attendantCategory ?? null;
+        if (!category) {
+          const res = await fetch("/api/attendants/me", { credentials: "same-origin" });
+          if (res.ok) {
+            const json = await res.json();
+            category = json?.attendantCategory ?? category;
+          }
+        }
+        const target = getLandingPage(category, role);
+        router.replace(target);
+      } catch (e) {
+        const target = getLandingPage(user?.attendantCategory ?? null, role);
+        router.replace(target);
+      }
+    })();
   }, [session, status, router]);
 
   return (
