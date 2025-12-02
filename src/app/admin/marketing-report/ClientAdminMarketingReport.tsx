@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import React, { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import ProgressBar from "@/app/_components/ProgressBar";
 import MarketingReportFilterBar from "./FilterBar";
 import MultiDayExportClient from "./MultiDayExportClient";
@@ -33,6 +34,7 @@ export default function ClientAdminMarketingReport({
   userFilter = "",
 }: Props) {
   const [selectedEntry, setSelectedEntry] = useState<MarketingReportEntry | null>(null);
+  const session = useSession();
 
   const summary = aggregates ?? {
     totalSales: 0,
@@ -270,13 +272,13 @@ export default function ClientAdminMarketingReport({
                           >
                             Export day CSV
                           </a>
-                          <Link
-                            href={`/admin/marketing-report/${entry.id}/edit`}
-                            className="text-xs text-white/80 underline hover:text-white"
-                          >
-                            Edit entry
-                          </Link>
-                          <DeleteEntryClient entryId={entry.id} />
+                          {/** Only show edit/delete actions to Admin users — server APIs enforce ADMIN role too */}
+                          {((session?.data as any)?.user?.role === "ADMIN") ? (
+                            <>
+                              <Link href={`/admin/marketing-report/${entry.id}/edit`} className="text-xs text-white/80 underline hover:text-white">Edit entry</Link>
+                              <DeleteEntryClient entryId={entry.id} />
+                            </>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

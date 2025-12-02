@@ -41,6 +41,7 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       const res = await fetch("/api/admin/marketing-report/update-entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ entryId: initialData.id, receipts }),
       });
       const data = await res.json();
@@ -66,6 +67,7 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       const res = await fetch("/api/admin/marketing-report/update-entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ entryId: initialData.id, action: "wipe" }),
       });
       const data = await res.json();

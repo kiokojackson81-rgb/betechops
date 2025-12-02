@@ -1,10 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import EditDayClient from "@/app/admin/marketing-report/EditDayClient";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditDayPage(props: any) {
+  // server-side guard: only ADMIN may access this page
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (role !== "ADMIN") return redirect("/not-authorized");
+
   const { entryId } = props.params as { entryId: string };
   const entry = await prisma.marketingDailyEntry.findUnique({
     where: { id: entryId },

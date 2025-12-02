@@ -2,10 +2,17 @@ import { startOfDay, endOfDay } from "date-fns";
 import ClientAdminMarketingReport from "./ClientAdminMarketingReport";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getRecentTradingPeriods, getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 type AdminSearchParams = Record<string, string | string[] | undefined> | undefined;
 
 const AdminMarketingReportPage = async (...args: any[]) => {
+  // server-side guard: only ADMIN may access this page
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (role !== "ADMIN") return redirect("/not-authorized");
+
   const props = args[0] ?? {};
   const searchParams = (props?.searchParams as AdminSearchParams) ?? undefined;
   const periods = getRecentTradingPeriods(12);
