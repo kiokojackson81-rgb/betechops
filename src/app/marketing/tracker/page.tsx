@@ -10,6 +10,7 @@ import { showToast } from "@/lib/ui/toast";
 import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 import { useRouter } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
+import { signOut } from "next-auth/react";
 
 type MarketingDailyFormState = {
   date: string;
@@ -325,9 +326,20 @@ export default function MarketingTrackerPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <form onSubmit={handleSubmit} className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
-          <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+            <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Log out
+            </button>
+          </div>
         </header>
 
         {periodSummary && (
