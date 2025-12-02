@@ -80,7 +80,21 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                     </button>
                     <button
                       className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
-                      onClick={() => window.open(`/attendant?impersonateId=${a.id}`, "_blank")}
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/admin/impersonate", {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ targetId: a.id }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data?.error || "Impersonation failed");
+                          const token = encodeURIComponent(data.token);
+                          window.open(`/api/impersonate/accept?token=${token}`, "_blank");
+                        } catch (err) {
+                          alert(String(err));
+                        }
+                      }}
                     >
                       Open dashboard
                     </button>

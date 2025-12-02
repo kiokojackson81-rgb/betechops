@@ -61,7 +61,26 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
 
       <div className="flex gap-3">
         <button onClick={save} disabled={saving} className="rounded-full bg-emerald-500 px-4 py-2 text-black font-semibold">{saving ? "Saving…" : "Save"}</button>
-        <button onClick={() => window.open(`/attendant?impersonateId=${attendant.id}`, "_blank")} className="rounded-full border border-slate-700 px-4 py-2">Open dashboard</button>
+        <button
+          onClick={async () => {
+            try {
+              const res = await fetch("/api/admin/impersonate", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ targetId: attendant.id }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data?.error || "Impersonation failed");
+              const token = encodeURIComponent(data.token);
+              window.open(`/api/impersonate/accept?token=${token}`, "_blank");
+            } catch (err) {
+              alert(String(err));
+            }
+          }}
+          className="rounded-full border border-slate-700 px-4 py-2"
+        >
+          Open dashboard
+        </button>
       </div>
     </div>
   );
