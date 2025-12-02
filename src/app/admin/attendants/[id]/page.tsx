@@ -1,9 +1,12 @@
-import type { PageProps } from "next";
 import { prisma } from "@/lib/prisma";
 import AttendantEditorClient from "./AttendantEditorClient";
 import { getCategoryLabel } from "@/lib/getLandingPage";
 
-export default async function AttendantEditPage({ params }: PageProps<{ id: string }>) {
+export default async function AttendantEditPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const { id } = params;
   const attendant = await prisma.user.findUnique({
     where: { id },
