@@ -38,7 +38,7 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   // Not logged in → send to sign-in
   if (!token) {
-    url.pathname = "/login";
+    url.pathname = "/attendant/login";
     return NextResponse.redirect(url);
   }
 
