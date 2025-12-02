@@ -13,13 +13,13 @@ import getLandingPage from "@/lib/getLandingPage";
 // mapping so middleware enforcements remain correct regardless of naming.
 const routePermissions: Array<{ prefix: string; categories: string[] }> = [
   // Marketing tracker is owned by direct sales
-  { prefix: "/marketing/tracker", categories: ["DIRECT_SALES", "DIRECT_SALES_OPS"] },
-  // Daily report is used by product upload / marketing staff
-  { prefix: "/attendant/daily-report", categories: ["PRODUCT_UPLOAD", "MARKETING_OPS"] },
+  { prefix: "/marketing/tracker", categories: ["DIRECT_SALES_OPS", "DIRECT_SALES", "DIRECT_SALES_OPS"] },
+  // Daily report is used by marketing staff
+  { prefix: "/attendant/daily-report", categories: ["MARKETING_OPS", "PRODUCT_UPLOAD", "MARKETING_OPS"] },
   // Support dashboard
-  { prefix: "/support/dashboard", categories: ["SUPPORT", "SUPPORT_OPS"] },
+  { prefix: "/support/dashboard", categories: ["SUPPORT_OPS", "SUPPORT"] },
   // Attendant top-level routes for marketplace ops
-  { prefix: "/attendant", categories: ["JUMIA_OPERATIONS", "KILIMALL_OPERATIONS", "GENERAL", "BETECH_OPS", "JUMIA_KILIMALL_OPS"] },
+  { prefix: "/attendant", categories: ["JUMIA_KILIMALL_OPS", "JUMIA_OPERATIONS", "KILIMALL_OPERATIONS", "GENERAL", "BETECH_OPS"] },
 ];
 
 export async function middleware(req: NextRequest) {

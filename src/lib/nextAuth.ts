@@ -10,6 +10,7 @@ type ExtendedToken = {
   sub?: string;
   role?: string;
   attendantCategory?: string;
+  isActive?: boolean;
 };
 
 const REQUIRED_DOMAIN = "@betech.co.ke";
@@ -55,24 +56,26 @@ export const authOptions = {
   ],
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: string; email?: string; id?: string } }) {
+    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: string; email?: string; id?: string; isActive?: boolean } }) {
       if (user) {
         token.role = user.role ?? token.role;
         token.attendantCategory = user.attendantCategory ?? token.attendantCategory;
         token.email = user.email ?? token.email;
         token.sub = user.id ?? token.sub;
+        token.isActive = (user as any).isActive ?? token.isActive ?? true;
         return token;
       }
 
       if (!token.email) return token;
       const existing = await prisma.user.findUnique({
         where: { email: token.email },
-        select: { id: true, role: true, attendantCategory: true },
+        select: { id: true, role: true, attendantCategory: true, isActive: true },
       });
       if (existing) {
         token.role = existing.role ?? token.role;
         token.attendantCategory = existing.attendantCategory ?? token.attendantCategory;
         token.sub = existing.id ?? token.sub;
+        token.isActive = existing.isActive ?? token.isActive ?? true;
       }
       return token;
     },
@@ -81,7 +84,8 @@ export const authOptions = {
       const s = session as Session;
       if (!s.user) s.user = {};
       (s.user as Record<string, unknown>).role = token.role ?? "ATTENDANT";
-      (s.user as Record<string, unknown>).attendantCategory = token.attendantCategory ?? "DIRECT_SALES_OPS";
+      (s.user as Record<string, unknown>).attendantCategory = token.attendantCategory ?? null;
+      (s.user as Record<string, unknown>).isActive = token.isActive ?? true;
       return s;
     },
   },
