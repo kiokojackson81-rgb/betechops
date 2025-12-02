@@ -22,16 +22,20 @@ export default async function PostLogin(props: unknown) {
     // If not explicit, compute canonical landing using the attendant category
     if (role === "ADMIN") return redirect("/admin");
 
+    // Prefer the DB value when possible so stale or missing session fields don't
+    // cause a default redirect to `/attendant`. We still fall back to the
+    // session value if DB lookup fails or no email is available.
     let category = (session.user as any)?.attendantCategory ?? null;
-
-    // If the server-side session didn't include a category, fall back to DB lookup
-    // (handles cases where NextAuth token may be stale or missing the field).
-    if (!category && (session.user as any)?.email) {
+    if ((session.user as any)?.email && role !== "ADMIN") {
       try {
-        const u = await prisma.user.findUnique({ where: { email: (session.user as any).email }, select: { attendantCategory: true } });
+        const u = await prisma.user.findUnique({
+          where: { email: (session.user as any).email },
+          select: { attendantCategory: true },
+        });
+        // Use DB value when present, otherwise keep whatever the session had.
         category = (u as any)?.attendantCategory ?? category;
       } catch (e) {
-        // ignore DB errors and continue with whatever category we have
+        // ignore DB errors and continue with the session value
       }
     }
 
