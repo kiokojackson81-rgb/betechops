@@ -26,9 +26,6 @@ const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
-const statPillClasses =
-  "rounded-2xl bg-slate-900/70 border border-white/5 px-4 py-3 flex flex-col justify-between shadow-sm";
-
 function createEmptyProduct(): ProductRow {
   return {
     id: crypto.randomUUID(),
@@ -193,13 +190,6 @@ export default function DailyReportFinal() {
     items: totalItems,
   };
 
-  const quickStats = {
-    receipts: totalReceipts,
-    sales: totalSales,
-    items: totalItems,
-    commission: commissionForPeriod,
-  };
-
   const handleResetDay = () => {
     setReceipts([createEmptyReceipt()]);
     setWalkinsServed("");
@@ -283,49 +273,22 @@ export default function DailyReportFinal() {
     </select>
   );
 
-  const quickStatsCard = (
-    <section className={cardClasses + " p-4 lg:p-6 flex flex-col gap-4"}>
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Quick stats</h2>
-        <span className="text-[11px] uppercase tracking-wide text-slate-400">
-          Trading period {tradingPeriod.label}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className={statPillClasses}>
-          <span className="text-xs text-slate-400">Receipts</span>
-          <span className="text-lg font-semibold text-emerald-400">{quickStats.receipts}</span>
-        </div>
-        <div className={statPillClasses}>
-          <span className="text-xs text-slate-400">Sales (KES)</span>
-          <span className="text-lg font-semibold text-emerald-400">{quickStats.sales.toLocaleString()}</span>
-        </div>
-        <div className={statPillClasses}>
-          <span className="text-xs text-slate-400">Items</span>
-          <span className="text-lg font-semibold text-emerald-400">{quickStats.items}</span>
-        </div>
-        <div className={statPillClasses}>
-          <span className="text-xs text-slate-400">Commission (KES)</span>
-          <span className="text-lg font-semibold text-emerald-400">{quickStats.commission.toLocaleString()}</span>
-        </div>
-      </div>
-    </section>
-  );
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 px-6 py-8 space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations</h1>
-          <p className="text-slate-400 text-sm">
-            Daily tracker for uploads, engagement, walk-ins and live sessions.
-          </p>
+      <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-8">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations</h1>
+            <p className="text-slate-400 text-sm">
+              Daily tracker for uploads, engagement, walk-ins and live sessions.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {datePicker}
+            {dayOfWeekSelect}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {datePicker}
-          {dayOfWeekSelect}
-        </div>
-      </header>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
@@ -390,7 +353,17 @@ export default function DailyReportFinal() {
         </div>
 
         <div className="lg:col-span-4 space-y-6">
-          {quickStatsCard}
+          <QuickStats
+            receipts={totalReceipts}
+            salesKes={totalSales}
+            newProducts={totalNewProducts}
+            editedProducts={totalEditedProducts}
+            copiedProducts={totalCopiedProducts}
+            walkInsServed={totalWalkinsServed}
+            walkInsPurchased={totalWalkinsPurchased}
+            commissionKes={commissionForPeriod}
+            tradingPeriodLabel={tradingPeriod.label}
+          />
         </div>
       </div>
     </div>
@@ -1068,6 +1041,76 @@ function NumberRow(props: { label: string; value: number | ""; onChange: (v: num
         className="w-24 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-sm text-right text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
       />
     </div>
+  );
+}
+
+type QuickStatsProps = {
+  receipts: number;
+  salesKes: number;
+  newProducts: number;
+  editedProducts: number;
+  copiedProducts: number;
+  walkInsServed: number;
+  walkInsPurchased: number;
+  commissionKes: number;
+  tradingPeriodLabel: string;
+};
+
+function QuickStats({
+  receipts,
+  salesKes,
+  newProducts,
+  editedProducts,
+  copiedProducts,
+  walkInsServed,
+  walkInsPurchased,
+  commissionKes,
+  tradingPeriodLabel,
+}: QuickStatsProps) {
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8 md:py-7">
+      <div className="flex flex-col gap-4 md:flex-row md:items-baseline md:justify-between">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-50">Quick stats</h2>
+        <p className="text-xs text-slate-400 md:text-right">
+          TRADING PERIOD {tradingPeriodLabel.toUpperCase()}
+        </p>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Receipts</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{receipts ?? 0}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Sales (KES)</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{salesKes?.toLocaleString() ?? "0"}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{commissionKes?.toLocaleString() ?? "0"}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">New products</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{newProducts ?? 0}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Edited products</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{editedProducts ?? 0}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Copied products</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{copiedProducts ?? 0}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Walk-ins served</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{walkInsServed ?? 0}</div>
+        </div>
+        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Walk-ins purchased</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-400">{walkInsPurchased ?? 0}</div>
+        </div>
+      </div>
+    </section>
   );
 }
 
