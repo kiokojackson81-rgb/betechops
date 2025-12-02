@@ -33,7 +33,7 @@ export default function AdminLoginPage() {
           <section className="flex items-center justify-center">
             <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(18,22,32,.9),rgba(18,22,32,.7))] p-6 shadow-[0_10px_30px_rgba(0,0,0,.35)] backdrop-blur">
               <Suspense fallback={<div className="py-6">Loading…</div>}>
-                <CredentialLoginForm defaultRedirect="/admin" title="Admin sign in" description="Admins use your betech.co.ke email and password." />
+                <CredentialLoginForm defaultRedirect="/auth/post-login?intended=admin" title="Admin sign in" description="Admins use your betech.co.ke email and password." />
               </Suspense>
               <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
               <div className="mt-4 text-xs text-slate-400">
