@@ -3,7 +3,10 @@ export function getLandingPage(category?: string | null, role?: string): string 
 
   if (!category) return "/attendant";
 
-  const cat = category.toUpperCase();
+  // Normalize the incoming category string to a DB-friendly enum label.
+  // Accept many legacy formats (spaces, hyphens, mixed case) by
+  // converting to upper-case and replacing non-alphanumerics with underscores.
+  const cat = (category || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 
   switch (cat) {
     case "DIRECT_SALES":
