@@ -57,6 +57,8 @@ function renderWidget(widget: string, shopId?: string | null) {
 }
 
 export default function AttendantDashboard() {
+  // impersonateId is read from the client-side URL when performing fetches
+  const impersonateIdFromWindow = () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null);
   const [shopId, setShopId] = useState<string | undefined>(undefined);
   const [profile, setProfile] = useState<ProfileResponse["user"] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,9 @@ export default function AttendantDashboard() {
 
   async function fetchSummary() {
     try {
-      const res = await fetch(`/api/daily-report?page=1&pageSize=6`, { cache: "no-store" });
+      const imp = impersonateIdFromWindow();
+      const qp = imp ? `?page=1&pageSize=6&impersonateId=${encodeURIComponent(imp)}` : `?page=1&pageSize=6`;
+      const res = await fetch(`/api/daily-report${qp}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       setSummary(data.summary ?? null);
@@ -88,7 +92,9 @@ export default function AttendantDashboard() {
 
   async function fetchProfile() {
     try {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const imp = impersonateIdFromWindow();
+      const url = imp ? `/api/attendants/me?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/me";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as ProfileResponse;
       setProfile(data.user);
@@ -101,7 +107,9 @@ export default function AttendantDashboard() {
 
   async function fetchShops() {
     try {
-      const res = await fetch("/api/attendants/shops", { cache: "no-store" });
+      const imp = impersonateIdFromWindow();
+      const url = imp ? `/api/attendants/shops?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/shops";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as ShopSummary[];
       setShops(data);

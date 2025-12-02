@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import getLandingPage from "@/lib/getLandingPage";
 
 type Attendant = {
   id: string;
@@ -62,21 +63,10 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
       <div className="flex gap-3">
         <button onClick={save} disabled={saving} className="rounded-full bg-emerald-500 px-4 py-2 text-black font-semibold">{saving ? "Saving…" : "Save"}</button>
         <button
-          onClick={async () => {
-            try {
-              const res = await fetch("/api/admin/impersonate", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ targetId: attendant.id }),
-              });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data?.error || "Impersonation failed");
-              const token = encodeURIComponent(data.token);
-              window.open(`/api/impersonate/accept?token=${token}`, "_blank");
-            } catch (err) {
-              alert(String(err));
-            }
-          }}
+          onClick={() => {
+              const dest = getLandingPage(attendant.attendantCategory || null);
+              router.push(`${dest}?impersonateId=${attendant.id}`);
+            }}
           className="rounded-full border border-slate-700 px-4 py-2"
         >
           Open dashboard

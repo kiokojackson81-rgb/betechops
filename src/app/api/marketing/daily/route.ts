@@ -75,7 +75,17 @@ const normalizeReceipts = (raw: any): ReceiptPayload[] => {
 export async function POST(req: Request) {
   const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!auth.ok) return auth.res;
-  const actorId = await getActorId();
+  // allow admin to submit on behalf of another attendant via impersonateId query param
+  let actorId = await getActorId();
+  try {
+    const url = new URL(req.url);
+    const impersonateId = url.searchParams.get("impersonateId");
+    if (impersonateId && auth.role === "ADMIN") {
+      actorId = impersonateId;
+    }
+  } catch (e) {
+    // ignore
+  }
 
   let body: any;
   try {

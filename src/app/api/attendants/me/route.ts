@@ -5,8 +5,36 @@ import * as jwt from "jsonwebtoken";
 
 export async function GET(req: Request) {
   const session = await auth();
-  const email = (session?.user as { email?: string } | undefined)?.email?.toLowerCase();
+  const email = (session?.user as { email?: string; role?: string } | undefined)?.email?.toLowerCase();
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // If impersonateId is provided in the query and the current session is an ADMIN,
+  // return the requested attendant's profile instead of the current user.
+  try {
+    const url = new URL(req.url);
+    const impersonateId = url.searchParams.get("impersonateId");
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    if (impersonateId && role === "ADMIN") {
+      const user = await prisma.user.findUnique({
+        where: { id: impersonateId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          attendantCategory: true,
+          isActive: true,
+          categoryAssignments: { select: { category: true } },
+        },
+      });
+      if (user) {
+        const { categoryAssignments, ...rest } = user;
+        return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) } });
+      }
+    }
+  } catch (e) {
+    // ignore and fallthrough to normal behaviour
+  }
 
   // check for impersonation cookie
   try {

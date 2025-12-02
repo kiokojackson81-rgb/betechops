@@ -72,6 +72,7 @@ const pillClass = (checked: boolean) =>
   }`;
 
 export default function MarketingTrackerPage() {
+  const impersonateIdFromWindow = () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null);
   const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
   const [receipts, setReceipts] = useState<ReceiptRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
@@ -238,7 +239,9 @@ export default function MarketingTrackerPage() {
         weeklyVideoCount: weeklyVideoCount ? Number(weeklyVideoCount) : 0,
       };
 
-      const res = await fetch("/api/marketing/daily", {
+      const imp = impersonateIdFromWindow();
+      const url = imp ? `/api/marketing/daily?impersonateId=${encodeURIComponent(imp)}` : "/api/marketing/daily";
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

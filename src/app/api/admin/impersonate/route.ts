@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import * as jwt from "jsonwebtoken";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const secret = process.env.NEXTAUTH_SECRET || process.env.SECRET;
   if (!secret) return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 
-  const token = jwt.sign({ t: target.id, a: admin.id }, secret, { expiresIn: "5m" });
+  const token = (jwt as any).sign({ t: target.id, a: admin.id }, secret, { expiresIn: "5m" });
 
   return NextResponse.json({ token });
 }
