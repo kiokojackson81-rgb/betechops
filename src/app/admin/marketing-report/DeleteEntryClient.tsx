@@ -16,6 +16,7 @@ export default function DeleteEntryClient({ entryId }: { entryId: string }) {
       const res = await fetch("/api/admin/marketing-report/delete-entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ entryId }),
       });
       if (!res.ok) {
