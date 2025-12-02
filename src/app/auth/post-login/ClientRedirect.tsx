@@ -19,6 +19,10 @@ export default function ClientRedirect() {
 
   useEffect(() => {
     if (status === "loading") return;
+    // DEBUG: log session to inspect attendantCategory at redirect time
+    // Remove this log after diagnosing redirect issues
+    // eslint-disable-next-line no-console
+    console.log("ClientRedirect session:", session?.user);
     if (!session) {
       router.replace("/attendant/login");
       return;
