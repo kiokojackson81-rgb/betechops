@@ -5,6 +5,7 @@ import React, { useMemo, useState } from "react";
 import ProgressBar from "@/app/_components/ProgressBar";
 import MarketingReportFilterBar from "./FilterBar";
 import MultiDayExportClient from "./MultiDayExportClient";
+import DeleteEntryClient from "./DeleteEntryClient";
 import type { MarketingReportEntry, MarketingReportAggregates } from "@/lib/marketingReport";
 
 const cardClasses =
@@ -269,14 +270,13 @@ export default function ClientAdminMarketingReport({
                           >
                             Export day CSV
                           </a>
-                          {entry.source === "MARKETING" && (
-                            <Link
-                              href={`/admin/marketing-report/${entry.id}/edit`}
-                              className="text-xs text-white/80 underline hover:text-white"
-                            >
-                              Edit entry
-                            </Link>
-                          )}
+                          <Link
+                            href={`/admin/marketing-report/${entry.id}/edit`}
+                            className="text-xs text-white/80 underline hover:text-white"
+                          >
+                            Edit entry
+                          </Link>
+                          <DeleteEntryClient entryId={entry.id} />
                         </div>
                       </td>
                     </tr>
