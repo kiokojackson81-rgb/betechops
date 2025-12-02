@@ -21,6 +21,8 @@ export default async function UsersPage() {
   const prepared = attendants.map(({ categoryAssignments, createdAt, ...rest }) => ({
     ...rest,
     createdAt: createdAt.toISOString(),
+    // ensure attendantCategory is a string for the client component
+    attendantCategory: rest.attendantCategory ?? "",
     categories: categoryAssignments.map((c) => c.category),
   }));
 
