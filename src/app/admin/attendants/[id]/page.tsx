@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import AttendantEditorClient from "./AttendantEditorClient";
 import { getCategoryLabel } from "@/lib/getLandingPage";
 
-export default async function AttendantEditPage({ params }) {
-  const { id } = params;
+export default async function AttendantEditPage({ params }: { params: any }) {
+  const { id } = params as { id: string };
   const attendant = await prisma.user.findUnique({
     where: { id },
     select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
