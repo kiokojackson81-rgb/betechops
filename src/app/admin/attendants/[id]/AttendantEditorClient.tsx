@@ -61,7 +61,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
 
       <div className="flex gap-3">
         <button onClick={save} disabled={saving} className="rounded-full bg-emerald-500 px-4 py-2 text-black font-semibold">{saving ? "Saving…" : "Save"}</button>
-        <button onClick={() => router.push(`/admin/attendants/${attendant.id}?action=impersonate`)} className="rounded-full border border-slate-700 px-4 py-2">Open dashboard</button>
+        <button onClick={() => window.open(`/attendant?impersonateId=${attendant.id}`, "_blank")} className="rounded-full border border-slate-700 px-4 py-2">Open dashboard</button>
       </div>
     </div>
   );

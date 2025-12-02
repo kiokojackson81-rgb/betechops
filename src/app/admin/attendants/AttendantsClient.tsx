@@ -78,7 +78,10 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                     <button className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800" onClick={() => router.push(`/admin/attendants/${a.id}`)}>
                       Edit
                     </button>
-                    <button className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800" onClick={() => router.push(`/admin/attendants/${a.id}?action=impersonate`)}>
+                    <button
+                      className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                      onClick={() => window.open(`/attendant?impersonateId=${a.id}`, "_blank")}
+                    >
                       Open dashboard
                     </button>
                   </div>
