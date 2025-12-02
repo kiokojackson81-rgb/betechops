@@ -711,8 +711,8 @@ function WalkInsNeatnessCard(props: {
 }
 
 function ProductStockCard(props: {
-  productTasks: { uploaded: number; edited: number; copied: number };
-  onChange: (val: { uploaded: number; edited: number; copied: number }) => void;
+  productTasks: { uploaded: number | ""; edited: number | ""; copied: number | "" };
+  onChange: (val: { uploaded: number | ""; edited: number | ""; copied: number | "" }) => void;
 }) {
   const { productTasks, onChange } = props;
   return (
@@ -786,8 +786,8 @@ function MarketplaceReviewCard(props: {
 }
 
 function TuesdayPromoCard(props: {
-  value: { uploaded: number; edited: number; copied: number };
-  onChange: (val: { uploaded: number; edited: number; copied: number }) => void;
+  value: { uploaded: number | ""; edited: number | ""; copied: number | "" };
+  onChange: (val: { uploaded: number | ""; edited: number | ""; copied: number | "" }) => void;
 }) {
   const { value, onChange } = props;
   return (
@@ -1071,6 +1071,28 @@ function NumberRow(props: { label: string; value: number | ""; onChange: (v: num
   );
 }
 
+function PillCheckbox(props: { label: string; checked: boolean; onChange: (next: boolean) => void }) {
+  const { label, checked, onChange } = props;
+  return (
+    <label
+      className={
+        "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium border transition-colors " +
+        (checked
+          ? "bg-emerald-500 text-black border-emerald-500"
+          : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800")
+      }
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="hidden"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 type CommunicationsState = {
   repliedFbComments: boolean;
   repliedFbDms: boolean;
@@ -1117,8 +1139,8 @@ type DaySpecificBlocksProps = {
   onWalkInsChange: (val: number) => void;
   neatness: { cleaned: boolean; neat: boolean; labeled: boolean };
   onNeatnessChange: (val: { cleaned: boolean; neat: boolean; labeled: boolean }) => void;
-  productTasks: { uploaded: number; edited: number; copied: number };
-  onProductTasksChange: (val: { uploaded: number; edited: number; copied: number }) => void;
+  productTasks: { uploaded: number | ""; edited: number | ""; copied: number | "" };
+  onProductTasksChange: (val: { uploaded: number | ""; edited: number | ""; copied: number | "" }) => void;
   communications: CommunicationsState;
   onCommunicationsChange: (val: CommunicationsState) => void;
   marketplace: MarketplaceState;
