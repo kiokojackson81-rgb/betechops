@@ -12,7 +12,7 @@ async function main() {
   const attendant = await prisma.user.upsert({
     where: { email: 'attendant@betech.co.ke' },
     update: {},
-    create: { email: 'attendant@betech.co.ke', name: 'Default Attendant', role: 'ATTENDANT', isActive: true, attendantCategory: 'DIRECT_SALES' },
+    create: { email: 'attendant@betech.co.ke', name: 'Default Attendant', role: 'ATTENDANT', isActive: true, attendantCategory: 'DIRECT_SALES_OPS' },
   });
 
   const product = await prisma.product.upsert({
@@ -31,39 +31,36 @@ async function main() {
       name: 'Jackson',
       password: bcrypt.hashSync('Ads0k015@#', 10),
       role: 'ADMIN',
-      // map BETECH_OPS -> GENERAL (administrative/general ops)
-      attendantCategory: 'GENERAL',
+      // use new enum values (post-migration)
+      attendantCategory: 'BETECH_OPS',
     },
     {
       email: 'jeniffer@betech.co.ke',
       name: 'Jeniffer',
       password: bcrypt.hashSync('Jeniffer@#2020', 10),
       role: 'ATTENDANT',
-      // map DIRECT_SALES_OPS -> DIRECT_SALES
-      attendantCategory: 'DIRECT_SALES',
+      attendantCategory: 'DIRECT_SALES_OPS',
     },
     {
       email: 'stephen@betech.co.ke',
       name: 'Stephen',
       password: bcrypt.hashSync('stephen@#2020', 10),
       role: 'ATTENDANT',
-      // map JUMIA_KILIMALL_OPS -> JUMIA_OPERATIONS (Jumia-focused)
-      attendantCategory: 'JUMIA_OPERATIONS',
+      attendantCategory: 'JUMIA_KILIMALL_OPS',
     },
     {
       email: 'brendah@betech.co.ke',
       name: 'Brendah',
       password: bcrypt.hashSync('brendah@#2020', 10),
       role: 'ATTENDANT',
-      // map MARKETING_OPS -> PRODUCT_UPLOAD (best available fit)
-      attendantCategory: 'PRODUCT_UPLOAD',
+      attendantCategory: 'MARKETING_OPS',
     },
     {
       email: 'benjamin@betech.co.ke',
       name: 'Benjamin',
       password: bcrypt.hashSync('benjamin@#2020', 10),
       role: 'ATTENDANT',
-      attendantCategory: 'GENERAL',
+      attendantCategory: 'BETECH_OPS',
     },
   ];
 
