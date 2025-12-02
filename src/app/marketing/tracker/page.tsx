@@ -8,6 +8,8 @@ import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
 import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes } from "@/lib/marketingDayConfigs";
+import { useRouter } from "next/navigation";
+import getLandingPage from "@/lib/getLandingPage";
 
 type MarketingDailyFormState = {
   date: string;
@@ -104,6 +106,41 @@ export default function MarketingTrackerPage() {
     });
     return Array.from(groups.entries());
   }, [config]);
+
+  const router = useRouter();
+
+  // Authorization guard: ensure the current session (or impersonated user) is
+  // allowed to access this page. Only attendants in DIRECT_SALES_OPS or ADMIN
+  // may use this page. If not authorized, redirect to login or their landing.
+  useEffect(() => {
+    (async () => {
+      try {
+        const imp = impersonateIdFromWindow();
+        const url = imp ? `/api/attendants/me?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/me";
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (!res.ok) {
+          router.replace("/attendant/login");
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        const user = data?.user;
+        if (!user) {
+          router.replace("/attendant/login");
+          return;
+        }
+        const role = user.role as string | undefined;
+        const category = user.attendantCategory as string | undefined;
+        if (role === "ADMIN") return; // admins may access this page (and may impersonate)
+        if (category !== "DIRECT_SALES_OPS") {
+          // redirect to their landing page
+          const dest = getLandingPage(category ?? null, role);
+          router.replace(dest);
+        }
+      } catch (err) {
+        router.replace("/attendant/login");
+      }
+    })();
+  }, [router]);
 
   const updateField = (key: string, value: boolean | number | string | null) => {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
