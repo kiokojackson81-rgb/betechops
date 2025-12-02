@@ -1,16 +1,25 @@
 export function getLandingPage(category?: string | null, role?: string): string {
   if (role === "ADMIN") return "/admin";
-  switch (category) {
+
+  if (!category) return "/attendant";
+
+  const cat = category.toUpperCase();
+
+  switch (cat) {
+    case "DIRECT_SALES":
     case "DIRECT_SALES_OPS":
       return "/marketing/tracker";
+    case "PRODUCT_UPLOAD":
     case "MARKETING_OPS":
       return "/attendant/daily-report";
+    case "JUMIA_OPERATIONS":
     case "JUMIA_KILIMALL_OPS":
       return "/attendant";
+    case "SUPPORT":
     case "SUPPORT_OPS":
-      return "/attendant";
+      return "/support/dashboard";
     case "BETECH_OPS":
-      return "/attendant";
+      return "/admin";
     default:
       return "/attendant";
   }
