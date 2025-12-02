@@ -91,6 +91,9 @@ export async function POST(req: Request) {
   // session user or the impersonated user) is allowed to submit marketing
   // daily entries. Only ADMIN or attendants in DIRECT_SALES_OPS may submit.
   try {
+    if (!actorId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const actorUser = await prisma.user.findUnique({
       where: { id: actorId },
       select: { id: true, role: true, attendantCategory: true },
