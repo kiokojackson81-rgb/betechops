@@ -87,6 +87,21 @@ export async function POST(req: Request) {
     // ignore
   }
 
+  // Server-side defense in depth: ensure the actor (either the current
+  // session user or the impersonated user) is allowed to submit marketing
+  // daily entries. Only ADMIN or attendants in DIRECT_SALES_OPS may submit.
+  try {
+    const actorUser = await prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, role: true, attendantCategory: true },
+    });
+    if (!actorUser) return NextResponse.json({ error: "Actor not found" }, { status: 404 });
+    const isAllowed = actorUser.role === "ADMIN" || actorUser.attendantCategory === "DIRECT_SALES_OPS";
+    if (!isAllowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } catch (e) {
+    return NextResponse.json({ error: "Failed to verify actor" }, { status: 500 });
+  }
+
   let body: any;
   try {
     body = await req.json();
