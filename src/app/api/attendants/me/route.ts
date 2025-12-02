@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import * as jwt from "jsonwebtoken";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -11,13 +10,27 @@ export async function GET(req: Request) {
 
   // check for impersonation cookie
   try {
-    const cookieStore = cookies();
-    const imp = cookieStore.get("impersonation")?.value;
+    const cookieHeader = (req.headers && (req as any).headers?.get)
+      ? req.headers.get("cookie")
+      : "";
+    const parseCookie = (name: string, header: string | null | undefined) => {
+      if (!header) return undefined;
+      const pairs = header.split(";").map((s) => s.trim());
+      for (const p of pairs) {
+        const idx = p.indexOf("=");
+        if (idx === -1) continue;
+        const k = p.slice(0, idx);
+        const v = p.slice(idx + 1);
+        if (k === name) return decodeURIComponent(v);
+      }
+      return undefined;
+    };
+    const imp = parseCookie("impersonation", cookieHeader);
     if (imp) {
       const secret = process.env.NEXTAUTH_SECRET || process.env.SECRET;
       if (secret) {
         try {
-          const payload = jwt.verify(imp, secret) as any;
+          const payload = (jwt as any).verify(imp, secret) as any;
           // verify that the cookie was issued by the same admin who is currently signed in
           // find current admin id from email
           const admin = await prisma.user.findUnique({ where: { email }, select: { id: true, role: true } });
