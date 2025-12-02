@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -278,11 +279,20 @@ export default function DailyReportFinal() {
     <div className="min-h-screen bg-slate-950 text-slate-50 px-6 py-8 space-y-6">
       <section className="mb-2">
         <div className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations</h1>
-            <p className="text-slate-400 text-sm">
-              Daily tracker for uploads, engagement, walk-ins and live sessions.
-            </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations</h1>
+              <p className="text-slate-400 text-sm">
+                Daily tracker for uploads, engagement, walk-ins and live sessions.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Log out
+            </button>
           </div>
         </div>
 
