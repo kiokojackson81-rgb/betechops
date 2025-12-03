@@ -1,0 +1,59 @@
+
+> betechops@0.1.0 dev
+> next dev --turbopack
+
+   ▲ Next.js 15.5.4 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.187:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Compiled middleware in 275ms
+ ✓ Ready in 1759ms
+ ○ Compiling /admin/marketing-report ...
+ ✓ Compiled /admin/marketing-report in 12.2s
+ ○ Compiling /api/health ...
+ ✓ Compiled /api/health in 1116ms
+ GET /api/health 200 in 4591ms
+ GET /api/health 200 in 6534ms
+ GET /admin/marketing-report 500 in 18111ms
+ ✓ Compiled /favicon.ico in 388ms
+ GET /favicon.ico 200 in 1158ms
+ GET /api/health 200 in 616ms
+ GET /admin/marketing-report 500 in 856ms
+ GET /api/health 200 in 1198ms
+ GET /admin/marketing-report 500 in 2114ms
+ ✓ Compiled in 511ms
+ ✓ Compiled /admin/marketing-report in 112ms
+ GET /api/health 200 in 1073ms
+ GET /api/health 200 in 958ms
+ GET /admin/marketing-report 200 in 1995ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 411ms
+ ○ Compiling /api/orders/pending-pricing ...
+ ✓ Compiled /api/orders/pending-pricing in 719ms
+ GET /api/auth/session 200 in 878ms
+ GET /api/returns/waiting-pickup 200 in 895ms
+ GET /api/orders/pending-pricing 200 in 909ms
+ GET /api/orders/pending-pricing 200 in 915ms
+ GET /api/returns/waiting-pickup 200 in 914ms
+ GET /not-authorized 200 in 579ms
+prisma:error 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].order.count()` invocation in
+C:\Projects\betechops\.next\server\chunks\[root-of-the-server]__75567cdc._.js:132:164
+
+  129 // Aggregate directly from the synced database so UI counts stay stable across refreshes.
+  130 const now = new Date();
+  131 const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+→ 132 const total = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].order.count(
+The table `public.Order` does not exist in the current database.
+prisma:error 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].order.count()` invocation in
+C:\Projects\betechops\.next\server\chunks\[root-of-the-server]__75567cdc._.js:132:164
+
+  129 // Aggregate directly from the synced database so UI counts stay stable across refreshes.
+  130 const now = new Date();
+  131 const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+→ 132 const total = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].order.count(
+The table `public.Order` does not exist in the current database.
+ GET /api/auth/session 200 in 643ms
+ POST /api/auth/_log 200 in 933ms

@@ -1,0 +1,651 @@
+ ⨯ Error: [next-auth]: `useSession` must be wrapped in a <SessionProvider />
+    at AdminUserMenu (src\app\admin\_components\AdminUserMenu.tsx:24:27)
+  22 |   // Try to use next-auth session if available
+  23 |   // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+> 24 |   const _sess = useSession() as { data?: any } | undefined;
+     |                           ^
+  25 |   const session = _sess?.data;
+  26 |   const name = session?.user?.name ?? session?.user?.email ?? "Admin";
+  27 |   const image = session?.user?.image; {
+  digest: '3834499794'
+}
+ ⨯ Error: [next-auth]: `useSession` must be wrapped in a <SessionProvider />
+    at AdminUserMenu (src\app\admin\_components\AdminUserMenu.tsx:24:27)
+  22 |   // Try to use next-auth session if available
+  23 |   // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+> 24 |   const _sess = useSession() as { data?: any } | undefined;
+     |                           ^
+  25 |   const session = _sess?.data;
+  26 |   const name = session?.user?.name ?? session?.user?.email ?? "Admin";
+  27 |   const image = session?.user?.image; {
+  digest: '3834499794'
+}
+ ⨯ Error: [next-auth]: `useSession` must be wrapped in a <SessionProvider />
+    at AdminUserMenu (src\app\admin\_components\AdminUserMenu.tsx:24:27)
+  22 |   // Try to use next-auth session if available
+  23 |   // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+> 24 |   const _sess = useSession() as { data?: any } | undefined;
+     |                           ^
+  25 |   const session = _sess?.data;
+  26 |   const name = session?.user?.name ?? session?.user?.email ?? "Admin";
+  27 |   const image = session?.user?.image; {
+  digest: '3834499794'
+}
+ ⨯ Error: [next-auth]: `useSession` must be wrapped in a <SessionProvider />
+    at AdminUserMenu (src\app\admin\_components\AdminUserMenu.tsx:24:27)
+  22 |   // Try to use next-auth session if available
+  23 |   // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+> 24 |   const _sess = useSession() as { data?: any } | undefined;
+     |                           ^
+  25 |   const session = _sess?.data;
+  26 |   const name = session?.user?.name ?? session?.user?.email ?? "Admin";
+  27 |   const image = session?.user?.image; {
+  digest: '3834499794'
+}
+'wmic' is not recognized as an internal or external command,
+operable program or batch file.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'a169…REDACTED',
+  refreshToken: 'R1EE…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: '5908…REDACTED',
+  refreshToken: 'plqn…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: '5e3e…REDACTED',
+  refreshToken: '8sXk…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'ENV',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: '0a09…REDACTED',
+  refreshToken: 'rSH0…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'e1dd…REDACTED',
+  refreshToken: 'SMHw…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'd3f5…REDACTED',
+  refreshToken: '5JKy…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'a169…REDACTED',
+  refreshToken: 'R1EE…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: '5908…REDACTED',
+  refreshToken: 'plqn…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: '5e3e…REDACTED',
+  refreshToken: '8sXk…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'SHOP',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'ENV',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'ENV',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+getJumiaAccessToken failed, falling back to generic: OIDC token exchange failed (400)
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+[OIDC] token exchange FAILED {
+  source: 'ENV',
+  tokenUrl: 'https://vendor-api.jumia.com/token',
+  platform: 'JUMIA',
+  clientId: 'ffe9…REDACTED',
+  refreshToken: 'NSoR…REDACTED',
+  status: 400,
+  body: '{"error":"server_error","error_description":"client not found"}\n'
+}
+Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection: Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
+ ⨯ unhandledRejection:  Error: OIDC token exchange failed (400)
+    at <unknown> (src\lib\oidc.ts:210:15)
+    at async withTokenSlot (src\lib\oidc.ts:20:12)
+  208 |           body: lastBody.slice(0, 400),
+  209 |         });
+> 210 |         throw new Error(`OIDC token exchange failed (${resp.status})`);
+      |               ^
+  211 |       }
+  212 |
+  213 |       console.error("[OIDC] token exchange FAILED", {
