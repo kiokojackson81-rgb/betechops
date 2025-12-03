@@ -361,6 +361,9 @@ export default function MarketingTrackerPage() {
   const serverPeriodTotalSales = periodSummary?.aggregates?.totalSales ?? 0;
   const combinedPeriodSales = serverPeriodTotalSales + totalSales;
 
+  const serverPeriodTotalItems = periodSummary?.aggregates?.totalItems ?? 0;
+  const combinedPeriodItems = serverPeriodTotalItems + totalItems;
+
   const commissionSummary = useMemo(
     () => getCommissionSummaryForSales(combinedPeriodSales),
     [combinedPeriodSales],
@@ -370,6 +373,7 @@ export default function MarketingTrackerPage() {
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel = periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
   const displayedSalesKes = combinedPeriodSales;
+  const displayedItems = combinedPeriodItems;
 
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
     setReceipts((rows) =>
@@ -719,7 +723,7 @@ export default function MarketingTrackerPage() {
               periodLabel={periodLabel}
               receipts={totalReceipts}
               salesKes={displayedSalesKes}
-              items={totalItems}
+              items={displayedItems}
               commissionKes={commissionKes}
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
