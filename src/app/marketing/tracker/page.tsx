@@ -282,6 +282,43 @@ export default function MarketingTrackerPage() {
     })();
   }, [router]);
 
+  // fetch period summary on mount so Quick stats show server-side aggregates
+  useEffect(() => {
+    (async () => {
+      try {
+        const imp = impersonateIdFromWindow();
+        const url = imp
+          ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(
+              imp,
+            )}`
+          : "/api/marketing/report/summary";
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        setPeriodSummary({
+          period: {
+            key: data.period?.key ?? "",
+            label: data.period?.label ?? "",
+            start: data.period?.start ?? "",
+            end: data.period?.end ?? "",
+          },
+          aggregates: {
+            totalSales: data.aggregates?.totalSales ?? 0,
+            totalItems: data.aggregates?.totalItems ?? 0,
+            paymentStats: data.aggregates?.paymentStats ?? {
+              totalSalesMpesa: 0,
+              totalSalesCash: 0,
+            },
+            commission: { commission: data.aggregates?.commission?.commission ?? 0 },
+          },
+        });
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
   const updateField = (key: string, value: boolean | number | string | null) => {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   };
@@ -319,19 +356,20 @@ export default function MarketingTrackerPage() {
   const totalReceipts = receipts.length;
   const totalSales = totals.totalSales;
   const totalItems = totals.totalItems;
-  // For commission, prefer the period-level aggregate from periodSummary
-  const periodSalesForCommission =
-    periodSummary?.aggregates?.totalSales ?? totalSales;
+  // Combine server-side period totals (if any) with the unsaved local receipts
+  // so the Quick stats update instantly as the attendant enters or deletes sales.
+  const serverPeriodTotalSales = periodSummary?.aggregates?.totalSales ?? 0;
+  const combinedPeriodSales = serverPeriodTotalSales + totalSales;
 
   const commissionSummary = useMemo(
-    () => getCommissionSummaryForSales(periodSalesForCommission),
-    [periodSalesForCommission],
+    () => getCommissionSummaryForSales(combinedPeriodSales),
+    [combinedPeriodSales],
   );
 
   const commissionKes = commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
-  const periodLabel =
-    periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
+  const periodLabel = periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
+  const displayedSalesKes = combinedPeriodSales;
 
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
     setReceipts((rows) =>
