@@ -4,8 +4,8 @@ export type CommissionSummary = {
   commission: number;
   currentSales: number;
   nextTarget: number | null;
-  tiersReached?: string[];
-  nextTierReward?: number | null;
+  tiersReached: string[];
+  nextTierReward: number | null;
 };
 
 // Wrapper that exposes the commission logic used across admin + tracker.
