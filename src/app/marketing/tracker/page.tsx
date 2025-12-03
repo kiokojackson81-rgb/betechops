@@ -718,10 +718,10 @@ export default function MarketingTrackerPage() {
             <StatsCard
               periodLabel={periodLabel}
               receipts={totalReceipts}
-              salesKes={totalSales}
+              salesKes={displayedSalesKes}
               items={totalItems}
               commissionKes={commissionKes}
-              currentSalesForTier={periodSalesForCommission}
+              currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />
           </div>
