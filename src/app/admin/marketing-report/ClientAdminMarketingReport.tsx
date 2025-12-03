@@ -35,7 +35,6 @@ export default function ClientAdminMarketingReport({
   userFilter = "",
 }: Props) {
   const [selectedEntry, setSelectedEntry] = useState<MarketingReportEntry | null>(null);
-  const session = useSession();
 
   const summary = aggregates ?? {
     totalSales: 0,
