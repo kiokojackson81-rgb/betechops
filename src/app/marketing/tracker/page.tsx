@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export default function MarketingTrackerPage(): JSX.Element {
+export default function MarketingTrackerPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-2xl text-center">
