@@ -282,41 +282,68 @@ export default function MarketingTrackerPage() {
     })();
   }, [router]);
 
-  // fetch period summary on mount so Quick stats show server-side aggregates
+  // fetch + poll period summary so Quick stats stay in sync with server
   useEffect(() => {
-    (async () => {
+    const POLL_INTERVAL_MS = 15_000; // poll every 15s
+    const controller = new AbortController();
+
+    const buildSummaryFrom = (data: any) => ({
+      period: {
+        key: data.period?.key ?? "",
+        label: data.period?.label ?? "",
+        start: data.period?.start ?? "",
+        end: data.period?.end ?? "",
+      },
+      aggregates: {
+        totalSales: data.aggregates?.totalSales ?? 0,
+        totalItems: data.aggregates?.totalItems ?? 0,
+        paymentStats: data.aggregates?.paymentStats ?? {
+          totalSalesMpesa: 0,
+          totalSalesCash: 0,
+        },
+        commission: {
+          commission: data.aggregates?.commission?.commission ?? 0,
+        },
+      },
+    });
+
+    const fetchSummary = async () => {
       try {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         const imp = impersonateIdFromWindow();
         const url = imp
-          ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(
-              imp,
-            )}`
+          ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(imp)}`
           : "/api/marketing/report/summary";
-        const res = await fetch(url, { credentials: "same-origin" });
+        const res = await fetch(url, { credentials: "same-origin", signal: controller.signal });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data) return;
-        setPeriodSummary({
-          period: {
-            key: data.period?.key ?? "",
-            label: data.period?.label ?? "",
-            start: data.period?.start ?? "",
-            end: data.period?.end ?? "",
-          },
-          aggregates: {
-            totalSales: data.aggregates?.totalSales ?? 0,
-            totalItems: data.aggregates?.totalItems ?? 0,
-            paymentStats: data.aggregates?.paymentStats ?? {
-              totalSalesMpesa: 0,
-              totalSalesCash: 0,
-            },
-            commission: { commission: data.aggregates?.commission?.commission ?? 0 },
-          },
+        const next = buildSummaryFrom(data);
+        setPeriodSummary((prev) => {
+          if (!prev) return next;
+          const changed =
+            prev.aggregates.totalSales !== next.aggregates.totalSales ||
+            prev.aggregates.totalItems !== next.aggregates.totalItems ||
+            prev.aggregates.paymentStats.totalSalesMpesa !== next.aggregates.paymentStats.totalSalesMpesa ||
+            prev.aggregates.paymentStats.totalSalesCash !== next.aggregates.paymentStats.totalSalesCash ||
+            prev.aggregates.commission.commission !== next.aggregates.commission.commission ||
+            prev.period.label !== next.period.label;
+          return changed ? next : prev;
         });
-      } catch {
-        // ignore
+      } catch (err) {
+        // ignore network/abort errors
       }
-    })();
+    };
+
+    // initial fetch
+    fetchSummary();
+
+    const id = setInterval(fetchSummary, POLL_INTERVAL_MS);
+
+    return () => {
+      clearInterval(id);
+      controller.abort();
+    };
   }, []);
 
   const updateField = (key: string, value: boolean | number | string | null) => {
