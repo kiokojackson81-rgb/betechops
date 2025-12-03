@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const impersonateId = url.searchParams.get("impersonateId");
-  const session = await getServerSession(authOptions as any);
+  // `getServerSession` can return various session shapes depending on adapters.
+  // Explicitly type as `any` so we can safely access `user` without TypeScript
+  // complaining about missing properties in some environments.
+  const session: any = await getServerSession(authOptions as any);
   const actorId = session?.user?.id;
 
   if (!actorId && !impersonateId) {
