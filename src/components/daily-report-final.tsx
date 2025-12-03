@@ -122,7 +122,6 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
-  // TODO: when fetching trading-period data, call setCommissionForPeriod(data.commissionForPeriod ?? 0)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
 
@@ -183,6 +182,38 @@ export default function DailyReportFinal() {
     }
     return () => controller.abort();
   }, [impersonateId, tradingPeriodKey]);
+
+  useEffect(() => {
+    if (!tradingPeriodKey) return;
+    const controller = new AbortController();
+    const fetchPeriodSummary = async () => {
+      try {
+        if (typeof window === "undefined") return;
+        const url = new URL("/api/marketing/report/summary", window.location.origin);
+        url.searchParams.set("date", date);
+        if (impersonateId) {
+          url.searchParams.set("impersonateId", impersonateId);
+        }
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+          credentials: "same-origin",
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        const commission = data?.aggregates?.commission?.commission;
+        if (typeof commission === "number") {
+          setCommissionForPeriod(Math.round(commission));
+        }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        console.error("Failed to load marketing period summary", err);
+      }
+    };
+    fetchPeriodSummary();
+    return () => controller.abort();
+  }, [date, impersonateId, tradingPeriodKey]);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     const totalReceipts = receipts.length;
