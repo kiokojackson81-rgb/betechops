@@ -175,7 +175,10 @@ export default function PayrollTableClient({
                   ["Discipline", row.adjustmentBreakdown.discipline],
                   ["Other", row.adjustmentBreakdown.other],
                   ["Penalties", row.adjustmentBreakdown.penalties],
-                ] as [string, number][]).filter(([, amount]) => amount > 0);
+                ] as [string, number][]).filter(([, amount]) => {
+                  const n = Number(amount);
+                  return !Number.isNaN(n) && n > 0;
+                });
 
                 return (
                   <tr
@@ -225,7 +228,7 @@ export default function PayrollTableClient({
                         <div className="text-[11px] text-slate-500">
                           {deductionParts.map(([label, amount], index) => (
                             <span key={label}>
-                              {label} {amount.toLocaleString("en-US")}
+                              {label} {Number(amount).toLocaleString("en-US")}
                               {index < deductionParts.length - 1 && " · "}
                             </span>
                           ))}
