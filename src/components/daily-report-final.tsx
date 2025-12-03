@@ -310,8 +310,10 @@ export default function DailyReportFinal() {
         </section>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-6 self-start">
+      {/* SALES RECORDS + QUICK STATS ON ONE ROW */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+        {/* LEFT: Sales records + other left column cards */}
+        <section className="lg:col-span-8 space-y-6">
           <SalesReceiptsCard
             receipts={receipts}
             updateReceipt={updateReceipt}
@@ -370,9 +372,10 @@ export default function DailyReportFinal() {
               {isSubmitting ? "Submitting…" : "Submit report"}
             </button>
           </div>
-        </div>
+        </section>
 
-        <div className="lg:col-span-4 space-y-6 self-start">
+        {/* RIGHT: single Quick stats card */}
+        <div className="lg:col-span-4">
           <QuickStats
             receipts={totalReceipts}
             salesKes={totalSales}
