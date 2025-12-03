@@ -263,213 +263,389 @@ export default function MarketingTrackerPage() {
       Object.entries(marketingFieldTypes).forEach(([key, type]) => {
         const raw = form.fields[key];
         if (type === "yesno") yesNo[key] = Boolean(raw);
-        else if (type === "numeric") numeric[key] = Number(raw || 0);
-        else text[key] = typeof raw === "string" ? raw : "";
-      });
-
-      const payload = {
-        date: form.date,
-        dayOfWeek: form.dayOfWeek,
-        receipts: receipts.map((r) => ({
-          receiptNumber: r.receiptNumber,
-          sellingTotal: r.sellingTotal === "" ? 0 : Math.max(0, Number(r.sellingTotal)),
-          paymentMethod: r.paymentMethod,
-          items: r.items.map((it) => ({
-            productName: it.productName.trim(),
-            buyingPrice: it.buyingPrice === "" ? 0 : Math.max(0, Number(it.buyingPrice)),
-          })),
-        })),
-        yesNo,
-        numeric,
-        text,
-        // Thursday-only weekly fields (explicit)
-        weeklyMeetingAttended,
-        weeklyVideoShootParticipated,
-        weeklyVideoCount: weeklyVideoCount ? Number(weeklyVideoCount) : 0,
-      };
-
-      const imp = impersonateIdFromWindow();
-      const url = imp ? `/api/marketing/daily?impersonateId=${encodeURIComponent(imp)}` : "/api/marketing/daily";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-          showToast("Marketing daily tracker submitted", "success");
-        setForm(defaultFormState());
-        setReceipts([newSaleRow()]);
-        // reset weekly state
-        setWeeklyMeetingAttended(false);
-        setWeeklyVideoShootParticipated(false);
-        setWeeklyVideoCount("");
-        const data = await res.json().catch(() => null);
-        if (data?.periodSummary) {
-          setPeriodSummary({
-            period: {
-              key: "",
-              label: data.periodSummary.periodLabel,
-              start: "",
-              end: "",
-            },
-            aggregates: {
-              totalSales: data.periodSummary.periodSales,
-              totalItems: data.periodSummary.totalItems ?? 0,
-              paymentStats: {
-                totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
-                totalSalesCash: data.periodSummary.cashTotal ?? 0,
-              },
-              commission: { commission: data.periodSummary.commission ?? 0 },
-            },
-          });
-        }
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.error || "Failed to submit entry", "error");
-      }
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Failed to submit entry", "error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl p-6">
-        {/* 1) HEADER – FULL WIDTH */}
-        <header className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
-            <p className="text-sm text-slate-300">
-              Every task you complete brings you closer to your next reward.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Log out
-            </button>
-          </div>
-        </header>
-
-        {/* 2) PERIOD SUMMARY – STILL FULL WIDTH, UNDER HEADER */}
-        {periodSummary && (
-          <div className="mt-6">
-            <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-emerald-200">
-                      Summary so far for this trading period
-                    </p>
-                    <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
-                    <p className="text-xs text-emerald-200">
-                      {periodSummary.period.label}
-                    </p>
-                  </div>
-                  <Button type="button" variant="secondary" onClick={() => setPeriodSummary(null)}>
-                    Hide
-                  </Button>
+        return (
+          <div className="min-h-screen bg-slate-950 text-slate-100">
+            <form onSubmit={handleSubmit} className="mx-auto max-w-6xl p-6">
+              {/* HEADER – FULL WIDTH */}
+              <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+                  <p className="text-sm text-slate-300">
+                    Every task you complete brings you closer to your next reward.
+                  </p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
-                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                    <div className="text-xs uppercase tracking-wide text-emerald-200">
-                      Period sales
-                    </div>
-                    <div className="text-xl font-semibold text-white">
-                      KES {periodSummary.aggregates.totalSales.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                    <div className="text-xs uppercase tracking-wide text-emerald-200">
-                      Total items
-                    </div>
-                    <div className="text-xl font-semibold text-white">
-                      {periodSummary.aggregates.totalItems.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                    <div className="text-xs uppercase tracking-wide text-emerald-200">
-                      MPESA vs Cash
-                    </div>
-                    <div className="text-sm">
-                      MPESA KES{" "}
-                      {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}
-                    </div>
-                    <div className="text-sm">
-                      Cash KES{" "}
-                      {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                    <div className="text-xs uppercase tracking-wide text-emerald-200">
-                      Commission so far
-                    </div>
-                    <div className="text-xl font-semibold text-white">
-                      KES{" "}
-                      {periodSummary.aggregates.commission.commission.toLocaleString()}
-                    </div>
-                  </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+                    className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+                  >
+                    Log out
+                  </button>
                 </div>
-                <p className="text-xs text-emerald-200">
-                  This panel auto-hides after 5 minutes. Commission shown is cumulative for the
-                  current trading period.
-                </p>
+              </header>
+
+              {/* PERIOD SUMMARY – FULL WIDTH, UNDER HEADER */}
+              {periodSummary && (
+                <div className="mt-6">
+                  <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-emerald-200">
+                            Summary so far for this trading period
+                          </p>
+                          <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
+                          <p className="text-xs text-emerald-200">
+                            {periodSummary.period.label}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => setPeriodSummary(null)}
+                        >
+                          Hide
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
+                        <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                          <div className="text-xs uppercase tracking-wide text-emerald-200">
+                            Period sales
+                          </div>
+                          <div className="text-xl font-semibold text-white">
+                            KES {periodSummary.aggregates.totalSales.toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                          <div className="text-xs uppercase tracking-wide text-emerald-200">
+                            Total items
+                          </div>
+                          <div className="text-xl font-semibold text-white">
+                            {periodSummary.aggregates.totalItems.toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                          <div className="text-xs uppercase tracking-wide text-emerald-200">
+                            MPESA vs Cash
+                          </div>
+                          <div className="text-sm">
+                            MPESA KES{" "}
+                            {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}
+                          </div>
+                          <div className="text-sm">
+                            Cash KES{" "}
+                            {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
+                          <div className="text-xs uppercase tracking-wide text-emerald-200">
+                            Commission so far
+                          </div>
+                          <div className="text-xl font-semibold text-white">
+                            KES{" "}
+                            {periodSummary.aggregates.commission.commission.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-emerald-200">
+                        This panel auto-hides after 5 minutes. Commission shown is cumulative
+                        for the current trading period.
+                      </p>
+                    </div>
+                  </Card>
+                </div>
+              )}
+
+              {/* DATE + DAY OF WEEK – FULL WIDTH ROW */}
+              <div className="mt-6">
+                <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Date
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="date"
+                          value={form.date}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, date: e.target.value }))
+                          }
+                          className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Day of week
+                      </label>
+                      <select
+                        value={form.dayOfWeek}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            dayOfWeek: e.target.value as DayName,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                      >
+                        {dayOptions.map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </Card>
               </div>
-            </Card>
-          </div>
-        )}
 
-        {/* 3) DATE + DAY-OF-WEEK – FULL WIDTH ROW (like screenshot 2) */}
-        <div className="mt-6">
-          <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wide text-slate-400">
-                  Date
-                </label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, date: e.target.value }))
+              {/* MAIN GRID: LEFT = RECEIPTS + CHECKLIST, RIGHT = STATS */}
+              <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+                {/* LEFT COLUMN */}
+                <section className="lg:col-span-8 space-y-6">
+                  {/* SALES RECORDS */}
+                  <ReceiptsEditor
+                    receipts={receipts}
+                    setReceipts={setReceipts}
+                    totals={totals}
+                  />
+
+                  {/* DAY CHECKLIST + OTHER FIELDS */}
+                  <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          Day checklist
+                        </p>
+                        <h2 className="text-xl font-semibold">{config.day}</h2>
+                      </div>
+                      <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+                        Auto-loaded from selected day
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      {groupedYesNo.map(([section, fields]) => (
+                        <div key={section} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-slate-200">
+                              {section}
+                            </h3>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {fields.map((f) => (
+                              <button
+                                type="button"
+                                key={f.key}
+                                onClick={() =>
+                                  updateField(f.key, !Boolean(form.fields[f.key]))
+                                }
+                                className={pillClass(Boolean(form.fields[f.key]))}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {form.dayOfWeek === "Thursday" && (
+                        <section className="mt-6 border border-red-500/30 rounded-xl p-4">
+                          <h3 className="text-sm font-semibold mb-3">
+                            Weekly Marketing Activities (Thursday)
+                          </h3>
+
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-full">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Weekly meeting
+                                </label>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setWeeklyMeetingAttended(true);
+                                      updateField("weeklyMeetingAttended", true);
+                                    }}
+                                    className={pillClass(weeklyMeetingAttended)}
+                                  >
+                                    Attended weekly marketing meeting
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setWeeklyMeetingAttended(false);
+                                      updateField("weeklyMeetingAttended", false);
+                                    }}
+                                    className={pillClass(!weeklyMeetingAttended)}
+                                  >
+                                    Did not attend
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="w-full">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Video shoot
+                                </label>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setWeeklyVideoShootParticipated(true);
+                                      updateField("weeklyVideoShootParticipated", true);
+                                    }}
+                                    className={pillClass(weeklyVideoShootParticipated)}
+                                  >
+                                    Participated in weekly video shoot
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setWeeklyVideoShootParticipated(false);
+                                      updateField("weeklyVideoShootParticipated", false);
+                                    }}
+                                    className={pillClass(
+                                      !weeklyVideoShootParticipated
+                                    )}
+                                  >
+                                    Did not participate
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="w-full">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Number of videos participated in (shooting)
+                                </label>
+                                <div className="mt-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={String(weeklyVideoCount)}
+                                    onChange={(e) => {
+                                      const v =
+                                        e.target.value === ""
+                                          ? ""
+                                          : Math.max(0, Number(e.target.value));
+                                      setWeeklyVideoCount(
+                                        v === "" ? "" : Number(v)
+                                      );
+                                      updateField(
+                                        "weeklyVideoCount",
+                                        v === "" ? "" : Number(v)
+                                      );
+                                    }}
+                                    className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      )}
+
+                      {(config.numericFields || []).length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-semibold text-slate-200">
+                            Numeric checks
+                          </h3>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {(config.numericFields || []).map((f) => (
+                              <div key={f.key} className="space-y-2">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  {f.label}
+                                </label>
+                                <Input
+                                  type="number"
+                                  min={f.min}
+                                  value={String(form.fields[f.key] ?? "")}
+                                  onChange={(e) =>
+                                    updateField(f.key, e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {(config.textFields || []).length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-semibold text-slate-200">
+                            Notes
+                          </h3>
+                          <div className="grid gap-3">
+                            {(config.textFields || []).map((f) => (
+                              <div key={f.key} className="space-y-2">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  {f.label}
+                                </label>
+                                <Textarea
+                                  value={String(form.fields[f.key] ?? "")}
+                                  onChange={(e) =>
+                                    updateField(f.key, e.target.value)
+                                  }
+                                  placeholder={f.placeholder}
+                                  rows={3}
+                                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* STICKY BUTTONS */}
+                  <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
+                    <Button
+                      type="reset"
+                      variant="secondary"
+                      onClick={() => setForm(defaultFormState())}
+                      className="px-5"
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      className="px-5 bg-emerald-500 text-black hover:brightness-95"
+                      disabled={submitting}
+                    >
+                      {submitting ? "Submitting..." : "Submit report"}
+                    </Button>
+                  </div>
+                </section>
+
+                {/* RIGHT COLUMN – QUICK STATS */}
+                <div className="lg:col-span-4">
+                  <StatsCard
+                    periodLabel={
+                      periodSummary?.period.label ??
+                      tradingPeriodLabel ??
+                      "Nov 25, 2025 — Dec 24, 2025"
                     }
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                    receipts={receipts.length}
+                    salesKes={totals.totalSales}
+                    items={totals.totalItems}
+                    commissionKes={commissionInfo.commission}
+                    nextTarget={commissionInfo.nextTarget ?? 0}
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wide text-slate-400">
-                  Day of week
-                </label>
-                <select
-                  value={form.dayOfWeek}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      dayOfWeek: e.target.value as DayName,
-                    }))
-                  }
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                >
-                  {dayOptions.map((day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* 4) MAIN GRID: SALES (LEFT) + QUICK STATS (RIGHT) */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+            </form>
+          </div>
+        );
           {/* LEFT: receipts + checklist, etc. */}
           <section className="lg:col-span-8 space-y-6">
             {/* SALES RECORDS (ReceiptsEditor) */}
