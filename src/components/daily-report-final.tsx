@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -113,6 +113,29 @@ export default function DailyReportFinal() {
 
   const tradingPeriod = getTradingPeriodFor(new Date(date));
   const tradingPeriodLabel = tradingPeriod?.label;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadCommission() {
+      try {
+        const res = await fetch("/api/attendant/commission", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        const value = Number(data.grossCommission ?? 0);
+        setCommissionForPeriod(Math.round(value));
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        console.error("Failed to load commission summary", err);
+      }
+    }
+    loadCommission();
+    return () => controller.abort();
+  }, []);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     const totalReceipts = receipts.length;
