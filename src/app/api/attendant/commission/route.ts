@@ -19,7 +19,23 @@ export async function GET() {
   const userId = session.user.id;
   const now = new Date();
   const { period, tiers, tradingPeriod } = await getOrCreateCommissionPeriod(now);
-  const { periodKey, periodLabel, startDate: start, endDate: end } = tradingPeriod;
+  // Normalize tradingPeriod shape: some helpers return { key,label,startDate,endDate }
+  // while others return { periodKey,periodLabel,startDate,endDate }.
+  let periodKey: string;
+  let periodLabel: string;
+  let start: Date;
+  let end: Date;
+  if ("periodKey" in tradingPeriod) {
+    periodKey = (tradingPeriod as any).periodKey;
+    periodLabel = (tradingPeriod as any).periodLabel;
+    start = (tradingPeriod as any).startDate ?? (tradingPeriod as any).start;
+    end = (tradingPeriod as any).endDate ?? (tradingPeriod as any).end;
+  } else {
+    periodKey = (tradingPeriod as any).key;
+    periodLabel = (tradingPeriod as any).label;
+    start = (tradingPeriod as any).startDate ?? (tradingPeriod as any).start;
+    end = (tradingPeriod as any).endDate ?? (tradingPeriod as any).end;
+  }
 
   const snapshots = await prisma.profitSnapshot.findMany({
     where: {
