@@ -224,6 +224,25 @@ export default function MarketingTrackerPage() {
     };
   }>(null);
 
+  // Background authoritative server summary used for Quick stats calculations.
+  // We keep this separate from `periodSummary` which controls the visible
+  // summary panel. The panel should remain hidden unless the attendant
+  // explicitly submits — serverPeriodSummary is updated by the poll.
+  const [serverPeriodSummary, setServerPeriodSummary] = useState<null | {
+    period: { key: string; label: string; start: string; end: string };
+    aggregates: {
+      totalSales: number;
+      totalItems: number;
+      paymentStats: {
+        totalSalesMpesa: number;
+        totalSalesCash: number;
+        countMpesaReceipts?: number;
+        countCashReceipts?: number;
+      };
+      commission: { commission: number };
+    };
+  }>(null);
+
   const config = useMemo(
     () =>
       marketingDayConfigs.find((c) => c.day === form.dayOfWeek) ??
@@ -321,7 +340,11 @@ export default function MarketingTrackerPage() {
         const data = await res.json().catch(() => null);
         if (!data) return;
         const next = buildSummaryFrom(data);
-        setPeriodSummary((prev) => {
+        // update authoritative server-side summary but do NOT show the panel
+        // unless the attendant explicitly submitted (periodSummary is used
+        // for the visible panel). This keeps Quick stats accurate while the
+        // panel remains hidden.
+        setServerPeriodSummary((prev) => {
           if (!prev) return next;
           const changed =
             prev.aggregates.totalSales !== next.aggregates.totalSales ||
@@ -420,16 +443,16 @@ export default function MarketingTrackerPage() {
   const totalItems = totals.totalItems;
   // Combine server-side period totals (if any) with the unsaved local receipts
   // so the Quick stats update instantly as the attendant enters or deletes sales.
-  const serverPeriodTotalSales = periodSummary?.aggregates?.totalSales ?? 0;
+  // Use `serverPeriodSummary` (authoritative) for calculations so the visible
+  // panel (`periodSummary`) can remain hidden while Quick stats stay accurate.
+  const serverPeriodTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
   const combinedPeriodSales = serverPeriodTotalSales + totalSales;
-
-  const serverPeriodTotalItems = periodSummary?.aggregates?.totalItems ?? 0;
+  const serverPeriodTotalItems = serverPeriodSummary?.aggregates?.totalItems ?? 0;
   const combinedPeriodItems = serverPeriodTotalItems + totalItems;
-
   // receipts: server may provide counts per payment method in paymentStats
   const serverPeriodReceipts =
-    (periodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
-    (periodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
+    (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
+    (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
   const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
 
   const commissionSummary = useMemo(
@@ -439,7 +462,7 @@ export default function MarketingTrackerPage() {
 
   const commissionKes = commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
-  const periodLabel = periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
+  const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
@@ -614,29 +637,31 @@ export default function MarketingTrackerPage() {
         if (data?.periodSummary) {
           // Use authoritative receipt counts returned by the server so Quick
           // stats show exact MPESA/CASH/total receipts immediately after submit.
-          setPeriodSummary(() => {
-            return {
-              period: {
-                key: "",
-                label: data.periodSummary.periodLabel,
-                start: "",
-                end: "",
+          const next = {
+            period: {
+              key: "",
+              label: data.periodSummary.periodLabel,
+              start: "",
+              end: "",
+            },
+            aggregates: {
+              totalSales: data.periodSummary.periodSales ?? 0,
+              totalItems: data.periodSummary.totalItems ?? 0,
+              paymentStats: {
+                totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
+                totalSalesCash: data.periodSummary.cashTotal ?? 0,
+                countMpesaReceipts: data.periodSummary.countMpesaReceipts ?? 0,
+                countCashReceipts: data.periodSummary.countCashReceipts ?? 0,
               },
-              aggregates: {
-                totalSales: data.periodSummary.periodSales ?? 0,
-                totalItems: data.periodSummary.totalItems ?? 0,
-                paymentStats: {
-                  totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
-                  totalSalesCash: data.periodSummary.cashTotal ?? 0,
-                  countMpesaReceipts: data.periodSummary.countMpesaReceipts ?? 0,
-                  countCashReceipts: data.periodSummary.countCashReceipts ?? 0,
-                },
-                commission: {
-                  commission: data.periodSummary.commission ?? 0,
-                },
+              commission: {
+                commission: data.periodSummary.commission ?? 0,
               },
-            };
-          });
+            },
+          };
+          // show the panel briefly
+          setPeriodSummary(next);
+          // also update the background authoritative summary used by Quick stats
+          setServerPeriodSummary(next);
         }
       } else {
         const err = await res.json().catch(() => ({}));
