@@ -1,5 +1,134 @@
 "use client";
 
+import React, { useMemo, useState } from "react";
+import Card from "@/app/_components/Card";
+import Input from "@/app/_components/Input";
+import Textarea from "@/app/_components/Textarea";
+import Button from "@/app/_components/Button";
+import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
+import StatsCard from "@/components/StatsCard";
+import { signOut } from "next-auth/react";
+
+type DayName = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday";
+
+const dayOptions: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const defaultFormState = () => ({ date: new Date().toISOString().slice(0, 10), dayOfWeek: "Monday" as DayName, fields: {} as Record<string, any> });
+
+export default function MarketingTrackerPage() {
+  const [form, setForm] = useState(defaultFormState());
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [weeklyMeetingAttended, setWeeklyMeetingAttended] = useState(false);
+  const [weeklyVideoShootParticipated, setWeeklyVideoShootParticipated] = useState(false);
+  const [weeklyVideoCount, setWeeklyVideoCount] = useState<number | "">("");
+  const [periodSummary, setPeriodSummary] = useState<any | null>(null);
+
+  const totals = useMemo(() => ({ totalSales: 0, totalItems: receipts.reduce((s, r) => s + (r?.items?.length || 0), 0) }), [receipts]);
+  const commissionInfo = useMemo(() => ({ commission: 0, nextTarget: 0 }), [totals.totalSales]);
+  const tradingPeriodLabel = "Nov 25, 2025 — Dec 24, 2025";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    // minimal placeholder submit
+    setTimeout(() => setSubmitting(false), 500);
+  };
+
+  const updateField = (key: string, value: any) => setForm((p: any) => ({ ...p, fields: { ...p.fields, [key]: value } }));
+
+  const groupedYesNo: [string, { key: string; label: string }[]][] = [];
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl p-6">
+        {/* HEADER – FULL WIDTH */}
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+            <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => signOut({ callbackUrl: "/attendant/login" })} className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10">Log out</button>
+          </div>
+        </header>
+
+        {/* PERIOD SUMMARY – FULL WIDTH, UNDER HEADER */}
+        {periodSummary && (
+          <div className="mt-6">
+            <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-emerald-200">Summary so far for this trading period</p>
+                    <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
+                    <p className="text-xs text-emerald-200">{periodSummary.period.label}</p>
+                  </div>
+                  <Button type="button" variant="secondary" onClick={() => setPeriodSummary(null)}>Hide</Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
+                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3"><div className="text-xs uppercase tracking-wide text-emerald-200">Period sales</div><div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.totalSales.toLocaleString()}</div></div>
+                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3"><div className="text-xs uppercase tracking-wide text-emerald-200">Total items</div><div className="text-xl font-semibold text-white">{periodSummary.aggregates.totalItems.toLocaleString()}</div></div>
+                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3"><div className="text-xs uppercase tracking-wide text-emerald-200">MPESA vs Cash</div><div className="text-sm">MPESA KES {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}</div><div className="text-sm">Cash KES {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}</div></div>
+                  <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3"><div className="text-xs uppercase tracking-wide text-emerald-200">Commission so far</div><div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.commission.commission.toLocaleString()}</div></div>
+                </div>
+                <p className="text-xs text-emerald-200">This panel auto-hides after 5 minutes. Commission shown is cumulative for the current trading period.</p>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* DATE + DAY OF WEEK – FULL WIDTH ROW */}
+        <div className="mt-6">
+          <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
+                <div className="flex items-center gap-3"><Input type="date" value={form.date} onChange={(e) => setForm((prev: any) => ({ ...prev, date: (e.target as HTMLInputElement).value }))} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100" /></div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
+                <select value={form.dayOfWeek} onChange={(e) => setForm((prev: any) => ({ ...prev, dayOfWeek: e.target.value }))} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100">{dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}</select>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* MAIN GRID: LEFT = RECEIPTS + CHECKLIST, RIGHT = STATS */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+          <section className="lg:col-span-8 space-y-6">
+            <ReceiptsEditor receipts={receipts} setReceipts={setReceipts} totals={totals} />
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <div className="mb-4 flex items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p><h2 className="text-xl font-semibold">Day</h2></div><div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Auto-loaded from selected day</div></div>
+
+              <div className="space-y-6">
+                {groupedYesNo.map(([section, fields]) => (
+                  <div key={section} className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-200">{section}</h3></div><div className="flex flex-wrap gap-2">{fields.map((f) => (<button key={f.key} type="button" onClick={() => updateField(f.key, !Boolean((form as any).fields[f.key]))} className={"rounded-full border px-4 py-2 text-sm font-medium"}>{f.label}</button>))}</div></div>
+                ))}
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-200">Numeric checks</h3>
+                </div>
+              </div>
+            </Card>
+
+            <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
+              <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">Reset</Button>
+              <Button type="submit" variant="primary" className="px-5 bg-emerald-500 text-black hover:brightness-95" disabled={submitting}>{submitting ? "Submitting..." : "Submit report"}</Button>
+            </div>
+          </section>
+
+          <div className="lg:col-span-4">
+            <StatsCard periodLabel={periodSummary?.period?.label ?? tradingPeriodLabel} receipts={receipts.length} salesKes={totals.totalSales} items={totals.totalItems} commissionKes={commissionInfo.commission} nextTarget={commissionInfo.nextTarget} />
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+"use client";
+
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
