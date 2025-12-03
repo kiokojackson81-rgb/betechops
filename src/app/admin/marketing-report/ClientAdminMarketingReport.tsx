@@ -274,10 +274,18 @@ export default function ClientAdminMarketingReport({
                           </a>
                           {/** Only show edit/delete actions to Admin users — server APIs enforce ADMIN role too */}
                           {((session?.data as any)?.user?.role === "ADMIN") ? (
-                            <>
-                              <Link href={`/admin/marketing-report/${entry.id}/edit`} className="text-xs text-white/80 underline hover:text-white">Edit entry</Link>
+                            <div className="flex gap-3 items-center">
+                              <a
+                                href={`/admin/marketing-report/${entry.id}/edit`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-white/80 underline hover:text-white"
+                                aria-label={`Edit entry ${entry.id}`}
+                              >
+                                Edit entry
+                              </a>
                               <DeleteEntryClient entryId={entry.id} />
-                            </>
+                            </div>
                           ) : null}
                         </div>
                       </td>
