@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import React, { useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+// server enforces ADMIN access for this page; client-side session checks can be flaky,
+// so show admin actions when this component is rendered on the admin page.
 import ProgressBar from "@/app/_components/ProgressBar";
 import MarketingReportFilterBar from "./FilterBar";
 import MultiDayExportClient from "./MultiDayExportClient";
@@ -272,21 +273,19 @@ export default function ClientAdminMarketingReport({
                           >
                             Export day CSV
                           </a>
-                          {/** Only show edit/delete actions to Admin users — server APIs enforce ADMIN role too */}
-                          {((session?.data as any)?.user?.role === "ADMIN") ? (
-                            <div className="flex gap-3 items-center">
-                              <a
-                                href={`/admin/marketing-report/${entry.id}/edit`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-white/80 underline hover:text-white"
-                                aria-label={`Edit entry ${entry.id}`}
-                              >
-                                Edit entry
-                              </a>
-                              <DeleteEntryClient entryId={entry.id} />
-                            </div>
-                          ) : null}
+                          {/** Admin-only page — render edit & delete actions. Server will still enforce ADMIN role. */}
+                          <div className="flex gap-3 items-center">
+                            <a
+                              href={`/admin/marketing-report/${entry.id}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-white/80 underline hover:text-white"
+                              aria-label={`Edit entry ${entry.id}`}
+                            >
+                              Edit entry
+                            </a>
+                            <DeleteEntryClient entryId={entry.id} />
+                          </div>
                         </div>
                       </td>
                     </tr>
