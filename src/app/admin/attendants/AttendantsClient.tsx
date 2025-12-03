@@ -33,6 +33,12 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           <p className="text-sm text-slate-400">Manage attendant categories, status, passwords and dashboards.</p>
         </div>
         <div className="flex gap-3">
+          <button
+            className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+            onClick={() => router.push("/admin/payroll")}
+          >
+            Payroll overview
+          </button>
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm">
             <option value="ALL">All categories</option>
             <option value="DIRECT_SALES_OPS">Direct Sales Ops</option>
