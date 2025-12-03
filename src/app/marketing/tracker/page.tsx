@@ -217,6 +217,8 @@ export default function MarketingTrackerPage() {
       paymentStats: {
         totalSalesMpesa: number;
         totalSalesCash: number;
+        countMpesaReceipts?: number;
+        countCashReceipts?: number;
       };
       commission: { commission: number };
     };
@@ -391,6 +393,12 @@ export default function MarketingTrackerPage() {
   const serverPeriodTotalItems = periodSummary?.aggregates?.totalItems ?? 0;
   const combinedPeriodItems = serverPeriodTotalItems + totalItems;
 
+  // receipts: server may provide counts per payment method in paymentStats
+  const serverPeriodReceipts =
+    (periodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
+    (periodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
+  const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
+
   const commissionSummary = useMemo(
     () => getCommissionSummaryForSales(combinedPeriodSales),
     [combinedPeriodSales],
@@ -401,6 +409,7 @@ export default function MarketingTrackerPage() {
   const periodLabel = periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
+  const displayedReceipts = combinedPeriodReceipts;
 
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
     setReceipts((rows) =>
@@ -748,7 +757,7 @@ export default function MarketingTrackerPage() {
           <div className="lg:col-span-4">
             <StatsCard
               periodLabel={periodLabel}
-              receipts={totalReceipts}
+              receipts={displayedReceipts}
               salesKes={displayedSalesKes}
               items={displayedItems}
               commissionKes={commissionKes}
