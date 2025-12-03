@@ -8,6 +8,7 @@ import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import StatsCard from "@/components/StatsCard";
 import { calculateCumulativeCommission } from "@/lib/commission";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 import { useRouter } from "next/navigation";
@@ -166,6 +167,9 @@ export default function MarketingTrackerPage() {
     () => calculateCumulativeCommission(totals.totalSales),
     [totals.totalSales]
   );
+
+  const tradingPeriod = useMemo(() => getTradingPeriodFor(new Date(form.date)), [form.date]);
+  const tradingPeriodLabel = tradingPeriod?.label;
 
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
     setReceipts((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
