@@ -9,13 +9,14 @@ import Card from "@/app/_components/Card";
 
 export const dynamic = "force-dynamic";
 
-export default async function PayrollPage({ params }: { params: { id: string } }) {
+export default async function PayrollPage({ params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) {
     redirect("/admin/login");
   }
 
-  const attendantId = params.id;
+  const awaitedParams = await params;
+  const attendantId = awaitedParams.id;
   const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { id: true, name: true, email: true } });
   if (!attendant) {
     return (
