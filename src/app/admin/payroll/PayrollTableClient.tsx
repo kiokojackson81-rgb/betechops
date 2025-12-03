@@ -169,13 +169,13 @@ export default function PayrollTableClient({
                 const isBrendah =
                   (row.name ?? "").toLowerCase().includes("brendah") ||
                   (row.email ?? "").toLowerCase().includes("brendah");
-                const deductionParts = [
+                const deductionParts = ([
                   ["Chama", row.adjustmentBreakdown.chama],
                   ["Lateness", row.adjustmentBreakdown.lateness],
                   ["Discipline", row.adjustmentBreakdown.discipline],
                   ["Other", row.adjustmentBreakdown.other],
                   ["Penalties", row.adjustmentBreakdown.penalties],
-                ].filter(([, amount]) => amount > 0);
+                ] as [string, number][]).filter(([, amount]) => amount > 0);
 
                 return (
                   <tr
