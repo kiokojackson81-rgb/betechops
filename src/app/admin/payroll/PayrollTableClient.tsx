@@ -29,7 +29,11 @@ export default function PayrollTableClient({
   const [search, setSearch] = useState("");
 
   const availableCategories = useMemo(() => {
-    const seen = new Set(rows.map((row) => row.attendantCategory).filter(Boolean));
+    const seen = new Set<string>(
+      rows
+        .map((row) => row.attendantCategory)
+        .filter((value): value is string => Boolean(value)),
+    );
     return categoryOrder.filter((value) => seen.has(value)).concat(
       Array.from(seen).filter((value) => !categoryOrder.includes(value)),
     );
