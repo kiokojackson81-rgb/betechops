@@ -7,7 +7,12 @@ import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
-import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes } from "@/lib/marketingDayConfigs";
+import {
+  DayName,
+  marketingDayConfigs,
+  marketingFieldKeys,
+  marketingFieldTypes,
+} from "@/lib/marketingDayConfigs";
 import { useRouter } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
 import { signOut } from "next-auth/react";
@@ -27,11 +32,26 @@ type ReceiptRow = {
   items: ReceiptItem[];
 };
 
-const dayOptions: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const dayOptions: DayName[] = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 const deriveDayOfWeek = (dateStr: string): DayName => {
   const d = new Date(dateStr);
-  const map = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const map = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
   const label = map[d.getDay()] as DayName | "Sunday";
   const exists = marketingDayConfigs.find((c) => c.day === label);
   return exists?.day ?? "Monday";
@@ -54,13 +74,19 @@ const defaultFormState = (): MarketingDailyFormState => {
 };
 
 const newSaleRow = (): ReceiptRow => ({
-  id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+  id:
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2),
   receiptNumber: "",
   sellingTotal: "",
   paymentMethod: "",
   items: [
     {
-      id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      id:
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2),
       productName: "",
       buyingPrice: "",
     },
@@ -74,20 +100,123 @@ const pillClass = (checked: boolean) =>
       : "border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500"
   }`;
 
+/* ---------- Quick stats card ---------- */
+
+type StatsCardProps = {
+  periodLabel: string;
+  receipts: number;
+  salesKes: number;
+  items: number;
+  commissionKes: number;
+  nextTarget: number;
+};
+
+function StatsCard({
+  periodLabel,
+  receipts,
+  salesKes,
+  items,
+  commissionKes,
+  nextTarget,
+}: StatsCardProps) {
+  const remaining = Math.max(nextTarget - salesKes, 0);
+  const progress =
+    nextTarget > 0 ? Math.min((salesKes / nextTarget) * 100, 100) : 0;
+
+  return (
+    <Card className="h-full border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <h2 className="text-xl font-semibold">Quick stats</h2>
+        <p className="text-xs text-slate-400 text-right">{periodLabel}</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Receipts */}
+        <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Receipts</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">{receipts}</p>
+        </div>
+
+        {/* Sales */}
+        <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">
+            {salesKes.toLocaleString()}
+          </p>
+        </div>
+
+        {/* Commission */}
+        <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">
+            Commission (KES)
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">
+            {commissionKes.toLocaleString()}
+          </p>
+        </div>
+
+        {/* Items */}
+        <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Items sold</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">{items}</p>
+        </div>
+      </div>
+
+      {/* Progress toward next tier */}
+      <div className="mt-6 space-y-2">
+        <p className="text-xs uppercase tracking-wide text-slate-400">To next tier</p>
+        <p className="text-xs sm:text-sm text-slate-200">
+          {remaining > 0
+            ? `KES ${remaining.toLocaleString()} more to hit next tier`
+            : "You’ve reached the top tier for this period 🎉"}
+        </p>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-emerald-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ---------- Page component ---------- */
+
 export default function MarketingTrackerPage() {
-  const impersonateIdFromWindow = () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null);
-  const [form, setForm] = useState<MarketingDailyFormState>(() => defaultFormState());
+  const impersonateIdFromWindow = () =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("impersonateId")
+      : null;
+
+  const [form, setForm] = useState<MarketingDailyFormState>(() =>
+    defaultFormState(),
+  );
   const [receipts, setReceipts] = useState<ReceiptRow[]>([newSaleRow()]);
   const [submitting, setSubmitting] = useState(false);
   const [weeklyMeetingAttended, setWeeklyMeetingAttended] = useState(false);
-  const [weeklyVideoShootParticipated, setWeeklyVideoShootParticipated] = useState(false);
+  const [weeklyVideoShootParticipated, setWeeklyVideoShootParticipated] =
+    useState(false);
   const [weeklyVideoCount, setWeeklyVideoCount] = useState<number | "">("");
   const [periodSummary, setPeriodSummary] = useState<null | {
     period: { key: string; label: string; start: string; end: string };
-    aggregates: { totalSales: number; totalItems: number; paymentStats: { totalSalesMpesa: number; totalSalesCash: number }; commission: { commission: number } };
+    aggregates: {
+      totalSales: number;
+      totalItems: number;
+      paymentStats: {
+        totalSalesMpesa: number;
+        totalSalesCash: number;
+      };
+      commission: { commission: number };
+    };
   }>(null);
 
-  const config = useMemo(() => marketingDayConfigs.find((c) => c.day === form.dayOfWeek) ?? marketingDayConfigs[0], [form.dayOfWeek]);
+  const config = useMemo(
+    () =>
+      marketingDayConfigs.find((c) => c.day === form.dayOfWeek) ??
+      marketingDayConfigs[0],
+    [form.dayOfWeek],
+  );
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, dayOfWeek: deriveDayOfWeek(prev.date) }));
@@ -110,14 +239,14 @@ export default function MarketingTrackerPage() {
 
   const router = useRouter();
 
-  // Authorization guard: ensure the current session (or impersonated user) is
-  // allowed to access this page. Only attendants in DIRECT_SALES_OPS or ADMIN
-  // may use this page. If not authorized, redirect to login or their landing.
+  // auth guard
   useEffect(() => {
     (async () => {
       try {
         const imp = impersonateIdFromWindow();
-        const url = imp ? `/api/attendants/me?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/me";
+        const url = imp
+          ? `/api/attendants/me?impersonateId=${encodeURIComponent(imp)}`
+          : "/api/attendants/me";
         const res = await fetch(url, { credentials: "same-origin" });
         if (!res.ok) {
           router.replace("/attendant/login");
@@ -131,13 +260,12 @@ export default function MarketingTrackerPage() {
         }
         const role = user.role as string | undefined;
         const category = user.attendantCategory as string | undefined;
-        if (role === "ADMIN") return; // admins may access this page (and may impersonate)
+        if (role === "ADMIN") return;
         if (category !== "DIRECT_SALES_OPS") {
-          // redirect to their landing page
           const dest = getLandingPage(category ?? null, role);
           router.replace(dest);
         }
-      } catch (err) {
+      } catch {
         router.replace("/attendant/login");
       }
     })();
@@ -148,24 +276,54 @@ export default function MarketingTrackerPage() {
   };
 
   const totals = useMemo(() => {
-    const totalSales = receipts.reduce((sum, r) => sum + (typeof r.sellingTotal === "number" ? r.sellingTotal : Number(r.sellingTotal || 0)), 0);
+    const totalSales = receipts.reduce(
+      (sum, r) =>
+        sum +
+        (typeof r.sellingTotal === "number"
+          ? r.sellingTotal
+          : Number(r.sellingTotal || 0)),
+      0,
+    );
     const totalProfit = receipts.reduce(
       (sum, r) =>
         sum +
-        ((typeof r.sellingTotal === "number" ? r.sellingTotal : Number(r.sellingTotal || 0)) -
-          r.items.reduce((s, it) => s + (typeof it.buyingPrice === "number" ? it.buyingPrice : Number(it.buyingPrice || 0)), 0)),
-      0
+        ((typeof r.sellingTotal === "number"
+          ? r.sellingTotal
+          : Number(r.sellingTotal || 0)) -
+          r.items.reduce(
+            (s, it) =>
+              s +
+              (typeof it.buyingPrice === "number"
+                ? it.buyingPrice
+                : Number(it.buyingPrice || 0)),
+            0,
+          )),
+      0,
     );
     const totalItems = receipts.reduce((sum, r) => sum + r.items.length, 0);
     return { totalSales, totalProfit, totalItems };
   }, [receipts]);
 
+  // derived stats for the Quick stats card
+  const totalReceipts = receipts.length;
+  const totalSales = totals.totalSales;
+  const totalItems = totals.totalItems;
+  const commissionKes = 0; // daily commission placeholder
+  const nextTarget = 1_000_000; // example tier target
+  const periodLabel =
+    periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
+
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
-    setReceipts((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setReceipts((rows) =>
+      rows.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
   };
 
   const addReceipt = () => setReceipts((rows) => [...rows, newSaleRow()]);
-  const removeReceipt = (id: string) => setReceipts((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+  const removeReceipt = (id: string) =>
+    setReceipts((rows) =>
+      rows.length > 1 ? rows.filter((r) => r.id !== id) : rows,
+    );
 
   const addItem = (receiptId: string) => {
     setReceipts((rows) =>
@@ -176,24 +334,37 @@ export default function MarketingTrackerPage() {
               items: [
                 ...r.items,
                 {
-                  id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                  id:
+                    typeof crypto !== "undefined" &&
+                    typeof crypto.randomUUID === "function"
+                      ? crypto.randomUUID()
+                      : Math.random().toString(36).slice(2),
                   productName: "",
                   buyingPrice: "",
                 },
               ],
             }
-          : r
-      )
+          : r,
+      ),
     );
   };
 
-  const updateItem = (receiptId: string, itemId: string, patch: Partial<ReceiptItem>) => {
+  const updateItem = (
+    receiptId: string,
+    itemId: string,
+    patch: Partial<ReceiptItem>,
+  ) => {
     setReceipts((rows) =>
       rows.map((r) =>
         r.id === receiptId
-          ? { ...r, items: r.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)) }
-          : r
-      )
+          ? {
+              ...r,
+              items: r.items.map((it) =>
+                it.id === itemId ? { ...it, ...patch } : it,
+              ),
+            }
+          : r,
+      ),
     );
   };
 
@@ -208,8 +379,8 @@ export default function MarketingTrackerPage() {
                   ? r.items.filter((it) => it.id !== itemId)
                   : r.items,
             }
-          : r
-      )
+          : r,
+      ),
     );
   };
 
@@ -219,25 +390,38 @@ export default function MarketingTrackerPage() {
 
     const errors: string[] = [];
 
-    // Validate receipts and items
     receipts.forEach((r, i) => {
-      if (!r.receiptNumber || r.receiptNumber.trim() === "") errors.push(`Receipt ${i + 1}: missing receipt number`);
-      if (r.sellingTotal === "" || Number.isNaN(Number(r.sellingTotal))) errors.push(`Receipt ${i + 1}: invalid selling total`);
-      if (!r.paymentMethod) errors.push(`Receipt ${i + 1}: missing payment method`);
+      if (!r.receiptNumber || r.receiptNumber.trim() === "")
+        errors.push(`Receipt ${i + 1}: missing receipt number`);
+      if (r.sellingTotal === "" || Number.isNaN(Number(r.sellingTotal)))
+        errors.push(`Receipt ${i + 1}: invalid selling total`);
+      if (!r.paymentMethod)
+        errors.push(`Receipt ${i + 1}: missing payment method`);
       r.items.forEach((it, j) => {
-        if (!it.productName || it.productName.trim() === "") errors.push(`Receipt ${i + 1}, item ${j + 1}: missing product name`);
-        if (it.buyingPrice === "" || Number.isNaN(Number(it.buyingPrice))) errors.push(`Receipt ${i + 1}, item ${j + 1}: invalid buying price`);
+        if (!it.productName || it.productName.trim() === "")
+          errors.push(
+            `Receipt ${i + 1}, item ${j + 1}: missing product name`,
+          );
+        if (it.buyingPrice === "" || Number.isNaN(Number(it.buyingPrice)))
+          errors.push(
+            `Receipt ${i + 1}, item ${j + 1}: invalid buying price`,
+          );
       });
     });
 
-    // Validate only the fields for the selected day (text + numeric)
     (config.textFields || []).forEach((f) => {
       const raw = form.fields[f.key];
       if (!raw || String(raw).trim() === "") errors.push(`${f.key}: required`);
     });
     (config.numericFields || []).forEach((f) => {
       const raw = form.fields[f.key];
-      if (raw === "" || raw === null || raw === undefined || Number.isNaN(Number(raw))) errors.push(`${f.key}: required numeric`);
+      if (
+        raw === "" ||
+        raw === null ||
+        raw === undefined ||
+        Number.isNaN(Number(raw))
+      )
+        errors.push(`${f.key}: required numeric`);
     });
 
     if (errors.length > 0) {
@@ -245,6 +429,7 @@ export default function MarketingTrackerPage() {
       setSubmitting(false);
       return;
     }
+
     try {
       const yesNo: Record<string, boolean> = {};
       const numeric: Record<string, number> = {};
@@ -261,34 +446,36 @@ export default function MarketingTrackerPage() {
         dayOfWeek: form.dayOfWeek,
         receipts: receipts.map((r) => ({
           receiptNumber: r.receiptNumber,
-          sellingTotal: r.sellingTotal === "" ? 0 : Math.max(0, Number(r.sellingTotal)),
+          sellingTotal:
+            r.sellingTotal === "" ? 0 : Math.max(0, Number(r.sellingTotal)),
           paymentMethod: r.paymentMethod,
           items: r.items.map((it) => ({
             productName: it.productName.trim(),
-            buyingPrice: it.buyingPrice === "" ? 0 : Math.max(0, Number(it.buyingPrice)),
+            buyingPrice:
+              it.buyingPrice === "" ? 0 : Math.max(0, Number(it.buyingPrice)),
           })),
         })),
         yesNo,
         numeric,
         text,
-        // Thursday-only weekly fields (explicit)
         weeklyMeetingAttended,
         weeklyVideoShootParticipated,
         weeklyVideoCount: weeklyVideoCount ? Number(weeklyVideoCount) : 0,
       };
 
       const imp = impersonateIdFromWindow();
-      const url = imp ? `/api/marketing/daily?impersonateId=${encodeURIComponent(imp)}` : "/api/marketing/daily";
+      const url = imp
+        ? `/api/marketing/daily?impersonateId=${encodeURIComponent(imp)}`
+        : "/api/marketing/daily";
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-          showToast("Marketing daily tracker submitted", "success");
+        showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
         setReceipts([newSaleRow()]);
-        // reset weekly state
         setWeeklyMeetingAttended(false);
         setWeeklyVideoShootParticipated(false);
         setWeeklyVideoCount("");
@@ -308,7 +495,9 @@ export default function MarketingTrackerPage() {
                 totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
                 totalSalesCash: data.periodSummary.cashTotal ?? 0,
               },
-              commission: { commission: data.periodSummary.commission ?? 0 },
+              commission: {
+                commission: data.periodSummary.commission ?? 0,
+              },
             },
           });
         }
@@ -317,7 +506,10 @@ export default function MarketingTrackerPage() {
         showToast(err.error || "Failed to submit entry", "error");
       }
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Failed to submit entry", "error");
+      showToast(
+        err instanceof Error ? err.message : "Failed to submit entry",
+        "error",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -325,11 +517,16 @@ export default function MarketingTrackerPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <form onSubmit={handleSubmit} className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto flex max-w-6xl flex-col gap-6 p-6"
+      >
         <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
-            <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
+            <p className="text-sm text-slate-300">
+              Every task you complete brings you closer to your next reward.
+            </p>
           </div>
           <div className="flex gap-2">
             <button
@@ -347,35 +544,67 @@ export default function MarketingTrackerPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-emerald-200">Summary so far for this trading period</p>
-                  <h2 className="text-lg font-semibold">{periodSummary.period.label}</h2>
-                  <p className="text-xs text-emerald-200">{periodSummary.period.label}</p>
+                  <p className="text-xs uppercase tracking-wide text-emerald-200">
+                    Summary so far for this trading period
+                  </p>
+                  <h2 className="text-lg font-semibold">
+                    {periodSummary.period.label}
+                  </h2>
+                  <p className="text-xs text-emerald-200">
+                    {periodSummary.period.label}
+                  </p>
                 </div>
-                <Button type="button" variant="secondary" onClick={() => setPeriodSummary(null)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setPeriodSummary(null)}
+                >
                   Hide
                 </Button>
               </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 text-sm">
+              <div className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                  <div className="text-xs uppercase tracking-wide text-emerald-200">Period sales</div>
-                  <div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.totalSales.toLocaleString()}</div>
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">
+                    Period sales
+                  </div>
+                  <div className="text-xl font-semibold text-white">
+                    KES {periodSummary.aggregates.totalSales.toLocaleString()}
+                  </div>
                 </div>
                 <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                  <div className="text-xs uppercase tracking-wide text-emerald-200">Total items</div>
-                  <div className="text-xl font-semibold text-white">{periodSummary.aggregates.totalItems.toLocaleString()}</div>
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">
+                    Total items
+                  </div>
+                  <div className="text-xl font-semibold text-white">
+                    {periodSummary.aggregates.totalItems.toLocaleString()}
+                  </div>
                 </div>
                 <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                  <div className="text-xs uppercase tracking-wide text-emerald-200">MPESA vs Cash</div>
-                  <div className="text-sm">MPESA KES {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}</div>
-                  <div className="text-sm">Cash KES {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}</div>
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">
+                    MPESA vs Cash
+                  </div>
+                  <div className="text-sm">
+                    MPESA KES{" "}
+                    {periodSummary.aggregates.paymentStats.totalSalesMpesa.toLocaleString()}
+                  </div>
+                  <div className="text-sm">
+                    Cash KES{" "}
+                    {periodSummary.aggregates.paymentStats.totalSalesCash.toLocaleString()}
+                  </div>
                 </div>
                 <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/30 p-3">
-                  <div className="text-xs uppercase tracking-wide text-emerald-200">Commission so far</div>
-                  <div className="text-xl font-semibold text-white">KES {periodSummary.aggregates.commission.commission.toLocaleString()}</div>
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">
+                    Commission so far
+                  </div>
+                  <div className="text-xl font-semibold text-white">
+                    KES{" "}
+                    {periodSummary.aggregates.commission.commission.toLocaleString()}
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-emerald-200">
-                This panel auto-hides after 5 minutes. Commission shown is cumulative for the current trading period.
+                This panel auto-hides after 5 minutes. Commission shown is
+                cumulative for the current trading period.
               </p>
             </div>
           </Card>
@@ -389,7 +618,9 @@ export default function MarketingTrackerPage() {
                 <Input
                   type="date"
                   value={form.date}
-                  onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, date: e.target.value }))
+                  }
                   className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
                 />
               </div>
@@ -398,7 +629,12 @@ export default function MarketingTrackerPage() {
               <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
               <select
                 value={form.dayOfWeek}
-                onChange={(e) => setForm((prev) => ({ ...prev, dayOfWeek: e.target.value as DayName }))}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    dayOfWeek: e.target.value as DayName,
+                  }))
+                }
                 className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
               >
                 {dayOptions.map((day) => (
@@ -411,7 +647,26 @@ export default function MarketingTrackerPage() {
           </div>
         </Card>
 
-        <ReceiptsEditor receipts={receipts} setReceipts={setReceipts} totals={totals} />
+        {/* SALES RECORDS + QUICK STATS ROW */}
+        <div className="grid gap-6 lg:grid-cols-12 items-start">
+          <div className="lg:col-span-8">
+            <ReceiptsEditor
+              receipts={receipts}
+              setReceipts={setReceipts}
+              totals={totals}
+            />
+          </div>
+          <div className="lg:col-span-4">
+            <StatsCard
+              periodLabel={periodLabel}
+              receipts={totalReceipts}
+              salesKes={totalSales}
+              items={totalItems}
+              commissionKes={commissionKes}
+              nextTarget={nextTarget}
+            />
+          </div>
+        </div>
 
         <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -435,7 +690,9 @@ export default function MarketingTrackerPage() {
                     <button
                       type="button"
                       key={f.key}
-                      onClick={() => updateField(f.key, !Boolean(form.fields[f.key]))}
+                      onClick={() =>
+                        updateField(f.key, !Boolean(form.fields[f.key]))
+                      }
                       className={pillClass(Boolean(form.fields[f.key]))}
                     >
                       {f.label}
@@ -446,14 +703,18 @@ export default function MarketingTrackerPage() {
             ))}
 
             {form.dayOfWeek === "Thursday" && (
-              <section className="mt-6 border border-red-500/30 rounded-xl p-4">
-                <h3 className="text-sm font-semibold mb-3">Weekly Marketing Activities (Thursday)</h3>
+              <section className="mt-6 rounded-xl border border-red-500/30 p-4">
+                <h3 className="mb-3 text-sm font-semibold">
+                  Weekly Marketing Activities (Thursday)
+                </h3>
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">Weekly meeting</label>
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Weekly meeting
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -480,8 +741,10 @@ export default function MarketingTrackerPage() {
 
                   <div className="flex items-center gap-3">
                     <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">Video shoot</label>
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Video shoot
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -508,16 +771,26 @@ export default function MarketingTrackerPage() {
 
                   <div className="flex items-center gap-3">
                     <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">Number of videos participated in (shooting)</label>
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Number of videos participated in (shooting)
+                      </label>
                       <div className="mt-2">
                         <Input
                           type="number"
                           min={0}
                           value={String(weeklyVideoCount)}
                           onChange={(e) => {
-                            const v = e.target.value === "" ? "" : Math.max(0, Number(e.target.value));
-                            setWeeklyVideoCount(v === "" ? "" : Number(v));
-                            updateField("weeklyVideoCount", v === "" ? "" : Number(v));
+                            const v =
+                              e.target.value === ""
+                                ? ""
+                                : Math.max(0, Number(e.target.value));
+                            setWeeklyVideoCount(
+                              v === "" ? "" : Number(v),
+                            );
+                            updateField(
+                              "weeklyVideoCount",
+                              v === "" ? "" : Number(v),
+                            );
                           }}
                           className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
                         />
@@ -530,11 +803,15 @@ export default function MarketingTrackerPage() {
 
             {(config.numericFields || []).length > 0 && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-200">Numeric checks</h3>
+                <h3 className="text-sm font-semibold text-slate-200">
+                  Numeric checks
+                </h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   {(config.numericFields || []).map((f) => (
                     <div key={f.key} className="space-y-2">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">{f.label}</label>
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        {f.label}
+                      </label>
                       <Input
                         type="number"
                         min={f.min}
@@ -554,7 +831,9 @@ export default function MarketingTrackerPage() {
                 <div className="grid gap-3">
                   {(config.textFields || []).map((f) => (
                     <div key={f.key} className="space-y-2">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">{f.label}</label>
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        {f.label}
+                      </label>
                       <Textarea
                         value={String(form.fields[f.key] ?? "")}
                         onChange={(e) => updateField(f.key, e.target.value)}
@@ -571,10 +850,20 @@ export default function MarketingTrackerPage() {
         </Card>
 
         <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
-          <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">
+          <Button
+            type="reset"
+            variant="secondary"
+            onClick={() => setForm(defaultFormState())}
+            className="px-5"
+          >
             Reset
           </Button>
-          <Button type="submit" variant="primary" className="px-5 bg-emerald-500 text-black hover:brightness-95" disabled={submitting}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="bg-emerald-500 px-5 text-black hover:brightness-95"
+            disabled={submitting}
+          >
             {submitting ? "Submitting..." : "Submit report"}
           </Button>
         </div>
