@@ -16,6 +16,20 @@ enum Role {
   ATTENDANT
 }
 
+enum PayFrequency {
+  MONTHLY
+  PERIOD
+}
+
+enum PayrollAdjustmentType {
+  CHAMA
+  LATENESS
+  DISCIPLINE
+  BONUS
+  COMMISSION_TOPUP
+  OTHER
+}
+
 enum AttendantCategory {
   DIRECT_SALES_OPS
   MARKETING_OPS
@@ -115,6 +129,9 @@ model User {
   dailyReports DailyReport[]
   // marketing tracker entries submitted by this user
   marketingEntries MarketingDailyEntry[]
+  // payroll relations
+  attendantCompPlan AttendantCompPlan?
+  attendantPayrollAdjustments AttendantPayrollAdjustment[]
 }
 
 model AttendantActivity {
@@ -132,6 +149,45 @@ model AttendantActivity {
 
   @@index([userId, entryDate])
   @@index([category, metric, entryDate])
+}
+
+model AttendantCompPlan {
+  id          String   @id @default(cuid())
+
+  attendantId String   @unique
+  attendant   User     @relation(fields: [attendantId], references: [id])
+
+  baseSalary        Int      // KES
+  frequency         PayFrequency @default(PERIOD)
+
+  defaultChamaDeduction     Int?  // per period
+  defaultOtherDeduction     Int?
+  defaultTransportAllowance Int?
+
+  isActive          Boolean @default(true)
+  notes             String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AttendantPayrollAdjustment {
+  id          String   @id @default(cuid())
+
+  attendantId String
+  attendant   User     @relation(fields: [attendantId], references: [id])
+
+  periodKey   String   // e.g. "2025-11-25_2025-12-24"
+  periodLabel String   // e.g. "Nov 25, 2025 – Dec 24, 2025"
+
+  adjustmentType PayrollAdjustmentType
+  label       String
+  amount      Int      // positive KES; sign is derived from type
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([attendantId, periodKey])
 }
 
 // Daily sales reports submitted by attendants

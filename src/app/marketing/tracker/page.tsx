@@ -16,6 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import type { EarningsSummary } from "@/lib/marketingEarnings";
 import { signOut } from "next-auth/react";
 
 type MarketingDailyFormState = {
@@ -192,6 +193,60 @@ function StatsCard({
   );
 }
 
+type EarningsCardProps = {
+  summary: EarningsSummary | null;
+};
+
+function EarningsCard({ summary }: EarningsCardProps) {
+  if (!summary) return null;
+
+  const rows = [
+    { label: "Base salary", type: "earning", amount: summary.baseSalary },
+    { label: "Commission", type: "earning", amount: summary.commission },
+    { label: "Transport allowance", type: "earning", amount: summary.transportAllowance },
+    { label: "Bonuses / extras", type: "earning", amount: summary.bonusTotal },
+    { label: "Chama", type: "deduction", amount: summary.chamaTotal },
+    { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
+    { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
+    { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
+  ].filter((row) => row.amount && row.amount !== 0);
+
+  return (
+    <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Earnings this period</h2>
+          <p className="text-xs text-slate-400">{summary.periodLabel}</p>
+        </div>
+        <div className="text-right text-xs">
+          <p className="text-slate-400 uppercase tracking-wide">Net pay</p>
+          <p className="text-xl font-semibold text-emerald-400">KES {summary.netPay.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2"
+          >
+            <span className="text-slate-300">{row.label}</span>
+            <span
+              className={
+                row.type === "earning"
+                  ? "font-semibold text-emerald-400"
+                  : "font-semibold text-rose-400"
+              }
+            >
+              {row.type === "deduction" ? "-" : ""}KES {row.amount.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ---------- Page component ---------- */
 
 export default function MarketingTrackerPage() {
@@ -242,6 +297,7 @@ export default function MarketingTrackerPage() {
       commission: { commission: number };
     };
   }>(null);
+  const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
 
   const config = useMemo(
     () =>
@@ -370,6 +426,40 @@ export default function MarketingTrackerPage() {
       controller.abort();
     };
   }, []);
+
+  // Poll earnings summary for the current attendant (used by EarningsCard)
+  useEffect(() => {
+    const POLL_INTERVAL_MS = 15_000;
+    const controller = new AbortController();
+
+    const fetchEarnings = async () => {
+      try {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+        const imp = impersonateIdFromWindow();
+        const url = imp
+          ? `/api/marketing/earnings/summary?impersonateId=${encodeURIComponent(imp)}`
+          : "/api/marketing/earnings/summary";
+        const res = await fetch(url, { credentials: "same-origin", signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        const next = data.summary ?? null;
+        // shallow compare by JSON to avoid unnecessary updates
+        const prevStr = JSON.stringify(earningsSummary ?? {});
+        const nextStr = JSON.stringify(next ?? {});
+        if (next && prevStr !== nextStr) setEarningsSummary(next);
+      } catch (err) {
+        // ignore network/abort errors
+      }
+    };
+
+    fetchEarnings();
+    const id = setInterval(fetchEarnings, POLL_INTERVAL_MS);
+    return () => {
+      clearInterval(id);
+      controller.abort();
+    };
+  }, [/* intentionally no deps to poll */]);
 
   const updateField = (key: string, value: boolean | number | string | null) => {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
@@ -818,7 +908,7 @@ export default function MarketingTrackerPage() {
               totals={totals}
             />
           </div>
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-4 space-y-4">
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
@@ -828,6 +918,7 @@ export default function MarketingTrackerPage() {
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />
+            <EarningsCard summary={earningsSummary} />
           </div>
         </div>
 
