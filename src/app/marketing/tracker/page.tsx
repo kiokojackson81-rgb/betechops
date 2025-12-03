@@ -579,24 +579,45 @@ export default function MarketingTrackerPage() {
         setWeeklyVideoCount("");
         const data = await res.json().catch(() => null);
         if (data?.periodSummary) {
-          setPeriodSummary({
-            period: {
-              key: "",
-              label: data.periodSummary.periodLabel,
-              start: "",
-              end: "",
-            },
-            aggregates: {
-              totalSales: data.periodSummary.periodSales,
-              totalItems: data.periodSummary.totalItems ?? 0,
-              paymentStats: {
-                totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
-                totalSalesCash: data.periodSummary.cashTotal ?? 0,
+          // Estimate receipt counts from today's summary if available so the
+          // Quick stats receipts counter updates immediately after submit.
+          const todayReceipts = data.todaySummary?.totalReceipts ?? 0;
+          const todayMpesa = data.todaySummary?.mpesaTotal ?? 0;
+          const todayCash = data.todaySummary?.cashTotal ?? 0;
+
+          const estCounts = (() => {
+            if (todayReceipts <= 0) return { countMpesaReceipts: 0, countCashReceipts: 0 };
+            if (todayCash <= 0 && todayMpesa > 0) return { countMpesaReceipts: todayReceipts, countCashReceipts: 0 };
+            if (todayMpesa <= 0 && todayCash > 0) return { countMpesaReceipts: 0, countCashReceipts: todayReceipts };
+            const mpesaShare = todayMpesa / (todayMpesa + todayCash);
+            const countMpesa = Math.round(mpesaShare * todayReceipts);
+            return { countMpesaReceipts: countMpesa, countCashReceipts: Math.max(0, todayReceipts - countMpesa) };
+          })();
+
+          setPeriodSummary((prev) => {
+            const prevMpesa = prev?.aggregates?.paymentStats?.countMpesaReceipts ?? 0;
+            const prevCash = prev?.aggregates?.paymentStats?.countCashReceipts ?? 0;
+            return {
+              period: {
+                key: "",
+                label: data.periodSummary.periodLabel,
+                start: "",
+                end: "",
               },
-              commission: {
-                commission: data.periodSummary.commission ?? 0,
+              aggregates: {
+                totalSales: data.periodSummary.periodSales,
+                totalItems: data.periodSummary.totalItems ?? 0,
+                paymentStats: {
+                  totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
+                  totalSalesCash: data.periodSummary.cashTotal ?? 0,
+                  countMpesaReceipts: prevMpesa + (estCounts.countMpesaReceipts ?? 0),
+                  countCashReceipts: prevCash + (estCounts.countCashReceipts ?? 0),
+                },
+                commission: {
+                  commission: data.periodSummary.commission ?? 0,
+                },
               },
-            },
+            };
           });
         }
       } else {
