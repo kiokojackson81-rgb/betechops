@@ -10,7 +10,6 @@ type PaymentMethod = "MPESA" | "CASH";
 type ProductRow = {
   id: string;
   name: string;
-  buyingPrice: number | "";
 };
 
 type ReceiptRow = {
@@ -31,7 +30,6 @@ function createEmptyProduct(): ProductRow {
   return {
     id: crypto.randomUUID(),
     name: "",
-    buyingPrice: "",
   };
 }
 
@@ -509,38 +507,27 @@ function SalesReceiptsCard(props: SalesReceiptsCardProps) {
               </p>
               <div className="space-y-2">
                 {receipt.products.map((p) => (
-                  <div
-                    key={p.id}
-                    className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto] gap-2"
-                  >
-                    <input
-                      type="text"
-                      placeholder="Product name"
-                      value={p.name}
-                      onChange={(e) => updateProduct(receipt.id, p.id, { name: e.target.value })}
-                      className={inputClasses}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Buying price (KES)"
-                      value={p.buyingPrice}
-                      onChange={(e) =>
-                        updateProduct(receipt.id, p.id, {
-                          buyingPrice: Number(e.target.value || 0),
-                        })
-                      }
-                      className={inputClasses}
-                    />
-                    {receipt.products.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeProductFromReceipt(receipt.id, p.id)}
-                        className="text-xs text-slate-400 hover:text-red-400"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                    <div
+                      key={p.id}
+                      className="flex flex-col gap-2 md:grid md:grid-cols-[minmax(0,2fr)_auto] md:items-start"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Product name"
+                        value={p.name}
+                        onChange={(e) => updateProduct(receipt.id, p.id, { name: e.target.value })}
+                        className={inputClasses}
+                      />
+                      {receipt.products.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeProductFromReceipt(receipt.id, p.id)}
+                          className="text-xs text-slate-400 hover:text-red-400 self-end"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                 ))}
               </div>
               <button

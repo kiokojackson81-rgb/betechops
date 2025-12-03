@@ -238,6 +238,7 @@ model DailySale {
   createdAt     DateTime @default(now())
 
   dailyReport   DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+  marketingSales MarketingSale[]
 
   @@index([dailyReportId])
 }
@@ -299,8 +300,11 @@ model MarketingSale {
   paymentMethod PaymentMethod
   itemsCount    Int              @default(1)
   createdAt     DateTime         @default(now())
+  dailySaleId   String?
+  dailySale     DailySale?       @relation(fields: [dailySaleId], references: [id])
 
   @@index([entryId])
+  @@index([dailySaleId])
 }
 
 model MarketingReceipt {

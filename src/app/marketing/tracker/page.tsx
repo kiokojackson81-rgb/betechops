@@ -34,6 +34,18 @@ type ReceiptRow = {
   items: ReceiptItem[];
 };
 
+type UnpricedSale = {
+  id: string;
+  saleDate: string;
+  day: string | null;
+  productName: string;
+  sellingPrice: number;
+  paymentMethod: "MPESA" | "CASH" | null;
+  receiptNumber: string;
+  attendantName: string;
+  attendantEmail: string | null;
+};
+
 const dayOptions: DayName[] = [
   "Monday",
   "Tuesday",
@@ -298,6 +310,9 @@ export default function MarketingTrackerPage() {
     };
   }>(null);
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
+  const [unpricedSales, setUnpricedSales] = useState<UnpricedSale[]>([]);
+  const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const config = useMemo(
     () =>
@@ -327,6 +342,67 @@ export default function MarketingTrackerPage() {
 
   const router = useRouter();
 
+  const handleSetBuyingDraft = (saleId: string, value: string) => {
+    setBuyingDrafts((prev) => ({ ...prev, [saleId]: value }));
+  };
+
+  const handleSubmitBuyingPrice = async (sale: UnpricedSale) => {
+    const rawValue = buyingDrafts[sale.id] ?? "";
+    const parsedValue = Number(rawValue);
+    if (!rawValue || Number.isNaN(parsedValue) || parsedValue <= 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+    const buyingPrice = Math.round(parsedValue);
+
+    try {
+      const res = await fetch("/api/marketing/price-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dailySaleId: sale.id,
+          buyingPrice,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        showToast(err?.error || "Failed to save buying price", "error");
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      showToast("Buying price saved", "success");
+      setUnpricedSales((prev) => prev.filter((row) => row.id !== sale.id));
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[sale.id];
+        return next;
+      });
+      if (data?.saleValue) {
+        const methodKey =
+          sale.paymentMethod === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
+        setServerPeriodSummary((prev) => {
+          if (!prev) return prev;
+          const updatedPaymentStats = {
+            ...prev.aggregates.paymentStats,
+            [methodKey]:
+              (prev.aggregates.paymentStats[methodKey] ?? 0) + data.saleValue,
+          };
+          return {
+            ...prev,
+            aggregates: {
+              ...prev.aggregates,
+              totalSales: prev.aggregates.totalSales + data.saleValue,
+              totalItems: prev.aggregates.totalItems + 1,
+              paymentStats: updatedPaymentStats,
+            },
+          };
+        });
+      }
+    } catch (err) {
+      showToast("Failed to save buying price", "error");
+    }
+  };
+
   // auth guard
   useEffect(() => {
     (async () => {
@@ -346,6 +422,7 @@ export default function MarketingTrackerPage() {
           router.replace("/attendant/login");
           return;
         }
+        setCurrentUserEmail(user.email?.toLowerCase() ?? null);
         const role = user.role as string | undefined;
         const category = user.attendantCategory as string | undefined;
         if (role === "ADMIN") return;
@@ -460,6 +537,38 @@ export default function MarketingTrackerPage() {
       controller.abort();
     };
   }, [/* intentionally no deps to poll */]);
+
+  useEffect(() => {
+    const POLL_INTERVAL_MS = 20_000;
+    if (!currentUserEmail || currentUserEmail !== "jeniffer@betech.co.ke") {
+      setUnpricedSales([]);
+      return;
+    }
+    const controller = new AbortController();
+
+    const fetchUnpricedSales = async () => {
+      try {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+        const res = await fetch("/api/marketing/unpriced-sales", {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data?.sales) return;
+        setUnpricedSales(data.sales);
+      } catch {
+        // ignore expected aborts/errors
+      }
+    };
+
+    fetchUnpricedSales();
+    const id = setInterval(fetchUnpricedSales, POLL_INTERVAL_MS);
+    return () => {
+      clearInterval(id);
+      controller.abort();
+    };
+  }, [currentUserEmail]);
 
   const updateField = (key: string, value: boolean | number | string | null) => {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
@@ -919,6 +1028,70 @@ export default function MarketingTrackerPage() {
               nextTarget={nextTarget}
             />
             <EarningsCard summary={earningsSummary} />
+            {currentUserEmail === "jeniffer@betech.co.ke" && (
+              <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Sales needing buying price
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Attach buying price to attendants’ sales to earn commission.
+                    </p>
+                  </div>
+                </div>
+
+                {unpricedSales.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    No pending sales. All sales in this period have buying prices.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {unpricedSales.map((sale) => (
+                      <div
+                        key={sale.id}
+                        className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
+                      >
+                        <div className="flex justify-between gap-2">
+                          <span className="font-semibold text-slate-100">
+                            {sale.productName}
+                          </span>
+                          <span className="text-slate-400">
+                            KES {sale.sellingPrice.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2 text-[11px] text-slate-400">
+                          <span>{sale.attendantName}</span>
+                          <span>
+                            #{sale.receiptNumber || "No receipt"} ·{" "}
+                            {sale.paymentMethod || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Buying price"
+                            value={buyingDrafts[sale.id] ?? ""}
+                            onChange={(e) =>
+                              handleSetBuyingDraft(sale.id, e.target.value)
+                            }
+                            className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSubmitBuyingPrice(sale)}
+                            className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
         </div>
 
