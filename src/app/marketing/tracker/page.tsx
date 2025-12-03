@@ -377,12 +377,45 @@ export default function MarketingTrackerPage() {
           )),
       0,
     );
-    const totalItems = receipts.reduce((sum, r) => sum + r.items.length, 0);
-    return { totalSales, totalProfit, totalItems };
+    // Count only "filled" items (product name or a buying price) so the
+    // items counter updates as the attendant types product names/prices.
+    const totalItems = receipts.reduce((sum, r) => {
+      const filled = r.items.filter((it) => {
+        const nameFilled = typeof it.productName === "string" && it.productName.trim() !== "";
+        const priceFilled =
+          typeof it.buyingPrice === "number"
+            ? it.buyingPrice > 0
+            : Number(it.buyingPrice || 0) > 0;
+        return nameFilled || priceFilled;
+      }).length;
+      return sum + filled;
+    }, 0);
+
+    // Count only "filled" receipts (sellingTotal > 0, any filled item, or
+    // a non-empty receipt number) so the receipts counter updates while
+    // typing, similar to total sales.
+    const filledReceiptsCount = receipts.reduce((count, r) => {
+      const hasSelling =
+        typeof r.sellingTotal === "number"
+          ? r.sellingTotal > 0
+          : Number(r.sellingTotal || 0) > 0;
+      const hasItems = r.items.some((it) => {
+        const nameFilled = typeof it.productName === "string" && it.productName.trim() !== "";
+        const priceFilled =
+          typeof it.buyingPrice === "number"
+            ? it.buyingPrice > 0
+            : Number(it.buyingPrice || 0) > 0;
+        return nameFilled || priceFilled;
+      });
+      const hasReceiptNumber = (r.receiptNumber ?? "").trim() !== "";
+      return count + (hasSelling || hasItems || hasReceiptNumber ? 1 : 0);
+    }, 0);
+
+    return { totalSales, totalProfit, totalItems, filledReceiptsCount };
   }, [receipts]);
 
   // derived stats for the Quick stats card
-  const totalReceipts = receipts.length;
+  const totalReceipts = (totals as any).filledReceiptsCount ?? receipts.length;
   const totalSales = totals.totalSales;
   const totalItems = totals.totalItems;
   // Combine server-side period totals (if any) with the unsaved local receipts
@@ -579,24 +612,9 @@ export default function MarketingTrackerPage() {
         setWeeklyVideoCount("");
         const data = await res.json().catch(() => null);
         if (data?.periodSummary) {
-          // Estimate receipt counts from today's summary if available so the
-          // Quick stats receipts counter updates immediately after submit.
-          const todayReceipts = data.todaySummary?.totalReceipts ?? 0;
-          const todayMpesa = data.todaySummary?.mpesaTotal ?? 0;
-          const todayCash = data.todaySummary?.cashTotal ?? 0;
-
-          const estCounts = (() => {
-            if (todayReceipts <= 0) return { countMpesaReceipts: 0, countCashReceipts: 0 };
-            if (todayCash <= 0 && todayMpesa > 0) return { countMpesaReceipts: todayReceipts, countCashReceipts: 0 };
-            if (todayMpesa <= 0 && todayCash > 0) return { countMpesaReceipts: 0, countCashReceipts: todayReceipts };
-            const mpesaShare = todayMpesa / (todayMpesa + todayCash);
-            const countMpesa = Math.round(mpesaShare * todayReceipts);
-            return { countMpesaReceipts: countMpesa, countCashReceipts: Math.max(0, todayReceipts - countMpesa) };
-          })();
-
-          setPeriodSummary((prev) => {
-            const prevMpesa = prev?.aggregates?.paymentStats?.countMpesaReceipts ?? 0;
-            const prevCash = prev?.aggregates?.paymentStats?.countCashReceipts ?? 0;
+          // Use authoritative receipt counts returned by the server so Quick
+          // stats show exact MPESA/CASH/total receipts immediately after submit.
+          setPeriodSummary(() => {
             return {
               period: {
                 key: "",
@@ -605,13 +623,13 @@ export default function MarketingTrackerPage() {
                 end: "",
               },
               aggregates: {
-                totalSales: data.periodSummary.periodSales,
+                totalSales: data.periodSummary.periodSales ?? 0,
                 totalItems: data.periodSummary.totalItems ?? 0,
                 paymentStats: {
                   totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
                   totalSalesCash: data.periodSummary.cashTotal ?? 0,
-                  countMpesaReceipts: prevMpesa + (estCounts.countMpesaReceipts ?? 0),
-                  countCashReceipts: prevCash + (estCounts.countCashReceipts ?? 0),
+                  countMpesaReceipts: data.periodSummary.countMpesaReceipts ?? 0,
+                  countCashReceipts: data.periodSummary.countCashReceipts ?? 0,
                 },
                 commission: {
                   commission: data.periodSummary.commission ?? 0,

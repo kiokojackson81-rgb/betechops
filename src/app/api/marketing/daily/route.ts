@@ -239,6 +239,15 @@ export async function POST(req: Request) {
       (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").reduce((s, r) => s + r.sellingTotal, 0),
       0
     );
+    const periodMpesaCount = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "MPESA").length,
+      0
+    );
+    const periodCashCount = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").length,
+      0
+    );
+    const periodTotalReceipts = periodEntries.reduce((sum, e) => sum + e.receipts.length, 0);
     const commission = getCommissionSummaryForSales(periodSales);
 
     const periodSummary: any = {
@@ -246,6 +255,9 @@ export async function POST(req: Request) {
       periodSales,
       mpesaTotal: periodMpesa,
       cashTotal: periodCash,
+      countMpesaReceipts: periodMpesaCount,
+      countCashReceipts: periodCashCount,
+      totalReceipts: periodTotalReceipts,
       totalItems: periodItems,
       commission: commission.commission,
       nextTarget: commission.nextTarget,
