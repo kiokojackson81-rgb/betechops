@@ -22,7 +22,8 @@ export async function POST(req: Request) {
     if (!before) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
     // delete items, receipts, then entry
-    await prisma.marketingReceiptItem.deleteMany({ where: { receipt: { dailyEntryId: entryId } } });
+    // Use relation filter to target items whose receipt belongs to this entry
+    await prisma.marketingReceiptItem.deleteMany({ where: { receipt: { is: { dailyEntryId: entryId } } } });
     await prisma.marketingReceipt.deleteMany({ where: { dailyEntryId: entryId } });
     await prisma.marketingDailyEntry.delete({ where: { id: entryId } });
 
