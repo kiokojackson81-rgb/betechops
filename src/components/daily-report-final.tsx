@@ -123,20 +123,6 @@ export default function DailyReportFinal() {
 
   const tradingPeriod = getTradingPeriodFor(new Date(date));
   const tradingPeriodLabel = tradingPeriod?.label;
-  const serverStats = serverQuickStats;
-  const displayedSalesKes = (serverStats?.totalSales ?? 0) + totalSales;
-  const displayedItems = (serverStats?.totalItems ?? 0) + totalItems;
-  const displayedReceipts = (serverStats?.totalReceipts ?? 0) + totalReceipts;
-  const displayedNewProducts =
-    (serverStats?.totalNewProducts ?? 0) + Number(productsUploaded || 0);
-  const displayedEditedProducts =
-    (serverStats?.totalEditedProducts ?? 0) + Number(productsEdited || 0);
-  const displayedCopiedProducts =
-    (serverStats?.totalCopiedProducts ?? 0) + Number(productsCopied || 0);
-  const displayedWalkInsServed =
-    (serverStats?.walkInsServed ?? 0) + Number(walkinsServed || 0);
-  const displayedWalkInsPurchased =
-    (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -211,6 +197,21 @@ export default function DailyReportFinal() {
   const totalCopiedProducts = Number(productsCopied || 0);
   const totalWalkinsServed = Number(walkinsServed || 0);
   const totalWalkinsPurchased = Number(walkinsPurchased || 0);
+
+  const serverStats = serverQuickStats;
+  const displayedSalesKes = (serverStats?.totalSales ?? 0) + totalSales;
+  const displayedItems = (serverStats?.totalItems ?? 0) + totalItems;
+  const displayedReceipts = (serverStats?.totalReceipts ?? 0) + totalReceipts;
+  const displayedNewProducts =
+    (serverStats?.totalNewProducts ?? 0) + Number(productsUploaded || 0);
+  const displayedEditedProducts =
+    (serverStats?.totalEditedProducts ?? 0) + Number(productsEdited || 0);
+  const displayedCopiedProducts =
+    (serverStats?.totalCopiedProducts ?? 0) + Number(productsCopied || 0);
+  const displayedWalkInsServed =
+    (serverStats?.walkInsServed ?? 0) + Number(walkinsServed || 0);
+  const displayedWalkInsPurchased =
+    (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
 
   const updateReceipt = (id: string, updates: Partial<ReceiptRow>) =>
     setReceipts((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
