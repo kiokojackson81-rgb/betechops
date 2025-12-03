@@ -9,7 +9,7 @@ import type {
   PaymentMethod,
 } from "@prisma/client";
 import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
-import { COMMISSION_LADDER } from "./commission";
+import { COMMISSION_LADDER } from "./commissionCommon";
 import { getCommissionSummaryForSales } from "./marketingCommission";
 
 export type MarketingSummaryDay = {

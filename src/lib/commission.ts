@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { COMMISSION_LADDER, calculateCumulativeCommission } from "./commissionCommon";
 
 export type CommissionBreakdown = {
   periodKey: string;
@@ -113,28 +114,5 @@ export function computeProductCommissions(args: {
 }
 
 // Commission ladder used by reporting code to compute progress and cumulative rewards.
-export const COMMISSION_LADDER: { min: number; reward: number }[] = [
-  { min: 1_000_000, reward: 10_000 },
-  { min: 2_000_000, reward: 15_000 },
-  { min: 3_000_000, reward: 20_000 },
-  { min: 4_000_000, reward: 20_000 },
-  { min: 5_000_000, reward: 20_000 },
-  { min: 6_000_000, reward: 20_000 },
-  { min: 7_000_000, reward: 20_000 },
-  { min: 8_000_000, reward: 20_000 },
-  { min: 9_000_000, reward: 20_000 },
-  { min: 10_000_000, reward: 20_000 },
-];
-
-// Calculate cumulative commission based on the ladder.
-export function calculateCumulativeCommission(totalSales: number) {
-  const tiersReached = COMMISSION_LADDER.filter((t) => t.min <= totalSales);
-  const commission = tiersReached.reduce((sum, t) => sum + t.reward, 0);
-  const nextTier = COMMISSION_LADDER.find((t) => t.min > totalSales) || null;
-  return {
-    commission,
-    tiersReached: tiersReached.map((t) => `${t.min}`),
-    nextTarget: nextTier?.min ?? null,
-    nextTierReward: nextTier?.reward ?? null,
-  };
-}
+// Re-export pure helpers from the server-safe common module.
+export { COMMISSION_LADDER, calculateCumulativeCommission };

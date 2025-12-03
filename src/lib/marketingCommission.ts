@@ -1,4 +1,4 @@
-import { calculateCumulativeCommission } from "./commission";
+import { calculateCumulativeCommission } from "./commissionCommon";
 
 export type CommissionSummary = {
   commission: number;

@@ -1,4 +1,4 @@
-import { calculateCumulativeCommission } from "@/lib/commission";
+import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 
 test("commission ladder basic checks", () => {
   expect(calculateCumulativeCommission(900_000).commission).toBe(0);
