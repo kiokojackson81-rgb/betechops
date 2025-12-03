@@ -337,8 +337,9 @@ export default function MarketingTrackerPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <form onSubmit={handleSubmit} className="mx-auto max-w-6xl p-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-8 space-y-6">
+        {/* SALES RECORDS + QUICK STATS ON ONE ROW */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+          <section className="lg:col-span-8 space-y-6">
             <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
@@ -591,8 +592,9 @@ export default function MarketingTrackerPage() {
                 {submitting ? "Submitting..." : "Submit report"}
               </Button>
             </div>
-          </div>
-          <div className="lg:col-span-4 space-y-6">
+          </section>
+
+          <div className="lg:col-span-4">
             <StatsCard
               periodLabel={periodSummary?.period.label ?? tradingPeriodLabel ?? "Nov 25, 2025 — Dec 24, 2025"}
               receipts={receipts.length}
