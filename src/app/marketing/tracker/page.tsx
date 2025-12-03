@@ -6,6 +6,8 @@ import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
+import StatsCard from "@/components/StatsCard";
+import { calculateCumulativeCommission } from "@/lib/commission";
 import { showToast } from "@/lib/ui/toast";
 import { DayName, marketingDayConfigs, marketingFieldKeys, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 import { useRouter } from "next/navigation";
@@ -159,6 +161,11 @@ export default function MarketingTrackerPage() {
     const totalItems = receipts.reduce((sum, r) => sum + r.items.length, 0);
     return { totalSales, totalProfit, totalItems };
   }, [receipts]);
+
+  const commissionInfo = useMemo(
+    () => calculateCumulativeCommission(totals.totalSales),
+    [totals.totalSales]
+  );
 
   const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
     setReceipts((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -325,22 +332,24 @@ export default function MarketingTrackerPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <form onSubmit={handleSubmit} className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
-            <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Log out
-            </button>
-          </div>
-        </header>
+      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl p-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-8 space-y-6">
+            <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+                <p className="text-sm text-slate-300">Every task you complete brings you closer to your next reward.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+                  className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Log out
+                </button>
+              </div>
+            </header>
 
         {periodSummary && (
           <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
@@ -570,13 +579,25 @@ export default function MarketingTrackerPage() {
           </div>
         </Card>
 
-        <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
-          <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">
-            Reset
-          </Button>
-          <Button type="submit" variant="primary" className="px-5 bg-emerald-500 text-black hover:brightness-95" disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit report"}
-          </Button>
+            <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
+              <Button type="reset" variant="secondary" onClick={() => setForm(defaultFormState())} className="px-5">
+                Reset
+              </Button>
+              <Button type="submit" variant="primary" className="px-5 bg-emerald-500 text-black hover:brightness-95" disabled={submitting}>
+                {submitting ? "Submitting..." : "Submit report"}
+              </Button>
+            </div>
+          </div>
+          <div className="lg:col-span-4 space-y-6">
+            <StatsCard
+              periodLabel={periodSummary?.period.label ?? tradingPeriodLabel ?? "Nov 25, 2025 — Dec 24, 2025"}
+              receipts={receipts.length}
+              salesKes={totals.totalSales}
+              items={totals.totalItems}
+              commissionKes={commissionInfo.commission}
+              nextTarget={commissionInfo.nextTarget ?? 0}
+            />
+          </div>
         </div>
       </form>
     </div>
