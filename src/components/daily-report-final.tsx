@@ -4,6 +4,8 @@ import { signOut } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import EarningsCard from "@/app/_components/EarningsCard";
+import type { EarningsSummary } from "@/lib/earningsSummary";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -117,25 +119,38 @@ export default function DailyReportFinal() {
     walkInsPurchased: number;
     totalReceipts: number;
   }>(null);
+  const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
   // TODO: when fetching trading-period data, call setCommissionForPeriod(data.commissionForPeriod ?? 0)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
 
   const tradingPeriod = getTradingPeriodFor(new Date(date));
   const tradingPeriodLabel = tradingPeriod?.label;
+  const tradingPeriodKey = tradingPeriod?.key;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setImpersonateId(params.get("impersonateId"));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-    async function loadCommission() {
+    async function loadEarnings() {
       try {
-        const res = await fetch("/api/attendant/commission", {
+        const basePath = "/api/attendant/earnings/summary";
+        const url = impersonateId ? `${basePath}?impersonateId=${encodeURIComponent(impersonateId)}` : basePath;
+        const res = await fetch(url, {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
+          credentials: "same-origin",
         });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data) return;
+        setEarningsSummary(data);
         setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
         setServerQuickStats({
           totalSales: Number(data.totalSales ?? 0),
@@ -149,35 +164,14 @@ export default function DailyReportFinal() {
         });
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        console.error("Failed to load commission summary", err);
+        console.error("Failed to load earnings summary", err);
       }
     }
-    loadCommission();
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    async function loadCommission() {
-      try {
-        const res = await fetch("/api/attendant/commission", {
-          method: "GET",
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const data = await res.json().catch(() => null);
-        if (!data) return;
-        const value = Number(data.grossCommission ?? 0);
-        setCommissionForPeriod(Math.round(value));
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        console.error("Failed to load commission summary", err);
-      }
+    if (tradingPeriodKey) {
+      loadEarnings();
     }
-    loadCommission();
     return () => controller.abort();
-  }, []);
+  }, [impersonateId, tradingPeriodKey]);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     const totalReceipts = receipts.length;
@@ -459,9 +453,10 @@ export default function DailyReportFinal() {
             copiedProducts={displayedCopiedProducts}
             walkInsServed={displayedWalkInsServed}
             walkInsPurchased={displayedWalkInsPurchased}
-            commissionKes={commissionForPeriod}
+            commissionKes={earningsSummary?.grossCommission ?? commissionForPeriod}
             tradingPeriodLabel={tradingPeriodLabel}
           />
+          <EarningsCard summary={earningsSummary} />
         </div>
       </div>
     </div>
