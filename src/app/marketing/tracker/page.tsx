@@ -15,6 +15,7 @@ import {
 } from "@/lib/marketingDayConfigs";
 import { useRouter } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { signOut } from "next-auth/react";
 
 type MarketingDailyFormState = {
@@ -108,7 +109,8 @@ type StatsCardProps = {
   salesKes: number;
   items: number;
   commissionKes: number;
-  nextTarget: number;
+  currentSalesForTier: number;
+  nextTarget: number | null;
 };
 
 function StatsCard({
@@ -117,11 +119,20 @@ function StatsCard({
   salesKes,
   items,
   commissionKes,
+  currentSalesForTier,
   nextTarget,
 }: StatsCardProps) {
-  const remaining = Math.max(nextTarget - salesKes, 0);
+  const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
+
+  const remaining =
+    hasNextTier && nextTarget! > currentSalesForTier
+      ? nextTarget! - currentSalesForTier
+      : 0;
+
   const progress =
-    nextTarget > 0 ? Math.min((salesKes / nextTarget) * 100, 100) : 0;
+    hasNextTier && nextTarget!
+      ? Math.min((currentSalesForTier / nextTarget!) * 100, 100)
+      : 100;
 
   return (
     <Card className="h-full border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -163,10 +174,10 @@ function StatsCard({
       </div>
 
       {/* Progress toward next tier */}
-      <div className="mt-6 space-y-2">
+        <div className="mt-6 space-y-2">
         <p className="text-xs uppercase tracking-wide text-slate-400">To next tier</p>
         <p className="text-xs sm:text-sm text-slate-200">
-          {remaining > 0
+          {hasNextTier && remaining > 0
             ? `KES ${remaining.toLocaleString()} more to hit next tier`
             : "You’ve reached the top tier for this period 🎉"}
         </p>
@@ -308,8 +319,17 @@ export default function MarketingTrackerPage() {
   const totalReceipts = receipts.length;
   const totalSales = totals.totalSales;
   const totalItems = totals.totalItems;
-  const commissionKes = 0; // daily commission placeholder
-  const nextTarget = 1_000_000; // example tier target
+  // For commission, prefer the period-level aggregate from periodSummary
+  const periodSalesForCommission =
+    periodSummary?.aggregates?.totalSales ?? totalSales;
+
+  const commissionSummary = useMemo(
+    () => getCommissionSummaryForSales(periodSalesForCommission),
+    [periodSalesForCommission],
+  );
+
+  const commissionKes = commissionSummary.commission;
+  const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
     periodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
 
@@ -663,6 +683,7 @@ export default function MarketingTrackerPage() {
               salesKes={totalSales}
               items={totalItems}
               commissionKes={commissionKes}
+              currentSalesForTier={periodSalesForCommission}
               nextTarget={nextTarget}
             />
           </div>

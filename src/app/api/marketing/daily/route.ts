@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, getActorId } from "@/lib/api";
 import { marketingDayConfigs, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { calculateCumulativeCommission } from "@/lib/commission";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { z } from "zod";
 
 const ReceiptItemSchema = z.object({
@@ -239,7 +239,7 @@ export async function POST(req: Request) {
       (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").reduce((s, r) => s + r.sellingTotal, 0),
       0
     );
-    const commission = calculateCumulativeCommission(periodSales);
+    const commission = getCommissionSummaryForSales(periodSales);
 
     const periodSummary: any = {
       periodLabel: period.label,

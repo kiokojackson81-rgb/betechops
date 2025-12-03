@@ -9,8 +9,8 @@ import type {
   PaymentMethod,
 } from "@prisma/client";
 import { getRecentTradingPeriods, getTradingPeriodFor, TradingPeriod } from "./tradingPeriod";
-import { calculateCumulativeCommission } from "./commission";
 import { COMMISSION_LADDER } from "./commission";
+import { getCommissionSummaryForSales } from "./marketingCommission";
 
 export type MarketingSummaryDay = {
   date: string; // 'YYYY-MM-DD'
@@ -354,7 +354,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
           (entries.filter((e) => coreTasks.every((key) => Boolean((e as any)[key]))).length / totalDaysLogged) * 100
         );
 
-  const commission = calculateCumulativeCommission(totalSales);
+  const commission = getCommissionSummaryForSales(totalSales);
 
   return {
     entries,
@@ -496,7 +496,7 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
 
   const days = Object.values(daysMap).sort((a, b) => a.date.localeCompare(b.date));
 
-  const commissionInfo = calculateCumulativeCommission(totalSales);
+  const commissionInfo = getCommissionSummaryForSales(totalSales);
 
   // compute progress to next tier
   const nextTarget = commissionInfo.nextTarget;

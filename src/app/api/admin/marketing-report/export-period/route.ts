@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
-import { calculateCumulativeCommission } from "@/lib/commission";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { requireRole } from "@/lib/api";
 
 const toNumber = (v: unknown) => {
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
 
   const periodSales = entries.reduce((sum, e) => sum + toNumber(e.totalSales), 0);
   const periodProfit = entries.reduce((sum, e) => sum + toNumber(e.totalProfit), 0);
-  const commission = calculateCumulativeCommission(periodSales);
+  const commission = getCommissionSummaryForSales(periodSales);
 
   rows.push(["TOTAL", "", periodSales, periodProfit, mpesaTotal, cashTotal, itemsTotal].join(","));
   rows.push(["COMMISSION", "", commission.commission, "", "", "", ""].join(","));
