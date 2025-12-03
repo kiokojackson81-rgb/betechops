@@ -65,8 +65,13 @@ export default function ClientAdminMarketingReport({
 
   const isActiveDay = (dayLabel: string) => (dayLabel === "All days" ? !dow : dow === dayLabel);
 
+  // Maintain a local copy of entries for optimistic updates. Sync from server only
+  // when filters or the selected period change to avoid clobbering optimistic removals
+  // triggered by the user.
   const [entriesState, setEntriesState] = useState<MarketingReportEntry[]>(entries);
-  useEffect(() => setEntriesState(entries), [entries]);
+  useEffect(() => {
+    setEntriesState(entries);
+  }, [selectedPeriodKey, dateStr, userFilter, dow]);
 
   const entriesList = entriesState;
   const hasEntries = entriesList.length > 0;
