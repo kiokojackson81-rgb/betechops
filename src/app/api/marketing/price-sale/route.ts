@@ -12,7 +12,7 @@ type PriceSalePayload = {
 };
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions as any);
+  const session = (await getServerSession(authOptions as any)) as any;
   const email = session?.user?.email?.toLowerCase();
   const role = (session?.user as { role?: string })?.role;
   if (!email) {

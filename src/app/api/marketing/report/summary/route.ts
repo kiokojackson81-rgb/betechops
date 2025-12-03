@@ -17,8 +17,20 @@ export async function GET(req: Request) {
 
   const { aggregates } = await getMarketingReport({ tradingPeriodKey: period.key });
 
+  // `period` can be the TradingPeriod from `tradingPeriod.ts` (has `start`/`end`)
+  // or the one from `marketingPeriod.ts` (has `startDate`/`endDate`). Normalize here.
+  let startDate: Date;
+  let endDate: Date;
+  if ("start" in period && "end" in period) {
+    startDate = (period as any).start;
+    endDate = (period as any).end;
+  } else {
+    startDate = (period as any).startDate;
+    endDate = (period as any).endDate;
+  }
+
   return NextResponse.json({
-    period: { key: period.key, label: period.label, start: period.start.toISOString(), end: period.end.toISOString() },
+    period: { key: period.key, label: period.label, start: startDate.toISOString(), end: endDate.toISOString() },
     aggregates: {
       totalSales: aggregates.totalSales,
       totalItems: aggregates.totalItems,
