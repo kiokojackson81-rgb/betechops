@@ -311,7 +311,7 @@ export default function DailyReportFinal() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-6 self-start">
           <SalesReceiptsCard
             receipts={receipts}
             updateReceipt={updateReceipt}
@@ -372,7 +372,7 @@ export default function DailyReportFinal() {
           </div>
         </div>
 
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6 self-start">
           <QuickStats
             receipts={totalReceipts}
             salesKes={totalSales}
