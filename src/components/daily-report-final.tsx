@@ -107,12 +107,68 @@ export default function DailyReportFinal() {
     weeklySummary: "",
   });
   const [commissionForPeriod, setCommissionForPeriod] = useState(0);
+  const [serverQuickStats, setServerQuickStats] = useState<null | {
+    totalSales: number;
+    totalItems: number;
+    totalNewProducts: number;
+    totalEditedProducts: number;
+    totalCopiedProducts: number;
+    walkInsServed: number;
+    walkInsPurchased: number;
+    totalReceipts: number;
+  }>(null);
   // TODO: when fetching trading-period data, call setCommissionForPeriod(data.commissionForPeriod ?? 0)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
 
   const tradingPeriod = getTradingPeriodFor(new Date(date));
   const tradingPeriodLabel = tradingPeriod?.label;
+  const serverStats = serverQuickStats;
+  const displayedSalesKes = (serverStats?.totalSales ?? 0) + totalSales;
+  const displayedItems = (serverStats?.totalItems ?? 0) + totalItems;
+  const displayedReceipts = (serverStats?.totalReceipts ?? 0) + totalReceipts;
+  const displayedNewProducts =
+    (serverStats?.totalNewProducts ?? 0) + Number(productsUploaded || 0);
+  const displayedEditedProducts =
+    (serverStats?.totalEditedProducts ?? 0) + Number(productsEdited || 0);
+  const displayedCopiedProducts =
+    (serverStats?.totalCopiedProducts ?? 0) + Number(productsCopied || 0);
+  const displayedWalkInsServed =
+    (serverStats?.walkInsServed ?? 0) + Number(walkinsServed || 0);
+  const displayedWalkInsPurchased =
+    (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadCommission() {
+      try {
+        const res = await fetch("/api/attendant/commission", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
+        setServerQuickStats({
+          totalSales: Number(data.totalSales ?? 0),
+          totalItems: Number(data.totalItems ?? 0),
+          totalNewProducts: Number(data.totalNewProducts ?? 0),
+          totalEditedProducts: Number(data.totalEditedProducts ?? 0),
+          totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
+          walkInsServed: Number(data.walkInsServed ?? 0),
+          walkInsPurchased: Number(data.walkInsPurchased ?? 0),
+          totalReceipts: Number(data.totalReceipts ?? 0),
+        });
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        console.error("Failed to load commission summary", err);
+      }
+    }
+    loadCommission();
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -395,13 +451,13 @@ export default function DailyReportFinal() {
 
         <div className="lg:col-span-4 space-y-6">
           <QuickStats
-            receipts={totalReceipts}
-            salesKes={totalSales}
-            newProducts={totalNewProducts}
-            editedProducts={totalEditedProducts}
-            copiedProducts={totalCopiedProducts}
-            walkInsServed={totalWalkinsServed}
-            walkInsPurchased={totalWalkinsPurchased}
+            receipts={displayedReceipts}
+            salesKes={displayedSalesKes}
+            newProducts={displayedNewProducts}
+            editedProducts={displayedEditedProducts}
+            copiedProducts={displayedCopiedProducts}
+            walkInsServed={displayedWalkInsServed}
+            walkInsPurchased={displayedWalkInsPurchased}
             commissionKes={commissionForPeriod}
             tradingPeriodLabel={tradingPeriodLabel}
           />

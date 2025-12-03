@@ -65,17 +65,33 @@ export async function GET() {
       newProducts: true,
       productsEdited: true,
       copiesUploaded: true,
+      walkInServed: true,
+      purchasesMade: true,
     },
   });
 
   let newProducts = 0;
   let editedProducts = 0;
   let copiedProducts = 0;
+  let walkInsServed = 0;
+  let walkInsPurchased = 0;
   for (const rep of reports) {
     newProducts += rep.newProducts ?? 0;
     editedProducts += rep.productsEdited ?? 0;
     copiedProducts += rep.copiesUploaded ?? 0;
+    walkInsServed += rep.walkInServed ?? 0;
+    walkInsPurchased += rep.purchasesMade ?? 0;
   }
+
+  const totalReceipts = reports.length;
+  const totalItems = await prisma.dailySale.count({
+    where: {
+      dailyReport: {
+        userId,
+        date: { gte: start, lte: end },
+      },
+    },
+  });
 
   const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
@@ -94,6 +110,13 @@ export async function GET() {
     newProductCommission,
     copiedCommission,
     editedCommission,
+    totalNewProducts: newProducts,
+    totalEditedProducts: editedProducts,
+    totalCopiedProducts: copiedProducts,
+    walkInsServed,
+    walkInsPurchased,
+    totalReceipts,
+    totalItems,
   };
 
   await prisma.commissionLedger.upsert({
@@ -129,5 +152,12 @@ export async function GET() {
     copiedCommission,
     editedCommission,
     grossCommission,
+    totalNewProducts: newProducts,
+    totalEditedProducts: editedProducts,
+    totalCopiedProducts: copiedProducts,
+    walkInsServed,
+    walkInsPurchased,
+    totalReceipts,
+    totalItems,
   });
 }
