@@ -884,7 +884,7 @@ export default function MarketingTrackerPage() {
       >
         <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
-            <h1 className="text-3xl font-semibold">Daily Task Ops (Mon–Sat)</h1>
+            <h1 className="text-3xl font-semibold">Sales Operations Dashboard</h1>
             <p className="text-sm text-slate-300">
               Every task you complete brings you closer to your next reward.
             </p>
