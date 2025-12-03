@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 // server enforces ADMIN access for this page; client-side session checks can be flaky,
 // so show admin actions when this component is rendered on the admin page.
 import ProgressBar from "@/app/_components/ProgressBar";
@@ -65,7 +65,10 @@ export default function ClientAdminMarketingReport({
 
   const isActiveDay = (dayLabel: string) => (dayLabel === "All days" ? !dow : dow === dayLabel);
 
-  const entriesList = entries;
+  const [entriesState, setEntriesState] = useState<MarketingReportEntry[]>(entries);
+  useEffect(() => setEntriesState(entries), [entries]);
+
+  const entriesList = entriesState;
   const hasEntries = entriesList.length > 0;
   const modalItemCount = selectedEntry
     ? (selectedEntry.receipts?.reduce((sum, rec) => sum + (rec.items?.length || 0), 0) ?? 0) ||
@@ -283,7 +286,21 @@ export default function ClientAdminMarketingReport({
                             >
                               Edit entry
                             </a>
-                            <DeleteEntryClient entryId={entry.id} />
+                              <DeleteEntryClient
+                                entryId={entry.id}
+                                entry={entry}
+                                onDeleted={(id) => {
+                                  setEntriesState((prev) => prev.filter((e) => e.id !== id));
+                                  if (selectedEntry?.id === id) setSelectedEntry(null);
+                                }}
+                                onRestore={(entryObj) => {
+                                  setEntriesState((prev) => {
+                                    const copy = prev.slice();
+                                    copy.splice(idx, 0, entryObj as MarketingReportEntry);
+                                    return copy;
+                                  });
+                                }}
+                              />
                           </div>
                         </div>
                       </td>
