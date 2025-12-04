@@ -124,7 +124,6 @@ export async function POST(req: Request) {
           newBatteries: metrics.newBatteries,
           changedBatteries: metrics.changedBatteries,
           submittedById: auth.user.id,
-          payload: { performance: metrics },
           receipts: {
             create: normalizedReceipts.map((receipt) => ({
               receiptNumber: receipt.receiptNumber,
