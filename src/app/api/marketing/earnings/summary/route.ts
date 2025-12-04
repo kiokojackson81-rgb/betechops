@@ -26,8 +26,14 @@ export async function GET(req: Request) {
   if (!attendantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const period = getTradingPeriodFor(new Date());
-  const periodKey = period.key;
-  const periodLabel = period.label;
+  // allow callers to specify a periodKey/periodLabel so earnings can be
+  // calculated for arbitrary periods (useful for admin impersonation/tests)
+  const urlObj = new URL(req.url);
+  const periodKeyParam = urlObj.searchParams.get("periodKey");
+  const periodLabelParam = urlObj.searchParams.get("periodLabel");
+
+  const periodKey = periodKeyParam ?? period.key;
+  const periodLabel = periodLabelParam ?? period.label;
 
   try {
     const summary = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });

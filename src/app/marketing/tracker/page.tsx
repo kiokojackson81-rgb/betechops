@@ -389,7 +389,7 @@ export default function MarketingTrackerPage() {
         delete next[key];
         return next;
       });
-      if (sale.source === "daily-sale" && data?.saleValue) {
+      if (data?.saleValue) {
         const methodKey =
           sale.paymentMethod === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
         setServerPeriodSummary((prev) => {

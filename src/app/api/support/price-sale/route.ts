@@ -51,9 +51,8 @@ export async function POST(req: Request) {
     include: {
       receipt: {
         include: {
-          dailyEntry: {
-            select: { id: true },
-          },
+          dailyEntry: true,
+          items: true,
         },
       },
     },
@@ -65,7 +64,13 @@ export async function POST(req: Request) {
 
   const entryId = receiptItem.receipt.dailyEntry.id;
   const previous = Number(receiptItem.buyingPrice ?? 0);
-  const profitDelta = previous - roundedPrice; // positive delta => profit increases
+  const profitDelta = previous - roundedPrice; // negative when buying price increases (reduces profit)
+
+  // derive a per-item selling value so callers (UI) can update quick-stats
+  const receipt = receiptItem.receipt;
+  const itemsCount = Math.max(1, (receipt.items || []).length);
+  const sellingTotal = Number(receipt.sellingTotal ?? 0);
+  const sellingPrice = Math.round(sellingTotal / itemsCount);
 
   await prisma.$transaction(async (tx) => {
     await tx.supportReceiptItem.update({
@@ -78,5 +83,12 @@ export async function POST(req: Request) {
     });
   });
 
-  return NextResponse.json({ ok: true, entryId, profitDelta });
+  return NextResponse.json({
+    ok: true,
+    entryId,
+    profitDelta,
+    saleValue: sellingPrice,
+    receiptTotal: sellingTotal,
+    paymentMethod: receipt.paymentMethod ?? null,
+  });
 }

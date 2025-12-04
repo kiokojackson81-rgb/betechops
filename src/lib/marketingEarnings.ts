@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCommissionSummaryForSales } from "./marketingCommission";
 import { getMarketingReport } from "./marketingReport";
+import { getSupportPeriodAggregates } from "./supportEntries";
+import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -31,7 +33,22 @@ export async function getEarningsSummaryForAttendant(opts: {
 
   // 1) Fetch total sales for this attendant + period via existing report helper
   const report = await getMarketingReport({ tradingPeriodKey: periodKey, submittedById: attendantId });
-  const sales = report?.aggregates?.totalSales ?? 0;
+  const marketingSales = report?.aggregates?.totalSales ?? 0;
+
+  // 1b) Include support sales for this attendant in the same period so commission
+  // reflects both marketing and support priced items. Prefer the periodKey
+  // passed from the caller; fall back to the current trading period.
+  let period = getTradingPeriodFor(new Date());
+  if (periodKey) {
+    const recent = getRecentTradingPeriods(24);
+    const found = recent.find((p) => p.key === periodKey);
+    if (found) period = found;
+  }
+
+  const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
+  const supportSales = supportSummary?.aggregates?.totalSales ?? 0;
+
+  const sales = marketingSales + supportSales;
 
   // 2) Commission from existing helper
   const commissionSummary = getCommissionSummaryForSales(sales);
