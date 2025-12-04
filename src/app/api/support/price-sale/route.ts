@@ -73,13 +73,28 @@ export async function POST(req: Request) {
   const sellingPrice = Math.round(sellingTotal / itemsCount);
 
   await prisma.$transaction(async (tx) => {
+    // update the receipt item
     await tx.supportReceiptItem.update({
       where: { id: receiptItem.id },
       data: { buyingPrice: roundedPrice },
     });
+
+    // Recompute totalProfit for the whole daily entry in a safe, idempotent way
+    const receipts = await tx.supportReceipt.findMany({
+      where: { dailyEntryId: entryId },
+      include: { items: true },
+    });
+
+    let recomputedTotalProfit = 0;
+    for (const r of receipts) {
+      const sell = Number(r.sellingTotal ?? 0);
+      const cost = (r.items || []).reduce((s, it) => s + Number(it.buyingPrice ?? 0), 0);
+      recomputedTotalProfit += sell - cost;
+    }
+
     await tx.supportDailyEntry.update({
       where: { id: entryId },
-      data: { totalProfit: { increment: profitDelta } },
+      data: { totalProfit: recomputedTotalProfit },
     });
   });
 
