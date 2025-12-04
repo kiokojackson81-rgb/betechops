@@ -15,10 +15,12 @@ type AttendantRow = {
 
 export default function AttendantsClient({ attendants }: { attendants: AttendantRow[] }) {
   const router = useRouter();
+  const [rows, setRows] = useState<AttendantRow[]>(attendants);
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const filtered = attendants.filter((a) => {
+  const filtered = rows.filter((a) => {
     if (filterCategory !== "ALL" && a.attendantCategory !== filterCategory) return false;
     if (filterStatus === "ACTIVE" && !a.isActive) return false;
     if (filterStatus === "DISABLED" && a.isActive) return false;
@@ -96,6 +98,74 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                       }}
                     >
                       Open dashboard
+                    </button>
+                    {a.isActive ? (
+                      <button
+                        className="text-xs rounded-full border border-amber-600 px-3 py-1 hover:bg-slate-800"
+                        disabled={loadingId === a.id}
+                        onClick={async () => {
+                          if (!confirm(`Disable ${a.email}?`)) return;
+                          setLoadingId(a.id);
+                          try {
+                            const res = await fetch(`/api/admin/attendants/${a.id}`, {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ action: "deactivate" }),
+                            });
+                            if (!res.ok) throw new Error("Request failed");
+                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: false } : r)));
+                          } catch (err) {
+                            alert("Failed to disable attendant");
+                          } finally {
+                            setLoadingId(null);
+                          }
+                        }}
+                      >
+                        Disable
+                      </button>
+                    ) : (
+                      <button
+                        className="text-xs rounded-full border border-emerald-600 px-3 py-1 hover:bg-slate-800"
+                        disabled={loadingId === a.id}
+                        onClick={async () => {
+                          if (!confirm(`Activate ${a.email}?`)) return;
+                          setLoadingId(a.id);
+                          try {
+                            const res = await fetch(`/api/admin/attendants/${a.id}`, {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ action: "activate" }),
+                            });
+                            if (!res.ok) throw new Error("Request failed");
+                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: true } : r)));
+                          } catch (err) {
+                            alert("Failed to activate attendant");
+                          } finally {
+                            setLoadingId(null);
+                          }
+                        }}
+                      >
+                        Activate
+                      </button>
+                    )}
+                    <button
+                      className="text-xs rounded-full border border-red-600 px-3 py-1 hover:bg-slate-800"
+                      disabled={loadingId === a.id}
+                      onClick={async () => {
+                        if (!confirm(`Permanently delete ${a.email}? This cannot be undone.`)) return;
+                        setLoadingId(a.id);
+                        try {
+                          const res = await fetch(`/api/admin/attendants/${a.id}`, { method: "DELETE" });
+                          if (!res.ok) throw new Error("Request failed");
+                          setRows((prev) => prev.filter((r) => r.id !== a.id));
+                        } catch (err) {
+                          alert("Failed to delete attendant");
+                        } finally {
+                          setLoadingId(null);
+                        }
+                      }}
+                    >
+                      Delete
                     </button>
                   </div>
                 </td>
