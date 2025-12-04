@@ -148,13 +148,15 @@ export default function DailyReportFinal() {
           credentials: "same-origin",
         });
         if (!res.ok) {
-          if (res.status === 401) {
-            setEarningsError("Earnings summary is restricted to authenticated attendants.");
-          } else if (res.status === 403) {
-            setEarningsError("You do not have permission to view this earnings summary.");
-          } else {
-            setEarningsError("Failed to load earnings summary.");
+          // For authentication/authorization responses (401/403) we silently
+          // fall back to the public summary so the card remains visible.
+          // Only surface an error for other failure types.
+          if (res.status === 401 || res.status === 403) {
+            // clear any previous non-auth error
+            setEarningsError(null);
+            return;
           }
+          setEarningsError("Failed to load earnings summary.");
           return;
         }
         const data = await res.json().catch(() => null);
