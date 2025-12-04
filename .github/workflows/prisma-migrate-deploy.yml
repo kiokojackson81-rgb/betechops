@@ -1,6 +1,38 @@
 name: Prisma Migrate Deploy
 
 on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  migrate:
+    name: Run Prisma Migrate Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Prisma Migrate Deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy --schema=prisma/schema.prisma
+name: Prisma Migrate Deploy
+
+on:
   workflow_dispatch:
     inputs:
       run_migrations:
