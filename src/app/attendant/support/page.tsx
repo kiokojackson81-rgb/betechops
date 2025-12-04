@@ -463,6 +463,11 @@ function SupportQuickStats({
       label: "Performance earnings",
       value: `KES ${performanceBonus.toLocaleString()}`,
     },
+    // Placeholder total commission: commission + performance earnings
+    {
+      label: "Total commission",
+      value: `KES ${(commissionKes + performanceBonus).toLocaleString()}`,
+    },
   ];
 
   return (
@@ -473,16 +478,16 @@ function SupportQuickStats({
           <p className="text-xs text-slate-400">{periodLabel}</p>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-2xl bg-slate-950/60 px-4 py-3 text-left"
+            className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left"
           >
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">
               {stat.label}
             </p>
-            <p className="mt-1 text-xl font-semibold text-emerald-400">{stat.value}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-400">{stat.value}</p>
           </div>
         ))}
       </div>

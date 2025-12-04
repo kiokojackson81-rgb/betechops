@@ -1362,30 +1362,30 @@ function QuickStats({
         <p className="text-xs text-slate-400 md:text-right">{tradingPeriodLabel || "TRADING PERIOD 25TH LAST MONTH – 24TH THIS MONTH"}</p>
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2">
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Receipts</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{receipts ?? 0}</div>
+      <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3">
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Receipts</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{receipts ?? 0}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Sales (KES)</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{salesKes?.toLocaleString() ?? "0"}</div>
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sales (KES)</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{salesKes?.toLocaleString() ?? "0"}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">New products</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{newProducts ?? 0}</div>
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">New products</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{newProducts ?? 0}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Edited products</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{editedProducts ?? 0}</div>
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Edited products</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{editedProducts ?? 0}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Copied products</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{copiedProducts ?? 0}</div>
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Copied products</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{copiedProducts ?? 0}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-400">{commissionKes?.toLocaleString() ?? "0"}</div>
+        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{commissionKes?.toLocaleString() ?? "0"}</div>
         </div>
       </div>
     </section>
