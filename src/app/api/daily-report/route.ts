@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, getActorId } from "@/lib/api";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
 
 const toNumberOrNull = (value: unknown): number | null => {
   if (value === null || typeof value === "undefined" || value === "") return null;
@@ -99,6 +101,9 @@ export async function POST(req: Request) {
   const auth = await requireRole("ATTENDANT");
   if (!auth.ok) return auth.res;
   const actorId = await getActorId();
+  if (!actorId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const {
       date,
@@ -163,50 +168,95 @@ export async function POST(req: Request) {
       metrics: { ...(tasks?.metrics || {}), ...metricsPayload },
     };
 
-    const report = await prisma.dailyReport.create({
-      data: {
-        date: date ? new Date(date) : new Date(),
-        day: String(day),
-        productsCount: Number(productsCount) || 0,
-        totalSales: Number(totalSales) || 0,
-        // store metrics inside tasks JSON for backwards compatibility
-        tasks: tasksWithSubmit,
-        submittedBy: submittedBy || null,
-        userId: actorId || undefined,
-        ...(typeof normalizedMetrics.newProducts === "number" ? { newProducts: normalizedMetrics.newProducts } : {}),
-        ...(typeof normalizedMetrics.productsEdited === "number" ? { productsEdited: normalizedMetrics.productsEdited } : {}),
-        ...(typeof normalizedMetrics.copiesUploaded === "number" ? { copiesUploaded: normalizedMetrics.copiesUploaded } : {}),
-        ...(typeof normalizedMetrics.walkInServed === "number" ? { walkInServed: normalizedMetrics.walkInServed } : {}),
-        ...(typeof normalizedMetrics.purchasesMade === "number" ? { purchasesMade: normalizedMetrics.purchasesMade } : {}),
-        ...(typeof normalizedMetrics.liveSessionsCount === "number" ? { liveSessionsCount: normalizedMetrics.liveSessionsCount } : {}),
-        ...(typeof normalizedMetrics.commissionEarned === "number" ? { commissionEarned: normalizedMetrics.commissionEarned } : {}),
-        ...(typeof normalizedMetrics.confirmedCompetitiveness === "boolean"
-          ? { confirmedCompetitiveness: normalizedMetrics.confirmedCompetitiveness }
-          : {}),
-        ...(normalizedMetrics.marketEngagement
-          ? { marketEngagement: normalizedMetrics.marketEngagement }
-          : {}),
-        ...(normalizedMetrics.concerns ? { concerns: normalizedMetrics.concerns } : {}),
-      },
-    });
-    // persist granular sales rows if provided in tasks.sales
-    try {
-      const sales: any[] = (tasks?.sales && Array.isArray(tasks.sales)) ? tasks.sales : [];
-      if (sales.length > 0) {
-        const createMany = sales.map((s) => ({
-          dailyReportId: report.id,
+    const reportDate = date ? new Date(date) : new Date();
+    const dayStart = new Date(reportDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+
+    const taskSales: any[] = Array.isArray(tasks?.sales) ? tasks?.sales : [];
+    const derivedProfit =
+      toNumberOrNull((tasks?.metrics as any)?.totalProfit) ??
+      toNumberOrNull((tasks?.totals as any)?.profit) ??
+      toNumberOrNull(totalSales) ??
+      0;
+    const totalProfitForDay = typeof derivedProfit === "number" ? derivedProfit : 0;
+    if (!tasksWithSubmit.metrics) tasksWithSubmit.metrics = {};
+    tasksWithSubmit.metrics.totalProfit = totalProfitForDay;
+
+    const reportPayload = {
+      date: reportDate,
+      day: String(day),
+      productsCount: Number(productsCount) || 0,
+      totalSales: Number(totalSales) || 0,
+      tasks: tasksWithSubmit,
+      submittedBy: submittedBy || null,
+      userId: actorId || undefined,
+      ...(typeof normalizedMetrics.newProducts === "number" ? { newProducts: normalizedMetrics.newProducts } : {}),
+      ...(typeof normalizedMetrics.productsEdited === "number" ? { productsEdited: normalizedMetrics.productsEdited } : {}),
+      ...(typeof normalizedMetrics.copiesUploaded === "number" ? { copiesUploaded: normalizedMetrics.copiesUploaded } : {}),
+      ...(typeof normalizedMetrics.walkInServed === "number" ? { walkInServed: normalizedMetrics.walkInServed } : {}),
+      ...(typeof normalizedMetrics.purchasesMade === "number" ? { purchasesMade: normalizedMetrics.purchasesMade } : {}),
+      ...(typeof normalizedMetrics.liveSessionsCount === "number" ? { liveSessionsCount: normalizedMetrics.liveSessionsCount } : {}),
+      ...(typeof normalizedMetrics.commissionEarned === "number" ? { commissionEarned: normalizedMetrics.commissionEarned } : {}),
+      ...(typeof normalizedMetrics.confirmedCompetitiveness === "boolean"
+        ? { confirmedCompetitiveness: normalizedMetrics.confirmedCompetitiveness }
+        : {}),
+      ...(normalizedMetrics.marketEngagement ? { marketEngagement: normalizedMetrics.marketEngagement } : {}),
+      ...(normalizedMetrics.concerns ? { concerns: normalizedMetrics.concerns } : {}),
+    };
+
+    let savedReport: Awaited<ReturnType<typeof prisma.dailyReport.create>>;
+    let periodCommission = 0;
+    let periodTotals: any = null;
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.dailyReport.findFirst({
+        where: {
+          userId: actorId || undefined,
+          date: { gte: dayStart, lt: dayEnd },
+        },
+      });
+
+      if (existing) {
+        await tx.dailySale.deleteMany({ where: { dailyReportId: existing.id } });
+        savedReport = await tx.dailyReport.update({
+          where: { id: existing.id },
+          data: reportPayload,
+        });
+      } else {
+        savedReport = await tx.dailyReport.create({ data: reportPayload });
+      }
+
+      if (taskSales.length > 0) {
+        const createMany = taskSales.map((s) => ({
+          dailyReportId: savedReport.id,
           productName: s.productName || "",
           price: Number(s.price || 0),
           paymentMethod: s.paymentMethod || undefined,
           receiptNumber: s.receiptNumber || undefined,
         }));
-        await prisma.dailySale.createMany({ data: createMany });
+        await tx.dailySale.createMany({ data: createMany });
       }
-    } catch (err) {
-      // non-fatal: log and continue
-      console.error('failed to persist daily sales rows', err);
-    }
-    return NextResponse.json({ report }, { status: 201 });
+
+      const period = getTradingPeriodFor(reportDate);
+      const ledgerResult = await recomputeMarketingCommissionLedger({
+        userId: actorId!,
+        period,
+        client: tx,
+      });
+      periodCommission = ledgerResult.commission;
+      periodTotals = ledgerResult.totals;
+    });
+
+    return NextResponse.json(
+      {
+        report: savedReport!,
+        commission: periodCommission,
+        periodTotals,
+      },
+      { status: 201 },
+    );
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? "Server error");
     return NextResponse.json({ error: msg }, { status: 500 });

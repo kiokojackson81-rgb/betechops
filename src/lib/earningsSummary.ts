@@ -11,6 +11,10 @@ export type EarningsSummary = {
   totalNewProducts: number;
   totalEditedProducts: number;
   totalCopiedProducts: number;
+  totalItems?: number;
+  totalReceipts?: number;
+  walkInsServed?: number;
+  walkInsPurchased?: number;
 
   baseSalary: number;
   transportAllowance: number;
@@ -33,6 +37,12 @@ export type EarningsSummary = {
   totalEarnings: number;
   totalDeductions: number;
   netPay: number;
+  ledger?: {
+    grossCommission: number;
+    netCommission: number;
+    penalties: number;
+    detail: unknown;
+  } | null;
 };
 
 export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: Date }) {
@@ -128,6 +138,10 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalNewProducts: newProducts,
     totalEditedProducts: editedProducts,
     totalCopiedProducts: copiedProducts,
+    totalItems: 0,
+    totalReceipts: 0,
+    walkInsServed: 0,
+    walkInsPurchased: 0,
     baseSalary,
     transportAllowance,
     salesCommission,
@@ -145,5 +159,6 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalEarnings,
     totalDeductions,
     netPay,
+    ledger: null,
   };
 }

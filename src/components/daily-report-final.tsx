@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
@@ -145,32 +145,28 @@ export default function DailyReportFinal() {
     setImpersonateId(params.get("impersonateId"));
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    async function loadEarnings() {
+  const loadEarnings = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!tradingPeriodKey) return null;
       try {
         const basePath = "/api/attendant/earnings/summary";
         const url = impersonateId ? `${basePath}?impersonateId=${encodeURIComponent(impersonateId)}` : basePath;
         const res = await fetch(url, {
           method: "GET",
           cache: "no-store",
-          signal: controller.signal,
           credentials: "same-origin",
+          signal,
         });
         if (!res.ok) {
-          // For authentication/authorization responses (401/403) we silently
-          // fall back to the public summary so the card remains visible.
-          // Only surface an error for other failure types.
           if (res.status === 401 || res.status === 403) {
-            // clear any previous non-auth error
             setEarningsError(null);
-            return;
+            return null;
           }
           setEarningsError("Failed to load earnings summary.");
-          return;
+          return null;
         }
         const data = await res.json().catch(() => null);
-        if (!data) return;
+        if (!data) return null;
         setEarningsError(null);
         setEarningsSummary(data);
         setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
@@ -184,23 +180,27 @@ export default function DailyReportFinal() {
           walkInsPurchased: Number(data.walkInsPurchased ?? 0),
           totalReceipts: Number(data.totalReceipts ?? 0),
         });
+        return data;
       } catch (err) {
-        if ((err as Error).name === "AbortError") return;
+        if ((err as Error).name === "AbortError") return null;
         console.error("Failed to load earnings summary", err);
+        return null;
       }
-    }
-    if (tradingPeriodKey) {
-      loadEarnings();
-    }
-    return () => controller.abort();
-  }, [impersonateId, tradingPeriodKey]);
+    },
+    [impersonateId, tradingPeriodKey],
+  );
 
   useEffect(() => {
     if (!tradingPeriodKey) return;
     const controller = new AbortController();
-    const fetchPeriodSummary = async () => {
+    loadEarnings(controller.signal);
+    return () => controller.abort();
+  }, [loadEarnings, tradingPeriodKey]);
+
+  const fetchPeriodSummary = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!tradingPeriodKey || typeof window === "undefined") return null;
       try {
-        if (typeof window === "undefined") return;
         const url = new URL("/api/marketing/report/summary", window.location.origin);
         url.searchParams.set("date", date);
         if (impersonateId) {
@@ -209,23 +209,31 @@ export default function DailyReportFinal() {
         const res = await fetch(url.toString(), {
           method: "GET",
           cache: "no-store",
-          signal: controller.signal,
           credentials: "same-origin",
+          signal,
         });
-        if (!res.ok) return;
+        if (!res.ok) return null;
         const data = await res.json().catch(() => null);
         const commission = data?.aggregates?.commission?.commission;
         if (typeof commission === "number") {
           setCommissionForPeriod(Math.round(commission));
         }
+        return data;
       } catch (err) {
-        if ((err as Error).name === "AbortError") return;
+        if ((err as Error).name === "AbortError") return null;
         console.error("Failed to load marketing period summary", err);
+        return null;
       }
-    };
-    fetchPeriodSummary();
+    },
+    [date, impersonateId, tradingPeriodKey],
+  );
+
+  useEffect(() => {
+    if (!tradingPeriodKey) return;
+    const controller = new AbortController();
+    fetchPeriodSummary(controller.signal);
     return () => controller.abort();
-  }, [date, impersonateId, tradingPeriodKey]);
+  }, [fetchPeriodSummary, tradingPeriodKey]);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     const totalReceipts = receipts.length;
@@ -260,6 +268,16 @@ export default function DailyReportFinal() {
     (serverStats?.walkInsServed ?? 0) + Number(walkinsServed || 0);
   const displayedWalkInsPurchased =
     (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
+
+  useEffect(() => {
+    if (
+      commissionForPeriod === 0 &&
+      displayedSalesKes > 0 &&
+      displayedSalesKes < 500_000
+    ) {
+      setCommissionForPeriod(Math.round(displayedSalesKes * 0.05));
+    }
+  }, [commissionForPeriod, displayedSalesKes]);
 
   // Build a public fallback earnings summary when the server restricts detailed
   // earnings data to authenticated attendants. This lets the UI show a card
@@ -473,6 +491,8 @@ export default function DailyReportFinal() {
       }
       showToast("Daily report submitted", "success");
       setSubmitSuccess("Daily report submitted successfully.");
+      await loadEarnings();
+      await fetchPeriodSummary();
       handleResetDay();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to submit daily report";
