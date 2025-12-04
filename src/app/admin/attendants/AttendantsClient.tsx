@@ -71,8 +71,46 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           <tbody>
             {filtered.map((a) => (
               <tr key={a.id} className="border-t border-white/5">
-                <td className="px-4 py-3">{a.name || "-"}</td>
-                <td className="px-4 py-3">{a.email}</td>
+                <td className="px-4 py-3">
+                  {a.name ? (
+                    <button
+                      onClick={() => {
+                        const map: Record<string, string> = {
+                          DIRECT_SALES_OPS: "/admin/marketing-report",
+                          MARKETING_OPS: "/admin/marketing-report",
+                          JUMIA_KILIMALL_OPS: "/admin/jumia-console",
+                          SUPPORT_OPS: "/admin/reports",
+                          BETECH_OPS: "/admin",
+                        };
+                        const dest = map[a.attendantCategory ?? ""] ?? "/admin/marketing-report";
+                        router.push(`${dest}?impersonateId=${a.id}`);
+                      }}
+                      className="text-left text-slate-100 hover:underline"
+                    >
+                      {a.name}
+                    </button>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => {
+                      const map: Record<string, string> = {
+                        DIRECT_SALES_OPS: "/admin/marketing-report",
+                        MARKETING_OPS: "/admin/marketing-report",
+                        JUMIA_KILIMALL_OPS: "/admin/jumia-console",
+                        SUPPORT_OPS: "/admin/reports",
+                        BETECH_OPS: "/admin",
+                      };
+                      const dest = map[a.attendantCategory ?? ""] ?? "/admin/marketing-report";
+                      router.push(`${dest}?impersonateId=${a.id}`);
+                    }}
+                    className="text-left text-slate-300 hover:underline"
+                  >
+                    {a.email}
+                  </button>
+                </td>
                 <td className="px-4 py-3">{a.categoryLabel ?? (a.attendantCategory ?? "Unassigned")}</td>
                 <td className="px-4 py-3">
                   <span className={
@@ -148,25 +186,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                         Activate
                       </button>
                     )}
-                    <button
-                      className="text-xs rounded-full border border-red-600 px-3 py-1 hover:bg-slate-800"
-                      disabled={loadingId === a.id}
-                      onClick={async () => {
-                        if (!confirm(`Permanently delete ${a.email}? This cannot be undone.`)) return;
-                        setLoadingId(a.id);
-                        try {
-                          const res = await fetch(`/api/admin/attendants/${a.id}`, { method: "DELETE" });
-                          if (!res.ok) throw new Error("Request failed");
-                          setRows((prev) => prev.filter((r) => r.id !== a.id));
-                        } catch (err) {
-                          alert("Failed to delete attendant");
-                        } finally {
-                          setLoadingId(null);
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
+                    {/* Delete removed per request */}
                   </div>
                 </td>
               </tr>
