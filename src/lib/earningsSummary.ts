@@ -103,6 +103,9 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const disciplineTotal = sum((a) => a.adjustmentType === "DISCIPLINE");
   const otherDeductionsTotal = sum((a) => a.adjustmentType === "OTHER");
 
+  // For the attendant-facing earnings summary we use the default behaviour
+  // (which applies the configured profit-fallback percent) so this endpoint
+  // mirrors previous commission calculations.
   const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,

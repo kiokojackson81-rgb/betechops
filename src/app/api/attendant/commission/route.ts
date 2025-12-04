@@ -93,6 +93,8 @@ export async function GET() {
     },
   });
 
+  // Use default profit fallback here so attendant endpoints keep previous
+  // commission behaviour (fallback percent configured in commission helper).
   const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
