@@ -1456,3 +1456,9 @@ type DaySpecificBlocksProps = {
   onSaturdaySummaryChange: (val: SaturdaySummaryState) => void;
 };
   
+const normalizeNumber = (value: number | "" | undefined) => {
+  if (typeof value === "number") return value;
+  if (value === "" || typeof value === "undefined") return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
