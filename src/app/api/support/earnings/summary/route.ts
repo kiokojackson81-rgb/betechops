@@ -36,9 +36,19 @@ export async function GET(req: Request) {
   const totalBatteries = aggregates.newBatteries + aggregates.changedBatteries;
   const batteryEarnings = totalBatteries * 70;
 
-  const commissionFromLedger = ledger ? Number(ledger.grossCommission ?? 0) : null;
-  const salesCommission =
-    commissionFromLedger ?? getCommissionSummaryForSales(periodSales).commission ?? 0;
+  const detail = ledger?.detail as Record<string, any> | undefined;
+  const supportDetail = detail && typeof detail === "object" ? (detail.support as Record<string, any> | undefined) : undefined;
+  let salesCommission: number | null = null;
+  if (supportDetail && typeof supportDetail.commission === "number") {
+    salesCommission = supportDetail.commission;
+  } else if (ledger && typeof ledger.grossCommission === "object") {
+    salesCommission = Number(ledger.grossCommission) || 0;
+  }
+  if (salesCommission === null) {
+    const fallbackCommission = Math.max(0, Math.round(periodProfit * 0.05));
+    const tierCommission = getCommissionSummaryForSales(periodSales).commission ?? 0;
+    salesCommission = fallbackCommission + tierCommission;
+  }
 
   const baseSalary = compPlan?.baseSalary ?? 0;
   const transportAllowance = compPlan?.defaultTransportAllowance ?? 0;

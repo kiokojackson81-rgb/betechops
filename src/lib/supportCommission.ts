@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -102,7 +103,10 @@ export async function recomputeSupportCommissionLedger(opts: {
     };
   }
 
-  const supportCommission = Math.max(0, Math.round(totals.totalProfit * 0.05));
+  const fallbackCommission = Math.max(0, Math.round(totals.totalProfit * 0.05));
+  const tierInfo = getCommissionSummaryForSales(totals.totalSales ?? 0);
+  const tierCommission = tierInfo.commission ?? 0;
+  const supportCommission = fallbackCommission + tierCommission;
   if (dryRun) {
     return {
       updated: false,
@@ -144,6 +148,8 @@ export async function recomputeSupportCommissionLedger(opts: {
       periodKey: period.key,
       totals,
       commission: supportCommission,
+      fallbackCommission,
+      tierCommission,
       computedAt: new Date().toISOString(),
     },
     supportCommission,

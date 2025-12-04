@@ -107,12 +107,14 @@ export async function POST(req: Request) {
   }
 
   let totalSales = 0;
-  let totalProfit = 0;
   normalizedReceipts.forEach((receipt) => {
     totalSales += receipt.sellingTotal;
-    const itemsCost = receipt.items.reduce((sum, item) => sum + item.buyingPrice, 0);
-    totalProfit += receipt.sellingTotal - itemsCost;
   });
+  // Initial submissions should not carry any profit until the pricing workflow
+  // attaches real buying prices. Profit is recomputed after pricing via the
+  // `/api/support/price-sale` route. Persist zero here to avoid paying
+  // commission before pricing is complete.
+  let totalProfit = 0;
 
   try {
     const entry = await prisma.$transaction(async (tx) => {
