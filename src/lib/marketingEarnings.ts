@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCommissionSummaryForSales } from "./marketingCommission";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getMarketingReport } from "./marketingReport";
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
@@ -50,9 +50,12 @@ export async function getEarningsSummaryForAttendant(opts: {
 
   const sales = marketingSales + supportSales;
 
-  // 2) Commission from existing helper
-  const commissionSummary = getCommissionSummaryForSales(sales);
-  const commission = commissionSummary.commission ?? 0;
+  // 2) Commission: use commission tiers with a 5%-of-profit fallback for low-sales
+  const { tiers } = (await getOrCreateCommissionPeriod(new Date()));
+  const marketingProfit = report?.aggregates?.totalProfit ?? 0;
+  const supportProfit = supportSummary?.aggregates?.totalProfit ?? 0;
+  const periodProfit = marketingProfit + supportProfit;
+  const commission = computeSalesCommissionFromTiers(sales, periodProfit, tiers);
 
   // 3) Comp plan (if none, treat as zeros)
   const plan = await prisma.attendantCompPlan.findUnique({ where: { attendantId } });
