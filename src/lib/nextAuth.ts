@@ -86,6 +86,8 @@ export const authOptions = {
       (s.user as Record<string, unknown>).role = token.role ?? "ATTENDANT";
       (s.user as Record<string, unknown>).attendantCategory = token.attendantCategory ?? null;
       (s.user as Record<string, unknown>).isActive = token.isActive ?? true;
+      // expose the attendant id so API routes depending on session.user.id keep working
+      (s.user as Record<string, unknown>).id = token.sub ?? token.id ?? null;
       return s;
     },
   },
