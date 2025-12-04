@@ -14,8 +14,6 @@ import getLandingPage from "@/lib/getLandingPage";
 const routePermissions: Array<{ prefix: string; categories: string[] }> = [
   // Marketing tracker is owned by direct sales
   { prefix: "/marketing/tracker", categories: ["DIRECT_SALES_OPS", "DIRECT_SALES", "DIRECT_SALES_OPS"] },
-  // Daily report is used by marketing staff
-  { prefix: "/attendant/daily-report", categories: ["MARKETING_OPS", "PRODUCT_UPLOAD", "MARKETING_OPS"] },
   // Support dashboard
   { prefix: "/support/dashboard", categories: ["SUPPORT_OPS", "SUPPORT"] },
   // Attendant top-level routes for marketplace ops
@@ -32,6 +30,10 @@ export async function middleware(req: NextRequest) {
     pathname === "/login" ||
     pathname === "/not-authorized"
   ) {
+    return NextResponse.next();
+  }
+
+  if (pathname === "/attendant/daily-report" || pathname.startsWith("/attendant/daily-report/")) {
     return NextResponse.next();
   }
 

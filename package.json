@@ -43,6 +43,7 @@
     "bcryptjs": "^3.0.3",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
+    "dotenv": "^17.2.3",
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.0",
     "lucide-react": "^0.544.0",
@@ -58,7 +59,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@prisma/client": "^6.18.0",
+    "@prisma/client": "^6.19.0",
     "@tailwindcss/postcss": "^4",
     "@types/jest": "^29.5.3",
     "@types/jsonwebtoken": "^9.0.10",

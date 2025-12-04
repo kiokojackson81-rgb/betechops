@@ -149,7 +149,7 @@ export default function DailyReportFinal() {
         });
         if (!res.ok) {
           if (res.status === 401) {
-            setEarningsError("Sign in required to view earnings summary.");
+            setEarningsError("Earnings summary is restricted to authenticated attendants.");
           } else if (res.status === 403) {
             setEarningsError("You do not have permission to view this earnings summary.");
           } else {
@@ -504,18 +504,9 @@ export default function DailyReportFinal() {
           ) : (
             <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8 md:py-7">
               <div className="text-sm text-slate-300">
-                {earningsError ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-amber-400">{earningsError}</p>
-                    {earningsError.includes("Sign in") && (
-                      <a href="/attendant/login" className="text-emerald-400 underline">
-                        Sign in
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <p>No earnings summary available for this trading period.</p>
-                )}
+                <p className="text-sm text-amber-400">
+                  {earningsError ?? "Earnings summary is temporarily unavailable for this trading period."}
+                </p>
               </div>
             </section>
           )}
