@@ -58,7 +58,7 @@ export async function getEarningsSummaryForAttendant(opts: {
   const supportProfit = supportSummary?.aggregates?.totalProfit ?? 0;
   const periodProfit = marketingProfit + supportProfit;
   const MIN_SALES_FOR_COMMISSION = 1_000_000;
-  const rawCommission = computeSalesCommissionFromTiers(sales, periodProfit, tiers, 0);
+  const rawCommission = computeSalesCommissionFromTiers(sales, periodProfit, tiers);
   const commission = sales >= MIN_SALES_FOR_COMMISSION ? rawCommission : 0;
 
   // 3) Comp plan (if none, treat as zeros)
