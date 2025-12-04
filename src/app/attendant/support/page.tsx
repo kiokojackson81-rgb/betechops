@@ -205,6 +205,10 @@ export default function SupportOpsPage() {
   );
 
   const performanceBonus = (combined.newBatteries + combined.changedBatteries) * 70;
+  const commissionDisplay =
+    typeof earningsSummary?.salesCommission === "number"
+      ? earningsSummary.salesCommission
+      : commissionSummary.commission;
 
   const handleReset = () => {
     setReceipts([createReceipt()]);
@@ -401,7 +405,7 @@ export default function SupportOpsPage() {
               receipts={combined.receipts}
               salesKes={combined.sales}
               items={combined.items}
-              commissionKes={commissionSummary.commission}
+              commissionKes={commissionDisplay}
               newBatteries={combined.newBatteries}
               changedBatteries={combined.changedBatteries}
               performanceBonus={performanceBonus}
