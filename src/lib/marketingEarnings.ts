@@ -50,12 +50,16 @@ export async function getEarningsSummaryForAttendant(opts: {
 
   const sales = marketingSales + supportSales;
 
-  // 2) Commission: use commission tiers with a 5%-of-profit fallback for low-sales
+  // 2) Commission: only award commission once the attendant crosses the
+  //    minimum ladder target (KES 1,000,000). Before that no commission
+  //    should appear in any earnings summary.
   const { tiers } = (await getOrCreateCommissionPeriod(new Date()));
   const marketingProfit = report?.aggregates?.totalProfit ?? 0;
   const supportProfit = supportSummary?.aggregates?.totalProfit ?? 0;
   const periodProfit = marketingProfit + supportProfit;
-  const commission = computeSalesCommissionFromTiers(sales, periodProfit, tiers);
+  const MIN_SALES_FOR_COMMISSION = 1_000_000;
+  const rawCommission = computeSalesCommissionFromTiers(sales, periodProfit, tiers, 0);
+  const commission = sales >= MIN_SALES_FOR_COMMISSION ? rawCommission : 0;
 
   // 3) Comp plan (if none, treat as zeros)
   const plan = await prisma.attendantCompPlan.findUnique({ where: { attendantId } });

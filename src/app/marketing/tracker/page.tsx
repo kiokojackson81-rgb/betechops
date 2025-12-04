@@ -18,6 +18,7 @@ import getLandingPage from "@/lib/getLandingPage";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import type { EarningsSummary } from "@/lib/marketingEarnings";
 import { signOut } from "next-auth/react";
+import { Trash2 } from "lucide-react";
 
 type MarketingDailyFormState = {
   date: string;
@@ -317,6 +318,7 @@ export default function MarketingTrackerPage() {
   const [unpricedSales, setUnpricedSales] = useState<UnpricedSale[]>([]);
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [deletingSaleKey, setDeletingSaleKey] = useState<string | null>(null);
 
   const config = useMemo(
     () =>
@@ -432,6 +434,41 @@ export default function MarketingTrackerPage() {
       }
     } catch (err) {
       showToast("Failed to save buying price", "error");
+    }
+  };
+
+  const handleDeleteUnpricedSale = async (sale: UnpricedSale) => {
+    const key = getUnpricedSaleKey(sale);
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("Delete this pending sale? This cannot be undone.");
+      if (!confirmed) return;
+    }
+    setDeletingSaleKey(key);
+    try {
+      const res = await fetch("/api/marketing/unpriced-sales/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ saleId: sale.id, source: sale.source }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        showToast(err?.error || "Failed to delete sale", "error");
+        return;
+      }
+      setUnpricedSales((prev) =>
+        prev.filter((row) => getUnpricedSaleKey(row) !== key),
+      );
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      showToast("Sale deleted", "success");
+    } catch {
+      showToast("Failed to delete sale", "error");
+    } finally {
+      setDeletingSaleKey((prev) => (prev === key ? null : prev));
     }
   };
 
@@ -1083,18 +1120,31 @@ export default function MarketingTrackerPage() {
                     {unpricedSales.map((sale) => {
                       const draftKey = getUnpricedSaleKey(sale);
                       const isSupport = sale.source === "support";
+                      const isDeleting = deletingSaleKey === draftKey;
                       return (
                         <div
                           key={draftKey}
                           className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-slate-100">
-                              {sale.productName}
-                            </span>
-                            <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-                              {isSupport ? "Support ops" : "Marketing ops"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-100">
+                                {sale.productName}
+                              </span>
+                              <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                                {isSupport ? "Support ops" : "Marketing ops"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUnpricedSale(sale)}
+                              disabled={isDeleting}
+                              aria-label="Delete pending sale"
+                              title="Delete sale"
+                              className={`rounded-full p-1 text-slate-500 transition hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                           <div className="flex justify-between gap-2 text-[11px] text-slate-400">
                             <span>{sale.attendantName}</span>
