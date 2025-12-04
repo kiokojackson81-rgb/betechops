@@ -409,6 +409,26 @@ export default function MarketingTrackerPage() {
             },
           };
         });
+        // Also update earnings summary immediately by recalculating commission
+        try {
+          setEarningsSummary((prev) => {
+            if (!prev) return prev;
+            const currentTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
+            const newTotalSales = currentTotalSales + data.saleValue;
+            const commissionInfo = getCommissionSummaryForSales(newTotalSales);
+            const newCommission = Math.round(commissionInfo.commission ?? 0);
+            const delta = newCommission - (prev.commission ?? 0);
+            if (delta === 0) return { ...prev, commission: newCommission };
+            return {
+              ...prev,
+              commission: newCommission,
+              totalEarnings: (prev.totalEarnings ?? 0) + delta,
+              netPay: (prev.netPay ?? 0) + delta,
+            };
+          });
+        } catch (err) {
+          // ignore any client-side calculation errors
+        }
       }
     } catch (err) {
       showToast("Failed to save buying price", "error");
