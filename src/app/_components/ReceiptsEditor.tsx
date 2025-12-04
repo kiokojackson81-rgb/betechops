@@ -25,10 +25,12 @@ export default function ReceiptsEditor({
   receipts,
   setReceipts,
   totals,
+  hideBuyingPrice = false,
 }: {
   receipts: ReceiptRow[];
   setReceipts: React.Dispatch<React.SetStateAction<ReceiptRow[]>>;
   totals: { totalSales: number; totalProfit: number; totalItems: number };
+  hideBuyingPrice?: boolean;
 }) {
   const newSaleRow = (): ReceiptRow => ({
     id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
@@ -39,7 +41,7 @@ export default function ReceiptsEditor({
       {
         id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
         productName: "",
-        buyingPrice: "",
+        buyingPrice: hideBuyingPrice ? 0 : "",
       },
     ],
   });
@@ -62,7 +64,7 @@ export default function ReceiptsEditor({
                 {
                   id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
                   productName: "",
-                  buyingPrice: "",
+                  buyingPrice: hideBuyingPrice ? 0 : "",
                 },
               ],
             }
@@ -149,16 +151,28 @@ export default function ReceiptsEditor({
               <div className="text-xs uppercase tracking-wide text-slate-400">Products in this receipt</div>
               <div className="flex flex-col gap-2">
                 {receipt.items.map((item) => (
-                  <div key={item.id} className="grid gap-2 md:grid-cols-[2fr_1fr_auto] md:items-center">
+                  <div
+                    key={item.id}
+                    className={
+                      "grid gap-2 md:items-center " +
+                      (hideBuyingPrice ? "md:grid-cols-[1fr_auto]" : "md:grid-cols-[2fr_1fr_auto]")
+                    }
+                  >
                     <Input value={item.productName} onChange={(e) => updateItem(receipt.id, item.id, { productName: e.target.value })} placeholder="Product name" className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100" />
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.buyingPrice === "" ? "" : item.buyingPrice}
-                      onChange={(e) => updateItem(receipt.id, item.id, { buyingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })}
-                      placeholder="Buying price (KES)"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                    />
+                    {!hideBuyingPrice && (
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.buyingPrice === "" ? "" : item.buyingPrice}
+                        onChange={(e) =>
+                          updateItem(receipt.id, item.id, {
+                            buyingPrice: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)),
+                          })
+                        }
+                        placeholder="Buying price (KES)"
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                      />
+                    )}
                     <Button variant="secondary" type="button" className="px-3 py-2 text-xs" onClick={() => removeItem(receipt.id, item.id)}>
                       Remove
                     </Button>
@@ -177,7 +191,7 @@ export default function ReceiptsEditor({
         <div className="space-y-1">
           <div>Total receipts: {receipts.length}</div>
           <div>Total sales (KES): {totals.totalSales.toLocaleString()}</div>
-          <div>Total profit (KES): {totals.totalProfit.toLocaleString()}</div>
+          {!hideBuyingPrice && <div>Total profit (KES): {totals.totalProfit.toLocaleString()}</div>}
           <div>Total items: {totals.totalItems}</div>
         </div>
         <Button type="button" variant="secondary" className="px-4" onClick={addReceipt}>

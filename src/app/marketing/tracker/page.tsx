@@ -36,6 +36,7 @@ type ReceiptRow = {
 
 type UnpricedSale = {
   id: string;
+  source: "daily-sale" | "support";
   saleDate: string;
   day: string | null;
   productName: string;
@@ -44,7 +45,10 @@ type UnpricedSale = {
   receiptNumber: string;
   attendantName: string;
   attendantEmail: string | null;
+  receiptTotal?: number;
 };
+
+const getUnpricedSaleKey = (sale: UnpricedSale) => `${sale.source}:${sale.id}`;
 
 const dayOptions: DayName[] = [
   "Monday",
@@ -342,12 +346,14 @@ export default function MarketingTrackerPage() {
 
   const router = useRouter();
 
-  const handleSetBuyingDraft = (saleId: string, value: string) => {
-    setBuyingDrafts((prev) => ({ ...prev, [saleId]: value }));
+  const handleSetBuyingDraft = (sale: UnpricedSale, value: string) => {
+    const key = getUnpricedSaleKey(sale);
+    setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSubmitBuyingPrice = async (sale: UnpricedSale) => {
-    const rawValue = buyingDrafts[sale.id] ?? "";
+    const key = getUnpricedSaleKey(sale);
+    const rawValue = buyingDrafts[key] ?? "";
     const parsedValue = Number(rawValue);
     if (!rawValue || Number.isNaN(parsedValue) || parsedValue <= 0) {
       showToast("Enter a valid buying price", "error");
@@ -356,13 +362,17 @@ export default function MarketingTrackerPage() {
     const buyingPrice = Math.round(parsedValue);
 
     try {
-      const res = await fetch("/api/marketing/price-sale", {
+      const endpoint =
+        sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
+      const body =
+        sale.source === "support"
+          ? { receiptItemId: sale.id, buyingPrice }
+          : { dailySaleId: sale.id, buyingPrice };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dailySaleId: sale.id,
-          buyingPrice,
-        }),
+        credentials: "same-origin",
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -371,13 +381,15 @@ export default function MarketingTrackerPage() {
       }
       const data = await res.json().catch(() => null);
       showToast("Buying price saved", "success");
-      setUnpricedSales((prev) => prev.filter((row) => row.id !== sale.id));
+      setUnpricedSales((prev) =>
+        prev.filter((row) => !(row.id === sale.id && row.source === sale.source)),
+      );
       setBuyingDrafts((prev) => {
         const next = { ...prev };
-        delete next[sale.id];
+        delete next[key];
         return next;
       });
-      if (data?.saleValue) {
+      if (sale.source === "daily-sale" && data?.saleValue) {
         const methodKey =
           sale.paymentMethod === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
         setServerPeriodSummary((prev) => {
@@ -823,6 +835,7 @@ export default function MarketingTrackerPage() {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -1047,47 +1060,58 @@ export default function MarketingTrackerPage() {
                   </p>
                 ) : (
                   <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {unpricedSales.map((sale) => (
-                      <div
-                        key={sale.id}
-                        className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
-                      >
-                        <div className="flex justify-between gap-2">
-                          <span className="font-semibold text-slate-100">
-                            {sale.productName}
-                          </span>
-                          <span className="text-slate-400">
-                            KES {sale.sellingPrice.toLocaleString()}
-                          </span>
+                    {unpricedSales.map((sale) => {
+                      const draftKey = getUnpricedSaleKey(sale);
+                      const isSupport = sale.source === "support";
+                      return (
+                        <div
+                          key={draftKey}
+                          className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-100">
+                              {sale.productName}
+                            </span>
+                            <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                              {isSupport ? "Support ops" : "Marketing ops"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-2 text-[11px] text-slate-400">
+                            <span>{sale.attendantName}</span>
+                            <span>
+                              #{sale.receiptNumber || "No receipt"} � {sale.paymentMethod || "N/A"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400">
+                            <span>Line value</span>
+                            <span>KES {sale.sellingPrice.toLocaleString()}</span>
+                          </div>
+                          {typeof sale.receiptTotal === "number" && sale.receiptTotal > 0 && (
+                            <div className="flex items-center justify-between text-[11px] text-slate-500">
+                              <span>Receipt total</span>
+                              <span>KES {sale.receiptTotal.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 pt-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="Buying price"
+                              value={buyingDrafts[draftKey] ?? ""}
+                              onChange={(e) => handleSetBuyingDraft(sale, e.target.value)}
+                              className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitBuyingPrice(sale)}
+                              className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
+                            >
+                              Save
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex justify-between gap-2 text-[11px] text-slate-400">
-                          <span>{sale.attendantName}</span>
-                          <span>
-                            #{sale.receiptNumber || "No receipt"} ·{" "}
-                            {sale.paymentMethod || "N/A"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Buying price"
-                            value={buyingDrafts[sale.id] ?? ""}
-                            onChange={(e) =>
-                              handleSetBuyingDraft(sale.id, e.target.value)
-                            }
-                            className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleSubmitBuyingPrice(sale)}
-                            className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </Card>

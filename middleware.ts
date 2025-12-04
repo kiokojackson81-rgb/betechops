@@ -57,6 +57,21 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (role !== "ADMIN" && category === "SUPPORT_OPS") {
+    if (!pathname.startsWith("/attendant/support")) {
+      url.pathname = "/attendant/support";
+      return NextResponse.redirect(url);
+    }
+  } else if (
+    role !== "ADMIN" &&
+    category !== "SUPPORT_OPS" &&
+    pathname.startsWith("/attendant/support")
+  ) {
+    const destination = getLandingPage(category as any, role as string);
+    url.pathname = destination;
+    return NextResponse.redirect(url);
+  }
+
   for (const { prefix, categories } of routePermissions) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       if (role === "ADMIN") return NextResponse.next();

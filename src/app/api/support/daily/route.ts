@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { PaymentMethod } from "@prisma/client";
+import { AttendantCategory, type PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
@@ -20,12 +20,18 @@ const ReceiptSchema = z.object({
   items: z.array(ReceiptItemSchema).default([]),
 });
 
+const PerformanceSchema = z.object({
+  newBatteries: z.union([z.number(), z.string()]).optional(),
+  changedBatteries: z.union([z.number(), z.string()]).optional(),
+});
+
 const PayloadSchema = z.object({
   date: z.string(),
   dayOfWeek: z.string().optional(),
   newBatteries: z.union([z.number(), z.string()]).optional(),
   changedBatteries: z.union([z.number(), z.string()]).optional(),
   receipts: z.array(ReceiptSchema),
+  performance: PerformanceSchema.optional(),
 });
 
 const toNumber = (value: unknown) => {
@@ -54,7 +60,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { date, dayOfWeek, receipts, newBatteries = 0, changedBatteries = 0 } = parsed.data;
+  const {
+    date,
+    dayOfWeek,
+    receipts,
+    performance,
+    newBatteries: legacyNew = 0,
+    changedBatteries: legacyChanged = 0,
+  } = parsed.data;
 
   if (!date) {
     return NextResponse.json({ error: "date is required" }, { status: 400 });
@@ -69,23 +82,22 @@ export async function POST(req: Request) {
     ? dayOfWeek
     : entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
+  const metrics = {
+    newBatteries: Math.max(0, toNumber(performance?.newBatteries ?? legacyNew)),
+    changedBatteries: Math.max(0, toNumber(performance?.changedBatteries ?? legacyChanged)),
+  };
+
   const normalizedReceipts = receipts
     .map((receipt) => {
       const sellingTotal = Math.max(0, toNumber(receipt.sellingTotal));
       const paymentMethod = normalizePaymentMethod(receipt.paymentMethod);
       const receiptNumber = typeof receipt.receiptNumber === "string" ? receipt.receiptNumber.trim() : null;
-      let items = receipt.items
-        .map((item) => ({
-          productName: (item.productName ?? "").trim(),
-          buyingPrice: Math.max(0, toNumber(item.buyingPrice)),
-        }))
-        .filter((item) => item.productName.length > 0 || item.buyingPrice > 0);
+      const normalizedItems = (receipt.items.length > 0 ? receipt.items : [{ productName: "Battery sale" }]).map((item) => ({
+        productName: (item.productName ?? "").trim() || "Battery sale",
+        buyingPrice: 0,
+      }));
 
-      if (items.length === 0) {
-        items = [{ productName: "Battery sale", buyingPrice: 0 }];
-      }
-
-      return { receiptNumber, sellingTotal, paymentMethod, items };
+      return { receiptNumber, sellingTotal, paymentMethod, items: normalizedItems };
     })
     .filter((receipt) => receipt.sellingTotal > 0 || receipt.items.length > 0);
 
@@ -102,30 +114,60 @@ export async function POST(req: Request) {
   });
 
   try {
-    const entry = await prisma.supportDailyEntry.create({
-      data: {
-        date: entryDate,
-        dayOfWeek: resolvedDay,
-        totalSales,
-        totalProfit,
-        newBatteries: Math.max(0, toNumber(newBatteries)),
-        changedBatteries: Math.max(0, toNumber(changedBatteries)),
-        submittedById: auth.user.id,
-        receipts: {
-          create: normalizedReceipts.map((receipt) => ({
-            receiptNumber: receipt.receiptNumber,
-            sellingTotal: receipt.sellingTotal,
-            paymentMethod: receipt.paymentMethod,
-            items: {
-              create: receipt.items.map((item) => ({
-                productName: item.productName || "Item",
-                buyingPrice: item.buyingPrice,
-              })),
-            },
-          })),
+    const entry = await prisma.$transaction(async (tx) => {
+      const created = await tx.supportDailyEntry.create({
+        data: {
+          date: entryDate,
+          dayOfWeek: resolvedDay,
+          totalSales,
+          totalProfit,
+          newBatteries: metrics.newBatteries,
+          changedBatteries: metrics.changedBatteries,
+          submittedById: auth.user.id,
+          payload: { performance: metrics },
+          receipts: {
+            create: normalizedReceipts.map((receipt) => ({
+              receiptNumber: receipt.receiptNumber,
+              sellingTotal: receipt.sellingTotal,
+              paymentMethod: receipt.paymentMethod,
+              items: {
+                create: receipt.items.map((item) => ({
+                  productName: item.productName || "Item",
+                  buyingPrice: 0,
+                })),
+              },
+            })),
+          },
         },
-      },
-      select: { id: true },
+        select: { id: true },
+      });
+
+      if (metrics.newBatteries > 0 || metrics.changedBatteries > 0) {
+        await tx.attendantActivity.createMany({
+          data: [
+            metrics.newBatteries > 0
+              ? {
+                  userId: auth.user.id,
+                  category: AttendantCategory.SUPPORT_OPS,
+                  metric: "newBatteries",
+                  intValue: metrics.newBatteries,
+                  entryDate,
+                }
+              : null,
+            metrics.changedBatteries > 0
+              ? {
+                  userId: auth.user.id,
+                  category: AttendantCategory.SUPPORT_OPS,
+                  metric: "changedBatteries",
+                  intValue: metrics.changedBatteries,
+                  entryDate,
+                }
+              : null,
+          ].filter(Boolean) as Parameters<typeof tx.attendantActivity.createMany>[0]["data"],
+        });
+      }
+
+      return created;
     });
 
     const period = getTradingPeriodFor(entryDate);

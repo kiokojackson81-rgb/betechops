@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { CalendarIcon } from "lucide-react";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
-import StatsCard from "@/components/StatsCard";
-import EarningsCard from "@/app/_components/EarningsCard";
-import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import Card from "@/app/_components/Card";
+import Button from "@/app/_components/Button";
+import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
-import type { EarningsSummary } from "@/lib/earningsSummary";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -28,7 +28,7 @@ type ReceiptRow = {
   items: ReceiptItem[];
 };
 
-type SupportSummary = {
+type SupportSummaryResponse = {
   period: { key: string; label: string; start: string; end: string };
   aggregates: {
     totalSales: number;
@@ -39,6 +39,20 @@ type SupportSummary = {
     changedBatteries: number;
     batteryEarnings: number;
   };
+};
+
+type SupportEarningsSummary = {
+  periodLabel: string;
+  baseSalary: number;
+  transportAllowance: number;
+  salesCommission: number;
+  batteryEarnings: number;
+  bonusTotal: number;
+  chamaTotal: number;
+  latenessTotal: number;
+  disciplineTotal: number;
+  otherDeductionsTotal: number;
+  netPay: number;
 };
 
 const inputClasses =
@@ -67,11 +81,15 @@ export default function SupportOpsPage() {
   const [receipts, setReceipts] = useState<ReceiptRow[]>([createReceipt()]);
   const [newBatteries, setNewBatteries] = useState<number | "">("");
   const [changedBatteries, setChangedBatteries] = useState<number | "">("");
-  const [periodSummary, setPeriodSummary] = useState<SupportSummary | null>(null);
-  const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [serverSummary, setServerSummary] = useState<SupportSummaryResponse | null>(
+    null,
+  );
+  const [earningsSummary, setEarningsSummary] = useState<SupportEarningsSummary | null>(
+    null,
+  );
 
   const tradingPeriodLabel = useMemo(() => getTradingPeriodFor(new Date()).label, []);
 
@@ -85,7 +103,7 @@ export default function SupportOpsPage() {
           router.replace("/attendant/login");
           return;
         }
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (cancelled) return;
         const user = data?.user;
         if (!user) {
@@ -108,31 +126,35 @@ export default function SupportOpsPage() {
     };
   }, [router]);
 
-  const refreshSummaries = useCallback(async () => {
+  const fetchSummaries = useCallback(async () => {
     try {
       const [summaryRes, earningsRes] = await Promise.all([
         fetch("/api/support/report/summary", { credentials: "same-origin" }),
         fetch("/api/support/earnings/summary", { credentials: "same-origin" }),
       ]);
-
       if (summaryRes.ok) {
-        const data = await summaryRes.json();
-        setPeriodSummary(data);
+        const data = (await summaryRes.json().catch(() => null)) as
+          | SupportSummaryResponse
+          | null;
+        if (data) setServerSummary(data);
       }
       if (earningsRes.ok) {
-        const data = await earningsRes.json();
-        setEarningsSummary(data);
+        const data = (await earningsRes.json().catch(() => null)) as
+          | SupportEarningsSummary
+          | null;
+        if (data) setEarningsSummary(data);
       }
     } catch {
-      // ignore network failures; UI already shows optimistic numbers
+      // no-op; UI already reflects optimistic data
     }
   }, []);
 
   useEffect(() => {
-    if (initialized) {
-      refreshSummaries();
-    }
-  }, [initialized, refreshSummaries]);
+    if (!initialized) return;
+    fetchSummaries();
+    const interval = setInterval(fetchSummaries, 15_000);
+    return () => clearInterval(interval);
+  }, [fetchSummaries, initialized]);
 
   const totals = useMemo(() => {
     return receipts.reduce(
@@ -142,28 +164,47 @@ export default function SupportOpsPage() {
         acc.totalItems += receipt.items.length;
         const buying = receipt.items.reduce(
           (sum, item) => sum + Number(item.buyingPrice || 0),
-          0
+          0,
         );
         acc.totalProfit += sale - buying;
         return acc;
       },
-      { totalSales: 0, totalProfit: 0, totalItems: 0 }
+      { totalSales: 0, totalProfit: 0, totalItems: 0 },
     );
   }, [receipts]);
 
-  const localNew = Number(newBatteries || 0);
-  const localChanged = Number(changedBatteries || 0);
+  const localPerformance = useMemo(
+    () => ({
+      new: Number(newBatteries || 0),
+      changed: Number(changedBatteries || 0),
+    }),
+    [changedBatteries, newBatteries],
+  );
 
-  const combinedSales = (periodSummary?.aggregates.totalSales ?? 0) + totals.totalSales;
-  const combinedReceipts =
-    (periodSummary?.aggregates.totalReceipts ?? 0) + receipts.length;
-  const combinedItems = (periodSummary?.aggregates.totalItems ?? 0) + totals.totalItems;
-  const combinedNew = (periodSummary?.aggregates.newBatteries ?? 0) + localNew;
-  const combinedChanged =
-    (periodSummary?.aggregates.changedBatteries ?? 0) + localChanged;
-  const combinedBatteryEarnings = (combinedNew + combinedChanged) * 70;
+  const combined = useMemo(() => {
+    const aggregates = serverSummary?.aggregates;
+    const base = {
+      sales: aggregates?.totalSales ?? 0,
+      receipts: aggregates?.totalReceipts ?? 0,
+      items: aggregates?.totalItems ?? 0,
+      newBatteries: aggregates?.newBatteries ?? 0,
+      changedBatteries: aggregates?.changedBatteries ?? 0,
+    };
+    return {
+      sales: base.sales + totals.totalSales,
+      receipts: base.receipts + receipts.length,
+      items: base.items + totals.totalItems,
+      newBatteries: base.newBatteries + localPerformance.new,
+      changedBatteries: base.changedBatteries + localPerformance.changed,
+    };
+  }, [localPerformance, receipts.length, serverSummary?.aggregates, totals]);
 
-  const commissionSummary = getCommissionSummaryForSales(combinedSales);
+  const commissionSummary = useMemo(
+    () => getCommissionSummaryForSales(combined.sales),
+    [combined.sales],
+  );
+
+  const performanceBonus = (combined.newBatteries + combined.changedBatteries) * 70;
 
   const handleReset = () => {
     setReceipts([createReceipt()]);
@@ -172,24 +213,28 @@ export default function SupportOpsPage() {
     setError(null);
   };
 
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     setError(null);
     try {
       const payload = {
         date,
         dayOfWeek,
-        newBatteries: localNew,
-        changedBatteries: localChanged,
         receipts: receipts.map((receipt) => ({
           receiptNumber: receipt.receiptNumber,
           sellingTotal: receipt.sellingTotal === "" ? 0 : Number(receipt.sellingTotal),
           paymentMethod: receipt.paymentMethod || "MPESA",
           items: receipt.items.map((item) => ({
             productName: item.productName,
-            buyingPrice: item.buyingPrice === "" ? 0 : Number(item.buyingPrice),
+            buyingPrice: 0,
           })),
         })),
+        performance: {
+          newBatteries: localPerformance.new,
+          changedBatteries: localPerformance.changed,
+        },
       };
 
       const res = await fetch("/api/support/daily", {
@@ -200,129 +245,127 @@ export default function SupportOpsPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.error || "Failed to submit support report.");
+        const message = data?.error || "Failed to submit support report.";
+        setError(message);
+        showToast(message, "error");
         return;
       }
 
-      await refreshSummaries();
+      showToast("Support report submitted", "success");
       handleReset();
+      fetchSummaries();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit support report.");
+      const message =
+        err instanceof Error ? err.message : "Failed to submit support report.";
+      setError(message);
+      showToast(message, "error");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   if (!initialized) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
-        <p>Loading support dashboard…</p>
+        <p>Loading support dashboard.</p>
       </div>
     );
   }
 
+  const periodLabel = serverSummary?.period.label ?? tradingPeriodLabel;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <form className="mx-auto max-w-6xl space-y-6 p-6">
+      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl space-y-6 p-6">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Support Operations</h1>
             <p className="text-sm text-slate-300">
-              Daily tracker for sales, battery performance, and earnings.
+              Sales capture, performance tracking, and quick earnings breakdown.
             </p>
           </div>
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-            className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/40 hover:bg-white/10"
+            className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
           >
             Log out
           </button>
         </header>
 
-        <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-8">
-            <div className="flex-1">
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                Date
-              </label>
-            </div>
-            <div className="md:flex md:items-center md:justify-end md:gap-3">
-              <div className="md:w-[150px]">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon size={16} className="text-slate-400" />
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => {
-                      setDate(e.target.value);
-                      const next = new Date(e.target.value);
-                      if (!Number.isNaN(next.getTime())) {
-                        setDayOfWeek(
-                          next.toLocaleDateString("en-KE", { weekday: "long" })
-                        );
-                      }
-                    }}
-                    className={inputClasses}
-                  />
-                </div>
-              </div>
-              <div className="mt-3 md:mt-0 md:w-[150px]">
-                <select
-                  value={dayOfWeek}
-                  onChange={(e) => setDayOfWeek(e.target.value)}
+        <Card className="border-slate-800 bg-slate-950/70">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Date</p>
+              <div className="mt-2 flex items-center gap-2">
+                <CalendarIcon size={16} className="text-slate-400" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(event) => {
+                    setDate(event.target.value);
+                    const next = new Date(event.target.value);
+                    if (!Number.isNaN(next.getTime())) {
+                      setDayOfWeek(
+                        next.toLocaleDateString("en-KE", { weekday: "long" }),
+                      );
+                    }
+                  }}
                   className={inputClasses}
-                >
-                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
-                    (d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    )
-                  )}
-                </select>
+                />
               </div>
+            </div>
+            <div className="w-full md:w-auto">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Day</p>
+              <select
+                value={dayOfWeek}
+                onChange={(event) => setDayOfWeek(event.target.value)}
+                className={inputClasses}
+              >
+                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
+                  (day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ),
+                )}
+              </select>
             </div>
           </div>
-        </section>
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
-            <ReceiptsEditor receipts={receipts} setReceipts={setReceipts} totals={totals} />
+            <ReceiptsEditor
+              receipts={receipts}
+              setReceipts={setReceipts}
+              totals={totals}
+              hideBuyingPrice
+            />
 
             <section className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
-              <h2 className="text-lg font-semibold">Battery performance</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    New batteries written
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClasses}
-                    value={newBatteries}
-                    onChange={(e) =>
-                      setNewBatteries(e.target.value === "" ? "" : Number(e.target.value))
-                    }
-                  />
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Performance (Support Ops)
+                  </p>
+                  <h2 className="text-lg font-semibold">Battery metrics</h2>
                 </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Batteries changed
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClasses}
-                    value={changedBatteries}
-                    onChange={(e) =>
-                      setChangedBatteries(
-                        e.target.value === "" ? "" : Number(e.target.value)
-                      )
-                    }
-                  />
+                <div className="rounded-full border border-emerald-500/30 px-3 py-1 text-xs text-emerald-200">
+                  70 KES per battery
                 </div>
+              </div>
+              <div className="space-y-4">
+                <NumberRow
+                  label="New batteries written"
+                  value={newBatteries}
+                  onChange={setNewBatteries}
+                />
+                <NumberRow
+                  label="Batteries changed"
+                  value={changedBatteries}
+                  onChange={setChangedBatteries}
+                />
               </div>
             </section>
 
@@ -332,49 +375,41 @@ export default function SupportOpsPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-3">
-              <button
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={handleReset}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                className="px-5"
               >
                 Reset
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={submitting}
+                className="bg-emerald-500 px-6 text-black hover:brightness-95 disabled:opacity-60"
               >
-                {isSubmitting ? "Submitting…" : "Submit report"}
-              </button>
+                {submitting ? "Submitting..." : "Submit report"}
+              </Button>
             </div>
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-            <StatsCard
-              periodLabel={periodSummary?.period.label ?? tradingPeriodLabel}
-              receipts={combinedReceipts}
-              salesKes={combinedSales}
-              items={combinedItems}
+            <SupportQuickStats
+              periodLabel={periodLabel}
+              receipts={combined.receipts}
+              salesKes={combined.sales}
+              items={combined.items}
               commissionKes={commissionSummary.commission}
-              currentSalesForTier={combinedSales}
-              nextTarget={commissionSummary.nextTarget}
+              newBatteries={combined.newBatteries}
+              changedBatteries={combined.changedBatteries}
+              performanceBonus={performanceBonus}
+              currentSalesForTier={combined.sales}
+              nextTarget={commissionSummary.nextTarget ?? null}
             />
 
-            <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-6">
-              <h2 className="text-lg font-semibold">Battery stats</h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <BatteryTile label="New batteries" value={combinedNew} />
-                <BatteryTile label="Changed batteries" value={combinedChanged} />
-              </div>
-              <div className="mt-4 text-sm text-slate-400">Battery earnings</div>
-              <div className="text-2xl font-semibold text-emerald-400">
-                KES {combinedBatteryEarnings.toLocaleString()}
-              </div>
-            </section>
-
-            <EarningsCard summary={earningsSummary} />
+            <SupportEarningsCard summary={earningsSummary} />
           </div>
         </div>
       </form>
@@ -382,11 +417,177 @@ export default function SupportOpsPage() {
   );
 }
 
-function BatteryTile({ label, value }: { label: string; value: number }) {
+function SupportQuickStats({
+  periodLabel,
+  receipts,
+  salesKes,
+  items,
+  commissionKes,
+  newBatteries,
+  changedBatteries,
+  performanceBonus,
+  currentSalesForTier,
+  nextTarget,
+}: {
+  periodLabel: string;
+  receipts: number;
+  salesKes: number;
+  items: number;
+  commissionKes: number;
+  newBatteries: number;
+  changedBatteries: number;
+  performanceBonus: number;
+  currentSalesForTier: number;
+  nextTarget: number | null;
+}) {
+  const totalBatteries = newBatteries + changedBatteries;
+  const remaining =
+    typeof nextTarget === "number" && nextTarget > currentSalesForTier
+      ? nextTarget - currentSalesForTier
+      : 0;
+  const reachedTop = !nextTarget || remaining <= 0;
+  const progress =
+    typeof nextTarget === "number" && nextTarget > 0
+      ? Math.min((currentSalesForTier / nextTarget) * 100, 100)
+      : 100;
+
+  const stats = [
+    { label: "Receipts", value: receipts.toLocaleString() },
+    { label: "Sales (KES)", value: salesKes.toLocaleString() },
+    { label: "Items sold", value: items.toLocaleString() },
+    { label: "Commission (KES)", value: commissionKes.toLocaleString() },
+    { label: "New batteries", value: newBatteries.toLocaleString() },
+    { label: "Changed batteries", value: changedBatteries.toLocaleString() },
+    { label: "Total batteries", value: totalBatteries.toLocaleString() },
+    {
+      label: "Performance earnings",
+      value: `KES ${performanceBonus.toLocaleString()}`,
+    },
+  ];
+
   return (
-    <div className="rounded-xl bg-slate-900/70 p-3">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-xl font-semibold text-emerald-400">{value}</p>
+    <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
+          <p className="text-xs text-slate-400">{periodLabel}</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-2xl bg-slate-950/60 px-4 py-3 text-left"
+          >
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">
+              {stat.label}
+            </p>
+            <p className="mt-1 text-xl font-semibold text-emerald-400">{stat.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-slate-400">
+          Progress to next tier
+        </p>
+        <p className="text-xs text-slate-200">
+          {reachedTop
+            ? "Reached highest tier for this period"
+            : `KES ${remaining.toLocaleString()} more to unlock the next tier`}
+        </p>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | null }) {
+  if (!summary) return null;
+  const credits = [
+    { label: "Base salary", amount: summary.baseSalary },
+    { label: "Performance bonus", amount: summary.batteryEarnings },
+    { label: "Commission", amount: summary.salesCommission },
+    { label: "Bonuses", amount: summary.bonusTotal },
+  ].filter((row) => row.amount !== 0);
+  const debits = [
+    { label: "Chama", amount: summary.chamaTotal },
+    { label: "Lateness", amount: summary.latenessTotal },
+    { label: "Discipline", amount: summary.disciplineTotal },
+    { label: "Other deductions", amount: summary.otherDeductionsTotal },
+  ].filter((row) => row.amount !== 0);
+
+  const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
+
+  return (
+    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            Earnings this period
+          </p>
+          <p className="text-sm text-slate-400">{summary.periodLabel}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Net pay</p>
+          <p className="text-2xl font-semibold text-emerald-300">
+            {formatCurrency(summary.netPay)}
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {credits.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2"
+          >
+            <span className="text-sm text-slate-300">{row.label}</span>
+            <span className="font-semibold text-emerald-300">
+              {formatCurrency(row.amount)}
+            </span>
+          </div>
+        ))}
+        {debits.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2"
+          >
+            <span className="text-sm text-slate-300">{row.label}</span>
+            <span className="font-semibold text-rose-300">
+              -{formatCurrency(row.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function NumberRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | "";
+  onChange: (value: number | "") => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-sm text-slate-100">{label}</span>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? "" : Number(event.target.value))
+        }
+        className="w-28 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-right text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+      />
     </div>
   );
 }
