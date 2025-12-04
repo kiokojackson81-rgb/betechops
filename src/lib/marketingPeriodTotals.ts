@@ -82,71 +82,142 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     return { totals: emptyTotals(), entryCount: 0 };
   }
 
-  const reports = await client.dailyReport.findMany({
-    where: {
-      userId,
-      date: { gte: period.start, lte: period.end },
-    },
-    include: { sales: true },
-  });
+  const [marketingEntries, reports] = await Promise.all([
+    client.marketingDailyEntry.findMany({
+      where: {
+        submittedById: userId,
+        date: { gte: period.start, lte: period.end },
+      },
+      include: {
+        receipts: { include: { items: true } },
+        sales: true,
+      },
+    }),
+    client.dailyReport.findMany({
+      where: {
+        userId,
+        date: { gte: period.start, lte: period.end },
+      },
+      include: { sales: true },
+    }),
+  ]);
 
-  if (reports.length === 0) {
+  if (marketingEntries.length === 0 && reports.length === 0) {
     return { totals: emptyTotals(), entryCount: 0 };
   }
 
-  const totals = reports.reduce<MarketingPeriodTotals>(
-    (acc, report) => {
-      const tasks = isRecord(report.tasks) ? (report.tasks as Record<string, unknown>) : {};
-      const metrics = isRecord(tasks.metrics) ? (tasks.metrics as Record<string, unknown>) : {};
-      const totalsJson = isRecord(tasks.totals) ? (tasks.totals as Record<string, unknown>) : {};
+  const totals = emptyTotals();
 
-      const profitFromMetrics =
-        toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
-      const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : toNumber(report.totalSales);
-
-      const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
-      const derivedReceipts = deriveReceiptsFromSales(report.sales);
-      const receiptCount = receiptsFromMetrics > 0 ? receiptsFromMetrics : derivedReceipts;
-
-      acc.totalSales += toNumber(report.totalSales);
-      acc.totalProfit += entryProfit;
-      acc.totalReceipts += receiptCount;
-      acc.totalItems += report.sales.length;
-      acc.totalNewProducts += report.newProducts ?? 0;
-      acc.totalEditedProducts += report.productsEdited ?? 0;
-      acc.totalCopiedProducts += report.copiesUploaded ?? 0;
-      acc.walkInsServed += report.walkInServed ?? 0;
-      acc.walkInsPurchased += report.purchasesMade ?? 0;
-
-      const receiptTracker = new Set<string>();
-      report.sales.forEach((sale, index) => {
-        const method = normalizeMethod(sale.paymentMethod);
-        const price = toNumber(sale.price);
+  marketingEntries.forEach((entry) => {
+    const receipts = entry.receipts ?? [];
+    if (receipts.length > 0) {
+      receipts.forEach((receipt) => {
+        const selling = toNumber(receipt.sellingTotal);
+        totals.totalSales += selling;
+        const items = receipt.items ?? [];
+        const buyingSum = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
+        totals.totalProfit += selling - buyingSum;
+        totals.totalItems += items.length;
+        totals.totalReceipts += 1;
+        const method = normalizeMethod(receipt.paymentMethod);
         if (method === "CASH") {
-          acc.paymentStats.totalSalesCash += price;
+          totals.paymentStats.totalSalesCash += selling;
+          totals.paymentStats.countCashReceipts += 1;
         } else {
-          acc.paymentStats.totalSalesMpesa += price;
+          totals.paymentStats.totalSalesMpesa += selling;
+          totals.paymentStats.countMpesaReceipts += 1;
+        }
+      });
+      return;
+    }
+
+    const sales = entry.sales ?? [];
+    if (sales.length > 0) {
+      const receiptTracker = new Set<string>();
+      sales.forEach((sale, index) => {
+        const selling = toNumber((sale as any).sellingPrice);
+        const buying = toNumber((sale as any).buyingPrice);
+        const itemsCount = Number((sale as any).itemsCount ?? 1);
+        totals.totalSales += selling;
+        totals.totalProfit += selling - buying;
+        totals.totalItems += itemsCount;
+        const method = normalizeMethod((sale as any).paymentMethod);
+        if (method === "CASH") {
+          totals.paymentStats.totalSalesCash += selling;
+        } else {
+          totals.paymentStats.totalSalesMpesa += selling;
         }
         const receiptKey =
-          sale.receiptNumber && sale.receiptNumber.trim().length > 0
-            ? `${sale.receiptNumber.trim()}|${method}`
-            : `${report.id}-${index}|${method}`;
+          (sale as any).receiptNumber && (sale as any).receiptNumber.trim().length > 0
+            ? `${(sale as any).receiptNumber.trim()}|${method}`
+            : `${entry.id}-${index}|${method}`;
         if (!receiptTracker.has(receiptKey)) {
           receiptTracker.add(receiptKey);
           if (method === "CASH") {
-            acc.paymentStats.countCashReceipts += 1;
+            totals.paymentStats.countCashReceipts += 1;
           } else {
-            acc.paymentStats.countMpesaReceipts += 1;
+            totals.paymentStats.countMpesaReceipts += 1;
           }
         }
       });
+      totals.totalReceipts += receiptTracker.size || sales.length;
+      return;
+    }
 
-      return acc;
-    },
-    emptyTotals(),
-  );
+    const fallbackSales = toNumber(entry.totalSales);
+    totals.totalSales += fallbackSales;
+    totals.totalProfit += toNumber(entry.totalProfit);
+    totals.totalReceipts += 1;
+  });
 
-  return { totals, entryCount: reports.length };
+  reports.forEach((report) => {
+    const tasks = isRecord(report.tasks) ? (report.tasks as Record<string, unknown>) : {};
+    const metrics = isRecord(tasks.metrics) ? (tasks.metrics as Record<string, unknown>) : {};
+    const totalsJson = isRecord(tasks.totals) ? (tasks.totals as Record<string, unknown>) : {};
+
+    const profitFromMetrics =
+      toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
+    const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : toNumber(report.totalSales);
+
+    const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
+    const derivedReceipts = deriveReceiptsFromSales(report.sales);
+    const receiptCount = receiptsFromMetrics > 0 ? receiptsFromMetrics : derivedReceipts;
+
+    totals.totalSales += toNumber(report.totalSales);
+    totals.totalProfit += entryProfit;
+    totals.totalReceipts += receiptCount;
+    totals.totalItems += report.sales.length;
+    totals.totalNewProducts += report.newProducts ?? 0;
+    totals.totalEditedProducts += report.productsEdited ?? 0;
+    totals.totalCopiedProducts += report.copiesUploaded ?? 0;
+    totals.walkInsServed += report.walkInServed ?? 0;
+    totals.walkInsPurchased += report.purchasesMade ?? 0;
+
+    const receiptTracker = new Set<string>();
+    report.sales.forEach((sale, index) => {
+      const method = normalizeMethod(sale.paymentMethod);
+      const price = toNumber(sale.price);
+      if (method === "CASH") {
+        totals.paymentStats.totalSalesCash += price;
+      } else {
+        totals.paymentStats.totalSalesMpesa += price;
+      }
+      const receiptKey =
+        sale.receiptNumber && sale.receiptNumber.trim().length > 0
+          ? `${sale.receiptNumber.trim()}|${method}`
+          : `${report.id}-${index}|${method}`;
+      if (!receiptTracker.has(receiptKey)) {
+        receiptTracker.add(receiptKey);
+        if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
+        } else {
+          totals.paymentStats.countMpesaReceipts += 1;
+        }
+      }
+    });
+  });
+
+  return { totals, entryCount: marketingEntries.length + reports.length };
 }
 
 type LedgerResult = {
