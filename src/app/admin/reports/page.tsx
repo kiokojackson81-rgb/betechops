@@ -1,5 +1,6 @@
 import { attendantCategoryDefinitions } from "@/lib/attendants/definitions";
 import { getAttendantCategorySummary } from "@/lib/attendants/reporting";
+import { prisma } from "@/lib/prisma";
 
 function formatDateRange(start: Date, days: number) {
   const end = new Date(start);
@@ -18,6 +19,12 @@ export default async function ReportsPage(props: any) {
   const isTrading = Boolean(searchParams?.trading);
   const days = searchParams?.days ? parseInt(searchParams.days, 10) || 7 : 7;
   const refDate = searchParams?.ref;
+  const impersonateId = searchParams?.impersonateId as string | undefined;
+
+  let impersonatedUser: { id: string; email: string | null; attendantCategory: string | null } | null = null;
+  if (impersonateId) {
+    impersonatedUser = await prisma.user.findUnique({ where: { id: impersonateId }, select: { id: true, email: true, attendantCategory: true } });
+  }
 
   const summary = isTrading
     ? await getAttendantCategorySummary({ tradingPeriod: true, refDate })
@@ -25,6 +32,11 @@ export default async function ReportsPage(props: any) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-8 text-slate-100">
+      {impersonatedUser && (
+        <div className="rounded-lg border border-white/10 bg-yellow-900/5 p-3 text-sm text-yellow-200">
+          Viewing as <strong className="text-white">{impersonatedUser.email}</strong> — category: <strong className="text-white">{impersonatedUser.attendantCategory ?? "Unassigned"}</strong>
+        </div>
+      )}
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold">Attendant Category Reports</h1>
         <p className="text-slate-300">
@@ -52,8 +64,10 @@ export default async function ReportsPage(props: any) {
         </div>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {attendantCategoryDefinitions.map((cat) => {
+        <div className="grid gap-6 md:grid-cols-2">
+        {attendantCategoryDefinitions
+          .filter((cat) => !impersonatedUser || cat.id === impersonatedUser!.attendantCategory)
+          .map((cat) => {
           const data = (summary.categories as any)[cat.id];
           const dailySales = data?.metrics?.DAILY_SALES?.numericSum ?? 0;
           const uploads = data?.metrics?.PRODUCT_UPLOADS?.intSum ?? 0;
