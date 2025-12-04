@@ -2,7 +2,14 @@
 // Idempotent script to recompute and (optionally) upsert commissionLedger
 // for a given period range. Dry-run by default.
 
-import "./../src/lib/env"; // if you have env loader; optional
+// Attempt to load project env helper if present. This is optional —
+// missing the module should not prevent the script from running.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require("./../src/lib/env");
+} catch (e) {
+  // ignore if env loader is not present in this environment
+}
 import { prisma } from "../src/lib/prisma";
 import {
   getOrCreateCommissionPeriod,
