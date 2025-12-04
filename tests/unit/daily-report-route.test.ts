@@ -7,15 +7,63 @@ jest.mock("@/lib/api", () => ({
   getActorId: jest.fn(),
 }));
 
-jest.mock("@/lib/prisma", () => ({
-  prisma: {
-    dailyReport: {
-      create: jest.fn(),
+jest.mock("@/lib/prisma", () => {
+  const dailyReport = {
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    findMany: jest.fn(),
+  };
+  const dailySale = {
+    createMany: jest.fn(),
+    deleteMany: jest.fn(),
+  };
+  const commissionLedger = {
+    findUnique: jest.fn(),
+    upsert: jest.fn(),
+  };
+  const client = {
+    dailyReport,
+    dailySale,
+    commissionLedger,
+  };
+  return {
+    prisma: {
+      ...client,
+      $transaction: jest.fn(async (cb: any) => cb(client)),
     },
-    dailySale: {
-      createMany: jest.fn(),
+  };
+});
+
+jest.mock("@/lib/marketingPeriodTotals", () => ({
+  recomputeMarketingCommissionLedger: jest.fn().mockResolvedValue({
+    updated: true,
+    commission: 0,
+    totals: {
+      totalSales: 0,
+      totalProfit: 0,
+      totalReceipts: 0,
+      totalItems: 0,
+      totalNewProducts: 0,
+      totalEditedProducts: 0,
+      totalCopiedProducts: 0,
+      walkInsServed: 0,
+      walkInsPurchased: 0,
+      paymentStats: {
+        totalSalesMpesa: 0,
+        totalSalesCash: 0,
+        countMpesaReceipts: 0,
+        countCashReceipts: 0,
+      },
     },
-  },
+    period: {
+      key: "period",
+      label: "label",
+      start: new Date(),
+      end: new Date(),
+    },
+    ledgerId: null,
+  }),
 }));
 
 import { POST } from "@/app/api/daily-report/route";
@@ -25,6 +73,7 @@ import { prisma } from "@/lib/prisma";
 const mockedRequireRole = requireRole as jest.MockedFunction<typeof requireRole>;
 const mockedGetActorId = getActorId as jest.MockedFunction<typeof getActorId>;
 const mockedDailyReportCreate = prisma.dailyReport.create as jest.Mock;
+const mockedDailyReportFindFirst = prisma.dailyReport.findFirst as jest.Mock;
 const mockedDailySaleCreateMany = prisma.dailySale.createMany as jest.Mock;
 
 describe("POST /api/daily-report", () => {
@@ -34,6 +83,7 @@ describe("POST /api/daily-report", () => {
     mockedGetActorId.mockResolvedValue("user-123");
     mockedDailyReportCreate.mockResolvedValue({ id: "rep-1" });
     mockedDailySaleCreateMany.mockResolvedValue({ count: 0 });
+    mockedDailyReportFindFirst.mockResolvedValue(null);
   });
 
   it("persists numeric metrics into dedicated columns", async () => {

@@ -24,9 +24,14 @@ export async function GET(req: Request) {
   const basisDate = dateStr ? new Date(dateStr) : null;
   const period = basisDate ? getTradingPeriodFor(basisDate) : await getCurrentTradingPeriod();
 
+  // Normalize period for downstream libs when the shape may vary between
+  // `tradingPeriod.ts` and `marketingPeriod.ts`. Use `any` to satisfy callers
+  // that expect slightly different period types.
+  const argPeriod: any = period as any;
+
   const [{ totals: marketingTotals }, supportSummary] = await Promise.all([
-    summarizeMarketingReportsForPeriod({ userId: targetUserId, period }),
-    getSupportPeriodAggregates({ userId: targetUserId, period }),
+    summarizeMarketingReportsForPeriod({ userId: targetUserId, period: argPeriod }),
+    getSupportPeriodAggregates({ userId: targetUserId, period: argPeriod }),
   ]);
 
   const supportTotals = supportSummary?.aggregates ?? {
@@ -59,8 +64,15 @@ export async function GET(req: Request) {
     endDate = (period as any).endDate;
   }
 
+  const normalizedPeriod = {
+    key: String((period as any).key ?? ""),
+    label: String((period as any).label ?? ""),
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+  };
+
   return NextResponse.json({
-    period: { key: period.key, label: period.label, start: startDate.toISOString(), end: endDate.toISOString() },
+    period: normalizedPeriod,
     aggregates: {
       totalSales,
       totalProfit,
