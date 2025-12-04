@@ -19,6 +19,13 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const adminMap: Record<string, string> = {
+    DIRECT_SALES_OPS: "/admin/marketing-report",
+    MARKETING_OPS: "/admin/marketing-report",
+    JUMIA_KILIMALL_OPS: "/admin/jumia-console",
+    SUPPORT_OPS: "/admin/reports",
+    BETECH_OPS: "/admin",
+  };
 
   const filtered = rows.filter((a) => {
     if (filterCategory !== "ALL" && a.attendantCategory !== filterCategory) return false;
@@ -73,43 +80,27 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
               <tr key={a.id} className="border-t border-white/5">
                 <td className="px-4 py-3">
                   {a.name ? (
-                    <button
-                      onClick={() => {
-                        const map: Record<string, string> = {
-                          DIRECT_SALES_OPS: "/admin/marketing-report",
-                          MARKETING_OPS: "/admin/marketing-report",
-                          JUMIA_KILIMALL_OPS: "/admin/jumia-console",
-                          SUPPORT_OPS: "/admin/reports",
-                          BETECH_OPS: "/admin",
-                        };
-                        const dest = map[a.attendantCategory ?? ""] ?? "/admin/marketing-report";
-                        router.push(`${dest}?impersonateId=${a.id}`);
-                      }}
+                    <a
+                      href={`${adminMap[a.attendantCategory ?? ""] ?? "/admin/marketing-report"}?impersonateId=${a.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-left text-slate-100 hover:underline"
                     >
                       {a.name}
-                    </button>
+                    </a>
                   ) : (
                     "-"
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => {
-                      const map: Record<string, string> = {
-                        DIRECT_SALES_OPS: "/admin/marketing-report",
-                        MARKETING_OPS: "/admin/marketing-report",
-                        JUMIA_KILIMALL_OPS: "/admin/jumia-console",
-                        SUPPORT_OPS: "/admin/reports",
-                        BETECH_OPS: "/admin",
-                      };
-                      const dest = map[a.attendantCategory ?? ""] ?? "/admin/marketing-report";
-                      router.push(`${dest}?impersonateId=${a.id}`);
-                    }}
+                  <a
+                    href={`${adminMap[a.attendantCategory ?? ""] ?? "/admin/marketing-report"}?impersonateId=${a.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-left text-slate-300 hover:underline"
                   >
                     {a.email}
-                  </button>
+                  </a>
                 </td>
                 <td className="px-4 py-3">{a.categoryLabel ?? (a.attendantCategory ?? "Unassigned")}</td>
                 <td className="px-4 py-3">
@@ -128,15 +119,14 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                     <button className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800" onClick={() => router.push(`/admin/attendants/${a.id}/payroll`)}>
                       Payroll
                     </button>
-                    <button
-                      className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
-                      onClick={() => {
-                        const dest = getLandingPage(a.attendantCategory || null);
-                        router.push(`${dest}?impersonateId=${a.id}`);
-                      }}
+                    <a
+                      href={`${getLandingPage(a.attendantCategory || null)}?impersonateId=${a.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800 inline-flex items-center justify-center"
                     >
                       Open dashboard
-                    </button>
+                    </a>
                     {a.isActive ? (
                       <button
                         className="text-xs rounded-full border border-amber-600 px-3 py-1 hover:bg-slate-800"
