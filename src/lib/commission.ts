@@ -86,10 +86,14 @@ export function computeSalesCommissionFromTiers(
   totalSales: number,
   totalProfit: number,
   tiers: { minSales: number; maxSales: number; payoutFlat: number }[],
+  // optional: percentage fallback to apply when sales are below first tier.
+  // If `undefined` or 0 the fallback is disabled (returns 0 until a tier is reached).
+  fallbackPercent: number | undefined = 0.05,
 ) {
   const firstTierMin = tiers.length ? tiers[0].minSales : 500_000;
   if (totalSales < firstTierMin) {
-    return 0.05 * totalProfit;
+    if (!fallbackPercent || fallbackPercent <= 0) return 0;
+    return fallbackPercent * totalProfit;
   }
   let commission = 0;
   for (const tier of tiers) {

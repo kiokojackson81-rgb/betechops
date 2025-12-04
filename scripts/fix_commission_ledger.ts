@@ -10,13 +10,20 @@ try {
 } catch (e) {
   // ignore if env loader is not present in this environment
 }
-import { prisma } from "../src/lib/prisma";
-import {
-  getOrCreateCommissionPeriod,
-  computeSalesCommissionFromTiers,
-  computeProductCommissions,
-} from "../src/lib/commission";
-import { getTradingPeriodFor } from "../src/lib/tradingPeriod";
+
+// Use a fresh Prisma client here to avoid importing project internals
+// which may not resolve cleanly in this script runner.
+let PrismaClient: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  PrismaClient = require("@prisma/client").PrismaClient;
+} catch (err) {
+  console.error("Missing dependency '@prisma/client'. Run `npm install` or `npm ci` in the project root and try again.");
+  process.exit(1);
+}
+const prisma = new PrismaClient();
+
+const isRecord = (v: unknown): v is Record<string, any> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 async function main() {
   const periodStart = process.env.PERIOD_START;
@@ -41,72 +48,82 @@ async function main() {
 
   console.log(`Found ${ledgers.length} commission ledger rows for the period.`);
 
-  // If none found, optionally compute for all attendants who had snapshots/reports in range
-  const userIds = ledgers.map((l) => l.userId);
+  // Gather attendants who have support entries in this period (we will upsert ledgers for them)
+  const attendants = await prisma.supportDailyEntry.findMany({
+    where: { date: { gte: start, lte: end } },
+    select: { submittedById: true },
+  });
+
+  const userIds = Array.from(new Set(attendants.map((a: { submittedById?: string | null }) => a.submittedById).filter(Boolean)));
 
   for (const userId of userIds) {
     console.log(`\nProcessing attendant ${userId}`);
 
-    // Recompute totals similar to attendant route
-    const snapshots = await prisma.profitSnapshot.findMany({
-      where: {
-        orderItem: {
-          order: {
-            attendantId: userId,
-            createdAt: { gte: start, lte: end },
-          },
-        },
+    // Summarize support entries for this attendant in the period
+    const entries = await prisma.supportDailyEntry.findMany({
+      where: { submittedById: userId, date: { gte: start, lte: end } },
+      select: {
+        totalSales: true,
+        totalProfit: true,
+        newBatteries: true,
+        changedBatteries: true,
+        receipts: { select: { _count: { select: { items: true } } } },
       },
-      select: { revenue: true, profit: true },
     });
 
     let totalSales = 0;
     let totalProfit = 0;
-    for (const s of snapshots) {
-      totalSales += Number(s.revenue ?? 0);
-      totalProfit += Number(s.profit ?? 0);
+    let totalReceipts = 0;
+    let totalItems = 0;
+    let newBatteries = 0;
+    let changedBatteries = 0;
+    for (const e of entries) {
+      totalSales += Number(e.totalSales ?? 0);
+      totalProfit += Number(e.totalProfit ?? 0);
+      totalReceipts += 1;
+      totalItems += Number(e.receipts?._count?.items ?? 0);
+      newBatteries += Number(e.newBatteries ?? 0);
+      changedBatteries += Number(e.changedBatteries ?? 0);
     }
 
-    const reports = await prisma.dailyReport.findMany({
-      where: { userId, date: { gte: start, lte: end } },
-      select: { newProducts: true, productsEdited: true, copiesUploaded: true },
+    const supportCommission = Math.max(0, Math.round(totalProfit * 0.05));
+
+    // Merge with any existing ledger entry to avoid clobbering other sections
+    const existingLedger = await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId,
+          periodStart: start,
+          periodEnd: end,
+        },
+      },
     });
 
-    let newProducts = 0;
-    let editedProducts = 0;
-    let copiedProducts = 0;
-    for (const r of reports) {
-      newProducts += r.newProducts ?? 0;
-      editedProducts += r.productsEdited ?? 0;
-      copiedProducts += r.copiesUploaded ?? 0;
-    }
+    const detailValue = existingLedger?.detail;
+    const existingDetail = isRecord(detailValue) ? { ...detailValue } : {};
+    const previousSupport = isRecord(existingDetail.support) ? existingDetail.support : null;
+    const previousSupportCommission =
+      typeof previousSupport?.commission === "number"
+        ? previousSupport.commission
+        : Number(existingDetail.supportCommission ?? 0);
 
-    const { period, tiers } = await getOrCreateCommissionPeriod(new Date(start));
+    const baseGross = Math.max(0, Number(existingLedger?.grossCommission ?? 0) - Number(previousSupportCommission ?? 0));
+    const grossCommission = baseGross + supportCommission;
+    const penalties = Number(existingLedger?.penalties ?? 0);
+    const netCommission = grossCommission - penalties;
 
-    // Use default fallback (no explicit 0) to match attendant behaviour
-    const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
-    const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
-      newProducts,
-      copiedProducts,
-      editedProducts,
-    });
-
-    const grossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission;
-
-    const detail = {
-      periodKey: `${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}`,
-      totalSales,
-      totalProfit,
-      salesCommission,
-      newProductCommission,
-      copiedCommission,
-      editedCommission,
-      totalNewProducts: newProducts,
-      totalEditedProducts: editedProducts,
-      totalCopiedProducts: copiedProducts,
+    const nextDetail = {
+      ...existingDetail,
+      support: {
+        periodKey: `${start.toISOString().split("T")[0]}_${end.toISOString().split("T")[0]}`,
+        totals: { totalSales, totalProfit, totalReceipts, totalItems, newBatteries, changedBatteries },
+        commission: supportCommission,
+        computedAt: new Date().toISOString(),
+      },
+      supportCommission,
     };
 
-    console.log(`Computed grossCommission=${grossCommission} (previous grossCommission available in DB)`);
+    console.log(`Computed supportCommission=${supportCommission} (previousSupportCommission=${previousSupportCommission})`);
 
     if (!dryRun) {
       await prisma.commissionLedger.upsert({
@@ -119,21 +136,21 @@ async function main() {
         },
         update: {
           grossCommission: grossCommission.toString(),
-          netCommission: grossCommission.toString(),
-          detail,
+          netCommission: netCommission.toString(),
+          detail: nextDetail,
         },
         create: {
           userId,
           periodStart: start,
           periodEnd: end,
           grossCommission: grossCommission.toString(),
-          netCommission: grossCommission.toString(),
-          detail,
+          netCommission: netCommission.toString(),
+          detail: nextDetail,
         },
       });
       console.log(`Upserted commissionLedger for ${userId}`);
     } else {
-      console.log(`Dry-run: not persisting changes for ${userId}`);
+      console.log(`Dry-run: would upsert commissionLedger for ${userId} with supportCommission=${supportCommission}`);
     }
   }
 

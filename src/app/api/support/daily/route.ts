@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
+import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +171,13 @@ export async function POST(req: Request) {
     const period = getTradingPeriodFor(entryDate);
     const summary = await getSupportPeriodAggregates({ userId: auth.user.id, period });
     const aggregates = summary.aggregates;
+
+    // Update commission ledger so payroll and earnings views include the new profit.
+    try {
+      await recomputeSupportCommissionLedger({ userId: auth.user.id, period });
+    } catch (ledgerErr) {
+      console.error("[support/daily] failed to recompute commission ledger", ledgerErr);
+    }
 
     return NextResponse.json(
       {

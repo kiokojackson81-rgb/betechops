@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,16 @@ export async function POST(req: Request) {
       data: { totalProfit: recomputedTotalProfit },
     });
   });
+
+  const submitterId = receiptItem.receipt.dailyEntry.submittedById;
+  if (submitterId) {
+    try {
+      const period = getTradingPeriodFor(new Date(receiptItem.receipt.dailyEntry.date));
+      await recomputeSupportCommissionLedger({ userId: submitterId, period });
+    } catch (ledgerErr) {
+      console.error("[support/price-sale] failed to recompute commission ledger", ledgerErr);
+    }
+  }
 
   return NextResponse.json({
     ok: true,
