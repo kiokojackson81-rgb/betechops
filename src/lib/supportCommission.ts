@@ -125,7 +125,9 @@ export async function recomputeSupportCommissionLedger(opts: {
 
   const detailValue = existingLedger?.detail;
   const existingDetail = isRecord(detailValue) ? { ...detailValue } : {};
-  const previousSupport = isRecord(existingDetail.support) ? existingDetail.support : null;
+  const previousSupport = isRecord(existingDetail) && isRecord(existingDetail.support)
+    ? existingDetail.support
+    : null;
   const previousSupportCommission =
     typeof previousSupport?.commission === "number"
       ? previousSupport.commission

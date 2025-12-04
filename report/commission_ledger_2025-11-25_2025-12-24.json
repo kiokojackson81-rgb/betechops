@@ -1,0 +1,28 @@
+[
+  {
+    "id": "cmirlas420000v5d8a50arayl",
+    "userId": "cmiqttmf10000v55sw48jeawd",
+    "periodStart": "2025-11-25T00:00:00.000Z",
+    "periodEnd": "2025-12-24T00:00:00.000Z",
+    "grossCommission": "425",
+    "penalties": "0",
+    "netCommission": "425",
+    "detail": {
+      "support": {
+        "totals": {
+          "totalItems": 0,
+          "totalSales": 16000,
+          "totalProfit": 8500,
+          "newBatteries": 0,
+          "totalReceipts": 2,
+          "changedBatteries": 0
+        },
+        "periodKey": "2025-11-25_2025-12-24",
+        "commission": 425,
+        "computedAt": "2025-12-04T15:27:33.840Z"
+      },
+      "supportCommission": 425
+    },
+    "createdAt": "2025-12-04T15:27:33.842Z"
+  }
+]
