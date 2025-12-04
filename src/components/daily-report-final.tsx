@@ -249,6 +249,35 @@ export default function DailyReportFinal() {
   const displayedWalkInsPurchased =
     (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
 
+  // Build a public fallback earnings summary when the server restricts detailed
+  // earnings data to authenticated attendants. This lets the UI show a card
+  // with basic values even when the user is not signed in.
+  const publicFallbackSummary: EarningsSummary = {
+    periodKey: tradingPeriodKey ?? "",
+    periodLabel: tradingPeriodLabel ?? "",
+    totalSales: serverStats?.totalSales ?? 0,
+    totalProfit: 0,
+    totalNewProducts: serverStats?.totalNewProducts ?? 0,
+    totalEditedProducts: serverStats?.totalEditedProducts ?? 0,
+    totalCopiedProducts: serverStats?.totalCopiedProducts ?? 0,
+    baseSalary: 0,
+    transportAllowance: 0,
+    salesCommission: commissionForPeriod,
+    newProductCommission: 0,
+    copiedCommission: 0,
+    editedCommission: 0,
+    grossCommission: commissionForPeriod,
+    bonusTotal: 0,
+    commissionTopUpTotal: 0,
+    chamaTotal: 0,
+    latenessTotal: 0,
+    disciplineTotal: 0,
+    otherDeductionsTotal: 0,
+    totalEarnings: commissionForPeriod,
+    totalDeductions: 0,
+    netPay: commissionForPeriod,
+  };
+
   const updateReceipt = (id: string, updates: Partial<ReceiptRow>) =>
     setReceipts((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
 
@@ -499,17 +528,15 @@ export default function DailyReportFinal() {
             tradingPeriodLabel={tradingPeriodLabel}
           />
 
-          {earningsSummary ? (
-            <EarningsCard summary={earningsSummary} />
-          ) : (
-            <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8 md:py-7">
-              <div className="text-sm text-slate-300">
-                <p className="text-sm text-amber-400">
-                  {earningsError ?? "Earnings summary is temporarily unavailable for this trading period."}
-                </p>
+          <div>
+            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} />
+            {earningsError && (
+              <div className="mt-2 rounded-md bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
+                {earningsError} {""}
+                <span className="text-amber-200">Sign in to view your full personalised earnings breakdown.</span>
               </div>
-            </section>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
