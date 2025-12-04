@@ -12,6 +12,7 @@ export default function EarningsCard({ summary }: { summary: EarningsSummary | n
     { label: "Base salary", value: summary.baseSalary },
     { label: "Transport allowance", value: summary.transportAllowance },
     { label: "Sales commission", value: summary.salesCommission },
+    { label: "Battery earnings", value: summary.batteryEarnings ?? 0 },
     { label: "New product commission", value: summary.newProductCommission },
     { label: "Copied product commission", value: summary.copiedCommission },
     { label: "Edited product commission", value: summary.editedCommission },

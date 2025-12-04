@@ -129,6 +129,8 @@ model User {
   dailyReports DailyReport[]
   // marketing tracker entries submitted by this user
   marketingEntries MarketingDailyEntry[]
+  // support tracker entries submitted by this user
+  supportEntries SupportDailyEntry[]
   // payroll relations
   attendantCompPlan AttendantCompPlan?
   attendantPayrollAdjustments AttendantPayrollAdjustment[]
@@ -329,6 +331,66 @@ model MarketingReceiptItem {
   receipt     MarketingReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   productName String
   buyingPrice Int
+
+  @@index([receiptId])
+}
+
+model SupportDailyEntry {
+  id               String             @id @default(cuid())
+  date             DateTime
+  dayOfWeek        String
+  totalSales       Int                @default(0)
+  totalProfit      Int                @default(0)
+  newBatteries     Int                @default(0)
+  changedBatteries Int                @default(0)
+  submittedById    String?
+  submittedBy      User?              @relation(fields: [submittedById], references: [id])
+  sales            SupportSale[]      @relation("SupportEntrySales")
+  receipts         SupportReceipt[]   @relation("SupportEntryReceipts")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([date])
+  @@index([submittedById])
+}
+
+model SupportSale {
+  id            String            @id @default(cuid())
+  entryId       String
+  entry         SupportDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade, name: "SupportEntrySales")
+  product       String
+  buyingPrice   Int
+  sellingPrice  Int
+  receiptNumber String?
+  paymentMethod PaymentMethod
+  itemsCount    Int               @default(1)
+  createdAt     DateTime          @default(now())
+
+  @@index([entryId])
+}
+
+model SupportReceipt {
+  id            String               @id @default(cuid())
+  dailyEntryId  String
+  dailyEntry    SupportDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade, name: "SupportEntryReceipts")
+  receiptNumber String?
+  sellingTotal  Int
+  paymentMethod PaymentMethod
+  items         SupportReceiptItem[] @relation("SupportReceiptItems")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([dailyEntryId])
+}
+
+model SupportReceiptItem {
+  id          String          @id @default(cuid())
+  receiptId   String
+  receipt     SupportReceipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade, name: "SupportReceiptItems")
+  productName String
+  buyingPrice Int
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([receiptId])
 }

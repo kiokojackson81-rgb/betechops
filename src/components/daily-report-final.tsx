@@ -269,6 +269,7 @@ export default function DailyReportFinal() {
     copiedCommission: 0,
     editedCommission: 0,
     grossCommission: commissionForPeriod,
+    batteryEarnings: 0,
     bonusTotal: 0,
     commissionTopUpTotal: 0,
     chamaTotal: 0,

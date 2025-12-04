@@ -14,8 +14,8 @@ import getLandingPage from "@/lib/getLandingPage";
 const routePermissions: Array<{ prefix: string; categories: string[] }> = [
   // Marketing tracker is owned by direct sales
   { prefix: "/marketing/tracker", categories: ["DIRECT_SALES_OPS", "DIRECT_SALES", "DIRECT_SALES_OPS"] },
-  // Support dashboard
-  { prefix: "/support/dashboard", categories: ["SUPPORT_OPS", "SUPPORT"] },
+  // Support operations dashboard
+  { prefix: "/attendant/support", categories: ["SUPPORT_OPS", "SUPPORT"] },
   // Attendant top-level routes for marketplace ops
   { prefix: "/attendant", categories: ["JUMIA_KILIMALL_OPS", "JUMIA_OPERATIONS", "KILIMALL_OPERATIONS", "GENERAL", "BETECH_OPS"] },
 ];
@@ -81,7 +81,7 @@ export const config = {
     "/attendant/:path*",
     "/marketing/tracker",
     "/marketing/tracker/:path*",
-    "/support/dashboard",
-    "/support/dashboard/:path*",
+    "/attendant/support",
+    "/attendant/support/:path*",
   ],
 };
