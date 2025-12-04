@@ -426,7 +426,7 @@ export default function DailyReportFinal() {
         <div className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl lg:text-3xl font-semibold">Sales Operations Dashboard</h1>
+              <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations Dashboard</h1>
               <p className="text-slate-400 text-sm">
                 Daily tracker for uploads, engagement, walk-ins and live sessions.
               </p>
