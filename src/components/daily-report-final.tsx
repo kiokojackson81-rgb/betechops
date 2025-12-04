@@ -6,6 +6,7 @@ import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
 import type { EarningsSummary } from "@/lib/earningsSummary";
+import { showToast } from "@/lib/ui/toast";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -20,6 +21,13 @@ type ReceiptRow = {
   receiptNumber: string;
   paymentMethod: PaymentMethod;
   products: ProductRow[];
+};
+
+type SaleEntryPayload = {
+  productName: string;
+  price: number;
+  paymentMethod: PaymentMethod;
+  receiptNumber: string;
 };
 
 const cardClasses =
@@ -124,6 +132,8 @@ export default function DailyReportFinal() {
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   const tradingPeriod = getTradingPeriodFor(new Date(date));
   const tradingPeriodLabel = tradingPeriod?.label;
@@ -366,29 +376,111 @@ export default function DailyReportFinal() {
     setSaturdaySummary({ liveSessionNotes: "", weeklySummary: "" });
   };
 
-  const handleSubmit = () => {
+  const buildSalesEntries = (): SaleEntryPayload[] => {
+    const rows: SaleEntryPayload[] = [];
+    receipts.forEach((receipt) => {
+      const total = normalizeNumber(receipt.sellingTotal);
+      const productCount = receipt.products.length;
+      if (productCount === 0) {
+        rows.push({
+          productName: receipt.receiptNumber ? `Receipt ${receipt.receiptNumber}` : "Receipt sale",
+          price: total,
+          paymentMethod: receipt.paymentMethod,
+          receiptNumber: receipt.receiptNumber,
+        });
+        return;
+      }
+      const base = Math.floor(total / productCount);
+      let remainder = total - base * productCount;
+      receipt.products.forEach((product, index) => {
+        const incremental = base + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder -= 1;
+        rows.push({
+          productName: product.name || `Product ${index + 1}`,
+          price: incremental,
+          paymentMethod: receipt.paymentMethod,
+          receiptNumber: receipt.receiptNumber,
+        });
+      });
+    });
+    return rows;
+  };
+
+  const buildTasksPayload = () => ({
+    receipts,
+    totals: salesTotals,
+    walkIns: {
+      served: normalizeNumber(walkinsServed),
+      purchased: normalizeNumber(walkinsPurchased),
+    },
+    neatness: shopNeatness,
+    productTasks: {
+      uploaded: normalizeNumber(productsUploaded),
+      edited: normalizeNumber(productsEdited),
+      copied: normalizeNumber(productsCopied),
+    },
+    communications,
+    marketplace,
+    liveSession,
+    thursdayActivities,
+    fridayTasks,
+    saturdaySummary,
+    commissionForPeriod,
+    sales: buildSalesEntries(),
+  });
+
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    const payload = {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const tasksPayload = buildTasksPayload();
+    const requestBody = {
       date,
-      dayOfWeek,
-      receipts,
-      totals: salesTotals,
-      walkIns: {
-        served: totalWalkinsServed,
-        purchased: totalWalkinsPurchased,
+      day: dayOfWeek,
+      productsCount: salesTotals.items,
+      totalSales: salesTotals.sales,
+      tasks: tasksPayload,
+      newProducts: normalizeNumber(productsUploaded),
+      productsEdited: normalizeNumber(productsEdited),
+      copiesUploaded: normalizeNumber(productsCopied),
+      walkInServed: normalizeNumber(walkinsServed),
+      purchasesMade: normalizeNumber(walkinsPurchased),
+      liveSessionsCount: normalizeNumber(liveSession.hosted),
+      commissionEarned: commissionForPeriod,
+      confirmedCompetitiveness: marketplace.pricingConfirmed,
+      marketEngagement: {
+        communications,
+        marketplace,
+        liveSession,
       },
-      neatness: shopNeatness,
-      productTasks: { uploaded: productsUploaded, edited: productsEdited, copied: productsCopied },
-      communications,
-      marketplace,
-      liveSession,
-      thursdayActivities,
-      fridayTasks,
-      saturdaySummary,
-      commissionForPeriod,
+      concerns: saturdaySummary.weeklySummary,
     };
-    console.log("SUBMIT DAILY REPORT", payload);
-    setTimeout(() => setIsSubmitting(false), 500);
+
+    try {
+      const endpoint = impersonateId
+        ? `/api/daily-report?impersonateId=${encodeURIComponent(impersonateId)}`
+        : "/api/daily-report";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to submit daily report");
+      }
+      showToast("Daily report submitted", "success");
+      setSubmitSuccess("Daily report submitted successfully.");
+      handleResetDay();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to submit daily report";
+      setSubmitError(message);
+      showToast(message, "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const datePicker = (
@@ -499,6 +591,17 @@ export default function DailyReportFinal() {
             onSaturdaySummaryChange={setSaturdaySummary}
           />
 
+          {submitError && (
+            <div className="rounded-xl border border-rose-700/40 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
+              {submitError}
+            </div>
+          )}
+          {submitSuccess && (
+            <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/20 px-4 py-3 text-sm text-emerald-200">
+              {submitSuccess}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row justify-end gap-3">
             <button
               type="button"
@@ -513,7 +616,7 @@ export default function DailyReportFinal() {
               disabled={isSubmitting || hasValidationErrors}
               onClick={handleSubmit}
             >
-              {isSubmitting ? "Submitting…" : "Submit report"}
+              {isSubmitting ? "Submitting..." : "Submit report"}
             </button>
           </div>
         </div>
@@ -1352,3 +1455,4 @@ type DaySpecificBlocksProps = {
   saturdaySummary: SaturdaySummaryState;
   onSaturdaySummaryChange: (val: SaturdaySummaryState) => void;
 };
+  
