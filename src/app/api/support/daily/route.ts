@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AttendantCategory, type PaymentMethod } from "@prisma/client";
+import { AttendantCategory, Prisma, type PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
@@ -141,29 +141,27 @@ export async function POST(req: Request) {
         select: { id: true },
       });
 
-      if (metrics.newBatteries > 0 || metrics.changedBatteries > 0) {
-        await tx.attendantActivity.createMany({
-          data: [
-            metrics.newBatteries > 0
-              ? {
-                  userId: auth.user.id,
-                  category: AttendantCategory.SUPPORT_OPS,
-                  metric: "newBatteries",
-                  intValue: metrics.newBatteries,
-                  entryDate,
-                }
-              : null,
-            metrics.changedBatteries > 0
-              ? {
-                  userId: auth.user.id,
-                  category: AttendantCategory.SUPPORT_OPS,
-                  metric: "changedBatteries",
-                  intValue: metrics.changedBatteries,
-                  entryDate,
-                }
-              : null,
-          ].filter(Boolean) as Parameters<typeof tx.attendantActivity.createMany>[0]["data"],
+      const activityData: Prisma.AttendantActivityCreateManyInput[] = [];
+      if (metrics.newBatteries > 0) {
+        activityData.push({
+          userId: auth.user.id,
+          category: AttendantCategory.SUPPORT_OPS,
+          metric: "newBatteries",
+          intValue: metrics.newBatteries,
+          entryDate,
         });
+      }
+      if (metrics.changedBatteries > 0) {
+        activityData.push({
+          userId: auth.user.id,
+          category: AttendantCategory.SUPPORT_OPS,
+          metric: "changedBatteries",
+          intValue: metrics.changedBatteries,
+          entryDate,
+        });
+      }
+      if (activityData.length) {
+        await tx.attendantActivity.createMany({ data: activityData });
       }
 
       return created;
