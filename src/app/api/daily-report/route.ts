@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, getActorId } from "@/lib/api";
 
+const toNumberOrNull = (value: unknown): number | null => {
+  if (value === null || typeof value === "undefined" || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const toIntOrNull = (value: unknown): number | null => {
+  const num = toNumberOrNull(value);
+  return typeof num === "number" ? Math.round(num) : null;
+};
+
 // Force this route to be dynamically executed to bypass static caching
 export const dynamic = "force-dynamic";
 
@@ -111,20 +122,39 @@ export async function POST(req: Request) {
     if (!day) {
       return NextResponse.json({ error: "day is required" }, { status: 400 });
     }
+
+    const normalizedMetrics = {
+      newProducts: toIntOrNull(newProducts),
+      productsEdited: toIntOrNull(productsEdited),
+      copiesUploaded: toIntOrNull(copiesUploaded),
+      walkInServed: toIntOrNull(walkInServed),
+      purchasesMade: toIntOrNull(purchasesMade),
+      liveSessionsCount: toIntOrNull(liveSessionsCount),
+      commissionEarned: toNumberOrNull(commissionEarned),
+      confirmedCompetitiveness:
+        typeof confirmedCompetitiveness === "boolean"
+          ? confirmedCompetitiveness
+          : confirmedCompetitiveness == null
+            ? null
+            : Boolean(confirmedCompetitiveness),
+      marketEngagement:
+        marketEngagement && typeof marketEngagement === "object" ? marketEngagement : null,
+      concerns: typeof concerns === "string" ? concerns : null,
+    };
     // merge submittedBy into tasks for backward compatibility
     // Also embed the new metrics inside the tasks JSON so reports are preserved
     // even when the database schema migration has not yet been applied.
     const metricsPayload = {
-      newProducts: typeof newProducts !== "undefined" ? Number(newProducts || 0) : undefined,
-      productsEdited: typeof productsEdited !== "undefined" ? Number(productsEdited || 0) : undefined,
-      copiesUploaded: typeof copiesUploaded !== "undefined" ? Number(copiesUploaded || 0) : undefined,
-      walkInServed: typeof walkInServed !== "undefined" ? Number(walkInServed || 0) : undefined,
-      purchasesMade: typeof purchasesMade !== "undefined" ? Number(purchasesMade || 0) : undefined,
-      liveSessionsCount: typeof liveSessionsCount !== "undefined" ? Number(liveSessionsCount || 0) : undefined,
-      commissionEarned: typeof commissionEarned !== "undefined" ? Number(commissionEarned || 0) : undefined,
-      confirmedCompetitiveness: typeof confirmedCompetitiveness !== "undefined" ? Boolean(confirmedCompetitiveness) : undefined,
-      marketEngagement: marketEngagement ? marketEngagement : undefined,
-      concerns: concerns ?? undefined,
+      newProducts: typeof normalizedMetrics.newProducts === "number" ? normalizedMetrics.newProducts : undefined,
+      productsEdited: typeof normalizedMetrics.productsEdited === "number" ? normalizedMetrics.productsEdited : undefined,
+      copiesUploaded: typeof normalizedMetrics.copiesUploaded === "number" ? normalizedMetrics.copiesUploaded : undefined,
+      walkInServed: typeof normalizedMetrics.walkInServed === "number" ? normalizedMetrics.walkInServed : undefined,
+      purchasesMade: typeof normalizedMetrics.purchasesMade === "number" ? normalizedMetrics.purchasesMade : undefined,
+      liveSessionsCount: typeof normalizedMetrics.liveSessionsCount === "number" ? normalizedMetrics.liveSessionsCount : undefined,
+      commissionEarned: typeof normalizedMetrics.commissionEarned === "number" ? normalizedMetrics.commissionEarned : undefined,
+      confirmedCompetitiveness: typeof normalizedMetrics.confirmedCompetitiveness === "boolean" ? normalizedMetrics.confirmedCompetitiveness : undefined,
+      marketEngagement: normalizedMetrics.marketEngagement ?? undefined,
+      concerns: normalizedMetrics.concerns ?? undefined,
     } as any;
 
     const tasksWithSubmit = {
@@ -143,6 +173,20 @@ export async function POST(req: Request) {
         tasks: tasksWithSubmit,
         submittedBy: submittedBy || null,
         userId: actorId || undefined,
+        ...(typeof normalizedMetrics.newProducts === "number" ? { newProducts: normalizedMetrics.newProducts } : {}),
+        ...(typeof normalizedMetrics.productsEdited === "number" ? { productsEdited: normalizedMetrics.productsEdited } : {}),
+        ...(typeof normalizedMetrics.copiesUploaded === "number" ? { copiesUploaded: normalizedMetrics.copiesUploaded } : {}),
+        ...(typeof normalizedMetrics.walkInServed === "number" ? { walkInServed: normalizedMetrics.walkInServed } : {}),
+        ...(typeof normalizedMetrics.purchasesMade === "number" ? { purchasesMade: normalizedMetrics.purchasesMade } : {}),
+        ...(typeof normalizedMetrics.liveSessionsCount === "number" ? { liveSessionsCount: normalizedMetrics.liveSessionsCount } : {}),
+        ...(typeof normalizedMetrics.commissionEarned === "number" ? { commissionEarned: normalizedMetrics.commissionEarned } : {}),
+        ...(typeof normalizedMetrics.confirmedCompetitiveness === "boolean"
+          ? { confirmedCompetitiveness: normalizedMetrics.confirmedCompetitiveness }
+          : {}),
+        ...(normalizedMetrics.marketEngagement
+          ? { marketEngagement: normalizedMetrics.marketEngagement }
+          : {}),
+        ...(normalizedMetrics.concerns ? { concerns: normalizedMetrics.concerns } : {}),
       },
     });
     // persist granular sales rows if provided in tasks.sales
