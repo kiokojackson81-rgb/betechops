@@ -54,10 +54,11 @@ export default async function AdminSupportReportPage({
   if (search) query.set("search", search);
 
   const cookieHeader = cookies().toString();
+  const hostHeader = (await headers()).get("host") ?? "";
   const res = await fetch(`/api/admin/support-report?${query.toString()}`, {
     headers: {
       ...(cookieHeader ? { cookie: cookieHeader } : {}),
-      "x-forwarded-host": headers().get("host") ?? "",
+      "x-forwarded-host": hostHeader,
     },
     cache: "no-store",
     credentials: "same-origin",
