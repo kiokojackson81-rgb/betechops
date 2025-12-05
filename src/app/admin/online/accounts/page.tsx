@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Platform } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { AccountAdminPanel } from "./AccountAdminPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ type AccountRow = {
 
 export default async function AdminOnlineAccountsPage() {
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
@@ -83,6 +84,33 @@ export default async function AdminOnlineAccountsPage() {
     );
   }
 
+  let attendants: Array<{
+    id: string;
+    name: string | null;
+    email: string | null;
+    role: string;
+    attendantCategory: string | null;
+  }> = [];
+  try {
+    attendants = await prisma.user.findMany({
+      where: {
+        role: { in: ["ATTENDANT", "SUPERVISOR"] },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        attendantCategory: true,
+      },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      take: 200,
+    });
+  } catch (err) {
+    console.error("Admin online accounts failed to load attendant directory:", err);
+  }
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -92,6 +120,11 @@ export default async function AdminOnlineAccountsPage() {
           View every configured Jumia / Kilimall account plus the attendants currently assigned via the API.
         </p>
       </header>
+
+      <AccountAdminPanel
+        accounts={rows.map((row) => ({ id: row.id, displayName: row.displayName, platform: row.platform }))}
+        attendants={attendants}
+      />
 
       <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/30">
         <table className="w-full min-w-[640px] text-sm">

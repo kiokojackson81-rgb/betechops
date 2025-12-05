@@ -2,8 +2,9 @@
 
 import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 
-const API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
+const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = 70;
 
 type JumiaStatement = {
@@ -33,7 +34,11 @@ type JumiaOrderItem = {
 };
 
 export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }) {
-  const accessToken = await refreshJumiaToken();
+  const credentials = await loadJumiaCredentials();
+  const apiBase = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
+  const authScheme = credentials.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
+  const accessToken = await refreshJumiaToken(credentials, apiBase);
+  const authHeader = `${authScheme} ${accessToken}`;
   const days = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const createdAfter = new Date();
   createdAfter.setDate(createdAfter.getDate() - days);
@@ -46,7 +51,7 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     if (account.jumiaShopSid) accountsBySid.set(account.jumiaShopSid, account);
   });
 
-  const statements = await fetchStatements(accessToken, createdAfter);
+  const statements = await fetchStatements(apiBase, authHeader, createdAfter);
   for (const statement of statements) {
     const account = statement.shopSid ? accountsBySid.get(statement.shopSid) : null;
     if (!account) continue;
@@ -80,13 +85,13 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     });
   }
 
-  const orders = await fetchOrders(accessToken, createdAfter);
+  const orders = await fetchOrders(apiBase, authHeader, createdAfter);
   for (const order of orders) {
     const shopSid = order.shopIds?.[0];
     const account = shopSid ? accountsBySid.get(shopSid) : null;
     if (!account) continue;
 
-    const items = await fetchOrderItems(accessToken, order.id);
+    const items = await fetchOrderItems(apiBase, authHeader, order.id);
     for (const item of items) {
       const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
       await prisma.marketplaceOrder.upsert({
@@ -120,41 +125,48 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
   }
 }
 
-async function refreshJumiaToken(): Promise<string> {
-  const clientId = process.env.JUMIA_CLIENT_ID;
-  const refreshToken = process.env.JUMIA_REFRESH_TOKEN;
-  if (!clientId || !refreshToken) {
-    throw new Error("JUMIA client credentials are missing");
-  }
-  const res = await fetch(`${API_BASE}/token`, {
+async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: string): Promise<string> {
+  const res = await fetch(new URL("/token", apiBase).toString(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
+    body: (() => {
+      const params = new URLSearchParams({
+        client_id: credentials.clientId,
+        grant_type: "refresh_token",
+        refresh_token: credentials.refreshToken,
+      });
+      if (credentials.clientSecret) {
+        params.set("client_secret", credentials.clientSecret);
+      }
+      return params;
+    })(),
   });
   if (!res.ok) {
     throw new Error(`Failed to refresh Jumia token (${res.status})`);
   }
   const data = (await res.json()) as { access_token: string; refresh_token?: string };
-  if (data.refresh_token && data.refresh_token !== refreshToken) {
-    // best-effort update of stored refresh token so future syncs stay valid
-    process.env.JUMIA_REFRESH_TOKEN = data.refresh_token;
+  if (data.refresh_token && data.refresh_token !== credentials.refreshToken) {
+    if (credentials.source === "env") {
+      process.env.JUMIA_REFRESH_TOKEN = data.refresh_token;
+    } else if (credentials.source === "db" && credentials.credentialId) {
+      await prisma.apiCredential.update({
+        where: { id: credentials.credentialId },
+        data: { refreshToken: data.refresh_token },
+      });
+    }
   }
   return data.access_token;
 }
 
-async function fetchStatements(token: string, createdAfter: Date): Promise<JumiaStatement[]> {
-  const url = new URL(`${API_BASE}/payout-statement`);
+async function fetchStatements(apiBase: string, authHeader: string, createdAfter: Date): Promise<JumiaStatement[]> {
+  const url = new URL("/payout-statement", apiBase);
   url.searchParams.set("createdAfter", createdAfter.toISOString().split("T")[0]);
   url.searchParams.set("currency", "LOCAL");
   url.searchParams.set("paid", "true");
   url.searchParams.set("size", "1000");
 
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: authHeader },
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch payout statements (${res.status})`);
@@ -163,20 +175,20 @@ async function fetchStatements(token: string, createdAfter: Date): Promise<Jumia
   return data.statements ?? [];
 }
 
-async function fetchOrders(token: string, createdAfter: Date): Promise<JumiaOrder[]> {
+async function fetchOrders(apiBase: string, authHeader: string, createdAfter: Date): Promise<JumiaOrder[]> {
   const orders: JumiaOrder[] = [];
   let nextToken: string | null = null;
   const createdBefore = new Date();
 
   do {
-    const url = new URL(`${API_BASE}/orders`);
+    const url = new URL("/orders", apiBase);
     url.searchParams.set("createdAfter", createdAfter.toISOString().split("T")[0]);
     url.searchParams.set("createdBefore", createdBefore.toISOString().split("T")[0]);
     url.searchParams.set("size", "200");
     if (nextToken) url.searchParams.set("token", nextToken);
 
     const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: authHeader },
     });
     if (!res.ok) throw new Error(`Failed to fetch orders (${res.status})`);
 
@@ -189,11 +201,11 @@ async function fetchOrders(token: string, createdAfter: Date): Promise<JumiaOrde
   return orders;
 }
 
-async function fetchOrderItems(accessToken: string, orderId: string): Promise<JumiaOrderItem[]> {
-  const url = new URL(`${API_BASE}/orders/items`);
+async function fetchOrderItems(apiBase: string, authHeader: string, orderId: string): Promise<JumiaOrderItem[]> {
+  const url = new URL("/orders/items", apiBase);
   url.searchParams.set("orderId", orderId);
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: authHeader },
   });
   if (!res.ok) throw new Error(`Failed to fetch order items (${res.status})`);
   const data = (await res.json()) as { items?: JumiaOrderItem[] };
