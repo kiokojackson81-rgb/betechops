@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -8,14 +8,11 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const resolveOrigin = () => {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
-  if (process.env.APP_URL) return process.env.APP_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-};
-
-const AdminSupportReportPage = async ({ searchParams }: { searchParams?: Promise<SearchParams | undefined> }) => {
+export default async function AdminSupportReportPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams | undefined>;
+}) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
@@ -24,14 +21,30 @@ const AdminSupportReportPage = async ({ searchParams }: { searchParams?: Promise
   }
 
   const basePeriod = getTradingPeriodFor(new Date());
-  const fromParam = Array.isArray(resolvedSearchParams.from) ? resolvedSearchParams.from[0] : resolvedSearchParams.from;
-  const toParam = Array.isArray(resolvedSearchParams.to) ? resolvedSearchParams.to[0] : resolvedSearchParams.to;
-  const day = Array.isArray(resolvedSearchParams.day) ? resolvedSearchParams.day[0] : resolvedSearchParams.day ?? "";
-  const attendantId = Array.isArray(resolvedSearchParams.attendantId) ? resolvedSearchParams.attendantId[0] : resolvedSearchParams.attendantId ?? "";
-  const search = Array.isArray(resolvedSearchParams.search) ? resolvedSearchParams.search[0] : resolvedSearchParams.search ?? "";
+  const fromParam = Array.isArray(resolvedSearchParams.from)
+    ? resolvedSearchParams.from[0]
+    : resolvedSearchParams.from;
+  const toParam = Array.isArray(resolvedSearchParams.to)
+    ? resolvedSearchParams.to[0]
+    : resolvedSearchParams.to;
+  const day = Array.isArray(resolvedSearchParams.day)
+    ? resolvedSearchParams.day[0]
+    : resolvedSearchParams.day ?? "";
+  const attendantId = Array.isArray(resolvedSearchParams.attendantId)
+    ? resolvedSearchParams.attendantId[0]
+    : resolvedSearchParams.attendantId ?? "";
+  const search = Array.isArray(resolvedSearchParams.search)
+    ? resolvedSearchParams.search[0]
+    : resolvedSearchParams.search ?? "";
 
-  const fromDate = fromParam && !Number.isNaN(new Date(fromParam).getTime()) ? fromParam : basePeriod.start.toISOString().split("T")[0];
-  const toDate = toParam && !Number.isNaN(new Date(toParam).getTime()) ? toParam : basePeriod.end.toISOString().split("T")[0];
+  const fromDate =
+    fromParam && !Number.isNaN(new Date(fromParam).getTime())
+      ? fromParam
+      : basePeriod.start.toISOString().split("T")[0];
+  const toDate =
+    toParam && !Number.isNaN(new Date(toParam).getTime())
+      ? toParam
+      : basePeriod.end.toISOString().split("T")[0];
 
   const query = new URLSearchParams();
   query.set("from", fromDate);
@@ -40,11 +53,14 @@ const AdminSupportReportPage = async ({ searchParams }: { searchParams?: Promise
   if (attendantId) query.set("attendantId", attendantId);
   if (search) query.set("search", search);
 
-  const origin = resolveOrigin();
   const cookieHeader = cookies().toString();
-  const res = await fetch(`${origin}/api/admin/support-report?${query.toString()}`, {
-    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+  const res = await fetch(`/api/admin/support-report?${query.toString()}`, {
+    headers: {
+      ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      "x-forwarded-host": headers().get("host") ?? "",
+    },
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   if (!res.ok) {
@@ -65,6 +81,4 @@ const AdminSupportReportPage = async ({ searchParams }: { searchParams?: Promise
       </main>
     </div>
   );
-};
-
-export default AdminSupportReportPage;
+}
