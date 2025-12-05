@@ -1,12 +1,12 @@
+const normalizeCategory = (category?: string | null) =>
+  (category || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
 export function getLandingPage(category?: string | null, role?: string): string {
   if (role === "ADMIN") return "/admin";
 
   if (!category) return "/attendant";
 
-  // Normalize the incoming category string to a DB-friendly enum label.
-  // Accept many legacy formats (spaces, hyphens, mixed case) by
-  // converting to upper-case and replacing non-alphanumerics with underscores.
-  const cat = (category || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const cat = normalizeCategory(category);
 
   switch (cat) {
     case "DIRECT_SALES":
@@ -25,6 +25,33 @@ export function getLandingPage(category?: string | null, role?: string): string 
       return "/admin";
     default:
       return "/attendant";
+  }
+}
+
+export function getAdminLandingPage(category?: string | null, role?: string): string {
+  if (role === "ADMIN") return "/admin";
+
+  if (!category) return "/admin";
+
+  const cat = normalizeCategory(category);
+
+  switch (cat) {
+    case "DIRECT_SALES":
+    case "DIRECT_SALES_OPS":
+      return "/admin/marketing-report";
+    case "PRODUCT_UPLOAD":
+    case "MARKETING_OPS":
+      return "/admin/daily-report";
+    case "JUMIA_OPERATIONS":
+    case "JUMIA_KILIMALL_OPS":
+      return "/admin/jumia-console";
+    case "SUPPORT":
+    case "SUPPORT_OPS":
+      return "/admin/support-report";
+    case "BETECH_OPS":
+      return "/admin";
+    default:
+      return "/admin";
   }
 }
 

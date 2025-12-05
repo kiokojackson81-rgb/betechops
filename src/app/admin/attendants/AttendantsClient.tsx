@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import getLandingPage from "@/lib/getLandingPage";
+import getLandingPage, { getAdminLandingPage } from "@/lib/getLandingPage";
 type AttendantRow = {
   id: string;
   name: string | null;
@@ -19,13 +19,6 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const adminMap: Record<string, string> = {
-    DIRECT_SALES_OPS: "/admin/marketing-report",
-    MARKETING_OPS: "/admin/marketing-report",
-    JUMIA_KILIMALL_OPS: "/admin/jumia-console",
-    SUPPORT_OPS: "/admin/reports",
-    BETECH_OPS: "/admin",
-  };
 
   const filtered = rows.filter((a) => {
     if (filterCategory !== "ALL" && a.attendantCategory !== filterCategory) return false;
@@ -81,7 +74,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                 <td className="px-4 py-3">
                   {a.name ? (
                     <a
-                      href={`${adminMap[a.attendantCategory ?? ""] ?? "/admin/marketing-report"}?impersonateId=${a.id}`}
+                      href={`${getAdminLandingPage(a.attendantCategory)}?impersonateId=${a.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-left text-slate-100 hover:underline"
@@ -94,7 +87,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                 </td>
                 <td className="px-4 py-3">
                   <a
-                    href={`${adminMap[a.attendantCategory ?? ""] ?? "/admin/marketing-report"}?impersonateId=${a.id}`}
+                    href={`${getAdminLandingPage(a.attendantCategory)}?impersonateId=${a.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-left text-slate-300 hover:underline"
