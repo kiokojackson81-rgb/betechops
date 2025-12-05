@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
-import type { AttendantCategory, Role } from "@prisma/client";
-import { isCategoryAllowed } from "@/lib/attendants/categoryCompat";
+import type { Role } from "@prisma/client";
+import { isCategoryAllowed, normalizeCategory } from "@/lib/attendants/categoryCompat";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 
@@ -119,12 +119,20 @@ export async function requireAttendant(req: Request, allowed: string[] = []): Pr
     return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
+  const normalizedCategory = normalizeCategory(targetUser.attendantCategory);
+  if (normalizedCategory) {
+    targetUser.attendantCategory = normalizedCategory;
+  }
+
   const allowedNormalized = allowed.map((entry) => (entry ? entry.toString().trim() : entry)).filter(Boolean) as string[];
   const allowedRoles = allowedNormalized.filter((entry) => ROLE_LABELS.has(entry.toUpperCase()));
   const allowedCategories = allowedNormalized.filter((entry) => !ROLE_LABELS.has(entry.toUpperCase())) as string[];
 
   const roleAllowed = allowedRoles.length === 0 ? true : allowedRoles.includes(sessionRole ?? "") || allowedRoles.includes(targetUser.role);
-  const categoryAllowed = allowedCategories.length === 0 ? true : isCategoryAllowed(targetUser.attendantCategory, allowedCategories);
+  const categoryAllowed =
+    allowedCategories.length === 0
+      ? true
+      : isCategoryAllowed(normalizedCategory ?? targetUser.attendantCategory, allowedCategories);
 
   if (!roleAllowed && !categoryAllowed) {
     return { ok: false, res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };

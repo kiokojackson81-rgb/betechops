@@ -1,4 +1,5 @@
 import { categoryMappings } from "./categoryMappings";
+import { attendantCategoryDefinitions } from "./definitions";
 
 function toUpperSnake(input: string): string {
   return input
@@ -20,6 +21,33 @@ function variantsOf(value: unknown): string[] {
   return Array.from(v).filter(Boolean);
 }
 
+const canonicalCategories = new Set(attendantCategoryDefinitions.map((def) => def.id));
+
+function resolveCanonical(candidate: string): string | null {
+  const normalized = toUpperSnake(candidate);
+  return canonicalCategories.has(normalized) ? normalized : null;
+}
+
+export function normalizeCategory(value: unknown): string | null {
+  if (value == null) return null;
+
+  for (const variant of variantsOf(value)) {
+    const resolved = resolveCanonical(variant);
+    if (resolved) return resolved;
+  }
+
+  const key = String(value ?? "").toLowerCase();
+  const mapped = categoryMappings[key];
+  if (mapped) {
+    for (const entry of mapped) {
+      const resolved = resolveCanonical(entry);
+      if (resolved) return resolved;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Return true if `storedCategory` should be considered allowed for any of the
  * entries in `allowedList`.
@@ -29,6 +57,13 @@ function variantsOf(value: unknown): string[] {
  */
 export function isCategoryAllowed(storedCategory: unknown, allowedList: string[] | undefined): boolean {
   if (!allowedList || allowedList.length === 0) return true; // no restriction
+
+  const storedNormalized = normalizeCategory(storedCategory);
+  const allowedCanonical = allowedList
+    .map((entry) => normalizeCategory(entry))
+    .filter((entry): entry is string => Boolean(entry));
+
+  if (storedNormalized && allowedCanonical.includes(storedNormalized)) return true;
 
   const storedVariants = variantsOf(storedCategory).map((s) => s.toString());
 

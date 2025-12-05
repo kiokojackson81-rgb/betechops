@@ -1,24 +1,18 @@
-const normalizeCategory = (category?: string | null) =>
-  (category || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+import { normalizeCategory } from "@/lib/attendants/categoryCompat";
 
 export function getLandingPage(category?: string | null, role?: string): string {
   if (role === "ADMIN") return "/admin";
 
-  if (!category) return "/attendant";
-
   const cat = normalizeCategory(category);
+  if (!cat) return "/attendant";
 
   switch (cat) {
-    case "DIRECT_SALES":
     case "DIRECT_SALES_OPS":
       return "/marketing/tracker";
-    case "PRODUCT_UPLOAD":
     case "MARKETING_OPS":
       return "/attendant/daily-report";
-    case "JUMIA_OPERATIONS":
     case "JUMIA_KILIMALL_OPS":
       return "/attendant";
-    case "SUPPORT":
     case "SUPPORT_OPS":
       return "/attendant/support";
     case "BETECH_OPS":
@@ -31,21 +25,16 @@ export function getLandingPage(category?: string | null, role?: string): string 
 export function getAdminLandingPage(category?: string | null, role?: string): string {
   if (role === "ADMIN") return "/admin";
 
-  if (!category) return "/admin";
-
   const cat = normalizeCategory(category);
+  if (!cat) return "/admin";
 
   switch (cat) {
-    case "DIRECT_SALES":
     case "DIRECT_SALES_OPS":
       return "/admin/marketing-report";
-    case "PRODUCT_UPLOAD":
     case "MARKETING_OPS":
       return "/admin/daily-report";
-    case "JUMIA_OPERATIONS":
     case "JUMIA_KILIMALL_OPS":
       return "/admin/jumia-console";
-    case "SUPPORT":
     case "SUPPORT_OPS":
       return "/admin/support-report";
     case "BETECH_OPS":
