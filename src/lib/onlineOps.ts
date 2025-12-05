@@ -1,6 +1,11 @@
 "use server";
 
-import type { MarketplaceAssignmentRole, PayrollAdjustmentType, Prisma } from "@prisma/client";
+import type {
+  AttendantPayrollAdjustment,
+  MarketplaceAssignmentRole,
+  PayrollAdjustmentType,
+  Prisma,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
@@ -213,7 +218,7 @@ async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
   );
 }
 
-function sumAdjustments(adjustments: Prisma.AttendantPayrollAdjustment[]): {
+function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {
   bonusTotal: number;
   commissionTopUpTotal: number;
   chamaTotal: number;

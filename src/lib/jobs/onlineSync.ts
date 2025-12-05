@@ -1,6 +1,6 @@
 "use server";
 
-import { Platform } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
@@ -69,13 +69,13 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
         payoutAmount: grossSales,
         currency: "KES",
         isPaid: Boolean(statement.paid),
-        rawPayload: statement as unknown as Record<string, unknown>,
+        rawPayload: statement as unknown as Prisma.InputJsonValue,
       },
       update: {
         grossSales,
         payoutAmount: grossSales,
         isPaid: Boolean(statement.paid),
-        rawPayload: statement as unknown as Record<string, unknown>,
+        rawPayload: statement as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -107,13 +107,13 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
             : undefined,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
-          rawPayload: item as unknown as Record<string, unknown>,
+          rawPayload: item as unknown as Prisma.InputJsonValue,
         },
         update: {
           status: item.status,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
-          rawPayload: item as unknown as Record<string, unknown>,
+          rawPayload: item as unknown as Prisma.InputJsonValue,
         },
       });
     }
