@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import type { AttendantCategory } from "@prisma/client";
 import getLandingPage from "@/lib/getLandingPage";
+import { isCategoryAllowed } from "@/lib/attendants/categoryCompat";
 
 // Use string[] for the permissions list to avoid a TypeScript mismatch when
 // the generated Prisma client enum differs from the schema during local
@@ -57,14 +58,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (role !== "ADMIN" && category === "SUPPORT_OPS") {
+  if (role !== "ADMIN" && isCategoryAllowed(category, ["SUPPORT_OPS"])) {
     if (!pathname.startsWith("/attendant/support")) {
       url.pathname = "/attendant/support";
       return NextResponse.redirect(url);
     }
   } else if (
     role !== "ADMIN" &&
-    category !== "SUPPORT_OPS" &&
+    !isCategoryAllowed(category, ["SUPPORT_OPS"]) &&
     pathname.startsWith("/attendant/support")
   ) {
     const destination = getLandingPage(category as any, role as string);
@@ -75,7 +76,7 @@ export async function middleware(req: NextRequest) {
   for (const { prefix, categories } of routePermissions) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       if (role === "ADMIN") return NextResponse.next();
-      if (!category || !categories.includes(category as AttendantCategory)) {
+      if (!category || !isCategoryAllowed(category, categories)) {
         // Wrong category → send to their home instead of /not-authorized
         const home = getLandingPage(category as any, role as string);
         url.pathname = home;

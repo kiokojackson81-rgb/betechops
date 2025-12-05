@@ -1,0 +1,64 @@
+import { categoryMappings } from "./categoryMappings";
+
+function toUpperSnake(input: string): string {
+  return input
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
+function variantsOf(value: unknown): string[] {
+  if (value == null) return [];
+  const s = String(value).trim();
+  const v = new Set<string>();
+  v.add(s);
+  v.add(s.toLowerCase());
+  v.add(s.toUpperCase());
+  v.add(toUpperSnake(s));
+  v.add(s.replace(/[^A-Za-z0-9]+/g, "_").toLowerCase());
+  return Array.from(v).filter(Boolean);
+}
+
+/**
+ * Return true if `storedCategory` should be considered allowed for any of the
+ * entries in `allowedList`.
+ *
+ * The check is tolerant: it compares multiple normalization variants and also
+ * consults `categoryMappings` for any explicit rank->domain mappings.
+ */
+export function isCategoryAllowed(storedCategory: unknown, allowedList: string[] | undefined): boolean {
+  if (!allowedList || allowedList.length === 0) return true; // no restriction
+
+  const storedVariants = variantsOf(storedCategory).map((s) => s.toString());
+
+  // Quick direct match (case-insensitive / snake-friendly)
+  for (const allowed of allowedList) {
+    const allowedVariants = variantsOf(allowed);
+    if (allowedVariants.some((av) => storedVariants.includes(av))) return true;
+  }
+
+  // If there's a mapping for the stored value (e.g. 'junior' -> ['DIRECT_SALES_OPS'])
+  // accept if any mapped canonical category is allowed.
+  const storedKey = String(storedCategory ?? "").toLowerCase();
+  const mapped = categoryMappings[storedKey];
+  if (mapped && mapped.length > 0) {
+    const mappedUpper = mapped.map((m) => toUpperSnake(m));
+    const allowedUpper = allowedList.map((a) => toUpperSnake(a));
+    if (mappedUpper.some((m) => allowedUpper.includes(m))) return true;
+  }
+
+  // Also consider the inverse: allowed entries might map to stored labels.
+  for (const allowed of allowedList) {
+    const key = String(allowed ?? "").toLowerCase();
+    const mappedFromAllowed = categoryMappings[key];
+    if (mappedFromAllowed && mappedFromAllowed.length > 0) {
+      const mappedVariants = mappedFromAllowed.flatMap((m) => variantsOf(m));
+      if (mappedVariants.some((mv) => storedVariants.includes(mv))) return true;
+    }
+  }
+
+  return false;
+}
+
+export default isCategoryAllowed;

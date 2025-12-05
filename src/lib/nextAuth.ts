@@ -36,7 +36,9 @@ export const authOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, email: true, name: true, password: true, role: true, attendantCategory: true, isActive: true },
+          // avoid selecting `attendantCategory` here — if the DB enum doesn't match
+          // the Prisma schema this can throw on read. Omit for now to allow login.
+          select: { id: true, email: true, name: true, password: true, role: true, isActive: true },
         });
 
         if (!user || !user.isActive || !user.password) return null;
@@ -49,7 +51,6 @@ export const authOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-          attendantCategory: user.attendantCategory,
         } as any;
       },
     }),
@@ -67,15 +68,37 @@ export const authOptions = {
       }
 
       if (!token.email) return token;
-      const existing = await prisma.user.findUnique({
-        where: { email: token.email },
-        select: { id: true, role: true, attendantCategory: true, isActive: true },
-      });
-      if (existing) {
-        token.role = existing.role ?? token.role;
-        token.attendantCategory = existing.attendantCategory ?? token.attendantCategory;
-        token.sub = existing.id ?? token.sub;
-        token.isActive = existing.isActive ?? token.isActive ?? true;
+      // Avoid selecting `attendantCategory` directly because a DB enum mismatch
+      // can cause Prisma to throw when reading the field. Fetch essential fields
+      // and skip attendantCategory for now — this lets the jwt flow continue.
+      try {
+        const existing = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { id: true, role: true, isActive: true },
+        });
+        if (existing) {
+          token.role = existing.role ?? token.role;
+          token.sub = existing.id ?? token.sub;
+          token.isActive = existing.isActive ?? token.isActive ?? true;
+        }
+      } catch (err) {
+        console.error("nextAuth: safe user lookup failed:", err);
+      }
+      // Attempt to enrich token with `attendantCategory` using a raw query
+      // that casts the DB enum to text. This avoids Prisma enum parsing
+      // errors when the DB enum labels differ from the Prisma schema.
+      try {
+        const rows = (await prisma.$queryRaw`
+          SELECT "attendantCategory"::text AS "attendantCategory"
+          FROM "User"
+          WHERE lower(email) = lower(${token.email})
+          LIMIT 1
+        `) as Array<{ attendantCategory?: string | null }>;
+        if (rows && rows[0] && typeof rows[0].attendantCategory !== "undefined") {
+          token.attendantCategory = rows[0].attendantCategory ?? token.attendantCategory;
+        }
+      } catch (err) {
+        console.error("nextAuth: failed to attach attendantCategory via raw query:", err);
       }
       return token;
     },

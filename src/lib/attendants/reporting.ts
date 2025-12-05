@@ -54,24 +54,25 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
   }
 
   const [activityAgg, assignmentCounts, fallbackUsers, jumiaOrders, kilimallOrders] = await Promise.all([
-    prisma.attendantActivity.groupBy({
-      by: ["category", "metric"],
-      where: { entryDate: { gte: since } },
-      _sum: { numericValue: true, intValue: true },
-    }),
-    prisma.attendantCategoryAssignment.groupBy({
-      by: ["category"],
-      where: { user: { role: { in: ["ATTENDANT", "SUPERVISOR"] }, isActive: true } },
-      _count: { _all: true },
-    }),
-    prisma.user.findMany({
-      where: {
-        role: { in: ["ATTENDANT", "SUPERVISOR"] },
-        isActive: true,
-        categoryAssignments: { none: {} },
-      },
-      select: { attendantCategory: true },
-    }),
+    prisma.$queryRaw`
+      SELECT category::text AS category, metric, SUM(COALESCE(numericValue::numeric, 0)) AS numeric_sum, SUM(COALESCE(intValue, 0)) AS int_sum
+      FROM "AttendantActivity"
+      WHERE "entryDate" >= ${since}
+      GROUP BY category, metric
+    `,
+    prisma.$queryRaw`
+      SELECT a.category::text AS category, COUNT(*) AS _count
+      FROM "AttendantCategoryAssignment" a
+      JOIN "User" u ON u.id = a."userId"
+      WHERE u.role IN ('ATTENDANT','SUPERVISOR') AND u."isActive" = true
+      GROUP BY a.category
+    `,
+    prisma.$queryRaw`
+      SELECT u."attendantCategory"::text AS "attendantCategory"
+      FROM "User" u
+      WHERE u.role IN ('ATTENDANT','SUPERVISOR') AND u."isActive" = true
+        AND NOT EXISTS (SELECT 1 FROM "AttendantCategoryAssignment" a WHERE a."userId" = u.id)
+    `,
     prisma.order.groupBy({
       by: ["status"],
       where: { shop: { platform: "JUMIA" } },
@@ -82,40 +83,47 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
       where: { shop: { platform: "KILIMALL" } },
       _count: true,
     }),
-  ]);
+  ] as const);
 
   // fetch DailyReport concerns with user category (limit recent rows)
-  const concernsRows = await prisma.dailyReport.findMany({
-    where: { date: { gte: since }, concerns: { not: null } },
-    select: { concerns: true, user: { select: { attendantCategory: true } }, createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const concernsRows = await prisma.$queryRaw`
+    SELECT d.concerns, d."createdAt", d."userId", u."attendantCategory"::text AS "attendantCategory"
+    FROM "DailyReport" d
+    LEFT JOIN "User" u ON u.id = d."userId"
+    WHERE d.date >= ${since} AND d.concerns IS NOT NULL
+    ORDER BY d."createdAt" DESC
+  ` as Array<{
+    concerns: string | null;
+    createdAt: Date;
+    userId: string | null;
+    attendantCategory: string | null;
+  }>;
 
   const totalsByCategory = attendantCategoryDefinitions.reduce<TotalsByCategory>((acc, def) => {
     (acc as any)[def.id] = { users: 0, metrics: {} };
     return acc;
   }, {} as TotalsByCategory);
 
-  for (const row of assignmentCounts) {
+  for (const row of assignmentCounts as Array<{ category: string; _count: string | number }>) {
     const cat = row.category as AttendantCategory;
     if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
-    (totalsByCategory as any)[cat].users += row._count._all;
+    (totalsByCategory as any)[cat].users += Number((row as any)._count ?? 0);
   }
 
-  for (const user of fallbackUsers) {
-    const cat = user.attendantCategory as AttendantCategory;
+  for (const user of fallbackUsers as Array<{ attendantCategory: string | null }>) {
+    const cat = (user.attendantCategory ?? "DIRECT_SALES_OPS") as AttendantCategory;
     if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
     (totalsByCategory as any)[cat].users += 1;
   }
 
-  for (const agg of activityAgg) {
+  for (const agg of activityAgg as Array<{ category: string; metric: string; numeric_sum: string | null; int_sum: string | null }>) {
     const cat = agg.category as AttendantCategory;
     if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
-    const numeric = agg._sum.numericValue;
-    const numericSum = numeric ? Number(numeric) : 0;
+    const numericSum = agg.numeric_sum ? Number(agg.numeric_sum) : 0;
+    const intSum = agg.int_sum ? Number(agg.int_sum) : 0;
     (totalsByCategory as any)[cat].metrics[agg.metric] = {
       numericSum,
-      intSum: agg._sum.intValue ?? 0,
+      intSum,
     };
   }
 
@@ -141,7 +149,7 @@ export async function getAttendantCategorySummary(opts: SummaryOptions = 7) {
 
   // group concerns by attendant category (trim and ignore empty values)
   for (const r of concernsRows) {
-    const cat = (r.user?.attendantCategory ?? ("DIRECT_SALES_OPS" as AttendantCategory)) as AttendantCategory;
+    const cat = ((r.attendantCategory ?? "DIRECT_SALES_OPS") as AttendantCategory) as AttendantCategory;
     if (!(totalsByCategory as any)[cat]) (totalsByCategory as any)[cat] = { users: 0, metrics: {} };
     const c = (totalsByCategory as any)[cat].concerns ?? { count: 0, recent: [] };
     const text = r.concerns ? String(r.concerns).trim() : "";
