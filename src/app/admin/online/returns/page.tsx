@@ -26,21 +26,67 @@ export default async function AdminOnlineReturnsPage(props: any) {
     normalizedStatus && Object.keys(statusLabels).includes(normalizedStatus) ? normalizedStatus : undefined;
   const selectedStatus = prismaStatusFilter;
 
-  const [counts, returns] = await Promise.all([
-    prisma.marketplaceReturn.groupBy({
-      by: ["status"],
-      _count: { _all: true },
-    }),
-    prisma.marketplaceReturn.findMany({
-      where: prismaStatusFilter ? { status: prismaStatusFilter } : undefined,
-      include: {
-        account: { select: { displayName: true, platform: true } },
-        attendant: { select: { name: true, email: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
-  ]);
+  type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
+  type ReturnRow = {
+    id: string;
+    status: MarketplaceReturnStatus;
+    orderItemId: string;
+    platform: string;
+    dueAt: Date;
+    createdAt: Date;
+    expectedAmount: unknown;
+    accountName: string;
+    accountPlatform: string;
+    attendantName: string | null;
+    attendantEmail: string | null;
+  };
+  let counts: ReturnGroup[] | null = null;
+  let returns: ReturnRow[] | null = null;
+  try {
+    const [groupCounts, returnEntries] = await Promise.all([
+      prisma.marketplaceReturn.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+      prisma.marketplaceReturn.findMany({
+        where: prismaStatusFilter ? { status: prismaStatusFilter } : undefined,
+        include: {
+          account: { select: { displayName: true, platform: true } },
+          attendant: { select: { name: true, email: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      }),
+    ]);
+    counts = groupCounts;
+    returns = returnEntries.map((entry) => ({
+      id: entry.id,
+      status: entry.status,
+      orderItemId: entry.orderItemId,
+      platform: entry.platform,
+      dueAt: entry.dueAt,
+      createdAt: entry.createdAt,
+      expectedAmount: entry.expectedAmount,
+      accountName: entry.account.displayName,
+      accountPlatform: entry.account.platform,
+      attendantName: entry.attendant?.name ?? null,
+      attendantEmail: entry.attendant?.email ?? null,
+    }));
+  } catch (err) {
+    console.error("Admin online returns failed to load data:", err);
+  }
+
+  if (!counts || !returns) {
+    return (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
+        <h2 className="text-lg font-semibold">Unable to load return cases</h2>
+        <p className="mt-2 text-sm">
+          The marketplace returns tables could not be queried. Verify that the latest online ops migrations are applied
+          and retry.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -94,16 +140,16 @@ export default async function AdminOnlineReturnsPage(props: any) {
                   <div className="text-xs text-slate-400">Order item #{entry.orderItemId}</div>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="font-semibold text-white">{entry.account.displayName}</div>
-                  <div className="text-xs text-slate-400 capitalize">{entry.platform.toLowerCase()}</div>
+                  <div className="font-semibold text-white">{entry.accountName}</div>
+                  <div className="text-xs text-slate-400 capitalize">{entry.accountPlatform.toLowerCase()}</div>
                 </td>
                 <td className="px-4 py-4">
-                  {entry.attendant ? (
+                  {entry.attendantName || entry.attendantEmail ? (
                     <>
                       <div className="font-semibold text-white">
-                        {entry.attendant.name ?? entry.attendant.email ?? "Unassigned"}
+                        {entry.attendantName ?? entry.attendantEmail ?? "Unassigned"}
                       </div>
-                      <div className="text-xs text-slate-400">{entry.attendant.email}</div>
+                      <div className="text-xs text-slate-400">{entry.attendantEmail}</div>
                     </>
                   ) : (
                     <span className="text-xs text-slate-500">Unassigned</span>
@@ -114,9 +160,7 @@ export default async function AdminOnlineReturnsPage(props: any) {
                 </td>
                 <td className="px-4 py-4 text-sm text-slate-200">
                   <div>{entry.dueAt.toLocaleDateString()}</div>
-                  <div className="text-xs text-slate-400">
-                    Created {entry.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </div>
+                  <div className="text-xs text-slate-400">Created {entry.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
                 </td>
               </tr>
             ))}

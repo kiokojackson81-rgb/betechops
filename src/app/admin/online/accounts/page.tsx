@@ -31,40 +31,57 @@ export default async function AdminOnlineAccountsPage() {
   }
 
   const now = new Date();
-  const accounts = await prisma.marketplaceAccount.findMany({
-    orderBy: [{ createdAt: "desc" }],
-    include: {
-      assignments: {
-        include: {
-          attendant: {
-            select: { id: true, name: true, email: true },
+  let rows: AccountRow[] | null = null;
+  try {
+    const accounts = await prisma.marketplaceAccount.findMany({
+      orderBy: [{ createdAt: "desc" }],
+      include: {
+        assignments: {
+          include: {
+            attendant: {
+              select: { id: true, name: true, email: true },
+            },
           },
+          where: {
+            OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+          },
+          orderBy: { createdAt: "desc" },
         },
-        where: {
-          OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-        },
-        orderBy: { createdAt: "desc" },
       },
-    },
-  });
+    });
 
-  const rows: AccountRow[] = accounts.map((account) => ({
-    id: account.id,
-    displayName: account.displayName,
-    platform: account.platform,
-    countryCode: account.countryCode,
-    currency: account.currency,
-    jumiaShopSid: account.jumiaShopSid,
-    kilimallShopCode: account.kilimallShopCode,
-    isActive: account.isActive,
-    assignments: account.assignments.map((assignment) => ({
-      attendantId: assignment.attendant?.id ?? assignment.attendantId,
-      attendantName: assignment.attendant?.name ?? null,
-      attendantEmail: assignment.attendant?.email ?? null,
-      role: assignment.role,
-      endsAt: assignment.endsAt,
-    })),
-  }));
+    rows = accounts.map((account) => ({
+      id: account.id,
+      displayName: account.displayName,
+      platform: account.platform,
+      countryCode: account.countryCode,
+      currency: account.currency,
+      jumiaShopSid: account.jumiaShopSid,
+      kilimallShopCode: account.kilimallShopCode,
+      isActive: account.isActive,
+      assignments: account.assignments.map((assignment) => ({
+        attendantId: assignment.attendant?.id ?? assignment.attendantId,
+        attendantName: assignment.attendant?.name ?? null,
+        attendantEmail: assignment.attendant?.email ?? null,
+        role: assignment.role,
+        endsAt: assignment.endsAt,
+      })),
+    }));
+  } catch (err) {
+    console.error("Admin online accounts failed to load data:", err);
+  }
+
+  if (!rows) {
+    return (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
+        <h2 className="text-lg font-semibold">Unable to load marketplace accounts</h2>
+        <p className="mt-2 text-sm">
+          The new online ops tables may not exist on this environment yet. Apply the latest Prisma migrations or check
+          your database connection, then refresh this page.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -148,4 +165,3 @@ export default async function AdminOnlineAccountsPage() {
     </div>
   );
 }
-

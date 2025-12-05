@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
 
@@ -13,6 +14,18 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 
 const numberFormatter = new Intl.NumberFormat("en-KE");
 
+type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
+
+type SummarySnapshot = {
+  accountCount: number;
+  activeAssignments: number;
+  payoutAgg: Awaited<ReturnType<typeof prisma.marketplacePayoutWeek.aggregate>>;
+  ordersAgg: Awaited<ReturnType<typeof prisma.marketplaceOrder.aggregate>>;
+  unpricedOrders: number;
+  returnsOpen: number;
+  returnsByStatus: ReturnGroup[];
+};
+
 export default async function AdminOnlineSummaryPage() {
   const session = await auth();
   const role = (session?.user as any)?.role;
@@ -23,8 +36,17 @@ export default async function AdminOnlineSummaryPage() {
   const period = getTradingPeriodFor(new Date());
   const now = new Date();
 
-  const [accountCount, activeAssignments, payoutAgg, ordersAgg, unpricedOrders, returnsOpen, returnsByStatus] =
-    await Promise.all([
+  let snapshot: SummarySnapshot | null = null;
+  try {
+    const [
+      accountCount,
+      activeAssignments,
+      payoutAgg,
+      ordersAgg,
+      unpricedOrders,
+      returnsOpen,
+      returnsByStatusRaw,
+    ] = await Promise.all([
       prisma.marketplaceAccount.count(),
       prisma.marketplaceAccountAssignment.count({
         where: {
@@ -63,6 +85,53 @@ export default async function AdminOnlineSummaryPage() {
       }),
     ]);
 
+    snapshot = {
+      accountCount,
+      activeAssignments,
+      payoutAgg,
+      ordersAgg,
+      unpricedOrders,
+      returnsOpen,
+      returnsByStatus: returnsByStatusRaw.map((entry) => ({
+        status: entry.status,
+        _count: { _all: entry._count._all },
+      })),
+    };
+  } catch (err) {
+    console.error("Admin online summary failed to load metrics:", err);
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
+        <h2 className="text-lg font-semibold">Unable to load online metrics</h2>
+        <p className="mt-2 text-sm text-rose-100">
+          The database query for marketplace metrics failed. Confirm that the latest Prisma migrations are applied and
+          that the nightly sync job has run successfully, then refresh this page.
+        </p>
+      </div>
+    );
+  }
+
+  const {
+    accountCount,
+    activeAssignments,
+    payoutAgg,
+    ordersAgg,
+    unpricedOrders,
+    returnsOpen,
+    returnsByStatus,
+  } = snapshot;
+
+  const ordersCount =
+    ordersAgg._count && typeof ordersAgg._count !== "boolean"
+      ? ordersAgg._count._all ?? 0
+      : 0;
+  const payoutStatementCount =
+    payoutAgg._count && typeof payoutAgg._count !== "boolean"
+      ? payoutAgg._count._all ?? 0
+      : 0;
+
   const cards = [
     { label: "Active accounts", value: accountCount },
     { label: "Active assignments", value: activeAssignments },
@@ -72,7 +141,7 @@ export default async function AdminOnlineSummaryPage() {
     },
     {
       label: "Orders synced (period)",
-      value: numberFormatter.format(ordersAgg._count?._all ?? 0),
+      value: numberFormatter.format(ordersCount),
     },
     { label: "Unpriced orders", value: unpricedOrders },
     { label: "Returns waiting at hub", value: returnsOpen },
@@ -103,7 +172,7 @@ export default async function AdminOnlineSummaryPage() {
           <div>
             <h3 className="text-lg font-semibold text-white">Marketplace payout weeks</h3>
             <p className="text-sm text-slate-400">
-              {payoutAgg._count?._all ?? 0} statements synced between {period.start.toLocaleDateString()} and{" "}
+              {payoutStatementCount} statements synced between {period.start.toLocaleDateString()} and{" "}
               {period.end.toLocaleDateString()}.
             </p>
           </div>
@@ -124,7 +193,7 @@ export default async function AdminOnlineSummaryPage() {
           <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-4">
             <dt className="text-xs uppercase tracking-wide text-slate-400">Statements counted</dt>
             <dd className="mt-2 text-xl font-semibold text-white">
-              {numberFormatter.format(payoutAgg._count?._all ?? 0)}
+              {numberFormatter.format(payoutStatementCount)}
             </dd>
           </div>
         </dl>
@@ -172,4 +241,3 @@ export default async function AdminOnlineSummaryPage() {
     </div>
   );
 }
-
