@@ -35,7 +35,9 @@ export function getSession() {
 
 type AttendantGuardSuccess = {
   ok: true;
-  user: { id: string; role: Role; attendantCategory: AttendantCategory | null };
+  // attendantCategory is read via raw SQL and may be an arbitrary string
+  // (e.g. 'junior') during the migration transition, so accept string|null here.
+  user: { id: string; role: Role; attendantCategory: string | null };
   role: string | null;
   session: Session;
   impersonated: boolean;
