@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MarketplaceReturnStatus } from "@prisma/client";
+import { MarketplaceReturnStatus, Prisma } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
 
@@ -16,15 +16,14 @@ const numberFormatter = new Intl.NumberFormat("en-KE");
 
 type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
 
-type SummarySnapshot = {
-  accountCount: number;
-  activeAssignments: number;
-  payoutAgg: Awaited<ReturnType<typeof prisma.marketplacePayoutWeek.aggregate>>;
-  ordersAgg: Awaited<ReturnType<typeof prisma.marketplaceOrder.aggregate>>;
-  unpricedOrders: number;
-  returnsOpen: number;
-  returnsByStatus: ReturnGroup[];
-};
+const makeEmptyPayoutAgg = () => ({
+  _sum: { grossSales: new Prisma.Decimal(0), payoutAmount: new Prisma.Decimal(0) },
+  _count: { _all: 0 },
+});
+const makeEmptyOrdersAgg = () => ({
+  _sum: { sellingPrice: new Prisma.Decimal(0) },
+  _count: { _all: 0 },
+});
 
 export default async function AdminOnlineSummaryPage() {
   const session = await auth();
@@ -36,23 +35,38 @@ export default async function AdminOnlineSummaryPage() {
   const period = getTradingPeriodFor(new Date());
   const now = new Date();
 
-  let snapshot: SummarySnapshot | null = null;
-  try {
-    const [
-      accountCount,
-      activeAssignments,
-      payoutAgg,
-      ordersAgg,
-      unpricedOrders,
-      returnsOpen,
-      returnsByStatusRaw,
-    ] = await Promise.all([
+  const warnings: string[] = [];
+
+  const safe = async <T,>(label: string, fallback: () => T, fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (err) {
+      console.error(`[admin/online/summary] Failed to load ${label}:`, err);
+      warnings.push(label);
+      return fallback();
+    }
+  };
+
+  const [
+    accountCount,
+    activeAssignments,
+    payoutAgg,
+    ordersAgg,
+    unpricedOrders,
+    returnsOpen,
+    returnsByStatusRaw,
+  ] = await Promise.all([
+    safe("account count", () => 0, () =>
       prisma.marketplaceAccount.count(),
+    ),
+    safe("assignment count", () => 0, () =>
       prisma.marketplaceAccountAssignment.count({
         where: {
           OR: [{ endsAt: null }, { endsAt: { gt: now } }],
         },
       }),
+    ),
+    safe("payout stats", makeEmptyPayoutAgg, () =>
       prisma.marketplacePayoutWeek.aggregate({
         _sum: { grossSales: true, payoutAmount: true },
         _count: { _all: true },
@@ -63,6 +77,8 @@ export default async function AdminOnlineSummaryPage() {
           },
         },
       }),
+    ),
+    safe("order stats", makeEmptyOrdersAgg, () =>
       prisma.marketplaceOrder.aggregate({
         _count: { _all: true },
         _sum: { sellingPrice: true },
@@ -73,55 +89,26 @@ export default async function AdminOnlineSummaryPage() {
           },
         },
       }),
-      prisma.marketplaceOrder.count({
-        where: { buyingPrice: null },
-      }),
-      prisma.marketplaceReturn.count({
-        where: { status: "WAITING_AT_HUB" },
-      }),
-      prisma.marketplaceReturn.groupBy({
+    ),
+    safe("unpriced orders count", () => 0, () =>
+      prisma.marketplaceOrder.count({ where: { buyingPrice: null } }),
+    ),
+    safe("pending returns count", () => 0, () =>
+      prisma.marketplaceReturn.count({ where: { status: "WAITING_AT_HUB" } }),
+    ),
+    safe("returns grouped by status", () => [] as ReturnGroup[], async () => {
+      const data = await prisma.marketplaceReturn.groupBy({
         by: ["status"],
         _count: { _all: true },
-      }),
-    ]);
-
-    snapshot = {
-      accountCount,
-      activeAssignments,
-      payoutAgg,
-      ordersAgg,
-      unpricedOrders,
-      returnsOpen,
-      returnsByStatus: returnsByStatusRaw.map((entry) => ({
+      });
+      return data.map((entry) => ({
         status: entry.status,
         _count: { _all: entry._count._all },
-      })),
-    };
-  } catch (err) {
-    console.error("Admin online summary failed to load metrics:", err);
-  }
+      }));
+    }),
+  ]);
 
-  if (!snapshot) {
-    return (
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
-        <h2 className="text-lg font-semibold">Unable to load online metrics</h2>
-        <p className="mt-2 text-sm text-rose-100">
-          The database query for marketplace metrics failed. Confirm that the latest Prisma migrations are applied and
-          that the nightly sync job has run successfully, then refresh this page.
-        </p>
-      </div>
-    );
-  }
-
-  const {
-    accountCount,
-    activeAssignments,
-    payoutAgg,
-    ordersAgg,
-    unpricedOrders,
-    returnsOpen,
-    returnsByStatus,
-  } = snapshot;
+  const returnsByStatus = returnsByStatusRaw;
 
   const ordersCount =
     ordersAgg._count && typeof ordersAgg._count !== "boolean"
@@ -149,6 +136,15 @@ export default async function AdminOnlineSummaryPage() {
 
   return (
     <div className="space-y-8">
+      {warnings.length > 0 && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-amber-100">
+          <p className="font-semibold">Some marketplace metrics are unavailable right now.</p>
+          <p className="mt-1 text-sm text-amber-200">
+            {warnings.join(", ")}. This usually means the latest database migrations haven't been applied yet or the nightly sync job hasn't populated
+            data for this environment. Other metrics are still shown below.
+          </p>
+        </div>
+      )}
       <section>
         <p className="text-xs uppercase tracking-wide text-slate-400">
           Current trading period • {period.label}
