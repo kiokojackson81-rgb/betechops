@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { fetchOrdersForShop, fetchPayoutsForShop } from '@/lib/jumia';
 import { fetchOrders as kmFetchOrders, fetchPayouts as kmFetchPayouts } from '@/lib/connectors/kilimall';
 import { decryptJson } from '@/lib/crypto/secure-json';
+import { syncOnlineMarketplaceData } from '@/lib/jobs/onlineSync';
+import { getTradingPeriodFor } from '@/lib/tradingPeriod';
 
 export async function syncOrdersJob() {
   const shops = await prisma.shop.findMany();
@@ -63,7 +65,30 @@ export async function returnsSlaJob() {
     await prisma.returnCase.update({ where: { id: r.id }, data: { status: 'OVERDUE' } });
     // TODO: compute penalty amount and append to CommissionLedger
   }
-  return { processed: overdue.length };
+  const marketplaceOverdue = await prisma.marketplaceReturn.findMany({
+    where: { status: 'WAITING_AT_HUB', dueAt: { lt: now }, attendantId: { not: null } },
+  });
+  const period = getTradingPeriodFor(now);
+  for (const entry of marketplaceOverdue) {
+    await prisma.marketplaceReturn.update({
+      where: { id: entry.id },
+      data: { status: 'CHARGED_TO_ATTENDANT' },
+    });
+    if (entry.attendantId) {
+      await prisma.attendantPayrollAdjustment.create({
+        data: {
+          attendantId: entry.attendantId,
+          periodKey: period.key,
+          periodLabel: period.label,
+          adjustmentType: 'DISCIPLINE',
+          label: `Return not picked (${entry.orderItemId})`,
+          amount: Math.round(Number(entry.expectedAmount ?? 0)),
+          createdById: entry.attendantId,
+        },
+      });
+    }
+  }
+  return { processed: overdue.length, marketplaceProcessed: marketplaceOverdue.length };
 }
 
 export async function commissionCalcJob() {
@@ -73,5 +98,10 @@ export async function commissionCalcJob() {
 
 export async function priceLearnerJob() {
   // placeholder: look for product cost patterns and mark LEARNED prices
+  return { ok: true };
+}
+
+export async function onlineOpsSyncJob() {
+  await syncOnlineMarketplaceData();
   return { ok: true };
 }
