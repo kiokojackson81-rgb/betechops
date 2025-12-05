@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";

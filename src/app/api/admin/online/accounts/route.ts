@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { Platform } from "@prisma/client";
 import { requireRole } from "@/lib/api";
