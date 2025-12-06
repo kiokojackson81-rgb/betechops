@@ -58,6 +58,20 @@ export async function middleware(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const category = (token as any)?.attendantCategory ?? (token as any)?.user?.attendantCategory;
 
+  // Temporary debug logging: record masked email, role and category for
+  // requests that hit auth/post-login or attendant routes. These logs are
+  // intentionally minimal and mask the email to avoid exposing full PII.
+  try {
+    const rawEmail = (token as any)?.email ?? (token as any)?.user?.email;
+    const maskedEmail = typeof rawEmail === "string" ? rawEmail.replace(/^(.{2}).+(@.+)$/, "$1***$2") : null;
+    if (pathname.startsWith("/auth/post-login") || pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker")) {
+      // eslint-disable-next-line no-console
+      console.log(`middleware: path=${pathname} maskedEmail=${maskedEmail} role=${String(role)} category=${String(category)}`);
+    }
+  } catch (e) {
+    // ignore logging errors
+  }
+
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     if (role !== "ADMIN") {
       url.pathname = "/admin/login";
