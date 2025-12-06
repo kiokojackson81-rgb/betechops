@@ -1,9 +1,10 @@
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Modal from "@/app/_components/Modal";
-import { computeRowStatus } from '@/lib/dailyReportHelpers';
+import { computeRowStatus } from "@/lib/dailyReportHelpers";
 import { showToast } from "@/lib/ui/toast";
 
 interface Report {
@@ -27,12 +28,7 @@ interface Summary {
   totalCommissionEarned?: number;
 }
 
-// Define the days with tasks for drop-down options.  This mirrors the keys
-// used on the attendant form.  If you change the tasks mapping in the
-// attendant page, update this list accordingly.
 const DAY_KEYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-
-// Marketplace shop list used for CSV export and admin table columns
 const MARKETPLACE_SHOPS = [
   "Betech Store",
   "JM Collection",
@@ -43,8 +39,9 @@ const MARKETPLACE_SHOPS = [
   "Kilimall",
 ];
 
-const cardClasses =
-  "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
+const shellCard = "rounded-2xl border border-white/10 bg-slate-900/70 shadow-xl shadow-black/20";
+const pillClasses =
+  "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition";
 
 function formatShortDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -62,7 +59,7 @@ function getTradingRange(date = new Date()) {
   return {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
-    label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
+    label: `${formatShortDate(start)} – ${formatShortDate(end)}`,
   };
 }
 
@@ -81,37 +78,118 @@ export default function AdminDailyReportPage() {
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
-  const [exportScope, setExportScope] = useState<'page' | 'all' | 'json'>('all');
+  const [exportScope, setExportScope] = useState<"page" | "all" | "json">("all");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState<string>('');
-  const [legendFilters, setLegendFilters] = useState<Array<'complete' | 'partial' | 'missing'>>(['complete','partial','missing']);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [legendFilters, setLegendFilters] = useState<Array<"complete" | "partial" | "missing">>([
+    "complete",
+    "partial",
+    "missing",
+  ]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailReport, setDetailReport] = useState<Report | null>(null);
   const [jsonPreview, setJsonPreview] = useState<{ title: string; payload: any } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  function getFilteredReports() {
-    return (reports || []).filter((r) => {
-      if (!shopFilter) return true;
-      const mr = (r.tasks as any)?.marketplaceReview ?? {};
-      const s = mr[shopFilter] || {};
-      const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
-      const done = checks.filter(Boolean).length;
-      return done >= (minComplete || 0);
-    }).sort((a, b) => {
-      if (!sortByCompleteness) return 0;
-      // compare by selected shop completeness (desc)
-      const sa = (a.tasks as any)?.marketplaceReview ?? {};
-      const sb = (b.tasks as any)?.marketplaceReview ?? {};
-      const aa = (sa[shopFilter] || {});
-      const bb = (sb[shopFilter] || {});
-      const ca = [aa.stockChecked, aa.pricingConfirmed, aa.competitorsReviewed, aa.oosReviewed].filter(Boolean).length;
-      const cb = [bb.stockChecked, bb.pricingConfirmed, bb.competitorsReviewed, bb.oosReviewed].filter(Boolean).length;
-      return cb - ca;
-    });
-  }
+  // Derived + memoized to keep render lean
+  const filteredReports = useMemo(() => {
+    return (reports || [])
+      .filter((r) => {
+        if (!shopFilter) return true;
+        const mr = (r.tasks as any)?.marketplaceReview ?? {};
+        const s = mr[shopFilter] || {};
+        const checks = [s.stockChecked, s.pricingConfirmed, s.competitorsReviewed, s.oosReviewed];
+        const done = checks.filter(Boolean).length;
+        return done >= (minComplete || 0);
+      })
+      .sort((a, b) => {
+        if (!sortByCompleteness || !shopFilter) return 0;
+        const sa = (a.tasks as any)?.marketplaceReview ?? {};
+        const sb = (b.tasks as any)?.marketplaceReview ?? {};
+        const aa = sa[shopFilter] || {};
+        const bb = sb[shopFilter] || {};
+        const ca = [aa.stockChecked, aa.pricingConfirmed, aa.competitorsReviewed, aa.oosReviewed].filter(
+          Boolean,
+        ).length;
+        const cb = [bb.stockChecked, bb.pricingConfirmed, bb.competitorsReviewed, bb.oosReviewed].filter(
+          Boolean,
+        ).length;
+        return cb - ca;
+      });
+  }, [reports, shopFilter, minComplete, sortByCompleteness]);
 
-  // fetch on mount so header KPIs render immediately
+  const filteredReportsForAgg = filteredReports;
+
+  // Aggregates for KPIs fall back to summary if present
+  const agg = useMemo(() => {
+    const sum = filteredReportsForAgg.reduce(
+      (acc, r) => {
+        const metrics = r.tasks?.metrics ?? {};
+        const cats = r.tasks?.categories ?? {};
+        acc.newUploads += Number(cats.newUploads ?? 0);
+        acc.copiesUploaded += Number(cats.copiesUploaded ?? 0);
+        acc.productsEdited += Number(cats.productsEdited ?? 0);
+        acc.salesCount += Array.isArray(r.tasks?.sales) ? r.tasks.sales.length : 0;
+        acc.walkIns += Number(metrics.walkInServed ?? 0);
+        acc.purchases += Number(metrics.purchasesMade ?? 0);
+        acc.liveSessions += Number(metrics.liveSessionsCount ?? 0);
+        acc.commission += Number(metrics.commissionEarned ?? 0);
+        return acc;
+      },
+      {
+        newUploads: 0,
+        copiesUploaded: 0,
+        productsEdited: 0,
+        salesCount: 0,
+        walkIns: 0,
+        purchases: 0,
+        liveSessions: 0,
+        commission: 0,
+      },
+    );
+
+    return {
+      totalProducts: Number(summary?.totalProducts ?? 0),
+      totalSales: Number(summary?.totalSales ?? 0),
+      totalNewProducts: Number(summary?.totalNewProducts ?? sum.newUploads),
+      totalProductsEdited: Number(summary?.totalProductsEdited ?? sum.productsEdited),
+      totalCopiesUploaded: Number(summary?.totalCopiesUploaded ?? sum.copiesUploaded),
+      totalWalkInsServed: Number(summary?.totalWalkInsServed ?? sum.walkIns),
+      totalPurchasesMade: Number(summary?.totalPurchasesMade ?? sum.purchases),
+      totalLiveSessions: Number(summary?.totalLiveSessions ?? sum.liveSessions),
+      totalCommissionEarned: Number(summary?.totalCommissionEarned ?? sum.commission),
+      salesCount: sum.salesCount,
+    };
+  }, [filteredReportsForAgg, summary]);
+
+  const kpiCards = [
+    { label: "Total products", value: agg.totalProducts.toLocaleString() },
+    { label: "Total sales", value: `KES ${agg.totalSales.toLocaleString()}` },
+    { label: "Live sessions", value: agg.totalLiveSessions.toLocaleString() },
+    { label: "Commission", value: `KES ${agg.totalCommissionEarned.toLocaleString()}` },
+    { label: "New products", value: agg.totalNewProducts.toLocaleString() },
+    { label: "Products edited", value: agg.totalProductsEdited.toLocaleString() },
+    { label: "Copies uploaded", value: agg.totalCopiesUploaded.toLocaleString() },
+    { label: "Walk-ins served", value: agg.totalWalkInsServed.toLocaleString() },
+    { label: "Customers purchased", value: agg.totalPurchasesMade.toLocaleString() },
+  ];
+
+  const scopeOptions: { label: string; value: "page" | "all" | "json" }[] = [
+    { label: "Current page", value: "page" },
+    { label: "All filtered", value: "all" },
+    { label: "Full JSON", value: "json" },
+  ];
+  const legendOptions: { key: "complete" | "partial" | "missing"; label: string }[] = [
+    { key: "complete", label: "Complete" },
+    { key: "partial", label: "Partial" },
+    { key: "missing", label: "Missing" },
+  ];
+
+  const tradingRange = getTradingRange();
+  const pageStart = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount);
+  const pageEnd = Math.min(page * pageSize, totalCount);
+  const maxPage = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+
   useEffect(() => {
     void fetchReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,7 +212,6 @@ export default function AdminDailyReportPage() {
         setReports(data.reports ?? []);
         setSummary(data.summary ?? null);
         setTotalCount(data.totalCount ?? 0);
-        // if empty and page>1, step back
         if ((data.reports ?? []).length === 0 && page > 1) setPage(1);
         if (!opts?.silent) showToast("Reports loaded", "success");
       } else {
@@ -149,19 +226,9 @@ export default function AdminDailyReportPage() {
   }
 
   function downloadCsv() {
-    const marketplaceShops = [
-      "Betech Store",
-      "JM Collection",
-      "Hitech Power",
-      "Maxton",
-      "Sky Store",
-      "Betech Solar",
-      "Kilimall",
-    ];
-
     const shopCols: string[] = [];
-    for (const shop of marketplaceShops) {
-      const safe = shop.replace(/\s+/g, '_');
+    for (const shop of MARKETPLACE_SHOPS) {
+      const safe = shop.replace(/\s+/g, "_");
       shopCols.push(`${safe}_stockChecked`);
       shopCols.push(`${safe}_pricingConfirmed`);
       shopCols.push(`${safe}_competitorsReviewed`);
@@ -174,9 +241,7 @@ export default function AdminDailyReportPage() {
       "Day",
       "Attendant",
       "SubmittedBy",
-      // keep raw marketplace JSON for compatibility
       "MarketplaceReview",
-      // flattened per-shop columns
       ...shopCols,
       "Products",
       "Sales",
@@ -193,17 +258,10 @@ export default function AdminDailyReportPage() {
       "OfficeCleaned",
       "OfficeNotes",
       "SalesDetails",
-      // include customerComms JSON
       "CustomerComms",
       "Tasks",
     ];
-    // safer CSV: quote fields, escape quotes, preserve JSON tasks
     const quote = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
-    // filtered + sorted reports for table and CSV export
-    const filteredReports = getFilteredReports();
-
-    const csvSource = filteredReports;
-
     const rows = filteredReports.map((r) => {
       const dateStr = new Date(r.date).toISOString().split("T")[0];
       const attendant = r.user?.name ?? "";
@@ -214,33 +272,31 @@ export default function AdminDailyReportPage() {
       const customerOps = tasks.customerOperations ?? {};
       const office = tasks.officeMaintenance ?? {};
       const salesDetails = Array.isArray(tasks.sales) ? JSON.stringify(tasks.sales) : "[]";
-
-      // per-shop flattened values
       const mr = (tasks as any).marketplaceReview || {};
       const shopValues: string[] = [];
-      for (const shop of marketplaceShops) {
+      for (const shop of MARKETPLACE_SHOPS) {
         const s = mr[shop] || {};
-        shopValues.push(String(s.stockChecked ? 'Yes' : ''));
-        shopValues.push(String(s.pricingConfirmed ? 'Yes' : ''));
-        shopValues.push(String(s.competitorsReviewed ? 'Yes' : ''));
-        shopValues.push(String(s.oosReviewed ? 'Yes' : ''));
-        shopValues.push(String(s.notes ?? ''));
+        shopValues.push(String(s.stockChecked ? "Yes" : ""));
+        shopValues.push(String(s.pricingConfirmed ? "Yes" : ""));
+        shopValues.push(String(s.competitorsReviewed ? "Yes" : ""));
+        shopValues.push(String(s.oosReviewed ? "Yes" : ""));
+        shopValues.push(String(s.notes ?? ""));
       }
 
       const cc = (tasks as any).customerComms || {};
       const ccValues = [
-        String(cc.walkInServed ?? ''),
-        String(cc.onlineServed ?? ''),
-        String(cc.callsHandled ?? ''),
-        String(cc.whatsappSmsReplied ?? ''),
-        String(cc.fbCommentsReplied ?? ''),
-        String(cc.fbDmsReplied ?? ''),
-        String(cc.igCommentsReplied ?? ''),
-        String(cc.igDmsReplied ?? ''),
-        String(cc.fbAllCleared ? 'Yes' : ''),
-        String(cc.igAllCleared ? 'Yes' : ''),
-        String(cc.competitorNotes ?? ''),
-        String(cc.improvementSuggestions ?? ''),
+        String(cc.walkInServed ?? ""),
+        String(cc.onlineServed ?? ""),
+        String(cc.callsHandled ?? ""),
+        String(cc.whatsappSmsReplied ?? ""),
+        String(cc.fbCommentsReplied ?? ""),
+        String(cc.fbDmsReplied ?? ""),
+        String(cc.igCommentsReplied ?? ""),
+        String(cc.igDmsReplied ?? ""),
+        String(cc.fbAllCleared ? "Yes" : ""),
+        String(cc.igAllCleared ? "Yes" : ""),
+        String(cc.competitorNotes ?? ""),
+        String(cc.improvementSuggestions ?? ""),
       ];
 
       return [
@@ -248,7 +304,6 @@ export default function AdminDailyReportPage() {
         r.day,
         attendant,
         submitted,
-        // per-shop flattened columns
         ...shopValues,
         String(r.productsCount),
         String(r.totalSales),
@@ -265,9 +320,7 @@ export default function AdminDailyReportPage() {
         String(office.officeCleaned ? "Yes" : "No"),
         String(office.officeNotes ?? ""),
         salesDetails,
-        // flattened customerComms
         ...ccValues,
-        // customerComms JSON
         JSON.stringify(tasks.customerComms ?? {}),
         JSON.stringify(tasks ?? {}),
       ];
@@ -286,102 +339,59 @@ export default function AdminDailyReportPage() {
   }
 
   const CSV_COLUMNS = [
-    'Date', 'Day', 'Attendant', 'SubmittedBy', 'MarketplaceReview (JSON)',
-    // per-shop flattened
+    "Date",
+    "Day",
+    "Attendant",
+    "SubmittedBy",
+    "MarketplaceReview (JSON)",
     ...MARKETPLACE_SHOPS.flatMap((s) => {
-      const safe = s.replace(/\s+/g, '_');
-      return [`${safe}_stockChecked`, `${safe}_pricingConfirmed`, `${safe}_competitorsReviewed`, `${safe}_oosReviewed`, `${safe}_notes`];
+      const safe = s.replace(/\s+/g, "_");
+      return [
+        `${safe}_stockChecked`,
+        `${safe}_pricingConfirmed`,
+        `${safe}_competitorsReviewed`,
+        `${safe}_oosReviewed`,
+        `${safe}_notes`,
+      ];
     }),
-    'Products', 'Sales', 'NewUploads', 'CopiesUploaded', 'ProductsEdited',
-    'Attended Marketing Meeting', 'Participated In Video Shoot', 'Marketing Videos Posted',
-    'WalkInCustomers', 'CustomersPurchased', 'LiveViewers', 'LivePurchases',
-    'OfficeCleaned', 'OfficeNotes', 'CustomerComms (JSON)', 'Tasks (JSON)'
+    "Products",
+    "Sales",
+    "NewUploads",
+    "CopiesUploaded",
+    "ProductsEdited",
+    "Attended Marketing Meeting",
+    "Participated In Video Shoot",
+    "Marketing Videos Posted",
+    "WalkInCustomers",
+    "CustomersPurchased",
+    "LiveViewers",
+    "LivePurchases",
+    "OfficeCleaned",
+    "OfficeNotes",
+    "CustomerComms (JSON)",
+    "Tasks (JSON)",
   ];
-
-  // Aggregates for currently filtered reports (used in header KPIs and PDF export)
-  const filteredReportsForAgg = getFilteredReports();
-  const aggNewUploads = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.newUploads) ? Number(r.tasks.categories.newUploads) : 0), 0);
-  const aggCopies = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.copiesUploaded) ? Number(r.tasks.categories.copiesUploaded) : 0), 0);
-  const aggEdited = filteredReportsForAgg.reduce((sum, r) => sum + ((r.tasks?.categories?.productsEdited) ? Number(r.tasks.categories.productsEdited) : 0), 0);
-  const aggSalesCount = filteredReportsForAgg.reduce((sum, r) => sum + ((Array.isArray(r.tasks?.sales)) ? r.tasks.sales.length : 0), 0);
-  const aggWalkIns = filteredReportsForAgg.reduce((sum, r) => {
-    const metrics = r.tasks?.metrics ?? {};
-    return sum + Number(metrics.walkInServed ?? 0);
-  }, 0);
-  const aggPurchases = filteredReportsForAgg.reduce((sum, r) => {
-    const metrics = r.tasks?.metrics ?? {};
-    return sum + Number(metrics.purchasesMade ?? 0);
-  }, 0);
-  const aggLiveSessions = filteredReportsForAgg.reduce((sum, r) => {
-    const metrics = r.tasks?.metrics ?? {};
-    return sum + Number(metrics.liveSessionsCount ?? 0);
-  }, 0);
-  const aggCommissionEarned = filteredReportsForAgg.reduce((sum, r) => {
-    const metrics = r.tasks?.metrics ?? {};
-    return sum + Number(metrics.commissionEarned ?? 0);
-  }, 0);
-  const tradingRange = getTradingRange();
-  const stats = {
-    totalProducts: Number(summary?.totalProducts ?? 0),
-    totalSales: Number(summary?.totalSales ?? 0),
-    totalNewProducts: Number(summary?.totalNewProducts ?? aggNewUploads),
-    totalProductsEdited: Number(summary?.totalProductsEdited ?? aggEdited),
-    totalCopiesUploaded: Number(summary?.totalCopiesUploaded ?? aggCopies),
-    totalWalkInsServed: Number(summary?.totalWalkInsServed ?? aggWalkIns),
-    totalPurchasesMade: Number(summary?.totalPurchasesMade ?? aggPurchases),
-    totalLiveSessions: Number(summary?.totalLiveSessions ?? aggLiveSessions),
-    totalCommissionEarned: Number(summary?.totalCommissionEarned ?? aggCommissionEarned),
-  };
-  const kpiCards = [
-    { label: "Total products", value: stats.totalProducts.toLocaleString() },
-    { label: "Total sales", value: `KES ${stats.totalSales.toLocaleString()}` },
-    { label: "Live sessions", value: stats.totalLiveSessions.toLocaleString() },
-    { label: "Commission", value: `KES ${stats.totalCommissionEarned.toLocaleString()}` },
-    { label: "New products", value: stats.totalNewProducts.toLocaleString() },
-    { label: "Products edited", value: stats.totalProductsEdited.toLocaleString() },
-    { label: "Copies uploaded", value: stats.totalCopiesUploaded.toLocaleString() },
-    { label: "Walk-ins served", value: stats.totalWalkInsServed.toLocaleString() },
-    { label: "Customers purchased", value: stats.totalPurchasesMade.toLocaleString() },
-  ];
-  const scopeOptions: { label: string; value: 'page' | 'all' | 'json' }[] = [
-    { label: "Current page", value: "page" },
-    { label: "All filtered", value: "all" },
-    { label: "Full JSON", value: "json" },
-  ];
-  const legendOptions: { key: 'complete' | 'partial' | 'missing'; label: string; color: string }[] = [
-    { key: 'complete', label: 'Complete', color: 'bg-status-complete' },
-    { key: 'partial', label: 'Partial', color: 'bg-status-partial' },
-    { key: 'missing', label: 'Missing', color: 'bg-status-missing' },
-  ];
-  const pageStart = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount);
-  const pageEnd = Math.min(page * pageSize, totalCount);
-  const maxPage = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
-  const toggleLegend = (key: 'complete' | 'partial' | 'missing') => {
-    setLegendFilters((prev) =>
-      prev.includes(key)
-        ? (prev.filter((item) => item !== key) as Array<'complete' | 'partial' | 'missing'>)
-        : ([...prev, key] as Array<'complete' | 'partial' | 'missing'>)
-    );
-  };
 
   function downloadPdf() {
-    const rows = filteredReportsForAgg.map((r) => {
-      const dateStr = new Date(r.date).toISOString().split('T')[0];
-      const attendant = r.user?.name ?? '';
-      const submitted = r.tasks?.submittedBy ?? '';
-      const products = r.tasks?.categories ?? {};
-      const sales = Array.isArray(r.tasks?.sales) ? r.tasks.sales : [];
-      return `<tr>
+    const rows = filteredReportsForAgg
+      .map((r) => {
+        const dateStr = new Date(r.date).toISOString().split("T")[0];
+        const attendant = r.user?.name ?? "";
+        const submitted = r.tasks?.submittedBy ?? "";
+        const products = r.tasks?.categories ?? {};
+        const sales = Array.isArray(r.tasks?.sales) ? r.tasks.sales : [];
+        return `<tr>
         <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
         <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
         <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
         <td style="padding:6px;border:1px solid #ddd">${submitted}</td>
-        <td style="padding:6px;border:1px solid #ddd">${products.newUploads ?? ''}</td>
-        <td style="padding:6px;border:1px solid #ddd">${products.copiesUploaded ?? ''}</td>
-        <td style="padding:6px;border:1px solid #ddd">${products.productsEdited ?? ''}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.newUploads ?? ""}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.copiesUploaded ?? ""}</td>
+        <td style="padding:6px;border:1px solid #ddd">${products.productsEdited ?? ""}</td>
         <td style="padding:6px;border:1px solid #ddd">${sales.length}</td>
       </tr>`;
-    }).join('');
+      })
+      .join("");
 
     const html = `
       <html>
@@ -411,48 +421,49 @@ export default function AdminDailyReportPage() {
         </body>
       </html>`;
 
-    const w = window.open('', '_blank', 'noopener');
+    const w = window.open("", "_blank", "noopener");
     if (!w) return;
     w.document.write(html);
     w.document.close();
-    setTimeout(() => { w.print(); }, 350);
+    setTimeout(() => {
+      w.print();
+    }, 350);
   }
 
-  // New: generate HTML for chosen scope and optionally include JSON block
-  function generateExportHtml(scope: 'page' | 'all' | 'json') {
+  function generateExportHtml(scope: "page" | "all" | "json") {
     let sourceReports: Report[] = [];
-    if (scope === 'page') {
-      sourceReports = reports; // current page
-    } else if (scope === 'all' || scope === 'json') {
-      sourceReports = filteredReportsForAgg; // all filtered
+    if (scope === "page") {
+      sourceReports = reports;
+    } else if (scope === "all" || scope === "json") {
+      sourceReports = filteredReportsForAgg;
     }
 
-    const marketplaceShops = MARKETPLACE_SHOPS;
+    const shopHeaderCells = MARKETPLACE_SHOPS.map(
+      (s) => `<th colspan="4" style="padding:6px;border:1px solid #ddd">${s}</th>`,
+    ).join("");
+    const rows = sourceReports
+      .map((r) => {
+        const dateStr = new Date(r.date).toISOString().split("T")[0];
+        const attendant = r.user?.name ?? "";
+        const submitted = r.tasks?.submittedBy ?? "";
+        const mr = (r.tasks as any)?.marketplaceReview || {};
+        const shopVals = MARKETPLACE_SHOPS.map((s) => {
+          const v = mr[s] || {};
+          return `<td style="padding:6px;border:1px solid #ddd">${v.stockChecked ? "Yes" : ""}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.pricingConfirmed ? "Yes" : ""}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.competitorsReviewed ? "Yes" : ""}</td>
+                <td style="padding:6px;border:1px solid #ddd">${v.oosReviewed ? "Yes" : ""}</td>`;
+        }).join("");
 
-    const rows = sourceReports.map((r) => {
-      const dateStr = new Date(r.date).toISOString().split('T')[0];
-      const attendant = r.user?.name ?? '';
-      const submitted = r.tasks?.submittedBy ?? '';
-      // flattened per-shop columns
-      const mr = (r.tasks as any)?.marketplaceReview || {};
-      const shopVals = marketplaceShops.map((s) => {
-        const v = mr[s] || {};
-        return `<td style="padding:6px;border:1px solid #ddd">${v.stockChecked ? 'Yes' : ''}</td>
-                <td style="padding:6px;border:1px solid #ddd">${v.pricingConfirmed ? 'Yes' : ''}</td>
-                <td style="padding:6px;border:1px solid #ddd">${v.competitorsReviewed ? 'Yes' : ''}</td>
-                <td style="padding:6px;border:1px solid #ddd">${v.oosReviewed ? 'Yes' : ''}</td>`;
-      }).join('');
-
-      return `<tr>
+        return `<tr>
         <td style="padding:6px;border:1px solid #ddd">${dateStr}</td>
         <td style="padding:6px;border:1px solid #ddd">${r.day}</td>
         <td style="padding:6px;border:1px solid #ddd">${attendant}</td>
         <td style="padding:6px;border:1px solid #ddd">${submitted}</td>
         ${shopVals}
       </tr>`;
-    }).join('');
-
-    const shopHeaderCells = MARKETPLACE_SHOPS.map((s) => `<th colspan="4" style="padding:6px;border:1px solid #ddd">${s}</th>`).join('');
+      })
+      .join("");
 
     const html = `
       <html>
@@ -477,73 +488,87 @@ export default function AdminDailyReportPage() {
                 ${shopHeaderCells}
               </tr>
               <tr>
-                ${MARKETPLACE_SHOPS.map(() => '<th>Stock</th><th>Pricing</th><th>Comp</th><th>OOS</th>').join('')}
+                ${MARKETPLACE_SHOPS.map(() => "<th>Stock</th><th>Pricing</th><th>Comp</th><th>OOS</th>").join("")}
               </tr>
             </thead>
             <tbody>
               ${rows}
             </tbody>
           </table>
-          ${scope === 'json' ? `<h3>Full JSON</h3><pre class="json">${JSON.stringify(sourceReports.map(r=>({ id:r.id,date:r.date,day:r.day,tasks:r.tasks,user:r.user })), null, 2)}</pre>` : ''}
+          ${
+            scope === "json"
+              ? `<h3>Full JSON</h3><pre class="json">${JSON.stringify(
+                  sourceReports.map((r) => ({ id: r.id, date: r.date, day: r.day, tasks: r.tasks, user: r.user })),
+                  null,
+                  2,
+                )}</pre>`
+              : ""
+          }
         </body>
       </html>`;
 
     return html;
   }
 
-  function openPreview(scope: 'page'|'all'|'json'){
+  function openPreview(scope: "page" | "all" | "json") {
     const html = generateExportHtml(scope);
     setPreviewHtml(html);
     setShowPreviewModal(true);
   }
 
-  async function downloadServerPdf(scope: 'page'|'all'|'json'){
+  async function downloadServerPdf(scope: "page" | "all" | "json") {
     const params = new URLSearchParams();
-    if (from) params.append('from', from);
-    if (to) params.append('to', to);
-    if (day) params.append('day', day);
-    if (submittedBy) params.append('user', submittedBy);
-    if (shopFilter) params.append('shop', shopFilter);
-    if (scope === 'json') params.append('includeJson', '1');
-    params.append('scope', scope);
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    if (day) params.append("day", day);
+    if (submittedBy) params.append("user", submittedBy);
+    if (shopFilter) params.append("shop", shopFilter);
+    if (scope === "json") params.append("includeJson", "1");
+    params.append("scope", scope);
     const url = `/api/daily-report/export/pdf?${params.toString()}`;
-    const w = window.open(url, '_blank');
-    if (!w) showToast('Unable to open PDF in a new tab', 'error');
+    const w = window.open(url, "_blank");
+    if (!w) showToast("Unable to open PDF in a new tab", "error");
   }
 
   function renderShopBadges(s: any) {
-    // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
     if (!present) return <div className="text-slate-400">-</div>;
     const IconCheck = () => (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1 inline-block">
         <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
     const IconX = () => (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1 inline-block">
         <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
 
     const badge = (label: string, ok: boolean, key: string) => (
-      <span key={key} title={label + (ok ? ': Yes' : ': No')} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1 ${ok ? 'bg-status-complete text-black' : 'bg-status-missing text-white'}`}>
-        {ok ? <IconCheck /> : <IconX />}{label}
+      <span
+        key={key}
+        title={label + (ok ? ": Yes" : ": No")}
+        className={`mr-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          ok ? "bg-status-complete text-black" : "bg-status-missing text-white"
+        }`}
+      >
+        {ok ? <IconCheck /> : <IconX />}
+        {label}
       </span>
     );
+
     return (
       <div>
         <div className="mb-1">
-          {badge('Stock', Boolean(s.stockChecked), 'stock')}
-          {badge('Pricing', Boolean(s.pricingConfirmed), 'pricing')}
-          {badge('Competitors', Boolean(s.competitorsReviewed), 'comp')}
-          {badge('OOS', Boolean(s.oosReviewed), 'oos')}
+          {badge("Stock", Boolean(s.stockChecked), "stock")}
+          {badge("Pricing", Boolean(s.pricingConfirmed), "pricing")}
+          {badge("Competitors", Boolean(s.competitorsReviewed), "comp")}
+          {badge("OOS", Boolean(s.oosReviewed), "oos")}
         </div>
-        {s.notes ? <div className="text-xs text-slate-400 truncate max-w-[12rem]">{String(s.notes)}</div> : null}
+        {s.notes ? <div className="max-w-[12rem] truncate text-xs text-slate-400">{String(s.notes)}</div> : null}
       </div>
     );
   }
-
   const deleteReport = async (reportId: string) => {
     if (typeof window !== "undefined") {
       const ok = window.confirm("Delete this daily report entry? This action cannot be undone.");
@@ -571,163 +596,166 @@ export default function AdminDailyReportPage() {
     }
   };
 
-  // computeRowStatus moved to `src/lib/dailyReportHelpers.ts` for reuse and testing
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-7xl p-6 space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-semibold">Daily Performance Reports</h1>
-          <p className="text-slate-300">Team submissions, marketplace checks, and operational notes at a glance.</p>
-        </header>
+    <div
+      className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,#1d2a5c_0%,transparent_38%),radial-gradient(circle_at_90%_10%,#251147_0%,transparent_32%),linear-gradient(180deg,#070b12,#0a0f1a)] text-white"
+    >
+      <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+        {/* Hero */}
+        <section className={`${shellCard} border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-950 to-black p-6`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Daily Ops</p>
+              <h1 className="text-3xl font-semibold tracking-tight">Daily Performance Reports</h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                Team submissions, marketplace checks, and operational notes—refined for admin review.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 shadow-[0_0_30px_rgba(52,211,153,0.18)]">
+              <div className="text-xs uppercase tracking-wide text-emerald-200">Trading period</div>
+              <div className="text-base font-semibold text-emerald-50">{tradingRange.label}</div>
+              <div className="text-[11px] text-emerald-200/80">25th to 24th</div>
+            </div>
+          </div>
+        </section>
 
-        <section className={`${cardClasses} p-4`}>
-          <div className="grid gap-3 md:grid-cols-5 text-sm">
-            {kpiCards.map((card) => (
-              <div key={card.label} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-400">{card.label}</div>
-                <div className="text-xl font-semibold text-white">{card.value}</div>
+        {/* KPI grid */}
+        <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {kpiCards.map((k) => (
+            <div
+              key={k.label}
+              className={`${shellCard} bg-slate-900/70 p-4 transition hover:-translate-y-0.5 hover:border-white/20`}
+            >
+              <div className="text-xs uppercase tracking-wide text-slate-400">{k.label}</div>
+              <div className="mt-2 text-2xl font-semibold">{k.value}</div>
+            </div>
+          ))}
+        </section>
+
+        {/* Filters */}
+        <section className={`${shellCard} p-4`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="grid w-full gap-4 md:grid-cols-3">
+              <div>
+                <label className="text-xs text-slate-400">From</label>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                />
               </div>
-            ))}
+              <div>
+                <label className="text-xs text-slate-400">To</label>
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Day</label>
+                <select
+                  value={day}
+                  onChange={(e) => setDay(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                >
+                  <option value="">Any</option>
+                  {DAY_KEYS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Submitted by</label>
+                <input
+                  type="text"
+                  value={submittedBy}
+                  onChange={(e) => setSubmittedBy(e.target.value)}
+                  placeholder="Name or ID"
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Marketplace shop focus</label>
+                <select
+                  value={shopFilter}
+                  onChange={(e) => setShopFilter(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                >
+                  <option value="">All shops</option>
+                  {MARKETPLACE_SHOPS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400">Min checks done (selected shop)</label>
+                <select
+                  value={minComplete}
+                  onChange={(e) => setMinComplete(Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
+                >
+                  {[0, 1, 2, 3, 4].map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSortByCompleteness((prev) => !prev);
+                }}
+              >
+                {sortByCompleteness ? "Sorted by completeness" : "Sort by completeness"}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setPage(1);
+                  void fetchReports();
+                }}
+              >
+                Apply filters
+              </Button>
+              <Button
+                variant="muted"
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    ...(from ? { from } : {}),
+                    ...(to ? { to } : {}),
+                    ...(day ? { day } : {}),
+                    ...(submittedBy ? { user: submittedBy } : {}),
+                  });
+                  window.location.href = `/api/daily-report/export${params.toString() ? `?${params.toString()}` : ""}`;
+                }}
+              >
+                Quick export
+              </Button>
+            </div>
           </div>
         </section>
-
-        <section className={`${cardClasses} p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between`}>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
-            <div className="text-lg font-semibold">{tradingRange.label}</div>
-            <div className="text-xs text-slate-500">25th to 24th</div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <span>Quick apply: {tradingRange.start}{' - '}{tradingRange.end}</span>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setFrom(tradingRange.start);
-                setTo(tradingRange.end);
-                setPage(1);
-                void fetchReports();
-              }}
-            >
-              Apply period
-            </Button>
-          </div>
-        </section>
-
-        <section className={`${cardClasses} p-4 space-y-4`}>
-          <div className="text-sm font-semibold text-slate-200">Filter daily reports</div>
-          <div className="grid gap-3 md:grid-cols-6">
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">From</label>
-              <input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">To</label>
-              <input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Day</label>
-              <select
-                value={day}
-                onChange={(e) => setDay(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              >
-                <option value="">All days</option>
-                {DAY_KEYS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Submitted by</label>
-              <input
-                type="text"
-                value={submittedBy}
-                onChange={(e) => setSubmittedBy(e.target.value)}
-                placeholder="Name or email"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Shop filter</label>
-              <select
-                value={shopFilter}
-                onChange={(e) => setShopFilter(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              >
-                <option value="">All shops</option>
-                {MARKETPLACE_SHOPS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Min checks</label>
-              <select
-                value={String(minComplete)}
-                onChange={(e) => setMinComplete(Number(e.target.value))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              >
-                {[0, 1, 2, 3, 4].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="primary"
-              onClick={() => {
-                setPage(1);
-                void fetchReports();
-              }}
-            >
-              Apply filters
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const params = new URLSearchParams({
-                  ...(from ? { from } : {}),
-                  ...(to ? { to } : {}),
-                  ...(day ? { day } : {}),
-                  ...(submittedBy ? { user: submittedBy } : {}),
-                });
-                window.location.href = `/api/daily-report/export${params.toString() ? `?${params.toString()}` : ""}`;
-              }}
-            >
-              Quick export
-            </Button>
-          </div>
-        </section>
-
-        <section className={`${cardClasses} p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
+        {/* Export + legend */}
+        <section className={`${shellCard} flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between`}>
           <div className="flex flex-wrap gap-2">
             {scopeOptions.map((scope) => (
               <button
                 key={scope.value}
                 type="button"
                 onClick={() => setExportScope(scope.value)}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                className={`${pillClasses} ${
                   exportScope === scope.value
-                    ? "bg-emerald-500 text-black border-emerald-500"
-                    : "border-slate-700 text-slate-300 hover:border-white/40"
+                    ? "border-emerald-500 bg-emerald-500 text-black"
+                    : "border-slate-700 text-slate-200 hover:border-white/40"
                 }`}
               >
                 {scope.label}
@@ -750,17 +778,23 @@ export default function AdminDailyReportPage() {
           </div>
         </section>
 
-        <section className={`${cardClasses} p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
+        <section className={`${shellCard} flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between`}>
           <div className="flex flex-wrap gap-2">
             {legendOptions.map((legend) => (
               <button
                 key={legend.key}
                 type="button"
-                onClick={() => toggleLegend(legend.key)}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                onClick={() =>
+                  setLegendFilters((prev) =>
+                    prev.includes(legend.key)
+                      ? (prev.filter((item) => item !== legend.key) as Array<"complete" | "partial" | "missing">)
+                      : ([...prev, legend.key] as Array<"complete" | "partial" | "missing">),
+                  )
+                }
+                className={`${pillClasses} ${
                   legendFilters.includes(legend.key)
-                    ? "bg-emerald-500 text-black border-emerald-500"
-                    : "border-slate-700 text-slate-300 hover:border-white/40"
+                    ? "border-emerald-500 bg-emerald-500 text-black"
+                    : "border-slate-700 text-slate-200 hover:border-white/40"
                 }`}
               >
                 {legend.label}
@@ -768,14 +802,14 @@ export default function AdminDailyReportPage() {
             ))}
             <button
               type="button"
-              onClick={() => setLegendFilters(['complete', 'partial', 'missing'])}
-              className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 hover:border-white/40"
+              onClick={() => setLegendFilters(["complete", "partial", "missing"])}
+              className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 hover:border-white/40"
             >
               All statuses
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-            <span>{totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : 'No entries yet'}</span>
+            <span>{totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : "No entries yet"}</span>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="secondary"
@@ -827,11 +861,11 @@ export default function AdminDailyReportPage() {
             {error}
           </div>
         )}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg shadow-black/20">
+        {/* Table */}
+        <section className="rounded-2xl border border-white/10 bg-slate-950/70 shadow-xl shadow-black/30">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-950/80 text-left text-xs uppercase tracking-wide text-slate-400">
+              <thead className="sticky top-0 z-10 bg-slate-950/90 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur">
                 <tr>
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Day</th>
@@ -840,7 +874,7 @@ export default function AdminDailyReportPage() {
                   <th className="px-3 py-2">Marketplace</th>
                   <th className="px-3 py-2">Marketplace JSON</th>
                   {MARKETPLACE_SHOPS.map((s) => (
-                    <th key={s} className="px-3 py-2 hidden text-left sm:table-cell">
+                    <th key={s} className="hidden px-3 py-2 text-left sm:table-cell">
                       {s}
                     </th>
                   ))}
@@ -885,11 +919,7 @@ export default function AdminDailyReportPage() {
                               const s = mr[k];
                               return s && s.stockChecked && s.pricingConfirmed && s.competitorsReviewed && s.oosReviewed;
                             }).length;
-                            return (
-                              <span className="text-sm font-medium text-white">
-                                {complete}/{shops.length} shops complete
-                              </span>
-                            );
+                            return <span className="text-sm font-medium text-white">{complete}/{shops.length} shops complete</span>;
                           })()}
                         </td>
                         <td className="px-3 py-2 text-slate-200">
@@ -921,7 +951,7 @@ export default function AdminDailyReportPage() {
                           <div className="text-sm">
                             <div className="font-semibold">Receipts: {Array.isArray(tasks.sales) ? tasks.sales.length : 0}</div>
                             <div className="text-xs text-slate-400">
-                              New: {categories.newUploads ?? 0} - Copies: {categories.copiesUploaded ?? 0} - Edited: {categories.productsEdited ?? 0}
+                              New: {categories.newUploads ?? 0} · Copies: {categories.copiesUploaded ?? 0} · Edited: {categories.productsEdited ?? 0}
                             </div>
                             {Array.isArray(tasks.sales) && tasks.sales.length > 0 ? (
                               <ul className="mt-2 list-disc pl-5 text-xs text-slate-300">
@@ -949,30 +979,30 @@ export default function AdminDailyReportPage() {
                           <div>Live Viewers: {customerOps.liveViewers ?? 0}</div>
                           <div>Live Purchases: {customerOps.livePurchases ?? 0}</div>
                         </td>
-                      <td className="px-3 py-2 text-sm text-slate-200">
-                        <div>Cleaned: {office.officeCleaned ? "Yes" : "No"}</div>
-                        <div className="text-xs text-slate-400">{office.officeNotes ?? ""}</div>
-                        <button
-                          type="button"
-                          className="mt-2 text-xs text-emerald-300 underline hover:text-emerald-200"
-                          onClick={() => {
-                            setDetailReport(r);
-                            setShowDetailModal(true);
-                          }}
-                        >
-                          View details
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-sm text-slate-200">
-                        <button
-                          type="button"
-                          onClick={() => deleteReport(r.id)}
-                          disabled={deletingId === r.id}
-                          className="text-xs text-rose-400 underline hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {deletingId === r.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </td>
+                        <td className="px-3 py-2 text-sm text-slate-200">
+                          <div>Cleaned: {office.officeCleaned ? "Yes" : "No"}</div>
+                          <div className="text-xs text-slate-400">{office.officeNotes ?? ""}</div>
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-emerald-300 underline hover:text-emerald-200"
+                            onClick={() => {
+                              setDetailReport(r);
+                              setShowDetailModal(true);
+                            }}
+                          >
+                            View details
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => deleteReport(r.id)}
+                            disabled={deletingId === r.id}
+                            className="text-xs text-rose-400 underline hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingId === r.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -981,10 +1011,12 @@ export default function AdminDailyReportPage() {
             </table>
           </div>
         </section>
-
+        {/* Modals */}
         <Modal title="CSV Columns Included" open={showCsvModal} onClose={() => setShowCsvModal(false)}>
           <div className="space-y-2 text-sm text-slate-200">
-            <p className="text-slate-300">This export includes the following columns (flattened per-shop columns are named using the shop label):</p>
+            <p className="text-slate-300">
+              This export includes the following columns (flattened per-shop columns are named using the shop label):
+            </p>
             <ul className="list-disc pl-5">
               {CSV_COLUMNS.map((c) => (
                 <li key={c} className="py-0.5">
@@ -1005,7 +1037,7 @@ export default function AdminDailyReportPage() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  const w = window.open('', '_blank');
+                  const w = window.open("", "_blank");
                   if (!w) return;
                   w.document.write(previewHtml);
                   w.document.close();
@@ -1032,10 +1064,12 @@ export default function AdminDailyReportPage() {
           {detailReport ? (
             <div className="space-y-3 text-sm text-slate-200">
               <div>
-                <strong>Date:</strong> {new Date(detailReport.date).toLocaleDateString()} - <strong>Day:</strong> {detailReport.day}
+                <strong>Date:</strong> {new Date(detailReport.date).toLocaleDateString()} - <strong>Day:</strong>{" "}
+                {detailReport.day}
               </div>
               <div>
-                <strong>Attendant:</strong> {detailReport.user?.name ?? '-'} - <strong>Submitted By:</strong> {detailReport.tasks?.submittedBy ?? '-'}
+                <strong>Attendant:</strong> {detailReport.user?.name ?? "-"} - <strong>Submitted By:</strong>{" "}
+                {detailReport.tasks?.submittedBy ?? "-"}
               </div>
               <div>
                 <strong>Marketplace Review:</strong>
@@ -1046,16 +1080,20 @@ export default function AdminDailyReportPage() {
               <div>
                 <strong>Categories:</strong>
                 <div className="mt-1 text-xs">
-                  New: {detailReport.tasks?.categories?.newUploads ?? 0} - Copies: {detailReport.tasks?.categories?.copiesUploaded ?? 0} - Edited: {detailReport.tasks?.categories?.productsEdited ?? 0}
+                  New: {detailReport.tasks?.categories?.newUploads ?? 0} - Copies:{" "}
+                  {detailReport.tasks?.categories?.copiesUploaded ?? 0} - Edited:{" "}
+                  {detailReport.tasks?.categories?.productsEdited ?? 0}
                 </div>
               </div>
               <div>
-                <strong>Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):</strong>
+                <strong>
+                  Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):
+                </strong>
                 {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
                   <ul className="mt-1 list-disc pl-5 text-xs">
                     {detailReport.tasks.sales.map((s: any, i: number) => (
                       <li key={i}>
-                        {s.productName || '-'} - KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? ` - ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''} {s.buyingPrice ? `(buying KES ${Number(s.buyingPrice).toLocaleString()})` : ''}
+                        {s.productName || "-"} - KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? ` - ${String(s.paymentMethod)}` : ""} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ""} {s.buyingPrice ? `(buying KES ${Number(s.buyingPrice).toLocaleString()})` : ""}
                       </li>
                     ))}
                   </ul>
@@ -1081,7 +1119,11 @@ export default function AdminDailyReportPage() {
           )}
         </Modal>
 
-        <Modal title={jsonPreview?.title || 'Marketplace Review'} open={Boolean(jsonPreview)} onClose={() => setJsonPreview(null)}>
+        <Modal
+          title={jsonPreview?.title || "Marketplace Review"}
+          open={Boolean(jsonPreview)}
+          onClose={() => setJsonPreview(null)}
+        >
           <pre className="max-h-80 overflow-auto rounded bg-black/20 p-3 text-xs text-slate-200">
             {JSON.stringify(jsonPreview?.payload ?? {}, null, 2)}
           </pre>
