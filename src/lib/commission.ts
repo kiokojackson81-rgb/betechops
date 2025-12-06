@@ -90,17 +90,62 @@ export function computeSalesCommissionFromTiers(
   // If `undefined` or 0 the fallback is disabled (returns 0 until a tier is reached).
   fallbackPercent: number | undefined = 0.05,
 ) {
-  const firstTierMin = tiers.length ? tiers[0].minSales : 500_000;
+  // If no tiers provided, fall back to the profit-percentage behavior.
+  if (!tiers || tiers.length === 0) {
+    if (!fallbackPercent || fallbackPercent <= 0) return 0;
+    return fallbackPercent * totalProfit;
+  }
+
+  // Make a safe sorted copy of tiers by minSales.
+  const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
+
+  const firstTierMin = sorted[0].minSales;
   if (totalSales < firstTierMin) {
     if (!fallbackPercent || fallbackPercent <= 0) return 0;
     return fallbackPercent * totalProfit;
   }
+
   let commission = 0;
-  for (const tier of tiers) {
-    if (totalSales >= tier.minSales) {
-      commission += tier.payoutFlat;
+
+  // We treat each tier as a band. For band i we consider the range from
+  // bandStart (previous band end or this tier.min for the first) up to bandEnd.
+  // Within a band, payout is proportional to progress through that band.
+  let previousMaxSales = sorted[0].minSales;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const tier = sorted[i];
+
+    const bandStart = i === 0 ? tier.minSales : previousMaxSales;
+    const bandEnd = tier.maxSales ?? tier.minSales;
+    const bandWidth = Math.max(0, bandEnd - bandStart);
+
+    if (bandWidth <= 0) {
+      // Degenerate band — treat as a step. If we've reached it, award full payout.
+      if (totalSales >= bandEnd) {
+        commission += tier.payoutFlat;
+        previousMaxSales = bandEnd;
+        continue;
+      } else {
+        break;
+      }
     }
+
+    if (totalSales >= bandEnd) {
+      // Completed this band fully → full payout
+      commission += tier.payoutFlat;
+    } else if (totalSales > bandStart) {
+      // Inside this band → prorate based on progress and stop.
+      const progress = (totalSales - bandStart) / bandWidth; // 0..1
+      commission += tier.payoutFlat * progress;
+      return commission;
+    } else {
+      // Haven't started this band yet.
+      break;
+    }
+
+    previousMaxSales = bandEnd;
   }
+
   return commission;
 }
 
