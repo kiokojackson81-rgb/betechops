@@ -8,7 +8,8 @@ import { useSession } from "next-auth/react";
  * Unlock requires an authenticated session; otherwise the user is redirected to login.
  */
 export function useCardLock(storageKey: string) {
-  const { data: session } = useSession() as { data?: any } | undefined;
+  const sessionResult = useSession();
+  const session = (sessionResult as any)?.data;
   const key = `lock:${storageKey}`;
   const [locked, setLocked] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
