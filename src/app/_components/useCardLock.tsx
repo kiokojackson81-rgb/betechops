@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react";
 export function useCardLock(storageKey: string) {
   const sessionResult = useSession();
   const session = (sessionResult as any)?.data;
+  const status = (sessionResult as any)?.status;
   const key = `lock:${storageKey}`;
   const [locked, setLocked] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -32,7 +33,8 @@ export function useCardLock(storageKey: string) {
   const lock = () => setLocked(true);
 
   const unlock = () => {
-    if (session) {
+    if (status === "loading") return;
+    if (status === "authenticated" && session) {
       setLocked(false);
       return;
     }
