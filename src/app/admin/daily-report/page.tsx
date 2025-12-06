@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
-import Card from "@/app/_components/Card";
-import Sparkline from "@/app/_components/Sparkline";
 import Modal from "@/app/_components/Modal";
 import { computeRowStatus } from '@/lib/dailyReportHelpers';
 import { showToast } from "@/lib/ui/toast";
@@ -29,7 +27,7 @@ interface Summary {
   totalCommissionEarned?: number;
 }
 
-// Define the days with tasks for drop‑down options.  This mirrors the keys
+// Define the days with tasks for drop�down options.  This mirrors the keys
 // used on the attendant form.  If you change the tasks mapping in the
 // attendant page, update this list accordingly.
 const DAY_KEYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -64,7 +62,7 @@ function getTradingRange(date = new Date()) {
   return {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
-    label: `${formatShortDate(start)} – ${formatShortDate(end)}`,
+    label: `${formatShortDate(start)} �- ${formatShortDate(end)}`,
   };
 }
 
@@ -357,6 +355,13 @@ export default function AdminDailyReportPage() {
   const pageStart = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount);
   const pageEnd = Math.min(page * pageSize, totalCount);
   const maxPage = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const toggleLegend = (key: 'complete' | 'partial' | 'missing') => {
+    setLegendFilters((prev) =>
+      prev.includes(key)
+        ? (prev.filter((item) => item !== key) as Array<'complete' | 'partial' | 'missing'>)
+        : ([...prev, key] as Array<'complete' | 'partial' | 'missing'>)
+    );
+  };
 
   function downloadPdf() {
     const rows = filteredReportsForAgg.map((r) => {
@@ -390,7 +395,7 @@ export default function AdminDailyReportPage() {
           </style>
         </head>
         <body>
-          <h2>Daily Reports — Export</h2>
+          <h2>Daily Reports �- Export</h2>
           <p>Exported ${filteredReportsForAgg.length} reports</p>
           <table>
             <thead>
@@ -462,7 +467,7 @@ export default function AdminDailyReportPage() {
           </style>
         </head>
         <body>
-          <h2>Daily Reports — Export (${scope})</h2>
+          <h2>Daily Reports �- Export (${scope})</h2>
           <p>Exported ${sourceReports.length} reports</p>
           <table>
             <thead>
@@ -508,7 +513,7 @@ export default function AdminDailyReportPage() {
   function renderShopBadges(s: any) {
     // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
-    if (!present) return <div className="text-slate-400">—</div>;
+    if (!present) return <div className="text-slate-400">�-</div>;
     const IconCheck = () => (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
         <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -541,367 +546,510 @@ export default function AdminDailyReportPage() {
   // computeRowStatus moved to `src/lib/dailyReportHelpers.ts` for reuse and testing
 
   return (
-    <div className="mx-auto max-w-8xl p-6 text-slate-100">
-      <div className="space-y-6 mb-6">
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold">Daily Performance Reports</h1>
-            <p className="text-sm text-slate-400 mt-1">Team submissions, marketplace checks, and operational notes - at a glance.</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-7xl p-6 space-y-6">
+        <header className="space-y-1">
+          <h1 className="text-3xl font-semibold">Daily Performance Reports</h1>
+          <p className="text-slate-300">Team submissions, marketplace checks, and operational notes at a glance.</p>
+        </header>
+
+        <section className={`${cardClasses} p-4`}>
+          <div className="grid gap-3 md:grid-cols-5 text-sm">
+            {kpiCards.map((card) => (
+              <div key={card.label} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400">{card.label}</div>
+                <div className="text-xl font-semibold text-white">{card.value}</div>
+              </div>
+            ))}
           </div>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="bg-[var(--panel,#121723)] border border-white/10 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Total products</div>
-                <div className="text-2xl font-semibold">{stats.totalProducts}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Total sales (KES)</div>
-                <div className="text-2xl font-semibold">KES {stats.totalSales.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Live sessions</div>
-                <div className="text-2xl font-semibold">{stats.totalLiveSessions}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Commission (KES)</div>
-                <div className="text-2xl font-semibold">KES {stats.totalCommissionEarned.toLocaleString()}</div>
-              </div>
+        </section>
+
+        <section className={`${cardClasses} p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between`}>
+          <div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
+            <div className="text-lg font-semibold">{tradingRange.label}</div>
+            <div className="text-xs text-slate-500">25th to 24th</div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+            <span>Quick apply: {tradingRange.start}{'  '}{tradingRange.end}</span>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setFrom(tradingRange.start);
+                setTo(tradingRange.end);
+                setPage(1);
+                void fetchReports();
+              }}
+            >
+              Apply period
+            </Button>
+          </div>
+        </section>
+
+        <section className={`${cardClasses} p-4 space-y-4`}>
+          <div className="text-sm font-semibold text-slate-200">Filter daily reports</div>
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">From</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">New products</div>
-                <div className="text-lg font-semibold">{stats.totalNewProducts}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Products edited</div>
-                <div className="text-lg font-semibold">{stats.totalProductsEdited}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Copies uploaded</div>
-                <div className="text-lg font-semibold">{stats.totalCopiesUploaded}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Walk-ins served</div>
-                <div className="text-lg font-semibold">{stats.totalWalkInsServed}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400">Purchases made</div>
-                <div className="text-lg font-semibold">{stats.totalPurchasesMade}</div>
-              </div>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">To</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              />
             </div>
-          </Card>
-          <Card className="bg-[var(--panel,#121723)] border border-white/10 p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-xs uppercase text-slate-400">Trading period</div>
-                <div className="text-lg font-semibold">{tradingRange.label}</div>
-                <div className="text-xs text-slate-500">25th to 24th</div>
-              </div>
-              <button
-                type="button"
-                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide hover:border-white/40"
-                onClick={() => {
-                  setFrom(tradingRange.start);
-                  setTo(tradingRange.end);
-                  setPage(1);
-                  void fetchReports();
-                }}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Day</label>
+              <select
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               >
-                Apply period
-              </button>
+                <option value="">All days</option>
+                {DAY_KEYS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
             </div>
-          </Card>
-        </div>
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex items-center bg-[rgba(255,255,255,0.02)] rounded-md p-1">
-            <button onClick={() => setExportScope('page')} className={`px-3 py-1 rounded ${exportScope === 'page' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Current page</button>
-            <button onClick={() => setExportScope('all')} className={`px-3 py-1 rounded ${exportScope === 'all' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>All filtered</button>
-            <button onClick={() => setExportScope('json')} className={`px-3 py-1 rounded ${exportScope === 'json' ? 'bg-white/8 ring-1 ring-white/10' : ''}`}>Full JSON</button>
-          </div>
-          <Button onClick={() => setShowCsvModal(true)} variant="secondary">CSV columns</Button>
-          <Button onClick={downloadCsv} variant="secondary">Download CSV</Button>
-          <Button onClick={() => openPreview(exportScope)} variant="muted">Preview</Button>
-          <Button onClick={() => downloadServerPdf(exportScope)} variant="primary">Download PDF</Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left: filters */}
-        <aside className="col-span-3 bg-[rgba(255,255,255,0.02)] border border-white/6 rounded-lg p-4 space-y-4">
-          <div className="text-sm font-medium mb-2">Filters</div>
-          <div>
-            <label className="text-xs text-slate-400">From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400">To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400">Day</label>
-            <select value={day} onChange={(e) => setDay(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
-              <option value="">All</option>
-              {DAY_KEYS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-400">Submitted by</label>
-            <input type="text" value={submittedBy} onChange={(e) => setSubmittedBy(e.target.value)} placeholder="Name or email" className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400">Filter shop</label>
-            <select value={shopFilter} onChange={(e) => setShopFilter(e.target.value)} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
-              <option value="">All shops</option>
-              {MARKETPLACE_SHOPS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-400">Min checks</label>
-            <select value={String(minComplete)} onChange={(e) => setMinComplete(Number(e.target.value))} className="w-full rounded px-2 py-1 mt-1 bg-transparent border border-white/10 text-sm">
-              <option value={0}>0</option>
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-              <option value={4}>4</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => { setPage(1); fetchReports(); }} variant="primary">Apply</Button>
-            <Button onClick={() => { window.location.href = `/api/daily-report/export?${new URLSearchParams({ ...(from?{from}:{}), ...(to?{to}:{}), ...(day?{day}:{}), ...(submittedBy?{user:submittedBy}:{}) }).toString()}`; }} variant="secondary">Export</Button>
-          </div>
-          <div className="text-xs text-slate-500 pt-2">Tip: use the CSV export for bulk analysis. New flattened shop columns and Saturday fields are included.</div>
-        </aside>
-
-        {/* Main: table */}
-        <main className="col-span-9">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button onClick={() => {
-                  const s = legendFilters.includes('complete') ? (legendFilters.filter(x => x !== 'complete') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'complete'] as Array<'complete'|'partial'|'missing'>);
-                  setLegendFilters(s);
-                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('complete') ? 'ring-2 ring-white/20' : ''}`}>
-                <span className="inline-block w-3 h-3 bg-status-complete rounded-full" />
-                <span className="text-xs text-slate-300">Complete</span>
-              </button>
-              <button onClick={() => {
-                  const s = legendFilters.includes('partial') ? (legendFilters.filter(x => x !== 'partial') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'partial'] as Array<'complete'|'partial'|'missing'>);
-                  setLegendFilters(s);
-                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('partial') ? 'ring-2 ring-white/20' : ''}`}>
-                <span className="inline-block w-3 h-3 bg-status-partial rounded-full" />
-                <span className="text-xs text-slate-300">Partial</span>
-              </button>
-              <button onClick={() => {
-                  const s = legendFilters.includes('missing') ? (legendFilters.filter(x => x !== 'missing') as Array<'complete'|'partial'|'missing'>) : ([...legendFilters, 'missing'] as Array<'complete'|'partial'|'missing'>);
-                  setLegendFilters(s);
-                }} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.includes('missing') ? 'ring-2 ring-white/20' : ''}`}>
-                <span className="inline-block w-3 h-3 bg-status-missing rounded-full" />
-                <span className="text-xs text-slate-300">Missing</span>
-              </button>
-              <button onClick={() => setLegendFilters(['complete','partial','missing'])} className={`flex items-center gap-2 px-2 py-1 rounded ${legendFilters.length === 3 ? 'ring-2 ring-white/20' : ''}`}>
-                <span className="inline-block w-3 h-3 bg-status-muted rounded-full" />
-                <span className="text-xs text-slate-300">All</span>
-              </button>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Submitted by</label>
+              <input
+                type="text"
+                value={submittedBy}
+                onChange={(e) => setSubmittedBy(e.target.value)}
+                placeholder="Name or email"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              />
             </div>
-            <div className="text-xs text-slate-400">Showing page {page} — {Math.min((page-1)*pageSize+1, totalCount)} to {Math.min(page*pageSize, totalCount)} of {totalCount}</div>
-          </div>
-
-          {error && <p className="text-red-400 mb-4">{error}</p>}
-          <div className="overflow-auto border border-white/6 rounded-lg bg-[rgba(255,255,255,0.01)]">
-            <table className="min-w-full divide-y divide-white/6 text-sm">
-          <thead className="bg-[var(--panel,#121723)]">
-            <tr>
-              <th className="px-3 py-2 text-left">Date</th>
-              <th className="px-3 py-2 text-left">Day</th>
-              <th className="px-3 py-2 text-left">Attendant</th>
-              <th className="px-3 py-2 text-left">Submitted By</th>
-              <th className="px-3 py-2 text-left">Marketplace</th>
-              <th className="px-3 py-2 text-left">Marketplace (JSON)</th>
-              {MARKETPLACE_SHOPS.map((s) => (
-                <th key={s} className="px-3 py-2 text-left hidden sm:table-cell">{s}</th>
-              ))}
-              <th className="px-3 py-2 text-right">Products</th>
-              <th className="px-3 py-2 text-right">Sales (KES)</th>
-              <th className="px-3 py-2 text-left">Tasks</th>
-              <th className="px-3 py-2 text-left">Marketing</th>
-              <th className="px-3 py-2 text-left">Customer Ops</th>
-              <th className="px-3 py-2 text-left">Office</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reports.map((r) => {
-              const rowStatus = computeRowStatus(r);
-              if (!legendFilters.includes(rowStatus as any)) return null;
-              const tasks = r.tasks ?? {};
-              const categories = tasks.categories ?? {};
-              const marketing = tasks.marketing ?? {};
-              const customerOps = tasks.customerOperations ?? {};
-              const office = tasks.officeMaintenance ?? {};
-              return (
-                <tr key={r.id} className="odd:bg-[#11161e] even:bg-[#0e131b]">
-                  <td className="px-3 py-2">{new Date(r.date).toLocaleDateString()}</td>
-                  <td className="px-3 py-2">{r.day}</td>
-                  <td className="px-3 py-2">{r.user?.name ?? "—"}</td>
-                  <td className="px-3 py-2">{r.tasks?.submittedBy ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    {(() => {
-                      const mr = r.tasks?.marketplaceReview ?? {};
-                      const shops = Object.keys(mr || {});
-                      if (!shops || shops.length === 0) return <span className="text-slate-400">—</span>;
-                      const complete = shops.filter((k) => {
-                        const s = mr[k];
-                        return s && s.stockChecked && s.pricingConfirmed && s.competitorsReviewed && s.oosReviewed;
-                      }).length;
-                      return <span>{complete}/{shops.length} shops complete</span>;
-                    })()}
-                  </td>
-                  <td className="px-3 py-2">
-                    <pre className="text-xs whitespace-pre-wrap max-w-[28rem] max-h-28 overflow-auto bg-black/20 p-2 rounded">{JSON.stringify((r.tasks as any)?.marketplaceReview ?? {}, null, 0)}</pre>
-                  </td>
-                  {MARKETPLACE_SHOPS.map((shop) => {
-                    const mr = (r.tasks as any)?.marketplaceReview ?? {};
-                    const s = mr[shop] || {};
-                    return (
-                      <td key={shop} className="px-3 py-2 text-sm hidden sm:table-cell" title={String(s.notes ?? '') || undefined}>
-                        {renderShopBadges(s)}
-                      </td>
-                    );
-                  })}
-                  <td className="px-3 py-2 text-right">{r.productsCount}</td>
-                  <td className="px-3 py-2 text-right">{Number(r.totalSales).toLocaleString()}</td>
-                  <td className="px-3 py-2">
-                    <div className="text-sm mb-1">
-                      <strong>Receipts:</strong>{' '}
-                      {Array.isArray(tasks.sales) ? tasks.sales.length : 0}
-                    </div>
-                    <div className="text-sm mb-1">
-                      <strong>Categories:</strong>{' '}
-                      {categories ? (
-                        <span>
-                          New: {categories.newUploads ?? 0} • Copies: {categories.copiesUploaded ?? 0} • Edited: {categories.productsEdited ?? 0}
-                        </span>
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </div>
-                    <div className="text-sm">
-                      <strong>Sales:</strong>
-                      {Array.isArray(tasks.sales) && tasks.sales.length > 0 ? (
-                        <ul className="list-disc pl-5 text-xs mt-1">
-                          {tasks.sales.map((s: any, i: number) => (
-                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? `• ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-xs text-slate-400">No sales recorded</div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    <div>Video Shoot: {marketing.participatedVideoShoot ? 'Yes' : 'No'}</div>
-                    <div>Marketing Meeting: {marketing.attendedMarketingMeeting ? 'Yes' : 'No'}</div>
-                    <div>Videos Shot: {marketing.marketingVideosShot ?? 0}</div>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    <div>Walk-ins: {customerOps.walkInCustomers ?? 0}</div>
-                    <div>Customers Purchased: {customerOps.customersPurchased ?? 0}</div>
-                    <div>Live Viewers: {customerOps.liveViewers ?? 0}</div>
-                    <div>Live Purchases: {customerOps.livePurchases ?? 0}</div>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    <div>Cleaned: {office.officeCleaned ? 'Yes' : 'No'}</div>
-                    <div className="text-xs text-slate-400">{office.officeNotes ?? ''}</div>
-                    <div className="mt-2">
-                      <Button onClick={() => { setDetailReport(r); setShowDetailModal(true); }} variant="secondary">View</Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {reports.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-3 py-4 text-center text-slate-400">
-                  No reports found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex gap-2">
-              <Button onClick={() => { if (page>1) { setPage(page-1); fetchReports(); } }} variant="secondary">Prev</Button>
-              <Button onClick={() => { const max = Math.max(1, Math.ceil(totalCount / pageSize)); if (page < max) { setPage(page+1); fetchReports(); } }} variant="secondary">Next</Button>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Shop filter</label>
+              <select
+                value={shopFilter}
+                onChange={(e) => setShopFilter(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="">All shops</option>
+                {MARKETPLACE_SHOPS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="text-xs text-slate-500">Page size
-              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded ml-2 border border-white/10 bg-transparent px-2 py-1">
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Min checks</label>
+              <select
+                value={String(minComplete)}
+                onChange={(e) => setMinComplete(Number(e.target.value))}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              >
+                {[0, 1, 2, 3, 4].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          <Modal title="CSV Columns Included" open={showCsvModal} onClose={() => setShowCsvModal(false)}>
-            <div className="space-y-2 text-sm text-slate-200">
-              <p className="text-slate-300">This export includes the following columns (flattened per-shop columns are named using the shop label):</p>
-              <ul className="list-disc pl-5">
-                {CSV_COLUMNS.map((c) => <li key={c} className="py-0.5">{c}</li>)}
-              </ul>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="primary"
+              onClick={() => {
+                setPage(1);
+                void fetchReports();
+              }}
+            >
+              Apply filters
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const params = new URLSearchParams({
+                  ...(from ? { from } : {}),
+                  ...(to ? { to } : {}),
+                  ...(day ? { day } : {}),
+                  ...(submittedBy ? { user: submittedBy } : {}),
+                });
+                window.location.href = `/api/daily-report/export${params.toString() ? `?${params.toString()}` : ""}`;
+              }}
+            >
+              Quick export
+            </Button>
+          </div>
+        </section>
+
+        <section className={`${cardClasses} p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
+          <div className="flex flex-wrap gap-2">
+            {scopeOptions.map((scope) => (
+              <button
+                key={scope.value}
+                type="button"
+                onClick={() => setExportScope(scope.value)}
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  exportScope === scope.value
+                    ? "bg-emerald-500 text-black border-emerald-500"
+                    : "border-slate-700 text-slate-300 hover:border-white/40"
+                }`}
+              >
+                {scope.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setShowCsvModal(true)} variant="secondary">
+              CSV columns
+            </Button>
+            <Button onClick={downloadCsv} variant="secondary">
+              Download CSV
+            </Button>
+            <Button onClick={() => openPreview(exportScope)} variant="muted">
+              Preview
+            </Button>
+            <Button onClick={() => downloadServerPdf(exportScope)} variant="primary">
+              Download PDF
+            </Button>
+          </div>
+        </section>
+
+        <section className={`${cardClasses} p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
+          <div className="flex flex-wrap gap-2">
+            {legendOptions.map((legend) => (
+              <button
+                key={legend.key}
+                type="button"
+                onClick={() => toggleLegend(legend.key)}
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  legendFilters.includes(legend.key)
+                    ? "bg-emerald-500 text-black border-emerald-500"
+                    : "border-slate-700 text-slate-300 hover:border-white/40"
+                }`}
+              >
+                {legend.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setLegendFilters(['complete', 'partial', 'missing'])}
+              className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 hover:border-white/40"
+            >
+              All statuses
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+            <span>
+              {totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : 'No entries yet'}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (page > 1) {
+                    setPage(page - 1);
+                    void fetchReports();
+                  }
+                }}
+                disabled={page <= 1}
+              >
+                Prev
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (page < maxPage) {
+                    setPage(page + 1);
+                    void fetchReports();
+                  }
+                }}
+                disabled={page >= maxPage}
+              >
+                Next
+              </Button>
+              <label className="flex items-center gap-2 text-xs">
+                Page size
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-slate-700 bg-slate-950/80 px-2 py-1 text-xs text-slate-100"
+                >
+                  {[10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          </Modal>
-          <Modal title="Export Preview" open={showPreviewModal} onClose={() => setShowPreviewModal(false)}>
-            <div className="space-y-3">
-              <div className="text-sm text-slate-300">Preview the export layout below. Use Print to open the browser print dialog.</div>
-              <div className="border border-white/6 rounded bg-black/10 p-3 max-h-[60vh] overflow-auto">
-                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          </div>
+        </section>
+
+        {error && (
+          <div className="rounded-2xl border border-rose-900/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg shadow-black/20">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-950/80 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Day</th>
+                  <th className="px-3 py-2">Attendant</th>
+                  <th className="px-3 py-2">Submitted By</th>
+                  <th className="px-3 py-2">Marketplace</th>
+                  <th className="px-3 py-2">Marketplace JSON</th>
+                  {MARKETPLACE_SHOPS.map((s) => (
+                    <th key={s} className="px-3 py-2 hidden text-left sm:table-cell">
+                      {s}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-right">Products</th>
+                  <th className="px-3 py-2 text-right">Sales (KES)</th>
+                  <th className="px-3 py-2">Tasks</th>
+                  <th className="px-3 py-2">Marketing</th>
+                  <th className="px-3 py-2">Customer Ops</th>
+                  <th className="px-3 py-2">Office</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.length === 0 ? (
+                  <tr>
+                    <td colSpan={MARKETPLACE_SHOPS.length + 12} className="px-3 py-6 text-center text-slate-400">
+                      No reports found
+                    </td>
+                  </tr>
+                ) : (
+                  reports.map((r, idx) => {
+                    const rowStatus = computeRowStatus(r);
+                    if (!legendFilters.includes(rowStatus as any)) return null;
+                    const tasks = r.tasks ?? {};
+                    const categories = tasks.categories ?? {};
+                    const marketing = tasks.marketing ?? {};
+                    const customerOps = tasks.customerOperations ?? {};
+                    const office = tasks.officeMaintenance ?? {};
+                    const rowClass = idx % 2 === 0 ? "bg-slate-950/40" : "bg-slate-900/40";
+                    return (
+                      <tr key={r.id} className={`border-t border-slate-800 ${rowClass}`}>
+                        <td className="px-3 py-2 text-slate-200">{new Date(r.date).toLocaleDateString()}</td>
+                        <td className="px-3 py-2 text-slate-200">{r.day}</td>
+                        <td className="px-3 py-2 text-slate-200">{r.user?.name ?? "-"}</td>
+                        <td className="px-3 py-2 text-slate-200">{r.tasks?.submittedBy ?? "-"}</td>
+                        <td className="px-3 py-2 text-slate-200">
+                          {(() => {
+                            const mr = r.tasks?.marketplaceReview ?? {};
+                            const shops = Object.keys(mr || {});
+                            if (!shops || shops.length === 0) return <span className="text-slate-500">-</span>;
+                            const complete = shops.filter((k) => {
+                              const s = mr[k];
+                              return s && s.stockChecked && s.pricingConfirmed && s.competitorsReviewed && s.oosReviewed;
+                            }).length;
+                            return (
+                              <span className="text-sm font-medium text-white">
+                                {complete}/{shops.length} shops complete
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-2 text-slate-200">
+                          <button
+                            type="button"
+                            className="text-xs text-sky-300 underline hover:text-sky-200"
+                            onClick={() =>
+                              setJsonPreview({
+                                title: `${new Date(r.date).toLocaleDateString()} marketplace review`,
+                                payload: (r.tasks as any)?.marketplaceReview ?? {},
+                              })
+                            }
+                          >
+                            View JSON
+                          </button>
+                        </td>
+                        {MARKETPLACE_SHOPS.map((shop) => {
+                          const mr = (r.tasks as any)?.marketplaceReview ?? {};
+                          const shopData = mr[shop] || {};
+                          return (
+                            <td key={shop} className="hidden px-3 py-2 text-sm sm:table-cell" title={String(shopData.notes ?? "") || undefined}>
+                              {renderShopBadges(shopData)}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-right text-white">{r.productsCount}</td>
+                        <td className="px-3 py-2 text-right text-white">{Number(r.totalSales).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-slate-200">
+                          <div className="text-sm">
+                            <div className="font-semibold">Receipts: {Array.isArray(tasks.sales) ? tasks.sales.length : 0}</div>
+                            <div className="text-xs text-slate-400">
+                              New: {categories.newUploads ?? 0} - Copies: {categories.copiesUploaded ?? 0} - Edited: {categories.productsEdited ?? 0}
+                            </div>
+                            {Array.isArray(tasks.sales) && tasks.sales.length > 0 ? (
+                              <ul className="mt-2 list-disc pl-5 text-xs text-slate-300">
+                                {tasks.sales.map((sale: any, saleIdx: number) => (
+                                  <li key={saleIdx}>
+                                    {sale.productName || "-"} - KES {Number(sale.price || 0).toLocaleString()}
+                                    {sale.paymentMethod ? ` - ${String(sale.paymentMethod)}` : ""}
+                                    {sale.receiptNumber ? ` (#${String(sale.receiptNumber)})` : ""}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="text-xs text-slate-500">No sales recorded</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-slate-200">
+                          <div>Video Shoot: {marketing.participatedVideoShoot ? "Yes" : "No"}</div>
+                          <div>Marketing Meeting: {marketing.attendedMarketingMeeting ? "Yes" : "No"}</div>
+                          <div>Videos Shot: {marketing.marketingVideosShot ?? 0}</div>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-slate-200">
+                          <div>Walk-ins: {customerOps.walkInCustomers ?? 0}</div>
+                          <div>Customers Purchased: {customerOps.customersPurchased ?? 0}</div>
+                          <div>Live Viewers: {customerOps.liveViewers ?? 0}</div>
+                          <div>Live Purchases: {customerOps.livePurchases ?? 0}</div>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-slate-200">
+                          <div>Cleaned: {office.officeCleaned ? "Yes" : "No"}</div>
+                          <div className="text-xs text-slate-400">{office.officeNotes ?? ""}</div>
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-emerald-300 underline hover:text-emerald-200"
+                            onClick={() => {
+                              setDetailReport(r);
+                              setShowDetailModal(true);
+                            }}
+                          >
+                            View details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <Modal title="CSV Columns Included" open={showCsvModal} onClose={() => setShowCsvModal(false)}>
+          <div className="space-y-2 text-sm text-slate-200">
+            <p className="text-slate-300">This export includes the following columns (flattened per-shop columns are named using the shop label):</p>
+            <ul className="list-disc pl-5">
+              {CSV_COLUMNS.map((c) => (
+                <li key={c} className="py-0.5">
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Modal>
+
+        <Modal title="Export Preview" open={showPreviewModal} onClose={() => setShowPreviewModal(false)}>
+          <div className="space-y-3">
+            <div className="text-sm text-slate-300">Preview the export layout below. Use Print to open the browser print dialog.</div>
+            <div className="max-h-[60vh] overflow-auto rounded border border-white/6 bg-black/10 p-3">
+              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const w = window.open('', '_blank');
+                  if (!w) return;
+                  w.document.write(previewHtml);
+                  w.document.close();
+                  setTimeout(() => w.print(), 250);
+                }}
+              >
+                Print
+              </Button>
+              <Button variant="secondary" onClick={() => setShowPreviewModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          title="Report Details"
+          open={showDetailModal}
+          onClose={() => {
+            setShowDetailModal(false);
+            setDetailReport(null);
+          }}
+        >
+          {detailReport ? (
+            <div className="space-y-3 text-sm text-slate-200">
+              <div>
+                <strong>Date:</strong> {new Date(detailReport.date).toLocaleDateString()} - <strong>Day:</strong> {detailReport.day}
               </div>
-              <div className="flex gap-2 justify-end">
-                <Button onClick={() => { const w = window.open('', '_blank'); if (!w) return; w.document.write(previewHtml); w.document.close(); setTimeout(() => w.print(), 250); }} variant="primary">Print</Button>
-                <Button onClick={() => setShowPreviewModal(false)} variant="secondary">Close</Button>
+              <div>
+                <strong>Attendant:</strong> {detailReport.user?.name ?? '-'} - <strong>Submitted By:</strong> {detailReport.tasks?.submittedBy ?? '-'}
+              </div>
+              <div>
+                <strong>Marketplace Review:</strong>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-black/20 p-2 text-xs text-slate-300">
+                  {JSON.stringify(detailReport.tasks?.marketplaceReview ?? {}, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <strong>Categories:</strong>
+                <div className="mt-1 text-xs">
+                  New: {detailReport.tasks?.categories?.newUploads ?? 0} - Copies: {detailReport.tasks?.categories?.copiesUploaded ?? 0} - Edited: {detailReport.tasks?.categories?.productsEdited ?? 0}
+                </div>
+              </div>
+              <div>
+                <strong>Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):</strong>
+                {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-5 text-xs">
+                    {detailReport.tasks.sales.map((s: any, i: number) => (
+                      <li key={i}>
+                        {s.productName || '-'} - KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? ` - ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''} {s.buyingPrice ? `(buying KES ${Number(s.buyingPrice).toLocaleString()})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-xs text-slate-400">No sales recorded</div>
+                )}
+              </div>
+              <div>
+                <strong>Customer Comms:</strong>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-black/20 p-2 text-xs text-slate-300">
+                  {JSON.stringify(detailReport.tasks?.customerComms ?? {}, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <strong>Full Tasks JSON:</strong>
+                <pre className="mt-1 max-h-60 overflow-auto rounded bg-black/20 p-2 text-xs text-slate-300">
+                  {JSON.stringify(detailReport.tasks ?? {}, null, 2)}
+                </pre>
               </div>
             </div>
-          </Modal>
-          <Modal title="Report Details" open={showDetailModal} onClose={() => { setShowDetailModal(false); setDetailReport(null); }}>
-            {detailReport ? (
-              <div className="space-y-3 text-sm">
-                <div><strong>Date:</strong> {new Date(detailReport.date).toLocaleDateString()} — <strong>Day:</strong> {detailReport.day}</div>
-                <div><strong>Attendant:</strong> {detailReport.user?.name ?? '—'} — <strong>Submitted By:</strong> {detailReport.tasks?.submittedBy ?? '—'}</div>
-                <div>
-                  <strong>Marketplace Review:</strong>
-                  <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks?.marketplaceReview ?? {}, null, 2)}</pre>
-                </div>
-                <div>
-                  <strong>Categories:</strong>
-                  <div className="text-xs mt-1">New: {detailReport.tasks?.categories?.newUploads ?? 0} • Copies: {detailReport.tasks?.categories?.copiesUploaded ?? 0} • Edited: {detailReport.tasks?.categories?.productsEdited ?? 0}</div>
-                </div>
-                <div>
-                  <strong>Sales ({Array.isArray(detailReport.tasks?.sales) ? detailReport.tasks.sales.length : 0}):</strong>
-                      {Array.isArray(detailReport.tasks?.sales) && detailReport.tasks.sales.length > 0 ? (
-                        <ul className="list-disc pl-5 text-xs mt-1">
-                            {detailReport.tasks.sales.map((s: any, i: number) => (
-                            <li key={i}>{s.productName || '—'} — KES {Number(s.price || 0).toLocaleString()} {s.paymentMethod ? `• ${String(s.paymentMethod)}` : ''} {s.receiptNumber ? `(#${String(s.receiptNumber)})` : ''} {s.buyingPrice ? `(buying KES ${Number(s.buyingPrice).toLocaleString()})` : ''}</li>
-                          ))}
-                        </ul>
-                      ) : <div className="text-xs text-slate-400">No sales recorded</div>}
-                </div>
-                <div>
-                  <strong>Customer Comms:</strong>
-                  <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks?.customerComms ?? {}, null, 2)}</pre>
-                </div>
-                <div>
-                  <strong>Full Tasks JSON:</strong>
-                  <pre className="text-xs whitespace-pre-wrap max-h-60 overflow-auto bg-black/20 p-2 rounded mt-1">{JSON.stringify(detailReport.tasks ?? {}, null, 2)}</pre>
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm">No report selected.</div>
-            )}
-          </Modal>
-        </main>
-      </div>
+          ) : (
+            <div className="text-sm text-slate-300">No report selected.</div>
+          )}
+        </Modal>
+
+        <Modal title={jsonPreview?.title || 'Marketplace Review'} open={Boolean(jsonPreview)} onClose={() => setJsonPreview(null)}>
+          <pre className="max-h-80 overflow-auto rounded bg-black/20 p-3 text-xs text-slate-200">
+            {JSON.stringify(jsonPreview?.payload ?? {}, null, 2)}
+          </pre>
+        </Modal>
+      </main>
     </div>
   );
 }
-
-// Sparkline is now provided by `src/app/_components/Sparkline`

@@ -1,11 +1,7 @@
 "use server";
 
-import type {
-  AttendantPayrollAdjustment,
-  MarketplaceAssignmentRole,
-  PayrollAdjustmentType,
-  Prisma,
-} from "@prisma/client";
+import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma } from "@prisma/client";
+import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";

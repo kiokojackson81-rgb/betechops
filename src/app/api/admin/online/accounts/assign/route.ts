@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { MarketplaceAssignmentRole } from "@prisma/client";
+import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 

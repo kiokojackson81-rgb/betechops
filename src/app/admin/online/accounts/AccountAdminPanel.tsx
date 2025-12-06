@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { MarketplaceAssignmentRole, Platform } from "@prisma/client";
+import { Platform } from "@prisma/client";
+import MarketplaceAssignmentRole, { MarketplaceAssignmentRoleValues, type MarketplaceAssignmentRole as MarketplaceAssignmentRoleType } from "@/lib/marketplaceAssignment";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/lib/ui/toast";
 
@@ -43,12 +44,12 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
   const [assignmentForm, setAssignmentForm] = useState({
     accountId: accounts[0]?.id ?? "",
     attendantId: "",
-    role: MarketplaceAssignmentRole.JUMIA_KILIMALL_OPS as MarketplaceAssignmentRole,
+    role: MarketplaceAssignmentRole.JUMIA_KILIMALL_OPS as MarketplaceAssignmentRoleType,
     endsAt: "",
   });
 
   const platformOptions = useMemo(() => Object.values(Platform), []);
-  const assignmentRoles = useMemo(() => Object.values(MarketplaceAssignmentRole), []);
+  const assignmentRoles = useMemo(() => MarketplaceAssignmentRoleValues, []);
 
   useEffect(() => {
     if (accounts.length === 0) {
@@ -311,7 +312,7 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
                 className={inputClasses}
                 value={assignmentForm.role}
                 onChange={(e) =>
-                  setAssignmentForm((prev) => ({ ...prev, role: e.target.value as MarketplaceAssignmentRole }))
+                  setAssignmentForm((prev) => ({ ...prev, role: e.target.value as MarketplaceAssignmentRoleType }))
                 }
                 disabled={disableAssignment}
               >

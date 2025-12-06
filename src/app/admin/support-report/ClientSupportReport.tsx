@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
@@ -50,7 +50,13 @@ export default function ClientSupportReport({
   initialFilters: { from: string; to: string; day: string; attendantId: string; search: string };
 }) {
   const router = useRouter();
+  
+  const [entriesState, setEntriesState] = useState<SupportReportEntry[]>(entries);
+  const [selectedEntry, setSelectedEntry] = useState<SupportReportEntry | null>(null);
 
+  useEffect(() => {
+    setEntriesState(entries);
+  }, [entries]);
   const totals = useMemo(() => ({
     cards: [
       { label: "Total sales", value: formatKES(summary.periodSales) },
@@ -182,14 +188,14 @@ export default function ClientSupportReport({
               </tr>
             </thead>
             <tbody>
-              {entries.length === 0 ? (
+              {entriesState.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
                     No support submissions match your filters.
                   </td>
                 </tr>
               ) : (
-                entries.map((entry, idx) => (
+                entriesState.map((entry, idx) => (
                   <tr key={entry.id} className="border-t border-slate-800">
                     <td className="px-3 py-2 text-slate-200">{entry.date}</td>
                     <td className="px-3 py-2 text-slate-300">{entry.dayOfWeek}</td>
@@ -207,8 +213,8 @@ export default function ClientSupportReport({
                     <td className="px-3 py-2 text-center text-slate-100">{entry.changedBatteries}</td>
                     <td className="px-3 py-2 text-right text-slate-100">{formatKES(entry.performanceEarnings)}</td>
                     <td className="px-3 py-2 text-right text-slate-100">{formatKES(entry.commission)}</td>
-                    <td className="px-3 py-2">
-                          <div className="flex flex-wrap gap-2 items-center">
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-2 items-center">
                         <button type="button" className="rounded-full border border-slate-600 px-3 py-1 text-[11px] text-slate-300" disabled>
                           View
                         </button>
