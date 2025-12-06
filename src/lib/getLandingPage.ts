@@ -16,7 +16,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
     case "SUPPORT_OPS":
       return "/attendant/support";
     case "BETECH_OPS":
-      return "/admin";
+      return role === "ADMIN" ? "/admin" : "/attendant";
     default:
       return "/attendant";
   }

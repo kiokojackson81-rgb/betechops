@@ -22,7 +22,7 @@ export function getLandingPage(attendantCategory?: string | null) {
     case "SUPPORT_OPS":
       return "/attendant/support";
     case "BETECH_OPS":
-      return "/admin";
+      return "/attendant";
     default:
       return "/";
   }
