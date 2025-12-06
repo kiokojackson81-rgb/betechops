@@ -29,12 +29,32 @@ const { chromium } = require('playwright');
       process.exit(3);
     }
     const decoded = decodeURIComponent(cb);
-    if (!decoded.startsWith('/marketing/tracker')) {
-      console.error('callbackUrl does not point to marketing/tracker:', decoded);
+
+    // Support two valid patterns:
+    // 1) Direct: callbackUrl=%2Fmarketing%2Ftracker... (older behavior)
+    // 2) Wrapped: callbackUrl=%2Fauth%2Fpost-login%3FcallbackUrl%3D%252Fmarketing%252Ftracker... (new middleware)
+    if (decoded.startsWith('/marketing/tracker')) {
+      console.log('SMOKE OK: middleware redirected to login and preserved callbackUrl ->', decoded);
       await browser.close();
-      process.exit(4);
+      process.exit(0);
     }
-    console.log('SMOKE OK: middleware redirected to login and preserved callbackUrl ->', decoded);
+
+    // If wrapped, parse nested callbackUrl param
+    try {
+      const nested = new URL('http://localhost' + decoded);
+      const nestedCb = nested.searchParams.get('callbackUrl');
+      if (nestedCb && decodeURIComponent(nestedCb).startsWith('/marketing/tracker')) {
+        console.log('SMOKE OK: middleware redirected to login and preserved nested callbackUrl ->', decodeURIComponent(nestedCb));
+        await browser.close();
+        process.exit(0);
+      }
+    } catch (err) {
+      // fall through to error below
+    }
+
+    console.error('callbackUrl does not point to marketing/tracker (direct or nested):', decoded);
+    await browser.close();
+    process.exit(4);
     await browser.close();
     process.exit(0);
   } catch (err) {
