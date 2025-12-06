@@ -103,7 +103,16 @@ export async function middleware(req: NextRequest) {
   for (const { prefix, categories } of routePermissions) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       if (role === "ADMIN") return NextResponse.next();
-      if (!category || !isCategoryAllowed(category, categories)) {
+      // If we don't yet have a category attached to the token (race condition
+      // where the JWT hasn't been enriched with attendantCategory after login),
+      // allow the request through. The app's server/client pages will perform
+      // a DB-backed lookup and resolve the correct landing page. Only enforce
+      // category-based redirects when a category is present and explicitly
+      // disallowed for this route.
+      if (!category) {
+        return NextResponse.next();
+      }
+      if (!isCategoryAllowed(category, categories)) {
         // Wrong category → send to their home instead of /not-authorized.
         // Avoid redirecting to the same pathname (redirect-to-self) which
         // produces an infinite redirect loop. If `home` equals the current
