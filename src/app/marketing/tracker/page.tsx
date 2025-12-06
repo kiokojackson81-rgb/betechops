@@ -728,7 +728,9 @@ export default function MarketingTrackerPage() {
     [combinedPeriodSales],
   );
 
-  const commissionKes = commissionSummary.commission;
+  // Prefer the server-calculated earnings summary commission when available
+  // so the Quick stats panel matches the detailed Earnings card exactly.
+  const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
   const displayedSalesKes = combinedPeriodSales;
