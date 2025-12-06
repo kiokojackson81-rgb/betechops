@@ -69,6 +69,10 @@ export default function ClientAdminMarketingReport({
   // when filters or the selected period change to avoid clobbering optimistic removals
   // triggered by the user.
   const [entriesState, setEntriesState] = useState<MarketingReportEntry[]>(entries);
+  // Intentionally exclude `entries` from deps: we only want to resync the local
+  // optimistic state when filters/period change, to avoid clobbering user-driven
+  // optimistic removals. Tell the linter this is deliberate.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setEntriesState(entries);
   }, [selectedPeriodKey, dateStr, userFilter, dow]);
