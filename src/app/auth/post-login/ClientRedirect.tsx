@@ -9,6 +9,7 @@ import getLandingPage from "@/lib/getLandingPage";
 type LocalUser = {
   role?: string;
   attendantCategory?: AttendantCategory;
+  email?: string | null;
 };
 
 export default function ClientRedirect() {
@@ -36,18 +37,29 @@ export default function ClientRedirect() {
       return;
     }
 
-    // Always refresh attendantCategory from the server to avoid stale tokens;
-    // this ensures Direct Sales Ops keep landing on `/marketing/tracker`.
+    // Always refresh attendantCategory from the server (no-cache) to avoid stale tokens.
     (async () => {
       try {
         let category: AttendantCategory | null | undefined = user?.attendantCategory ?? null;
-        const res = await fetch("/api/attendants/me", { credentials: "same-origin" });
+        const res = await fetch("/api/attendants/me", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
         if (res.ok) {
           const json = await res.json();
           category = json?.attendantCategory ?? category;
           role = json?.role ?? role;
         }
-        const target = getLandingPage(category, role);
+        let target = getLandingPage(category, role);
+        // Safety net: if we still don't have a category and this is the Direct Sales Ops user,
+        // force them to the tracker instead of the generic attendant page.
+        if (
+          target === "/attendant" &&
+          user?.email &&
+          user.email.toLowerCase() === "jeniffer@betech.co.ke"
+        ) {
+          target = "/marketing/tracker";
+        }
         router.replace(target);
       } catch (e) {
         const target = getLandingPage(user?.attendantCategory ?? null, role);
