@@ -62,7 +62,7 @@ export default function StatsCard({
   );
 }
 
-function StatTile({ label, value }: { label: string; value: number | string }) {
+function StatTile({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>

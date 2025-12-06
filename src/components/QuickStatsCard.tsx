@@ -93,7 +93,7 @@ export function QuickStatsCard({ variant = "onlineOps" }: { variant?: Variant })
   );
 }
 
-function StatTile({ label, value, loading }: { label: string; value: number | string; loading: boolean }) {
+function StatTile({ label, value, loading }: { label: string; value: React.ReactNode; loading: boolean }) {
   return (
     <div className="rounded-2xl bg-slate-950/50 px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
