@@ -33,12 +33,17 @@ export function useCardLock(storageKey: string) {
   const lock = () => setLocked(true);
 
   const unlock = () => {
+    // Do nothing while session is still resolving
     if (status === "loading") return;
-    if (status === "authenticated" && session) {
+
+    // If we have a session object OR status explicitly says authenticated, unlock locally
+    if (session || status === "authenticated") {
       setLocked(false);
       return;
     }
-    if (typeof window !== "undefined") {
+
+    // Only redirect when we know the user is not authenticated
+    if (status === "unauthenticated" && typeof window !== "undefined") {
       const cb = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/attendant/login?callbackUrl=${cb}`;
     }
