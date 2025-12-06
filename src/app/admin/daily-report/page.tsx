@@ -27,7 +27,7 @@ interface Summary {
   totalCommissionEarned?: number;
 }
 
-// Define the days with tasks for dropâdown options.  This mirrors the keys
+// Define the days with tasks for drop-down options.  This mirrors the keys
 // used on the attendant form.  If you change the tasks mapping in the
 // attendant page, update this list accordingly.
 const DAY_KEYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -62,7 +62,7 @@ function getTradingRange(date = new Date()) {
   return {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
-    label: `${formatShortDate(start)} â- ${formatShortDate(end)}`,
+    label: `${formatShortDate(start)} - ${formatShortDate(end)}`,
   };
 }
 
@@ -395,7 +395,7 @@ export default function AdminDailyReportPage() {
           </style>
         </head>
         <body>
-          <h2>Daily Reports â- Export</h2>
+          <h2>Daily Reports - Export</h2>
           <p>Exported ${filteredReportsForAgg.length} reports</p>
           <table>
             <thead>
@@ -467,7 +467,7 @@ export default function AdminDailyReportPage() {
           </style>
         </head>
         <body>
-          <h2>Daily Reports â- Export (${scope})</h2>
+          <h2>Daily Reports - Export (${scope})</h2>
           <p>Exported ${sourceReports.length} reports</p>
           <table>
             <thead>
@@ -513,7 +513,7 @@ export default function AdminDailyReportPage() {
   function renderShopBadges(s: any) {
     // s: marketplace shop object with boolean flags
     const present = Boolean(s && Object.keys(s).length > 0);
-    if (!present) return <div className="text-slate-400">â-</div>;
+    if (!present) return <div className="text-slate-400">-</div>;
     const IconCheck = () => (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1">
         <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -571,7 +571,7 @@ export default function AdminDailyReportPage() {
             <div className="text-xs text-slate-500">25th to 24th</div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <span>Quick apply: {tradingRange.start}{'  '}{tradingRange.end}</span>
+            <span>Quick apply: {tradingRange.start} -> {tradingRange.end}</span>
             <Button
               variant="secondary"
               onClick={() => {
@@ -747,7 +747,7 @@ export default function AdminDailyReportPage() {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-            <span>
+            <span>Quick apply: {tradingRange.start}{' - '}{tradingRange.end}</span>
               {totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : 'No entries yet'}
             </span>
             <div className="flex flex-wrap items-center gap-2">
