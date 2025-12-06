@@ -571,7 +571,7 @@ export default function AdminDailyReportPage() {
             <div className="text-xs text-slate-500">25th to 24th</div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <span>Quick apply: {tradingRange.start} -> {tradingRange.end}</span>
+            <span>Quick apply: {tradingRange.start}{' - '}{tradingRange.end}</span>
             <Button
               variant="secondary"
               onClick={() => {
@@ -747,9 +747,7 @@ export default function AdminDailyReportPage() {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-            <span>Quick apply: {tradingRange.start}{' - '}{tradingRange.end}</span>
-              {totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : 'No entries yet'}
-            </span>
+            <span>{totalCount ? `Showing ${pageStart} - ${pageEnd} of ${totalCount}` : 'No entries yet'}</span>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="secondary"
