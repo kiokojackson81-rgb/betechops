@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Card from "@/app/_components/Card";
+import SensitiveValue from "./SensitiveValue";
 import type { OnlineQuickStats } from "@/lib/onlineOps";
 import { showToast } from "@/lib/ui/toast";
 
@@ -54,7 +55,21 @@ export function QuickStatsCard({ variant = "onlineOps" }: { variant?: Variant })
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <StatTile label="Receipts" value={stats?.receipts ?? 0} loading={loading} />
         <StatTile label="Sales (KES)" value={formatCurrency(stats?.salesKes ?? 0)} loading={loading} />
-        <StatTile label="Commission (KES)" value={formatCurrency(stats?.commissionKes ?? 0)} loading={loading} />
+        <StatTile
+          label="Commission (KES)"
+          value={
+            loading
+              ? "…"
+              : (
+                  <SensitiveValue
+                    value={stats?.commissionKes ?? 0}
+                    format={(v) => `KES ${Number(v).toLocaleString("en-KE")}`}
+                    storageKey={`quickstats:commission:${stats?.periodLabel ?? "current"}`}
+                  />
+                )
+          }
+          loading={loading}
+        />
         <StatTile label="Items sold" value={stats?.itemsSold ?? 0} loading={loading} />
       </div>
 

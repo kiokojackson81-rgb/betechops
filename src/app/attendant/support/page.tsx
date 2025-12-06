@@ -455,11 +455,12 @@ function SupportQuickStats({
       ? Math.min((currentSalesForTier / nextTarget) * 100, 100)
       : 100;
 
-  const stats = [
+    const stats = [
     { label: "Receipts", value: receipts.toLocaleString() },
     { label: "Sales (KES)", value: salesKes.toLocaleString() },
     { label: "Items sold", value: items.toLocaleString() },
-    { label: "Commission (KES)", value: commissionKes.toLocaleString() },
+    // commission shown using SensitiveValue so it can be hidden; unhide requires login
+    { label: "Commission (KES)", value: <SensitiveValue value={commissionKes} format={(v) => `KES ${Number(v).toLocaleString()}`} storageKey={`support:commission`} /> },
     { label: "New batteries", value: newBatteries.toLocaleString() },
     { label: "Changed batteries", value: changedBatteries.toLocaleString() },
     { label: "Total batteries", value: totalBatteries.toLocaleString() },
@@ -470,7 +471,9 @@ function SupportQuickStats({
     // Placeholder total commission: commission + performance earnings
     {
       label: "Total commission",
-      value: `KES ${(commissionKes + performanceBonus).toLocaleString()}`,
+      value: (
+        <SensitiveValue value={commissionKes + performanceBonus} format={(v) => `KES ${Number(v).toLocaleString()}`} storageKey={`support:total-commission`} />
+      ),
     },
   ];
 

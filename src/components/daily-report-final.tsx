@@ -1385,7 +1385,10 @@ function QuickStats({
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{commissionKes?.toLocaleString() ?? "0"}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">
+            {/* Lazy client component to allow click-to-hide; unhide requires login */}
+            <SensitiveValue value={commissionKes ?? 0} format={(v) => Number(v).toLocaleString()} storageKey={`dailyreport:commission`} />
+          </div>
         </div>
       </div>
     </section>

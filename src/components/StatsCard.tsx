@@ -1,6 +1,7 @@
 "use client";
 
 import Card from "@/app/_components/Card";
+import SensitiveValue from "./SensitiveValue";
 
 type StatsCardProps = {
   periodLabel: string;
@@ -42,7 +43,7 @@ export default function StatsCard({
       <div className="grid gap-4 sm:grid-cols-2">
         <StatTile label="Receipts" value={receipts} />
         <StatTile label="Sales (KES)" value={salesKes.toLocaleString()} />
-        <StatTile label="Commission (KES)" value={commissionKes.toLocaleString()} />
+        <StatTile label="Commission (KES)" value={<SensitiveValue value={commissionKes} format={(v) => Number(v).toLocaleString()} storageKey="stats:commission" />} />
         <StatTile label="Items sold" value={items} />
       </div>
 
