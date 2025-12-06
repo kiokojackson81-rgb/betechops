@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
+import Card from "@/app/_components/Card";
+import Sparkline from "@/app/_components/Sparkline";
 import Modal from "@/app/_components/Modal";
 import { computeRowStatus } from '@/lib/dailyReportHelpers';
 import { showToast } from "@/lib/ui/toast";
@@ -354,6 +356,7 @@ export default function AdminDailyReportPage() {
   ];
   const pageStart = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount);
   const pageEnd = Math.min(page * pageSize, totalCount);
+  const maxPage = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
 
   function downloadPdf() {
     const rows = filteredReportsForAgg.map((r) => {
