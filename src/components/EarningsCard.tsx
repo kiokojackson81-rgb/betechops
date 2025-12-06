@@ -11,6 +11,7 @@ type Variant = "support" | "marketing" | "onlineOps";
 type BaseProps = {
   variant?: Exclude<Variant, "onlineOps">;
   summary: MarketingSummary | null;
+  lockKey?: string;
 };
 
 type OnlineProps = {
@@ -23,7 +24,7 @@ export function EarningsCard(props: Props) {
   if (props.variant === "onlineOps") {
     return <OnlineOpsEarningsCard />;
   }
-  return <BaseEarningsCard summary={props.summary} />;
+  return <BaseEarningsCard summary={props.summary} lockKey={props.lockKey} />;
 }
 
 function OnlineOpsEarningsCard() {

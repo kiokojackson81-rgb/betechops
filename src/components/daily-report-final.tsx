@@ -7,6 +7,8 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
 import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+import SensitiveValue from "./SensitiveValue";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -655,7 +657,7 @@ export default function DailyReportFinal() {
           />
 
           <div>
-            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} />
+            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
             {earningsError && (
               <div className="mt-2 rounded-md bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
                 {earningsError} {""}
@@ -1355,48 +1357,54 @@ function QuickStats({
   commissionKes,
   tradingPeriodLabel,
 }: QuickStatsProps) {
+  const { locked, toggle } = useCardLock("dailyreport:quickstats");
+  const mask = (v: React.ReactNode) => (locked ? "•••" : v);
+
   return (
     <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8 md:py-7">
       <div className="flex flex-col gap-4 md:flex-row md:items-baseline md:justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-50">Quick stats</h2>
-        <p className="text-xs text-slate-400 md:text-right">{tradingPeriodLabel || "TRADING PERIOD 25TH LAST MONTH – 24TH THIS MONTH"}</p>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-50">Quick stats</h2>
+          <LockButton locked={locked} onToggle={toggle} />
+        </div>
+        <p className="text-xs text-slate-400 md:text-right">{tradingPeriodLabel || "TRADING PERIOD 25TH LAST MONTH - 24TH THIS MONTH"}</p>
       </div>
 
       <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3">
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Receipts</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{receipts ?? 0}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(receipts ?? 0)}</div>
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sales (KES)</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{salesKes?.toLocaleString() ?? "0"}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(salesKes?.toLocaleString() ?? "0")}</div>
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">New products</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{newProducts ?? 0}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(newProducts ?? 0)}</div>
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Edited products</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{editedProducts ?? 0}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(editedProducts ?? 0)}</div>
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Copied products</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-400">{copiedProducts ?? 0}</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(copiedProducts ?? 0)}</div>
         </div>
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">
-            {/* Lazy client component to allow click-to-hide; unhide requires login */}
-            <SensitiveValue value={commissionKes ?? 0} format={(v) => Number(v).toLocaleString()} storageKey={`dailyreport:commission`} />
+            {locked ? (
+              "•••"
+            ) : (
+              <SensitiveValue value={commissionKes ?? 0} format={(v) => Number(v).toLocaleString()} storageKey={`dailyreport:commission`} />
+            )}
           </div>
         </div>
       </div>
     </section>
   );
 }
-
-// Sensitive values (click-to-hide) used in the tiles
-import SensitiveValue from "./SensitiveValue";
 
 function PillCheckbox(props: { label: string; checked: boolean; onChange: (next: boolean) => void }) {
   const { label, checked, onChange } = props;

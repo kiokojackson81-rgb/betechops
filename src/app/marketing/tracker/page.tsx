@@ -19,6 +19,7 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import type { EarningsSummary } from "@/lib/marketingEarnings";
 import { signOut } from "next-auth/react";
 import { Trash2 } from "lucide-react";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 
 type MarketingDailyFormState = {
   date: string;
@@ -141,6 +142,8 @@ function StatsCard({
   nextTarget,
 }: StatsCardProps) {
   const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
+  const { locked, toggle } = useCardLock("marketing:quickstats");
+  const mask = (val: React.ReactNode) => (locked ? "•••" : val);
 
   const remaining =
     hasNextTier && nextTarget! > currentSalesForTier
@@ -155,7 +158,10 @@ function StatsCard({
   return (
     <Card className="h-full border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
       <div className="mb-6 flex items-start justify-between gap-4">
-        <h2 className="text-xl font-semibold">Quick stats</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold">Quick stats</h2>
+          <LockButton locked={locked} onToggle={toggle} />
+        </div>
         <p className="text-xs text-slate-400 text-right">{periodLabel}</p>
       </div>
 
@@ -163,14 +169,14 @@ function StatsCard({
         {/* Receipts */}
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">Receipts</p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-400">{receipts}</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(receipts)}</p>
         </div>
 
         {/* Sales */}
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">
-            {salesKes.toLocaleString()}
+            {mask(salesKes.toLocaleString())}
           </p>
         </div>
 
@@ -180,14 +186,14 @@ function StatsCard({
             Commission (KES)
           </p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">
-            {commissionKes.toLocaleString()}
+            {mask(commissionKes.toLocaleString())}
           </p>
         </div>
 
         {/* Items */}
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">Items sold</p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-400">{items}</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(items)}</p>
         </div>
       </div>
 
@@ -217,6 +223,9 @@ type EarningsCardProps = {
 function EarningsCard({ summary }: EarningsCardProps) {
   if (!summary) return null;
 
+  const { locked, toggle } = useCardLock("marketing:earnings");
+  const mask = (v: React.ReactNode) => (locked ? "•••" : v);
+
   const rows = [
     { label: "Base salary", type: "earning", amount: summary.baseSalary },
     { label: "Commission", type: "earning", amount: summary.commission },
@@ -231,13 +240,16 @@ function EarningsCard({ summary }: EarningsCardProps) {
   return (
     <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold">Earnings this period</h2>
-          <p className="text-xs text-slate-400">{summary.periodLabel}</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Earnings this period</h2>
+            <p className="text-xs text-slate-400">{summary.periodLabel}</p>
+          </div>
+          <LockButton locked={locked} onToggle={toggle} />
         </div>
         <div className="text-right text-xs">
           <p className="text-slate-400 uppercase tracking-wide">Net pay</p>
-          <p className="text-xl font-semibold text-emerald-400">KES {summary.netPay.toLocaleString()}</p>
+          <p className="text-xl font-semibold text-emerald-400">{mask(`KES ${summary.netPay.toLocaleString()}`)}</p>
         </div>
       </div>
 
@@ -255,7 +267,7 @@ function EarningsCard({ summary }: EarningsCardProps) {
                   : "font-semibold text-rose-400"
               }
             >
-              {row.type === "deduction" ? "-" : ""}KES {row.amount.toLocaleString()}
+              {mask(`${row.type === "deduction" ? "-" : ""}KES ${row.amount.toLocaleString()}`)}
             </span>
           </div>
         ))}

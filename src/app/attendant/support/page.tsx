@@ -12,6 +12,7 @@ import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -456,23 +457,28 @@ function SupportQuickStats({
       ? Math.min((currentSalesForTier / nextTarget) * 100, 100)
       : 100;
 
+    const { locked, toggle } = useCardLock("support:quickstats");
+    const mask = (v: React.ReactNode) => (locked ? "•••" : v);
+
     const stats = [
     { label: "Receipts", value: receipts.toLocaleString() },
     { label: "Sales (KES)", value: salesKes.toLocaleString() },
     { label: "Items sold", value: items.toLocaleString() },
     // commission shown using SensitiveValue so it can be hidden; unhide requires login
-    { label: "Commission (KES)", value: <SensitiveValue value={commissionKes} format={(v) => `KES ${Number(v).toLocaleString()}`} storageKey={`support:commission`} /> },
+    { label: "Commission (KES)", value: locked ? "•••" : <SensitiveValue value={commissionKes} format={(v) => `KES ${Number(v).toLocaleString()}`} storageKey={`support:commission`} /> },
     { label: "New batteries", value: newBatteries.toLocaleString() },
     { label: "Changed batteries", value: changedBatteries.toLocaleString() },
     { label: "Total batteries", value: totalBatteries.toLocaleString() },
     {
       label: "Performance earnings",
-      value: `KES ${performanceBonus.toLocaleString()}`,
+      value: mask(`KES ${performanceBonus.toLocaleString()}`),
     },
     // Placeholder total commission: commission + performance earnings
     {
       label: "Total commission",
-      value: (
+      value: locked ? (
+        "•••"
+      ) : (
         <SensitiveValue value={commissionKes + performanceBonus} format={(v) => `KES ${Number(v).toLocaleString()}`} storageKey={`support:total-commission`} />
       ),
     },
@@ -485,6 +491,7 @@ function SupportQuickStats({
           <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
           <p className="text-xs text-slate-400">{periodLabel}</p>
         </div>
+        <LockButton locked={locked} onToggle={toggle} />
       </div>
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         {stats.map((stat) => (
@@ -495,7 +502,11 @@ function SupportQuickStats({
             <p className="text-[10px] uppercase tracking-wide text-slate-400">
               {stat.label}
             </p>
-            <p className="mt-1 text-lg font-semibold text-emerald-400">{stat.value}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-400">
+              {typeof stat.value === "string" || typeof stat.value === "number"
+                ? mask(stat.value)
+                : stat.value}
+            </p>
           </div>
         ))}
       </div>
@@ -521,6 +532,8 @@ function SupportQuickStats({
 
 function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | null }) {
   if (!summary) return null;
+  const { locked, toggle } = useCardLock("support:earnings");
+  const mask = (v: React.ReactNode) => (locked ? "•••" : v);
   const credits = [
     { label: "Base salary", amount: summary.baseSalary },
     { label: "Performance bonus", amount: summary.batteryEarnings },
@@ -539,16 +552,19 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Earnings this period
-          </p>
-          <p className="text-sm text-slate-400">{summary.periodLabel}</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+              Earnings this period
+            </p>
+            <p className="text-sm text-slate-400">{summary.periodLabel}</p>
+          </div>
+          <LockButton locked={locked} onToggle={toggle} />
         </div>
         <div className="text-right">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Net pay</p>
           <p className="text-2xl font-semibold text-emerald-300">
-            {formatCurrency(summary.netPay)}
+            {mask(formatCurrency(summary.netPay))}
           </p>
         </div>
       </div>
@@ -560,7 +576,7 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
           >
             <span className="text-sm text-slate-300">{row.label}</span>
             <span className="font-semibold text-emerald-300">
-              {formatCurrency(row.amount)}
+              {mask(formatCurrency(row.amount))}
             </span>
           </div>
         ))}
@@ -571,7 +587,7 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
           >
             <span className="text-sm text-slate-300">{row.label}</span>
             <span className="font-semibold text-rose-300">
-              -{formatCurrency(row.amount)}
+              {mask(`-${formatCurrency(row.amount)}`)}
             </span>
           </div>
         ))}

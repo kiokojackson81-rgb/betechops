@@ -2,11 +2,20 @@
 
 import Card from "./Card";
 import type { EarningsSummary } from "@/lib/earningsSummary";
+import { useCardLock, LockButton } from "./useCardLock";
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
 
-export default function EarningsCard({ summary }: { summary: EarningsSummary | null }) {
+export default function EarningsCard({
+  summary,
+  lockKey,
+}: {
+  summary: EarningsSummary | null;
+  lockKey?: string;
+}) {
   if (!summary) return null;
+
+  const { locked, toggle } = useCardLock(lockKey ?? "earnings:default");
 
   const rows = [
     { label: "Base salary", value: summary.baseSalary },
@@ -29,21 +38,26 @@ export default function EarningsCard({ summary }: { summary: EarningsSummary | n
       formatted: row.value < 0 ? `- ${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value),
     }));
 
+  const mask = (val: string) => (locked ? "•••" : val);
+
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/60">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Earnings summary</p>
-        <p className="text-sm text-slate-400">For {summary.periodLabel}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Earnings summary</p>
+          <p className="text-sm text-slate-400">For {summary.periodLabel}</p>
+        </div>
+        {lockKey ? <LockButton locked={locked} onToggle={toggle} /> : null}
       </div>
       <div className="rounded-2xl border border-emerald-500/30 bg-black/20 px-4 py-3">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Net pay</p>
-        <p className="text-2xl font-semibold text-emerald-300">{formatCurrency(summary.netPay)}</p>
+        <p className="text-2xl font-semibold text-emerald-300">{mask(formatCurrency(summary.netPay))}</p>
       </div>
       <div className="space-y-3 text-sm text-slate-100">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between">
             <span className="text-slate-400">{row.label}</span>
-            <span>{row.formatted}</span>
+            <span>{mask(row.formatted)}</span>
           </div>
         ))}
       </div>
