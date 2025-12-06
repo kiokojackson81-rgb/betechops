@@ -51,18 +51,15 @@ export default function ClientRedirect() {
           role = json?.role ?? role;
         }
         let target = getLandingPage(category, role);
-        // Safety net: if we still don't have a category and this is the Direct Sales Ops user,
-        // force them to the tracker instead of the generic attendant page.
-        if (
-          target === "/attendant" &&
-          user?.email &&
-          user.email.toLowerCase() === "jeniffer@betech.co.ke"
-        ) {
+        if (user?.email?.toLowerCase() === "jeniffer@betech.co.ke" && target === "/attendant") {
           target = "/marketing/tracker";
         }
         router.replace(target);
       } catch (e) {
-        const target = getLandingPage(user?.attendantCategory ?? null, role);
+        let target = getLandingPage(user?.attendantCategory ?? null, role);
+        if (user?.email?.toLowerCase() === "jeniffer@betech.co.ke" && target === "/attendant") {
+          target = "/marketing/tracker";
+        }
         router.replace(target);
       }
     })();
