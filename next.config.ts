@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 
+const externalPackages = ["pino", "thread-stream", "pino-pretty"];
+
 const nextConfig: NextConfig = {
-  // Do not bundle these packages into server bundles — load from Node at runtime
-  serverExternalPackages: ["pino", "thread-stream", "pino-pretty"],
+  serverExternalPackages: externalPackages,
+  // Turbopack is now the default in Next 16. Provide an explicit (even if empty)
+  // config so builds that still rely on legacy webpack hooks don't error out.
+  turbopack: {},
 };
 
 export default nextConfig;
