@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Button from "@/app/_components/Button";
+import DeleteSupportEntryClient from "./DeleteSupportEntryClient";
 
 const dayOptions = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -188,7 +189,7 @@ export default function ClientSupportReport({
                   </td>
                 </tr>
               ) : (
-                entries.map((entry) => (
+                entries.map((entry, idx) => (
                   <tr key={entry.id} className="border-t border-slate-800">
                     <td className="px-3 py-2 text-slate-200">{entry.date}</td>
                     <td className="px-3 py-2 text-slate-300">{entry.dayOfWeek}</td>
@@ -207,7 +208,7 @@ export default function ClientSupportReport({
                     <td className="px-3 py-2 text-right text-slate-100">{formatKES(entry.performanceEarnings)}</td>
                     <td className="px-3 py-2 text-right text-slate-100">{formatKES(entry.commission)}</td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 items-center">
                         <button type="button" className="rounded-full border border-slate-600 px-3 py-1 text-[11px] text-slate-300" disabled>
                           View
                         </button>
@@ -217,6 +218,24 @@ export default function ClientSupportReport({
                         <button type="button" className="rounded-full border border-slate-600 px-3 py-1 text-[11px] text-slate-300" disabled>
                           Edit
                         </button>
+                        <DeleteSupportEntryClient
+                          entryId={entry.id}
+                          entry={entry}
+                          onDeleted={(id) => {
+                            // optimistic removal: remove from local state immediately
+                            setEntriesState((prev) => prev.filter((e) => e.id !== id));
+                            // clear selected detail view if it was the deleted entry
+                            if (selectedEntry?.id === id) setSelectedEntry(null);
+                          }}
+                          onRestore={(entryObj) => {
+                            // rollback: insert at original index
+                            setEntriesState((prev) => {
+                              const copy = prev.slice();
+                              copy.splice(idx, 0, entryObj as any);
+                              return copy;
+                            });
+                          }}
+                        />
                       </div>
                     </td>
                   </tr>

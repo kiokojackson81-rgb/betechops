@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Button from "@/app/_components/Button";
-import Card from "@/app/_components/Card";
-import Sparkline from "@/app/_components/Sparkline";
 import Modal from "@/app/_components/Modal";
 import { computeRowStatus } from '@/lib/dailyReportHelpers';
 import { showToast } from "@/lib/ui/toast";
@@ -44,6 +42,9 @@ const MARKETPLACE_SHOPS = [
   "Betech Solar",
   "Kilimall",
 ];
+
+const cardClasses =
+  "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
 
 function formatShortDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -86,6 +87,7 @@ export default function AdminDailyReportPage() {
   const [legendFilters, setLegendFilters] = useState<Array<'complete' | 'partial' | 'missing'>>(['complete','partial','missing']);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailReport, setDetailReport] = useState<Report | null>(null);
+  const [jsonPreview, setJsonPreview] = useState<{ title: string; payload: any } | null>(null);
 
   function getFilteredReports() {
     return (reports || []).filter((r) => {
@@ -329,6 +331,29 @@ export default function AdminDailyReportPage() {
     totalLiveSessions: Number(summary?.totalLiveSessions ?? aggLiveSessions),
     totalCommissionEarned: Number(summary?.totalCommissionEarned ?? aggCommissionEarned),
   };
+  const kpiCards = [
+    { label: "Total products", value: stats.totalProducts.toLocaleString() },
+    { label: "Total sales", value: `KES ${stats.totalSales.toLocaleString()}` },
+    { label: "Live sessions", value: stats.totalLiveSessions.toLocaleString() },
+    { label: "Commission", value: `KES ${stats.totalCommissionEarned.toLocaleString()}` },
+    { label: "New products", value: stats.totalNewProducts.toLocaleString() },
+    { label: "Products edited", value: stats.totalProductsEdited.toLocaleString() },
+    { label: "Copies uploaded", value: stats.totalCopiesUploaded.toLocaleString() },
+    { label: "Walk-ins served", value: stats.totalWalkInsServed.toLocaleString() },
+    { label: "Customers purchased", value: stats.totalPurchasesMade.toLocaleString() },
+  ];
+  const scopeOptions: { label: string; value: 'page' | 'all' | 'json' }[] = [
+    { label: "Current page", value: "page" },
+    { label: "All filtered", value: "all" },
+    { label: "Full JSON", value: "json" },
+  ];
+  const legendOptions: { key: 'complete' | 'partial' | 'missing'; label: string; color: string }[] = [
+    { key: 'complete', label: 'Complete', color: 'bg-status-complete' },
+    { key: 'partial', label: 'Partial', color: 'bg-status-partial' },
+    { key: 'missing', label: 'Missing', color: 'bg-status-missing' },
+  ];
+  const pageStart = totalCount === 0 ? 0 : Math.min((page - 1) * pageSize + 1, totalCount);
+  const pageEnd = Math.min(page * pageSize, totalCount);
 
   function downloadPdf() {
     const rows = filteredReportsForAgg.map((r) => {
