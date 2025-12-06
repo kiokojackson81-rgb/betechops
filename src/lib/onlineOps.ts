@@ -6,9 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 
-type AssignmentWithAccount = Prisma.MarketplaceAccountAssignmentGetPayload<{
-  include: { account: true };
-}>;
+type AssignmentWithAccount = any;
 
 export type MarketplaceAssignmentSummary = {
   assignments: AssignmentWithAccount[];

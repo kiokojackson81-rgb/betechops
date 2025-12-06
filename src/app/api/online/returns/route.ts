@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
   const now = Date.now();
   return NextResponse.json({
-    returns: returns.map((entry) => ({
+    returns: returns.map((entry: any) => ({
       id: entry.id,
       accountName: entry.account.displayName,
       platform: entry.platform,
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
       dueAt: entry.dueAt.toISOString(),
       daysRemaining: Math.ceil((entry.dueAt.getTime() - now) / (1000 * 60 * 60 * 24)),
       notes: entry.notes,
-      attachments: entry.attachments.map((att) => ({
+      attachments: entry.attachments.map((att: any) => ({
         id: att.id,
         url: att.url,
         uploadedAt: att.createdAt.toISOString(),

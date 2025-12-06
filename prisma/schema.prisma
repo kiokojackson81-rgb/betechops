@@ -37,6 +37,13 @@ model User {
   supportEntries              SupportDailyEntry[]
   userShops                   UserShop[]
   managedShops                Shop[]                        @relation("ManagedBy")
+  // Marketplace relations (added to satisfy new marketplace models)
+  marketplaceAccountAssignments MarketplaceAccountAssignment[] @relation("MarketplaceAccountAssignment_attendant")
+  marketplaceOrdersPriced      MarketplaceOrder[] @relation("MarketplaceOrder_pricedBy")
+  marketplacePricingTemplatesUpdated MarketplacePricingTemplate[] @relation("MarketplacePricingTemplate_updatedBy")
+  marketplaceReturnsAttended   MarketplaceReturn[] @relation("MarketplaceReturn_attendant")
+  marketplaceReturnsProcessed  MarketplaceReturn[] @relation("MarketplaceReturn_processedBy")
+  marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[] @relation("MarketplaceReturnAttachment_uploadedBy")
 }
 
 model AttendantActivity {
@@ -815,6 +822,13 @@ enum ReturnStatus {
   OVERDUE
 }
 
+// Enum added to match marketplace online ops migrations
+enum MarketplaceReturnStatus {
+  WAITING_AT_HUB
+  PICKED
+  CHARGED_TO_ATTENDANT
+}
+
 enum PriceSource {
   MANUAL
   LEARNED
@@ -857,4 +871,151 @@ enum AttendantCategory_new {
   senior
   assistant
   manager
+}
+
+// Marketplace online ops enums and models (added from migration)
+enum MarketplaceAssignmentRole {
+  JUMIA_KILIMALL_OPS
+  SUPERVISOR
+}
+
+model MarketplaceAccount {
+  id              String   @id @default(cuid())
+  platform        Platform
+  displayName     String
+  countryCode     String
+  currency        String   @default("KES")
+  jumiaShopSid    String?  @unique(map: "MarketplaceAccount_platform_jumiaShopSid_key")
+  kilimallShopCode String? @unique(map: "MarketplaceAccount_platform_kilimallShopCode_key")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  assignments     MarketplaceAccountAssignment[]
+  payoutWeeks     MarketplacePayoutWeek[]
+  orders          MarketplaceOrder[]
+  returns         MarketplaceReturn[]
+
+  @@index([platform, jumiaShopSid])
+  @@index([platform, kilimallShopCode])
+}
+
+model MarketplaceAccountAssignment {
+  id         String   @id @default(cuid())
+  accountId  String
+  attendantId String
+  role       MarketplaceAssignmentRole
+  startsAt   DateTime @default(now())
+  endsAt     DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  account    MarketplaceAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  attendant  User               @relation("MarketplaceAccountAssignment_attendant", fields: [attendantId], references: [id], onDelete: Restrict)
+
+  @@index([attendantId, role], map: "MarketplaceAccountAssignment_attendantId_role_idx")
+  @@unique([accountId, attendantId, role], map: "MarketplaceAccountAssignment_accountId_attendantId_role_key")
+}
+
+model MarketplacePayoutWeek {
+  id             String   @id @default(cuid())
+  accountId      String
+  statementNumber String
+  weekStart      DateTime
+  weekEnd        DateTime
+  grossSales     Decimal  @db.Decimal(14, 2)
+  payoutAmount   Decimal  @db.Decimal(14, 2)
+  currency       String   @default("KES")
+  isPaid         Boolean  @default(false)
+  rawPayload     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  account        MarketplaceAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId, weekEnd], map: "MarketplacePayoutWeek_accountId_weekEnd_idx")
+  @@unique([accountId, statementNumber], map: "MarketplacePayoutWeek_accountId_statementNumber_key")
+}
+
+model MarketplaceOrder {
+  id             String   @id @default(cuid())
+  accountId      String
+  platform       Platform
+  orderId        String
+  orderItemId    String
+  status         String
+  orderedAt      DateTime
+  productName    String
+  productUrl     String?
+  sellingPrice   Decimal  @db.Decimal(14, 2)
+  currency       String   @default("KES")
+  buyingPrice    Decimal? @db.Decimal(14, 2)
+  profit         Decimal? @db.Decimal(14, 2)
+  pricedById     String?
+  pricedAt       DateTime?
+  isReturned     Boolean  @default(false)
+  rawPayload     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  account        MarketplaceAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  pricedBy       User?              @relation("MarketplaceOrder_pricedBy", fields: [pricedById], references: [id], onDelete: SetNull)
+  returns        MarketplaceReturn[] @relation("MarketplaceOrder_returns")
+
+  @@index([accountId, orderedAt], map: "MarketplaceOrder_accountId_orderedAt_idx")
+  @@index([pricedById], map: "MarketplaceOrder_pricedById_idx")
+  @@unique([platform, orderItemId], map: "MarketplaceOrder_platform_orderItemId_key")
+}
+
+model MarketplacePricingTemplate {
+  id                    String   @id @default(cuid())
+  platform              Platform
+  normalizedProductName String
+  sellingPrice          Decimal  @db.Decimal(14, 2)
+  defaultBuyingPrice    Decimal  @db.Decimal(14, 2)
+  updatedById           String?
+  updatedAt             DateTime @default(now())
+
+  updatedBy             User? @relation("MarketplacePricingTemplate_updatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([platform, normalizedProductName, sellingPrice], map: "MarketplacePricingTemplate_platform_normalizedProductName_s_key")
+}
+
+model MarketplaceReturn {
+  id               String   @id @default(cuid())
+  accountId        String
+  platform         Platform
+  marketplaceOrderId String?
+  orderItemId      String
+  attendantId      String?
+  expectedAmount   Decimal  @db.Decimal(14, 2)
+  status           MarketplaceReturnStatus @default(WAITING_AT_HUB)
+  createdAt        DateTime @default(now())
+  dueAt            DateTime
+  processedById    String?
+  processedAt      DateTime?
+  notes            String?
+
+  account          MarketplaceAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  marketplaceOrder MarketplaceOrder?   @relation("MarketplaceOrder_returns", fields: [marketplaceOrderId], references: [id], onDelete: SetNull)
+  attendant        User?               @relation("MarketplaceReturn_attendant", fields: [attendantId], references: [id], onDelete: SetNull)
+  processedBy      User?               @relation("MarketplaceReturn_processedBy", fields: [processedById], references: [id], onDelete: SetNull)
+  attachments      MarketplaceReturnAttachment[]
+
+  @@index([attendantId, status], map: "MarketplaceReturn_attendantId_status_idx")
+  @@index([dueAt, status], map: "MarketplaceReturn_dueAt_status_idx")
+  @@unique([platform, orderItemId], map: "MarketplaceReturn_platform_orderItemId_key")
+}
+
+model MarketplaceReturnAttachment {
+  id         String   @id @default(cuid())
+  returnId   String
+  url        String
+  uploadedById String
+  createdAt  DateTime @default(now())
+
+  returnRef  MarketplaceReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  uploadedBy User              @relation("MarketplaceReturnAttachment_uploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([returnId], map: "MarketplaceReturnAttachment_returnId_idx")
 }

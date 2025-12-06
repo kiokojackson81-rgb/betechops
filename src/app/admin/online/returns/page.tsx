@@ -59,7 +59,7 @@ export default async function AdminOnlineReturnsPage(props: any) {
       }),
     ]);
     counts = groupCounts;
-    returns = returnEntries.map((entry) => ({
+    returns = returnEntries.map((entry: any) => ({
       id: entry.id,
       status: entry.status,
       orderItemId: entry.orderItemId,

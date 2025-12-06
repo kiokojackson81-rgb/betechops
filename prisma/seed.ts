@@ -77,7 +77,7 @@ async function main() {
     },
   ] as const;
 
-  const attendantRecords = [];
+  const attendantRecords: any[] = [];
   for (const userDef of seedUsers) {
     const hashed = await bcrypt.hash(userDef.password, 10);
     const primary = userDef.categories[0] ?? ("DIRECT_SALES_OPS" as AttendantCategory);

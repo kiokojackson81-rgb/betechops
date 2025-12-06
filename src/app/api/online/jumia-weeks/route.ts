@@ -21,13 +21,13 @@ export async function GET(req: Request) {
         orderBy: { weekEnd: "desc" },
         take: 4,
       });
-      const total4Weeks = weeks.reduce((sum, week) => sum + Number(week.grossSales ?? 0), 0);
+      const total4Weeks = weeks.reduce((sum: number, week: any) => sum + Number(week.grossSales ?? 0), 0);
 
       return {
         accountId: assignment.accountId,
         accountName: assignment.account.displayName,
         platform: assignment.account.platform,
-        weeks: weeks.map((week) => ({
+        weeks: weeks.map((week: any) => ({
           id: week.id,
           statementNumber: week.statementNumber,
           weekStart: week.weekStart.toISOString(),

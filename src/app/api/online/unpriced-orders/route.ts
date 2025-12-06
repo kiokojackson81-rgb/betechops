@@ -31,10 +31,10 @@ export async function GET(req: Request) {
 
   if (!orders.length) return NextResponse.json({ orders: [] });
 
-  const templateKeys = Array.from(
+  const templateKeys: string[] = Array.from(
     new Set(
       orders.map(
-        (order) =>
+        (order: any) =>
           `${order.platform}:${normalizeName(order.productName)}:${Number(order.sellingPrice ?? 0)}`,
       ),
     ),
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     ? await prisma.marketplacePricingTemplate.findMany({
         where: {
           OR: templateKeys.map((key) => {
-            const [platform, name, price] = key.split(":");
+            const [platform, name, price] = (key as string).split(":");
             return {
               platform: platform as any,
               normalizedProductName: name,
@@ -56,13 +56,13 @@ export async function GET(req: Request) {
     : [];
 
   const templateMap = new Map<string, number>();
-  templates.forEach((template) => {
+  templates.forEach((template: any) => {
     const mapKey = `${template.platform}:${template.normalizedProductName}:${Number(template.sellingPrice ?? 0)}`;
     templateMap.set(mapKey, Number(template.defaultBuyingPrice ?? 0));
   });
 
   return NextResponse.json({
-    orders: orders.map((order) => {
+    orders: orders.map((order: any) => {
       const key = `${order.platform}:${normalizeName(order.productName)}:${Number(order.sellingPrice ?? 0)}`;
       return {
         id: order.id,

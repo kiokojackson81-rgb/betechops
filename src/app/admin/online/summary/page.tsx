@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MarketplaceReturnStatus, Prisma } from "@prisma/client";
+import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
 
@@ -101,7 +101,7 @@ export default async function AdminOnlineSummaryPage() {
         by: ["status"],
         _count: { _all: true },
       });
-      return data.map((entry) => ({
+      return data.map((entry: any) => ({
         status: entry.status,
         _count: { _all: entry._count._all },
       }));
@@ -213,10 +213,10 @@ export default async function AdminOnlineSummaryPage() {
               </tr>
             </thead>
             <tbody>
-              {returnsByStatus.map((entry) => (
+              {returnsByStatus.map((entry: any) => (
                 <tr key={entry.status} className="border-t border-white/5">
                   <td className="py-3 pr-4 font-medium text-white">
-                    {entry.status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
+                    {entry.status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
                   </td>
                   <td className="py-3 pr-4 text-right text-emerald-200">
                     {numberFormatter.format(entry._count._all)}

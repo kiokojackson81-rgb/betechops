@@ -107,9 +107,9 @@ async function getJumiaAccessTokenWithMeta(
   // Optional simple in-memory cache keyed by (source+clientId)
   const cacheKey = `${source}:${clientId}`;
   const now = Math.floor(Date.now() / 1000);
-  // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+  // @ts-ignore - global cache container for tokens; may not be typed on globalThis
   globalThis.__jumiaTokenCache ??= new Map<string, { token: AccessToken; exp: number }>();
-  // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+  // @ts-ignore - global cache container for tokens; may not be typed on globalThis
   const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }>;
   const cached = cache.get(cacheKey);
   if (cached && cached.exp > now + 60) {
@@ -267,7 +267,7 @@ export async function getAccessTokenFromEnv(): Promise<string> {
 
 export function getJumiaTokenInfo() {
   // Try to pick a cached entry if available
-  // @ts-expect-error - access global cache if present
+  // @ts-ignore - access global cache if present
   const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }> | undefined;
   if (cache && cache.size > 0) {
     for (const [k, v] of cache.entries()) {

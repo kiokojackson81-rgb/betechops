@@ -13,6 +13,8 @@ declare module "@prisma/client" {
     marketplacePayoutWeek: any;
     marketplaceOrder: any;
     marketplaceReturn: any;
+    marketplacePricingTemplate: any;
+    marketplaceReturnAttachment: any;
   }
 
   export type MarketplaceReturnStatus = "WAITING_AT_HUB" | "PICKED" | "CHARGED_TO_ATTENDANT";

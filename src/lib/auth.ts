@@ -68,7 +68,7 @@ export async function requireAttendant(req: Request, allowed: string[] = []): Pr
     // ignore malformed URLs and proceed without impersonation
   }
 
-  let targetUser = null;
+  let targetUser: { id: string; role: Role; attendantCategory: string | null; isActive: boolean } | null = null;
   let impersonated = false;
 
   async function fetchUserByIdOrEmail(opts: { id?: string; email?: string }) {
