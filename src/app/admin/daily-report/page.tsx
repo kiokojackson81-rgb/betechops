@@ -88,6 +88,7 @@ export default function AdminDailyReportPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailReport, setDetailReport] = useState<Report | null>(null);
   const [jsonPreview, setJsonPreview] = useState<{ title: string; payload: any } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function getFilteredReports() {
     return (reports || []).filter((r) => {
@@ -116,7 +117,7 @@ export default function AdminDailyReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchReports() {
+  async function fetchReports(opts?: { silent?: boolean }) {
     setError("");
     const params = new URLSearchParams();
     if (from) params.append("from", from);
@@ -135,7 +136,7 @@ export default function AdminDailyReportPage() {
         setTotalCount(data.totalCount ?? 0);
         // if empty and page>1, step back
         if ((data.reports ?? []).length === 0 && page > 1) setPage(1);
-        showToast("Reports loaded", "success");
+        if (!opts?.silent) showToast("Reports loaded", "success");
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to fetch reports.");
@@ -543,6 +544,33 @@ export default function AdminDailyReportPage() {
     );
   }
 
+  const deleteReport = async (reportId: string) => {
+    if (typeof window !== "undefined") {
+      const ok = window.confirm("Delete this daily report entry? This action cannot be undone.");
+      if (!ok) return;
+    }
+    setDeletingId(reportId);
+    try {
+      const res = await fetch("/api/admin/daily-report/delete-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: reportId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || "Delete failed");
+      }
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+      setTotalCount((count) => Math.max(0, count - 1));
+      showToast("Entry deleted", "success");
+      await fetchReports({ silent: true });
+    } catch (err: any) {
+      showToast(err?.message || "Delete failed", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // computeRowStatus moved to `src/lib/dailyReportHelpers.ts` for reuse and testing
 
   return (
@@ -822,12 +850,13 @@ export default function AdminDailyReportPage() {
                   <th className="px-3 py-2">Marketing</th>
                   <th className="px-3 py-2">Customer Ops</th>
                   <th className="px-3 py-2">Office</th>
+                  <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {reports.length === 0 ? (
                   <tr>
-                    <td colSpan={MARKETPLACE_SHOPS.length + 12} className="px-3 py-6 text-center text-slate-400">
+                    <td colSpan={MARKETPLACE_SHOPS.length + 13} className="px-3 py-6 text-center text-slate-400">
                       No reports found
                     </td>
                   </tr>
@@ -920,20 +949,30 @@ export default function AdminDailyReportPage() {
                           <div>Live Viewers: {customerOps.liveViewers ?? 0}</div>
                           <div>Live Purchases: {customerOps.livePurchases ?? 0}</div>
                         </td>
-                        <td className="px-3 py-2 text-sm text-slate-200">
-                          <div>Cleaned: {office.officeCleaned ? "Yes" : "No"}</div>
-                          <div className="text-xs text-slate-400">{office.officeNotes ?? ""}</div>
-                          <button
-                            type="button"
-                            className="mt-2 text-xs text-emerald-300 underline hover:text-emerald-200"
-                            onClick={() => {
-                              setDetailReport(r);
-                              setShowDetailModal(true);
-                            }}
-                          >
-                            View details
-                          </button>
-                        </td>
+                      <td className="px-3 py-2 text-sm text-slate-200">
+                        <div>Cleaned: {office.officeCleaned ? "Yes" : "No"}</div>
+                        <div className="text-xs text-slate-400">{office.officeNotes ?? ""}</div>
+                        <button
+                          type="button"
+                          className="mt-2 text-xs text-emerald-300 underline hover:text-emerald-200"
+                          onClick={() => {
+                            setDetailReport(r);
+                            setShowDetailModal(true);
+                          }}
+                        >
+                          View details
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => deleteReport(r.id)}
+                          disabled={deletingId === r.id}
+                          className="text-xs text-rose-400 underline hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingId === r.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </td>
                       </tr>
                     );
                   })
