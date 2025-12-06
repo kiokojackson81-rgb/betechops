@@ -33,8 +33,11 @@ export function useCardLock(storageKey: string) {
   const lock = () => setLocked(true);
 
   const unlock = () => {
-    // Do nothing while session is still resolving
-    if (status === "loading") return;
+    // If session still loading, optimistically unlock and let downstream values render.
+    if (status === "loading") {
+      setLocked(false);
+      return;
+    }
 
     // If we have a session object OR status explicitly says authenticated, unlock locally
     if (session || status === "authenticated") {
@@ -42,10 +45,13 @@ export function useCardLock(storageKey: string) {
       return;
     }
 
-    // Only redirect when we know the user is not authenticated
-    if (status === "unauthenticated" && typeof window !== "undefined") {
-      const cb = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/attendant/login?callbackUrl=${cb}`;
+    // If explicitly unauthenticated, unlock and redirect to login so numbers show after login redirect back.
+    if (status === "unauthenticated") {
+      setLocked(false);
+      if (typeof window !== "undefined") {
+        const cb = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/attendant/login?callbackUrl=${cb}`;
+      }
     }
   };
 
