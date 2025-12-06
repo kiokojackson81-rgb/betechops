@@ -1395,6 +1395,9 @@ function QuickStats({
   );
 }
 
+// Sensitive values (click-to-hide) used in the tiles
+import SensitiveValue from "./SensitiveValue";
+
 function PillCheckbox(props: { label: string; checked: boolean; onChange: (next: boolean) => void }) {
   const { label, checked, onChange } = props;
   return (

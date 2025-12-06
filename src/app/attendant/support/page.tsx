@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { CalendarIcon } from "lucide-react";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import Card from "@/app/_components/Card";
+import SensitiveValue from "@/components/SensitiveValue";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
