@@ -31,7 +31,9 @@ export default function SensitiveValue({
     try {
       if (typeof window === "undefined") return false;
       const raw = localStorage.getItem(key);
-      return raw === "1";
+      const val = raw === "1";
+      console.debug("SensitiveValue:init", { key, stored: raw, visible: val });
+      return val;
     } catch {
       return false;
     }
@@ -48,13 +50,16 @@ export default function SensitiveValue({
   const onToggle = () => {
     if (visible) {
       setVisible(false);
+      console.debug("SensitiveValue:hide", { key });
       return;
     }
     // require login to unhide
     if (session) {
       setVisible(true);
+      console.debug("SensitiveValue:unhide (session present)", { key });
       return;
     }
+    console.debug("SensitiveValue:redirecting to login (no session)", { key });
     // Not logged in: redirect to login with callbackUrl
     if (typeof window !== "undefined") {
       const cb = encodeURIComponent(window.location.pathname + window.location.search);
