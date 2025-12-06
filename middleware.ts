@@ -48,8 +48,13 @@ export async function middleware(req: NextRequest) {
       // already redirected here once — let the request proceed to show login UI
       return NextResponse.next();
     }
+    // Preserve the originally requested path (including query) so the
+    // login page can pass it through as `callbackUrl` and the app can
+    // redirect back to the intended page after successful authentication.
+    const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search;
     url.pathname = "/attendant/login";
     url.searchParams.set("_r", "1");
+    url.searchParams.set("callbackUrl", originalPathWithQuery);
     return NextResponse.redirect(url);
   }
 
