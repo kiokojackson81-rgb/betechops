@@ -24,6 +24,23 @@ type AccountRow = {
   }>;
 };
 
+type MarketplaceAccountWithAssignments = {
+  id: string;
+  displayName: string;
+  platform: Platform;
+  countryCode: string;
+  currency: string;
+  jumiaShopSid: string | null;
+  kilimallShopCode: string | null;
+  isActive: boolean;
+  assignments: Array<{
+    attendantId: string;
+    role: string;
+    endsAt: Date | null;
+    attendant?: { id: string; name: string | null; email: string | null } | null;
+  }>;
+};
+
 export default async function AdminOnlineAccountsPage() {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
@@ -34,7 +51,7 @@ export default async function AdminOnlineAccountsPage() {
   const now = new Date();
   let rows: AccountRow[] | null = null;
   try {
-    const accounts = await prisma.marketplaceAccount.findMany({
+    const accounts = (await prisma.marketplaceAccount.findMany({
       orderBy: [{ createdAt: "desc" }],
       include: {
         assignments: {
@@ -49,7 +66,7 @@ export default async function AdminOnlineAccountsPage() {
           orderBy: { createdAt: "desc" },
         },
       },
-    });
+    })) as MarketplaceAccountWithAssignments[];
 
     rows = accounts.map((account) => ({
       id: account.id,
