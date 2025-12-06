@@ -67,7 +67,7 @@ export default function SensitiveValue({
     }
   };
 
-  const display = visible ? (format ? format(value) : String(value)) : placeholder;
+  const formatted = format ? format(value) : String(value);
 
   return (
     <button
@@ -77,7 +77,14 @@ export default function SensitiveValue({
       aria-pressed={visible}
       title={visible ? "Hide value" : "Click to show (login required)"}
     >
-      <span>{display}</span>
+      {visible ? (
+        <span>{formatted}</span>
+      ) : (
+        <span className="inline-flex items-center gap-2">
+          <span className="blur-sm opacity-60 select-none">{formatted}</span>
+          <span aria-hidden className="text-xs text-slate-400">🔒</span>
+        </span>
+      )}
     </button>
   );
 }
