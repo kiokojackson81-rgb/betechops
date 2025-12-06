@@ -19,16 +19,12 @@ export default function ClientRedirect() {
 
   useEffect(() => {
     if (status === "loading") return;
-    // DEBUG: log session to inspect attendantCategory at redirect time
-    // Remove this log after diagnosing redirect issues
-    // eslint-disable-next-line no-console
-    console.log("ClientRedirect session:", session?.user);
     if (!session) {
       router.replace("/attendant/login");
       return;
     }
     const user = session.user as LocalUser;
-    const role = user?.role || "ATTENDANT";
+    let role = user?.role || "ATTENDANT";
     const params = new URLSearchParams(window.location.search);
     const intended = params.get("intended");
     if (intended === "admin" && role === "ADMIN") {
@@ -40,20 +36,16 @@ export default function ClientRedirect() {
       return;
     }
 
-    // If the session doesn't include an attendantCategory (token may be
-    // stale), try a server lookup to get the authoritative value before
-    // choosing a landing page. This avoids redirecting Direct Sales Ops
-    // attendants to the generic `/attendant` page when the DB says they
-    // should go to `/marketing/tracker`.
+    // Always refresh attendantCategory from the server to avoid stale tokens;
+    // this ensures Direct Sales Ops keep landing on `/marketing/tracker`.
     (async () => {
       try {
-        let category = user?.attendantCategory ?? null;
-        if (!category) {
-          const res = await fetch("/api/attendants/me", { credentials: "same-origin" });
-          if (res.ok) {
-            const json = await res.json();
-            category = json?.attendantCategory ?? category;
-          }
+        let category: AttendantCategory | null | undefined = user?.attendantCategory ?? null;
+        const res = await fetch("/api/attendants/me", { credentials: "same-origin" });
+        if (res.ok) {
+          const json = await res.json();
+          category = json?.attendantCategory ?? category;
+          role = json?.role ?? role;
         }
         const target = getLandingPage(category, role);
         router.replace(target);
