@@ -14,4 +14,6 @@ declare module "@prisma/client" {
     marketplaceOrder: any;
     marketplaceReturn: any;
   }
+
+  export type MarketplaceReturnStatus = "WAITING_AT_HUB" | "PICKED" | "CHARGED_TO_ATTENDANT";
 }
