@@ -73,14 +73,15 @@ export default function SensitiveValue({
     <button
       type="button"
       onClick={onToggle}
-      className={`inline-flex items-center gap-2 focus:outline-none ${className}`}
+      className={`inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded ${className} cursor-pointer`}
       aria-pressed={visible}
+      aria-label={visible ? "Hide value" : "Show value (login required)"}
       title={visible ? "Hide value" : "Click to show (login required)"}
     >
       {visible ? (
-        <span>{formatted}</span>
+        <span className="select-none pointer-events-auto">{formatted}</span>
       ) : (
-        <span className="inline-flex items-center gap-2">
+        <span className="inline-flex items-center gap-2 pointer-events-auto">
           <span className="blur-sm opacity-60 select-none">{formatted}</span>
           <span aria-hidden className="text-xs text-slate-400">🔒</span>
         </span>
