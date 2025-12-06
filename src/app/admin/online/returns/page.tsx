@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MarketplaceReturnStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
+import MarketplaceDataFallback from "../_components/MarketplaceDataFallback";
 
 export const dynamic = "force-dynamic";
 
@@ -78,13 +79,11 @@ export default async function AdminOnlineReturnsPage(props: any) {
 
   if (!counts || !returns) {
     return (
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
-        <h2 className="text-lg font-semibold">Unable to load return cases</h2>
-        <p className="mt-2 text-sm">
-          The marketplace returns tables could not be queried. Verify that the latest online ops migrations are applied
-          and retry.
-        </p>
-      </div>
+      <MarketplaceDataFallback
+        title="Marketplace returns unavailable"
+        reason="We could not query marketplace return groups or the most recent cases. Double-check that the online ops migrations ran successfully (MarketplaceReturn & related tables) before refreshing."
+        className="mt-4"
+      />
     );
   }
 

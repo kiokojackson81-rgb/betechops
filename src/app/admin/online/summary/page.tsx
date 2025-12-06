@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
+import MarketplaceDataFallback from "../_components/MarketplaceDataFallback";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,20 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Unpriced orders", value: unpricedOrders },
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
+
+  const dataUnavailable = warnings.length >= 5;
+
+  if (dataUnavailable) {
+    return (
+      <MarketplaceDataFallback
+        title="Marketplace summary unavailable"
+        reason={`Most of the marketplace telemetry queries failed (${warnings.join(
+          ", ",
+        )}). That usually means the online ops tables never migrated in this environment.`}
+        className="mt-4"
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">

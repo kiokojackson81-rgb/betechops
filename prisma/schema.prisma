@@ -814,6 +814,11 @@ enum ShopRoleAtShop {
   SUPERVISOR
 }
 
+enum MarketplaceAssignmentRole {
+  JUMIA_KILIMALL_OPS
+  SUPERVISOR
+}
+
 enum ReturnStatus {
   REQUESTED
   IN_TRANSIT
@@ -864,6 +869,12 @@ enum PaymentStatus {
   UNPAID
   PARTIAL
   PAID
+}
+
+enum MarketplaceReturnStatus {
+  WAITING_AT_HUB
+  PICKED
+  CHARGED_TO_ATTENDANT
 }
 
 enum AttendantCategory_new {
@@ -1018,4 +1029,137 @@ model MarketplaceReturnAttachment {
   uploadedBy User              @relation("MarketplaceReturnAttachment_uploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
 
   @@index([returnId], map: "MarketplaceReturnAttachment_returnId_idx")
+}
+model MarketplaceAccount {
+  id               String                         @id @default(cuid())
+  platform         Platform
+  displayName      String
+  countryCode      String
+  currency         String                         @default("KES")
+  jumiaShopSid     String?
+  kilimallShopCode String?
+  isActive         Boolean                        @default(true)
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  assignments      MarketplaceAccountAssignment[]
+  payoutWeeks      MarketplacePayoutWeek[]
+  orders           MarketplaceOrder[]
+  returns          MarketplaceReturn[]
+
+  @@unique([platform, jumiaShopSid])
+  @@unique([platform, kilimallShopCode])
+}
+
+model MarketplaceAccountAssignment {
+  id          String                     @id @default(cuid())
+  accountId   String
+  attendantId String
+  role        MarketplaceAssignmentRole
+  startsAt    DateTime                   @default(now())
+  endsAt      DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+  account     MarketplaceAccount         @relation(fields: [accountId], references: [id])
+  attendant   User                       @relation(fields: [attendantId], references: [id])
+
+  @@index([attendantId, role])
+  @@unique([accountId, attendantId, role])
+}
+
+model MarketplacePayoutWeek {
+  id               String              @id @default(cuid())
+  accountId        String
+  statementNumber  String
+  weekStart        DateTime
+  weekEnd          DateTime
+  grossSales       Decimal             @db.Decimal(14, 2)
+  payoutAmount     Decimal             @db.Decimal(14, 2)
+  currency         String              @default("KES")
+  isPaid           Boolean             @default(false)
+  rawPayload       Json
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  account          MarketplaceAccount  @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, weekEnd])
+  @@unique([accountId, statementNumber])
+}
+
+model MarketplaceOrder {
+  id            String             @id @default(cuid())
+  accountId     String
+  platform      Platform
+  orderId       String
+  orderItemId   String
+  status        String
+  orderedAt     DateTime
+  productName   String
+  productUrl    String?
+  sellingPrice  Decimal            @db.Decimal(14, 2)
+  currency      String             @default("KES")
+  buyingPrice   Decimal?           @db.Decimal(14, 2)
+  profit        Decimal?           @db.Decimal(14, 2)
+  pricedById    String?
+  pricedAt      DateTime?
+  isReturned    Boolean            @default(false)
+  rawPayload    Json
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  account       MarketplaceAccount @relation(fields: [accountId], references: [id])
+  pricedBy      User?              @relation(fields: [pricedById], references: [id])
+  returns       MarketplaceReturn[] @relation("MarketplaceOrderReturns")
+
+  @@index([accountId, orderedAt])
+  @@index([pricedById])
+  @@unique([platform, orderItemId])
+}
+
+model MarketplacePricingTemplate {
+  id                    String    @id @default(cuid())
+  platform              Platform
+  normalizedProductName String
+  sellingPrice          Decimal   @db.Decimal(14, 2)
+  defaultBuyingPrice    Decimal   @db.Decimal(14, 2)
+  updatedById           String?
+  updatedAt             DateTime  @default(now())
+  updatedBy             User?     @relation(fields: [updatedById], references: [id])
+
+  @@unique([platform, normalizedProductName, sellingPrice])
+}
+
+model MarketplaceReturn {
+  id                String                   @id @default(cuid())
+  accountId         String
+  platform          Platform
+  marketplaceOrderId String?
+  orderItemId       String
+  attendantId       String?
+  expectedAmount    Decimal                  @db.Decimal(14, 2)
+  status            MarketplaceReturnStatus  @default(WAITING_AT_HUB)
+  createdAt         DateTime                 @default(now())
+  dueAt             DateTime
+  processedById     String?
+  processedAt       DateTime?
+  notes             String?
+  account           MarketplaceAccount       @relation(fields: [accountId], references: [id])
+  marketplaceOrder  MarketplaceOrder?        @relation("MarketplaceOrderReturns", fields: [marketplaceOrderId], references: [id])
+  attendant         User?                    @relation("ReturnAttendant", fields: [attendantId], references: [id])
+  processedBy       User?                    @relation("ReturnProcessedBy", fields: [processedById], references: [id])
+  attachments       MarketplaceReturnAttachment[]
+
+  @@index([attendantId, status])
+  @@index([dueAt, status])
+  @@unique([platform, orderItemId])
+}
+
+model MarketplaceReturnAttachment {
+  id           String             @id @default(cuid())
+  returnId     String
+  url          String
+  uploadedById String
+  createdAt    DateTime           @default(now())
+  return       MarketplaceReturn  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  uploadedBy   User               @relation(fields: [uploadedById], references: [id])
+
+  @@index([returnId])
 }

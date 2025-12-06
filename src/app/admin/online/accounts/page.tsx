@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Platform } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AccountAdminPanel } from "./AccountAdminPanel";
+import MarketplaceDataFallback from "../_components/MarketplaceDataFallback";
 
 export const dynamic = "force-dynamic";
 
@@ -91,13 +92,10 @@ export default async function AdminOnlineAccountsPage() {
 
   if (!rows) {
     return (
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-100">
-        <h2 className="text-lg font-semibold">Unable to load marketplace accounts</h2>
-        <p className="mt-2 text-sm">
-          The new online ops tables may not exist on this environment yet. Apply the latest Prisma migrations or check
-          your database connection, then refresh this page.
-        </p>
-      </div>
+      <MarketplaceDataFallback
+        title="Marketplace accounts unavailable"
+        reason="We can't query marketplace accounts or assignments because the backing tables haven't been created yet."
+      />
     );
   }
 
