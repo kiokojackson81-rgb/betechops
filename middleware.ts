@@ -85,8 +85,15 @@ export async function middleware(req: NextRequest) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       if (role === "ADMIN") return NextResponse.next();
       if (!category || !isCategoryAllowed(category, categories)) {
-        // Wrong category → send to their home instead of /not-authorized
+        // Wrong category → send to their home instead of /not-authorized.
+        // Avoid redirecting to the same pathname (redirect-to-self) which
+        // produces an infinite redirect loop. If `home` equals the current
+        // pathname, let the request continue so the page can render and
+        // show a helpful message or re-check session on the client.
         const home = getLandingPage(category as any, role as string);
+        if (home === pathname) {
+          return NextResponse.next();
+        }
         url.pathname = home;
         return NextResponse.redirect(url);
       }
