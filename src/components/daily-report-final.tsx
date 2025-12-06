@@ -1394,11 +1394,13 @@ function QuickStats({
         <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">
-            {locked ? (
-              "•••"
-            ) : (
-              <SensitiveValue value={commissionKes ?? 0} format={(v) => Number(v).toLocaleString()} storageKey={`dailyreport:commission`} />
-            )}
+            <SensitiveValue
+              value={commissionKes ?? 0}
+              format={(v) => Number(v).toLocaleString()}
+              storageKey={`dailyreport:commission`}
+              forceHidden={locked}
+              forceVisible={!locked}
+            />
           </div>
         </div>
       </div>

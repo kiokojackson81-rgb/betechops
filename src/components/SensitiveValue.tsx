@@ -9,14 +9,18 @@ type Props = {
   storageKey?: string; // optional key to persist hidden state per-field
   placeholder?: string;
   className?: string;
+  forceVisible?: boolean;
+  forceHidden?: boolean;
 };
 
 export default function SensitiveValue({
   value,
   format,
   storageKey,
-  placeholder = "••••",
+  placeholder = "•••",
   className = "",
+  forceVisible,
+  forceHidden,
 }: Props) {
   const _sess = useSession() as { data?: any } | undefined;
   const session = _sess?.data;
@@ -32,7 +36,6 @@ export default function SensitiveValue({
       if (typeof window === "undefined") return false;
       const raw = localStorage.getItem(key);
       const val = raw === "1";
-      console.debug("SensitiveValue:init", { key, stored: raw, visible: val });
       return val;
     } catch {
       return false;
@@ -47,20 +50,27 @@ export default function SensitiveValue({
     }
   }, [key, visible]);
 
+  useEffect(() => {
+    if (forceHidden) {
+      setVisible(false);
+      return;
+    }
+    if (forceVisible) {
+      setVisible(true);
+    }
+  }, [forceHidden, forceVisible]);
+
   const onToggle = () => {
+    if (forceHidden) return;
     if (visible) {
       setVisible(false);
-      console.debug("SensitiveValue:hide", { key });
       return;
     }
     // require login to unhide
     if (session) {
       setVisible(true);
-      console.debug("SensitiveValue:unhide (session present)", { key });
       return;
     }
-    console.debug("SensitiveValue:redirecting to login (no session)", { key });
-    // Not logged in: redirect to login with callbackUrl
     if (typeof window !== "undefined") {
       const cb = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/attendant/login?callbackUrl=${cb}`;
@@ -83,7 +93,7 @@ export default function SensitiveValue({
       ) : (
         <span className="inline-flex items-center gap-2 pointer-events-auto">
           <span className="blur-sm opacity-60 select-none">{formatted}</span>
-          <span aria-hidden className="text-xs text-slate-400">🔒</span>
+          <span aria-hidden className="text-xs text-slate-400">{placeholder}</span>
         </span>
       )}
     </button>
