@@ -39,9 +39,17 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  // Not logged in → send to sign-in
+  // Not logged in → send to sign-in, but avoid redirect loops by using
+  // a short-lived query flag. If we've already redirected once (`_r=1`),
+  // allow the request through so the login page can render and show
+  // diagnostics instead of causing an infinite redirect loop in the browser.
   if (!token) {
+    if (url.searchParams.get("_r") === "1") {
+      // already redirected here once — let the request proceed to show login UI
+      return NextResponse.next();
+    }
     url.pathname = "/attendant/login";
+    url.searchParams.set("_r", "1");
     return NextResponse.redirect(url);
   }
 
