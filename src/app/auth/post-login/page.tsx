@@ -16,6 +16,22 @@ export default async function PostLogin(props: unknown) {
 
   // If we have a server-side session and role, validate and redirect.
   if (session && role) {
+    // If a `callbackUrl` param is present (encoded previously by
+    // middleware), prefer server-side redirect to that exact path.
+    const cbRaw = Array.isArray(searchParams?.callbackUrl)
+      ? (searchParams?.callbackUrl as string[])[0]
+      : (searchParams?.callbackUrl as string | undefined);
+    if (cbRaw) {
+      try {
+        const decoded = decodeURIComponent(cbRaw);
+        // Only allow same-origin paths.
+        if (decoded && decoded.startsWith("/")) {
+          return redirect(decoded);
+        }
+      } catch (e) {
+        // ignore malformed callbackUrl and continue with normal flow
+      }
+    }
     if (intended === "admin" && role === "ADMIN") return redirect("/admin");
     if (intended === "attendant" && role !== "ADMIN") return redirect("/attendant");
 

@@ -52,9 +52,15 @@ export async function middleware(req: NextRequest) {
     // login page can pass it through as `callbackUrl` and the app can
     // redirect back to the intended page after successful authentication.
     const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search;
+    // Wrap the original target in an auth/post-login callback so the
+    // post-login handler can server-side redirect to the exact page
+    // after the session is established. This avoids races where the
+    // middleware or landing-page logic would otherwise send the user
+    // to a computed home path.
+    const wrapped = `/auth/post-login?callbackUrl=${encodeURIComponent(originalPathWithQuery)}`;
     url.pathname = "/attendant/login";
     url.searchParams.set("_r", "1");
-    url.searchParams.set("callbackUrl", originalPathWithQuery);
+    url.searchParams.set("callbackUrl", wrapped);
     return NextResponse.redirect(url);
   }
 
