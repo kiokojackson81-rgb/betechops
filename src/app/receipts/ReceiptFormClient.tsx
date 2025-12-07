@@ -121,7 +121,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   };
 
   return (
-    <div className="mx-auto max-w-5xl p-4 space-y-6">
+    <div className="mx-auto max-w-6xl p-4 space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Create receipt / invoice / quotation / layaway</h1>
         <p className="text-sm text-slate-500">Saves to the unified receipts table and is ready for printing or sending.</p>
@@ -129,14 +129,14 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm">Attendant</label>
+          <label className="text-sm text-slate-600">Attendant</label>
           <select value={attendantId ?? ""} onChange={(e) => setAttendantId(e.target.value || null)} className="w-full rounded border px-3 py-2">
             <option value="">Select attendant</option>
             {attendants.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-sm">Document Type</label>
+          <label className="text-sm text-slate-600">Document Type</label>
           <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded border px-3 py-2">
             <option>RECEIPT</option>
             <option>INVOICE</option>
@@ -148,29 +148,29 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="text-sm">Serial / Receipt No.</label>
+          <label className="text-sm text-slate-600">Serial / Receipt No.</label>
           <Input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Serial" />
         </div>
         <div>
-          <label className="text-sm">Customer Name</label>
+          <label className="text-sm text-slate-600">Customer Name</label>
           <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" />
         </div>
         <div>
-          <label className="text-sm">Customer Phone</label>
+          <label className="text-sm text-slate-600">Customer Phone</label>
           <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." />
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm">Customer Email (for sending)</label>
+          <label className="text-sm text-slate-600">Customer Email (for sending)</label>
           <Input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="email@example.com" />
         </div>
         <div className="flex items-end gap-3">
-          <label className="inline-flex items-center gap-2 text-sm">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
             Send via e-mail
           </label>
-          <label className="inline-flex items-center gap-2 text-sm">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={sendWhatsapp} onChange={(e) => setSendWhatsapp(e.target.checked)} />
             Send via WhatsApp
           </label>
@@ -179,11 +179,11 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <section className="space-y-3 rounded-xl border border-slate-200 p-3">
         <div className="flex flex-wrap items-center gap-4">
-          <label className="inline-flex items-center gap-2 text-sm">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={showSerials} onChange={(e) => setShowSerials(e.target.checked)} />
             Capture serial / IMEI per item
           </label>
-          <label className="inline-flex items-center gap-2 text-sm">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={showWarranty} onChange={(e) => setShowWarranty(e.target.checked)} />
             Capture warranty per item
           </label>
@@ -220,23 +220,23 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="text-sm">Tax %</label>
+          <label className="text-sm text-slate-600">Tax %</label>
           <Input type="number" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value || 0))} />
-          <label className="inline-flex items-center mt-1 text-sm"><input type="checkbox" checked={showTax} onChange={(e) => setShowTax(e.target.checked)} className="mr-2" /> Show Tax</label>
+          <label className="inline-flex items-center mt-1 text-sm text-slate-600"><input type="checkbox" checked={showTax} onChange={(e) => setShowTax(e.target.checked)} className="mr-2" /> Show Tax</label>
         </div>
         <div>
-          <label className="text-sm">Discount (KES)</label>
+          <label className="text-sm text-slate-600">Discount (KES)</label>
           <Input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value || 0))} />
-          <label className="inline-flex items-center mt-1 text-sm"><input type="checkbox" checked={showDiscount} onChange={(e) => setShowDiscount(e.target.checked)} className="mr-2" /> Show Discount</label>
+          <label className="inline-flex items-center mt-1 text-sm text-slate-600"><input type="checkbox" checked={showDiscount} onChange={(e) => setShowDiscount(e.target.checked)} className="mr-2" /> Show Discount</label>
         </div>
         <div>
-          <label className="text-sm">Payment details</label>
+          <label className="text-sm text-slate-600">Payment details</label>
           <div className="mt-1">
-            <label className="inline-flex items-center text-sm"><input type="checkbox" checked={paymentDetailsShown} onChange={(e) => setPaymentDetailsShown(e.target.checked)} className="mr-2" /> Include payment details on receipt</label>
+            <label className="inline-flex items-center text-sm text-slate-600"><input type="checkbox" checked={paymentDetailsShown} onChange={(e) => setPaymentDetailsShown(e.target.checked)} className="mr-2" /> Include payment details on receipt</label>
           </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
-              <label className="text-sm">Deposit (KES)</label>
+              <label className="text-sm text-slate-600">Deposit (KES)</label>
               <Input type="number" value={deposit} onChange={(e) => setDeposit(Number(e.target.value || 0))} />
               <p className="text-xs text-slate-500">Balance auto-computed from total.</p>
             </div>
@@ -246,16 +246,16 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm">Warranty note</label>
+          <label className="text-sm text-slate-600">Warranty note</label>
           <Input value={warrantyText} onChange={(e) => setWarrantyText(e.target.value)} placeholder="Global warranty text (optional)" />
         </div>
         <div>
-          <label className="text-sm">General notes / terms</label>
+          <label className="text-sm text-slate-600">General notes / terms</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded border p-2 h-full min-h-[60px]" />
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm card-top-accent">
         <div className="space-y-1 text-sm">
           <div>Subtotal: KES {subtotal.toLocaleString()}</div>
           <div>Tax: KES {taxAmount.toLocaleString()}</div>
@@ -269,7 +269,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => { navigator.clipboard?.writeText(JSON.stringify({ items, subtotal, taxAmount, total })); showToast("Copied snapshot", "info"); }}>Copy snapshot</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save to System & Print"}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save to System & Print"}</Button>
         </div>
       </div>
     </div>
