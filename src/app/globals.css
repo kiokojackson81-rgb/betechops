@@ -24,17 +24,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Force light theme even when user prefers dark, to keep receipts/ops UI bright */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: var(--betech-warmcharcoal);
-    --foreground: #efece9;
-    --muted: #9aa6b2;
-    --border: #2b2625;
-    --card-bg: #0f0d0d;
+    --background: #ffffff;
+    --foreground: #171717;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --card-bg: #ffffff;
     --primary: var(--betech-orange);
-    --accent: #a78bfa;
-    --success: #4ade80;
-    --warning: #fbbf24;
+    --accent: #7c3aed;
+    --success: #16a34a;
+    --warning: #f59e0b;
     --danger: #7f1d1d;
   }
 }
