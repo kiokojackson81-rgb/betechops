@@ -32,6 +32,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [attendantId, setAttendantId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
   const [serial, setSerial] = useState<string>(generateSerial());
+  const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
@@ -82,7 +83,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       const payload = {
         docType: docType.toLowerCase(),
         serial,
-        date: new Date().toISOString(),
+        date,
         customerName,
         customerPhone,
         attendantId,
@@ -127,8 +128,8 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
     <div className="mx-auto max-w-6xl p-6 space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold">Create Receipt / Invoice / Quotation / Layaway</h1>
-          <p className="text-sm text-slate-300">Saves to the unified receipts table and is ready for printing or sending.</p>
+          <h1 className="text-3xl font-semibold">Betech Printable Docs – Receipt / Invoice / Quotation</h1>
+          <p className="text-sm text-slate-300">Fill in customer details, then save to system or print / save as PDF.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Betech Receipts Module</span>
@@ -136,42 +137,62 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       </header>
 
       <div className="space-y-6 rounded-2xl border border-slate-800 bg-slate-950/70 card-top-accent p-6 shadow-xl shadow-black/20">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Attendant</label>
-            <select value={attendantId ?? ""} onChange={(e) => setAttendantId(e.target.value || null)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500">
+        <div className="grid gap-3 md:grid-cols-6">
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Document Type</label>
+            <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100">
+              <option value="RECEIPT">Receipt</option>
+              <option value="INVOICE">Invoice</option>
+              <option value="QUOTATION">Quotation</option>
+              <option value="LAYAWAY">Layaway</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Receipt / Invoice No.</label>
+            <input readOnly value={serial} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Customer (M/S)</label>
+            <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Name / Company" className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Customer Phone</label>
+            <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-wide text-slate-400">Served by (Attendant)</label>
+            <select value={attendantId ?? ""} onChange={(e) => setAttendantId(e.target.value || null)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100">
               <option value="">Select attendant</option>
               {attendants.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Document Type</label>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500">
-              <option>RECEIPT</option>
-              <option>INVOICE</option>
-              <option>QUOTATION</option>
-              <option>LAYAWAY</option>
-            </select>
-          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Serial / Receipt No.</label>
-            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Serial" readOnly />
+        <div className="flex flex-col gap-3 border-t border-slate-900 pt-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Tax % (optional)</label>
+              <input type="number" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value || 0))} className="w-28 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100" />
+            </div>
+            <label className="mt-5 inline-flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" className="accent-emerald-500" checked={showTax} onChange={(e) => setShowTax(e.target.checked)} />
+              <span>Show tax on document</span>
+            </label>
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Customer Name</label>
-            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setShowSerials((v) => !v)} className={`rounded-full px-4 py-1.5 text-xs font-medium tracking-wide border ${showSerials ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:bg-slate-800"}`}>Add serial numbers</button>
+            <button type="button" onClick={() => setShowWarranty((v) => !v)} className={`rounded-full px-4 py-1.5 text-xs font-medium tracking-wide border ${showWarranty ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:bg-slate-800"}`}>Add warranty</button>
+            <button type="button" onClick={() => setShowDiscount((v) => !v)} className={`rounded-full px-4 py-1.5 text-xs font-medium tracking-wide border ${showDiscount ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:bg-slate-800"}`}>Add discount</button>
           </div>
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Customer Phone</label>
-            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." />
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            {/* Customer email and send toggles removed per requirements */}
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 focus:outline-none">{saving ? "Saving..." : "Save to System"}</button>
+            <button type="button" onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-50 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 focus:outline-none">Print / Save PDF</button>
           </div>
         </div>
       </div>
