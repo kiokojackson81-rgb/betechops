@@ -120,7 +120,16 @@ export function LockButton({
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={() => {
+        // eslint-disable-next-line no-console
+        console.debug('LockButton: clicked', { locked });
+        try {
+          onToggle();
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('LockButton: onToggle error', err);
+        }
+      }}
       className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-2.5 py-1 text-xs text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200"
       aria-pressed={!locked}
       title={locked ? "Unlock (login required)" : "Lock"}
