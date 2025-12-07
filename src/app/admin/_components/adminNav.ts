@@ -7,6 +7,7 @@ export const NAV: AdminNavItem[] = [
   { href: "/admin", label: "Overview", icon: Receipt },
   { href: "/admin/shops", label: "Shops & Staff", icon: Store },
   { href: "/admin/orders", label: "Orders", icon: Package },
+  { href: "/admin/receipts", label: "Receipts", icon: FileText },
   { href: "/admin/returns", label: "Returns", icon: Truck },
   { href: "/admin/returns/jumia", label: "Jumia Returns", icon: Truck },
   { href: "/admin/catalog", label: "Catalog", icon: Layers },
