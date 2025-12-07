@@ -6,6 +6,12 @@ export default function ReceiptsAdminClient({ initial }: { initial: any[] }) {
   const [rows, setRows] = useState(initial || []);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<any | null>(null);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [customer, setCustomer] = useState<string>("");
+  const [docType, setDocType] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const toggle = (id: string) => setExpanded((s) => ({ ...s, [id]: !s[id] }));
 
@@ -41,8 +47,57 @@ export default function ReceiptsAdminClient({ initial }: { initial: any[] }) {
     }
   };
 
+  const fetchList = async (opts?: { page?: number }) => {
+    try {
+      setLoading(true);
+      const q: any = new URLSearchParams();
+      if (dateFrom) q.append('from', dateFrom);
+      if (dateTo) q.append('to', dateTo);
+      if (customer) q.append('customer', customer);
+      if (docType) q.append('docType', docType);
+      if (status) q.append('status', status);
+      if (opts?.page) q.append('page', String(opts.page));
+      q.append('includeItems', 'true');
+      const res = await fetch('/api/receipts/list?' + q.toString());
+      const json = await res.json();
+      setRows(json.receipts || []);
+    } catch (e) {
+      console.error('Failed to fetch receipts list', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
+      <div className="mb-4 p-2 border rounded">
+        <div className="grid grid-cols-6 gap-2">
+          <div>
+            <label className="text-xs">From</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border p-1 w-full" />
+          </div>
+          <div>
+            <label className="text-xs">To</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border p-1 w-full" />
+          </div>
+          <div>
+            <label className="text-xs">Customer</label>
+            <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="border p-1 w-full" />
+          </div>
+          <div>
+            <label className="text-xs">Doc Type</label>
+            <input value={docType} onChange={(e) => setDocType(e.target.value)} className="border p-1 w-full" />
+          </div>
+          <div>
+            <label className="text-xs">Status</label>
+            <input value={status} onChange={(e) => setStatus(e.target.value)} className="border p-1 w-full" />
+          </div>
+          <div className="flex items-end gap-2">
+            <button className="px-2 py-1 border" onClick={() => fetchList() }>{loading ? 'Searching...' : 'Search'}</button>
+            <button className="px-2 py-1 border" onClick={() => { setDateFrom(''); setDateTo(''); setCustomer(''); setDocType(''); setStatus(''); fetchList(); }}>Reset</button>
+          </div>
+        </div>
+      </div>
       <table className="w-full table-auto border-collapse">
         <thead>
           <tr className="text-left">
