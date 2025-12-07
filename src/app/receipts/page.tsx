@@ -1,12 +1,13 @@
 import React from "react";
 import ReceiptsAdminClient from "./list/ReceiptsAdminClient";
+import { absUrl, withParams } from "@/lib/abs-url";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceiptsPage() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
   try {
-    const res = await fetch(`${base}/api/receipts/list?includeItems=true`, { cache: "no-store" });
+    const apiUrl = await absUrl('/api/receipts/list');
+    const res = await fetch(withParams(apiUrl, { includeItems: true }), { cache: "no-store" });
     const data = await res.json().catch(() => ({ receipts: [] }));
     return (
       <div className="p-4">
@@ -15,7 +16,8 @@ export default async function ReceiptsPage() {
         <ReceiptsAdminClient initial={data.receipts || []} allowEdit={false} />
       </div>
     );
-  } catch {
+  } catch (e) {
+    // keep minimal output to the page; server logs will contain details
     return <div className="p-4">Failed to load receipts</div>;
   }
 }

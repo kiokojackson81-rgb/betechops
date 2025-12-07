@@ -1,12 +1,13 @@
 import React from "react";
 import ReceiptsAdminClient from "./ReceiptsAdminClient";
+import { absUrl, withParams } from "@/lib/abs-url";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceiptsListPage() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
   try {
-    const res = await fetch(`${base}/api/receipts/list?includeItems=true`, { cache: "no-store" });
+    const apiUrl = await absUrl('/api/receipts/list');
+    const res = await fetch(withParams(apiUrl, { includeItems: true }), { cache: "no-store" });
     const j = await res.json();
     const receipts = j.receipts || [];
     return (
