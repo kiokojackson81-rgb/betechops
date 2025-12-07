@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { requireRole } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, context: { params: { userId: string
       : (context as { params: { userId: string } }).params;
     const amt = Number(amount || 0);
     const bal = await prisma.balance.upsert({ where: { userId }, create: { userId, available: amt, pending: 0 }, update: { available: { increment: amt } as any } as any });
-    await prisma.actionLog.create({ data: { actorId: (guard.session?.user as any)?.id ?? 'system', entity: 'Balance', entityId: userId, action: 'ADJUST', before: null, after: bal } });
+    await prisma.actionLog.create({ data: { actorId: (guard.session?.user as any)?.id ?? 'system', entity: 'Balance', entityId: userId, action: 'ADJUST', before: Prisma.JsonNull, after: bal } });
     return NextResponse.json({ ok: true, balance: bal });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';

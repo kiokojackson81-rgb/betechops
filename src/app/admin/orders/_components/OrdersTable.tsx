@@ -98,15 +98,17 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
 
   function pageNext() {
     if (!nextToken) return;
-    const q = new URLSearchParams(sp.toString());
+    const q = new URLSearchParams(sp?.toString() || "");
     q.set("nextToken", nextToken);
-    router.push(`${pathname}?${q.toString()}`);
+    const target = q.toString() ? `${pathname ?? "/"}?${q.toString()}` : (pathname ?? "/");
+    router.push(target);
   }
 
   function pagePrev() {
-    const q = new URLSearchParams(sp.toString());
+    const q = new URLSearchParams(sp?.toString() || "");
     q.delete("nextToken");
-    router.push(`${pathname}?${q.toString()}`);
+    const target = q.toString() ? `${pathname ?? "/"}?${q.toString()}` : (pathname ?? "/");
+    router.push(target);
   }
 
   // Lazy-load per-order item details (product URL and computed amount) for rows missing them.
@@ -163,7 +165,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     } catch {}
   }, [selected]);
 
-  const currentShopId = useMemo(() => sp.get("shopId") || undefined, [sp]);
+  const currentShopId = useMemo(() => sp?.get("shopId") || undefined, [sp]);
   const selectedIds = Object.keys(selected);
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selected[r.id]);
   const someSelected = selectedIds.length > 0;

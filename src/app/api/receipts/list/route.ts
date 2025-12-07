@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
     attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
     status: r.order?.status ?? r.order?.paymentStatus ?? null,
-    items: includeItems ? (r.order?.items ?? []) : undefined,
+    items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
   }));
 
   return NextResponse.json({ receipts: mapped, paging: { page, size } });

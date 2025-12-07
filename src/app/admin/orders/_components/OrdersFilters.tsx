@@ -33,7 +33,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   const sp = useSearchParams();
 
   const snapshot = useMemo(() => {
-    const status = sp.get("status") || DEFAULTS.status;
+    const status = sp?.get("status") || DEFAULTS.status;
     const sizeDefault = (() => {
       if (isSyncedStatus(status)) {
         return status.trim().toUpperCase() === "PENDING" ? "300" : "150";
@@ -42,12 +42,12 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     })();
     return {
       status,
-      country: sp.get("country") || DEFAULTS.country,
-      shopId: sp.get("shopId") || DEFAULTS.shopId,
-      dateFrom: sp.get("dateFrom") || DEFAULTS.dateFrom,
-      dateTo: sp.get("dateTo") || DEFAULTS.dateTo,
-      q: sp.get("q") || DEFAULTS.q,
-      size: sp.get("size") || sizeDefault,
+      country: sp?.get("country") || DEFAULTS.country,
+      shopId: sp?.get("shopId") || DEFAULTS.shopId,
+      dateFrom: sp?.get("dateFrom") || DEFAULTS.dateFrom,
+      dateTo: sp?.get("dateTo") || DEFAULTS.dateTo,
+      q: sp?.get("q") || DEFAULTS.q,
+      size: sp?.get("size") || sizeDefault,
     };
   }, [sp]);
 
@@ -84,7 +84,8 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
     q.delete("nextToken");
     const queryString = q.toString();
-    router.push(queryString ? `${pathname}?${queryString}` : pathname);
+    const target = queryString ? `${pathname ?? "/"}?${queryString}` : (pathname ?? "/");
+    router.push(target);
   };
 
   const reset = () => {
@@ -95,7 +96,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
       return DEFAULTS.size;
     })();
     setPending({ ...DEFAULTS, size: sizeDefault });
-    const q = new URLSearchParams(sp.toString());
+    const q = new URLSearchParams(sp?.toString() || "");
     Object.keys(DEFAULTS).forEach((key) => q.delete(key));
     q.delete("nextToken");
     router.push(`${pathname}?${q.toString()}`);

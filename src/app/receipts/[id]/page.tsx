@@ -46,7 +46,7 @@ export default async function Page({ params }: { params: { id: string } }) {
               <tr key={it.id}>
                 <td className="border p-1">{it.title || it.productName}</td>
                 <td className="border p-1">{it.quantity}</td>
-                <td className="border p-1">{it.sellingPrice}</td>
+                 <td className="border p-1">{String(it.sellingPrice ?? "")}</td>
                 <td className="border p-1">{it.serial}</td>
                 <td className="border p-1">{it.warranty}</td>
               </tr>
@@ -58,7 +58,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       <section className="mt-4 space-y-1 text-right">
         <div>Subtotal: {totals.subtotal ?? ""}</div>
         <div>Tax: {totals.tax ?? ""}</div>
-        <div>Discount: {receipt.discount ?? 0}</div>
+         <div>Discount: {String(receipt.discount ?? 0)}</div>
         <div className="text-xl font-semibold">Total: {totals.total ?? ""}</div>
         {receipt.docType === "LAYAWAY" && <div className="text-amber-700">Balance: {balance}</div>}
       </section>

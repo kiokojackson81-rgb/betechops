@@ -1,8 +1,9 @@
 import { prisma } from '../src/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 async function main() {
   console.log('Scanning receipts for existing fileUrl in receipt.data...');
-  const receipts = await prisma.receipt.findMany({ where: { NOT: { data: null } }, select: { id: true, data: true } });
+  const receipts = await prisma.receipt.findMany({ where: { data: { not: Prisma.JsonNull } }, select: { id: true, data: true } });
   let created = 0;
   for (const r of receipts) {
     const data = r.data as any;

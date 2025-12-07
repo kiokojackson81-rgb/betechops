@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, context: { params: { orderRef: stri
         const provisional = await tx.commissionRecord.findFirst({ where: { orderId: order.id, status: 'PENDING' } });
         if (provisional) {
           const { period, tiers } = await getOrCreateCommissionPeriod(new Date());
-          const totalsAgg = await tx.order.aggregate({ where: { attendantId: order.attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: 'PAID' }, _sum: { totalAmount: true } });
+          const totalsAgg = await tx.order.aggregate({ where: { attendantId: order.attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: 'PAID' as any }, _sum: { totalAmount: true } });
           const totalSales = Number(totalsAgg._sum.totalAmount ?? 0);
           const totalProfit = totalSales;
           const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers as any);

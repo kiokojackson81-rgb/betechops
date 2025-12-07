@@ -7,6 +7,7 @@ export default function BulkActions() {
   const router = useRouter();
   const pathname = usePathname();
   const shopId = useMemo(() => {
+    if (!sp) return null;
     const v = sp.get("shopId");
     return v && v !== "ALL" ? v : null;
   }, [sp]);
