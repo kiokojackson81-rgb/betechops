@@ -5,11 +5,14 @@ import { deleteS3Object } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+// Accept both direct and Promise-based params (Next 16 typed context)
+export async function DELETE(req: NextRequest, context: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   const guard = await requireRole(['ADMIN']);
   if (!guard.ok) return guard.res;
 
-  const id = params.id;
+  const { id } = 'params' in context && typeof (context as any).params?.then === 'function'
+    ? await (context as { params: Promise<{ id: string }> }).params
+    : (context as { params: { id: string } }).params;
   try {
     const file = await prisma.receiptFile.findUnique({ where: { id } });
     if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 });
