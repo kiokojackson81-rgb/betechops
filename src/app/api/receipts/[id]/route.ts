@@ -4,9 +4,20 @@ import { requireRole } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
+
+function resolveParams(context: ParamsContext): Promise<{ id: string }> {
+  const maybePromise = (context as any).params;
+  if (maybePromise && typeof maybePromise.then === "function") {
+    return maybePromise as Promise<{ id: string }>;
+  }
+  return Promise.resolve((context as { params: { id: string } }).params);
+}
+
+export async function GET(_req: NextRequest, context: ParamsContext) {
+  const { id } = await resolveParams(context);
   const receipt = await prisma.receipt.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       order: {
         include: {
@@ -22,10 +33,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json({ receipt });
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, context: ParamsContext) {
   const guard = await requireRole(["ADMIN"]);
   if (!guard.ok) return guard.res;
   const actorId = (guard.session?.user as any)?.id ?? null;
+  const { id } = await resolveParams(context);
 
   const body = await req.json().catch(() => ({}));
   const items = Array.isArray(body?.items) ? body.items : [];
@@ -44,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.receipt.findUnique({
-        where: { id: params.id },
+        where: { id },
         include: { order: { include: { items: true, layawayPlan: true } } },
       });
       if (!existing) throw new Error("Receipt not found");
@@ -101,7 +113,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
 
       const updatedReceipt = await tx.receipt.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           taxRate: taxRate || null,
           discount: discount || null,
@@ -125,7 +137,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           data: {
             actorId: actorId ?? "system",
             entity: "Receipt",
-            entityId: params.id,
+            entityId: id,
             action: "UPDATE",
             before: existing as any,
             after: updatedReceipt as any,
