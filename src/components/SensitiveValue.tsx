@@ -22,6 +22,8 @@ export default function SensitiveValue({
   forceVisible,
   forceHidden,
 }: Props) {
+  // Remove session gating for toggling visibility — allow local toggle
+  // so users can lock/unlock locally without requiring authentication.
   const _sess = useSession() as { data?: any } | undefined;
   const session = _sess?.data;
 
@@ -66,15 +68,12 @@ export default function SensitiveValue({
       setVisible(false);
       return;
     }
-    // require login to unhide
-    if (session) {
-      setVisible(true);
-      return;
-    }
-    if (typeof window !== "undefined") {
-      const cb = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/attendant/login?callbackUrl=${cb}`;
-    }
+    // Allow local unhide without requiring a server session. This keeps
+    // behavior simple: clicking toggles visibility and stores it in
+    // localStorage. Auto-lock behavior (if desired) is handled by the
+    // adjacent `useCardLock` hook for cards.
+    setVisible(true);
+    return;
   };
 
   const formatted = format ? format(value) : String(value);

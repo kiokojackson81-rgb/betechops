@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
 
 /**
  * Small helper to lock/unlock sensitive cards (values blurred when locked).
  * Unlock requires an authenticated session; otherwise the user is redirected to login.
  */
 export function useCardLock(storageKey: string) {
-  const sessionResult = useSession();
-  const session = (sessionResult as any)?.data;
-  const status = (sessionResult as any)?.status;
+  // This hook now operates purely client-side using localStorage so that
+  // locking/unlocking works regardless of authentication state. Auto-lock
+  // behavior is preserved.
   const key = `lock:${storageKey}`;
   const [locked, setLocked] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -33,16 +32,10 @@ export function useCardLock(storageKey: string) {
     }
   }, [key, locked]);
 
-  // If the user is explicitly unauthenticated, ensure cards are locked even
-  // if localStorage previously had them unlocked. This prevents exposing
-  // sensitive values to unauthenticated visitors.
-  useEffect(() => {
-    if (status === "unauthenticated" && !locked) {
-      setLocked(true);
-    }
-  }, [status, locked]);
+  // No session gating: keep current localStorage value but ensure it's a
+  // boolean state. We do not redirect unauthenticated users.
 
-  // Start/clear the auto-lock timer when unlocked by an authenticated user.
+  // Start/clear the auto-lock timer when unlocked.
   useEffect(() => {
     // helper to clear existing timer
     const clearTimer = () => {
@@ -52,8 +45,8 @@ export function useCardLock(storageKey: string) {
       }
     };
 
-    // Only start timer when unlocked and we have an authenticated session.
-    if (!locked && (session || status === "authenticated")) {
+    // Only start timer when unlocked.
+    if (!locked) {
       // clear any previous timer
       clearTimer();
       // auto-lock after 5 minutes
