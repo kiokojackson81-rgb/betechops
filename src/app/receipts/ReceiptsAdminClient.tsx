@@ -27,7 +27,7 @@ type EditState = {
   customerPhone?: string | null;
   customerEmail?: string | null;
   attendantId?: string | null;
-  items: Array<{ id?: string | null; title: string; quantity: number; unitPrice: number; serial?: string | null; warranty?: string | null }>;
+  items: Array<{ id?: string | null; title: string; quantity: number; unitPrice: number; serial?: string | null; warranty?: string | null; supportItemId?: string | null; buyingPrice?: number | null }>;
 };
 
 export default function ReceiptsAdminClient({ initial, allowEdit = true }: { initial: ReceiptRow[]; allowEdit?: boolean }) {
@@ -48,14 +48,17 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
       const res = await fetch(`/api/receipts/${id}`);
       const json = await res.json();
       const receipt = json?.receipt ?? null;
+      const supportItems: Array<{ id: string; buyingPrice: number | null }> = json?.supportItems || [];
       if (receipt) {
-        const orderItems = (receipt.order?.items || []).map((it: any) => ({
+        const orderItems = (receipt.order?.items || []).map((it: any, idx: number) => ({
           id: it.id,
           title: it.title || it.productName || "",
           quantity: it.quantity,
           unitPrice: Number(it.sellingPrice || it.unitPrice || 0),
           serial: it.serial || "",
           warranty: it.warranty || "",
+          supportItemId: supportItems[idx]?.id || null,
+          buyingPrice: supportItems[idx]?.buyingPrice ?? null,
         }));
         setEditing({
           id,
@@ -110,6 +113,27 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
     }
   };
 
+  const savePrices = async () => {
+    if (!editing) return;
+    try {
+      for (const it of editing.items) {
+        if (!it.supportItemId) continue;
+        const price = Number(it.buyingPrice || 0);
+        if (!price) continue;
+        await fetch("/api/support/price-sale", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ receiptItemId: it.supportItemId, buyingPrice: price }),
+        });
+      }
+      alert("Prices saved");
+      await fetchList();
+      closeEdit();
+    } catch (e) {
+      alert("Failed to save prices");
+    }
+  };
+
   const fetchList = async () => {
     try {
       setLoading(true);
@@ -119,7 +143,7 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
       if (search) params.append("q", search);
       if (docType) params.append("docType", docType);
       params.append("includeItems", "true");
-      const res = await fetch(`/api/receipts/list?${params.toString()}`);
+      const res = await fetch(`/api/receipts?${params.toString()}`);
       const json = await res.json();
       setRows(json.receipts || []);
     } catch (e) {
@@ -264,7 +288,7 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
             <div className="mt-3">
               <h3 className="font-semibold">Items</h3>
               {(editing.items || []).map((it, idx) => (
-                <div key={it.id || idx} className="mt-2 grid grid-cols-6 items-center gap-2">
+                <div key={it.id || idx} className="mt-2 grid grid-cols-7 items-center gap-2">
                   <input value={it.title} onChange={(e) => setEditing((s) => {
                     if (!s) return s;
                     const copy = { ...s };
@@ -295,6 +319,16 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
                     copy.items[idx].warranty = e.target.value;
                     return copy;
                   })} className="rounded border p-1" placeholder="Warranty" />
+                  {it.supportItemId ? (
+                    <input type="number" value={it.buyingPrice ?? ""} onChange={(e) => setEditing((s) => {
+                      if (!s) return s;
+                      const copy = { ...s };
+                      copy.items[idx].buyingPrice = Number(e.target.value || 0);
+                      return copy;
+                    })} className="rounded border p-1" placeholder="Buying price" />
+                  ) : (
+                    <div className="text-xs text-slate-500">Price later</div>
+                  )}
                   <button className="text-red-600" onClick={() => setEditing((s) => {
                     if (!s) return s;
                     const copy = { ...s };
@@ -311,6 +345,7 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={closeEdit} className="rounded border px-3 py-1">Cancel</button>
               <button onClick={saveEdit} className="rounded bg-blue-600 px-3 py-1 text-white">Save</button>
+              <button onClick={savePrices} className="rounded bg-emerald-600 px-3 py-1 text-white">Save Prices</button>
             </div>
           </div>
         </div>
@@ -318,4 +353,3 @@ export default function ReceiptsAdminClient({ initial, allowEdit = true }: { ini
     </div>
   );
 }
-

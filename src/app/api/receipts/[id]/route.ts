@@ -29,8 +29,27 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
+  let supportItems: Array<{ id: string; buyingPrice: number | null }> = [];
+  try {
+    if (receipt?.order?.orderNumber) {
+      const supportReceipts = await prisma.supportReceipt.findMany({
+        where: { receiptNumber: receipt.order.orderNumber },
+        include: { items: true },
+      });
+      if (supportReceipts.length > 0) {
+        supportItems = supportReceipts.flatMap((sr) =>
+          sr.items.map((it) => ({
+            id: it.id,
+            buyingPrice: it.buyingPrice ? Number(it.buyingPrice) : null,
+          })),
+        );
+      }
+    }
+  } catch (e) {
+    // best-effort; ignore support lookup failures
+  }
   if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ receipt });
+  return NextResponse.json({ receipt, supportItems });
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {
@@ -48,6 +67,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const paymentDetailsShown = Boolean(body?.paymentDetailsShown);
   const notes = body?.notes ?? null;
   const warrantyText = body?.warrantyText ?? null;
+  const attendantId = body?.attendantId ?? null;
 
   const subtotal = items.reduce((sum: number, it: any) => sum + Number(it.quantity || 1) * Number(it.unitPrice || it.sellingPrice || 0), 0);
   const taxAmount = showTax ? subtotal * (taxRate / 100) : 0;
@@ -66,6 +86,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
       // refresh products + items
       await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
+      const createdOrderItems: any[] = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.productName || "Item").slice(0, 255);
         let product = await tx.product.findFirst({ where: { name: title } });
@@ -79,7 +100,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             },
           });
         }
-        await tx.orderItem.create({
+        const createdItem = await tx.orderItem.create({
           data: {
             orderId: existing.orderId,
             productId: product.id,
@@ -89,6 +110,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             warranty: it.warranty ?? null,
           },
         });
+        createdOrderItems.push(createdItem);
       }
 
       // update order basics
@@ -110,6 +132,16 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           where: { id: existing.order.layawayPlan.id },
           data: { balance, isComplete: balance <= 0 },
         });
+        if (balance <= 0) {
+          await tx.commissionEarning.updateMany({
+            where: { orderItem: { orderId: existing.orderId }, status: "PENDING" },
+            data: { status: "RELEASED" },
+          });
+          await tx.commissionRecord.updateMany({
+            where: { orderId: existing.orderId },
+            data: { status: "RELEASED", releasedAt: new Date(), amount: String(total) },
+          });
+        }
       }
 
       const updatedReceipt = await tx.receipt.update({
@@ -132,6 +164,22 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         },
       });
 
+      // Refresh commission earnings on edit (gross-based placeholder)
+      if (createdOrderItems.length) {
+        await tx.commissionEarning.deleteMany({ where: { orderItem: { orderId: existing.orderId } } });
+        await tx.commissionEarning.createMany({
+          data: createdOrderItems.map((it) => ({
+            staffId: attendantId || existing.order?.attendantId || null,
+            orderItemId: it.id,
+            basis: "gross",
+            qty: it.quantity,
+            amount: Number(it.sellingPrice || 0) * Number(it.quantity || 1),
+            status: docType === "LAYAWAY" ? "PENDING" : "PENDING",
+            calcDetail: { reason: "receipt_edit_seed" },
+          })),
+        });
+      }
+
       try {
         await tx.actionLog.create({
           data: {
@@ -149,6 +197,19 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
       return updatedReceipt;
     });
+
+    // recompute support ledger if attendant is present
+    const ledgerAttendantId = attendantId || (updated as any)?.order?.attendantId;
+    if (ledgerAttendantId) {
+      try {
+        const { getTradingPeriodFor } = await import("@/lib/tradingPeriod");
+        const { recomputeSupportCommissionLedger } = await import("@/lib/supportCommission");
+        const period = getTradingPeriodFor(new Date());
+        await recomputeSupportCommissionLedger({ userId: ledgerAttendantId, period });
+      } catch (e) {
+        console.error("[receipts PATCH] failed to recompute support ledger", e);
+      }
+    }
 
     return NextResponse.json({ ok: true, receipt: updated });
   } catch (err) {

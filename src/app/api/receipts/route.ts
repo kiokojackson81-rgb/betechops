@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAttendant } from "@/lib/auth";
+import { requireAttendant, auth } from "@/lib/auth";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -10,6 +13,78 @@ function genId() {
 export const dynamic = "force-dynamic";
 
 const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD || 500000);
+
+export async function GET(req: NextRequest) {
+  try {
+    await auth(); // soft guard: require session but allow attendants/supervisors/admins
+  } catch (e) {
+    // allow unauthenticated fetch to still fall through if middleware handled already
+  }
+
+  const url = new URL(req.url);
+  const q = url.searchParams.get("q") || undefined;
+  const docType = url.searchParams.get("docType") || undefined;
+  const start = url.searchParams.get("start");
+  const end = url.searchParams.get("end");
+  const attendantId = url.searchParams.get("attendantId") || undefined;
+  const includeItems = url.searchParams.get("includeItems") === "true";
+  const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
+  const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
+
+  const today = new Date();
+  const startDefault = new Date(today);
+  startDefault.setHours(0, 0, 0, 0);
+  const endDefault = new Date(today);
+  endDefault.setHours(23, 59, 59, 999);
+
+  const where: any = {};
+  if (docType) where.docType = docType.toUpperCase();
+  where.generatedAt = {
+    gte: start ? new Date(start) : startDefault,
+    lte: end ? new Date(end) : endDefault,
+  };
+
+  if (q) {
+    where.OR = [
+      { order: { customerName: { contains: q, mode: "insensitive" } } },
+      { order: { customerPhone: { contains: q, mode: "insensitive" } } },
+      { order: { customerEmail: { contains: q, mode: "insensitive" } } },
+      { order: { orderNumber: { contains: q, mode: "insensitive" } } },
+      { order: { attendant: { name: { contains: q, mode: "insensitive" } } } },
+      { issuedBy: { name: { contains: q, mode: "insensitive" } } },
+    ];
+  }
+  if (attendantId) {
+    where.order = { ...(where.order || {}), attendantId };
+  }
+
+  const receipts = await prisma.receipt.findMany({
+    where,
+    orderBy: { generatedAt: "desc" },
+    skip: (page - 1) * size,
+    take: size,
+    include: {
+      order: includeItems
+        ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+        : { select: { orderNumber: true, customerName: true, attendant: { select: { id: true, name: true } }, status: true, paymentStatus: true, totalAmount: true } },
+      issuedBy: { select: { id: true, name: true } },
+    },
+  });
+
+  const mapped = receipts.map((r) => ({
+    id: r.id,
+    orderRef: r.order?.orderNumber,
+    docType: r.docType,
+    createdAt: r.generatedAt,
+    customerName: r.order?.customerName,
+    total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
+    attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
+    status: r.order?.status ?? r.order?.paymentStatus ?? null,
+    items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
+  }));
+
+  return NextResponse.json({ receipts: mapped, paging: { page, size } });
+}
 
 export async function POST(req: NextRequest) {
   let guard;
@@ -39,6 +114,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const entryDate = payload?.date ? new Date(payload.date) : new Date();
+      const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
+
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -90,8 +168,9 @@ export async function POST(req: NextRequest) {
       // clear existing order items for update case (simple approach)
       await tx.orderItem.deleteMany({ where: { orderId: orderUpsert.id } });
 
+      const createdOrderItems = [];
       for (const it of createdItems) {
-        await tx.orderItem.create({
+        const item = await tx.orderItem.create({
           data: {
             orderId: orderUpsert.id,
             productId: it.product.id,
@@ -101,6 +180,7 @@ export async function POST(req: NextRequest) {
             warranty: it.warranty ?? null,
           },
         });
+        createdOrderItems.push(item);
       }
 
       // Layaway plan creation/update
@@ -160,6 +240,80 @@ export async function POST(req: NextRequest) {
         receipt = await tx.receipt.create({ data: receiptData });
       }
 
+      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
+      if (createdOrderItems.length && attendantId) {
+        await tx.commissionEarning.createMany({
+          data: createdOrderItems.map((it) => ({
+            staffId: attendantId,
+            orderItemId: it.id,
+            basis: "gross",
+            qty: it.quantity,
+            amount: 0,
+            status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
+            calcDetail: { reason: "receipt_seed", total },
+          })),
+        });
+      }
+
+      // Record support daily entry + receipt so support commission ledger can include this sale
+      if (attendantId) {
+        const startOfDay = new Date(entryDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(entryDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const existingEntry = await tx.supportDailyEntry.findFirst({
+          where: {
+            submittedById: attendantId,
+            date: { gte: startOfDay, lte: endOfDay },
+          },
+          select: { id: true, totalSales: true, totalProfit: true },
+        });
+
+        const supportReceiptData = {
+          receiptNumber: serial,
+          sellingTotal: total,
+          paymentMethod: PaymentMethod.MPESA,
+          items: {
+            create: items.map((it: any) => ({
+              productName: String(it.title || it.product || "Item").slice(0, 255),
+              buyingPrice: 0,
+            })),
+          },
+        };
+
+        if (existingEntry) {
+          await tx.supportReceipt.create({
+            data: {
+              dailyEntryId: existingEntry.id,
+              ...supportReceiptData,
+            },
+          });
+          await tx.supportDailyEntry.update({
+            where: { id: existingEntry.id },
+            data: {
+              totalSales: Number(existingEntry.totalSales || 0) + total,
+              // keep profit unchanged until pricing happens via /api/support/price-sale
+            },
+          });
+        } else {
+          await tx.supportDailyEntry.create({
+            data: {
+              date: entryDate,
+              dayOfWeek,
+              totalSales: total,
+              totalProfit: 0,
+              newBatteries: 0,
+              changedBatteries: 0,
+              submittedById: attendantId,
+              receipts: {
+                create: [supportReceiptData],
+              },
+            },
+          });
+        }
+      }
+
       // create provisional commission record
       const provisional = await tx.commissionRecord.create({
         data: {
@@ -170,6 +324,44 @@ export async function POST(req: NextRequest) {
           data: { subtotal, tax: taxAmount, total, docType },
         },
       });
+
+      // Seed CommissionEarning rows (gross-based) for this order's items; recompute jobs can overwrite
+      if (createdOrderItems.length && attendantId) {
+        const perItemEarnings = createdOrderItems.map((it) => {
+          const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
+          const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
+          return {
+            staffId: attendantId,
+            orderItemId: it.id,
+            basis: "gross",
+            qty: it.quantity,
+            amount: gross,
+            status,
+            calcDetail: { reason: "receipt_seed", total },
+          };
+        });
+        await tx.commissionEarning.createMany({ data: perItemEarnings });
+
+        // If immediate threshold hit, also release commission record now
+        if (total >= IMMEDIATE_THRESHOLD) {
+          await tx.commissionRecord.update({
+            where: { id: provisional.id },
+            data: { status: "RELEASED", amount: String(total), releasedAt: new Date() },
+          });
+        }
+      }
+
+      // If layaway is fully paid on creation, release pending commissions
+      if (docType === "LAYAWAY" && balance <= 0 && attendantId) {
+        await tx.commissionRecord.update({
+          where: { id: provisional.id },
+          data: { status: "RELEASED", amount: String(total), releasedAt: new Date() },
+        });
+        await tx.commissionEarning.updateMany({
+          where: { orderItem: { orderId: orderUpsert.id }, status: "PENDING" },
+          data: { status: "RELEASED" },
+        });
+      }
 
       // Optionally release immediately if threshold met
       if (Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
@@ -214,6 +406,16 @@ export async function POST(req: NextRequest) {
 
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
+
+    // Recompute support commission ledger after committing the transaction
+    if (attendantId) {
+      try {
+        const period = getTradingPeriodFor(payload?.date ? new Date(payload.date) : new Date());
+        await recomputeSupportCommissionLedger({ userId: attendantId, period });
+      } catch (ledgerErr) {
+        console.error("[receipts] failed to recompute support commission ledger", ledgerErr);
+      }
+    }
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

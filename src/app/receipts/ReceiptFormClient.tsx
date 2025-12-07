@@ -25,7 +25,7 @@ const newItem = (): ItemRow => ({
   warranty: warrantyOptions[0],
 });
 
-export default function ReceiptFormClient() {
+export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {
   const [attendants, setAttendants] = useState<Array<{ id: string; name: string }>>([]);
   const [attendantId, setAttendantId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
@@ -111,6 +111,7 @@ export default function ReceiptFormClient() {
         return showToast(data?.error || "Failed to save receipt", "error");
       }
       showToast("Saved receipt", "success");
+      onCreated?.(data);
       setTimeout(() => window.print(), 300);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
@@ -274,4 +275,3 @@ export default function ReceiptFormClient() {
     </div>
   );
 }
-

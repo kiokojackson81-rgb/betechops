@@ -974,6 +974,12 @@ export default function MarketingTrackerPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <a
+              href={`/receipts?start=${form.date}&end=${form.date}`}
+              className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+            >
+              View Receipts
+            </a>
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: "/attendant/login" })}
