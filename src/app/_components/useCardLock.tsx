@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 /**
@@ -21,6 +21,9 @@ export function useCardLock(storageKey: string) {
     }
   });
 
+  // Timer ref used to auto-lock after a period when unlocked.
+  const autoLockTimer = useRef<number | null>(null);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -29,6 +32,42 @@ export function useCardLock(storageKey: string) {
       // ignore
     }
   }, [key, locked]);
+
+  // If the user is explicitly unauthenticated, ensure cards are locked even
+  // if localStorage previously had them unlocked. This prevents exposing
+  // sensitive values to unauthenticated visitors.
+  useEffect(() => {
+    if (status === "unauthenticated" && !locked) {
+      setLocked(true);
+    }
+  }, [status, locked]);
+
+  // Start/clear the auto-lock timer when unlocked by an authenticated user.
+  useEffect(() => {
+    // helper to clear existing timer
+    const clearTimer = () => {
+      if (autoLockTimer.current) {
+        clearTimeout(autoLockTimer.current);
+        autoLockTimer.current = null;
+      }
+    };
+
+    // Only start timer when unlocked and we have an authenticated session.
+    if (!locked && (session || status === "authenticated")) {
+      // clear any previous timer
+      clearTimer();
+      // auto-lock after 5 minutes
+      autoLockTimer.current = window.setTimeout(() => {
+        setLocked(true);
+        autoLockTimer.current = null;
+      }, 5 * 60 * 1000);
+    } else {
+      // If locked, ensure timer is cleared
+      clearTimer();
+    }
+
+    return () => clearTimer();
+  }, [locked, session, status]);
 
   const lock = () => setLocked(true);
 
@@ -45,9 +84,11 @@ export function useCardLock(storageKey: string) {
       return;
     }
 
-    // If explicitly unauthenticated, unlock and redirect to login so numbers show after login redirect back.
+    // If explicitly unauthenticated, redirect to login. Do not locally unlock
+    // first (prevents briefly exposing values). After successful login the
+    // middleware will redirect back and the authenticated session will allow
+    // unlocking without hitting the login flow again.
     if (status === "unauthenticated") {
-      setLocked(false);
       if (typeof window !== "undefined") {
         const cb = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/attendant/login?callbackUrl=${cb}`;
