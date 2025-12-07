@@ -60,7 +60,7 @@ export function useCardLock(storageKey: string) {
     }
 
     return () => clearTimer();
-  }, [locked, session, status]);
+  }, [locked]);
 
   // Synchronously update localStorage when locking/unlocking to avoid races
   // where other scripts read stale values during the same tick.
@@ -89,35 +89,10 @@ export function useCardLock(storageKey: string) {
   const lock = () => _lock();
 
   const unlock = () => {
-    if (typeof window !== "undefined") {
-      // debug: log attempt to unlock and current session/status
-      // eslint-disable-next-line no-console
-      console.debug("useCardLock: unlock() called", { storageKey, status, hasSession: !!session });
-    }
-    // If session still loading, optimistically unlock and let downstream values render.
-    if (status === "loading") {
-      _unlock();
-      return;
-    }
-
-    // If we have a session object OR status explicitly says authenticated, unlock locally
-    if (session || status === "authenticated") {
-      _unlock();
-      return;
-    }
-
-    // If explicitly unauthenticated, redirect to login. Do not locally unlock
-    // first (prevents briefly exposing values). After successful login the
-    // middleware will redirect back and the authenticated session will allow
-    // unlocking without hitting the login flow again.
-    if (status === "unauthenticated") {
-      if (typeof window !== "undefined") {
-        const cb = encodeURIComponent(window.location.pathname + window.location.search);
-        // eslint-disable-next-line no-console
-        console.debug("useCardLock: redirecting to login", { callbackUrl: cb });
-        window.location.href = `/attendant/login?callbackUrl=${cb}`;
-      }
-    }
+    // Simple local unlock — no session gating.
+    // eslint-disable-next-line no-console
+    console.debug("useCardLock: unlock() called", { storageKey });
+    _unlock();
   };
 
   const toggle = () => (locked ? unlock() : lock());
