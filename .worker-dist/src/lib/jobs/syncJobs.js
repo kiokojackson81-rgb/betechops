@@ -5,10 +5,13 @@ exports.syncPayoutsJob = syncPayoutsJob;
 exports.returnsSlaJob = returnsSlaJob;
 exports.commissionCalcJob = commissionCalcJob;
 exports.priceLearnerJob = priceLearnerJob;
+exports.onlineOpsSyncJob = onlineOpsSyncJob;
 const prisma_1 = require("@/lib/prisma");
 const jumia_1 = require("@/lib/jumia");
 const kilimall_1 = require("@/lib/connectors/kilimall");
 const secure_json_1 = require("@/lib/crypto/secure-json");
+const onlineSync_1 = require("@/lib/jobs/onlineSync");
+const tradingPeriod_1 = require("@/lib/tradingPeriod");
 async function syncOrdersJob() {
     const shops = await prisma_1.prisma.shop.findMany();
     const results = {};
@@ -73,7 +76,30 @@ async function returnsSlaJob() {
         await prisma_1.prisma.returnCase.update({ where: { id: r.id }, data: { status: 'OVERDUE' } });
         // TODO: compute penalty amount and append to CommissionLedger
     }
-    return { processed: overdue.length };
+    const marketplaceOverdue = await prisma_1.prisma.marketplaceReturn.findMany({
+        where: { status: 'WAITING_AT_HUB', dueAt: { lt: now }, attendantId: { not: null } },
+    });
+    const period = (0, tradingPeriod_1.getTradingPeriodFor)(now);
+    for (const entry of marketplaceOverdue) {
+        await prisma_1.prisma.marketplaceReturn.update({
+            where: { id: entry.id },
+            data: { status: 'CHARGED_TO_ATTENDANT' },
+        });
+        if (entry.attendantId) {
+            await prisma_1.prisma.attendantPayrollAdjustment.create({
+                data: {
+                    attendantId: entry.attendantId,
+                    periodKey: period.key,
+                    periodLabel: period.label,
+                    adjustmentType: 'DISCIPLINE',
+                    label: `Return not picked (${entry.orderItemId})`,
+                    amount: Math.round(Number(entry.expectedAmount ?? 0)),
+                    createdById: entry.attendantId,
+                },
+            });
+        }
+    }
+    return { processed: overdue.length, marketplaceProcessed: marketplaceOverdue.length };
 }
 async function commissionCalcJob() {
     // placeholder: recompute ledgers
@@ -81,5 +107,9 @@ async function commissionCalcJob() {
 }
 async function priceLearnerJob() {
     // placeholder: look for product cost patterns and mark LEARNED prices
+    return { ok: true };
+}
+async function onlineOpsSyncJob() {
+    await (0, onlineSync_1.syncOnlineMarketplaceData)();
     return { ok: true };
 }

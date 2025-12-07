@@ -39,7 +39,7 @@ async function PATCH(request) {
             if (!existing) {
                 throw new Error("not_found");
             }
-            const fallbackPrimary = attendantCategoryUpdate ?? existing.attendantCategory;
+            const fallbackPrimary = attendantCategoryUpdate ?? existing.attendantCategory ?? Array.from(utils_1.categoryValues)[0];
             const desiredAssignments = includesCategoryUpdate
                 ? (0, utils_1.sanitizeCategories)(body.categories ?? [], fallbackPrimary)
                 : null;

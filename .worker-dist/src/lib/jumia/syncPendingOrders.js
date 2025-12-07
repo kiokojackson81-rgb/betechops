@@ -156,7 +156,30 @@ async function syncAllAccountsPendingOrders() {
     }
     const results = await Promise.all(tasks);
     const completedAt = new Date();
-    const totalOrders = results.reduce((acc, r) => acc + (r?.orders || 0), 0);
+    // Compute a unique DB-backed count of pending orders for the same window to
+    // avoid double-counting when the vendor returns the same order under
+    // multiple shops (per-shop upsert counts can increment the same id several times).
+    const totalOrders = await (async () => {
+        try {
+            const now = new Date();
+            const windowStart = (0, date_fns_tz_1.zonedTimeToUtc)((0, date_fns_1.addDays)(now, -WINDOW_DAYS), DEFAULT_TIMEZONE);
+            const count = await prisma_1.prisma.jumiaOrder.count({
+                where: {
+                    status: { in: ['PENDING'] },
+                    OR: [
+                        { updatedAtJumia: { gte: windowStart } },
+                        { createdAtJumia: { gte: windowStart } },
+                        { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: { gte: windowStart } }] },
+                    ],
+                },
+            });
+            return count;
+        }
+        catch (err) {
+            // Fall back to the aggregated per-shop sum if DB read fails for any reason
+            return results.reduce((acc, r) => acc + (r?.orders || 0), 0);
+        }
+    })();
     const totalPages = results.reduce((acc, r) => acc + (r?.pages || 0), 0);
     const anyError = results.some((r) => r?.error);
     const shopCount = tasks.length;
@@ -263,12 +286,15 @@ async function upsertOrder(shopId, raw) {
             packedItems: parseNullableInt(raw?.packedItems),
             countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
             isPrepayment: coerceBoolean(raw?.isPrepayment),
-            // @ts-ignore Prisma type not yet reflecting new field
             totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
             totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
             createdAtJumia: parseOptionalDate(raw?.createdAt),
             updatedAtJumia: parseOptionalDate(raw?.updatedAt),
             shopId,
+            // cache the vendor-provided shop name when available for stable UI display
+            shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+                ? String(raw.shop.name)
+                : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : null),
         },
         update: {
             number: parseNullableInt(raw?.number),
@@ -279,11 +305,13 @@ async function upsertOrder(shopId, raw) {
             packedItems: parseNullableInt(raw?.packedItems),
             countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
             isPrepayment: coerceBoolean(raw?.isPrepayment),
-            // @ts-ignore Prisma type not yet reflecting new field
             totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
             totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
             createdAtJumia: parseOptionalDate(raw?.createdAt),
             updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+            shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+                ? String(raw.shop.name)
+                : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : undefined),
         },
     });
 }

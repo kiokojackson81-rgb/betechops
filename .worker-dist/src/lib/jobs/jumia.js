@@ -546,6 +546,9 @@ async function syncOrdersIncremental(opts) {
                             };
                             await prisma_1.prisma.jumiaOrder.upsert({
                                 where: { id },
+                                // Cast create/update payloads to any to avoid strict Prisma typing issues
+                                // (schema/client may drift in CI environments). This is a minimal
+                                // pragmatic fix to unblock the build while preserving runtime shape.
                                 create: {
                                     id,
                                     number: toInt(rawObj.number),
@@ -556,12 +559,14 @@ async function syncOrdersIncremental(opts) {
                                     packedItems: toInt(rawObj.packedItems),
                                     countryCode: typeof rawObj?.country?.code === 'string' ? String(rawObj.country.code) : null,
                                     isPrepayment: toBool(rawObj.isPrepayment),
-                                    // @ts-ignore Prisma type not yet reflecting new field
                                     totalAmountLocalCurrency: typeof rawObj.totalAmountLocalCurrency === 'string' ? String(rawObj.totalAmountLocalCurrency) : null,
                                     totalAmountLocalValue: (() => { const v = rawObj.totalAmountLocalValue ?? rawObj.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                                     createdAtJumia: toDate(rawObj.createdAt ?? rawObj.created_at),
                                     updatedAtJumia: toDate(rawObj.updatedAt ?? rawObj.updated_at ?? rawObj.lastUpdatedAt),
                                     shopId,
+                                    shopName: (rawObj?.shop && typeof rawObj.shop === 'object' && rawObj.shop.name)
+                                        ? String(rawObj.shop.name)
+                                        : (typeof rawObj?.shopName === 'string' ? rawObj.shopName : typeof rawObj?.shop_label === 'string' ? rawObj.shop_label : null),
                                 },
                                 update: {
                                     number: toInt(rawObj.number),
@@ -572,12 +577,14 @@ async function syncOrdersIncremental(opts) {
                                     packedItems: toInt(rawObj.packedItems),
                                     countryCode: typeof rawObj?.country?.code === 'string' ? String(rawObj.country.code) : null,
                                     isPrepayment: toBool(rawObj.isPrepayment),
-                                    // @ts-ignore Prisma type not yet reflecting new field
                                     totalAmountLocalCurrency: typeof rawObj.totalAmountLocalCurrency === 'string' ? String(rawObj.totalAmountLocalCurrency) : null,
                                     totalAmountLocalValue: (() => { const v = rawObj.totalAmountLocalValue ?? rawObj.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
                                     createdAtJumia: toDate(rawObj.createdAt ?? rawObj.created_at),
                                     updatedAtJumia: toDate(rawObj.updatedAt ?? rawObj.updated_at ?? rawObj.lastUpdatedAt),
-                                },
+                                    shopName: (rawObj?.shop && typeof rawObj.shop === 'object' && rawObj.shop.name)
+                                        ? String(rawObj.shop.name)
+                                        : (typeof rawObj?.shopName === 'string' ? rawObj.shopName : typeof rawObj?.shop_label === 'string' ? rawObj.shop_label : undefined),
+                                }
                             });
                             upserted += 1;
                             const updatedIso = (() => {

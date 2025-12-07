@@ -369,6 +369,25 @@ async function GET(req) {
             }
             const isLastPage = out.length < pageSize; // conservative: if we couldn't fill, treat as last
             const payload = { orders: out, nextToken, isLastPage };
+            // Enrich merged orders with canonical shop names when available to ensure
+            // live and cached views show consistent shop labels.
+            try {
+                const shopIds = Array.from(new Set((out || []).map((o) => (Array.isArray(o?.shopIds) && o.shopIds.length) ? o.shopIds[0] : (o?.shopId || null)).filter(Boolean)));
+                if (shopIds.length) {
+                    const shops = await prisma_1.prisma.jumiaShop.findMany({ where: { id: { in: shopIds } }, select: { id: true, name: true, account: { select: { label: true } } } }).catch(() => []);
+                    const map = new Map();
+                    for (const s of shops)
+                        map.set(s.id, { name: s.name, accountLabel: s.account?.label ?? null });
+                    for (const it of (out || [])) {
+                        const sid = Array.isArray(it?.shopIds) && it.shopIds.length ? it.shopIds[0] : (it?.shopId || null);
+                        if (sid && map.has(sid) && !it.shopName) {
+                            // prefer the explicit shop.name as the stable label
+                            it.shopName = map.get(sid).name ?? undefined;
+                        }
+                    }
+                }
+            }
+            catch { }
             if (cacheKey)
                 cacheMap.set(cacheKey, { ts: Date.now(), data: payload });
             const resAll = server_1.NextResponse.json(payload);
@@ -398,6 +417,23 @@ async function GET(req) {
         const vendorPath = stripShopIdFromPath(path);
         try {
             const data = await jumiaFetch(vendorPath, shopAuth ? { method: 'GET', shopAuth, shopCode: qs.shopId } : { method: 'GET' });
+            // Attach shopName when we know the requested shopId and have a DB entry
+            try {
+                if (qs.shopId && data && (Array.isArray(data?.orders) || Array.isArray(data?.items) || Array.isArray(data?.data))) {
+                    const rows = Array.isArray(data.orders) ? data.orders : Array.isArray(data.items) ? data.items : data.data || [];
+                    const shopRow = await prisma_1.prisma.jumiaShop.findUnique({
+                        where: { id: qs.shopId },
+                        select: { id: true, name: true, account: { select: { label: true } } },
+                    }).catch(() => null);
+                    if (shopRow) {
+                        for (const r of rows) {
+                            if (!r.shopName)
+                                r.shopName = shopRow.name;
+                        }
+                    }
+                }
+            }
+            catch { }
             if (cacheKey)
                 cacheMap.set(cacheKey, { ts: Date.now(), data });
             const res = server_1.NextResponse.json(data);

@@ -5,7 +5,6 @@ exports.POST = POST;
 const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const api_1 = require("@/lib/api");
-const client_1 = require("@prisma/client");
 const utils_1 = require("./utils");
 async function GET(request) {
     const auth = await (0, api_1.requireRole)("ADMIN");
@@ -58,9 +57,9 @@ async function POST(request) {
         return server_1.NextResponse.json({ error: "email required" }, { status: 400 });
     const normalizedEmail = email.toLowerCase().trim();
     const primaryCandidate = body.category?.toUpperCase();
-    const fallbackPrimary = primaryCandidate && utils_1.categoryValues.has(primaryCandidate) ? primaryCandidate : client_1.AttendantCategory.GENERAL;
+    const fallbackPrimary = primaryCandidate && utils_1.categoryValues.has(primaryCandidate) ? primaryCandidate : "DIRECT_SALES_OPS";
     const desiredCategories = (0, utils_1.sanitizeCategories)(body.categories ?? (primaryCandidate ? [primaryCandidate] : []), fallbackPrimary);
-    const primaryCategory = desiredCategories[0] ?? client_1.AttendantCategory.GENERAL;
+    const primaryCategory = desiredCategories[0] ?? "DIRECT_SALES_OPS";
     const user = await prisma_1.prisma.$transaction(async (tx) => {
         const saved = await tx.user.upsert({
             where: { email: normalizedEmail },

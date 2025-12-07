@@ -295,7 +295,15 @@ export async function POST(req: Request) {
 
           const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || `https://${(new URL(req.url)).host}`;
           const apiUrl = `${site.replace(/\/$/, '')}/api/receipts`;
-          const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          // Forward the caller's cookies so the receipts endpoint can authenticate this server-to-server call.
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              cookie: req.headers.get('cookie') || '',
+            },
+            body: JSON.stringify(payload),
+          });
           if (res.ok) {
             const json = await res.json();
             const receiptId = json?.receiptId || json?.receipt?.id;

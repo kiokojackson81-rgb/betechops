@@ -80,9 +80,9 @@ async function getJumiaAccessTokenWithMeta(shopAuth) {
     // Optional simple in-memory cache keyed by (source+clientId)
     const cacheKey = `${source}:${clientId}`;
     const now = Math.floor(Date.now() / 1000);
-    // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+    // @ts-ignore - global cache container for tokens; may not be typed on globalThis
     globalThis.__jumiaTokenCache ?? (globalThis.__jumiaTokenCache = new Map());
-    // @ts-expect-error - global cache container for tokens; may not be typed on globalThis
+    // @ts-ignore - global cache container for tokens; may not be typed on globalThis
     const cache = globalThis.__jumiaTokenCache;
     const cached = cache.get(cacheKey);
     if (cached && cached.exp > now + 60) {
@@ -226,7 +226,7 @@ async function getAccessTokenFromEnv() {
 }
 function getJumiaTokenInfo() {
     // Try to pick a cached entry if available
-    // @ts-expect-error - access global cache if present
+    // @ts-ignore - access global cache if present
     const cache = globalThis.__jumiaTokenCache;
     if (cache && cache.size > 0) {
         for (const [k, v] of cache.entries()) {

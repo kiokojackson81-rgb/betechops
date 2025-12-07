@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.upsertNormalizedOrder = upsertNormalizedOrder;
 exports.ensureReturnCaseForOrder = ensureReturnCaseForOrder;
-const prisma_1 = require("../prisma");
+const prisma_1 = require("@/lib/prisma");
 const client_1 = require("@prisma/client");
 function mapStatus(s) {
     const ss = (s || '').toLowerCase();
@@ -75,6 +75,7 @@ async function upsertNormalizedOrder(n) {
                 createdAtJumia: new Date(orderedAt),
                 updatedAtJumia: new Date(orderedAt),
                 shopId: shopId,
+                shopName: undefined,
             },
             update: {
                 status: status || "UNKNOWN",

@@ -22,7 +22,7 @@ const newItem = (): ItemRow => ({
   quantity: 1,
   unitPrice: "",
   serial: "",
-  warranty: warrantyOptions[0],
+  warranty: "",
 });
 
 export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {  
@@ -42,6 +42,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(true);
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
+  const [globalWarranty, setGlobalWarranty] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -105,6 +106,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         showDiscount,
         paymentDetailsShown,
         notes,
+        globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
         items: items.map((it) => ({
           title: it.title,
@@ -207,6 +209,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
               )}
               {showWarranty ? (
                 <select className="rounded border px-2 py-1" value={it.warranty} onChange={(e) => updateRow(it.id, { warranty: e.target.value })}>
+                  <option value="">No warranty</option>
                   {warrantyOptions.map((w) => <option key={w} value={w}>{w}</option>)}
                 </select>
               ) : (

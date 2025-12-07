@@ -5,8 +5,8 @@ exports.POST = POST;
 const server_1 = require("next/server");
 const prisma_1 = require("@/lib/prisma");
 const api_1 = require("@/lib/api");
-const categories_1 = require("@/lib/attendants/categories");
-const metricValues = new Set(Object.keys(categories_1.ATTENDANT_ACTIVITY_METRICS));
+const definitions_1 = require("@/lib/attendants/definitions");
+const metricValues = new Set(Object.keys(definitions_1.ATTENDANT_ACTIVITY_METRICS));
 async function GET(request) {
     const auth = await (0, api_1.requireRole)(["ATTENDANT", "SUPERVISOR", "ADMIN"]);
     if (!auth.ok)
@@ -49,12 +49,13 @@ async function POST(request) {
     if (!user)
         return server_1.NextResponse.json({ error: "user_not_found" }, { status: 404 });
     const categoryPool = user.categoryAssignments.map((c) => c.category);
-    if (!categoryPool.includes(user.attendantCategory))
+    // user.attendantCategory may be null; only add when present
+    if (user.attendantCategory && !categoryPool.includes(user.attendantCategory))
         categoryPool.unshift(user.attendantCategory);
     const requestedCategory = body.category?.toUpperCase() || undefined;
     const effectiveCategory = requestedCategory && categoryPool.includes(requestedCategory)
         ? requestedCategory
-        : categoryPool[0] ?? user.attendantCategory;
+        : (categoryPool[0] ?? user.attendantCategory ?? categoryPool[0] ?? "DIRECT_SALES_OPS");
     const numericValue = typeof body.numericValue === "number" && Number.isFinite(body.numericValue) ? Number(body.numericValue.toFixed(2)) : undefined;
     const intValue = typeof body.intValue === "number" && Number.isInteger(body.intValue) ? body.intValue : undefined;
     if (numericValue === undefined && intValue === undefined) {
