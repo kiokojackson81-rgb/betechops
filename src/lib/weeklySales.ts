@@ -93,8 +93,9 @@ export async function recomputeWeeklySalesCommission(opts: {
   });
 
   const detailValue = existingLedger?.detail;
-  const nextDetail = isRecord(detailValue) ? { ...detailValue } : {};
-  const previousWeekly = isRecord(nextDetail.onlineWeekly) ? nextDetail.onlineWeekly : null;
+  const nextDetail: Record<string, any> = isRecord(detailValue) ? { ...detailValue } : {};
+  const prevWeeklyRaw = nextDetail.onlineWeekly;
+  const previousWeekly = isRecord(prevWeeklyRaw) ? prevWeeklyRaw : null;
   const previousCommission =
     typeof previousWeekly?.commission === "number"
       ? previousWeekly.commission
