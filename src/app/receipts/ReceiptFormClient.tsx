@@ -25,7 +25,7 @@ const newItem = (): ItemRow => ({
   warranty: warrantyOptions[0],
 });
 
-const generateSerial = () => `R-${Date.now().toString(36).toUpperCase()}`;
+const generateSerial = () => `Betech${Math.floor(Date.now() / 1000)}`;
 
 export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {
   const [attendants, setAttendants] = useState<Array<{ id: string; name: string }>>([]);
@@ -37,9 +37,9 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
-  const [showTax, setShowTax] = useState<boolean>(true);
+  const [showTax, setShowTax] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
-  const [showDiscount, setShowDiscount] = useState<boolean>(false);
+  const [showDiscount, setShowDiscount] = useState<boolean>(true);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
   const [warrantyText, setWarrantyText] = useState<string>("");
@@ -128,11 +128,18 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
     <div className="mx-auto max-w-6xl p-6 space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold">Betech Printable Docs – Receipt / Invoice / Quotation</h1>
-          <p className="text-sm text-slate-300">Fill in customer details, then save to system or print / save as PDF.</p>
+          <h1 className="text-3xl font-semibold">Betech Sales Ops</h1>
+          <p className="text-sm text-slate-300">Unified Receipt, Quotation & Documentation Suite for Betech Operations.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">Betech Receipts Module</span>
+          <button
+            type="button"
+            onClick={() => window.location.assign("/receipts?view=list")}
+            className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-1.5 text-xs font-medium text-emerald-200 shadow-sm"
+          >
+            View Receipts
+          </button>
         </div>
       </header>
 
@@ -164,9 +171,9 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
             <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs uppercase tracking-wide text-slate-400">Served by (Attendant)</label>
+            <label className="text-xs uppercase tracking-wide text-slate-400">Served by (Sales Person)</label>
             <select value={attendantId ?? ""} onChange={(e) => setAttendantId(e.target.value || null)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100">
-              <option value="">Select attendant</option>
+              <option value="">Select Sales Person</option>
               {attendants.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
@@ -212,7 +219,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         <div className="space-y-2">
           {items.map((it) => (
             <div key={it.id} className="grid gap-2 md:grid-cols-6 items-center border-b border-slate-800 pb-2">
-              <input className="col-span-2 rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500 px-3 py-2" value={it.title} onChange={(e) => updateRow(it.id, { title: e.target.value })} placeholder="Item description" />
+              <textarea className="col-span-2 rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500 px-3 py-2 min-h-[52px]" value={it.title} onChange={(e) => updateRow(it.id, { title: e.target.value })} placeholder="Item description (can include multiple parts)" />
               <input type="number" min={1} className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 px-3 py-2" value={it.quantity} onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })} />
               <input type="number" min={0} className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 px-3 py-2" value={it.unitPrice as any} onChange={(e) => updateRow(it.id, { unitPrice: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="Unit price" />
               {showSerials ? (
