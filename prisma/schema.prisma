@@ -29,6 +29,7 @@ model User {
   dailyReports                DailyReport[]
   marketingEntries            MarketingDailyEntry[]
   orders                      Order[]
+  issuedReceipts              Receipt[]                    @relation("issuedBy")
   returnsApproved             ReturnCase[]                  @relation("ReturnApprovedBy")
   returnsCreated              ReturnCase[]                  @relation("ReturnCreatedBy")
   evidenceTaken               ReturnEvidence[]              @relation("EvidenceTaker")
@@ -44,6 +45,10 @@ model User {
   marketplaceReturnsAttended   MarketplaceReturn[] @relation("MarketplaceReturn_attendant")
   marketplaceReturnsProcessed  MarketplaceReturn[] @relation("MarketplaceReturn_processedBy")
   marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[] @relation("MarketplaceReturnAttachment_uploadedBy")
+  // One-to-one balance for commission payouts
+  balance                     Balance?
+  // Commission records assigned to this attendant
+  commissionRecords           CommissionRecord[]
 }
 
 model AttendantActivity {
@@ -406,6 +411,12 @@ model Order {
   items          OrderItem[]
   returnCases    ReturnCase[]
   settlementRows SettlementRow[]
+  // One-to-one receipt created for this order (if any)
+  receipt        Receipt?
+  // Commission records created for this order
+  commissionRecords CommissionRecord[]
+  // Optional layaway plan attached to this order
+  layawayPlan    LayawayPlan?
 }
 
 model OrderItem {
@@ -422,6 +433,8 @@ model OrderItem {
   returnAdjustments  ReturnAdjustment[]
   returnCases        ReturnCase[]
   settlementRows     SettlementRow[]
+  serial             String?
+  warranty           String?
 }
 
 /// Commission configuration and snapshots
@@ -707,6 +720,19 @@ model CommissionLedger {
   @@unique([userId, periodStart, periodEnd], name: "userId_periodStart_periodEnd")
 }
 
+model Balance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  available Decimal  @default(0) @db.Decimal(14, 2)
+  pending   Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
 model Reconciliation {
   id           String   @id @default(cuid())
   shopId       String
@@ -876,6 +902,94 @@ enum AttendantCategory_new {
   senior
   assistant
   manager
+}
+// Receipt and layaway models for unified receipts system
+
+enum DocType {
+  RECEIPT
+  INVOICE
+  QUOTATION
+  LAYAWAY
+}
+
+enum CommissionRecordStatus {
+  PENDING
+  RELEASED
+}
+
+model CommissionRecord {
+  id          String                 @id @default(cuid())
+  orderId     String
+  attendantId String?
+  amount      Decimal?               @db.Decimal(14, 2)
+  status      CommissionRecordStatus @default(PENDING)
+  periodId    String?
+  releasedAt  DateTime?
+  data        Json?
+  createdAt   DateTime               @default(now())
+
+  order       Order                  @relation(fields: [orderId], references: [id])
+  attendant   User?                  @relation(fields: [attendantId], references: [id])
+}
+
+model Receipt {
+  id                   String   @id @default(cuid())
+  orderId              String   @unique
+  order                Order    @relation(fields: [orderId], references: [id])
+  docType              DocType
+  generatedAt          DateTime @default(now())
+  issuedById           String?
+  issuedBy             User?    @relation("issuedBy", fields: [issuedById], references: [id])
+  taxRate              Decimal? @db.Decimal(6, 2)
+  discount             Decimal? @db.Decimal(12, 2)
+  showTax              Boolean  @default(false)
+  showDiscount         Boolean  @default(false)
+  paymentDetailsShown  Boolean  @default(false)
+  notes                String?
+  warrantyText         String?
+  totals               Json?
+  data                 Json?
+  createdAt            DateTime @default(now())
+  // Attached files (PDFs, etc.)
+  files                ReceiptFile[]
+}
+
+model ReceiptFile {
+  id          String   @id @default(cuid())
+  receiptId   String
+  key         String?  // S3 key when stored in S3
+  url         String   // public or presigned URL
+  contentType String?
+  size        Int?
+  uploadedBy  String?  // user id
+  uploadedAt  DateTime @default(now())
+  expiresAt   DateTime?
+
+  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+}
+
+model LayawayPlan {
+  id         String          @id @default(cuid())
+  orderId    String          @unique
+  order      Order           @relation(fields: [orderId], references: [id])
+  deposit    Decimal         @db.Decimal(14, 2) @default("0")
+  balance    Decimal         @db.Decimal(14, 2) @default("0")
+  isComplete Boolean         @default(false)
+  payments   LayawayPayment[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model LayawayPayment {
+  id      String    @id @default(cuid())
+  planId  String
+  plan    LayawayPlan @relation(fields: [planId], references: [id])
+  amount  Decimal   @db.Decimal(14, 2)
+  paidAt  DateTime  @default(now())
+  method  String?
+  ref     String?
 }
 
 // Marketplace online ops enums and models (added from migration)

@@ -266,7 +266,47 @@ export async function POST(req: Request) {
     // Only admins see period profit
     if (isAdmin) periodSummary.periodProfit = periodProfit;
 
-    return NextResponse.json({ todaySummary, periodSummary }, { status: 201 });
+    // Persist unified receipts/orders so marketing tracker sales become canonical receipts
+    const createdReceiptLinks: string[] = [];
+    try {
+      for (const r of entry.receipts) {
+        try {
+          const payload = {
+            docType: 'RECEIPT',
+            customerName: null,
+            items: (r.items || []).map((it: any) => ({ title: it.productName || 'Item', unitPrice: Number(it.buyingPrice || 0) || 0, quantity: 1 })),
+            taxRate: 0,
+            showTax: false,
+            showDiscount: false,
+            paymentDetailsShown: false,
+            notes: `Imported from marketing entry ${entry.id}`,
+            marketingEntryId: entry.id,
+            marketingReceiptId: r.id,
+            attendantId: actorId,
+            serial: r.receiptNumber || `M-${entry.id}-${r.id}`,
+          } as any;
+
+          const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || `https://${(new URL(req.url)).host}`;
+          const apiUrl = `${site.replace(/\/$/, '')}/api/receipts`;
+          const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (res.ok) {
+            const json = await res.json();
+            const receiptId = json?.receiptId || json?.receipt?.id;
+            if (receiptId) createdReceiptLinks.push(`${site.replace(/\/$/, '')}/receipts/${receiptId}`);
+          } else {
+            const txt = await res.text();
+            console.error('Failed to sync marketing receipt to unified receipts', res.status, txt);
+          }
+        } catch (innerErr) {
+          // Do not fail the main marketing submission if the receipt sync fails; log and continue
+          console.error('Failed to sync marketing receipt to unified receipts', innerErr);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to persist unified receipts for marketing entry', e);
+    }
+
+    return NextResponse.json({ todaySummary, periodSummary, createdReceiptLinks }, { status: 201 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to save marketing entry";
     console.error("marketing daily submit failed", err);
