@@ -25,14 +25,15 @@ const newItem = (): ItemRow => ({
   warranty: warrantyOptions[0],
 });
 
+const generateSerial = () => `R-${Date.now().toString(36).toUpperCase()}`;
+
 export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {
   const [attendants, setAttendants] = useState<Array<{ id: string; name: string }>>([]);
   const [attendantId, setAttendantId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
-  const [serial, setSerial] = useState<string>("");
+  const [serial, setSerial] = useState<string>(generateSerial());
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
-  const [customerEmail, setCustomerEmail] = useState<string>("");
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
   const [showTax, setShowTax] = useState<boolean>(true);
@@ -42,10 +43,8 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [notes, setNotes] = useState<string>("");
   const [warrantyText, setWarrantyText] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
-  const [showSerials, setShowSerials] = useState<boolean>(true);
-  const [showWarranty, setShowWarranty] = useState<boolean>(true);
-  const [sendEmail, setSendEmail] = useState<boolean>(false);
-  const [sendWhatsapp, setSendWhatsapp] = useState<boolean>(false);
+  const [showSerials, setShowSerials] = useState<boolean>(false);
+  const [showWarranty, setShowWarranty] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -53,7 +52,12 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       try {
         const res = await fetch("/api/users?role=ATTENDANT");
         const json = await res.json();
-        if (Array.isArray(json?.users)) setAttendants(json.users.map((u: any) => ({ id: u.id, name: u.name || u.email })));
+        if (Array.isArray(json?.users)) {
+          const parsed = json.users.map((u: any) => ({ id: u.id, name: u.name || u.email }));
+          setAttendants(parsed);
+          const jen = parsed.find((u) => (u.name || "").toLowerCase().startsWith("jeniffer"));
+          setAttendantId(jen?.id || parsed[0]?.id || null);
+        }
       } catch (e) {
         // ignore
       }
@@ -81,7 +85,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         date: new Date().toISOString(),
         customerName,
         customerPhone,
-        customerEmail,
         attendantId,
         issuedById: attendantId,
         taxRate,
@@ -100,8 +103,8 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           warranty: showWarranty ? it.warranty || null : null,
         })),
         sendChannels: {
-          email: sendEmail,
-          whatsapp: sendWhatsapp,
+          email: false,
+          whatsapp: false,
         },
       };
 
@@ -155,7 +158,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="text-xs uppercase tracking-wide text-slate-400">Serial / Receipt No.</label>
-            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Serial" />
+            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Serial" readOnly />
           </div>
           <div>
             <label className="text-xs uppercase tracking-wide text-slate-400">Customer Name</label>
@@ -168,18 +171,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">Customer Email (for sending)</label>
-            <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="email@example.com" />
-          </div>
-          <div className="flex items-end gap-4">
-            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
-              <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-              Send via e-mail
-            </label>
-            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
-              <input type="checkbox" checked={sendWhatsapp} onChange={(e) => setSendWhatsapp(e.target.checked)} />
-              Send via WhatsApp
-            </label>
+            {/* Customer email and send toggles removed per requirements */}
           </div>
         </div>
       </div>
@@ -248,17 +240,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
               <p className="text-xs text-slate-500">Balance auto-computed from total.</p>
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-xs uppercase tracking-wide text-slate-400">Warranty note</label>
-          <Input className="rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500" value={warrantyText} onChange={(e) => setWarrantyText(e.target.value)} placeholder="Global warranty text (optional)" />
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-wide text-slate-400">General notes / terms</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 placeholder-slate-500 p-3 h-full min-h-[60px]" />
         </div>
       </div>
 
