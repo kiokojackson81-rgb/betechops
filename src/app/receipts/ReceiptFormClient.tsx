@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Input from "@/app/_components/Input";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
+import { generateReceiptSerial } from "@/lib/id";
 
 type ItemRow = {
   id: string;
@@ -25,13 +26,12 @@ const newItem = (): ItemRow => ({
 });
 
 export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {  
-  const [attendants, setAttendants] = useState<Array<{ id: string; name: string }>>([]);
+  const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
   const [attendantId, setAttendantId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
-  const [serial, setSerial] = useState<string>("");
+  const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
-  const [customerEmail, setCustomerEmail] = useState<string>("");
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
   const [showTax, setShowTax] = useState<boolean>(true);
@@ -39,24 +39,42 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
-  const [warrantyText, setWarrantyText] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(true);
-  const [showWarranty, setShowWarranty] = useState<boolean>(true);
-  const [sendEmail, setSendEmail] = useState<boolean>(false);
-  const [sendWhatsapp, setSendWhatsapp] = useState<boolean>(false);
+  const [showWarranty, setShowWarranty] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/users?role=ATTENDANT");
-        const json = await res.json();
-        if (Array.isArray(json?.users)) setAttendants(json.users.map((u: any) => ({ id: u.id, name: u.name || u.email })));
+        const res = await fetch("/api/users?roles=ATTENDANT");
+        const json = await res.json().catch(() => null);
+        const rows = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.users)
+            ? json.users
+            : [];
+        if (cancelled) return;
+        const mapped = rows
+          .filter((u: any) => u && u.id)
+          .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id, email: u.email ?? null }));
+        setAttendants(mapped);
+        if (mapped.length) {
+          setAttendantId((prev) => {
+            if (prev) return prev;
+            const jeniffer = mapped.find((att) => {
+              const haystack = `${att.name || ""} ${att.email || ""}`.toLowerCase();
+              return haystack.includes("jeniffer");
+            });
+            return (jeniffer ?? mapped[0]).id;
+          });
+        }
       } catch (e) {
         // ignore
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const addRow = () => setItems((s) => [...s, newItem()]);
@@ -79,7 +97,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         date: new Date().toISOString(),
         customerName,
         customerPhone,
-        customerEmail,
         attendantId,
         issuedById: attendantId,
         taxRate,
@@ -88,7 +105,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         showDiscount,
         paymentDetailsShown,
         notes,
-        warrantyText,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
         items: items.map((it) => ({
           title: it.title,
@@ -97,10 +113,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           serial: showSerials ? it.serial || null : null,
           warranty: showWarranty ? it.warranty || null : null,
         })),
-        sendChannels: {
-          email: sendEmail,
-          whatsapp: sendWhatsapp,
-        },
       };
 
       const res = await fetch("/api/receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" });
@@ -110,6 +122,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       }
       showToast("Saved receipt", "success");
       onCreated?.(data);
+      setSerial(generateReceiptSerial());
       setTimeout(() => window.print(), 300);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
@@ -146,8 +159,18 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
       <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="text-sm">Serial / Receipt No.</label>
-          <Input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Serial" />
+          <label className="text-sm flex items-center justify-between">
+            <span>Serial / Receipt No.</span>
+            <button
+              type="button"
+              className="text-xs text-emerald-600 hover:underline"
+              onClick={() => setSerial(generateReceiptSerial())}
+            >
+              Regenerate
+            </button>
+          </label>
+          <Input value={serial} readOnly placeholder="Auto-generated" className="bg-slate-50 text-slate-600" />
+          <p className="text-xs text-slate-500 mt-1">Generated automatically for receipts, invoices, quotations and layaway.</p>
         </div>
         <div>
           <label className="text-sm">Customer Name</label>
@@ -156,22 +179,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         <div>
           <label className="text-sm">Customer Phone</label>
           <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." />
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-sm">Customer Email (for sending)</label>
-          <Input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="email@example.com" />
-        </div>
-        <div className="flex items-end gap-3">
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-            Send via e-mail
-          </label>
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={sendWhatsapp} onChange={(e) => setSendWhatsapp(e.target.checked)} />
-            Send via WhatsApp
-          </label>
         </div>
       </div>
 
@@ -242,15 +249,9 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-sm">Warranty note</label>
-          <Input value={warrantyText} onChange={(e) => setWarrantyText(e.target.value)} placeholder="Global warranty text (optional)" />
-        </div>
-        <div>
-          <label className="text-sm">General notes / terms</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded border p-2 h-full min-h-[60px]" />
-        </div>
+      <div>
+        <label className="text-sm">General notes / terms</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded border p-2 min-h-[60px]" />
       </div>
 
       <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -5,10 +5,7 @@ import { requireAttendant, auth } from "@/lib/auth";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
-
-function genId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
+import { generateRandomId, generateReceiptSerial } from "@/lib/id";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   const payload = (await req.json()) as any;
 
-  const serial = String(payload?.serial || `R-${genId()}`);
+  const serial = String(payload?.serial || generateReceiptSerial());
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
   const attendantId = payload?.attendantId ?? payload?.servedBy ?? null;
   const issuedById = payload?.issuedById ?? (guard.ok ? guard.user.id : null);
@@ -131,7 +128,7 @@ export async function POST(req: NextRequest) {
         const title = String(it.title || it.product || it.name || "Item").slice(0, 255);
         let product = await tx.product.findFirst({ where: { name: title } });
         if (!product) {
-          product = await tx.product.create({ data: { sku: `manual-${genId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
+          product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
         }
         createdItems.push({ product, qty: Number(it.quantity || 1), unitPrice: Number(it.unitPrice || it.sellingPrice || 0), serial: it.serial, warranty: it.warranty, title });
       }
