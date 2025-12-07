@@ -72,6 +72,11 @@ export function useCardLock(storageKey: string) {
   const lock = () => setLocked(true);
 
   const unlock = () => {
+    if (typeof window !== "undefined") {
+      // debug: log attempt to unlock and current session/status
+      // eslint-disable-next-line no-console
+      console.debug("useCardLock: unlock() called", { storageKey, status, hasSession: !!session });
+    }
     // If session still loading, optimistically unlock and let downstream values render.
     if (status === "loading") {
       setLocked(false);
@@ -91,6 +96,8 @@ export function useCardLock(storageKey: string) {
     if (status === "unauthenticated") {
       if (typeof window !== "undefined") {
         const cb = encodeURIComponent(window.location.pathname + window.location.search);
+        // eslint-disable-next-line no-console
+        console.debug("useCardLock: redirecting to login", { callbackUrl: cb });
         window.location.href = `/attendant/login?callbackUrl=${cb}`;
       }
     }
