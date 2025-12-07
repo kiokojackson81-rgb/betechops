@@ -1,147 +1,146 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { getActorId } from '@/lib/api';
+import { requireRole } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const session = await auth();
-  const role = (session as any)?.user?.role;
-  if (role !== "ADMIN") {
-    throw new NextResponse(JSON.stringify({ error: "Forbidden" }), { status: 403 });
-  }
-}
-
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params;
-  try {
-    const receipt = await prisma.receipt.findUnique({ where: { id }, include: { order: { include: { items: true } }, issuedBy: true } });
-    if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ receipt });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: params.id },
+    include: {
+      order: {
+        include: {
+          items: true,
+          attendant: { select: { id: true, name: true, email: true } },
+          layawayPlan: { include: { payments: true } },
+        },
+      },
+      issuedBy: { select: { id: true, name: true, email: true } },
+    },
+  });
+  if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ receipt });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const guard = await requireRole(["ADMIN"]);
+  if (!guard.ok) return guard.res;
+  const actorId = (guard.session?.user as any)?.id ?? null;
+
+  const body = await req.json().catch(() => ({}));
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const taxRate = Number(body?.taxRate || 0);
+  const showTax = Boolean(body?.showTax);
+  const discount = Number(body?.discount || 0);
+  const showDiscount = Boolean(body?.showDiscount);
+  const paymentDetailsShown = Boolean(body?.paymentDetailsShown);
+  const notes = body?.notes ?? null;
+  const warrantyText = body?.warrantyText ?? null;
+
+  const subtotal = items.reduce((sum: number, it: any) => sum + Number(it.quantity || 1) * Number(it.unitPrice || it.sellingPrice || 0), 0);
+  const taxAmount = showTax ? subtotal * (taxRate / 100) : 0;
+  const total = subtotal + taxAmount - discount;
+
   try {
-    await requireAdmin();
-  } catch (res) {
-    if (res instanceof NextResponse) return res;
-    throw res;
-  }
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.receipt.findUnique({
+        where: { id: params.id },
+        include: { order: { include: { items: true, layawayPlan: true } } },
+      });
+      if (!existing) throw new Error("Receipt not found");
+      const docType = body?.docType ? String(body.docType).toUpperCase() : String(existing.docType);
+      const layawayDeposit = Number(existing.order?.layawayPlan?.deposit ?? existing.order?.paidAmount ?? 0);
+      const paidAmount = docType === "LAYAWAY" ? layawayDeposit : total;
 
-  const { id } = params;
-  const body = (await req.json()) as any;
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const receipt = await tx.receipt.findUnique({ where: { id }, include: { order: true } });
-      if (!receipt) throw new Error("Receipt not found");
-
-      const orderId = receipt.orderId;
-
-      // fetch existing items for diff/audit
-      const oldItems = await tx.orderItem.findMany({ where: { orderId } });
-
-      // handle item replacement if provided
-      let newItems: any[] = [];
-      if (Array.isArray(body.items)) {
-        // delete existing
-        await tx.orderItem.deleteMany({ where: { orderId } });
-        for (const it of body.items) {
-          const title = String(it.title || it.name || "Item").slice(0, 255);
-          let product = await tx.product.findFirst({ where: { name: title } });
-          if (!product) {
-            product = await tx.product.create({ data: { sku: `manual-${Date.now()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
-          }
-          const created = await tx.orderItem.create({ data: { orderId, productId: product.id, quantity: Number(it.quantity || 1), sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0, serial: it.serial ?? null, warranty: it.warranty ?? null } });
-          newItems.push({ ...created, title: product.name });
+      // refresh products + items
+      await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
+      for (const it of items) {
+        const title = String(it.title || it.product || it.productName || "Item").slice(0, 255);
+        let product = await tx.product.findFirst({ where: { name: title } });
+        if (!product) {
+          product = await tx.product.create({
+            data: {
+              sku: `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+              name: title,
+              category: "manual",
+              sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
+            },
+          });
         }
-      } else {
-        newItems = oldItems;
+        await tx.orderItem.create({
+          data: {
+            orderId: existing.orderId,
+            productId: product.id,
+            quantity: Number(it.quantity || 1),
+            sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
+            serial: it.serial ?? null,
+            warranty: it.warranty ?? null,
+          },
+        });
       }
 
-      // recalc totals from items
-      const items = await tx.orderItem.findMany({ where: { orderId } });
-      const subtotal = items.reduce((s, it) => s + Number(it.sellingPrice || 0) * (it.quantity || 1), 0);
-      const taxRate = body.taxRate !== undefined ? Number(body.taxRate) : Number((receipt.taxRate as any) || 0);
-      const tax = body.showTax || receipt.showTax ? (subtotal * (taxRate / 100)) : 0;
-      const discount = body.discount !== undefined ? Number(body.discount) : Number((receipt.discount as any) || 0);
-      const total = subtotal + tax - discount;
+      // update order basics
+      await tx.order.update({
+        where: { id: existing.orderId },
+        data: {
+          customerName: body?.customerName ?? undefined,
+          customerPhone: body?.customerPhone ?? undefined,
+          customerEmail: body?.customerEmail ?? undefined,
+          attendantId: body?.attendantId ?? undefined,
+          totalAmount: total,
+          paidAmount,
+        },
+      });
 
-      // update order totals
-      await tx.order.update({ where: { id: orderId }, data: { totalAmount: Number(total) } as any });
-
-      // update receipt fields
-      const updateData: any = {};
-      const allowed = ['notes', 'taxRate', 'discount', 'showTax', 'showDiscount', 'paymentDetailsShown', 'warrantyText'];
-      for (const k of allowed) if (body[k] !== undefined) updateData[k] = body[k];
-      updateData.totals = { subtotal, tax, total };
-      updateData.data = { ...(receipt.data as any), ...(body.data || {}) };
-
-      const updated = await tx.receipt.update({ where: { id }, data: updateData });
-
-      // compute item-level diffs for audit purposes
-      const diffs: any = { added: [], removed: [], updated: [] };
-      const mapOldBySerial: Record<string, any[]> = {};
-      for (const oi of oldItems) {
-        const key = (oi.serial || '') || `${oi.productId}`;
-        (mapOldBySerial[key] = mapOldBySerial[key] || []).push(oi);
-      }
-      const mapNewBySerial: Record<string, any[]> = {};
-      for (const ni of newItems) {
-        const key = (ni.serial || '') || `${ni.productId}`;
-        (mapNewBySerial[key] = mapNewBySerial[key] || []).push(ni);
-      }
-      // detect removed
-      for (const key of Object.keys(mapOldBySerial)) {
-        if (!mapNewBySerial[key]) diffs.removed.push(...mapOldBySerial[key]);
-      }
-      // detect added
-      for (const key of Object.keys(mapNewBySerial)) {
-        if (!mapOldBySerial[key]) diffs.added.push(...mapNewBySerial[key]);
-      }
-      // detect updates where present in both
-      for (const key of Object.keys(mapNewBySerial)) {
-        if (mapOldBySerial[key]) {
-          const olds = mapOldBySerial[key];
-          const news = mapNewBySerial[key];
-          // compare lengths or fields
-          for (let i = 0; i < Math.min(olds.length, news.length); i++) {
-            const o = olds[i];
-            const n = news[i];
-            const changes: any = {};
-            if (o.quantity !== n.quantity) changes.quantity = { before: o.quantity, after: n.quantity };
-            if (String(o.sellingPrice) !== String(n.sellingPrice)) changes.sellingPrice = { before: o.sellingPrice, after: n.sellingPrice };
-            if ((o.serial || '') !== (n.serial || '')) changes.serial = { before: o.serial, after: n.serial };
-            if ((o.warranty || '') !== (n.warranty || '')) changes.warranty = { before: o.warranty, after: n.warranty };
-            if (Object.keys(changes).length) diffs.updated.push({ before: o, after: n, changes });
-          }
-        }
+      if (existing.order?.layawayPlan) {
+        const balance = Math.max(0, total - Number(existing.order.layawayPlan.deposit || 0));
+        await tx.layawayPlan.update({
+          where: { id: existing.order.layawayPlan.id },
+          data: { balance, isComplete: balance <= 0 },
+        });
       }
 
-      // write action log with diff details
+      const updatedReceipt = await tx.receipt.update({
+        where: { id: params.id },
+        data: {
+          taxRate: taxRate || null,
+          discount: discount || null,
+          showTax,
+          showDiscount,
+          paymentDetailsShown,
+          notes,
+          warrantyText,
+          totals: {
+            subtotal,
+            tax: taxAmount,
+            total,
+            balance: existing.order?.layawayPlan ? Math.max(0, total - Number(existing.order.layawayPlan.deposit || 0)) : 0,
+          },
+          data: { ...(existing.data as any), ...body, totals: { subtotal, tax: taxAmount, total } },
+        },
+      });
+
       try {
-        const actorId = (await getActorId()) || (await auth())?.user?.id || 'system';
-        await tx.actionLog.create({ data: { actorId, entity: 'Receipt', entityId: id, action: 'PATCH', before: { receipt, items: oldItems }, after: { updated, items }, } });
-        // separate log entry for item diffs
-        if (diffs.added.length || diffs.removed.length || diffs.updated.length) {
-          await tx.actionLog.create({ data: { actorId, entity: 'OrderItem', entityId: orderId, action: 'PATCH_ITEMS', before: oldItems, after: items, } });
-        }
-      } catch (e) {
-        // best-effort
-        try { console.error('Failed to write audit logs', e); } catch {}
+        await tx.actionLog.create({
+          data: {
+            actorId: actorId ?? "system",
+            entity: "Receipt",
+            entityId: params.id,
+            action: "UPDATE",
+            before: existing as any,
+            after: updatedReceipt as any,
+          },
+        });
+      } catch {
+        // best-effort audit log
       }
 
-      return updated;
+      return updatedReceipt;
     });
 
-    return NextResponse.json({ ok: true, receipt: result });
+    return NextResponse.json({ ok: true, receipt: updated });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
+    const msg = err instanceof Error ? err.message : "Failed to update receipt";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

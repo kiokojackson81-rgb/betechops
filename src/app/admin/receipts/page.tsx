@@ -1,22 +1,22 @@
-import React from 'react';
-import ReceiptsAdminClient from './ReceiptsAdminClient';
+import React from "react";
+import ReceiptsAdminClient from "@/app/receipts/list/ReceiptsAdminClient";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function AdminReceiptsPage() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
   try {
-    const res = await fetch(`${base}/api/receipts/list?includeItems=true`, { cache: 'no-store' });
+    const res = await fetch(`${base}/api/receipts/list?includeItems=true`, { cache: "no-store" });
     const j = await res.json();
     const receipts = j.receipts || [];
     return (
-      <div className="p-4 max-w-5xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-4">Admin — Receipts</h1>
-        <ReceiptsAdminClient initial={receipts} />
+      <div className="mx-auto max-w-5xl p-4">
+        <h1 className="mb-4 text-2xl font-semibold">Admin - Receipts</h1>
+        <ReceiptsAdminClient initial={receipts} allowEdit />
       </div>
     );
   } catch (e) {
-    console.error('Failed to load receipts for admin page', e);
-    return (<div className="p-4">Failed to load receipts</div>);
+    console.error("Failed to load receipts for admin page", e);
+    return <div className="p-4">Failed to load receipts</div>;
   }
 }

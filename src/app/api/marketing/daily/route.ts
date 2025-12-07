@@ -271,10 +271,17 @@ export async function POST(req: Request) {
     try {
       for (const r of entry.receipts) {
         try {
+          const items = (r.items || []);
+          const perItemValue = items.length > 0 ? Number(r.sellingTotal || 0) / items.length : Number(r.sellingTotal || 0);
           const payload = {
             docType: 'RECEIPT',
-            customerName: null,
-            items: (r.items || []).map((it: any) => ({ title: it.productName || 'Item', unitPrice: Number(it.buyingPrice || 0) || 0, quantity: 1 })),
+            customerName: entry.submittedByName || null,
+            customerPhone: null,
+            items: items.map((it: any) => ({
+              title: it.productName || 'Item',
+              unitPrice: perItemValue || Number(it.buyingPrice || 0) || 0,
+              quantity: 1,
+            })),
             taxRate: 0,
             showTax: false,
             showDiscount: false,

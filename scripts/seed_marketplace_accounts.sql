@@ -25,7 +25,7 @@ BEGIN
 
   -- 1) Betech Store (JUMIA) - Benjamin (SUPERVISOR)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Betech Store' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = 'e20e8623-e422-4566-a08a-37751f4bc759') OR ("displayName" = 'Betech Store' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('Betech Store','JUMIA','e20e8623-e422-4566-a08a-37751f4bc759','KE','KES', true)
@@ -55,7 +55,7 @@ BEGIN
 
   -- 2) Hitech Power (JUMIA) - Benjamin
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Hitech Power' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = '8c0e5ed0-8eb7-49c6-982c-1acdfef94d37') OR ("displayName" = 'Hitech Power' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('Hitech Power','JUMIA','8c0e5ed0-8eb7-49c6-982c-1acdfef94d37','KE','KES', true)
@@ -83,7 +83,7 @@ BEGIN
 
   -- 3) Sky Store Ke (JUMIA) - Benjamin
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Sky Store Ke' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = 'cd95a840-f194-4f49-88fd-848f2c59456f') OR ("displayName" = 'Sky Store Ke' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('Sky Store Ke','JUMIA','cd95a840-f194-4f49-88fd-848f2c59456f','KE','KES', true)
@@ -111,7 +111,7 @@ BEGIN
 
   -- 4) LabTech Kenya (JUMIA) - Benjamin
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'LabTech Kenya' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = '3579f345-a3ac-4e9d-b355-1990f0ad8a54') OR ("displayName" = 'LabTech Kenya' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('LabTech Kenya','JUMIA','3579f345-a3ac-4e9d-b355-1990f0ad8a54','KE','KES', true)
@@ -139,7 +139,7 @@ BEGIN
 
   -- 5) JM Latest Collections (JUMIA) - Stephen (JUMIA_KILIMALL_OPS)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'JM Latest Collections' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = 'f7df0953-7c18-4191-b304-614f9f0987a4') OR ("displayName" = 'JM Latest Collections' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('JM Latest Collections','JUMIA','f7df0953-7c18-4191-b304-614f9f0987a4','KE','KES', true)
@@ -167,7 +167,7 @@ BEGIN
 
   -- 6) Betech Solar Solution (JUMIA) - Stephen
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Betech Solar Solution' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = 'b2a290cc-74fd-4b9e-a598-ef42fc57f918') OR ("displayName" = 'Betech Solar Solution' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('Betech Solar Solution','JUMIA','b2a290cc-74fd-4b9e-a598-ef42fc57f918','KE','KES', true)
@@ -195,7 +195,7 @@ BEGIN
 
   -- 7) Maxton Enterprise (JUMIA) - Stephen
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Maxton Enterprise' AND "platform" = 'JUMIA' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE ("platform" = 'JUMIA' AND "jumiaShopSid" = '61e52422-f98e-49da-87e2-f9c832bf1a04') OR ("displayName" = 'Maxton Enterprise' AND "platform" = 'JUMIA') LIMIT 1;
   IF acc_id IS NULL THEN
     INSERT INTO "MarketplaceAccount" ("displayName","platform","jumiaShopSid","countryCode","currency","isActive")
     VALUES ('Maxton Enterprise','JUMIA','61e52422-f98e-49da-87e2-f9c832bf1a04','KE','KES', true)
@@ -244,82 +244,82 @@ BEGIN
 
   -- 9) Hitech Access (KILIMALL)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "marketplaceAccount" WHERE "displayName" = 'Hitech Access' AND "platform" = 'KILIMALL' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Hitech Access' AND "platform" = 'KILIMALL' LIMIT 1;
   IF acc_id IS NULL THEN
-    INSERT INTO "marketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
+    INSERT INTO "MarketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
     VALUES ('Hitech Access','KILIMALL','HITECH_ACCESS','KE','KES', true)
     RETURNING id INTO acc_id;
   ELSE
-    UPDATE "marketplaceAccount"
+    UPDATE "MarketplaceAccount"
     SET "kilimallShopCode"='HITECH_ACCESS', "countryCode"='KE', "currency"='KES', "isActive"=true
     WHERE id = acc_id;
   END IF;
-  UPDATE "marketplaceAccountAssignment" SET "endsAt" = NULL
+  UPDATE "MarketplaceAccountAssignment" SET "endsAt" = NULL
     WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS';
-  IF NOT EXISTS (SELECT 1 FROM "marketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
-    INSERT INTO "marketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
+  IF NOT EXISTS (SELECT 1 FROM "MarketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
+    INSERT INTO "MarketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
     VALUES (acc_id, ste_id, 'JUMIA_KILIMALL_OPS', NOW());
   END IF;
 
   -- 10) Betech Solar Kilimall (KILIMALL)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "marketplaceAccount" WHERE "displayName" = 'Betech Solar Kilimall' AND "platform" = 'KILIMALL' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Betech Solar Kilimall' AND "platform" = 'KILIMALL' LIMIT 1;
   IF acc_id IS NULL THEN
-    INSERT INTO "marketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
+    INSERT INTO "MarketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
     VALUES ('Betech Solar Kilimall','KILIMALL','BETECH_SOLAR_KILIMALL','KE','KES', true)
     RETURNING id INTO acc_id;
   ELSE
-    UPDATE "marketplaceAccount"
+    UPDATE "MarketplaceAccount"
     SET "kilimallShopCode"='BETECH_SOLAR_KILIMALL', "countryCode"='KE', "currency"='KES', "isActive"=true
     WHERE id = acc_id;
   END IF;
-  UPDATE "marketplaceAccountAssignment" SET "endsAt" = NULL
+  UPDATE "MarketplaceAccountAssignment" SET "endsAt" = NULL
     WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS';
-  IF NOT EXISTS (SELECT 1 FROM "marketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
-    INSERT INTO "marketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
+  IF NOT EXISTS (SELECT 1 FROM "MarketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
+    INSERT INTO "MarketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
     VALUES (acc_id, ste_id, 'JUMIA_KILIMALL_OPS', NOW());
   END IF;
 
   -- 11) JM Collection (KILIMALL)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "marketplaceAccount" WHERE "displayName" = 'JM Collection' AND "platform" = 'KILIMALL' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'JM Collection' AND "platform" = 'KILIMALL' LIMIT 1;
   IF acc_id IS NULL THEN
-    INSERT INTO "marketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
+    INSERT INTO "MarketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
     VALUES ('JM Collection','KILIMALL','JM_COLLECTION','KE','KES', true)
     RETURNING id INTO acc_id;
   ELSE
-    UPDATE "marketplaceAccount"
+    UPDATE "MarketplaceAccount"
     SET "kilimallShopCode"='JM_COLLECTION', "countryCode"='KE', "currency"='KES', "isActive"=true
     WHERE id = acc_id;
   END IF;
-  UPDATE "marketplaceAccountAssignment" SET "endsAt" = NULL
+  UPDATE "MarketplaceAccountAssignment" SET "endsAt" = NULL
     WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS';
-  IF NOT EXISTS (SELECT 1 FROM "marketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
-    INSERT INTO "marketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
+  IF NOT EXISTS (SELECT 1 FROM "MarketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
+    INSERT INTO "MarketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
     VALUES (acc_id, ste_id, 'JUMIA_KILIMALL_OPS', NOW());
   END IF;
 
   -- 12) Hitech Power Kilimall (KILIMALL)
   acc_id := NULL;
-  SELECT id INTO acc_id FROM "marketplaceAccount" WHERE "displayName" = 'Hitech Power Kilimall' AND "platform" = 'KILIMALL' LIMIT 1;
+  SELECT id INTO acc_id FROM "MarketplaceAccount" WHERE "displayName" = 'Hitech Power Kilimall' AND "platform" = 'KILIMALL' LIMIT 1;
   IF acc_id IS NULL THEN
-    INSERT INTO "marketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
+    INSERT INTO "MarketplaceAccount" ("displayName","platform","kilimallShopCode","countryCode","currency","isActive")
     VALUES ('Hitech Power Kilimall','KILIMALL','HITECH_POWER_KILIMALL','KE','KES', true)
     RETURNING id INTO acc_id;
   ELSE
-    UPDATE "marketplaceAccount"
+    UPDATE "MarketplaceAccount"
     SET "kilimallShopCode"='HITECH_POWER_KILIMALL', "countryCode"='KE', "currency"='KES', "isActive"=true
     WHERE id = acc_id;
   END IF;
-  UPDATE "marketplaceAccountAssignment" SET "endsAt" = NULL
+  UPDATE "MarketplaceAccountAssignment" SET "endsAt" = NULL
     WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS';
-  IF NOT EXISTS (SELECT 1 FROM "marketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
-    INSERT INTO "marketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
+  IF NOT EXISTS (SELECT 1 FROM "MarketplaceAccountAssignment" WHERE "accountId" = acc_id AND "attendantId" = ste_id AND "role" = 'JUMIA_KILIMALL_OPS') THEN
+    INSERT INTO "MarketplaceAccountAssignment" ("accountId","attendantId","role","startsAt")
     VALUES (acc_id, ste_id, 'JUMIA_KILIMALL_OPS', NOW());
   END IF;
 
   RAISE NOTICE 'Seeding complete.';
-END $$;
+END $$ LANGUAGE plpgsql;
 
 -- Notes:
 -- 1) The script expects the tables and columns named exactly as used above (case-sensitive with double quotes).

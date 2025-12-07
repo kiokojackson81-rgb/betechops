@@ -5,7 +5,7 @@
 -- Create enum DocType if not exists
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'doctype') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE lower(typname) = 'doctype') THEN
     CREATE TYPE "DocType" AS ENUM ('RECEIPT', 'INVOICE', 'QUOTATION', 'LAYAWAY');
   END IF;
 END$$;
@@ -13,8 +13,24 @@ END$$;
 -- Create enum CommissionRecordStatus if not exists
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'commissionrecordstatus') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE lower(typname) = 'commissionrecordstatus') THEN
     CREATE TYPE "CommissionRecordStatus" AS ENUM ('PENDING', 'RELEASED');
+  END IF;
+END$$;
+
+-- Add customer contact + metadata fields to Order if missing
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Order') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Order' AND column_name = 'customerPhone') THEN
+      ALTER TABLE "Order" ADD COLUMN "customerPhone" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Order' AND column_name = 'customerEmail') THEN
+      ALTER TABLE "Order" ADD COLUMN "customerEmail" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Order' AND column_name = 'metadata') THEN
+      ALTER TABLE "Order" ADD COLUMN "metadata" JSONB;
+    END IF;
   END IF;
 END$$;
 

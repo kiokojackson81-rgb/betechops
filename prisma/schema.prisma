@@ -398,6 +398,9 @@ model Order {
   id             String          @id @default(cuid())
   orderNumber    String          @unique
   customerName   String
+  customerPhone  String?
+  customerEmail  String?
+  metadata       Json?
   shopId         String
   attendantId    String?
   status         OrderStatus     @default(PENDING)

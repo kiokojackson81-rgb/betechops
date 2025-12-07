@@ -1,21 +1,21 @@
-import React from 'react';
+import React from "react";
+import ReceiptsAdminClient from "./list/ReceiptsAdminClient";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function ReceiptsPage() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || '';
-  const url = `${base}/api/receipts/list`;
-  const res = await fetch(url, { cache: 'no-store' });
-  let data: any = { receipts: [] };
+  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
   try {
-    data = await res.json();
-  } catch {}
-
-  return (
-    <div>
-      <h1>Receipts</h1>
-      <p>This page lists receipts (basic server-side view).</p>
-      <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(data.receipts || [], null, 2)}</pre>
-    </div>
-  );
+    const res = await fetch(`${base}/api/receipts/list?includeItems=true`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({ receipts: [] }));
+    return (
+      <div className="p-4">
+        <h1 className="mb-2 text-2xl font-semibold">Receipts</h1>
+        <p className="mb-4 text-sm text-slate-600">Search by date, phone, name or reference. Expand rows to view serials and warranties.</p>
+        <ReceiptsAdminClient initial={data.receipts || []} allowEdit={false} />
+      </div>
+    );
+  } catch {
+    return <div className="p-4">Failed to load receipts</div>;
+  }
 }
