@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       // clear existing order items for update case (simple approach)
       await tx.orderItem.deleteMany({ where: { orderId: orderUpsert.id } });
 
-      const createdOrderItems = [];
+      const createdOrderItems: any[] = [];
       for (const it of createdItems) {
         const item = await tx.orderItem.create({
           data: {
