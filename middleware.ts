@@ -69,6 +69,7 @@ export async function middleware(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const category = (token as any)?.attendantCategory ?? (token as any)?.user?.attendantCategory;
   const hasCategory = Boolean(category);
+  const alreadyRehydrated = url.searchParams.get("_rehydrated") === "1";
 
   // Temporary debug logging: record masked email, role and category for
   // requests that hit auth/post-login or attendant routes. These logs are
@@ -90,9 +91,10 @@ export async function middleware(req: NextRequest) {
   if (
     role !== "ADMIN" &&
     !hasCategory &&
+    !alreadyRehydrated &&
     (pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker"))
   ) {
-    const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search;
+    const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search + (req.nextUrl.search ? "&" : "?") + "_rehydrated=1";
     url.pathname = "/auth/post-login";
     url.searchParams.set("callbackUrl", originalPathWithQuery);
     return NextResponse.redirect(url);
