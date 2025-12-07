@@ -39,13 +39,20 @@ async function run() {
 
     // Evaluate final URL
     const final = new URL(url);
-    if (final.pathname.startsWith('/marketing/tracker') && final.searchParams.get('impersonateId')) {
-      console.log('SIGN-IN SMOKE OK: final page is marketing/tracker with impersonateId ->', final.href);
+    const acceptableTargets = [
+      { path: '/marketing/tracker', requireImpersonateId: true },
+      { path: '/attendant/online', requireImpersonateId: false },
+      { path: '/attendant/jumia-ops', requireImpersonateId: false },
+    ];
+    const match = acceptableTargets.find((entry) => final.pathname.startsWith(entry.path));
+
+    if (match && (!match.requireImpersonateId || final.searchParams.get('impersonateId'))) {
+      console.log('SIGN-IN SMOKE OK: final page', final.pathname, '->', final.href);
       await browser.close();
       process.exit(0);
     }
 
-    console.error('SIGN-IN SMOKE FAILED: final URL not marketing/tracker?impersonateId=... ->', final.href);
+    console.error('SIGN-IN SMOKE FAILED: unexpected final URL ->', final.href);
     await browser.close();
     process.exit(3);
   } catch (err) {

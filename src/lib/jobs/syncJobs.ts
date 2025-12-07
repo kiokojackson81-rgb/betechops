@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import { fetchOrdersForShop, fetchPayoutsForShop } from '@/lib/jumia';
-import { fetchOrders as kmFetchOrders, fetchPayouts as kmFetchPayouts } from '@/lib/connectors/kilimall';
+import { fetchPayouts as kmFetchPayouts } from '@/lib/connectors/kilimall';
 import { decryptJson } from '@/lib/crypto/secure-json';
 import { syncOnlineMarketplaceData } from '@/lib/jobs/onlineSync';
 import { getTradingPeriodFor } from '@/lib/tradingPeriod';
+import { recomputeWeeklySalesCommission } from '@/lib/weeklySales';
 
 export async function syncOrdersJob() {
   const shops = await prisma.shop.findMany();
@@ -12,17 +13,15 @@ export async function syncOrdersJob() {
   for (const s of shops) {
     try {
       if (s.platform === 'JUMIA') {
+        if (s.disableAutoSync) {
+          results[s.id] = { skipped: true };
+          continue;
+        }
         const orders = await fetchOrdersForShop(s.id);
         results[s.id] = { count: orders.length };
       } else if (s.platform === 'KILIMALL') {
-        if (s.credentialsEncrypted) {
-          const creds = decryptJson(s.credentialsEncrypted as { payload: string });
-          const credObj = creds as Record<string, unknown>;
-          const items = await kmFetchOrders({ appId: (credObj?.storeId as string) || (credObj?.appId as string), appSecret: (credObj?.appSecret as string) || (credObj?.app_secret as string), apiBase: (credObj?.apiBase as string) }, { since: undefined });
-          results[s.id] = { count: (items as unknown[]).length };
-        } else {
-          results[s.id] = { error: 'no credentials' };
-        }
+        // Kilimall shops are tracked manually and never auto-synced.
+        results[s.id] = { skipped: true };
       }
     } catch (e: unknown) {
       results[s.id] = { error: errMessage(e) };
@@ -92,8 +91,33 @@ export async function returnsSlaJob() {
 }
 
 export async function commissionCalcJob() {
-  // placeholder: recompute ledgers
-  return { ok: true };
+  const period = getTradingPeriodFor(new Date());
+  const distinctUsers = await prisma.weeklySale.findMany({
+    where: {
+      AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+    },
+    select: { userId: true },
+    distinct: ['userId'],
+  });
+
+  const processed: Array<{ userId: string; payout: number; totalSales: number; updated: boolean }> = [];
+  const errors: Array<{ userId: string; error: string }> = [];
+
+  for (const entry of distinctUsers) {
+    try {
+      const result = await recomputeWeeklySalesCommission({ userId: entry.userId, period });
+      processed.push({ userId: entry.userId, payout: result.payout, totalSales: result.totalSales, updated: result.updated });
+    } catch (err) {
+      errors.push({ userId: entry.userId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return {
+    period: period.key,
+    processed: processed.length,
+    results: processed,
+    errors,
+  };
 }
 
 export async function priceLearnerJob() {

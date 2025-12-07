@@ -29,6 +29,7 @@ model User {
   dailyReports                DailyReport[]
   marketingEntries            MarketingDailyEntry[]
   orders                      Order[]
+  weeklySales                 WeeklySale[]
   issuedReceipts              Receipt[]                    @relation("issuedBy")
   returnsApproved             ReturnCase[]                  @relation("ReturnApprovedBy")
   returnsCreated              ReturnCase[]                  @relation("ReturnCreatedBy")
@@ -302,6 +303,8 @@ model Shop {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   platform             Platform              @default(JUMIA)
+  /// When true, automated sync jobs should skip fetching orders for this shop.
+  disableAutoSync      Boolean               @default(false)
   credentialsEncrypted Json?
   apiCredentials       ApiCredential[]
   attendantCommissions AttendantCommission[]
@@ -317,6 +320,25 @@ model Shop {
   assignments          ShopAssignment[]
   userAssignments      UserShop[]
   managers             User[]                @relation("ManagedBy")
+  weeklySales          WeeklySale[]
+}
+
+/// WeeklySale records aggregate the total sales for a given attendant (user) and shop
+/// over a Monday→Saturday week. Each record can be marked as PENDING or PAID.
+model WeeklySale {
+  id        String   @id @default(cuid())
+  shopId    String?
+  userId    String
+  weekStart DateTime
+  weekEnd   DateTime
+  amount    Decimal  @db.Decimal(12, 2)
+  status    String
+  createdAt DateTime @default(now())
+
+  shop Shop? @relation(fields: [shopId], references: [id])
+  user User  @relation(fields: [userId], references: [id])
+
+  @@index([shopId, weekStart])
 }
 
 model JumiaAccount {

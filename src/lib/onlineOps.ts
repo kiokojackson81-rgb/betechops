@@ -74,7 +74,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   const period = opts?.period ?? getTradingPeriodFor(new Date());
   const { accountIds } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  const [directStats, payoutWeeks, onlineOrdersCount, earnings] = await Promise.all([
+  const [directStats, payoutWeeks, onlineOrdersCount, earnings, weeklyManual] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
       ? prisma.marketplacePayoutWeek.findMany({
@@ -93,18 +93,20 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
         })
       : Promise.resolve(0),
     getOnlineEarningsSummary(attendantId, { period }),
+    getWeeklyManualSales(attendantId, period),
   ]);
 
   const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
+  const weeklyManualSales = weeklyManual.totalSales;
 
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    receipts: directStats.receipts,
-    salesKes: directStats.sales + marketplaceSales,
+    receipts: directStats.receipts + weeklyManual.entries,
+    salesKes: directStats.sales + weeklyManualSales + marketplaceSales,
     commissionKes: earnings.grossCommission,
-    itemsSold: directStats.items + onlineOrdersCount,
-    directSales: directStats.sales,
+    itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
+    directSales: directStats.sales + weeklyManualSales,
     marketplaceSales,
     progressTarget: COMMISSION_PROGRESS_TARGET,
   };
@@ -114,7 +116,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const period = opts?.period ?? getTradingPeriodFor(new Date());
   const { accountIds, roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  const [directStats, payoutWeeks, plan, adjustments, returns] = await Promise.all([
+  const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
       ? prisma.marketplacePayoutWeek.findMany({
@@ -135,13 +137,16 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
         dueAt: { gte: period.start, lte: period.end },
       },
     }),
+    getWeeklyManualSales(attendantId, period),
   ]);
 
   const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
+  const weeklyManualSales = weeklyManual.totalSales;
+  const combinedDirectSales = directStats.sales + weeklyManualSales;
   const directSalesCommission =
-    directStats.sales < DIRECT_SALES_TIER_THRESHOLD
+    combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
       ? Math.max(0, Math.round(directStats.profit * 0.05))
-      : calculateCumulativeCommission(Math.max(0, directStats.profit)).commission;
+      : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
 
   const marketplaceCommission = calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
   const isSupervisor = roles.includes("SUPERVISOR");
@@ -161,7 +166,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    directSales: directStats.sales,
+    directSales: combinedDirectSales,
     directProfit: directStats.profit,
     marketplaceSales,
     directCommission: directSalesCommission,
@@ -210,6 +215,25 @@ async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
     },
     { sales: 0, profit: 0, receipts: 0, items: 0 },
   );
+}
+
+async function getWeeklyManualSales(attendantId: string, period: TradingPeriod) {
+  const summary = await prisma.weeklySale.aggregate({
+    _sum: { amount: true },
+    _count: { _all: true },
+    where: {
+      userId: attendantId,
+      AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+    },
+  });
+
+  const entries =
+    typeof summary._count === "number" ? summary._count : summary._count?._all ?? 0;
+
+  return {
+    totalSales: Number(summary._sum?.amount ?? 0),
+    entries,
+  };
 }
 
 function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {

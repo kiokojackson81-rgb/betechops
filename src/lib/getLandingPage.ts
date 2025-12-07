@@ -12,7 +12,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
     case "MARKETING_OPS":
       return "/attendant/daily-report";
     case "JUMIA_KILIMALL_OPS":
-      return "/attendant";
+      return "/attendant/online";
     case "SUPPORT_OPS":
       return "/attendant/support";
     case "BETECH_OPS":

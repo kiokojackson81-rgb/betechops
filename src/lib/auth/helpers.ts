@@ -12,9 +12,8 @@ export function getLandingPage(attendantCategory?: string | null) {
       return "/marketing/tracker";
     case "JUMIA_OPERATIONS":
     case "JUMIA_KILIMALL_OPS":
-      return "/attendant/jumia";
     case "KILIMALL_OPERATIONS":
-      return "/attendant/kilimall";
+      return "/attendant/online";
     case "PRODUCT_UPLOAD":
     case "MARKETING_OPS":
       return "/attendant/daily-report";

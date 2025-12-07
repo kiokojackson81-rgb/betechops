@@ -5,6 +5,7 @@ const items = [
   { href: "/attendant/pending-pricing", label: "Pending Pricing" },
   { href: "/attendant/orders/new", label: "Create Order" },
   { href: "/attendant/stock-low", label: "Low Stock" },
+  { href: "/attendant/online", label: "Online Ops" },
   // New shortcut for submitting daily reports
   { href: "/attendant/daily-report", label: "Daily Report" },
 ];

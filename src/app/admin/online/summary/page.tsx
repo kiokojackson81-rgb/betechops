@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
+import WeeklySalesTable from "./WeeklySalesTable";
 
 export const dynamic = "force-dynamic";
 
@@ -234,6 +235,8 @@ export default async function AdminOnlineSummaryPage() {
           </table>
         </div>
       </section>
+
+      <WeeklySalesTable />
     </div>
   );
 }
