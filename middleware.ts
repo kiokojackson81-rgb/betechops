@@ -68,6 +68,7 @@ export async function middleware(req: NextRequest) {
   const role = (token as any)?.role ?? (token as any)?.user?.role;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const category = (token as any)?.attendantCategory ?? (token as any)?.user?.attendantCategory;
+  const hasCategory = Boolean(category);
 
   // Temporary debug logging: record masked email, role and category for
   // requests that hit auth/post-login or attendant routes. These logs are
@@ -81,6 +82,20 @@ export async function middleware(req: NextRequest) {
     }
   } catch (e) {
     // ignore logging errors
+  }
+
+  // If the token is missing attendantCategory (stale JWT), bounce through
+  // post-login to re-hydrate the category from the database so we can route
+  // Support Ops and other roles to the correct dashboard.
+  if (
+    role !== "ADMIN" &&
+    !hasCategory &&
+    (pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker"))
+  ) {
+    const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search;
+    url.pathname = "/auth/post-login";
+    url.searchParams.set("callbackUrl", originalPathWithQuery);
+    return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
