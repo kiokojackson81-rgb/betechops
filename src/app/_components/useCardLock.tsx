@@ -69,7 +69,31 @@ export function useCardLock(storageKey: string) {
     return () => clearTimer();
   }, [locked, session, status]);
 
-  const lock = () => setLocked(true);
+  // Synchronously update localStorage when locking/unlocking to avoid races
+  // where other scripts read stale values during the same tick.
+  const _lock = () => {
+    try {
+      if (typeof window !== "undefined") localStorage.setItem(key, "1");
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line no-console
+    console.debug('useCardLock: _lock -> setting locked=true', { key });
+    setLocked(true);
+  };
+
+  const _unlock = () => {
+    try {
+      if (typeof window !== "undefined") localStorage.setItem(key, "0");
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line no-console
+    console.debug('useCardLock: _unlock -> setting locked=false', { key });
+    setLocked(false);
+  };
+
+  const lock = () => _lock();
 
   const unlock = () => {
     if (typeof window !== "undefined") {
@@ -79,13 +103,13 @@ export function useCardLock(storageKey: string) {
     }
     // If session still loading, optimistically unlock and let downstream values render.
     if (status === "loading") {
-      setLocked(false);
+      _unlock();
       return;
     }
 
     // If we have a session object OR status explicitly says authenticated, unlock locally
     if (session || status === "authenticated") {
-      setLocked(false);
+      _unlock();
       return;
     }
 
