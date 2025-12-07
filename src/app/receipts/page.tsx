@@ -8,7 +8,11 @@ export default async function ReceiptsPage() {
     const apiUrl = await absUrl("/api/receipts");
     const res = await fetch(withParams(apiUrl, { includeItems: true }), { cache: "no-store" });
     const data = await res.json().catch(() => ({ receipts: [] }));
-    return <ReceiptsPageClient initial={data.receipts || []} />;
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900 p-4">
+        <ReceiptsPageClient initial={data.receipts || []} />
+      </div>
+    );
   } catch (e) {
     return <div className="p-4">Failed to load receipts</div>;
   }
