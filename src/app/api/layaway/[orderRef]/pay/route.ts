@@ -5,7 +5,7 @@ import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { orderRef: string } }) {
+export async function POST(req: NextRequest, context: { params: { orderRef: string } } | { params: Promise<{ orderRef: string }> }) {
   try {
     await requireAttendant(req as unknown as Request);
   } catch (res) {
@@ -13,7 +13,9 @@ export async function POST(req: NextRequest, { params }: { params: { orderRef: s
     throw res;
   }
 
-  const { orderRef } = params;
+  const { orderRef } = 'params' in context && typeof (context as any).params?.then === 'function'
+    ? await (context as { params: Promise<{ orderRef: string }> }).params
+    : (context as { params: { orderRef: string } }).params;
   const body = (await req.json()) as any;
   const amount = Number(body.amount || 0);
   const method = body.method ?? null;
