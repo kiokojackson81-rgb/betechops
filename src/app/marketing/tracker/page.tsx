@@ -664,22 +664,25 @@ export default function MarketingTrackerPage() {
           : Number(r.sellingTotal || 0)),
       0,
     );
-    const totalProfit = receipts.reduce(
-      (sum, r) =>
-        sum +
-        ((typeof r.sellingTotal === "number"
-          ? r.sellingTotal
-          : Number(r.sellingTotal || 0)) -
-          r.items.reduce(
-            (s, it) =>
-              s +
-              (typeof it.buyingPrice === "number"
-                ? it.buyingPrice
-                : Number(it.buyingPrice || 0)),
-            0,
-          )),
-      0,
-    );
+    const totalProfit = receipts.reduce((sum, r) => {
+      const selling = typeof r.sellingTotal === "number" ? r.sellingTotal : Number(r.sellingTotal || 0);
+
+      // If any item in the receipt does not have a buyingPrice entered,
+      // treat the receipt as unpriced and exclude it from profit calculations.
+      const allItemsPriced = r.items.every((it) => {
+        if (typeof it.buyingPrice === "number") return it.buyingPrice > 0;
+        return Number(it.buyingPrice || 0) > 0;
+      });
+
+      if (!allItemsPriced) return sum;
+
+      const buyingSum = r.items.reduce(
+        (s, it) => s + (typeof it.buyingPrice === "number" ? it.buyingPrice : Number(it.buyingPrice || 0)),
+        0,
+      );
+
+      return sum + (selling - buyingSum);
+    }, 0);
     // Count only "filled" items (product name or a buying price) so the
     // items counter updates as the attendant types product names/prices.
     const totalItems = receipts.reduce((sum, r) => {
