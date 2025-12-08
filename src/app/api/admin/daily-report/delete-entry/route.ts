@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, getActorId } from "@/lib/api";
+import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export async function POST(req: Request) {
   const auth = await requireRole("ADMIN");
@@ -50,6 +52,15 @@ export async function POST(req: Request) {
       });
     } catch (logErr) {
       console.warn("Failed to write actionLog for daily report delete", logErr);
+    }
+    try {
+      const userId = before.user?.id || before.userId;
+      if (userId) {
+        const period = getTradingPeriodFor(before.date);
+        await recomputeMarketingCommissionLedger({ userId, period });
+      }
+    } catch (recomputeErr) {
+      console.warn("Failed to recompute marketing commission after delete", recomputeErr);
     }
 
     return NextResponse.json({ deleted: true });

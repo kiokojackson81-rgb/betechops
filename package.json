@@ -29,6 +29,7 @@
     "worker:jumia-sync": "npm run build:worker --silent && node .worker-dist/scripts/jumia-sync-worker.js",
     "build:worker": "tsc -p tsconfig.worker.json",
     "debug:prisma:check": "node scripts/prisma-connect-check.js",
+    "recompute:wrapper": "node scripts/recompute-wrapper.js",
     "set:default-providers": "ts-node --esm --transpile-only scripts/set-default-providers.ts",
     "list:shops": "ts-node --esm --transpile-only scripts/list-shops.ts",
     "shops:export": "ts-node --esm --transpile-only scripts/export-shops.ts",

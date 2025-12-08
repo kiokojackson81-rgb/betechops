@@ -181,11 +181,14 @@ async function summarize(prisma, userId, period) {
   return { totals, entryCount: marketingEntries.length + reports.length };
 }
 
-async function recompute(emailArg) {
+async function recompute(emailArg, dateArg) {
   const prisma = new PrismaClient();
   try {
-    const email = emailArg || process.argv[2] || process.env.USER_EMAIL || 'brendah@betech.co.ke';
-    console.log('Running recompute for', email);
+    // Args: [email] [date]
+    const cliEmail = emailArg || process.argv[2];
+    const cliDate = dateArg || process.argv[3] || process.env.RECOMPUTE_DATE;
+    const email = cliEmail || process.env.USER_EMAIL || 'brendah@betech.co.ke';
+    console.log('Running recompute for', email, cliDate ? `period date=${cliDate}` : '(current period)');
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       console.error('User not found:', email);
@@ -193,7 +196,7 @@ async function recompute(emailArg) {
       return;
     }
 
-    const period = getTradingPeriodFor(new Date());
+    const period = cliDate ? getTradingPeriodFor(new Date(cliDate)) : getTradingPeriodFor(new Date());
     const { totals } = await summarize(prisma, user.id, period);
     const commissionInfo = calculateCumulativeCommission(totals.totalSales || 0);
     let marketingCommission = 0;
