@@ -18,14 +18,16 @@ const dayLabels = ["All days", "Monday", "Tuesday", "Wednesday", "Thursday", "Fr
 
 const formatKES = (value: number) => `KES ${Math.round(value).toLocaleString("en-KE")}`;
 
-const getSaleItemsCount = (sale: MarketingReportEntry["sales"][number]): number => {
+type MarketingSaleRow = NonNullable<MarketingReportEntry["sales"]>[number];
+
+const getSaleItemsCount = (sale?: MarketingSaleRow): number => {
   if (!sale) return 0;
   const countRaw = (sale as { itemsCount?: number | null }).itemsCount;
   const count = typeof countRaw === "number" ? countRaw : Number(countRaw ?? 0);
   return Number.isFinite(count) && count > 0 ? count : 1;
 };
 
-const getSaleSellingPrice = (sale: MarketingReportEntry["sales"][number]): number => {
+const getSaleSellingPrice = (sale?: MarketingSaleRow): number => {
   if (!sale) return 0;
   const raw = (sale as { sellingPrice?: number | string | null }).sellingPrice;
   if (typeof raw === "number") return raw;
