@@ -23,7 +23,21 @@ export default async function PostLogin(props: unknown) {
       : (searchParams?.callbackUrl as string | undefined);
     if (cbRaw) {
       try {
-        const decoded = decodeURIComponent(cbRaw);
+        // Safely unwrap nested /auth/post-login wrappers that middleware may
+        // have produced (e.g. "/auth/post-login?callbackUrl=%2Fmarketing%2Ftracker").
+        // Limit to a small depth to avoid infinite loops on malformed values.
+        let decoded = decodeURIComponent(cbRaw);
+        for (let depth = 0; depth < 3; depth++) {
+          if (!decoded.startsWith("/auth/post-login")) break;
+          try {
+            const u = new URL(decoded, "http://example.com");
+            const inner = u.searchParams.get("callbackUrl");
+            if (!inner) break;
+            decoded = decodeURIComponent(inner);
+          } catch (e) {
+            break;
+          }
+        }
         // Only allow same-origin paths.
         if (decoded && decoded.startsWith("/")) {
           return redirect(decoded);
