@@ -25,6 +25,17 @@ export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
 
+  const mask = (s: string | undefined | null, head = 20, tail = 20) => {
+    if (!s) return "";
+    try {
+      const str = String(s);
+      if (str.length <= head + tail) return str;
+      return `${str.slice(0, head)}...${str.slice(-tail)}`;
+    } catch (e) {
+      return "";
+    }
+  };
+
   if (
     pathname === "/attendant/login" ||
     pathname === "/admin/login" ||
@@ -57,10 +68,22 @@ export async function middleware(req: NextRequest) {
     // after the session is established. This avoids races where the
     // middleware or landing-page logic would otherwise send the user
     // to a computed home path.
-    const wrapped = `/auth/post-login?callbackUrl=${encodeURIComponent(originalPathWithQuery)}`;
+    // Preserve the original target but avoid wrapping it inside another
+    // `/auth/post-login` here — doing so created nested callbackUrls which
+    // could be double-decoded and led to redirect-to-self loops. Instead
+    // pass the encoded original path directly as `callbackUrl` and let the
+    // login/post-login handlers perform any necessary wrapping.
+    const encodedTarget = encodeURIComponent(originalPathWithQuery);
+    // Log masked callback info for diagnostics (temporary guard-rail).
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`middleware: redirecting->login callbackUrl=${mask(encodedTarget)} original=${mask(originalPathWithQuery)}`);
+    } catch (e) {
+      // ignore logging errors
+    }
     url.pathname = "/attendant/login";
     url.searchParams.set("_r", "1");
-    url.searchParams.set("callbackUrl", wrapped);
+    url.searchParams.set("callbackUrl", encodedTarget);
     return NextResponse.redirect(url);
   }
 
@@ -95,6 +118,13 @@ export async function middleware(req: NextRequest) {
     (pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker"))
   ) {
     const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search + (req.nextUrl.search ? "&" : "?") + "_rehydrated=1";
+    try {
+      // Log masked info for diagnostics (temporary)
+      // eslint-disable-next-line no-console
+      console.log(`middleware: rehydrate->post-login callback=${mask(originalPathWithQuery)}`);
+    } catch (e) {
+      // ignore
+    }
     url.pathname = "/auth/post-login";
     url.searchParams.set("callbackUrl", encodeURIComponent(originalPathWithQuery));
     return NextResponse.redirect(url);
