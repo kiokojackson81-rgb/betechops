@@ -388,6 +388,115 @@ export default function MarketingTrackerPage() {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
+  const allocateReceiptBuyingPrices = (total: number, items: Array<{ id: string }>) => {
+    if (!items.length) return [];
+    const base = Math.floor(total / items.length);
+    let remainder = total - base * items.length;
+    return items.map((item) => {
+      const extra = remainder > 0 ? 1 : 0;
+      if (remainder > 0) remainder -= 1;
+      return { id: item.id, value: base + extra };
+    });
+  };
+
+  const submitBuyingPrice = async (
+    sale: UnpricedSale,
+    receiptItemId: string | undefined,
+    buyingPrice: number,
+  ) => {
+    if (sale.source === "support" && !receiptItemId) {
+      throw new Error("Select an item on the receipt to price");
+    }
+
+    const endpoint =
+      sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
+    const body =
+      sale.source === "support"
+        ? { receiptItemId, buyingPrice }
+        : { dailySaleId: sale.id, buyingPrice };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || "Failed to save buying price");
+    }
+    const data = await res.json().catch(() => null);
+
+    let saleValueDelta = 0;
+    let paymentDelta: "MPESA" | "CASH" | null = null;
+    setUnpricedSales((prev) => {
+      const next: UnpricedSale[] = [];
+      for (const row of prev) {
+        if (row.id !== sale.id || row.source !== sale.source) {
+          next.push(row);
+          continue;
+        }
+        if (row.source === "support" && receiptItemId) {
+          const remainingItems = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
+          if (!remainingItems.length) {
+            saleValueDelta = data?.receiptTotal ?? row.sellingPrice;
+            paymentDelta = row.paymentMethod;
+            continue;
+          }
+          next.push({
+            ...row,
+            receiptItems: remainingItems,
+            itemsPending: Math.max(0, (row.itemsPending ?? remainingItems.length + 1) - 1),
+          });
+          continue;
+        }
+        saleValueDelta = data?.saleValue ?? row.sellingPrice;
+        paymentDelta = row.paymentMethod;
+      }
+      return next;
+    });
+
+    if (saleValueDelta > 0) {
+      const methodKey = paymentDelta === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
+      setServerPeriodSummary((prev) => {
+        if (!prev) return prev;
+        const updatedPaymentStats = {
+          ...prev.aggregates.paymentStats,
+          [methodKey]: (prev.aggregates.paymentStats[methodKey] ?? 0) + saleValueDelta,
+        };
+        return {
+          ...prev,
+          aggregates: {
+            ...prev.aggregates,
+            totalSales: prev.aggregates.totalSales + saleValueDelta,
+            totalItems: prev.aggregates.totalItems + 1,
+            paymentStats: updatedPaymentStats,
+          },
+        };
+      });
+
+      try {
+        setEarningsSummary((prev) => {
+          if (!prev) return prev;
+          const currentTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
+          const newTotalSales = currentTotalSales + saleValueDelta;
+          const commissionInfo = getCommissionSummaryForSales(newTotalSales);
+          const newCommission = Math.round(commissionInfo.commission ?? 0);
+          const delta = newCommission - (prev.commission ?? 0);
+          if (delta === 0) return { ...prev, commission: newCommission };
+          return {
+            ...prev,
+            commission: newCommission,
+            totalEarnings: (prev.totalEarnings ?? 0) + delta,
+            netPay: (prev.netPay ?? 0) + delta,
+          };
+        });
+      } catch {
+        // ignore client-side calculation issues
+      }
+    }
+  };
+
   const handleSubmitBuyingPrice = async (sale: UnpricedSale, receiptItemId?: string) => {
     const draftKey = getUnpricedDraftKey(sale, receiptItemId);
     const rawValue = buyingDrafts[draftKey] ?? "";
@@ -396,110 +505,50 @@ export default function MarketingTrackerPage() {
       showToast("Enter a valid buying price", "error");
       return;
     }
-    if (sale.source === "support" && !receiptItemId) {
-      showToast("Select an item on the receipt to price", "error");
-      return;
-    }
 
     const buyingPrice = Math.round(parsedValue);
-
+    setPricingSaleKey(draftKey);
     try {
-      const endpoint =
-        sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
-      const body =
-        sale.source === "support"
-          ? { receiptItemId, buyingPrice }
-          : { dailySaleId: sale.id, buyingPrice };
-      setPricingSaleKey(draftKey);
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        showToast(err?.error || "Failed to save buying price", "error");
-        return;
-      }
-      const data = await res.json().catch(() => null);
-      showToast("Buying price saved", "success");
-
-      let saleValueDelta = 0;
-      let paymentDelta: "MPESA" | "CASH" | null = null;
-      setUnpricedSales((prev) => {
-        const next: UnpricedSale[] = [];
-        for (const row of prev) {
-          if (row.id !== sale.id || row.source !== sale.source) {
-            next.push(row);
-            continue;
-          }
-          if (row.source === "support" && receiptItemId) {
-            const remainingItems = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
-            if (!remainingItems.length) {
-              saleValueDelta = data?.receiptTotal ?? row.sellingPrice;
-              paymentDelta = row.paymentMethod;
-              continue;
-            }
-            next.push({
-              ...row,
-              receiptItems: remainingItems,
-              itemsPending: Math.max(0, (row.itemsPending ?? remainingItems.length + 1) - 1),
-            });
-            continue;
-          }
-          saleValueDelta = data?.saleValue ?? row.sellingPrice;
-          paymentDelta = row.paymentMethod;
-        }
-        return next;
-      });
-
+      await submitBuyingPrice(sale, receiptItemId, buyingPrice);
       setBuyingDrafts((prev) => {
         const next = { ...prev };
         delete next[draftKey];
         return next;
       });
+      showToast("Buying price saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingSaleKey(null);
+    }
+  };
 
-      if (saleValueDelta > 0) {
-        const methodKey = paymentDelta === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
-        setServerPeriodSummary((prev) => {
-          if (!prev) return prev;
-          const updatedPaymentStats = {
-            ...prev.aggregates.paymentStats,
-            [methodKey]:
-              (prev.aggregates.paymentStats[methodKey] ?? 0) + saleValueDelta,
-          };
-          return {
-            ...prev,
-            aggregates: {
-              ...prev.aggregates,
-              totalSales: prev.aggregates.totalSales + saleValueDelta,
-              totalItems: prev.aggregates.totalItems + 1,
-              paymentStats: updatedPaymentStats,
-            },
-          };
-        });
-
-        try {
-          setEarningsSummary((prev) => {
-            if (!prev) return prev;
-            const currentTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
-            const newTotalSales = currentTotalSales + saleValueDelta;
-            const commissionInfo = getCommissionSummaryForSales(newTotalSales);
-            const newCommission = Math.round(commissionInfo.commission ?? 0);
-            const delta = newCommission - (prev.commission ?? 0);
-            if (delta === 0) return { ...prev, commission: newCommission };
-            return {
-              ...prev,
-              commission: newCommission,
-              totalEarnings: (prev.totalEarnings ?? 0) + delta,
-              netPay: (prev.netPay ?? 0) + delta,
-            };
-          });
-        } catch {
-          // ignore client-side calculation issues
-        }
+  const handleSubmitSupportReceiptTotal = async (sale: UnpricedSale) => {
+    const draftKey = getUnpricedDraftKey(sale);
+    const rawValue = buyingDrafts[draftKey] ?? "";
+    const parsedValue = Number(rawValue);
+    if (!rawValue || Number.isNaN(parsedValue) || parsedValue <= 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+    const items = sale.receiptItems || [];
+    if (!items.length) {
+      showToast("No receipt items available for pricing", "error");
+      return;
+    }
+    const allocations = allocateReceiptBuyingPrices(Math.round(parsedValue), items);
+    setPricingSaleKey(draftKey);
+    try {
+      for (let i = 0; i < allocations.length; i++) {
+        const { id, value } = allocations[i];
+        await submitBuyingPrice(sale, id, value);
       }
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      showToast("Buying price saved", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
     } finally {
@@ -1212,35 +1261,31 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
                           )}
                           {isSupport && (sale.receiptItems?.length ?? 0) > 0 ? (
                             <div className="space-y-2 pt-2">
-                              {sale.receiptItems!.map((item) => {
-                                const itemKey = getUnpricedDraftKey(sale, item.id);
-                                const isSaving = pricingSaleKey === itemKey;
-                                return (
-                                  <div key={item.id} className="flex items-center gap-2">
-                                    <div className="flex-1 text-[11px] text-slate-300">
-                                      <div className="font-semibold text-slate-100">
-                                        {item.productName || "Receipt item"}
-                                      </div>
-                                    </div>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      placeholder="Buying price"
-                                      value={buyingDrafts[itemKey] ?? ""}
-                                      onChange={(e) => handleSetBuyingDraft(itemKey, e.target.value)}
-                                      className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSubmitBuyingPrice(sale, item.id)}
-                                      disabled={isSaving}
-                                      className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-60"
-                                    >
-                                      {isSaving ? "Saving…" : "Save"}
-                                    </button>
-                                  </div>
-                                );
-                              })}
+                              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-2 text-[11px] text-slate-300">
+                                <ul className="list-disc space-y-1 pl-4 text-left text-slate-200">
+                                  {sale.receiptItems!.map((item) => (
+                                    <li key={item.id}>{item.productName || "Receipt item"}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  placeholder="Total buying price"
+                                  value={buyingDrafts[saleKey] ?? ""}
+                                  onChange={(e) => handleSetBuyingDraft(saleKey, e.target.value)}
+                                  className="h-8 w-28 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitSupportReceiptTotal(sale)}
+                                  disabled={pricingSaleKey === saleKey}
+                                  className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-60"
+                                >
+                                  {pricingSaleKey === saleKey ? "Saving…" : "Save"}
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2 pt-1">

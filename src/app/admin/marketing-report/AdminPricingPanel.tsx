@@ -138,6 +138,60 @@ export default function AdminPricingPanel() {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
+  const allocateReceiptBuyingPrices = (total: number, items: Array<{ id: string }>) => {
+    if (!items.length) return [];
+    const base = Math.floor(total / items.length);
+    let remainder = total - base * items.length;
+    return items.map((item) => {
+      const extra = remainder > 0 ? 1 : 0;
+      if (remainder > 0) remainder -= 1;
+      return { id: item.id, value: base + extra };
+    });
+  };
+
+  const submitPrice = async (sale: UnpricedSale, receiptItemId: string | undefined, buyingPrice: number) => {
+    if (sale.source === "support" && !receiptItemId) {
+      throw new Error("Select a receipt item to price");
+    }
+    const endpoint = sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
+    const payload =
+      sale.source === "support"
+        ? { receiptItemId, buyingPrice }
+        : { dailySaleId: sale.id, buyingPrice };
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || "Failed to save buying price");
+    }
+    setSales((prev) => {
+      const next: UnpricedSale[] = [];
+      for (const row of prev) {
+        if (row.id !== sale.id || row.source !== sale.source) {
+          next.push(row);
+          continue;
+        }
+        if (row.source === "support" && receiptItemId) {
+          const remaining = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
+          if (!remaining.length) {
+            continue;
+          }
+          next.push({
+            ...row,
+            receiptItems: remaining,
+            itemsPending: Math.max(0, (row.itemsPending ?? remaining.length + 1) - 1),
+          });
+          continue;
+        }
+      }
+      return next;
+    });
+  };
+
   const handlePriceSale = async (sale: UnpricedSale, receiptItemId?: string) => {
     const draftKey = getDraftKey(sale, receiptItemId);
     const draft = buyingDrafts[draftKey];
@@ -146,56 +200,47 @@ export default function AdminPricingPanel() {
       showToast("Enter a valid buying price", "error");
       return;
     }
-    if (sale.source === "support" && !receiptItemId) {
-      showToast("Select a receipt item to price", "error");
-      return;
-    }
     setPricingKey(draftKey);
     try {
-      const endpoint = sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
-      const payload =
-        sale.source === "support"
-          ? { receiptItemId, buyingPrice: Math.round(numeric) }
-          : { dailySaleId: sale.id, buyingPrice: Math.round(numeric) };
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        credentials: "same-origin",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Failed to save buying price");
-      }
-      showToast("Buying price saved", "success");
-      setSales((prev) => {
-        const next: UnpricedSale[] = [];
-        for (const row of prev) {
-          if (row.id !== sale.id || row.source !== sale.source) {
-            next.push(row);
-            continue;
-          }
-          if (row.source === "support" && receiptItemId) {
-            const remaining = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
-            if (!remaining.length) {
-              continue;
-            }
-            next.push({
-              ...row,
-              receiptItems: remaining,
-              itemsPending: Math.max(0, (row.itemsPending ?? remaining.length + 1) - 1),
-            });
-            continue;
-          }
-          continue;
-        }
-        return next;
-      });
+      await submitPrice(sale, receiptItemId, Math.round(numeric));
       setBuyingDrafts((prev) => {
         const next = { ...prev };
         delete next[draftKey];
         return next;
       });
+      showToast("Buying price saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingKey(null);
+    }
+  };
+
+  const handlePriceSupportReceipt = async (sale: UnpricedSale) => {
+    const draftKey = getDraftKey(sale);
+    const draft = buyingDrafts[draftKey];
+    const numeric = Number(draft);
+    if (!draft || Number.isNaN(numeric) || numeric <= 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+    const items = sale.receiptItems || [];
+    if (!items.length) {
+      showToast("No receipt items available for pricing", "error");
+      return;
+    }
+    const allocations = allocateReceiptBuyingPrices(Math.round(numeric), items);
+    setPricingKey(draftKey);
+    try {
+      for (const { id, value } of allocations) {
+        await submitPrice(sale, id, value);
+      }
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      showToast("Buying price saved", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
     } finally {
@@ -398,30 +443,21 @@ export default function AdminPricingPanel() {
                     <td className="px-3 py-3 align-top">
                       {hasReceiptItems ? (
                         <div className="space-y-2">
-                          {sale.receiptItems!.map((item) => {
-                            const itemKey = getDraftKey(sale, item.id);
-                            const isSaving = pricingKey === itemKey;
-                            return (
-                              <div key={item.id} className="flex items-center gap-2">
-                                <div className="flex-1 text-xs text-slate-300">{item.productName || "Receipt item"}</div>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="50"
-                                  value={buyingDrafts[itemKey] ?? ""}
-                                  placeholder="Buying price"
-                                  onChange={(e) => handleSetDraft(itemKey, e.target.value)}
-                                />
-                                <Button
-                                  onClick={() => handlePriceSale(sale, item.id)}
-                                  disabled={isSaving}
-                                  className="whitespace-nowrap"
-                                >
-                                  {isSaving ? "Saving…" : "Price item"}
-                                </Button>
-                              </div>
-                            );
-                          })}
+                          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300">
+                            <ul className="list-disc space-y-1 pl-4 text-slate-100">
+                              {sale.receiptItems!.map((item) => (
+                                <li key={item.id}>{item.productName || "Receipt item"}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={buyingDrafts[getDraftKey(sale)] ?? ""}
+                            placeholder="Total buying price"
+                            onChange={(e) => handleSetDraft(getDraftKey(sale), e.target.value)}
+                          />
                         </div>
                       ) : (
                         <Input
@@ -435,7 +471,15 @@ export default function AdminPricingPanel() {
                       )}
                     </td>
                     <td className="px-3 py-3 align-top space-y-2">
-                      {!hasReceiptItems ? (
+                      {hasReceiptItems ? (
+                        <Button
+                          onClick={() => handlePriceSupportReceipt(sale)}
+                          disabled={pricingKey === getDraftKey(sale)}
+                          className="w-full"
+                        >
+                          {pricingKey === getDraftKey(sale) ? "Saving…" : "Price receipt"}
+                        </Button>
+                      ) : (
                         <Button
                           onClick={() => handlePriceSale(sale)}
                           disabled={pricingKey === getDraftKey(sale)}
