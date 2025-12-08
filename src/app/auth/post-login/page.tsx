@@ -23,10 +23,30 @@ export default async function PostLogin(props: unknown) {
       : (searchParams?.callbackUrl as string | undefined);
     if (cbRaw) {
       try {
+        const mask = (s: string | undefined | null, head = 24, tail = 24) => {
+          if (!s) return "";
+          try {
+            const str = String(s);
+            if (str.length <= head + tail) return str;
+            return `${str.slice(0, head)}...${str.slice(-tail)}`;
+          } catch (e) {
+            return "";
+          }
+        };
+
+        // Log masked callback for diagnostics (temporary).
+        try {
+          // eslint-disable-next-line no-console
+          console.log(`post-login: received cbRaw=${mask(cbRaw)} sessionEmail=${mask((session as any)?.user?.email)}`);
+        } catch (e) {
+          // ignore logging errors
+        }
+
         // Safely unwrap nested /auth/post-login wrappers that middleware may
         // have produced (e.g. "/auth/post-login?callbackUrl=%2Fmarketing%2Ftracker").
         // Limit to a small depth to avoid infinite loops on malformed values.
         let decoded = decodeURIComponent(cbRaw);
+        let depthUnwrapped = 0;
         for (let depth = 0; depth < 3; depth++) {
           if (!decoded.startsWith("/auth/post-login")) break;
           try {
@@ -34,10 +54,18 @@ export default async function PostLogin(props: unknown) {
             const inner = u.searchParams.get("callbackUrl");
             if (!inner) break;
             decoded = decodeURIComponent(inner);
+            depthUnwrapped = depth + 1;
           } catch (e) {
             break;
           }
         }
+
+        // Log the final decoded target (masked) and unwrap depth.
+        try {
+          // eslint-disable-next-line no-console
+          console.log(`post-login: unwrappedDepth=${depthUnwrapped} finalTarget=${mask(decoded)}`);
+        } catch (e) {}
+
         // Only allow same-origin paths.
         if (decoded && decoded.startsWith("/")) {
           return redirect(decoded);
