@@ -189,6 +189,37 @@ export default function AdminDailyReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // If the admin is impersonating a user via query param, fetch the
+  // CommissionLedger for the current trading period and prefer its
+  // stored commission value when displaying the KPI. This ensures the
+  // admin view shows the authoritative (possibly zero) commission.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const imp = params.get("impersonateId");
+    if (!imp) return;
+
+    const dt = new Date();
+    const url = `/api/marketing/ledger?impersonateId=${encodeURIComponent(imp)}&date=${dt.toISOString().split("T")[0]}`;
+    (async () => {
+      try {
+        const res = await fetch(url, { method: "GET", credentials: "same-origin" });
+        if (!res.ok) return;
+        const j = await res.json().catch(() => null);
+        const ledger = j?.ledger ?? null;
+        if (ledger) {
+          const marketingCommission = Number(ledger.detail?.marketing?.commission ?? 0);
+          const supportCommission = Number(ledger.detail?.support?.commission ?? 0);
+          const net = Number(ledger.netCommission ?? ledger.grossCommission ?? 0);
+          const final = marketingCommission + supportCommission || net || 0;
+          setSummary((s) => ({ ...(s ?? {}), totalCommissionEarned: Number(final) }));
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, []);
+
   async function fetchReports(opts?: { silent?: boolean }) {
     setError("");
     const params = new URLSearchParams();
