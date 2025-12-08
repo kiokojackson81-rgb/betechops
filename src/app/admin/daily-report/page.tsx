@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Modal from "@/app/_components/Modal";
 import { computeRowStatus } from "@/lib/dailyReportHelpers";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
 interface Report {
@@ -48,18 +49,11 @@ function formatShortDate(date: Date): string {
 }
 
 function getTradingRange(date = new Date()) {
-  const start = new Date(date);
-  start.setDate(1);
-  start.setMonth(start.getMonth() - 1);
-  start.setDate(25);
-  const end = new Date(date);
-  end.setDate(1);
-  end.setMonth(end.getMonth() + 1);
-  end.setDate(24);
+  const period = getTradingPeriodFor(date);
   return {
-    start: start.toISOString().split("T")[0],
-    end: end.toISOString().split("T")[0],
-    label: `${formatShortDate(start)} – ${formatShortDate(end)}`,
+    start: period.start.toISOString().split("T")[0],
+    end: period.end.toISOString().split("T")[0],
+    label: `${formatShortDate(period.start)} – ${formatShortDate(period.end)}`,
   };
 }
 
