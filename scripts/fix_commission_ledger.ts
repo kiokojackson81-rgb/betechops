@@ -1,6 +1,7 @@
 // scripts/fix_commission_ledger.ts
 // Idempotent script to recompute and (optionally) upsert commissionLedger
 // for a given period range. Dry-run by default.
+export {};
 
 // Attempt to load project env helper if present. This is optional —
 // missing the module should not prevent the script from running.
