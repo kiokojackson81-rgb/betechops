@@ -29,6 +29,18 @@ interface Summary {
   totalCommissionEarned?: number;
 }
 
+const EMPTY_SUMMARY: Summary = {
+  totalProducts: 0,
+  totalSales: 0,
+  totalNewProducts: 0,
+  totalProductsEdited: 0,
+  totalCopiesUploaded: 0,
+  totalWalkInsServed: 0,
+  totalPurchasesMade: 0,
+  totalLiveSessions: 0,
+  totalCommissionEarned: 0,
+};
+
 const DAY_KEYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const MARKETPLACE_SHOPS = [
   "Betech Store",
@@ -212,7 +224,9 @@ export default function AdminDailyReportPage() {
           const supportCommission = Number(ledger.detail?.support?.commission ?? 0);
           const net = Number(ledger.netCommission ?? ledger.grossCommission ?? 0);
           const final = marketingCommission + supportCommission || net || 0;
-          setSummary((s) => ({ ...(s ?? {}), totalCommissionEarned: Number(final) }));
+          setSummary((s) =>
+            s ? { ...s, totalCommissionEarned: Number(final) } : { ...EMPTY_SUMMARY, totalCommissionEarned: Number(final) },
+          );
         }
       } catch (e) {
         // ignore
