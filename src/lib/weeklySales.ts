@@ -23,7 +23,7 @@ export async function summarizeWeeklySalesForPeriod(opts: {
   const { userId, period } = opts;
   const client = opts.client ?? prisma;
 
-  let rows: { amount: number | null }[] = [];
+  let rows: { amount: Prisma.Decimal | null }[] = [];
   try {
     rows = await client.weeklySale.findMany({
       where: {
