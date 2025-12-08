@@ -91,6 +91,44 @@ export async function GET(req: Request) {
     end: endDate.toISOString(),
   };
 
+  // Prefer an existing CommissionLedger row as the authoritative source
+  // for displayed commission. If a ledger exists for the target user+period
+  // use its detail (marketing/support) commission values or the stored
+  // netCommission/grossCommission. This ensures the UI shows explicit zero
+  // when the ledger has been zeroed (e.g., pending pricing).
+  try {
+    const ledger = await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: targetUserId,
+          periodStart: startDate,
+          periodEnd: endDate,
+        },
+      },
+    });
+
+    if (ledger) {
+      const detail: any = ledger.detail ?? {};
+      const marketingCommission = Number(detail.marketing?.commission ?? 0);
+      const supportCommission = Number(detail.support?.commission ?? 0);
+      const combinedDetailCommission = marketingCommission + supportCommission;
+
+      // If the ledger stores explicit detail commissions, use those. Otherwise
+      // fall back to the ledger's netCommission (or grossCommission). This
+      // guarantees that a zeroed ledger results in a displayed zero.
+      if (combinedDetailCommission > 0) {
+        commission = combinedDetailCommission;
+      } else {
+        // Prefer netCommission; if absent, use grossCommission; otherwise keep
+        // the previously computed value.
+        const ledgerNet = Number(ledger.netCommission ?? ledger.grossCommission ?? commission);
+        commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+      }
+    }
+  } catch (e) {
+    // If ledger lookup fails, continue with the computed commission above.
+  }
+
   return NextResponse.json({
     period: normalizedPeriod,
     aggregates: {
