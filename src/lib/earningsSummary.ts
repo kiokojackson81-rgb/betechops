@@ -116,7 +116,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // For the attendant-facing earnings summary we use the default behaviour
   // (which applies the configured profit-fallback percent) so this endpoint
   // mirrors previous commission calculations.
-  const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
+  const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
+  const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
     copiedProducts,
