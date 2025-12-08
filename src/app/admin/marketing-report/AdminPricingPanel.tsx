@@ -487,7 +487,7 @@ export default function AdminPricingPanel() {
                         >
                           {pricingKey === getDraftKey(sale) ? "Saving…" : "Price sale"}
                         </Button>
-                      ) : null}
+                      )}
                       <button
                         type="button"
                         onClick={() => handleDeleteSale(sale)}
