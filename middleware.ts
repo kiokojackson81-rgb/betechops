@@ -96,7 +96,7 @@ export async function middleware(req: NextRequest) {
   ) {
     const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search + (req.nextUrl.search ? "&" : "?") + "_rehydrated=1";
     url.pathname = "/auth/post-login";
-    url.searchParams.set("callbackUrl", originalPathWithQuery);
+    url.searchParams.set("callbackUrl", encodeURIComponent(originalPathWithQuery));
     return NextResponse.redirect(url);
   }
 
