@@ -5,6 +5,8 @@ import { getCurrentTradingPeriod } from "@/lib/marketingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,24 @@ export async function GET(req: Request) {
   let commission = commissionInfo.commission ?? 0;
   if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
     commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+  }
+
+  // If there are any unpriced sales for this attendant in the current
+  // period, zero out commission until pricing is completed. This prevents
+  // attendants from receiving commission computed from unpriced receipts.
+  try {
+    const user = await prisma.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+    const userEmail = user?.email?.toLowerCase() ?? null;
+    if (userEmail) {
+      const unpriced = await getUnpricedDailySalesForCurrentPeriod();
+      const hasUnpricedForUser = unpriced.some((s) => (s.attendantEmail ?? "").toLowerCase() === userEmail);
+      if (hasUnpricedForUser) {
+        commission = 0;
+      }
+    }
+  } catch (e) {
+    // If pricing check fails, do not block returning computed commission —
+    // silently ignore and return the computed value.
   }
 
   // `period` can be the TradingPeriod from `tradingPeriod.ts` (has `start`/`end`)
