@@ -23,13 +23,24 @@ export async function summarizeWeeklySalesForPeriod(opts: {
   const { userId, period } = opts;
   const client = opts.client ?? prisma;
 
-  const rows = await client.weeklySale.findMany({
-    where: {
-      userId,
-      AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
-    },
-    select: { amount: true },
-  });
+  let rows: { amount: number | null }[] = [];
+  try {
+    rows = await client.weeklySale.findMany({
+      where: {
+        userId,
+        AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+      },
+      select: { amount: true },
+    });
+  } catch (e: any) {
+    // If the WeeklySale table does not exist in the connected database (Prisma P2021),
+    // return an empty summary rather than letting the entire request fail.
+    if ((e as any)?.code === "P2021") {
+      console.warn("[weeklySales] weeklySale table not found; returning zero summary", e.message || e);
+      return { totalSales: 0, entries: 0 };
+    }
+    throw e;
+  }
 
   if (!rows.length) {
     return { totalSales: 0, entries: 0 };
