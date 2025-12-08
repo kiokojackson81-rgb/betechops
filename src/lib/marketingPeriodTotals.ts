@@ -110,13 +110,17 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
   marketingEntries.forEach((entry) => {
     const receipts = entry.receipts ?? [];
-    if (receipts.length > 0) {
+      if (receipts.length > 0) {
       receipts.forEach((receipt) => {
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
         const items = receipt.items ?? [];
-        const buyingSum = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
-        totals.totalProfit += selling - buyingSum;
+        // Only include profit for receipts where all items have a valid buyingPrice
+        const allItemsPriced = items.every((it) => toNumber((it as any).buyingPrice) > 0);
+        if (allItemsPriced) {
+          const buyingSum = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
+          totals.totalProfit += selling - buyingSum;
+        }
         totals.totalItems += items.length;
         totals.totalReceipts += 1;
         const method = normalizeMethod(receipt.paymentMethod);
@@ -132,14 +136,17 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     }
 
     const sales = entry.sales ?? [];
-    if (sales.length > 0) {
+      if (sales.length > 0) {
       const receiptTracker = new Set<string>();
       sales.forEach((sale, index) => {
         const selling = toNumber((sale as any).sellingPrice);
         const buying = toNumber((sale as any).buyingPrice);
         const itemsCount = Number((sale as any).itemsCount ?? 1);
         totals.totalSales += selling;
-        totals.totalProfit += selling - buying;
+        // Only add profit if buying price is present
+        if (buying > 0) {
+          totals.totalProfit += selling - buying;
+        }
         totals.totalItems += itemsCount;
         const method = normalizeMethod((sale as any).paymentMethod);
         if (method === "CASH") {
@@ -177,7 +184,8 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     const profitFromMetrics =
       toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
-    const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : toNumber(report.totalSales);
+    // Do not treat selling total as profit when no profit metric is provided.
+    const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : 0;
 
     const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
     const derivedReceipts = deriveReceiptsFromSales(report.sales);
