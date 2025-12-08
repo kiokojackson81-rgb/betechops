@@ -580,25 +580,30 @@ export default function MarketingTrackerPage() {
     const POLL_INTERVAL_MS = 15_000; // poll every 15s
     const controller = new AbortController();
 
-    const buildSummaryFrom = (data: RemoteSummaryPayload) => ({
-      period: {
-        key: data.period?.key ?? "",
-        label: data.period?.label ?? "",
-        start: data.period?.start ?? "",
-        end: data.period?.end ?? "",
-      },
-      aggregates: {
-        totalSales: data.aggregates?.totalSales ?? 0,
-        totalItems: data.aggregates?.totalItems ?? 0,
-        paymentStats: data.aggregates?.paymentStats ?? {
-          totalSalesMpesa: 0,
-          totalSalesCash: 0,
+    const buildSummaryFrom = (data: RemoteSummaryPayload) => {
+      const paymentStatsRaw = data.aggregates?.paymentStats ?? {};
+      return {
+        period: {
+          key: data.period?.key ?? "",
+          label: data.period?.label ?? "",
+          start: data.period?.start ?? "",
+          end: data.period?.end ?? "",
         },
-        commission: {
-          commission: data.aggregates?.commission?.commission ?? 0,
+        aggregates: {
+          totalSales: data.aggregates?.totalSales ?? 0,
+          totalItems: data.aggregates?.totalItems ?? 0,
+          paymentStats: {
+            totalSalesMpesa: paymentStatsRaw.totalSalesMpesa ?? 0,
+            totalSalesCash: paymentStatsRaw.totalSalesCash ?? 0,
+            countMpesaReceipts: paymentStatsRaw.countMpesaReceipts ?? 0,
+            countCashReceipts: paymentStatsRaw.countCashReceipts ?? 0,
+          },
+          commission: {
+            commission: data.aggregates?.commission?.commission ?? 0,
+          },
         },
-      },
-    });
+      };
+    };
 
     const fetchSummary = async () => {
       try {
@@ -612,20 +617,32 @@ export default function MarketingTrackerPage() {
         const data = await res.json().catch(() => null);
         if (!data) return;
         const next = buildSummaryFrom(data);
+        const safeNext = {
+          ...next,
+          aggregates: {
+            ...next.aggregates,
+            paymentStats: {
+              totalSalesMpesa: next.aggregates.paymentStats.totalSalesMpesa ?? 0,
+              totalSalesCash: next.aggregates.paymentStats.totalSalesCash ?? 0,
+              countMpesaReceipts: next.aggregates.paymentStats.countMpesaReceipts,
+              countCashReceipts: next.aggregates.paymentStats.countCashReceipts,
+            },
+          },
+        };
         // update authoritative server-side summary but do NOT show the panel
         // unless the attendant explicitly submitted (periodSummary is used
         // for the visible panel). This keeps Quick stats accurate while the
         // panel remains hidden.
         setServerPeriodSummary((prev) => {
-          if (!prev) return next;
+          if (!prev) return safeNext;
           const changed =
-            prev.aggregates.totalSales !== next.aggregates.totalSales ||
-            prev.aggregates.totalItems !== next.aggregates.totalItems ||
-            prev.aggregates.paymentStats.totalSalesMpesa !== next.aggregates.paymentStats.totalSalesMpesa ||
-            prev.aggregates.paymentStats.totalSalesCash !== next.aggregates.paymentStats.totalSalesCash ||
-            prev.aggregates.commission.commission !== next.aggregates.commission.commission ||
-            prev.period.label !== next.period.label;
-          return changed ? next : prev;
+            prev.aggregates.totalSales !== safeNext.aggregates.totalSales ||
+            prev.aggregates.totalItems !== safeNext.aggregates.totalItems ||
+            prev.aggregates.paymentStats.totalSalesMpesa !== safeNext.aggregates.paymentStats.totalSalesMpesa ||
+            prev.aggregates.paymentStats.totalSalesCash !== safeNext.aggregates.paymentStats.totalSalesCash ||
+            prev.aggregates.commission.commission !== safeNext.aggregates.commission.commission ||
+            prev.period.label !== safeNext.period.label;
+          return changed ? safeNext : prev;
         });
       } catch {
         // ignore network/abort errors
