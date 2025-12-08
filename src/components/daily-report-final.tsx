@@ -271,16 +271,6 @@ export default function DailyReportFinal() {
   const displayedWalkInsPurchased =
     (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
 
-  useEffect(() => {
-    if (
-      commissionForPeriod === 0 &&
-      displayedSalesKes > 0 &&
-      displayedSalesKes < 500_000
-    ) {
-      setCommissionForPeriod(Math.round(displayedSalesKes * 0.05));
-    }
-  }, [commissionForPeriod, displayedSalesKes]);
-
   // Build a public fallback earnings summary when the server restricts detailed
   // earnings data to authenticated attendants. This lets the UI show a card
   // with basic values even when the user is not signed in.

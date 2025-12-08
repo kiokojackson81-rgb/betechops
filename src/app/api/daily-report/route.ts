@@ -178,11 +178,14 @@ export async function POST(req: Request) {
     const derivedProfit =
       toNumberOrNull((tasks?.metrics as any)?.totalProfit) ??
       toNumberOrNull((tasks?.totals as any)?.profit) ??
-      toNumberOrNull(totalSales) ??
-      0;
-    const totalProfitForDay = typeof derivedProfit === "number" ? derivedProfit : 0;
+      null;
+    const hasProfitValue = typeof derivedProfit === "number";
     if (!tasksWithSubmit.metrics) tasksWithSubmit.metrics = {};
-    tasksWithSubmit.metrics.totalProfit = totalProfitForDay;
+    if (hasProfitValue) {
+      tasksWithSubmit.metrics.totalProfit = derivedProfit!;
+    } else {
+      delete (tasksWithSubmit.metrics as any).totalProfit;
+    }
 
     const reportPayload = {
       date: reportDate,

@@ -143,4 +143,28 @@ describe("POST /api/daily-report", () => {
       }),
     });
   });
+
+  it("does not treat total sales as profit when profit is missing", async () => {
+    const payload = {
+      date: "2025-12-01",
+      day: "Tuesday",
+      productsCount: 1,
+      totalSales: 2500,
+      tasks: {
+        sales: [],
+      },
+    };
+
+    const res = await POST(
+      new Request("http://localhost/api/daily-report", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const lastCall = mockedDailyReportCreate.mock.calls[mockedDailyReportCreate.mock.calls.length - 1];
+    const createPayload = lastCall?.[0];
+    expect(createPayload?.data?.tasks?.metrics?.totalProfit).toBeUndefined();
+  });
 });
