@@ -2,7 +2,13 @@
 import React, { useEffect, useState } from "react";
 import { formatISO, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 
-type MarketingSummary = any;
+type MarketingSummary = {
+  totalSales: number;
+  totalProfit?: number;
+  totalItems?: number;
+  paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number };
+  commission?: { commission?: number; tiersReached?: string[] };
+};
 
 export default function SummaryPanelClient({ initialFrom, initialTo }: { initialFrom: string; initialTo: string }) {
   const [from, setFrom] = useState(initialFrom);
@@ -22,8 +28,8 @@ export default function SummaryPanelClient({ initialFrom, initialTo }: { initial
       }
       const data = await res.json();
       setSummary(data);
-    } catch (err: any) {
-      setError(err?.message || String(err));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
       setSummary(null);
     } finally {
       setLoading(false);
@@ -32,7 +38,6 @@ export default function SummaryPanelClient({ initialFrom, initialTo }: { initial
 
   useEffect(() => {
     fetchSummary(from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
 
   return (

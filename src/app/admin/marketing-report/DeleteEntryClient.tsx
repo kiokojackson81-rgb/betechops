@@ -23,11 +23,7 @@ export default function DeleteEntryClient({ entryId, entry, onDeleted, onRestore
 
     // If optimistic removal is enabled, remove from parent immediately
     if (optimistic && onDeleted) {
-      try {
-        onDeleted(entryId);
-      } catch (e) {
-        // ignore
-      }
+      onDeleted(entryId);
     }
 
     setLoading(true);
@@ -47,26 +43,18 @@ export default function DeleteEntryClient({ entryId, entry, onDeleted, onRestore
 
       // If not optimistic or parent expects confirmation callback, ensure onDeleted is called.
       if (!optimistic && onDeleted) {
-        try {
-          onDeleted(entryId);
-        } catch (e) {
-          // swallow
-        }
+        onDeleted(entryId);
       }
 
       // fallback: if no optimistic handler provided, refresh to update data
       if (!optimistic && !onDeleted) {
         router.refresh();
       }
-    } catch (err: any) {
-      showToast(err?.message || "Delete failed", "error");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
       // rollback optimistic removal if provided
       if (optimistic && onRestore && entry) {
-        try {
-          onRestore(entry);
-        } catch (e) {
-          // swallow
-        }
+        onRestore(entry);
       } else if (optimistic && !onRestore) {
         // no rollback handler: refresh to restore data from server
         router.refresh();

@@ -13,20 +13,20 @@ export default function WipeButtonClient({ entryId }: { entryId: string }) {
     if (!ok) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/marketing-report/update-entry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entryId, action: 'wipe' }),
+      const res = await fetch("/api/admin/marketing-report/update-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId, action: "wipe" }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || 'Wipe failed');
+        throw new Error(j?.error || "Wipe failed");
       }
       // refresh to reflect wiped state
       router.refresh();
-      showToast('Wipe completed', 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'Wipe failed', 'error');
+      showToast("Wipe completed", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Wipe failed", "error");
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
@@ -20,6 +20,7 @@ import type { EarningsSummary } from "@/lib/marketingEarnings";
 import { signOut } from "next-auth/react";
 import { Trash2 } from "lucide-react";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+import type { UnpricedSale } from "@/lib/marketingUnpricedSales";
 
 type MarketingDailyFormState = {
   date: string;
@@ -36,21 +37,19 @@ type ReceiptRow = {
   items: ReceiptItem[];
 };
 
-type UnpricedSale = {
-  id: string;
-  source: "daily-sale" | "support";
-  saleDate: string;
-  day: string | null;
-  productName: string;
-  sellingPrice: number;
-  paymentMethod: "MPESA" | "CASH" | null;
-  receiptNumber: string;
-  attendantName: string;
-  attendantEmail: string | null;
-  receiptTotal?: number;
+type RemoteSummaryPayload = {
+  period?: { key?: string; label?: string; start?: string; end?: string };
+  aggregates?: {
+    totalSales?: number;
+    totalItems?: number;
+    paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number };
+    commission?: { commission?: number };
+  };
 };
 
 const getUnpricedSaleKey = (sale: UnpricedSale) => `${sale.source}:${sale.id}`;
+const getUnpricedDraftKey = (sale: UnpricedSale, receiptItemId?: string) =>
+  receiptItemId ? `${sale.source}:item:${receiptItemId}` : getUnpricedSaleKey(sale);
 
 const dayOptions: DayName[] = [
   "Monday",
@@ -221,9 +220,8 @@ type EarningsCardProps = {
 };
 
 function EarningsCard({ summary }: EarningsCardProps) {
-  if (!summary) return null;
-
   const { locked, toggle } = useCardLock("marketing:earnings");
+  if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
 
   const rows = [
@@ -327,10 +325,36 @@ export default function MarketingTrackerPage() {
     };
   }>(null);
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
+  const earningsSummaryJsonRef = useRef<string>("");
   const [unpricedSales, setUnpricedSales] = useState<UnpricedSale[]>([]);
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [deletingSaleKey, setDeletingSaleKey] = useState<string | null>(null);
+  const [pricingSaleKey, setPricingSaleKey] = useState<string | null>(null);
+  const unpricedQueueStats = useMemo(() => {
+    return unpricedSales.reduce(
+      (acc, sale) => {
+        acc.receipts += 1;
+        if (sale.source === "support") {
+          acc.supportReceipts += 1;
+          const pendingItems = sale.receiptItems?.length ?? sale.itemsPending ?? 0;
+          if (pendingItems > 0) {
+            acc.items += pendingItems;
+          } else {
+            const fallback = sale.itemsPending ?? 0;
+            acc.items += fallback > 0 ? fallback : 1;
+          }
+        } else {
+          acc.items += 1;
+        }
+        return acc;
+      },
+      { receipts: 0, supportReceipts: 0, items: 0 },
+    );
+  }, [unpricedSales]);
+  useEffect(() => {
+    earningsSummaryJsonRef.current = JSON.stringify(earningsSummary ?? {});
+  }, [earningsSummary]);
 
   const config = useMemo(
     () =>
@@ -360,19 +384,23 @@ export default function MarketingTrackerPage() {
 
   const router = useRouter();
 
-  const handleSetBuyingDraft = (sale: UnpricedSale, value: string) => {
-    const key = getUnpricedSaleKey(sale);
+  const handleSetBuyingDraft = (key: string, value: string) => {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmitBuyingPrice = async (sale: UnpricedSale) => {
-    const key = getUnpricedSaleKey(sale);
-    const rawValue = buyingDrafts[key] ?? "";
+  const handleSubmitBuyingPrice = async (sale: UnpricedSale, receiptItemId?: string) => {
+    const draftKey = getUnpricedDraftKey(sale, receiptItemId);
+    const rawValue = buyingDrafts[draftKey] ?? "";
     const parsedValue = Number(rawValue);
     if (!rawValue || Number.isNaN(parsedValue) || parsedValue <= 0) {
       showToast("Enter a valid buying price", "error");
       return;
     }
+    if (sale.source === "support" && !receiptItemId) {
+      showToast("Select an item on the receipt to price", "error");
+      return;
+    }
+
     const buyingPrice = Math.round(parsedValue);
 
     try {
@@ -380,8 +408,9 @@ export default function MarketingTrackerPage() {
         sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
       const body =
         sale.source === "support"
-          ? { receiptItemId: sale.id, buyingPrice }
+          ? { receiptItemId, buyingPrice }
           : { dailySaleId: sale.id, buyingPrice };
+      setPricingSaleKey(draftKey);
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -395,40 +424,67 @@ export default function MarketingTrackerPage() {
       }
       const data = await res.json().catch(() => null);
       showToast("Buying price saved", "success");
-      setUnpricedSales((prev) =>
-        prev.filter((row) => !(row.id === sale.id && row.source === sale.source)),
-      );
-      setBuyingDrafts((prev) => {
-        const next = { ...prev };
-        delete next[key];
+
+      let saleValueDelta = 0;
+      let paymentDelta: "MPESA" | "CASH" | null = null;
+      setUnpricedSales((prev) => {
+        const next: UnpricedSale[] = [];
+        for (const row of prev) {
+          if (row.id !== sale.id || row.source !== sale.source) {
+            next.push(row);
+            continue;
+          }
+          if (row.source === "support" && receiptItemId) {
+            const remainingItems = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
+            if (!remainingItems.length) {
+              saleValueDelta = data?.receiptTotal ?? row.sellingPrice;
+              paymentDelta = row.paymentMethod;
+              continue;
+            }
+            next.push({
+              ...row,
+              receiptItems: remainingItems,
+              itemsPending: Math.max(0, (row.itemsPending ?? remainingItems.length + 1) - 1),
+            });
+            continue;
+          }
+          saleValueDelta = data?.saleValue ?? row.sellingPrice;
+          paymentDelta = row.paymentMethod;
+        }
         return next;
       });
-      if (data?.saleValue) {
-        const methodKey =
-          sale.paymentMethod === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
+
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+
+      if (saleValueDelta > 0) {
+        const methodKey = paymentDelta === "CASH" ? "totalSalesCash" : "totalSalesMpesa";
         setServerPeriodSummary((prev) => {
           if (!prev) return prev;
           const updatedPaymentStats = {
             ...prev.aggregates.paymentStats,
             [methodKey]:
-              (prev.aggregates.paymentStats[methodKey] ?? 0) + data.saleValue,
+              (prev.aggregates.paymentStats[methodKey] ?? 0) + saleValueDelta,
           };
           return {
             ...prev,
             aggregates: {
               ...prev.aggregates,
-              totalSales: prev.aggregates.totalSales + data.saleValue,
+              totalSales: prev.aggregates.totalSales + saleValueDelta,
               totalItems: prev.aggregates.totalItems + 1,
               paymentStats: updatedPaymentStats,
             },
           };
         });
-        // Also update earnings summary immediately by recalculating commission
+
         try {
           setEarningsSummary((prev) => {
             if (!prev) return prev;
             const currentTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
-            const newTotalSales = currentTotalSales + data.saleValue;
+            const newTotalSales = currentTotalSales + saleValueDelta;
             const commissionInfo = getCommissionSummaryForSales(newTotalSales);
             const newCommission = Math.round(commissionInfo.commission ?? 0);
             const delta = newCommission - (prev.commission ?? 0);
@@ -440,12 +496,14 @@ export default function MarketingTrackerPage() {
               netPay: (prev.netPay ?? 0) + delta,
             };
           });
-        } catch (err) {
-          // ignore any client-side calculation errors
+        } catch {
+          // ignore client-side calculation issues
         }
       }
     } catch (err) {
-      showToast("Failed to save buying price", "error");
+      showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingSaleKey(null);
     }
   };
 
@@ -522,7 +580,7 @@ export default function MarketingTrackerPage() {
     const POLL_INTERVAL_MS = 15_000; // poll every 15s
     const controller = new AbortController();
 
-    const buildSummaryFrom = (data: any) => ({
+    const buildSummaryFrom = (data: RemoteSummaryPayload) => ({
       period: {
         key: data.period?.key ?? "",
         label: data.period?.label ?? "",
@@ -569,7 +627,7 @@ export default function MarketingTrackerPage() {
             prev.period.label !== next.period.label;
           return changed ? next : prev;
         });
-      } catch (err) {
+      } catch {
         // ignore network/abort errors
       }
     };
@@ -603,10 +661,13 @@ export default function MarketingTrackerPage() {
         if (!data) return;
         const next = data.summary ?? null;
         // shallow compare by JSON to avoid unnecessary updates
-        const prevStr = JSON.stringify(earningsSummary ?? {});
+        const prevStr = earningsSummaryJsonRef.current;
         const nextStr = JSON.stringify(next ?? {});
-        if (next && prevStr !== nextStr) setEarningsSummary(next);
-      } catch (err) {
+        if (next && prevStr !== nextStr) {
+          earningsSummaryJsonRef.current = nextStr;
+          setEarningsSummary(next);
+        }
+      } catch {
         // ignore network/abort errors
       }
     };
@@ -617,7 +678,7 @@ export default function MarketingTrackerPage() {
       clearInterval(id);
       controller.abort();
     };
-  }, [/* intentionally no deps to poll */]);
+  }, []);
 
   useEffect(() => {
     const POLL_INTERVAL_MS = 20_000;
@@ -655,7 +716,7 @@ export default function MarketingTrackerPage() {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   };
 
-  const totals = useMemo(() => {
+const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems: number; filledReceiptsCount: number } => {
     const totalSales = receipts.reduce(
       (sum, r) =>
         sum +
@@ -717,11 +778,11 @@ export default function MarketingTrackerPage() {
       return count + (hasSelling || hasItems || hasReceiptNumber ? 1 : 0);
     }, 0);
 
-    return { totalSales, totalProfit, totalItems, filledReceiptsCount };
-  }, [receipts]);
+  return { totalSales, totalProfit, totalItems, filledReceiptsCount };
+}, [receipts]);
 
-  // derived stats for the Quick stats card
-  const totalReceipts = (totals as any).filledReceiptsCount ?? receipts.length;
+// derived stats for the Quick stats card
+const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   const totalSales = totals.totalSales;
   const totalItems = totals.totalItems;
   // Combine server-side period totals (if any) with the unsaved local receipts
@@ -751,77 +812,6 @@ export default function MarketingTrackerPage() {
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
-
-  const updateReceipt = (id: string, patch: Partial<ReceiptRow>) => {
-    setReceipts((rows) =>
-      rows.map((row) => (row.id === id ? { ...row, ...patch } : row)),
-    );
-  };
-
-  const addReceipt = () => setReceipts((rows) => [...rows, newSaleRow()]);
-  const removeReceipt = (id: string) =>
-    setReceipts((rows) =>
-      rows.length > 1 ? rows.filter((r) => r.id !== id) : rows,
-    );
-
-  const addItem = (receiptId: string) => {
-    setReceipts((rows) =>
-      rows.map((r) =>
-        r.id === receiptId
-          ? {
-              ...r,
-              items: [
-                ...r.items,
-                {
-                  id:
-                    typeof crypto !== "undefined" &&
-                    typeof crypto.randomUUID === "function"
-                      ? crypto.randomUUID()
-                      : Math.random().toString(36).slice(2),
-                  productName: "",
-                  buyingPrice: "",
-                },
-              ],
-            }
-          : r,
-      ),
-    );
-  };
-
-  const updateItem = (
-    receiptId: string,
-    itemId: string,
-    patch: Partial<ReceiptItem>,
-  ) => {
-    setReceipts((rows) =>
-      rows.map((r) =>
-        r.id === receiptId
-          ? {
-              ...r,
-              items: r.items.map((it) =>
-                it.id === itemId ? { ...it, ...patch } : it,
-              ),
-            }
-          : r,
-      ),
-    );
-  };
-
-  const removeItem = (receiptId: string, itemId: string) => {
-    setReceipts((rows) =>
-      rows.map((r) =>
-        r.id === receiptId
-          ? {
-              ...r,
-              items:
-                r.items.filter((it) => it.id !== itemId).length > 0
-                  ? r.items.filter((it) => it.id !== itemId)
-                  : r.items,
-            }
-          : r,
-      ),
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1123,16 +1113,25 @@ export default function MarketingTrackerPage() {
             <EarningsCard summary={earningsSummary} />
             {currentUserEmail === "jeniffer@betech.co.ke" && (
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-100">
-                      Sales needing buying price
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Attach buying price to attendants’ sales to earn commission.
-                    </p>
-                  </div>
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Sales needing buying price
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Attach buying price to attendants&apos; sales to earn commission.
+                </p>
+              </div>
+              {unpricedSales.length > 0 ? (
+                <div className="flex flex-col items-start rounded-xl border border-slate-800/80 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-300 sm:flex-row sm:items-center sm:gap-4">
+                  <span>{unpricedQueueStats.receipts} receipts</span>
+                  <span>{unpricedQueueStats.items} items pending</span>
+                  {unpricedQueueStats.supportReceipts ? (
+                    <span>{unpricedQueueStats.supportReceipts} support receipts</span>
+                  ) : null}
                 </div>
+              ) : null}
+            </div>
 
                 {unpricedSales.length === 0 ? (
                   <p className="text-xs text-slate-400">
@@ -1141,12 +1140,12 @@ export default function MarketingTrackerPage() {
                 ) : (
                   <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-1">
                     {unpricedSales.map((sale) => {
-                      const draftKey = getUnpricedSaleKey(sale);
+                      const saleKey = getUnpricedSaleKey(sale);
                       const isSupport = sale.source === "support";
-                      const isDeleting = deletingSaleKey === draftKey;
+                      const isDeleting = deletingSaleKey === saleKey;
                       return (
                         <div
-                          key={draftKey}
+                          key={saleKey}
                           className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -1176,32 +1175,68 @@ export default function MarketingTrackerPage() {
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-slate-400">
-                            <span>Line value</span>
+                            <span>{isSupport ? "Receipt value" : "Line value"}</span>
                             <span>KES {sale.sellingPrice.toLocaleString()}</span>
                           </div>
-                          {typeof sale.receiptTotal === "number" && sale.receiptTotal > 0 && (
-                            <div className="flex items-center justify-between text-[11px] text-slate-500">
-                              <span>Receipt total</span>
-                              <span>KES {sale.receiptTotal.toLocaleString()}</span>
+                          {isSupport ? (
+                            <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                              {((sale.itemsPending ?? sale.receiptItems?.length ?? 0) || 0).toLocaleString()} pending
+                              {sale.itemsTotal ? ` of ${sale.itemsTotal}` : ""} items
+                            </div>
+                          ) : (
+                            <div className="text-[10px] uppercase tracking-wide text-slate-500">1 item pending</div>
+                          )}
+                          {isSupport && (sale.receiptItems?.length ?? 0) > 0 ? (
+                            <div className="space-y-2 pt-2">
+                              {sale.receiptItems!.map((item) => {
+                                const itemKey = getUnpricedDraftKey(sale, item.id);
+                                const isSaving = pricingSaleKey === itemKey;
+                                return (
+                                  <div key={item.id} className="flex items-center gap-2">
+                                    <div className="flex-1 text-[11px] text-slate-300">
+                                      <div className="font-semibold text-slate-100">
+                                        {item.productName || "Receipt item"}
+                                      </div>
+                                    </div>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      placeholder="Buying price"
+                                      value={buyingDrafts[itemKey] ?? ""}
+                                      onChange={(e) => handleSetBuyingDraft(itemKey, e.target.value)}
+                                      className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSubmitBuyingPrice(sale, item.id)}
+                                      disabled={isSaving}
+                                      className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-60"
+                                    >
+                                      {isSaving ? "Saving…" : "Save"}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 pt-1">
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="Buying price"
+                                value={buyingDrafts[saleKey] ?? ""}
+                                onChange={(e) => handleSetBuyingDraft(saleKey, e.target.value)}
+                                className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSubmitBuyingPrice(sale)}
+                                className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
+                              >
+                                Save
+                              </button>
                             </div>
                           )}
-                          <div className="flex items-center gap-2 pt-1">
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="Buying price"
-                              value={buyingDrafts[draftKey] ?? ""}
-                              onChange={(e) => handleSetBuyingDraft(sale, e.target.value)}
-                              className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleSubmitBuyingPrice(sale)}
-                              className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
-                            >
-                              Save
-                            </button>
-                          </div>
                         </div>
                       );
                     })}

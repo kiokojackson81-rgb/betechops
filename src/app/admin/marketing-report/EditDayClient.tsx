@@ -48,11 +48,23 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       if (!res.ok) throw new Error(data?.error || "Failed to save");
       // If API returns the updated entry, refresh local state
       if (data?.entry && Array.isArray(data.entry.receipts)) {
-        setReceipts(data.entry.receipts.map((r: any) => ({ ...r })));
+        setReceipts(
+          data.entry.receipts.map((r: Receipt) => ({
+            id: r.id,
+            receiptNumber: r.receiptNumber ?? "",
+            sellingTotal: Number(r.sellingTotal) || 0,
+            paymentMethod: r.paymentMethod,
+            items: (r.items || []).map((it) => ({
+              id: it.id,
+              productName: it.productName || "",
+              buyingPrice: Number(it.buyingPrice) || 0,
+            })),
+          })),
+        );
       }
       setMessage("Saved successfully");
-    } catch (err: any) {
-      setMessage(err?.message || "Save failed");
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -74,15 +86,28 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
       if (!res.ok) throw new Error(data?.error || "Failed to wipe");
       // Prefer server-canonical entry if returned
       if (data?.entry && Array.isArray(data.entry.receipts)) {
-        setReceipts(data.entry.receipts.map((r: any) => ({ ...r })));
+        setReceipts(
+          data.entry.receipts.map((r: Receipt) => ({
+            id: r.id,
+            receiptNumber: r.receiptNumber ?? "",
+            sellingTotal: Number(r.sellingTotal) || 0,
+            paymentMethod: r.paymentMethod,
+            items: (r.items || []).map((it) => ({
+              id: it.id,
+              productName: it.productName || "",
+              buyingPrice: Number(it.buyingPrice) || 0,
+            })),
+          })),
+        );
       } else {
         setReceipts([]);
       }
       setMessage("Wiped receipts for the day.");
       showToast("Wiped receipts for the day.", "success");
-    } catch (err: any) {
-      setMessage(err?.message || "Wipe failed");
-      showToast(err?.message || "Wipe failed", "error");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Wipe failed";
+      setMessage(message);
+      showToast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -95,7 +120,11 @@ export default function EditDayClient({ initialData }: { initialData: { id: stri
           <div className="grid gap-2 md:grid-cols-3">
             <input value={r.receiptNumber ?? ""} onChange={(e) => updateReceipt(ri, { receiptNumber: e.target.value })} placeholder="Receipt number" className="px-2 py-1 bg-slate-900 border border-slate-800 rounded" />
             <input type="number" value={r.sellingTotal} onChange={(e) => updateReceipt(ri, { sellingTotal: Number(e.target.value) || 0 })} className="px-2 py-1 bg-slate-900 border border-slate-800 rounded" />
-            <select value={r.paymentMethod} onChange={(e) => updateReceipt(ri, { paymentMethod: e.target.value as any })} className="px-2 py-1 bg-slate-900 border border-slate-800 rounded">
+            <select
+              value={r.paymentMethod}
+              onChange={(e) => updateReceipt(ri, { paymentMethod: e.target.value as Receipt["paymentMethod"] })}
+              className="px-2 py-1 bg-slate-900 border border-slate-800 rounded"
+            >
               <option value="MPESA">MPESA</option>
               <option value="CASH">CASH</option>
             </select>

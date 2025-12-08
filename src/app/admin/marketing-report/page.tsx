@@ -5,37 +5,48 @@ import { getRecentTradingPeriods, getTradingPeriodFor } from "@/lib/tradingPerio
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-type AdminSearchParams = Record<string, string | string[] | undefined> | undefined;
+type AdminSearchParams = {
+  period?: string | string[];
+  dow?: string | string[];
+  date?: string | string[];
+  user?: string | string[];
+};
 
-const AdminMarketingReportPage = async (...args: any[]) => {
+type AdminMarketingReportPageProps = {
+  searchParams?: AdminSearchParams;
+};
+
+const getFirstParam = (value?: string | string[]) => {
+  if (!value) return "";
+  return Array.isArray(value) ? value[0] ?? "" : value;
+};
+
+const AdminMarketingReportPage = async ({ searchParams }: AdminMarketingReportPageProps) => {
   // server-side guard: only ADMIN may access this page
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = session?.user?.role;
   if (role !== "ADMIN") return redirect("/not-authorized");
 
-  const props = args[0] ?? {};
-  const searchParams = (props?.searchParams as AdminSearchParams) ?? undefined;
   const periods = getRecentTradingPeriods(12);
+  const selectedPeriodKey = getFirstParam(searchParams?.period);
   const selectedPeriod =
-    (searchParams?.period &&
-      periods.find((period) => period.key === searchParams.period)) ||
-    getTradingPeriodFor(new Date());
+    periods.find((period) => period.key === selectedPeriodKey) ?? getTradingPeriodFor(new Date());
 
-  const dow = Array.isArray(searchParams?.dow) ? searchParams?.dow[0] : searchParams?.dow || "";
-  const dateStrRaw = Array.isArray(searchParams?.date) ? searchParams?.date[0] : searchParams?.date;
-  const userSearch = Array.isArray(searchParams?.user) ? searchParams?.user[0] : searchParams?.user;
+  const dow = getFirstParam(searchParams?.dow);
+  const dateStrRaw = getFirstParam(searchParams?.date);
+  const userSearch = getFirstParam(searchParams?.user);
 
   const parsedDate = dateStrRaw ? new Date(dateStrRaw) : undefined;
   const validDate = parsedDate && !Number.isNaN(parsedDate.getTime());
-  const from = validDate ? startOfDay(parsedDate) : undefined;
-  const to = validDate ? endOfDay(parsedDate) : undefined;
+  const from = validDate ? startOfDay(parsedDate as Date) : undefined;
+  const to = validDate ? endOfDay(parsedDate as Date) : undefined;
 
   const report = await getMarketingReport({
     tradingPeriodKey: selectedPeriod.key,
     dayOfWeek: dow || undefined,
     from,
     to,
-    userFilter: userSearch,
+    userFilter: userSearch || undefined,
   });
 
   return (
@@ -49,8 +60,8 @@ const AdminMarketingReportPage = async (...args: any[]) => {
           dateStr={validDate && dateStrRaw ? dateStrRaw : ""}
           userFilter={userSearch ?? ""}
         />
-    </main>
-  </div>
+      </main>
+    </div>
   );
 };
 

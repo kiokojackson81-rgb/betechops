@@ -25,14 +25,14 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
   useEffect(() => {
     // When the period changes, clear the date if it's out of range
     if (!date) return;
-    const p = periods.find((p) => p.key === periodKey);
+    const p = periods.find((period) => period.key === periodKey);
     if (!p) return;
     const dateObj = new Date(date);
     if (Number.isNaN(dateObj.getTime())) return;
     if (dateObj < p.start || dateObj > p.end) {
       setDate(undefined);
     }
-  }, [periodKey]);
+  }, [periodKey, periods, date]);
 
   useEffect(() => {
     setUser(initialUser);

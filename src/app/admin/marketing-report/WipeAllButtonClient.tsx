@@ -13,17 +13,17 @@ export default function WipeAllButtonClient({ userId, periodKey }: { userId: str
     if (!ok) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/marketing-report/wipe-by-attendant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/marketing-report/wipe-by-attendant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, tradingPeriodKey: periodKey }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || 'Wipe failed');
-      showToast(`Wiped ${j.wiped || 0} entries (batch ${j.batchId || ''})`, 'success');
+      if (!res.ok) throw new Error(j?.error || "Wipe failed");
+      showToast(`Wiped ${j.wiped || 0} entries (batch ${j.batchId || ""})`, "success");
       router.refresh();
-    } catch (err: any) {
-      showToast(err?.message || 'Wipe failed', 'error');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Wipe failed", "error");
     } finally {
       setLoading(false);
     }

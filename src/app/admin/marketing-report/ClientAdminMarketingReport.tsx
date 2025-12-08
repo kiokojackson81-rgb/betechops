@@ -9,6 +9,7 @@ import MarketingReportFilterBar from "./FilterBar";
 import MultiDayExportClient from "./MultiDayExportClient";
 import DeleteEntryClient from "./DeleteEntryClient";
 import type { MarketingReportEntry, MarketingReportAggregates } from "@/lib/marketingReport";
+import AdminPricingPanel from "./AdminPricingPanel";
 
 const cardClasses =
   "rounded-2xl border border-white/10 bg-[var(--card,#171b23)] border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20";
@@ -16,6 +17,21 @@ const cardClasses =
 const dayLabels = ["All days", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const formatKES = (value: number) => `KES ${Math.round(value).toLocaleString("en-KE")}`;
+
+const getSaleItemsCount = (sale: MarketingReportEntry["sales"][number]): number => {
+  if (!sale) return 0;
+  const countRaw = (sale as { itemsCount?: number | null }).itemsCount;
+  const count = typeof countRaw === "number" ? countRaw : Number(countRaw ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 1;
+};
+
+const getSaleSellingPrice = (sale: MarketingReportEntry["sales"][number]): number => {
+  if (!sale) return 0;
+  const raw = (sale as { sellingPrice?: number | string | null }).sellingPrice;
+  if (typeof raw === "number") return raw;
+  const asNumber = Number(raw ?? 0);
+  return Number.isFinite(asNumber) ? asNumber : 0;
+};
 
 type Props = {
   entries?: MarketingReportEntry[];
@@ -65,23 +81,18 @@ export default function ClientAdminMarketingReport({
 
   const isActiveDay = (dayLabel: string) => (dayLabel === "All days" ? !dow : dow === dayLabel);
 
-  // Maintain a local copy of entries for optimistic updates. Sync from server only
-  // when filters or the selected period change to avoid clobbering optimistic removals
-  // triggered by the user.
+  // Maintain a local copy of entries for optimistic updates. Resync whenever the
+  // server sends new results (i.e., when filters change or a revalidation occurs).
   const [entriesState, setEntriesState] = useState<MarketingReportEntry[]>(entries);
-  // Intentionally exclude `entries` from deps: we only want to resync the local
-  // optimistic state when filters/period change, to avoid clobbering user-driven
-  // optimistic removals. Tell the linter this is deliberate.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setEntriesState(entries);
-  }, [selectedPeriodKey, dateStr, userFilter, dow]);
+  }, [entries]);
 
   const entriesList = entriesState;
   const hasEntries = entriesList.length > 0;
   const modalItemCount = selectedEntry
     ? (selectedEntry.receipts?.reduce((sum, rec) => sum + (rec.items?.length || 0), 0) ?? 0) ||
-      (selectedEntry.sales?.reduce((sum, sale) => sum + (Number((sale as any).itemsCount) || 1), 0) ?? 0)
+      (selectedEntry.sales?.reduce((sum, sale) => sum + getSaleItemsCount(sale), 0) ?? 0)
     : 0;
 
   return (
@@ -187,6 +198,8 @@ export default function ClientAdminMarketingReport({
         </div>
       </section>
 
+      <AdminPricingPanel />
+
       <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -199,7 +212,7 @@ export default function ClientAdminMarketingReport({
           <table className="min-w-full text-sm">
             <thead className="bg-slate-950/80 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                {["Date", "Day", "Channel", "Total sales", "Total profit", "Sales rows", "TikTok", "IG / FB / YT", "WhatsApp", "Live summary", "Stock enough?", "Shop ready?", "Weekly comment", "Actions"].map((col) => (
+                {["Date", "Day", "Channel", "Total sales", "Total profit", "Receipts / items", "TikTok", "IG / FB / YT", "WhatsApp", "Live summary", "Stock enough?", "Shop ready?", "Weekly comment", "Actions"].map((col) => (
                   <th key={col} className="px-3 py-2">{col}</th>
                 ))}
               </tr>
@@ -224,8 +237,9 @@ export default function ClientAdminMarketingReport({
                   const stockOk = Boolean(entry.stockEnoughFastMovers);
                   const shopReady = Boolean(entry.shopCleaned && entry.shopWellArranged && entry.displayWellLabeled);
                   const receiptsItems = entry.receipts?.reduce((sum, rec) => sum + (rec.items?.length || 0), 0) ?? 0;
-                  const salesCount = entry.sales?.reduce((sum, sale) => sum + (Number((sale as any).itemsCount) || 1), 0) ?? 0;
+                  const salesCount = entry.sales?.reduce((sum, sale) => sum + getSaleItemsCount(sale), 0) ?? 0;
                   const itemCount = receiptsItems || salesCount;
+                  const receiptsCount = entry.receipts?.length ?? (entry.sales?.length ?? 0);
                   const channelLabel = entry.source === "ATTENDANT" ? "Attendant" : "Marketing";
                   const channelClass =
                     entry.source === "ATTENDANT"
@@ -241,7 +255,10 @@ export default function ClientAdminMarketingReport({
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-white">{formatKES(entry.totalSales)}</td>
                       <td className="px-3 py-2 text-right text-slate-100">{formatKES(entry.totalProfit)}</td>
-                      <td className="px-3 py-2 text-right text-slate-200">{itemCount} items</td>
+                      <td className="px-3 py-2 text-right text-slate-200">
+                        <div className="font-semibold text-white">{receiptsCount} receipts</div>
+                        <div className="text-xs text-slate-400">{itemCount} items</div>
+                      </td>
                       <td className="px-3 py-2 text-slate-200">
                         <div className="flex gap-2">
                           <span title="Posted">{tikTokDone ? "Y" : "N"}</span>
@@ -397,8 +414,8 @@ export default function ClientAdminMarketingReport({
                   <div className="mt-3 space-y-2">
                     {selectedEntry.sales.map((sale, idx) => (
                       <div key={idx} className="flex justify-between text-sm text-white/80">
-                          <span>{sale.product || "—"}</span>
-                        <span>{formatKES(Number((sale as any).sellingPrice ?? 0))}</span>
+                        <span>{sale.product || "-"}</span>
+                        <span>{formatKES(getSaleSellingPrice(sale))}</span>
                       </div>
                     ))}
                   </div>
