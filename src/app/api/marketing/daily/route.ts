@@ -248,7 +248,14 @@ export async function POST(req: Request) {
       0
     );
     const periodTotalReceipts = periodEntries.reduce((sum, e) => sum + e.receipts.length, 0);
-    const commission = getCommissionSummaryForSales(periodSales);
+    const commissionInfo = getCommissionSummaryForSales(periodSales);
+    let commissionValue = 0;
+    if (periodProfit > 0) {
+      commissionValue = commissionInfo.commission ?? 0;
+      if (commissionValue === 0 && periodSales > 0 && periodSales < 500_000) {
+        commissionValue = Math.round(Math.max(periodProfit, 0) * 0.05);
+      }
+    }
 
     const periodSummary: any = {
       periodLabel: period.label,
@@ -259,9 +266,9 @@ export async function POST(req: Request) {
       countCashReceipts: periodCashCount,
       totalReceipts: periodTotalReceipts,
       totalItems: periodItems,
-      commission: commission.commission,
-      nextTarget: commission.nextTarget,
-      nextTierAmount: commission.nextTierReward,
+      commission: commissionValue,
+      nextTarget: commissionInfo.nextTarget,
+      nextTierAmount: commissionInfo.nextTierReward,
     };
     // Only admins see period profit
     if (isAdmin) periodSummary.periodProfit = periodProfit;

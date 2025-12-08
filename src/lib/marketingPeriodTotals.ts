@@ -247,13 +247,16 @@ export async function recomputeMarketingCommissionLedger(opts: {
   const period = opts.period ?? getTradingPeriodFor(opts.date ?? new Date());
 
   const { totals } = await summarizeMarketingReportsForPeriod({ userId, period, client });
-  const commissionInfo = getCommissionSummaryForSales(totals.totalSales);
-  const baseCommission = commissionInfo.commission ?? 0;
-  const fallbackCommission =
-    baseCommission === 0 && totals.totalSales > 0 && totals.totalSales < 500_000
-      ? Math.round(Math.max(totals.totalProfit, 0) * 0.05)
-      : 0;
-  const marketingCommission = baseCommission > 0 ? baseCommission : fallbackCommission;
+  let marketingCommission = 0;
+  if (totals.totalProfit > 0) {
+    const commissionInfo = getCommissionSummaryForSales(totals.totalSales);
+    const baseCommission = commissionInfo.commission ?? 0;
+    const fallbackCommission =
+      baseCommission === 0 && totals.totalSales > 0 && totals.totalSales < 500_000
+        ? Math.round(Math.max(totals.totalProfit, 0) * 0.05)
+        : 0;
+    marketingCommission = baseCommission > 0 ? baseCommission : fallbackCommission;
+  }
 
   if (marketingCommission === 0 && totals.totalSales === 0) {
     return { updated: false, commission: 0, totals, period, ledgerId: null };

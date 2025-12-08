@@ -28,9 +28,12 @@
     const totalReceipts = marketingTotals.totalReceipts + supportTotals.totalReceipts;
 
     const commissionInfo = getCommissionSummaryForSales(totalSales);
-    let commission = commissionInfo.commission ?? 0;
-    if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
-      commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+    let commission = 0;
+    if (totalProfit > 0) {
+      commission = commissionInfo.commission ?? 0;
+      if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
+        commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+      }
     }
 
     // zero commission if this user has unpriced sales this period

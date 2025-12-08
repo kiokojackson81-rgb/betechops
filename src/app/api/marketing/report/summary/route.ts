@@ -48,10 +48,13 @@ export async function GET(req: Request) {
   const totalItems = marketingTotals.totalItems + supportTotals.totalItems;
   const totalReceipts = marketingTotals.totalReceipts + supportTotals.totalReceipts;
 
-  const commissionInfo = getCommissionSummaryForSales(totalSales);
-  let commission = commissionInfo.commission ?? 0;
-  if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
-    commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+  let commission = 0;
+  if (totalProfit > 0) {
+    const commissionInfo = getCommissionSummaryForSales(totalSales);
+    commission = commissionInfo.commission ?? 0;
+    if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
+      commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+    }
   }
 
   // If there are any unpriced sales for this attendant in the current
