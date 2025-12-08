@@ -581,7 +581,14 @@ export default function MarketingTrackerPage() {
     const controller = new AbortController();
 
     const buildSummaryFrom = (data: RemoteSummaryPayload) => {
-      const paymentStatsRaw = data.aggregates?.paymentStats ?? {};
+      type PaymentStatsRaw = {
+        totalSalesMpesa?: number;
+        totalSalesCash?: number;
+        countMpesaReceipts?: number;
+        countCashReceipts?: number;
+      };
+
+      const paymentStatsRaw: PaymentStatsRaw = data.aggregates?.paymentStats ?? {};
       return {
         period: {
           key: data.period?.key ?? "",
@@ -624,8 +631,8 @@ export default function MarketingTrackerPage() {
             paymentStats: {
               totalSalesMpesa: next.aggregates.paymentStats.totalSalesMpesa ?? 0,
               totalSalesCash: next.aggregates.paymentStats.totalSalesCash ?? 0,
-              countMpesaReceipts: next.aggregates.paymentStats.countMpesaReceipts,
-              countCashReceipts: next.aggregates.paymentStats.countCashReceipts,
+              countMpesaReceipts: next.aggregates.paymentStats.countMpesaReceipts ?? 0,
+              countCashReceipts: next.aggregates.paymentStats.countCashReceipts ?? 0,
             },
           },
         };
