@@ -5,6 +5,7 @@ import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
 import { uploadBufferToS3 } from '@/lib/storage';
 import renderReceiptTemplate from '@/app/templates/receiptTemplate';
+import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage } from '@/lib/notifications/whatsapp';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
@@ -120,31 +121,52 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     errors.push({ channel: 'email', error: String(e) });
   }
 
-  // WhatsApp / SMS via Twilio (send short link)
+  // WhatsApp via Meta Business API or Twilio fallback + optional SMS
   try {
-    const toPhone = (receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone;
+    const toPhone = ((receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || '').trim();
     const wantWhatsapp = channels.includes('whatsapp');
     const wantSms = channels.includes('sms');
-    if ((wantWhatsapp || wantSms) && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
-      const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      const site = getSiteUrl();
-      const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
-      if (toPhone) {
-        if (wantWhatsapp) {
-          // WhatsApp supports media via mediaUrl array if public URL available
-          const msgPayload: any = { from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`, to: `whatsapp:${toPhone}`, body: `Your receipt: ${link}` };
-          if (pdfUrl) msgPayload.mediaUrl = [pdfUrl];
-          await client.messages.create(msgPayload);
+    const site = getSiteUrl();
+    const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
+
+    if (wantWhatsapp && toPhone) {
+      if (hasWhatsAppConfig()) {
+        try {
+          if (pdfUrl) {
+            await sendWhatsAppDocumentMessage({
+              to: toPhone,
+              link: pdfUrl,
+              filename: `receipt-${receipt.id}.pdf`,
+              caption: `Receipt ${receipt.order?.orderNumber ?? receipt.id}`,
+            });
+          } else {
+            await sendWhatsAppTextMessage({
+              to: toPhone,
+              body: `Your receipt ${receipt.order?.orderNumber ?? ''}: ${link}`,
+              previewUrl: true,
+            });
+          }
           sent.push('whatsapp');
+        } catch (err) {
+          errors.push({ channel: 'whatsapp', error: err instanceof Error ? err.message : String(err) });
         }
-        if (wantSms && process.env.TWILIO_FROM_SMS) {
-          const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
-          // some carriers support MMS attachments - if pdfUrl available, include link instead
-          if (pdfUrl) smsPayload.mediaUrl = [pdfUrl];
-          await client.messages.create(smsPayload);
-          sent.push('sms');
-        }
+      } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
+        const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        const msgPayload: any = { from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`, to: `whatsapp:${toPhone}`, body: `Your receipt: ${link}` };
+        if (pdfUrl) msgPayload.mediaUrl = [pdfUrl];
+        await client.messages.create(msgPayload);
+        sent.push('whatsapp');
+      } else {
+        errors.push({ channel: 'whatsapp', error: 'No WhatsApp provider configured' });
       }
+    }
+
+    if (wantSms && toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
+      const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
+      if (pdfUrl) smsPayload.mediaUrl = [pdfUrl];
+      await client.messages.create(smsPayload);
+      sent.push('sms');
     }
   } catch (e) {
     errors.push({ channel: 'twilio', error: String(e) });

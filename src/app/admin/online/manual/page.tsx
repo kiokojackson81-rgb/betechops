@@ -21,7 +21,12 @@ type WeeklySaleRow = {
   shop?: { id: string; name: string | null; platform: Platform } | null;
 };
 
-type ShopOption = { id: string; name: string; platform: Platform };
+type ShopOption = {
+  id: string;
+  name: string;
+  platform: Platform;
+  attendants: Array<{ id: string; name: string | null; email: string | null }>;
+};
 
 type FilterState = {
   shopId: string;
@@ -37,14 +42,107 @@ type FormState = {
   userId: string;
 };
 
+type TradingWeek = {
+  key: string;
+  label: string;
+  display: string;
+  startInput: string;
+  endInput: string;
+  start: Date;
+  end: Date;
+};
+
 const initialFilters: FilterState = { shopId: "", status: "", source: "" };
-const initialForm: FormState = { shopId: "", weekStart: "", weekEnd: "", amount: "", userId: "" };
+
+const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
+const formatShort = (date: Date) => date.toLocaleDateString("en-KE", { day: "2-digit", month: "short" });
+
+function buildTradingWeeks(reference = new Date()) {
+  const now = new Date(reference);
+  now.setHours(0, 0, 0, 0);
+  let startYear = now.getFullYear();
+  let startMonth = now.getMonth() - 1;
+  if (startMonth < 0) {
+    startMonth = 11;
+    startYear -= 1;
+  }
+
+  const lastDayOfStartMonth = new Date(startYear, startMonth + 1, 0).getDate();
+  const week1Start = new Date(startYear, startMonth, 25);
+  const week1End = new Date(startYear, startMonth, lastDayOfStartMonth);
+  const week2Start = new Date(startYear, startMonth + 1, 1);
+  const week2End = new Date(startYear, startMonth + 1, 7);
+  const week3Start = new Date(startYear, startMonth + 1, 8);
+  const week3End = new Date(startYear, startMonth + 1, 14);
+  const week4Start = new Date(startYear, startMonth + 1, 15);
+  const week4End = new Date(startYear, startMonth + 1, 21);
+
+  const weeks: TradingWeek[] = [
+    {
+      key: `week1-${toInputDate(week1Start)}`,
+      label: "Week 1",
+      display: `${formatShort(week1Start)} – ${formatShort(week1End)}`,
+      startInput: toInputDate(week1Start),
+      endInput: toInputDate(week1End),
+      start: week1Start,
+      end: week1End,
+    },
+    {
+      key: `week2-${toInputDate(week2Start)}`,
+      label: "Week 2",
+      display: `${formatShort(week2Start)} – ${formatShort(week2End)}`,
+      startInput: toInputDate(week2Start),
+      endInput: toInputDate(week2End),
+      start: week2Start,
+      end: week2End,
+    },
+    {
+      key: `week3-${toInputDate(week3Start)}`,
+      label: "Week 3",
+      display: `${formatShort(week3Start)} – ${formatShort(week3End)}`,
+      startInput: toInputDate(week3Start),
+      endInput: toInputDate(week3End),
+      start: week3Start,
+      end: week3End,
+    },
+    {
+      key: `week4-${toInputDate(week4Start)}`,
+      label: "Week 4",
+      display: `${formatShort(week4Start)} – ${formatShort(week4End)}`,
+      startInput: toInputDate(week4Start),
+      endInput: toInputDate(week4End),
+      start: week4Start,
+      end: week4End,
+    },
+  ];
+
+  let defaultWeek = weeks[0];
+  for (const wk of weeks) {
+    if (wk.end.getTime() < now.getTime()) {
+      defaultWeek = wk;
+    }
+  }
+
+  return { weeks, defaultWeek: defaultWeek ?? weeks[0] };
+}
+
+const buildInitialForm = (week?: TradingWeek): FormState => ({
+  shopId: "",
+  weekStart: week?.startInput ?? "",
+  weekEnd: week?.endInput ?? "",
+  amount: "",
+  userId: "",
+});
 
 export default function ManualWeeklySalesPage() {
+  const tradingWeeks = useMemo(() => buildTradingWeeks(), []);
+  const initialWeek = tradingWeeks.defaultWeek ?? tradingWeeks.weeks[0];
+
   const [sales, setSales] = useState<WeeklySaleRow[]>([]);
   const [shops, setShops] = useState<ShopOption[]>([]);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [form, setForm] = useState<FormState>(initialForm);
+  const [selectedWeekKey, setSelectedWeekKey] = useState(initialWeek?.key ?? "");
+  const [form, setForm] = useState<FormState>(() => buildInitialForm(initialWeek));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -55,7 +153,7 @@ export default function ManualWeeklySalesPage() {
 
   const loadShops = async () => {
     try {
-      const res = await fetch("/api/shops", { cache: "no-store" });
+      const res = await fetch("/api/admin/online/manual/shops", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load shops");
       const data = (await res.json()) as ShopOption[];
       setShops(Array.isArray(data) ? data : []);
@@ -94,6 +192,26 @@ export default function ManualWeeklySalesPage() {
 
   const onFormChange = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const selectedShop = useMemo(() => shops.find((shop) => shop.id === form.shopId) || null, [shops, form.shopId]);
+  const selectedShopAttendants = selectedShop?.attendants ?? [];
+
+  useEffect(() => {
+    if (!selectedShop) {
+      setForm((prev) => ({ ...prev, userId: "" }));
+      return;
+    }
+    if (selectedShopAttendants.length === 0) return;
+    setForm((prev) => {
+      if (prev.userId && selectedShopAttendants.some((att) => att.id === prev.userId)) return prev;
+      return { ...prev, userId: selectedShopAttendants[0].id };
+    });
+  }, [selectedShop?.id, selectedShopAttendants]);
+
+  const handleWeekSelect = (key: string) => {
+    const week = tradingWeeks.weeks.find((wk) => wk.key === key);
+    if (!week) return;
+    setSelectedWeekKey(key);
+    setForm((prev) => ({ ...prev, weekStart: week.startInput, weekEnd: week.endInput }));
+  };
 
   const createEntry = async () => {
     if (!form.shopId || !form.weekStart || !form.weekEnd || !form.amount) {
@@ -119,7 +237,8 @@ export default function ManualWeeklySalesPage() {
         throw new Error(err?.error || "Failed to create entry");
       }
       showToast("Manual weekly sale saved", "success");
-      setForm(initialForm);
+      const resetWeek = tradingWeeks.weeks.find((wk) => wk.key === selectedWeekKey) ?? initialWeek;
+      setForm(buildInitialForm(resetWeek));
       await loadSales();
     } catch (err) {
       console.error(err);
@@ -188,6 +307,20 @@ export default function ManualWeeklySalesPage() {
             </select>
           </label>
           <label className="text-sm text-slate-300">
+            Trading week
+            <select
+              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
+              value={selectedWeekKey}
+              onChange={(e) => handleWeekSelect(e.target.value)}
+            >
+              {tradingWeeks.weeks.map((week) => (
+                <option key={week.key} value={week.key}>
+                  {week.label} ({week.display})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">
             Week start
             <input
               type="date"
@@ -218,20 +351,46 @@ export default function ManualWeeklySalesPage() {
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="text-sm text-slate-300">
-            Assign to attendant (optional)
-            <input
-              type="text"
-              placeholder="Attendant user ID"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={form.userId}
-              onChange={(e) => onFormChange("userId", e.target.value)}
-            />
+            Assigned attendant
+            {selectedShopAttendants.length > 0 ? (
+              <select
+                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
+                value={form.userId}
+                onChange={(e) => onFormChange("userId", e.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {selectedShopAttendants.map((attendant) => (
+                  <option key={attendant.id} value={attendant.id}>
+                    {attendant.name || attendant.email || attendant.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder="Attendant user ID"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
+                value={form.userId}
+                onChange={(e) => onFormChange("userId", e.target.value)}
+              />
+            )}
           </label>
           <div className="text-sm text-slate-500">
             <p>Shop platform</p>
             <p className="mt-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-slate-200">
               {selectedShop ? selectedShop.platform : "Select a shop"}
             </p>
+          </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Trading weeks</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {tradingWeeks.weeks.map((week) => (
+              <div key={week.key} className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">{week.label}</p>
+                <p className="text-base text-white">{week.display}</p>
+              </div>
+            ))}
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
@@ -241,7 +400,7 @@ export default function ManualWeeklySalesPage() {
             disabled={saving}
             className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save manual entry"}
+            {saving ? "Saving." : "Save manual entry"}
           </button>
           <Link href="/attendant/daily-report" className="text-sm text-emerald-400 hover:text-emerald-200">
             Need to record receipts? Open the daily report tool →
@@ -316,7 +475,7 @@ export default function ManualWeeklySalesPage() {
                     <div className="text-xs text-slate-400">{sale.platform}</div>
                   </td>
                   <td className="py-3 text-sm text-slate-200">
-                    {new Date(sale.weekStart).toLocaleDateString()} – {new Date(sale.weekEnd).toLocaleDateString()}
+                    {new Date(sale.weekStart).toLocaleDateString()} - {new Date(sale.weekEnd).toLocaleDateString()}
                   </td>
                   <td className="py-3 font-semibold text-emerald-300">{currency.format(Number(sale.amount ?? 0))}</td>
                   <td className="py-3 text-xs text-slate-400">{sale.source}</td>
@@ -365,7 +524,7 @@ export default function ManualWeeklySalesPage() {
               {loading && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-sm text-slate-500">
-                    Loading weekly sales…
+                    Loading weekly sales.
                   </td>
                 </tr>
               )}
