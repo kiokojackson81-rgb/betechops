@@ -1,10 +1,12 @@
 "use server";
 
 import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma } from "@prisma/client";
+import { WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 type AssignmentWithAccount = any;
 
@@ -24,6 +26,8 @@ export type OnlineQuickStats = {
   directSales: number;
   marketplaceSales: number;
   progressTarget: number;
+  nextTierThreshold: number;
+  remainingToNextTier: number;
 };
 
 export type OnlineEarningsSummary = {
@@ -74,7 +78,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   const period = opts?.period ?? getTradingPeriodFor(new Date());
   const { accountIds } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  const [directStats, payoutWeeks, onlineOrdersCount, earnings, weeklyManual] = await Promise.all([
+  const [directStats, payoutWeeks, onlineOrdersCount, earnings, weeklyManual, commissionConfig] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
       ? prisma.marketplacePayoutWeek.findMany({
@@ -94,21 +98,42 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
       : Promise.resolve(0),
     getOnlineEarningsSummary(attendantId, { period }),
     getWeeklyManualSales(attendantId, period),
+    getOrCreateCommissionPeriod(period.start),
   ]);
 
   const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
+  const totalTrackedSales = directStats.sales + weeklyManualSales + marketplaceSales;
+
+  const tiers = commissionConfig?.tiers ?? [];
+  let nextTierThreshold = COMMISSION_PROGRESS_TARGET;
+  if (tiers.length) {
+    const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
+    const upcomingTier = sorted.find((tier) => totalTrackedSales < tier.minSales);
+    if (upcomingTier) {
+      nextTierThreshold = upcomingTier.minSales;
+    } else {
+      const lastTier = sorted[sorted.length - 1];
+      nextTierThreshold = lastTier.maxSales ?? lastTier.minSales;
+      if (totalTrackedSales > nextTierThreshold) {
+        nextTierThreshold = totalTrackedSales;
+      }
+    }
+  }
+  const remainingToNextTier = Math.max(0, nextTierThreshold - totalTrackedSales);
 
   return {
     periodKey: period.key,
     periodLabel: period.label,
     receipts: directStats.receipts + weeklyManual.entries,
-    salesKes: directStats.sales + weeklyManualSales + marketplaceSales,
+    salesKes: totalTrackedSales,
     commissionKes: earnings.grossCommission,
     itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
     directSales: directStats.sales + weeklyManualSales,
     marketplaceSales,
-    progressTarget: COMMISSION_PROGRESS_TARGET,
+    progressTarget: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
+    nextTierThreshold: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
+    remainingToNextTier,
   };
 }
 
@@ -223,6 +248,7 @@ async function getWeeklyManualSales(attendantId: string, period: TradingPeriod) 
     _count: { _all: true },
     where: {
       userId: attendantId,
+      status: WeeklySaleStatus.APPROVED,
       AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
     },
   });

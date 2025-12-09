@@ -1,6 +1,7 @@
 "use server";
 
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
@@ -28,6 +29,7 @@ export async function summarizeWeeklySalesForPeriod(opts: {
     rows = await client.weeklySale.findMany({
       where: {
         userId,
+        status: WeeklySaleStatus.APPROVED,
         AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
       },
       select: { amount: true },

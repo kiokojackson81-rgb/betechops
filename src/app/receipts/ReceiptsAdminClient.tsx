@@ -1,6 +1,9 @@
+
 "use client";
 
-import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { showToast } from "@/lib/ui/toast";
 
 type ReceiptRow = {
   id: string;
@@ -9,347 +12,1051 @@ type ReceiptRow = {
   createdAt: string;
   customerName?: string | null;
   attendantName?: string | null;
-  total?: number | null;
+  total?: number | string | null;
   status?: string | null;
-  items?: any[];
+  items?: Array<{ id: string }> | null;
 };
 
-type EditState = {
+type ReceiptSummary = {
+  totalCount: number;
+  totalValue: number;
+  averageValue: number;
+  lastReceipt?: { id: string; createdAt: string; customerName?: string | null };
+};
+
+type FilterState = {
+  q: string;
+  docType: string;
+  start: string;
+  end: string;
+  attendantId: string;
+};
+
+type AttendantOption = { id: string; name: string };
+
+type ReceiptDetailPayload = {
+  receipt: any;
+  supportItems?: Array<{ id: string; buyingPrice: number | null }>;
+};
+
+type EditItem = {
   id: string;
-  notes?: string | null;
-  taxRate?: number;
-  showTax?: boolean;
-  discount?: number;
-  showDiscount?: boolean;
-  paymentDetailsShown?: boolean;
-  warrantyText?: string | null;
-  customerName?: string | null;
-  customerPhone?: string | null;
-  customerEmail?: string | null;
-  attendantId?: string | null;
-  items: Array<{ id?: string | null; title: string; quantity: number; unitPrice: number; serial?: string | null; warranty?: string | null; supportItemId?: string | null; buyingPrice?: number | null }>;
+  title: string;
+  quantity: number;
+  unitPrice: number;
+  serial?: string | null;
+  warranty?: string | null;
 };
 
-export default function ReceiptsAdminClient({ initial, allowEdit = true }: { initial: ReceiptRow[]; allowEdit?: boolean }) {
-  const [rows, setRows] = useState<ReceiptRow[]>(initial || []);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [editing, setEditing] = useState<EditState | null>(null);
-  const [start, setStart] = useState<string>(() => new Date().toISOString().split("T")[0]);
-  const [end, setEnd] = useState<string>(() => new Date().toISOString().split("T")[0]);
-  const [search, setSearch] = useState<string>("");
-  const [docType, setDocType] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+type EditDraft = {
+  docType: string;
+  attendantId: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  taxRate: number;
+  showTax: boolean;
+  discount: number;
+  showDiscount: boolean;
+  paymentDetailsShown: boolean;
+  notes?: string | null;
+  warrantyText?: string | null;
+  items: EditItem[];
+};
 
-  const toggle = (id: string) => setExpanded((s) => ({ ...s, [id]: !s[id] }));
+type Props = {
+  initial?: ReceiptRow[];
+  allowEdit?: boolean;
+  onSummaryChange?: (summary: ReceiptSummary) => void;
+  refreshSignal?: number;
+};
 
-  const openEdit = async (id: string) => {
-    if (!allowEdit) return;
-    try {
-      const res = await fetch(`/api/receipts/${id}`);
-      const json = await res.json();
-      const receipt = json?.receipt ?? null;
-      const supportItems: Array<{ id: string; buyingPrice: number | null }> = json?.supportItems || [];
-      if (receipt) {
-        const orderItems = (receipt.order?.items || []).map((it: any, idx: number) => ({
-          id: it.id,
-          title: it.title || it.productName || "",
-          quantity: it.quantity,
-          unitPrice: Number(it.sellingPrice || it.unitPrice || 0),
-          serial: it.serial || "",
-          warranty: it.warranty || "",
-          supportItemId: supportItems[idx]?.id || null,
-          buyingPrice: supportItems[idx]?.buyingPrice ?? null,
-        }));
-        setEditing({
-          id,
-          notes: receipt.notes || "",
-          taxRate: Number(receipt.taxRate || 0),
-          showTax: Boolean(receipt.showTax),
-          discount: Number(receipt.discount || 0),
-          showDiscount: Boolean(receipt.showDiscount),
-          paymentDetailsShown: Boolean(receipt.paymentDetailsShown),
-          warrantyText: receipt.warrantyText || "",
-          customerName: receipt.order?.customerName || "",
-          customerPhone: receipt.order?.customerPhone || "",
-          customerEmail: receipt.order?.customerEmail || "",
-          attendantId: receipt.order?.attendantId || "",
-          items: orderItems,
-        });
+const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
+const WARRANTY_OPTIONS = ["", "3 Months", "6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
+const PAGE_SIZE = 50;
+
+const randomId = () => Math.random().toString(36).slice(2, 9);
+
+const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
+  const totalValue = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const totalCount = rows.length;
+  const averageValue = totalCount ? totalValue / totalCount : 0;
+  const head = rows[0];
+  const lastReceipt = head
+    ? { id: head.id, createdAt: head.createdAt, customerName: head.customerName }
+    : undefined;
+  return { totalCount, totalValue, averageValue, lastReceipt };
+};
+
+const formatCurrency = (value: number | string | null | undefined) => {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return "KES 0";
+  return `KES ${amount.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+};
+
+const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
+
+const makeDefaultFilters = (): FilterState => {
+  const today = new Date();
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setHours(23, 59, 59, 999);
+  return {
+    q: "",
+    docType: "",
+    start: formatDateInput(start),
+    end: formatDateInput(end),
+    attendantId: "",
+  };
+};
+
+const buildDateParam = (value: string, endOfDay: boolean) => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split("-").map((part) => Number(part));
+  if (!y || !m || !d) return undefined;
+  const date = new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return date.toISOString();
+};
+
+const csvEscape = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
+const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
+  const receipt = detail.receipt;
+  const order = receipt?.order ?? {};
+  const dataItems = Array.isArray(receipt?.data?.items) ? receipt.data.items : [];
+  const orderItems = Array.isArray(order?.items) ? order.items : [];
+  const sourceItems = dataItems.length ? dataItems : orderItems;
+  const items: EditItem[] =
+    sourceItems.length > 0
+      ? sourceItems.map((it: any) => ({
+          id: it.id || randomId(),
+          title: it.title || it.productName || it.name || "",
+          quantity: Number(it.quantity || 1),
+          unitPrice: Number(it.unitPrice ?? it.sellingPrice ?? it.price ?? 0),
+          serial: it.serial ?? null,
+          warranty: it.warranty ?? null,
+        }))
+      : [
+          {
+            id: randomId(),
+            title: "",
+            quantity: 1,
+            unitPrice: 0,
+            serial: null,
+            warranty: null,
+          },
+        ];
+
+  return {
+    docType: String(receipt?.docType || "RECEIPT").toUpperCase(),
+    attendantId: order?.attendant?.id ?? order?.attendantId ?? null,
+    customerName: order?.customerName || receipt?.data?.customerName || "",
+    customerPhone: order?.customerPhone || receipt?.data?.customerPhone || "",
+    taxRate: Number(receipt?.taxRate ?? 0),
+    showTax: Boolean(receipt?.showTax),
+    discount: Number(receipt?.discount ?? 0),
+    showDiscount: Boolean(receipt?.showDiscount),
+    paymentDetailsShown: Boolean(receipt?.paymentDetailsShown),
+    notes: receipt?.notes ?? null,
+    warrantyText: receipt?.warrantyText ?? null,
+    items,
+  };
+};
+export default function ReceiptsAdminClient({
+  initial = [],
+  allowEdit,
+  onSummaryChange,
+  refreshSignal = 0,
+}: Props) {
+  const [rows, setRows] = useState<ReceiptRow[]>(initial);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
+  const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
+  const [attendants, setAttendants] = useState<AttendantOption[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [selected, setSelected] = useState<ReceiptRow | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
+  const [editState, setEditState] = useState<{ open: boolean; draft: EditDraft | null; saving: boolean }>({
+    open: false,
+    draft: null,
+    saving: false,
+  });
+  const [exporting, setExporting] = useState(false);
+  const firstLoadRef = useRef(true);
+
+  useEffect(() => {
+    setRows(initial);
+    setHasMore(initial.length === PAGE_SIZE);
+    setPage(1);
+  }, [initial]);
+
+  useEffect(() => {
+    onSummaryChange?.(computeSummary(rows));
+  }, [rows, onSummaryChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/users?roles=ATTENDANT", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Failed to load attendants");
+        if (cancelled) return;
+        const options: AttendantOption[] = (Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [])
+          .filter((u: any) => u?.id)
+          .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id }));
+        setAttendants(options);
+      } catch (err) {
+        console.warn("[receipts] failed to load attendants", err);
       }
-    } catch (e) {
-      console.error(e);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const loadRows = useCallback(
+    async (targetPage: number, opts?: { silent?: boolean }) => {
+      setError(null);
+      if (!opts?.silent) setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("size", String(PAGE_SIZE));
+        params.set("includeItems", "false");
+        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
+        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
+        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        if (startParam) params.set("start", startParam);
+        if (endParam) params.set("end", endParam);
+
+        const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
+        const nextRows = Array.isArray(data?.receipts) ? data.receipts : [];
+        setRows(nextRows);
+        setHasMore(nextRows.length === PAGE_SIZE);
+        setPage(targetPage);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load receipts";
+        setError(message);
+        showToast(message, "error");
+      } finally {
+        if (!opts?.silent) setLoading(false);
+      }
+    },
+    [appliedFilters],
+  );
+
+  useEffect(() => {
+    const silent = firstLoadRef.current;
+    firstLoadRef.current = false;
+    void loadRows(1, { silent });
+  }, [appliedFilters, loadRows]);
+
+  useEffect(() => {
+    if (!firstLoadRef.current) {
+      void loadRows(1);
+    }
+  }, [refreshSignal, loadRows]);
+
+  const applyFilters = () => {
+    setAppliedFilters({ ...filters });
+  };
+
+  const resetFilters = () => {
+    const defaults = makeDefaultFilters();
+    setFilters(defaults);
+    setAppliedFilters(defaults);
+  };
+
+  const gotoPage = (next: number) => {
+    if (next < 1) return;
+    void loadRows(next);
+  };
+
+  const handleManualRefresh = () => {
+    void loadRows(page);
+  };
+  const handleRowClick = (row: ReceiptRow) => {
+    setSelected(row);
+    setDrawerOpen(true);
+    setDetail(null);
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/receipts/${row.id}`, { cache: "no-store" });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
+        setDetail(payload as ReceiptDetailPayload);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load receipt";
+        showToast(message, "error");
+      } finally {
+        setDetailLoading(false);
+      }
+    })();
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setSelected(null);
+    setDetail(null);
+    setDetailLoading(false);
+  };
+
+  const handleSend = async (channel: "email" | "whatsapp") => {
+    if (!selected) return;
+    setSendingChannel(channel);
+    try {
+      const res = await fetch(`/api/receipts/${selected.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channels: [channel] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to queue send");
+      showToast(`Queued ${channel === "email" ? "email" : "WhatsApp"} send`, "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to queue send";
+      showToast(message, "error");
+    } finally {
+      setSendingChannel(null);
     }
   };
 
-  const closeEdit = () => setEditing(null);
+  const openEditModal = () => {
+    if (!allowEdit) return;
+    if (!detail?.receipt) {
+      showToast("Load receipt details first", "warn");
+      return;
+    }
+    const draft = buildDraftFromDetail(detail);
+    setEditState({ open: true, draft, saving: false });
+  };
 
-  const saveEdit = async () => {
-    if (!editing) return;
+  const updateDraft = (next: EditDraft) => {
+    setEditState((prev) => ({ ...prev, draft: next }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!detail?.receipt || !editState.draft) return;
+    if (!editState.draft.items.length) {
+      showToast("Add at least one item before saving", "warn");
+      return;
+    }
+    setEditState((prev) => ({ ...prev, saving: true }));
     try {
       const payload = {
-        notes: editing.notes,
-        taxRate: editing.taxRate,
-        showTax: editing.showTax,
-        discount: editing.discount,
-        showDiscount: editing.showDiscount,
-        paymentDetailsShown: editing.paymentDetailsShown,
-        warrantyText: editing.warrantyText,
-        customerName: editing.customerName,
-        customerPhone: editing.customerPhone,
-        customerEmail: editing.customerEmail,
-        attendantId: editing.attendantId,
-        items: editing.items,
+        ...editState.draft,
+        items: editState.draft.items.map((it) => ({
+          title: it.title,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          serial: it.serial,
+          warranty: it.warranty,
+        })),
       };
-      const res = await fetch(`/api/receipts/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const json = await res.json();
-      if (json?.ok) {
-        await fetchList();
-        closeEdit();
-      } else {
-        alert(json?.error || "Failed to save");
-      }
-    } catch (e) {
-      alert("Failed to save");
+      const res = await fetch(`/api/receipts/${detail.receipt.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update receipt");
+      showToast("Receipt updated", "success");
+      setEditState({ open: false, draft: null, saving: false });
+      setDetail((prev) => (prev ? { ...prev, receipt: data.receipt ?? prev.receipt } : prev));
+      setSelected((prev) =>
+        prev && prev.id === detail.receipt.id
+          ? {
+              ...prev,
+              total: data?.receipt?.totals?.total ?? prev.total,
+              customerName: data?.receipt?.order?.customerName ?? prev.customerName,
+            }
+          : prev,
+      );
+      await loadRows(page, { silent: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update receipt";
+      showToast(message, "error");
+      setEditState((prev) => ({ ...prev, saving: false }));
     }
   };
 
-  const savePrices = async () => {
-    if (!editing) return;
-    try {
-      for (const it of editing.items) {
-        if (!it.supportItemId) continue;
-        const price = Number(it.buyingPrice || 0);
-        if (!price) continue;
-        await fetch("/api/support/price-sale", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ receiptItemId: it.supportItemId, buyingPrice: price }),
-        });
-      }
-      alert("Prices saved");
-      await fetchList();
-      closeEdit();
-    } catch (e) {
-      alert("Failed to save prices");
+  const handleExport = () => {
+    if (!rows.length) {
+      showToast("No rows to export", "warn");
+      return;
     }
-  };
-
-  const fetchList = async () => {
+    setExporting(true);
     try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (start) params.append("start", start);
-      if (end) params.append("end", end);
-      if (search) params.append("q", search);
-      if (docType) params.append("docType", docType);
-      params.append("includeItems", "true");
-      const res = await fetch(`/api/receipts?${params.toString()}`);
-      const json = await res.json();
-      setRows(json.receipts || []);
-    } catch (e) {
-      console.error("Failed to fetch receipts list", e);
+      const header = ["Receipt ID", "Order Ref", "Doc Type", "Customer", "Attendant", "Total", "Status", "Created At"];
+      const csv = [header.join(",")];
+      for (const row of rows) {
+        csv.push(
+          [
+            csvEscape(row.id),
+            csvEscape(row.orderRef || ""),
+            csvEscape(row.docType),
+            csvEscape(row.customerName || ""),
+            csvEscape(row.attendantName || ""),
+            csvEscape(Number(row.total ?? 0).toFixed(2)),
+            csvEscape(row.status || ""),
+            csvEscape(new Date(row.createdAt).toISOString()),
+          ].join(","),
+        );
+      }
+      const blob = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `receipts-${appliedFilters.start || "start"}-${appliedFilters.end || "end"}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Export ready", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to export CSV";
+      showToast(message, "error");
     } finally {
-      setLoading(false);
+      setExporting(false);
     }
+  };
+  return (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Search customer / order / attendant
+            <input
+              value={filters.q}
+              onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+              placeholder="eg. Jane, OR-123..."
+            />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Document type
+            <select
+              value={filters.docType}
+              onChange={(e) => setFilters((prev) => ({ ...prev, docType: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">All</option>
+              {DOC_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            From
+            <input
+              type="date"
+              value={filters.start}
+              onChange={(e) =>
+                setFilters((prev) => {
+                  const next = { ...prev, start: e.target.value };
+                  if (next.end && next.start && next.start > next.end) next.end = next.start;
+                  return next;
+                })
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            To
+            <input
+              type="date"
+              value={filters.end}
+              onChange={(e) =>
+                setFilters((prev) => {
+                  const next = { ...prev, end: e.target.value };
+                  if (next.start && next.end && next.end < next.start) next.start = next.end;
+                  return next;
+                })
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr]">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Attendant
+            <select
+              value={filters.attendantId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, attendantId: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">All attendants</option>
+              {attendants.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-end gap-2">
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+            >
+              Apply filters
+            </button>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-50"
+            disabled={exporting}
+          >
+            {exporting ? "Preparing CSV..." : "Export CSV"}
+          </button>
+        </div>
+      </section>
+      <section className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-950/40 p-2 shadow-inner shadow-black/40">
+        <table className="min-w-full text-sm">
+          <thead className="text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th className="px-3 py-2 text-left">Order</th>
+              <th className="px-3 py-2 text-left">Doc</th>
+              <th className="px-3 py-2 text-left">Customer</th>
+              <th className="px-3 py-2 text-left">Attendant</th>
+              <th className="px-3 py-2 text-left">Total</th>
+              <th className="px-3 py-2 text-left">Status</th>
+              <th className="px-3 py-2 text-left">Created</th>
+              <th className="px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                  {loading ? "Loading receipts..." : "No receipts match this filter."}
+                </td>
+              </tr>
+            )}
+            {rows.map((row) => {
+              const isSelected = row.id === selected?.id && drawerOpen;
+              return (
+                <tr
+                  key={row.id}
+                  className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
+                  onClick={() => handleRowClick(row)}
+                >
+                  <td className="px-3 py-3">
+                    <div className="font-semibold text-white">{row.orderRef || "-"}</div>
+                    <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs uppercase text-slate-100">
+                      {row.docType}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="text-white">{row.customerName || "Walk-in"}</div>
+                  </td>
+                  <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
+                  <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
+                  <td className="px-3 py-3">
+                    <span className="text-xs uppercase tracking-wide text-slate-400">{row.status || "-"}</span>
+                  </td>
+                  <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
+                  <td className="px-3 py-3 text-right">
+                    <button className="text-sm text-emerald-300 hover:underline" type="button">
+                      View
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {error && <p className="px-3 py-2 text-sm text-rose-300">{error}</p>}
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300">
+            <span>
+              Page {page}, showing {rows.length} receipts
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => gotoPage(page - 1)}
+                disabled={page === 1 || loading}
+                className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => gotoPage(page + 1)}
+                disabled={!hasMore || loading}
+                className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+      {drawerOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/60" onClick={closeDrawer} />
+          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-xl transform bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipt detail</p>
+                <h2 className="text-xl font-semibold text-white">{selected?.orderRef || selected?.id}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeDrawer}
+                className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+            {detailLoading && <p className="mt-6 text-sm text-slate-400">Loading details...</p>}
+            {!detailLoading && detail?.receipt && (
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
+                  <div className="flex flex-wrap gap-4 text-slate-300">
+                    <div>
+                      <p className="text-xs text-slate-500">Customer</p>
+                      <p className="text-base text-white">
+                        {detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Served by</p>
+                      <p>{detail.receipt.order?.attendant?.name || selected?.attendantName || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Created</p>
+                      <p>{formatDateTime(detail.receipt.generatedAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Doc type</p>
+                      <p>{detail.receipt.docType}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm">
+                    <div className="flex flex-wrap gap-4">
+                      <div>
+                        <p className="text-xs text-slate-500">Subtotal</p>
+                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.totals?.subtotal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Tax</p>
+                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.totals?.tax)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Discount</p>
+                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.discount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Total</p>
+                        <p className="text-lg font-semibold text-emerald-300">
+                          {formatCurrency(detail.receipt.totals?.total)}
+                        </p>
+                      </div>
+                    </div>
+                    {detail.receipt.docType === "LAYAWAY" && (
+                      <p className="mt-2 text-xs text-amber-300">
+                        Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>
+                  <div className="mt-3 space-y-2">
+                    {(detail.receipt.order?.items || []).map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm">
+                        <div>
+                          <p className="font-semibold text-white">{item.title || item.productName || "Item"}</p>
+                          <p className="text-xs text-slate-500">
+                            Qty {Number(item.quantity || 1).toLocaleString()} - {formatCurrency(item.sellingPrice)}
+                            {item.serial && ` - SN ${item.serial}`}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-emerald-300">
+                          {formatCurrency(Number(item.quantity || 1) * Number(item.sellingPrice || 0))}
+                        </p>
+                      </div>
+                    ))}
+                    {(detail.receipt.order?.items || []).length === 0 && (
+                      <p className="text-sm text-slate-400">No items recorded.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/receipts/${detail.receipt.id}`}
+                    target="_blank"
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
+                  >
+                    Open printable
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleSend("email")}
+                    disabled={sendingChannel === "email"}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    {sendingChannel === "email" ? "Sending..." : "Send email"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSend("whatsapp")}
+                    disabled={sendingChannel === "whatsapp"}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    {sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp"}
+                  </button>
+                  {allowEdit && (
+                    <button
+                      type="button"
+                      onClick={openEditModal}
+                      className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+                    >
+                      Edit receipt
+                    </button>
+                  )}
+                </div>
+
+                {detail.receipt.notes && (
+                  <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Notes</p>
+                    <p className="text-slate-200">{detail.receipt.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </aside>
+        </>
+      )}
+
+      <EditModal
+        open={editState.open}
+        draft={editState.draft}
+        attendants={attendants}
+        saving={editState.saving}
+        onClose={() => setEditState({ open: false, draft: null, saving: false })}
+        onDraftChange={updateDraft}
+        onSave={handleSaveEdit}
+      />
+    </div>
+  );
+}
+type EditModalProps = {
+  open: boolean;
+  draft: EditDraft | null;
+  attendants: AttendantOption[];
+  saving: boolean;
+  onClose: () => void;
+  onDraftChange: (draft: EditDraft) => void;
+  onSave: () => void;
+};
+
+function EditModal({ open, draft, attendants, saving, onClose, onDraftChange, onSave }: EditModalProps) {
+  const totals = useMemo(() => {
+    if (!draft) return { subtotal: 0, tax: 0, total: 0 };
+    const subtotal = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const tax = draft.showTax ? subtotal * (draft.taxRate / 100) : 0;
+    const total = subtotal + tax - draft.discount;
+    return { subtotal, tax, total };
+  }, [draft]);
+
+  if (!open || !draft) return null;
+
+  const updateItem = (id: string, patch: Partial<EditItem>) => {
+    const nextItems = draft.items.map((item) => (item.id === id ? { ...item, ...patch } : item));
+    onDraftChange({ ...draft, items: nextItems });
+  };
+
+  const addItem = () => {
+    onDraftChange({
+      ...draft,
+      items: [...draft.items, { id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null }],
+    });
+  };
+
+  const removeItem = (id: string) => {
+    const remaining = draft.items.filter((item) => item.id !== id);
+    onDraftChange({
+      ...draft,
+      items: remaining.length ? remaining : [{ id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null }],
+    });
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-2 rounded border border-slate-200 p-3 md:grid-cols-5">
-        <div>
-          <label className="text-xs">From</label>
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="w-full rounded border p-1" />
-        </div>
-        <div>
-          <label className="text-xs">To</label>
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="w-full rounded border p-1" />
-        </div>
-        <div>
-          <label className="text-xs">Search (name / phone / ref)</label>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded border p-1" placeholder="Name, phone, ref" />
-        </div>
-        <div>
-          <label className="text-xs">Doc Type</label>
-          <select value={docType} onChange={(e) => setDocType(e.target.value)} className="w-full rounded border p-1">
-            <option value="">All</option>
-            <option value="RECEIPT">Receipt</option>
-            <option value="INVOICE">Invoice</option>
-            <option value="QUOTATION">Quotation</option>
-            <option value="LAYAWAY">Layaway</option>
-          </select>
-        </div>
-        <div className="flex items-end gap-2">
-          <button className="rounded border px-3 py-1" onClick={fetchList}>{loading ? "Loading..." : "Search"}</button>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/70">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Edit receipt</h3>
           <button
-            className="rounded border px-3 py-1"
-            onClick={() => {
-              const today = new Date().toISOString().split("T")[0];
-              setStart(today);
-              setEnd(today);
-              setSearch("");
-              setDocType("");
-              fetchList();
-            }}
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-200 hover:bg-white/10"
           >
-            Reset
+            Close
           </button>
         </div>
-      </div>
 
-      <table className="w-full table-auto border-collapse text-sm">
-        <thead>
-          <tr className="text-left">
-            <th>No.</th>
-            <th>Date</th>
-            <th>Doc Type</th>
-            <th>Customer</th>
-            <th>Attendant</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <React.Fragment key={r.id}>
-              <tr className="border-t">
-                <td>{idx + 1}</td>
-                <td>{new Date(r.createdAt).toLocaleString()}</td>
-                <td>{r.docType}</td>
-                <td>{r.customerName}</td>
-                <td>{r.attendantName}</td>
-                <td>{r.total}</td>
-                <td>{r.status}</td>
-                <td className="space-x-2">
-                  <button onClick={() => toggle(r.id)} className="text-blue-600">{expanded[r.id] ? "Hide" : "Expand"}</button>
-                  {allowEdit && <button onClick={() => openEdit(r.id)} className="text-emerald-700">Edit</button>}
-                </td>
-              </tr>
-              {expanded[r.id] && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs text-slate-500 mb-2">Items for {r.orderRef}</p>
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr><th>Title</th><th>Qty</th><th>Unit</th><th>Serial</th><th>Warranty</th></tr>
-                        </thead>
-                        <tbody>
-                          {(r.items || []).map((it: any, i: number) => (
-                            <tr key={i}><td>{it.title || it.productName}</td><td>{it.quantity}</td><td>{it.unitPrice || it.sellingPrice}</td><td>{it.serial}</td><td>{it.warranty}</td></tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
-
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded bg-white p-4">
-            <h2 className="text-lg font-semibold">Edit Receipt {editing.id}</h2>
-            <div className="mt-2 grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="text-xs">Customer name</label>
-                <input value={editing.customerName || ""} onChange={(e) => setEditing((s) => s ? { ...s, customerName: e.target.value } : s)} className="w-full rounded border p-1" />
-              </div>
-              <div>
-                <label className="text-xs">Customer phone</label>
-                <input value={editing.customerPhone || ""} onChange={(e) => setEditing((s) => s ? { ...s, customerPhone: e.target.value } : s)} className="w-full rounded border p-1" />
-              </div>
-              <div>
-                <label className="text-xs">Customer email</label>
-                <input value={editing.customerEmail || ""} onChange={(e) => setEditing((s) => s ? { ...s, customerEmail: e.target.value } : s)} className="w-full rounded border p-1" />
-              </div>
-              <div>
-                <label className="text-xs">Notes</label>
-                <textarea value={editing.notes || ""} onChange={(e) => setEditing((s) => s ? { ...s, notes: e.target.value } : s)} className="w-full rounded border p-1" />
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-2 md:grid-cols-3">
-              <label className="text-xs flex flex-col gap-1">Tax %<input type="number" value={editing.taxRate ?? 0} onChange={(e) => setEditing((s) => s ? { ...s, taxRate: Number(e.target.value || 0) } : s)} className="rounded border p-1" /></label>
-              <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(editing.showTax)} onChange={(e) => setEditing((s) => s ? { ...s, showTax: e.target.checked } : s)} /> Show tax</label>
-              <label className="text-xs flex flex-col gap-1">Discount (KES)<input type="number" value={editing.discount ?? 0} onChange={(e) => setEditing((s) => s ? { ...s, discount: Number(e.target.value || 0) } : s)} className="rounded border p-1" /></label>
-              <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(editing.showDiscount)} onChange={(e) => setEditing((s) => s ? { ...s, showDiscount: e.target.checked } : s)} /> Show discount</label>
-              <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={Boolean(editing.paymentDetailsShown)} onChange={(e) => setEditing((s) => s ? { ...s, paymentDetailsShown: e.target.checked } : s)} /> Include payment details</label>
-            </div>
-
-            <div className="mt-3">
-              <label className="text-xs">Warranty text</label>
-              <input value={editing.warrantyText || ""} onChange={(e) => setEditing((s) => s ? { ...s, warrantyText: e.target.value } : s)} className="w-full rounded border p-1" />
-            </div>
-
-            <div className="mt-3">
-              <h3 className="font-semibold">Items</h3>
-              {(editing.items || []).map((it, idx) => (
-                <div key={it.id || idx} className="mt-2 grid grid-cols-7 items-center gap-2">
-                  <input value={it.title} onChange={(e) => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items[idx].title = e.target.value;
-                    return copy;
-                  })} className="col-span-2 rounded border p-1" placeholder="Title" />
-                  <input type="number" value={it.quantity} onChange={(e) => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items[idx].quantity = Number(e.target.value);
-                    return copy;
-                  })} className="rounded border p-1" />
-                  <input type="number" value={it.unitPrice} onChange={(e) => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items[idx].unitPrice = Number(e.target.value);
-                    return copy;
-                  })} className="rounded border p-1" />
-                  <input value={it.serial || ""} onChange={(e) => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items[idx].serial = e.target.value;
-                    return copy;
-                  })} className="rounded border p-1" placeholder="Serial" />
-                  <input value={it.warranty || ""} onChange={(e) => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items[idx].warranty = e.target.value;
-                    return copy;
-                  })} className="rounded border p-1" placeholder="Warranty" />
-                  {it.supportItemId ? (
-                    <input type="number" value={it.buyingPrice ?? ""} onChange={(e) => setEditing((s) => {
-                      if (!s) return s;
-                      const copy = { ...s };
-                      copy.items[idx].buyingPrice = Number(e.target.value || 0);
-                      return copy;
-                    })} className="rounded border p-1" placeholder="Buying price" />
-                  ) : (
-                    <div className="text-xs text-slate-500">Price later</div>
-                  )}
-                  <button className="text-red-600" onClick={() => setEditing((s) => {
-                    if (!s) return s;
-                    const copy = { ...s };
-                    copy.items = copy.items.filter((_, i) => i !== idx);
-                    return copy;
-                  })}>Remove</button>
-                </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Attendant
+            <select
+              value={draft.attendantId ?? ""}
+              onChange={(e) => onDraftChange({ ...draft, attendantId: e.target.value || null })}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Keep existing</option>
+              {attendants.map((att) => (
+                <option key={att.id} value={att.id}>
+                  {att.name}
+                </option>
               ))}
-              <div className="mt-2">
-                <button className="rounded border px-2 py-1" onClick={() => setEditing((s) => s ? { ...s, items: [...s.items, { id: null, title: "", quantity: 1, unitPrice: 0, serial: "", warranty: "" }] } : s)}>Add Item</button>
-              </div>
-            </div>
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Document type
+            <select
+              value={draft.docType}
+              onChange={(e) => onDraftChange({ ...draft, docType: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+            >
+              {DOC_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Customer name
+            <input
+              value={draft.customerName}
+              onChange={(e) => onDraftChange({ ...draft, customerName: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+            />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Customer phone
+            <input
+              value={draft.customerPhone || ""}
+              onChange={(e) => onDraftChange({ ...draft, customerPhone: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+            />
+          </label>
+        </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={closeEdit} className="rounded border px-3 py-1">Cancel</button>
-              <button onClick={saveEdit} className="rounded bg-blue-600 px-3 py-1 text-white">Save</button>
-              <button onClick={savePrices} className="rounded bg-emerald-600 px-3 py-1 text-white">Save Prices</button>
-            </div>
+        <section className="mt-4 space-y-3 rounded-2xl border border-white/5 bg-slate-900/40 p-4">
+          <div className="flex flex-wrap gap-4 text-xs text-slate-300">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.showTax}
+                onChange={(e) => onDraftChange({ ...draft, showTax: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              Show tax (rate {draft.taxRate}%)
+            </label>
+            {draft.showTax && (
+              <input
+                type="number"
+                min={0}
+                value={draft.taxRate}
+                onChange={(e) => onDraftChange({ ...draft, taxRate: Number(e.target.value || 0) })}
+                className="w-24 rounded-xl border border-slate-800 bg-slate-950/70 px-2 py-1 text-sm text-white"
+              />
+            )}
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.showDiscount}
+                onChange={(e) => onDraftChange({ ...draft, showDiscount: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              Show discount
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={draft.discount}
+              onChange={(e) => onDraftChange({ ...draft, discount: Number(e.target.value || 0) })}
+              className="w-32 rounded-xl border border-slate-800 bg-slate-950/70 px-2 py-1 text-sm text-white"
+              placeholder="Discount"
+            />
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.paymentDetailsShown}
+                onChange={(e) => onDraftChange({ ...draft, paymentDetailsShown: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              Show payment instructions
+            </label>
+          </div>
+        </section>
+
+        <section className="mt-4 space-y-3 rounded-2xl border border-white/5 bg-slate-900/40 p-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-white">Items</h4>
+            <button
+              type="button"
+              onClick={addItem}
+              className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-200 hover:bg-white/10"
+            >
+              + Add item
+            </button>
+          </div>
+          <div className="space-y-3">
+            {draft.items.map((item) => (
+              <div key={item.id} className="grid gap-2 rounded-2xl border border-white/5 bg-slate-950/60 p-3 md:grid-cols-12">
+                <input
+                  value={item.title}
+                  onChange={(e) => updateItem(item.id, { title: e.target.value })}
+                  placeholder="Item description"
+                  className="md:col-span-4 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={item.quantity}
+                  onChange={(e) => updateItem(item.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                  className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-2 py-2 text-sm text-white"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={item.unitPrice}
+                  onChange={(e) => updateItem(item.id, { unitPrice: Math.max(0, Number(e.target.value || 0)) })}
+                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                  placeholder="Unit price"
+                />
+                <input
+                  value={item.serial || ""}
+                  onChange={(e) => updateItem(item.id, { serial: e.target.value })}
+                  placeholder="Serial"
+                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                />
+                <select
+                  value={item.warranty || ""}
+                  onChange={(e) => updateItem(item.id, { warranty: e.target.value || null })}
+                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                >
+                  {WARRANTY_OPTIONS.map((option) => (
+                    <option key={option || "none"} value={option}>
+                      {option || "No warranty"}
+                    </option>
+                  ))}
+                </select>
+                <div className="md:col-span-1 flex flex-col items-end justify-between gap-2">
+                  <p className="text-xs text-slate-500">Line total</p>
+                  <p className="text-sm font-semibold text-emerald-300">
+                    {formatCurrency(item.quantity * item.unitPrice)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    className="text-xs text-rose-300 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Notes
+            <textarea
+              value={draft.notes || ""}
+              onChange={(e) => onDraftChange({ ...draft, notes: e.target.value })}
+              className="mt-1 min-h-[60px] w-full rounded-xl border border-slate-800 bg-slate-900/70 p-2 text-sm text-white"
+            />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Warranty text
+            <textarea
+              value={draft.warrantyText || ""}
+              onChange={(e) => onDraftChange({ ...draft, warrantyText: e.target.value })}
+              className="mt-1 min-h-[60px] w-full rounded-xl border border-slate-800 bg-slate-900/70 p-2 text-sm text-white"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-2 rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p>Subtotal: {formatCurrency(totals.subtotal)}</p>
+            <p>Tax: {formatCurrency(totals.tax)}</p>
+            <p>Discount: {formatCurrency(draft.discount)}</p>
+            <p className="text-lg font-semibold text-white">Total: {formatCurrency(totals.total)}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

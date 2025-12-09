@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import ReceiptsAdminClient from "./ReceiptsAdminClient";
 
@@ -16,48 +16,102 @@ type ReceiptRow = {
   items?: any[];
 };
 
-export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
-  const [view, setView] = useState<"create" | "list">("create");
-  const [rows, setRows] = useState<ReceiptRow[]>(initial || []);
+type ReceiptSummary = {
+  totalCount: number;
+  totalValue: number;
+  averageValue: number;
+  lastReceipt?: { id: string; createdAt: string; customerName?: string | null };
+};
 
-  const refreshList = async () => {
-    try {
-      const res = await fetch("/api/receipts?includeItems=true");
-      const json = await res.json();
-      setRows(json?.receipts || []);
-    } catch {
-      // ignore
-    }
+const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
+  const totalValue = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const totalCount = rows.length;
+  const averageValue = totalCount ? totalValue / totalCount : 0;
+  const head = rows[0];
+  const lastReceipt = head
+    ? { id: head.id, createdAt: head.createdAt, customerName: head.customerName }
+    : undefined;
+  return { totalCount, totalValue, averageValue, lastReceipt };
+};
+
+export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
+  const [summary, setSummary] = useState<ReceiptSummary>(() => computeSummary(initial || []));
+  const [showForm, setShowForm] = useState(false);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+
+  const summaryCards = useMemo(
+    () => [
+      { label: "Receipts loaded", value: summary.totalCount.toLocaleString() },
+      {
+        label: "Total value",
+        value: `KES ${summary.totalValue.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`,
+      },
+      {
+        label: "Average value",
+        value: `KES ${summary.averageValue.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`,
+      },
+      {
+        label: "Last entry",
+        value: summary.lastReceipt
+          ? `${new Date(summary.lastReceipt.createdAt).toLocaleString()} - ${
+              summary.lastReceipt.customerName || "Walk-in"
+            }`
+          : "-",
+      },
+    ],
+    [summary],
+  );
+
+  const handleCreated = () => {
+    setShowForm(false);
+    setRefreshSignal((val) => val + 1);
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="mb-4 flex gap-3">
+    <div className="mx-auto max-w-6xl space-y-8">
+      <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
+            <h1 className="text-2xl font-semibold text-white">Receipts & printable docs</h1>
+            <p className="text-sm text-slate-400">
+              Track every printable document, search by customer, and open the PDF drawer without leaving this page.
+            </p>
+          </div>
           <button
-            className={`${view === "create"
-              ? "tab-active rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-slate-100 shadow-sm hover:border-white/40 hover:bg-white/15"
-              : "rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-500 hover:bg-slate-800"
-            }`}
-            onClick={() => setView("create")}
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-black shadow-lg shadow-emerald-700/30 hover:brightness-95"
           >
-            Create Receipt
-          </button>
-          <button
-            className={`${view === "list"
-              ? "tab-active rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-slate-100 shadow-sm hover:border-white/40 hover:bg-white/15"
-              : "rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-500 hover:bg-slate-800"
-            }`}
-            onClick={() => setView("list")}
-          >
-            View Receipts
+            {showForm ? "Hide creation form" : "Create new receipt"}
           </button>
         </div>
-      </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-2xl border border-white/5 bg-slate-950/40 px-4 py-3 text-sm text-slate-300"
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
+              <p className="mt-2 text-lg font-semibold text-white">{card.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <div className="space-y-6 rounded-2xl border border-white/10 bg-[var(--card,#171b23)] card-top-accent bg-slate-900/80 p-6 shadow-xl shadow-black/30">
-        {view === "create" && <ReceiptFormClient onCreated={refreshList} />}
-        {view === "list" && <ReceiptsAdminClient initial={rows} allowEdit />}
+      {showForm && (
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <ReceiptFormClient onCreated={handleCreated} />
+        </section>
+      )}
+
+      <div className="rounded-3xl border border-white/5 bg-slate-950/60 p-4 sm:p-6 shadow-inner shadow-black/40">
+        <ReceiptsAdminClient
+          initial={initial}
+          allowEdit
+          onSummaryChange={setSummary}
+          refreshSignal={refreshSignal}
+        />
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
-import WeeklySalesTable from "./WeeklySalesTable";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -236,7 +236,22 @@ export default async function AdminOnlineSummaryPage() {
         </div>
       </section>
 
-      <WeeklySalesTable />
+      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Manual weekly sales</h3>
+            <p className="text-sm text-slate-400">
+              Review marketplace overrides, add manual entries, and approve payouts captured outside the sync job.
+            </p>
+          </div>
+          <Link
+            href="/admin/online/manual"
+            className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
+          >
+            Open manual sales desk
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

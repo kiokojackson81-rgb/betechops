@@ -5,7 +5,8 @@ import { requireAttendant, auth } from "@/lib/auth";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
-import { generateRandomId, generateReceiptSerial } from "@/lib/id";
+import { generateRandomId } from "@/lib/id";
+import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
 
   const payload = (await req.json()) as any;
 
-  const serial = String(payload?.serial || generateReceiptSerial());
+  const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
   const attendantId = payload?.attendantId ?? payload?.servedBy ?? null;
   const issuedById = payload?.issuedById ?? (guard.ok ? guard.user.id : null);

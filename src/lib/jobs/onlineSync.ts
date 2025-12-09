@@ -1,6 +1,6 @@
 "use server";
 
-import { Platform, Prisma } from "@prisma/client";
+import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 
@@ -33,6 +33,10 @@ type JumiaOrderItem = {
   product?: { name?: string; sellerSku?: string; imageUrl?: string };
 };
 
+type MarketplaceAccountWithAssignments = Prisma.MarketplaceAccountGetPayload<{
+  include: { assignments: true };
+}>;
+
 export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }) {
   const credentials = await loadJumiaCredentials();
   const apiBase = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
@@ -43,9 +47,33 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
   const createdAfter = new Date();
   createdAfter.setDate(createdAfter.getDate() - days);
 
-  const jumiaAccounts = await prisma.marketplaceAccount.findMany({
+  const activeAssignmentsWhere = {
+    OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
+  };
+
+  const jumiaAccounts: MarketplaceAccountWithAssignments[] = await prisma.marketplaceAccount.findMany({
     where: { platform: Platform.JUMIA, isActive: true },
+    include: {
+      assignments: {
+        where: activeAssignmentsWhere,
+        orderBy: { startsAt: "desc" },
+      },
+    },
   });
+
+  const jumiaShops = await prisma.shop.findMany({
+    where: { platform: Platform.JUMIA },
+    select: { id: true, name: true },
+  });
+  const shopsById = new Map<string, (typeof jumiaShops)[number]>();
+  const shopsByName = new Map<string, (typeof jumiaShops)[number]>();
+  jumiaShops.forEach((shop) => {
+    shopsById.set(shop.id, shop);
+    if (shop.name) {
+      shopsByName.set(shop.name.trim().toLowerCase(), shop);
+    }
+  });
+
   const accountsBySid = new Map<string, typeof jumiaAccounts[number]>();
   jumiaAccounts.forEach((account) => {
     if (account.jumiaShopSid) accountsBySid.set(account.jumiaShopSid, account);
@@ -83,6 +111,26 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
         rawPayload: statement as unknown as Prisma.InputJsonValue,
       },
     });
+
+     const shopRecord =
+       shopsById.get(account.id) ||
+       (account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined);
+     if (!shopRecord) {
+       console.warn(
+         `[onlineSync] Unable to map marketplace account ${account.displayName ?? account.id} to a Shop record; skipping WeeklySale upsert.`,
+       );
+     } else {
+       const assignedUserId = resolveAccountAssignee(account);
+       await upsertWeeklySaleFromStatement({
+         shopId: shopRecord.id,
+         platform: account.platform,
+         weekStart,
+         weekEnd,
+         amount: grossSales,
+         userId: assignedUserId,
+         isPaid: Boolean(statement.paid),
+       });
+     }
   }
 
   const orders = await fetchOrders(apiBase, authHeader, createdAfter);
@@ -218,4 +266,70 @@ function deriveWeekWindow(statement: JumiaStatement) {
     ? new Date(statement.period.endDate)
     : new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
   return { weekStart: start, weekEnd: end };
+}
+
+function resolveAccountAssignee(account: MarketplaceAccountWithAssignments) {
+  if (!account.assignments?.length) return null;
+  const priority = ["JUMIA_KILIMALL_OPS", "SUPERVISOR"];
+  for (const role of priority) {
+    const match = account.assignments.find((assignment) => assignment.role === role);
+    if (match) return match.attendantId;
+  }
+  return account.assignments[0]?.attendantId ?? null;
+}
+
+async function upsertWeeklySaleFromStatement(opts: {
+  shopId: string;
+  platform: Platform;
+  weekStart: Date;
+  weekEnd: Date;
+  amount: number;
+  userId?: string | null;
+  isPaid: boolean;
+}) {
+  const { shopId, platform, weekStart, weekEnd, amount, userId, isPaid } = opts;
+  const existing = await prisma.weeklySale.findUnique({
+    where: {
+      shopId_platform_weekStart_weekEnd: {
+        shopId,
+        platform,
+        weekStart,
+        weekEnd,
+      },
+    },
+  });
+  if (existing && existing.source === WeeklySaleSource.MANUAL) {
+    console.warn(
+      `[onlineSync] WeeklySale ${existing.id} (${shopId}/${platform}) is manual (${existing.status}); automatic sync skipped.`,
+    );
+    return;
+  }
+
+  await prisma.weeklySale.upsert({
+    where: {
+      shopId_platform_weekStart_weekEnd: {
+        shopId,
+        platform,
+        weekStart,
+        weekEnd,
+      },
+    },
+    create: {
+      shopId,
+      platform,
+      weekStart,
+      weekEnd,
+      amount,
+      userId: userId ?? null,
+      status: isPaid ? WeeklySaleStatus.APPROVED : WeeklySaleStatus.PENDING,
+      source: WeeklySaleSource.AUTOMATIC,
+    },
+    update: {
+      amount,
+      userId: userId ?? existing?.userId ?? null,
+      status: isPaid ? WeeklySaleStatus.APPROVED : WeeklySaleStatus.PENDING,
+      source: WeeklySaleSource.AUTOMATIC,
+      approvedBy: null,
+    },
+  });
 }

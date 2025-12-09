@@ -16,10 +16,10 @@ export function QuickStatsCard({ variant = "onlineOps" }: { variant?: Variant })
     if (variant !== "onlineOps") return;
     setLoading(true);
     try {
-      const res = await fetch("/api/online/summary", { credentials: "same-origin", cache: "no-store" });
+      const res = await fetch("/api/reports/summary?scope=attendant", { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load quick stats");
       const data = await res.json().catch(() => null);
-      setStats(data?.stats ?? null);
+      setStats(data?.quickStats ?? null);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to load quick stats", "error");
     } finally {
@@ -77,15 +77,20 @@ export function QuickStatsCard({ variant = "onlineOps" }: { variant?: Variant })
         <p className="text-xs uppercase tracking-wide text-slate-400">Target progress</p>
         <div className="text-xs text-slate-400">
           {stats
-            ? stats.salesKes >= stats.progressTarget
+            ? stats.remainingToNextTier <= 0
               ? "Great work! Target achieved."
-              : `KES ${(stats.progressTarget - stats.salesKes).toLocaleString()} remaining`
-            : "—"}
+              : `KES ${stats.remainingToNextTier.toLocaleString()} remaining`
+            : "-"}
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
           <div
             className="h-full rounded-full bg-emerald-500 transition-all"
-            style={{ width: `${Math.min(100, ((stats?.salesKes ?? 0) / (stats?.progressTarget || 1)) * 100)}%` }}
+            style={{
+              width: `${Math.min(
+                100,
+                ((stats?.salesKes ?? 0) / (stats?.progressTarget || stats?.nextTierThreshold || 1)) * 100,
+              )}%`,
+            }}
           />
         </div>
       </div>

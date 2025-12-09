@@ -29,7 +29,8 @@ model User {
   dailyReports                DailyReport[]
   marketingEntries            MarketingDailyEntry[]
   orders                      Order[]
-  weeklySales                 WeeklySale[]
+  weeklySales                 WeeklySale[]              @relation("WeeklySaleAttendant")
+  weeklySalesApproved         WeeklySale[]              @relation("WeeklySaleApproval")
   issuedReceipts              Receipt[]                    @relation("issuedBy")
   returnsApproved             ReturnCase[]                  @relation("ReturnApprovedBy")
   returnsCreated              ReturnCase[]                  @relation("ReturnCreatedBy")
@@ -326,19 +327,26 @@ model Shop {
 /// WeeklySale records aggregate the total sales for a given attendant (user) and shop
 /// over a Monday→Saturday week. Each record can be marked as PENDING or PAID.
 model WeeklySale {
-  id        String   @id @default(cuid())
-  shopId    String?
-  userId    String
-  weekStart DateTime
-  weekEnd   DateTime
-  amount    Decimal  @db.Decimal(12, 2)
-  status    String
-  createdAt DateTime @default(now())
+  id         String            @id @default(cuid())
+  userId     String?
+  shopId     String?
+  platform   Platform
+  weekStart  DateTime
+  weekEnd    DateTime
+  amount     Decimal           @db.Decimal(12, 2)
+  source     WeeklySaleSource  @default(AUTOMATIC)
+  status     WeeklySaleStatus  @default(PENDING)
+  createdBy  String?
+  approvedBy String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
-  shop Shop? @relation(fields: [shopId], references: [id])
-  user User  @relation(fields: [userId], references: [id])
+  shop     Shop?   @relation(fields: [shopId], references: [id])
+  user     User?   @relation("WeeklySaleAttendant", fields: [userId], references: [id])
+  approved User?   @relation("WeeklySaleApproval", fields: [approvedBy], references: [id])
 
-  @@index([shopId, weekStart])
+  @@index([shopId, platform, weekStart, weekEnd])
+  @@unique([shopId, platform, weekStart, weekEnd], map: "WeeklySale_shopId_platform_weekStart_weekEnd_key")
 }
 
 model JumiaAccount {
@@ -858,6 +866,17 @@ enum AttendantCategory {
 enum Platform {
   JUMIA
   KILIMALL
+}
+
+enum WeeklySaleSource {
+  AUTOMATIC
+  MANUAL
+}
+
+enum WeeklySaleStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum ShopRoleAtShop {

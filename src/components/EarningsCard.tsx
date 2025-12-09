@@ -34,10 +34,10 @@ function OnlineOpsEarningsCard() {
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/online/earnings/summary", { credentials: "same-origin", cache: "no-store" });
+      const res = await fetch("/api/reports/summary?scope=attendant", { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load earnings summary");
       const data = await res.json().catch(() => null);
-      if (data?.summary) setSummary(mapOnlineSummary(data.summary));
+      if (data?.earnings) setSummary(mapOnlineSummary(data.earnings));
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to load earnings summary", "error");
     } finally {

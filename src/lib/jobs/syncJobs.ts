@@ -5,6 +5,7 @@ import { decryptJson } from '@/lib/crypto/secure-json';
 import { syncOnlineMarketplaceData } from '@/lib/jobs/onlineSync';
 import { getTradingPeriodFor } from '@/lib/tradingPeriod';
 import { recomputeWeeklySalesCommission } from '@/lib/weeklySales';
+import { WeeklySaleStatus } from '@prisma/client';
 
 export async function syncOrdersJob() {
   const shops = await prisma.shop.findMany();
@@ -94,6 +95,8 @@ export async function commissionCalcJob() {
   const period = getTradingPeriodFor(new Date());
   const distinctUsers = await prisma.weeklySale.findMany({
     where: {
+      userId: { not: null },
+      status: WeeklySaleStatus.APPROVED,
       AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
     },
     select: { userId: true },
