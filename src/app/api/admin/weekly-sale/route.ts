@@ -121,8 +121,8 @@ export async function POST(req: NextRequest) {
       userId: userId ?? null,
       status: WeeklySaleStatus.PENDING,
       source: WeeklySaleSource.MANUAL,
-      // clear any existing approver relation when creating/updating manual entries
-      approved: { disconnect: true },
+      // clear any existing approver when creating/updating manual entries
+      approvedBy: null,
       createdBy: actorId,
     },
   });
