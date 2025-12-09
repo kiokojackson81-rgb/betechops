@@ -29,8 +29,8 @@ export async function GET() {
     attendants: shop.assignments
       .map((assignment) => assignment.user)
       .filter(
-        (user): user is { id: string; name: string | null; email: string } =>
-          Boolean(user && user.email),
+        (user): user is { id: string; name: string | null; email: string | null } =>
+          Boolean(user),
       ),
   }));
 
