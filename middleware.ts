@@ -73,17 +73,16 @@ export async function middleware(req: NextRequest) {
     // could be double-decoded and led to redirect-to-self loops. Instead
     // pass the encoded original path directly as `callbackUrl` and let the
     // login/post-login handlers perform any necessary wrapping.
-    const encodedTarget = encodeURIComponent(originalPathWithQuery);
     // Log masked callback info for diagnostics (temporary guard-rail).
     try {
       // eslint-disable-next-line no-console
-      console.log(`middleware: redirecting->login callbackUrl=${mask(encodedTarget)} original=${mask(originalPathWithQuery)}`);
+      console.log(`middleware: redirecting->login callbackUrl=${mask(originalPathWithQuery)} original=${mask(originalPathWithQuery)}`);
     } catch (e) {
       // ignore logging errors
     }
     url.pathname = "/attendant/login";
     url.searchParams.set("_r", "1");
-    url.searchParams.set("callbackUrl", encodedTarget);
+    url.searchParams.set("callbackUrl", originalPathWithQuery);
     return NextResponse.redirect(url);
   }
 
@@ -126,7 +125,7 @@ export async function middleware(req: NextRequest) {
       // ignore
     }
     url.pathname = "/auth/post-login";
-    url.searchParams.set("callbackUrl", encodeURIComponent(originalPathWithQuery));
+    url.searchParams.set("callbackUrl", originalPathWithQuery);
     return NextResponse.redirect(url);
   }
 

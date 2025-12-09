@@ -42,10 +42,23 @@ export default async function PostLogin(props: unknown) {
           // ignore logging errors
         }
 
+        // Safely unwrap any double-encoded callback values before processing.
+        let decoded = cbRaw;
+        for (let depth = 0; depth < 3; depth++) {
+          const needsDecode = typeof decoded === "string" && decoded.includes("%");
+          if (!needsDecode) break;
+          try {
+            const next = decodeURIComponent(decoded);
+            decoded = next;
+            if (!next.includes("%")) break;
+          } catch {
+            break;
+          }
+        }
+
         // Safely unwrap nested /auth/post-login wrappers that middleware may
         // have produced (e.g. "/auth/post-login?callbackUrl=%2Fmarketing%2Ftracker").
         // Limit to a small depth to avoid infinite loops on malformed values.
-        let decoded = decodeURIComponent(cbRaw);
         let depthUnwrapped = 0;
         for (let depth = 0; depth < 3; depth++) {
           if (!decoded.startsWith("/auth/post-login")) break;
