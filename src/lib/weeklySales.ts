@@ -53,11 +53,14 @@ export async function summarizeWeeklySalesForPeriod(opts: {
 }
 
 export async function recomputeWeeklySalesCommission(opts: {
-  userId: string;
+  userId: string | null;
   period?: TradingPeriod;
   client?: PrismaOrTx;
 }) {
   const { userId } = opts;
+  if (!userId) {
+    return { updated: false, totalSales: 0, payout: 0, period: opts.period ?? getTradingPeriodFor(new Date()), ledgerId: null };
+  }
   const client = opts.client ?? prisma;
   const period = opts.period ?? getTradingPeriodFor(new Date());
 
