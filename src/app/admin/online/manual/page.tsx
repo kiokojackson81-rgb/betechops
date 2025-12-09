@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
-import type { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
