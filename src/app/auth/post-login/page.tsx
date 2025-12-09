@@ -79,9 +79,20 @@ export default async function PostLogin(props: unknown) {
           console.log(`post-login: unwrappedDepth=${depthUnwrapped} finalTarget=${mask(decoded)}`);
         } catch (e) {}
 
-        // Only allow same-origin paths.
+        // Only allow same-origin paths. If this callback was produced by the
+        // middleware rehydration flow (it includes `_rehydrated=1`) but the
+        // current server session still lacks `attendantCategory`, avoid
+        // redirecting back to the same target because middleware will rewrap
+        // it and produce a redirect loop. In that case fallthrough to normal
+        // landing computation below.
+        const isRehydrated = typeof decoded === "string" && decoded.includes("_rehydrated=1");
+        const sessionHasCategory = !!(session.user as any)?.attendantCategory;
         if (decoded && decoded.startsWith("/")) {
-          return redirect(decoded);
+          if (isRehydrated && !sessionHasCategory) {
+            // Skip returning to decoded target to avoid a redirect cycle.
+          } else {
+            return redirect(decoded);
+          }
         }
       } catch (e) {
         // ignore malformed callbackUrl and continue with normal flow
