@@ -28,7 +28,10 @@ export async function GET() {
     platform: shop.platform,
     attendants: shop.assignments
       .map((assignment) => assignment.user)
-      .filter((user): user is { id: string; name: string | null; email: string | null } => Boolean(user)),
+      .filter(
+        (user): user is { id: string; name: string | null; email: string } =>
+          Boolean(user && user.email),
+      ),
   }));
 
   return NextResponse.json(payload);

@@ -425,6 +425,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error('[receipts] POST handler error:', err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

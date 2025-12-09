@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma } from "@/lib/prisma";
 
 export type ReceiptOwner =
   | { type: "pos"; id: string; ref: string }
@@ -10,18 +10,24 @@ export async function findReceiptOwner(receiptNumber?: string): Promise<ReceiptO
   const rn = receiptNumber.trim();
 
   // Check POS orders (orderNumber + receipt)
-  const order = await prisma.order.findUnique({ where: { orderNumber: rn }, include: { receipt: true } });
-  if (order && order.receipt) {
-    return { type: "pos", id: order.receipt.id, ref: order.orderNumber };
+  if (prisma.order && typeof (prisma.order as any).findUnique === "function") {
+    const order = await (prisma.order as any).findUnique({ where: { orderNumber: rn }, include: { receipt: true } });
+    if (order && order.receipt) {
+      return { type: "pos", id: order.receipt.id, ref: order.orderNumber };
+    }
   }
 
   // Check marketing receipts
-  const m = await prisma.marketingReceipt.findFirst({ where: { receiptNumber: rn } });
-  if (m) return { type: "marketing", id: m.id, entryId: m.dailyEntryId };
+  if (prisma.marketingReceipt && typeof (prisma.marketingReceipt as any).findFirst === "function") {
+    const m = await (prisma.marketingReceipt as any).findFirst({ where: { receiptNumber: rn } });
+    if (m) return { type: "marketing", id: m.id, entryId: m.dailyEntryId };
+  }
 
   // Check support receipts
-  const s = await prisma.supportReceipt.findFirst({ where: { receiptNumber: rn } });
-  if (s) return { type: "support", id: s.id, entryId: s.dailyEntryId };
+  if (prisma.supportReceipt && typeof (prisma.supportReceipt as any).findFirst === "function") {
+    const s = await (prisma.supportReceipt as any).findFirst({ where: { receiptNumber: rn } });
+    if (s) return { type: "support", id: s.id, entryId: s.dailyEntryId };
+  }
 
   return null;
 }
