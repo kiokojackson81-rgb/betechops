@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     platform: shop.platform,
     weekStart: normalizedWeekStart,
     weekEnd: normalizedWeekEnd,
-  } as Prisma.WeeklySaleShopId_platform_weekStart_weekEndCompoundUniqueInput;
+  } as Prisma.WeeklySaleShopIdPlatformWeekStartWeekEndCompoundUniqueInput;
 
   const existing = await prisma.weeklySale.findUnique({
     where: { shopId_platform_weekStart_weekEnd: weekKey },
@@ -121,7 +121,8 @@ export async function POST(req: NextRequest) {
       userId: userId ?? null,
       status: WeeklySaleStatus.PENDING,
       source: WeeklySaleSource.MANUAL,
-      approvedBy: null,
+      // clear any existing approver relation when creating/updating manual entries
+      approved: { disconnect: true },
       createdBy: actorId,
     },
   });
