@@ -43,16 +43,22 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
           </tr>
         </thead>
         <tbody>
-          {items.map((item: any, idx: number) => (
-            <tr key={idx} className="border-b align-top">
-              <td className="py-1">{item.quantity ?? item.qty ?? 1}</td>
-              <td className="py-1 whitespace-pre-wrap">{item.title}
-                {item.serial && <div className="text-[10px] text-slate-500">Serial / IMEI: {item.serial}</div>}
-              </td>
-              <td className="py-1 text-right">{formatKsh(item.unitPrice ?? item.price ?? item.sellingPrice)}</td>
-              <td className="py-1 text-right">{formatKsh((item.quantity ?? item.qty ?? 1) * Number(item.unitPrice ?? item.price ?? item.sellingPrice || 0))}</td>
-            </tr>
-          ))}
+          {items.map((item: any, idx: number) => {
+            const qty = item.quantity ?? item.qty ?? 1;
+            const unitPrice = (item.unitPrice ?? item.price ?? item.sellingPrice) ?? 0;
+            const lineTotal = qty * Number(unitPrice);
+            return (
+              <tr key={idx} className="border-b align-top">
+                <td className="py-1">{qty}</td>
+                <td className="py-1 whitespace-pre-wrap">
+                  {item.title}
+                  {item.serial && <div className="text-[10px] text-slate-500">Serial / IMEI: {item.serial}</div>}
+                </td>
+                <td className="py-1 text-right">{formatKsh(unitPrice)}</td>
+                <td className="py-1 text-right">{formatKsh(lineTotal)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
