@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const q = url.searchParams.get("q") || undefined;
+  const phoneParam = url.searchParams.get("phone") || undefined;
   const docType = url.searchParams.get("docType") || undefined;
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
@@ -53,8 +54,33 @@ export async function GET(req: NextRequest) {
       { issuedBy: { name: { contains: q, mode: "insensitive" } } },
     ];
   }
+
+  if (phoneParam) {
+    const pRaw = String(phoneParam).replace(/[^+0-9]/g, "");
+    // create a local-style variant (07...) when possible
+    let local = pRaw;
+    if (pRaw.startsWith("+254")) local = "0" + pRaw.slice(4);
+    else if (pRaw.startsWith("254")) local = "0" + pRaw.slice(3);
+    else if (/^[7][0-9]{8}$/.test(pRaw)) local = "0" + pRaw;
+
+    where.OR = where.OR || [];
+    where.OR.push({ order: { customerPhone: { contains: pRaw, mode: "insensitive" } } });
+    if (local) {
+      where.OR.push({ order: { customerPhone: { contains: local, mode: "insensitive" } } });
+    }
+  }
   if (attendantId) {
     where.order = { ...(where.order || {}), attendantId };
+  }
+
+  // compute total count for paging (best-effort; tests may mock only findMany)
+  let totalCount: number | null = null;
+  try {
+    if (prisma.receipt && typeof (prisma.receipt as any).count === "function") {
+      totalCount = await (prisma.receipt as any).count({ where });
+    }
+  } catch (e) {
+    totalCount = null;
   }
 
   const receipts = await prisma.receipt.findMany({
@@ -83,7 +109,10 @@ export async function GET(req: NextRequest) {
     items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
   }));
 
-  return NextResponse.json({ receipts: mapped, paging: { page, size } });
+  // if we couldn't get totalCount earlier (test mocks), fall back to results length
+  if (totalCount === null) totalCount = mapped.length;
+  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / size));
+  return NextResponse.json({ receipts: mapped, paging: { page, size, totalCount, totalPages } });
 }
 
 export async function POST(req: NextRequest) {

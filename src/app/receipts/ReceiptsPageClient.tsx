@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import ReceiptPrintView from "./_components/ReceiptPrintView";
+import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
 
 type ReceiptRow = {
   id: string;
@@ -45,6 +46,8 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   const [selected, setSelected] = useState<any | null>(null);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(10);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [totalPages, setTotalPages] = useState<number | null>(null);
 
   const handleCreated = () => {
     // after create, keep on create view and optionally clear or focus
@@ -59,7 +62,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
       const p = opts?.page ?? page;
       const params = new URLSearchParams();
       if (query) params.set("q", query);
-      if (phone) params.set("phone", phone);
+      if (phone) params.set("phone", normalizePhone(phone) || phone);
       params.set("includeItems", "true");
       params.set("page", String(p));
       params.set("size", String(size));
@@ -68,6 +71,8 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
       const data = await res.json();
       setResults(data.receipts || []);
       setPage(data.paging?.page ?? p);
+      setTotalCount(data.paging?.totalCount ?? null);
+      setTotalPages(data.paging?.totalPages ?? null);
     } catch (e) {
       setResults([]);
     } finally {
@@ -82,6 +87,12 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, phone, view, size]);
+
+  // prefill phone with country code on mount if empty
+  useEffect(() => {
+    if (!phone) setPhone("+254");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const viewReceipt = async (r: ReceiptRow) => {
     // fetch authoritative receipt with items
