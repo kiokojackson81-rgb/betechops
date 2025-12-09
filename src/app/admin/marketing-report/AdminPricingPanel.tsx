@@ -6,6 +6,11 @@ import Input from "@/app/_components/Input";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
 import type { UnpricedSale } from "@/lib/marketingUnpricedSales";
+import {
+  groupMarketingUnpricedSales,
+  type GroupedUnpricedSale,
+  type ReceiptGroupingItem,
+} from "@/lib/unpricedReceiptGrouping";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -16,13 +21,14 @@ const sourceLabels: Record<UnpricedSale["source"], string> = {
 
 const formatKES = (value: number) => `KES ${Math.round(value).toLocaleString("en-KE")}`;
 
-const getSaleKey = (sale: UnpricedSale) => `${sale.source}:${sale.id}`;
+const getSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
 const dayFilters = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const getDraftKey = (sale: UnpricedSale, receiptItemId?: string) =>
+const getDraftKey = (sale: GroupedUnpricedSale, receiptItemId?: string) =>
   receiptItemId ? `${sale.source}:item:${receiptItemId}` : getSaleKey(sale);
 
 export default function AdminPricingPanel() {
   const [sales, setSales] = useState<UnpricedSale[]>([]);
+  const groupedSales = useMemo(() => groupMarketingUnpricedSales(sales), [sales]);
   const [loading, setLoading] = useState(true);
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [pricingKey, setPricingKey] = useState<string | null>(null);
@@ -57,7 +63,7 @@ export default function AdminPricingPanel() {
 
   const attendantOptions = useMemo(() => {
     const map = new Map<string, string>();
-    sales.forEach((sale) => {
+    groupedSales.forEach((sale) => {
       const key = (sale.attendantEmail || sale.attendantName || "").toLowerCase();
       if (!key) return;
       const label = sale.attendantEmail
@@ -66,10 +72,10 @@ export default function AdminPricingPanel() {
       if (label) map.set(key, label);
     });
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
-  }, [sales]);
+  }, [groupedSales]);
 
   const filteredSales = useMemo(() => {
-    let rows = [...sales];
+    let rows: GroupedUnpricedSale[] = [...groupedSales];
     if (sourceFilter) {
       rows = rows.filter((sale) => sale.source === sourceFilter);
     }
@@ -111,7 +117,7 @@ export default function AdminPricingPanel() {
       rows = rows.filter((sale) => !sale.receiptNumber);
     }
     return rows;
-  }, [sales, search, sourceFilter, attendantFilter, paymentFilter, dayFilter, dateFilter, receiptFilter]);
+  }, [groupedSales, search, sourceFilter, attendantFilter, paymentFilter, dayFilter, dateFilter, receiptFilter]);
   const queueStats = useMemo(() => {
     return filteredSales.reduce(
       (acc, sale) => {
@@ -126,7 +132,8 @@ export default function AdminPricingPanel() {
             acc.items += fallback > 0 ? fallback : 1;
           }
         } else {
-          acc.items += 1;
+          const pending = (sale.groupedSaleIds?.length ?? sale.itemsPending ?? 1) || 1;
+          acc.items += pending;
         }
         return acc;
       },
@@ -138,26 +145,47 @@ export default function AdminPricingPanel() {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
-  const allocateReceiptBuyingPrices = (total: number, items: Array<{ id: string }>) => {
-    if (!items.length) return [];
-    const base = Math.floor(total / items.length);
-    let remainder = total - base * items.length;
-    return items.map((item) => {
-      const extra = remainder > 0 ? 1 : 0;
-      if (remainder > 0) remainder -= 1;
-      return { id: item.id, value: base + extra };
+  const allocateReceiptBuyingPrices = (
+    total: number,
+    items: Array<{ id: string; saleValue?: number }>,
+  ) => {
+    const roundedTotal = Math.max(0, Math.round(total));
+    if (!items.length || roundedTotal <= 0) return [];
+    const weights = items.map((item) => Math.max(0, item.saleValue ?? 0));
+    const weightSum = weights.reduce((sum, value) => sum + value, 0);
+    let remainder = roundedTotal;
+    const allocations = items.map((item, index) => {
+      const value =
+        weightSum > 0
+          ? Math.floor((weights[index] / weightSum) * roundedTotal)
+          : Math.floor(roundedTotal / items.length);
+      remainder -= value;
+      return { id: item.id, value };
     });
+    let pointer = 0;
+    while (remainder > 0 && allocations.length > 0) {
+      allocations[pointer % allocations.length].value += 1;
+      remainder -= 1;
+      pointer += 1;
+    }
+    return allocations;
   };
 
-  const submitPrice = async (sale: UnpricedSale, receiptItemId: string | undefined, buyingPrice: number) => {
+  const submitPrice = async (
+    sale: GroupedUnpricedSale,
+    receiptItemId: string | undefined,
+    buyingPrice: number,
+    options?: { overrideSaleId?: string },
+  ) => {
     if (sale.source === "support" && !receiptItemId) {
       throw new Error("Select a receipt item to price");
     }
+    const targetSaleId = options?.overrideSaleId ?? sale.id;
     const endpoint = sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
     const payload =
       sale.source === "support"
         ? { receiptItemId, buyingPrice }
-        : { dailySaleId: sale.id, buyingPrice };
+        : { dailySaleId: targetSaleId, buyingPrice };
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -169,30 +197,38 @@ export default function AdminPricingPanel() {
       throw new Error(err?.error || "Failed to save buying price");
     }
     setSales((prev) => {
-      const next: UnpricedSale[] = [];
-      for (const row of prev) {
-        if (row.id !== sale.id || row.source !== sale.source) {
-          next.push(row);
-          continue;
-        }
-        if (row.source === "support" && receiptItemId) {
-          const remaining = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
-          if (!remaining.length) {
+      if (sale.source === "support") {
+        const next: UnpricedSale[] = [];
+        for (const row of prev) {
+          if (row.id !== sale.id || row.source !== sale.source) {
+            next.push(row);
             continue;
           }
-          next.push({
-            ...row,
-            receiptItems: remaining,
-            itemsPending: Math.max(0, (row.itemsPending ?? remaining.length + 1) - 1),
-          });
-          continue;
+          if (receiptItemId) {
+            const remaining = (row.receiptItems || []).filter((item) => item.id !== receiptItemId);
+            if (!remaining.length) {
+              continue;
+            }
+            next.push({
+              ...row,
+              receiptItems: remaining,
+              itemsPending: Math.max(0, (row.itemsPending ?? remaining.length + 1) - 1),
+            });
+            continue;
+          }
         }
+        return next;
       }
-      return next;
+      return prev.filter((row) => row.id !== targetSaleId);
     });
   };
 
-  const handlePriceSale = async (sale: UnpricedSale, receiptItemId?: string) => {
+  const handlePriceSale = async (sale: GroupedUnpricedSale, receiptItemId?: string) => {
+    const receiptItems = sale.receiptItems as ReceiptGroupingItem[] | undefined;
+    if (sale.source === "daily-sale" && (receiptItems?.length ?? 0) > 0) {
+      await handlePriceReceiptGroup(sale);
+      return;
+    }
     const draftKey = getDraftKey(sale, receiptItemId);
     const draft = buyingDrafts[draftKey];
     const numeric = Number(draft);
@@ -216,7 +252,7 @@ export default function AdminPricingPanel() {
     }
   };
 
-  const handlePriceSupportReceipt = async (sale: UnpricedSale) => {
+  const handlePriceSupportReceipt = async (sale: GroupedUnpricedSale) => {
     const draftKey = getDraftKey(sale);
     const draft = buyingDrafts[draftKey];
     const numeric = Number(draft);
@@ -248,23 +284,61 @@ export default function AdminPricingPanel() {
     }
   };
 
-  const handleDeleteSale = async (sale: UnpricedSale) => {
+  const handlePriceReceiptGroup = async (sale: GroupedUnpricedSale) => {
+    const draftKey = getDraftKey(sale);
+    const draft = buyingDrafts[draftKey];
+    const numeric = Number(draft);
+    if (!draft || Number.isNaN(numeric) || numeric <= 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+    const items = (sale.receiptItems as ReceiptGroupingItem[] | undefined) ?? [];
+    if (!items.length) {
+      showToast("No receipt items available for pricing", "error");
+      return;
+    }
+    const allocations = allocateReceiptBuyingPrices(Math.round(numeric), items);
+    setPricingKey(draftKey);
+    try {
+      for (const { id, value } of allocations) {
+        await submitPrice(sale, undefined, value, { overrideSaleId: id });
+      }
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      showToast("Buying price saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingKey(null);
+    }
+  };
+
+  const handleDeleteSale = async (sale: GroupedUnpricedSale) => {
     const key = getSaleKey(sale);
     if (!window.confirm("Remove this sale from the pricing queue?")) return;
     setDeletingKey(key);
     try {
-      const res = await fetch("/api/marketing/unpriced-sales/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ saleId: sale.id, source: sale.source }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Failed to delete sale");
+      const ids =
+        sale.source === "daily-sale" && sale.groupedSaleIds?.length
+          ? sale.groupedSaleIds
+          : [sale.id];
+      for (const saleId of ids) {
+        const res = await fetch("/api/marketing/unpriced-sales/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ saleId, source: sale.source }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || "Failed to delete sale");
+        }
       }
       showToast("Sale removed from queue", "success");
-      setSales((prev) => prev.filter((row) => getSaleKey(row) !== key));
+      setSales((prev) => prev.filter((row) => !(sale.groupedSaleIds ?? [sale.id]).includes(row.id)));
       setBuyingDrafts((prev) => {
         const next = { ...prev };
         delete next[key];
@@ -410,7 +484,9 @@ export default function AdminPricingPanel() {
               {filteredSales.map((sale) => {
                 const key = getSaleKey(sale);
                 const saleDate = new Date(sale.saleDate);
-                const hasReceiptItems = sale.source === "support" && (sale.receiptItems?.length ?? 0) > 0;
+                const receiptItems = sale.receiptItems as ReceiptGroupingItem[] | undefined;
+                const hasReceiptItems = (receiptItems?.length ?? 0) > 0;
+                const isSupportReceipt = sale.source === "support";
                 return (
                   <tr key={key} className="border-t border-slate-800 bg-slate-950/30">
                     <td className="px-3 py-3 align-top">
@@ -431,7 +507,7 @@ export default function AdminPricingPanel() {
                       <div>{hasReceiptItems ? "Receipt value" : "Selling price"}: {formatKES(sale.sellingPrice)}</div>
                       <div>Payment: {sale.paymentMethod ?? "N/A"}</div>
                       <div>Receipt: {sale.receiptNumber || "N/A"}</div>
-                      {sale.source === "support" ? (
+                      {hasReceiptItems ? (
                         <div className="text-[10px] uppercase tracking-wide text-slate-500">
                           {((sale.itemsPending ?? sale.receiptItems?.length ?? 0) || 0).toLocaleString()} pending
                           {sale.itemsTotal ? ` of ${sale.itemsTotal}` : ""} items
@@ -445,8 +521,13 @@ export default function AdminPricingPanel() {
                         <div className="space-y-2">
                           <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300">
                             <ul className="list-disc space-y-1 pl-4 text-slate-100">
-                              {sale.receiptItems!.map((item) => (
-                                <li key={item.id}>{item.productName || "Receipt item"}</li>
+                              {receiptItems!.map((item) => (
+                                <li key={item.id} className="flex items-center justify-between gap-2">
+                                  <span>{item.productName || "Receipt item"}</span>
+                                  {typeof item.saleValue === "number" ? (
+                                    <span className="text-slate-400">{formatKES(item.saleValue)}</span>
+                                  ) : null}
+                                </li>
                               ))}
                             </ul>
                           </div>
@@ -473,7 +554,7 @@ export default function AdminPricingPanel() {
                     <td className="px-3 py-3 align-top space-y-2">
                       {hasReceiptItems ? (
                         <Button
-                          onClick={() => handlePriceSupportReceipt(sale)}
+                          onClick={() => (isSupportReceipt ? handlePriceSupportReceipt(sale) : handlePriceReceiptGroup(sale))}
                           disabled={pricingKey === getDraftKey(sale)}
                           className="w-full"
                         >

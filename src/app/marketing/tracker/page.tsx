@@ -21,6 +21,11 @@ import { signOut } from "next-auth/react";
 import { Trash2 } from "lucide-react";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import type { UnpricedSale } from "@/lib/marketingUnpricedSales";
+import {
+  groupMarketingUnpricedSales,
+  type GroupedUnpricedSale,
+  type ReceiptGroupingItem,
+} from "@/lib/unpricedReceiptGrouping";
 
 type MarketingDailyFormState = {
   date: string;
@@ -47,8 +52,8 @@ type RemoteSummaryPayload = {
   };
 };
 
-const getUnpricedSaleKey = (sale: UnpricedSale) => `${sale.source}:${sale.id}`;
-const getUnpricedDraftKey = (sale: UnpricedSale, receiptItemId?: string) =>
+const getUnpricedSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
+const getUnpricedDraftKey = (sale: GroupedUnpricedSale, receiptItemId?: string) =>
   receiptItemId ? `${sale.source}:item:${receiptItemId}` : getUnpricedSaleKey(sale);
 
 const dayOptions: DayName[] = [
@@ -326,7 +331,11 @@ export default function MarketingTrackerPage() {
   }>(null);
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const earningsSummaryJsonRef = useRef<string>("");
-  const [unpricedSales, setUnpricedSales] = useState<UnpricedSale[]>([]);
+  const [rawUnpricedSales, setRawUnpricedSales] = useState<UnpricedSale[]>([]);
+  const unpricedSales = useMemo(
+    () => groupMarketingUnpricedSales(rawUnpricedSales),
+    [rawUnpricedSales],
+  );
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [deletingSaleKey, setDeletingSaleKey] = useState<string | null>(null);
@@ -345,7 +354,8 @@ export default function MarketingTrackerPage() {
             acc.items += fallback > 0 ? fallback : 1;
           }
         } else {
-          acc.items += 1;
+          const pendingItems = (sale.groupedSaleIds?.length ?? sale.itemsPending ?? 1) || 1;
+          acc.items += pendingItems;
         }
         return acc;
       },
@@ -388,32 +398,49 @@ export default function MarketingTrackerPage() {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
-  const allocateReceiptBuyingPrices = (total: number, items: Array<{ id: string }>) => {
-    if (!items.length) return [];
-    const base = Math.floor(total / items.length);
-    let remainder = total - base * items.length;
-    return items.map((item) => {
-      const extra = remainder > 0 ? 1 : 0;
-      if (remainder > 0) remainder -= 1;
-      return { id: item.id, value: base + extra };
+  const allocateReceiptBuyingPrices = (
+    total: number,
+    items: Array<{ id: string; saleValue?: number }>,
+  ) => {
+    const roundedTotal = Math.max(0, Math.round(total));
+    if (!items.length || roundedTotal <= 0) return [];
+    const weights = items.map((item) => Math.max(0, item.saleValue ?? 0));
+    const weightSum = weights.reduce((sum, value) => sum + value, 0);
+    let remainder = roundedTotal;
+    const allocations = items.map((item, index) => {
+      const value =
+        weightSum > 0
+          ? Math.floor((weights[index] / weightSum) * roundedTotal)
+          : Math.floor(roundedTotal / items.length);
+      remainder -= value;
+      return { id: item.id, value };
     });
+    let pointer = 0;
+    while (remainder > 0 && allocations.length > 0) {
+      allocations[pointer % allocations.length].value += 1;
+      remainder -= 1;
+      pointer += 1;
+    }
+    return allocations;
   };
 
   const submitBuyingPrice = async (
-    sale: UnpricedSale,
+    sale: GroupedUnpricedSale,
     receiptItemId: string | undefined,
     buyingPrice: number,
+    options?: { overrideSaleId?: string; saleValue?: number },
   ) => {
     if (sale.source === "support" && !receiptItemId) {
       throw new Error("Select an item on the receipt to price");
     }
 
+    const targetSaleId = options?.overrideSaleId ?? sale.id;
     const endpoint =
       sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
     const body =
       sale.source === "support"
         ? { receiptItemId, buyingPrice }
-        : { dailySaleId: sale.id, buyingPrice };
+        : { dailySaleId: targetSaleId, buyingPrice };
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -429,10 +456,10 @@ export default function MarketingTrackerPage() {
 
     let saleValueDelta = 0;
     let paymentDelta: "MPESA" | "CASH" | null = null;
-    setUnpricedSales((prev) => {
+    setRawUnpricedSales((prev) => {
       const next: UnpricedSale[] = [];
       for (const row of prev) {
-        if (row.id !== sale.id || row.source !== sale.source) {
+        if (row.id !== targetSaleId || row.source !== sale.source) {
           next.push(row);
           continue;
         }
@@ -450,7 +477,7 @@ export default function MarketingTrackerPage() {
           });
           continue;
         }
-        saleValueDelta = data?.saleValue ?? row.sellingPrice;
+        saleValueDelta = options?.saleValue ?? data?.saleValue ?? row.sellingPrice;
         paymentDelta = row.paymentMethod;
       }
       return next;
@@ -497,7 +524,7 @@ export default function MarketingTrackerPage() {
     }
   };
 
-  const handleSubmitBuyingPrice = async (sale: UnpricedSale, receiptItemId?: string) => {
+  const handleSubmitBuyingPrice = async (sale: GroupedUnpricedSale, receiptItemId?: string) => {
     const draftKey = getUnpricedDraftKey(sale, receiptItemId);
     const rawValue = buyingDrafts[draftKey] ?? "";
     const parsedValue = Number(rawValue);
@@ -523,7 +550,7 @@ export default function MarketingTrackerPage() {
     }
   };
 
-  const handleSubmitSupportReceiptTotal = async (sale: UnpricedSale) => {
+  const handleSubmitSupportReceiptTotal = async (sale: GroupedUnpricedSale) => {
     const draftKey = getUnpricedDraftKey(sale);
     const rawValue = buyingDrafts[draftKey] ?? "";
     const parsedValue = Number(rawValue);
@@ -556,7 +583,43 @@ export default function MarketingTrackerPage() {
     }
   };
 
-  const handleDeleteUnpricedSale = async (sale: UnpricedSale) => {
+  const handleSubmitMarketingReceiptTotal = async (sale: GroupedUnpricedSale) => {
+    const draftKey = getUnpricedDraftKey(sale);
+    const rawValue = buyingDrafts[draftKey] ?? "";
+    const parsedValue = Number(rawValue);
+    if (!rawValue || Number.isNaN(parsedValue) || parsedValue <= 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+    const items = (sale.receiptItems as ReceiptGroupingItem[] | undefined) ?? [];
+    if (!items.length) {
+      showToast("No receipt items available for pricing", "error");
+      return;
+    }
+    const allocations = allocateReceiptBuyingPrices(Math.round(parsedValue), items);
+    setPricingSaleKey(draftKey);
+    try {
+      for (const { id, value } of allocations) {
+        const entry = items.find((item) => item.id === id);
+        await submitBuyingPrice(sale, undefined, value, {
+          overrideSaleId: id,
+          saleValue: entry?.saleValue,
+        });
+      }
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      showToast("Buying price saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingSaleKey(null);
+    }
+  };
+
+  const handleDeleteUnpricedSale = async (sale: GroupedUnpricedSale) => {
     const key = getUnpricedSaleKey(sale);
     if (typeof window !== "undefined") {
       const confirmed = window.confirm("Delete this pending sale? This cannot be undone.");
@@ -564,19 +627,25 @@ export default function MarketingTrackerPage() {
     }
     setDeletingSaleKey(key);
     try {
-      const res = await fetch("/api/marketing/unpriced-sales/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ saleId: sale.id, source: sale.source }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        showToast(err?.error || "Failed to delete sale", "error");
-        return;
+      const ids =
+        sale.source === "daily-sale" && sale.groupedSaleIds?.length
+          ? sale.groupedSaleIds
+          : [sale.id];
+      for (const saleId of ids) {
+        const res = await fetch("/api/marketing/unpriced-sales/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ saleId, source: sale.source }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          showToast(err?.error || "Failed to delete sale", "error");
+          return;
+        }
       }
-      setUnpricedSales((prev) =>
-        prev.filter((row) => getUnpricedSaleKey(row) !== key),
+      setRawUnpricedSales((prev) =>
+        prev.filter((row) => !(sale.groupedSaleIds ?? [sale.id]).includes(row.id)),
       );
       setBuyingDrafts((prev) => {
         const next = { ...prev };
@@ -756,7 +825,7 @@ export default function MarketingTrackerPage() {
   useEffect(() => {
     const POLL_INTERVAL_MS = 20_000;
     if (!currentUserEmail || currentUserEmail !== "jeniffer@betech.co.ke") {
-      setUnpricedSales([]);
+      setRawUnpricedSales([]);
       return;
     }
     const controller = new AbortController();
@@ -771,7 +840,7 @@ export default function MarketingTrackerPage() {
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data?.sales) return;
-        setUnpricedSales(data.sales);
+        setRawUnpricedSales(data.sales);
       } catch {
         // ignore expected aborts/errors
       }
@@ -1207,110 +1276,241 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             </div>
 
                 {unpricedSales.length === 0 ? (
+
                   <p className="text-xs text-slate-400">
+
                     No pending sales. All sales in this period have buying prices.
+
                   </p>
+
                 ) : (
+
                   <div className="mt-2 space-y-2 max-h-72 overflow-y-auto pr-1">
+
                     {unpricedSales.map((sale) => {
+
                       const saleKey = getUnpricedSaleKey(sale);
+
                       const isSupport = sale.source === "support";
+
+                      const receiptItems = sale.receiptItems as ReceiptGroupingItem[] | undefined;
+
+                      const hasReceiptItems = (receiptItems?.length ?? 0) > 0;
+
                       const isDeleting = deletingSaleKey === saleKey;
+
                       return (
+
                         <div
+
                           key={saleKey}
+
                           className="rounded-xl bg-slate-950/70 px-3 py-2 text-xs space-y-1"
+
                         >
+
                           <div className="flex items-center justify-between gap-2">
+
                             <div className="flex items-center gap-2">
+
                               <span className="font-semibold text-slate-100">
+
                                 {sale.productName}
+
                               </span>
+
                               <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+
                                 {isSupport ? "Support ops" : "Marketing ops"}
+
                               </span>
+
                             </div>
+
                             <button
+
                               type="button"
+
                               onClick={() => handleDeleteUnpricedSale(sale)}
+
                               disabled={isDeleting}
+
                               aria-label="Delete pending sale"
+
                               title="Delete sale"
+
                               className={`rounded-full p-1 text-slate-500 transition hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-50`}
+
                             >
+
                               <Trash2 className="h-3.5 w-3.5" />
+
                             </button>
+
                           </div>
+
                           <div className="flex justify-between gap-2 text-[11px] text-slate-400">
+
                             <span>{sale.attendantName}</span>
+
                             <span>
-                              #{sale.receiptNumber || "No receipt"} ï¿½ {sale.paymentMethod || "N/A"}
+
+                              #{sale.receiptNumber || "No receipt"} · {sale.paymentMethod || "N/A"}
+
                             </span>
+
                           </div>
+
                           <div className="flex items-center justify-between text-[11px] text-slate-400">
-                            <span>{isSupport ? "Receipt value" : "Line value"}</span>
+
+                            <span>{hasReceiptItems ? "Receipt value" : "Line value"}</span>
+
                             <span>KES {sale.sellingPrice.toLocaleString()}</span>
+
                           </div>
-                          {isSupport ? (
+
+                          {hasReceiptItems ? (
+
                             <div className="text-[10px] uppercase tracking-wide text-slate-500">
+
                               {((sale.itemsPending ?? sale.receiptItems?.length ?? 0) || 0).toLocaleString()} pending
+
                               {sale.itemsTotal ? ` of ${sale.itemsTotal}` : ""} items
+
                             </div>
+
                           ) : (
+
                             <div className="text-[10px] uppercase tracking-wide text-slate-500">1 item pending</div>
+
                           )}
-                          {isSupport && (sale.receiptItems?.length ?? 0) > 0 ? (
+
+                          {hasReceiptItems ? (
+
                             <div className="space-y-2 pt-2">
+
                               <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-2 text-[11px] text-slate-300">
+
                                 <ul className="list-disc space-y-1 pl-4 text-left text-slate-200">
-                                  {sale.receiptItems!.map((item) => (
-                                    <li key={item.id}>{item.productName || "Receipt item"}</li>
+
+                                  {receiptItems!.map((item) => (
+
+                                    <li key={item.id} className="flex items-center justify-between gap-2">
+
+                                      <span>{item.productName || "Receipt item"}</span>
+
+                                      {typeof item.saleValue === "number" ? (
+
+                                        <span className="text-slate-400">
+
+                                          KES {item.saleValue.toLocaleString()}
+
+                                        </span>
+
+                                      ) : null}
+
+                                    </li>
+
                                   ))}
+
                                 </ul>
+
                               </div>
+
                               <div className="flex items-center gap-2">
+
                                 <Input
+
                                   type="number"
+
                                   min={0}
+
                                   placeholder="Total buying price"
+
                                   value={buyingDrafts[saleKey] ?? ""}
+
                                   onChange={(e) => handleSetBuyingDraft(saleKey, e.target.value)}
+
                                   className="h-8 w-28 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+
                                 />
+
                                 <button
+
                                   type="button"
-                                  onClick={() => handleSubmitSupportReceiptTotal(sale)}
+
+                                  onClick={() =>
+
+                                    isSupport
+
+                                      ? handleSubmitSupportReceiptTotal(sale)
+
+                                      : handleSubmitMarketingReceiptTotal(sale)
+
+                                  }
+
                                   disabled={pricingSaleKey === saleKey}
+
                                   className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-60"
+
                                 >
-                                  {pricingSaleKey === saleKey ? "Savingâ€¦" : "Save"}
+
+                                  {pricingSaleKey === saleKey ? "Saving." : "Save"}
+
                                 </button>
+
                               </div>
+
                             </div>
+
                           ) : (
+
                             <div className="flex items-center gap-2 pt-1">
+
                               <Input
+
                                 type="number"
+
                                 min={0}
+
                                 placeholder="Buying price"
+
                                 value={buyingDrafts[saleKey] ?? ""}
+
                                 onChange={(e) => handleSetBuyingDraft(saleKey, e.target.value)}
+
                                 className="h-8 w-24 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs"
+
                               />
+
                               <button
+
                                 type="button"
+
                                 onClick={() => handleSubmitBuyingPrice(sale)}
+
                                 className="ml-auto h-8 rounded-full bg-emerald-500 px-3 text-xs font-semibold text-black hover:brightness-95"
+
                               >
+
                                 Save
+
                               </button>
+
                             </div>
+
                           )}
+
                         </div>
+
                       );
+
                     })}
+
                   </div>
+
                 )}
+
               </Card>
             )}
           </div>
