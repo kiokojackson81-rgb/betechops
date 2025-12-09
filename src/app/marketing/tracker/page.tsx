@@ -147,7 +147,7 @@ function StatsCard({
 }: StatsCardProps) {
   const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
   const { locked, toggle } = useCardLock("marketing:quickstats");
-  const mask = (val: React.ReactNode) => (locked ? "•••" : val);
+  const mask = (val: React.ReactNode) => (locked ? "..." : val);
 
   const remaining =
     hasNextTier && nextTarget! > currentSalesForTier
@@ -207,7 +207,7 @@ function StatsCard({
         <p className="text-xs sm:text-sm text-slate-200">
           {hasNextTier && remaining > 0
             ? `KES ${remaining.toLocaleString()} more to hit next tier`
-            : "You’ve reached the top tier for this period 🎉"}
+            : "You've reached the top tier for this period!"}
         </p>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
           <div
@@ -227,7 +227,7 @@ type EarningsCardProps = {
 function EarningsCard({ summary }: EarningsCardProps) {
   const { locked, toggle } = useCardLock("marketing:earnings");
   if (!summary) return null;
-  const mask = (v: React.ReactNode) => (locked ? "•••" : v);
+  const mask = (v: React.ReactNode) => (locked ? "..." : v);
 
   const rows = [
     { label: "Base salary", type: "earning", amount: summary.baseSalary },
@@ -314,7 +314,7 @@ export default function MarketingTrackerPage() {
   // Background authoritative server summary used for Quick stats calculations.
   // We keep this separate from `periodSummary` which controls the visible
   // summary panel. The panel should remain hidden unless the attendant
-  // explicitly submits — serverPeriodSummary is updated by the poll.
+  // explicitly submits - serverPeriodSummary is updated by the poll.
   const [serverPeriodSummary, setServerPeriodSummary] = useState<null | {
     period: { key: string; label: string; start: string; end: string };
     aggregates: {
@@ -950,7 +950,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   // so the Quick stats panel matches the detailed Earnings card exactly.
   const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
-  const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 – Dec 24, 2025";
+  const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 - Dec 24, 2025";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
@@ -1354,9 +1354,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
                             <span>{sale.attendantName}</span>
 
                             <span>
-
-                              #{sale.receiptNumber || "No receipt"} � {sale.paymentMethod || "N/A"}
-
+                              #{sale.receiptNumber || "No receipt"} - {sale.paymentMethod || "N/A"}
                             </span>
 
                           </div>
