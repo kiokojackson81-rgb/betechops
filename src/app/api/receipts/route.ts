@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     const existing = await findReceiptOwner(String(serial));
     if (existing) {
       const msg = buildDuplicateMessage(serial, existing);
-      return NextResponse.json({ ok: false, code: "DUPLICATE_RECEIPT", message: msg }, { status: 409 });
+      return NextResponse.json({ ok: false, code: "DUPLICATE_RECEIPT", message: msg, owner: existing }, { status: 409 });
     }
 
     const result = await prisma.$transaction(async (tx) => {

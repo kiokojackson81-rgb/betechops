@@ -158,3 +158,22 @@ input[type="checkbox"] {
   .att-cs-root { grid-template-columns: 1fr; }
   .att-cs-right { position: relative; }
 }
+
+/* Print helpers: hide interactive controls and optimize receipts for printing */
+@media print {
+  .no-print { display: none !important; }
+  /* Make printed text dark on white */
+  body { background: #fff !important; color: #000 !important; }
+  /* Remove shadows and rounded corners for compact print */
+  .shadow, .shadow-xl, .shadow-inner { box-shadow: none !important; }
+  .rounded-3xl, .rounded-2xl, .rounded-md { border-radius: 0 !important; }
+  /* Ensure receipt table spans full width and uses readable font size */
+  table { width: 100% !important; font-size: 12px !important; }
+  /* Avoid page breaks inside receipt block */
+  .receipt-print-area, .receipt { page-break-inside: avoid !important; }
+  /* print-only area (visible only on print) */
+  .print-only { display: block !important; }
+}
+
+/* hide print-only sections on screen */
+.print-only { display: none; }

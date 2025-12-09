@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
+import ReceiptPrintView from "./_components/ReceiptPrintView";
+import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
 
 type ItemRow = {
   id: string;
@@ -42,6 +44,8 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
   const [globalWarranty, setGlobalWarranty] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [printSnapshot, setPrintSnapshot] = useState<any>(null);
+  const [duplicateOwner, setDuplicateOwner] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,12 +122,40 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       const res = await fetch("/api/receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // handle duplicate owner (409) specially
+        if (res.status === 409 && data?.code === "DUPLICATE_RECEIPT") {
+          setDuplicateOwner(data.owner ?? { message: data.message });
+          showToast(data?.message || "Duplicate receipt detected", "error");
+          return;
+        }
         return showToast(data?.error || "Failed to save receipt", "error");
       }
+
       showToast("Saved receipt", "success");
       onCreated?.(data);
-      setSerial(generateReceiptSerial());
-      setTimeout(() => window.print(), 300);
+
+      // fetch the saved receipt (include items) so we can render exact print view
+      try {
+        const listRes = await fetch(`/api/receipts?includeItems=true&q=${encodeURIComponent(serial)}`);
+        const listJson = await listRes.json().catch(() => null);
+        const found = listJson?.receipts?.find((r: any) => r.orderRef === serial) || (listJson?.receipts && listJson.receipts[0]);
+        if (found) {
+          setPrintSnapshot(found);
+          // allow render, then print
+          setTimeout(() => {
+            window.print();
+            setSerial(generateReceiptSerial());
+            // clear print snapshot after print
+            setTimeout(() => setPrintSnapshot(null), 1000);
+          }, 300);
+        } else {
+          setSerial(generateReceiptSerial());
+          setTimeout(() => window.print(), 300);
+        }
+      } catch (e) {
+        setSerial(generateReceiptSerial());
+        setTimeout(() => window.print(), 300);
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
@@ -288,7 +320,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           ))}
         </div>
 
-        <div className="mt-2">
+        <div className="mt-2 no-print">
           <button
             type="button"
             className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
@@ -369,22 +401,22 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
-            onClick={() => {
-              try {
-                const draft = { items, subtotal, taxAmount, total, taxRate, showTax, discount, customerName, customerPhone, serial, docType };
-                const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-                window.open(`/receipts/preview?draft=${encoded}`, "_blank");
-              } catch (e) {
-                showToast("Failed to open preview", "error");
-              }
-            }}
-          >
-            Preview receipt
-          </button>
+        <div className="flex flex-wrap gap-2 no-print">
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
+                  onClick={() => {
+                    try {
+                      const draft = { items, subtotal, taxAmount, total, taxRate, showTax, discount, customerName, customerPhone, serial, docType };
+                      const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+                      window.open(`/receipts/preview?draft=${encoded}`, "_blank");
+                    } catch (e) {
+                      showToast("Failed to open preview", "error");
+                    }
+                  }}
+                >
+                  Preview receipt
+                </button>
           <button
             type="button"
             disabled={saving}
@@ -395,6 +427,16 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           </button>
         </div>
       </div>
+      {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
+      {printSnapshot && (
+        <div className="receipt-print-area print-only">
+          <ReceiptPrintView data={printSnapshot} mode="print" />
+        </div>
+      )}
+
+      {duplicateOwner && (
+        <ReceiptDuplicateModal owner={duplicateOwner} onClose={() => setDuplicateOwner(null)} />
+      )}
     </div>
   );
 }
