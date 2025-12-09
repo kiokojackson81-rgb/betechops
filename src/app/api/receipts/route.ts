@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
     docType: r.docType,
     createdAt: r.generatedAt,
     customerName: r.order?.customerName,
+    customerPhone: (r.order as any)?.customerPhone ?? null,
     total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
     attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
     status: r.order?.status ?? r.order?.paymentStatus ?? null,
@@ -425,7 +426,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error('[receipts] POST handler error:', err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

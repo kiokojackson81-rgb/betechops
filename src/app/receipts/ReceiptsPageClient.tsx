@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import ReceiptPrintView from "./_components/ReceiptPrintView";
 
@@ -39,9 +39,12 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   // default to create view; allow toggling to inline 'list' search for attendants
   const [view, setView] = useState<"create" | "list">("create");
   const [query, setQuery] = useState("");
+  const [phone, setPhone] = useState("");
   const [results, setResults] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(10);
 
   const handleCreated = () => {
     // after create, keep on create view and optionally clear or focus
@@ -49,19 +52,36 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
     // TODO: we could refresh summary or show created receipt
   };
 
-  const doSearch = async () => {
+  // perform search with explicit phone support and pagination
+  const doSearch = async (opts?: { page?: number }) => {
     setLoading(true);
     try {
-      const q = encodeURIComponent(query || "");
-      const res = await fetch(`/api/receipts?q=${q}&includeItems=true`, { cache: "no-store" });
+      const p = opts?.page ?? page;
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (phone) params.set("phone", phone);
+      params.set("includeItems", "true");
+      params.set("page", String(p));
+      params.set("size", String(size));
+      const url = `/api/receipts?${params.toString()}`;
+      const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
       setResults(data.receipts || []);
+      setPage(data.paging?.page ?? p);
     } catch (e) {
       setResults([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // debounce search when query or phone changes
+  useEffect(() => {
+    if (view !== "list") return;
+    const t = setTimeout(() => doSearch({ page: 1 }), 450);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, phone, view, size]);
 
   const viewReceipt = async (r: ReceiptRow) => {
     // fetch authoritative receipt with items
@@ -150,11 +170,16 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
                 <p className="mt-3 text-sm text-slate-400">No receipts found. Try a different query.</p>
               ) : (
                 <div className="mt-3 space-y-2">
+                  <div className="hidden grid-cols-3 gap-4 px-3 pb-2 text-xs text-slate-400 md:grid">
+                    <div>Receipt</div>
+                    <div>Customer</div>
+                    <div className="text-right">Actions</div>
+                  </div>
                   {results.map((r) => (
                     <div key={r.id} className="flex items-center justify-between rounded-md bg-slate-950/30 p-3">
                       <div>
                         <div className="text-sm font-semibold">{r.orderRef || r.id}</div>
-                        <div className="text-xs text-slate-400">{r.customerName || "-"} • {r.items?.length ? `${r.items.length} items` : "-"}</div>
+                        <div className="text-xs text-slate-400">{r.customerName || "-"} • { (r as any).customerPhone || "-" }</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -168,6 +193,27 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
                   ))}
                 </div>
               )}
+
+              {/* Pagination controls */}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-slate-400">Showing {results.length} results</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={page <= 1}
+                    onClick={() => { setPage((p) => Math.max(1, p - 1)); doSearch({ page: Math.max(1, page - 1) }); }}
+                    className="rounded border border-white/10 px-3 py-1 text-sm text-slate-200 disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <div className="text-sm text-slate-200">Page {page}</div>
+                  <button
+                    onClick={() => { setPage((p) => p + 1); doSearch({ page: page + 1 }); }}
+                    className="rounded border border-white/10 px-3 py-1 text-sm text-slate-200"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </section>
           )}
         </div>
