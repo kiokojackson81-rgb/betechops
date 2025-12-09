@@ -1,9 +1,15 @@
 import { normalizeCategory } from "@/lib/attendants/categoryCompat";
 
 export function getLandingPage(category?: string | null, role?: string): string {
-  if (role === "ADMIN") return "/admin";
-
   const cat = normalizeCategory(category);
+
+  if (role === "ADMIN") {
+    if (cat === "JUMIA_KILIMALL_OPS" || cat === "BETECH_OPS") {
+      return "/admin/online/summary";
+    }
+    return "/admin";
+  }
+
   if (!cat) return "/attendant";
 
   switch (cat) {
@@ -16,15 +22,13 @@ export function getLandingPage(category?: string | null, role?: string): string 
     case "SUPPORT_OPS":
       return "/attendant/support";
     case "BETECH_OPS":
-      return role === "ADMIN" ? "/admin" : "/attendant";
+      return "/attendant/online";
     default:
       return "/attendant";
   }
 }
 
-export function getAdminLandingPage(category?: string | null, role?: string): string {
-  if (role === "ADMIN") return "/admin";
-
+export function getAdminLandingPage(category?: string | null): string {
   const cat = normalizeCategory(category);
   if (!cat) return "/admin";
 
@@ -34,11 +38,11 @@ export function getAdminLandingPage(category?: string | null, role?: string): st
     case "MARKETING_OPS":
       return "/admin/daily-report";
     case "JUMIA_KILIMALL_OPS":
-      return "/admin/jumia-console";
+      return "/admin/online/summary";
     case "SUPPORT_OPS":
       return "/admin/support-report";
     case "BETECH_OPS":
-      return "/admin";
+      return "/admin/online/summary";
     default:
       return "/admin";
   }

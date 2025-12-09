@@ -7,6 +7,7 @@ const tabs = [
   { href: "/admin/online/summary", label: "Summary" },
   { href: "/admin/online/accounts", label: "Accounts" },
   { href: "/admin/online/returns", label: "Returns" },
+  { href: "/admin/online/manual", label: "Open manual sales desk" },
 ];
 
 export default function AdminOnlineNav() {
@@ -33,4 +34,3 @@ export default function AdminOnlineNav() {
     </nav>
   );
 }
-

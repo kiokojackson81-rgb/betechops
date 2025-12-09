@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
@@ -23,9 +23,12 @@ type WeeklySaleRow = {
 
 type ShopOption = {
   id: string;
-  name: string;
+  shopName: string | null;
+  displayName: string;
   platform: Platform;
+  primaryAttendant: { id: string; name: string | null; email: string | null } | null;
   attendants: Array<{ id: string; name: string | null; email: string | null }>;
+  identifiers?: { jumiaShopSid?: string | null; kilimallShopCode?: string | null } | null;
 };
 
 type FilterState = {
@@ -39,7 +42,6 @@ type FormState = {
   weekStart: string;
   weekEnd: string;
   amount: string;
-  userId: string;
 };
 
 type TradingWeek = {
@@ -60,28 +62,29 @@ const formatShort = (date: Date) => date.toLocaleDateString("en-KE", { day: "2-d
 function buildTradingWeeks(reference = new Date()) {
   const now = new Date(reference);
   now.setHours(0, 0, 0, 0);
-  let startYear = now.getFullYear();
-  let startMonth = now.getMonth() - 1;
-  if (startMonth < 0) {
-    startMonth = 11;
-    startYear -= 1;
-  }
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
 
-  const lastDayOfStartMonth = new Date(startYear, startMonth + 1, 0).getDate();
-  const week1Start = new Date(startYear, startMonth, 25);
-  const week1End = new Date(startYear, startMonth, lastDayOfStartMonth);
-  const week2Start = new Date(startYear, startMonth + 1, 1);
-  const week2End = new Date(startYear, startMonth + 1, 7);
-  const week3Start = new Date(startYear, startMonth + 1, 8);
-  const week3End = new Date(startYear, startMonth + 1, 14);
-  const week4Start = new Date(startYear, startMonth + 1, 15);
-  const week4End = new Date(startYear, startMonth + 1, 21);
+  const lastDayPrevMonth = new Date(currentYear, currentMonth, 0);
+  const prevMonthYear = lastDayPrevMonth.getFullYear();
+  const prevMonthIndex = lastDayPrevMonth.getMonth();
+  const prevMonthMaxDay = lastDayPrevMonth.getDate();
+  const clampPrevMonth = (day: number) => Math.min(day, prevMonthMaxDay);
+
+  const week1Start = new Date(prevMonthYear, prevMonthIndex, 24);
+  const week1End = new Date(prevMonthYear, prevMonthIndex, clampPrevMonth(30));
+  const week2Start = new Date(currentYear, currentMonth, 1);
+  const week2End = new Date(currentYear, currentMonth, 7);
+  const week3Start = new Date(currentYear, currentMonth, 8);
+  const week3End = new Date(currentYear, currentMonth, 14);
+  const week4Start = new Date(currentYear, currentMonth, 15);
+  const week4End = new Date(currentYear, currentMonth, 21);
 
   const weeks: TradingWeek[] = [
     {
       key: `week1-${toInputDate(week1Start)}`,
       label: "Week 1",
-      display: `${formatShort(week1Start)} – ${formatShort(week1End)}`,
+      display: `${formatShort(week1Start)} - ${formatShort(week1End)}`,
       startInput: toInputDate(week1Start),
       endInput: toInputDate(week1End),
       start: week1Start,
@@ -90,7 +93,7 @@ function buildTradingWeeks(reference = new Date()) {
     {
       key: `week2-${toInputDate(week2Start)}`,
       label: "Week 2",
-      display: `${formatShort(week2Start)} – ${formatShort(week2End)}`,
+      display: `${formatShort(week2Start)} - ${formatShort(week2End)}`,
       startInput: toInputDate(week2Start),
       endInput: toInputDate(week2End),
       start: week2Start,
@@ -99,7 +102,7 @@ function buildTradingWeeks(reference = new Date()) {
     {
       key: `week3-${toInputDate(week3Start)}`,
       label: "Week 3",
-      display: `${formatShort(week3Start)} – ${formatShort(week3End)}`,
+      display: `${formatShort(week3Start)} - ${formatShort(week3End)}`,
       startInput: toInputDate(week3Start),
       endInput: toInputDate(week3End),
       start: week3Start,
@@ -108,7 +111,7 @@ function buildTradingWeeks(reference = new Date()) {
     {
       key: `week4-${toInputDate(week4Start)}`,
       label: "Week 4",
-      display: `${formatShort(week4Start)} – ${formatShort(week4End)}`,
+      display: `${formatShort(week4Start)} - ${formatShort(week4End)}`,
       startInput: toInputDate(week4Start),
       endInput: toInputDate(week4End),
       start: week4Start,
@@ -131,7 +134,6 @@ const buildInitialForm = (week?: TradingWeek): FormState => ({
   weekStart: week?.startInput ?? "",
   weekEnd: week?.endInput ?? "",
   amount: "",
-  userId: "",
 });
 
 export default function ManualWeeklySalesPage() {
@@ -146,12 +148,7 @@ export default function ManualWeeklySalesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadShops();
-    loadSales();
-  }, []);
-
-  const loadShops = async () => {
+  const loadShops = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/online/manual/shops", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load shops");
@@ -161,9 +158,9 @@ export default function ManualWeeklySalesPage() {
       console.error(err);
       showToast("Unable to load shops", "error");
     }
-  };
+  }, []);
 
-  const loadSales = async (nextFilters?: FilterState) => {
+  const loadSales = useCallback(async (nextFilters?: FilterState) => {
     const active = nextFilters ?? filters;
     setLoading(true);
     try {
@@ -182,7 +179,12 @@ export default function ManualWeeklySalesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    loadShops();
+    loadSales();
+  }, [loadShops, loadSales]);
 
   const onFilterChange = (key: keyof FilterState, value: string) => {
     const next = { ...filters, [key]: value };
@@ -192,25 +194,45 @@ export default function ManualWeeklySalesPage() {
 
   const onFormChange = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const selectedShop = useMemo(() => shops.find((shop) => shop.id === form.shopId) || null, [shops, form.shopId]);
-  const selectedShopAttendants = selectedShop?.attendants ?? [];
+  const selectedAssignee = selectedShop?.primaryAttendant ?? null;
+  const selectedWeek = useMemo(
+    () =>
+      tradingWeeks.weeks.find((wk) => wk.key === selectedWeekKey) ??
+      tradingWeeks.defaultWeek ??
+      tradingWeeks.weeks[0],
+    [tradingWeeks, selectedWeekKey],
+  );
+
+  const takenShopIdsForWeek = useMemo(() => {
+    if (!form.weekStart || !form.weekEnd) return [] as string[];
+    const seen = new Set<string>();
+    sales.forEach((sale) => {
+      if (!sale.shopId) return;
+      const saleWeekStart = new Date(sale.weekStart).toISOString().slice(0, 10);
+      const saleWeekEnd = new Date(sale.weekEnd).toISOString().slice(0, 10);
+      if (saleWeekStart === form.weekStart && saleWeekEnd === form.weekEnd) {
+        seen.add(sale.shopId);
+      }
+    });
+    return Array.from(seen);
+  }, [sales, form.weekStart, form.weekEnd]);
+  const takenShopSet = useMemo(() => new Set(takenShopIdsForWeek), [takenShopIdsForWeek]);
+  const availableShops = useMemo(
+    () => shops.filter((shop) => !takenShopSet.has(shop.id)),
+    [shops, takenShopSet],
+  );
 
   useEffect(() => {
-    if (!selectedShop) {
-      setForm((prev) => ({ ...prev, userId: "" }));
-      return;
+    if (form.shopId && takenShopSet.has(form.shopId)) {
+      setForm((prev) => ({ ...prev, shopId: "" }));
     }
-    if (selectedShopAttendants.length === 0) return;
-    setForm((prev) => {
-      if (prev.userId && selectedShopAttendants.some((att) => att.id === prev.userId)) return prev;
-      return { ...prev, userId: selectedShopAttendants[0].id };
-    });
-  }, [selectedShop?.id, selectedShopAttendants]);
+  }, [form.shopId, takenShopSet]);
 
   const handleWeekSelect = (key: string) => {
     const week = tradingWeeks.weeks.find((wk) => wk.key === key);
     if (!week) return;
     setSelectedWeekKey(key);
-    setForm((prev) => ({ ...prev, weekStart: week.startInput, weekEnd: week.endInput }));
+    setForm((prev) => ({ ...prev, shopId: "", weekStart: week.startInput, weekEnd: week.endInput }));
   };
 
   const createEntry = async () => {
@@ -218,6 +240,7 @@ export default function ManualWeeklySalesPage() {
       showToast("Please provide shop, week range and amount", "error");
       return;
     }
+    const assignedUserId = selectedAssignee?.id ?? null;
     setSaving(true);
     try {
       const payload = {
@@ -225,7 +248,7 @@ export default function ManualWeeklySalesPage() {
         weekStart: form.weekStart,
         weekEnd: form.weekEnd,
         amount: Number(form.amount),
-        userId: form.userId || null,
+        userId: assignedUserId,
       };
       const res = await fetch("/api/admin/weekly-sale", {
         method: "POST",
@@ -297,14 +320,22 @@ export default function ManualWeeklySalesPage() {
               className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
               value={form.shopId}
               onChange={(e) => onFormChange("shopId", e.target.value)}
+              disabled={availableShops.length === 0}
             >
-              <option value="">Select shop</option>
-              {shops.map((shop) => (
+              <option value="">
+                {availableShops.length === 0 ? "All shops captured for this week" : "Select shop"}
+              </option>
+              {availableShops.map((shop) => (
                 <option key={shop.id} value={shop.id}>
-                  {shop.name} ({shop.platform})
+                  {shop.displayName} ({shop.platform})
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {shops.length === 0
+                ? "Loading shop assignments…"
+                : `${availableShops.length} of ${shops.length} shops still open for ${selectedWeek?.display ?? "this week"}.`}
+            </p>
           </label>
           <label className="text-sm text-slate-300">
             Trading week
@@ -349,38 +380,33 @@ export default function ManualWeeklySalesPage() {
             />
           </label>
         </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-slate-300">
-            Assigned attendant
-            {selectedShopAttendants.length > 0 ? (
-              <select
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-                value={form.userId}
-                onChange={(e) => onFormChange("userId", e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {selectedShopAttendants.map((attendant) => (
-                  <option key={attendant.id} value={attendant.id}>
-                    {attendant.name || attendant.email || attendant.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Attendant user ID"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-                value={form.userId}
-                onChange={(e) => onFormChange("userId", e.target.value)}
-              />
-            )}
-          </label>
-          <div className="text-sm text-slate-500">
-            <p>Shop platform</p>
-            <p className="mt-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-slate-200">
-              {selectedShop ? selectedShop.platform : "Select a shop"}
-            </p>
-          </div>
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+          {selectedShop ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Attendant on file</p>
+                <p className="mt-1 font-semibold text-white">
+                  {selectedAssignee?.name || selectedAssignee?.email || "Unassigned"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Shop platform</p>
+                <p className="mt-1 font-semibold text-white">{selectedShop.platform}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Marketplace codes</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {selectedShop.identifiers?.jumiaShopSid
+                    ? `SID: ${selectedShop.identifiers.jumiaShopSid}`
+                    : selectedShop.identifiers?.kilimallShopCode
+                      ? `Code: ${selectedShop.identifiers.kilimallShopCode}`
+                      : "—"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p>Select a shop to view the assigned attendant and identifiers for this trading period.</p>
+          )}
         </div>
         <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Trading weeks</p>
@@ -447,7 +473,7 @@ export default function ManualWeeklySalesPage() {
               <option value="">All shops</option>
               {shops.map((shop) => (
                 <option key={shop.id} value={shop.id}>
-                  {shop.name}
+                  {shop.displayName}
                 </option>
               ))}
             </select>

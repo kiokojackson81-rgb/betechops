@@ -1,6 +1,6 @@
 "use server";
 
-import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 
@@ -112,25 +112,14 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
       },
     });
 
-     const shopRecord =
-       shopsById.get(account.id) ||
-       (account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined);
-     if (!shopRecord) {
-       console.warn(
-         `[onlineSync] Unable to map marketplace account ${account.displayName ?? account.id} to a Shop record; skipping WeeklySale upsert.`,
-       );
-     } else {
-       const assignedUserId = resolveAccountAssignee(account);
-       await upsertWeeklySaleFromStatement({
-         shopId: shopRecord.id,
-         platform: account.platform,
-         weekStart,
-         weekEnd,
-         amount: grossSales,
-         userId: assignedUserId,
-         isPaid: Boolean(statement.paid),
-       });
-     }
+    const shopRecord =
+      shopsById.get(account.id) ||
+      (account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined);
+    if (!shopRecord) {
+      console.warn(
+        `[onlineSync] Unable to map marketplace account ${account.displayName ?? account.id} to a Shop record; payout data stored without WeeklySale entry.`,
+      );
+    }
   }
 
   const orders = await fetchOrders(apiBase, authHeader, createdAfter);
@@ -268,68 +257,4 @@ function deriveWeekWindow(statement: JumiaStatement) {
   return { weekStart: start, weekEnd: end };
 }
 
-function resolveAccountAssignee(account: MarketplaceAccountWithAssignments) {
-  if (!account.assignments?.length) return null;
-  const priority = ["JUMIA_KILIMALL_OPS", "SUPERVISOR"];
-  for (const role of priority) {
-    const match = account.assignments.find((assignment) => assignment.role === role);
-    if (match) return match.attendantId;
-  }
-  return account.assignments[0]?.attendantId ?? null;
-}
-
-async function upsertWeeklySaleFromStatement(opts: {
-  shopId: string;
-  platform: Platform;
-  weekStart: Date;
-  weekEnd: Date;
-  amount: number;
-  userId?: string | null;
-  isPaid: boolean;
-}) {
-  const { shopId, platform, weekStart, weekEnd, amount, userId, isPaid } = opts;
-  const existing = await prisma.weeklySale.findUnique({
-    where: {
-      shopId_platform_weekStart_weekEnd: {
-        shopId,
-        platform,
-        weekStart,
-        weekEnd,
-      },
-    },
-  });
-  if (existing && existing.source === WeeklySaleSource.MANUAL) {
-    console.warn(
-      `[onlineSync] WeeklySale ${existing.id} (${shopId}/${platform}) is manual (${existing.status}); automatic sync skipped.`,
-    );
-    return;
-  }
-
-  await prisma.weeklySale.upsert({
-    where: {
-      shopId_platform_weekStart_weekEnd: {
-        shopId,
-        platform,
-        weekStart,
-        weekEnd,
-      },
-    },
-    create: {
-      shopId,
-      platform,
-      weekStart,
-      weekEnd,
-      amount,
-      userId: userId ?? null,
-      status: isPaid ? WeeklySaleStatus.APPROVED : WeeklySaleStatus.PENDING,
-      source: WeeklySaleSource.AUTOMATIC,
-    },
-    update: {
-      amount,
-      userId: userId ?? existing?.userId ?? null,
-      status: isPaid ? WeeklySaleStatus.APPROVED : WeeklySaleStatus.PENDING,
-      source: WeeklySaleSource.AUTOMATIC,
-      approvedBy: null,
-    },
-  });
-}
+// Automatic WeeklySale creation has been disabled so admins can manage overrides manually.
