@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
-import ReceiptsAdminClient from "./ReceiptsAdminClient";
 
 type ReceiptRow = {
   id: string;
@@ -35,9 +35,7 @@ const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
 };
 
 export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
-  const [summary, setSummary] = useState<ReceiptSummary>(() => computeSummary(initial || []));
-  const [view, setView] = useState<"create" | "list">("list");
-  const [refreshSignal, setRefreshSignal] = useState(0);
+  const summary = useMemo(() => computeSummary(initial || []), [initial]);
 
   const summaryCards = useMemo(
     () => [
@@ -63,8 +61,12 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   );
 
   const handleCreated = () => {
-    setView("list");
-    setRefreshSignal((val) => val + 1);
+    // placeholder for future summary refresh logic
+  };
+
+  const scrollToCreate = () => {
+    if (typeof window === "undefined") return;
+    document.getElementById("receipt-create")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -81,17 +83,18 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
 
           <div className="flex items-center gap-2">
             <button
-              className={"rounded-full px-4 py-2 text-sm font-semibold " + (view === "create" ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200")}
-              onClick={() => setView("create")}
+              type="button"
+              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+              onClick={scrollToCreate}
             >
               Create
             </button>
-            <button
-              className={"rounded-full px-4 py-2 text-sm font-semibold " + (view === "list" ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200")}
-              onClick={() => setView("list")}
+            <Link
+              href="/admin/receipts"
+              className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
             >
               View receipts
-            </button>
+            </Link>
           </div>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -107,22 +110,12 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
         </div>
       </section>
 
-      {view === "create" && (
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-          <ReceiptFormClient onCreated={handleCreated} />
-        </section>
-      )}
-
-      {view === "list" && (
-        <div className="rounded-3xl border border-white/5 bg-slate-950/60 p-4 sm:p-6 shadow-inner shadow-black/40">
-          <ReceiptsAdminClient
-            initial={initial}
-            allowEdit
-            onSummaryChange={setSummary}
-            refreshSignal={refreshSignal}
-          />
-        </div>
-      )}
+      <section
+        id="receipt-create"
+        className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40"
+      >
+        <ReceiptFormClient onCreated={handleCreated} />
+      </section>
     </div>
   );
 }

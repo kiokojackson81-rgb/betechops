@@ -170,9 +170,12 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Create receipt / invoice / quotation / layaway</h1>
-        <p className="text-sm text-slate-300">Saves to the unified receipts table and is ready for printing or sending.</p>
+      <header className="space-y-1">
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
+        <h1 className="text-2xl font-semibold sm:text-3xl">Betech Customers Operations</h1>
+        <p className="text-sm text-slate-300">
+          Track every printable document, search by customer, and open the PDF drawer without leaving this page.
+        </p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
