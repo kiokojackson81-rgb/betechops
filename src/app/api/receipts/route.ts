@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant, auth } from "@/lib/auth";
+import { findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
@@ -111,6 +112,13 @@ export async function POST(req: NextRequest) {
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
 
   try {
+    // Early duplicate guard: check across POS, marketing, support
+    const existing = await findReceiptOwner(String(serial));
+    if (existing) {
+      const msg = buildDuplicateMessage(serial, existing);
+      return NextResponse.json({ ok: false, code: "DUPLICATE_RECEIPT", message: msg }, { status: 409 });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
