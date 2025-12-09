@@ -1,9 +1,41 @@
 // Disabled duplicate middleware. Root-level middleware.ts is the single source of truth.
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export function middleware() {
-  return NextResponse.next();
+// Lightweight middleware guard to avoid redirect cycles involving the
+// `/auth/post-login` rehydration flow. The deployed environment previously
+// produced repeated middleware->post-login->target redirects when the
+// attendant session lacked `attendantCategory`.
+export function middleware(req: NextRequest) {
+  try {
+    const url = req.nextUrl.clone();
+    const pathname = url.pathname || "";
+    const params = url.searchParams;
+
+    // If the request is already targeting the post-login handler, do not
+    // process or wrap it again.
+    if (pathname.startsWith("/auth/post-login")) {
+      return NextResponse.next();
+    }
+
+    // If the request already carries the rehydration marker, skip any
+    // middleware rewrap/redirect behavior to avoid loops.
+    if (params.has("_rehydrated")) {
+      return NextResponse.next();
+    }
+
+    // Default: pass through. We intentionally do not attempt to rehydrate or
+    // inspect auth state here to keep the middleware lightweight and avoid
+    // mismatched runtime constraints in edge environments. The primary goal
+    // is to avoid creating redirect cycles — actual auth decisions are still
+    // handled by the app routes and post-login logic.
+    return NextResponse.next();
+  } catch (e) {
+    return NextResponse.next();
+  }
 }
 
-// Empty matcher to ensure this middleware never runs. Avoid TS assertions in config to satisfy Next.js parser.
-export const config = { matcher: [] };
+// Apply middleware to the attendant and marketing routes where rehydration
+// was previously observed. Keep matcher minimal to avoid affecting unrelated
+// paths.
+export const config = { matcher: ["/marketing/:path*", "/attendant/:path*", "/auth/post-login"] };
