@@ -22,17 +22,23 @@ export async function GET() {
     },
   });
 
-  const payload = shops.map((shop) => ({
-    id: shop.id,
-    name: shop.name,
-    platform: shop.platform,
-    attendants: shop.assignments
+  const payload = shops.map((shop) => {
+    const attendants = shop.assignments
       .map((assignment) => assignment.user)
-      .filter(
-        (user): user is { id: string; name: string | null; email: string | null } =>
-          Boolean(user),
-      ),
-  }));
+      .filter((user): user is NonNullable<typeof user> => Boolean(user))
+      .map((user) => ({
+        id: user.id,
+        name: user.name ?? null,
+        email: user.email ?? null,
+      }));
+
+    return {
+      id: shop.id,
+      name: shop.name,
+      platform: shop.platform,
+      attendants,
+    };
+  });
 
   return NextResponse.json(payload);
 }
