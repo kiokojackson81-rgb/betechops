@@ -15,7 +15,7 @@ async function resolveParams(context: ParamsContext): Promise<{ id: string }> {
   return (context as { params: { id: string } }).params;
 }
 
-export async function PATCH(req: NextRequest, context: ParamsContext) {
+export async function PATCH(req: NextRequest, context: any) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
   const { id } = await resolveParams(context);
@@ -39,7 +39,14 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     }
     updates.status = nextStatus;
     const approverId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
-    updates.approvedBy = nextStatus === WeeklySaleStatus.APPROVED ? approverId : null;
+    // Prisma generated types expect relation updates via the `approved` relation.
+    if (nextStatus === WeeklySaleStatus.APPROVED && approverId) {
+      // connect the approver user
+      (updates as any).approved = { connect: { id: approverId } };
+    } else {
+      // disconnect any existing approver when not approved
+      (updates as any).approved = { disconnect: true };
+    }
   }
 
   if (!Object.keys(updates).length) {
@@ -59,10 +66,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   return NextResponse.json(sale);
 }
 
-export async function DELETE(_req: NextRequest, context: ParamsContext) {
+export async function DELETE(_req: NextRequest, context: any) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
-  const { id } = await resolveParams(context);
+  const { id } = await resolveParams(context as ParamsContext);
 
   const sale = await prisma.weeklySale.findUnique({
     where: { id },
