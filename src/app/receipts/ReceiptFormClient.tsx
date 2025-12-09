@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
-import { generateReceiptSerial } from "@/lib/id";
+import { generateReceiptSerial } from "@/lib/receipts/serial";
 
 type ItemRow = {
   id: string;
@@ -32,13 +32,13 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
-  const [showTax, setShowTax] = useState<boolean>(true);
+  const [showTax, setShowTax] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
-  const [showSerials, setShowSerials] = useState<boolean>(true);
+  const [showSerials, setShowSerials] = useState<boolean>(false);
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
   const [globalWarranty, setGlobalWarranty] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -218,7 +218,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         <div className="flex flex-wrap items-center gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-slate-200">
             <input type="checkbox" checked={showSerials} onChange={(e) => setShowSerials(e.target.checked)} className={checkboxClass} />
-            Capture serial / IMEI per item
+            Add serial / IMEI (optional)
           </label>
           <label className="inline-flex items-center gap-2 text-sm text-slate-200">
             <input type="checkbox" checked={showWarranty} onChange={(e) => setShowWarranty(e.target.checked)} className={checkboxClass} />
@@ -228,12 +228,13 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
         <div className="space-y-2">
           {items.map((it) => (
-            <div key={it.id} className="grid items-center gap-2 border-b border-slate-800 pb-2 md:grid-cols-7">
-              <input
-                className={`col-span-2 ${compactFieldClass}`}
+            <div key={it.id} className="grid items-start gap-2 border-b border-slate-800 pb-2 md:grid-cols-7">
+              <textarea
+                className={`col-span-2 ${compactFieldClass} min-h-[40px] resize-y`}
                 value={it.title}
                 onChange={(e) => updateRow(it.id, { title: e.target.value })}
                 placeholder="Item description"
+                rows={2}
               />
               <input
                 type="number"
@@ -255,7 +256,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
                   className={compactFieldClass}
                   value={it.serial}
                   onChange={(e) => updateRow(it.id, { serial: e.target.value })}
-                  placeholder="Serial / IMEI"
+                  placeholder="Serial / IMEI (optional)"
                 />
               ) : (
                 <div className="hidden md:block" />
@@ -366,11 +367,6 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
           {docType === "LAYAWAY" && (
             <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>
           )}
-          <p className="mt-2 text-xs text-slate-400">
-            Thank you for shopping with Betech Solar Solutions. You were served by {attendants.find((a) => a.id === attendantId)?.name || "____"}.
-            Follow us on all social media platforms: @Betech Solar Solutions Kenya.
-          </p>
-          <p className="text-xs text-slate-400">Official Stamp: _____________________</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -378,11 +374,16 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
             type="button"
             className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
             onClick={() => {
-              navigator.clipboard?.writeText(JSON.stringify({ items, subtotal, taxAmount, total }));
-              showToast("Copied snapshot", "info");
+              try {
+                const draft = { items, subtotal, taxAmount, total, taxRate, showTax, discount, customerName, customerPhone, serial, docType };
+                const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+                window.open(`/receipts/preview?draft=${encoded}`, "_blank");
+              } catch (e) {
+                showToast("Failed to open preview", "error");
+              }
             }}
           >
-            Copy snapshot
+            Preview receipt
           </button>
           <button
             type="button"

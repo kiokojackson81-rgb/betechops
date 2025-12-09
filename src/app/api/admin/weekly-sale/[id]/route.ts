@@ -5,11 +5,20 @@ import { requireRole } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-type Params = { params: { id: string } };
+type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
-export async function PATCH(req: NextRequest, { params }: Params) {
+async function resolveParams(context: ParamsContext): Promise<{ id: string }> {
+  const maybePromise = (context as { params: Promise<{ id: string }> }).params;
+  if (maybePromise && typeof maybePromise.then === "function") {
+    return maybePromise;
+  }
+  return (context as { params: { id: string } }).params;
+}
+
+export async function PATCH(req: NextRequest, context: ParamsContext) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
+  const { id } = await resolveParams(context);
 
   const body = (await req.json().catch(() => null)) as { status?: string; amount?: number | string } | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -38,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const sale = await prisma.weeklySale.update({
-    where: { id: params.id },
+    where: { id },
     data: updates,
     include: {
       shop: { select: { id: true, name: true, platform: true } },
@@ -50,12 +59,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json(sale);
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(_req: NextRequest, context: ParamsContext) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
+  const { id } = await resolveParams(context);
 
   const sale = await prisma.weeklySale.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { id: true, source: true, status: true },
   });
   if (!sale) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -63,6 +73,6 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Only pending manual entries can be deleted" }, { status: 400 });
   }
 
-  await prisma.weeklySale.delete({ where: { id: params.id } });
+  await prisma.weeklySale.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }
