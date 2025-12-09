@@ -130,7 +130,15 @@ export async function POST(req: NextRequest) {
         if (!product) {
           product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
         }
-        createdItems.push({ product, qty: Number(it.quantity || 1), unitPrice: Number(it.unitPrice || it.sellingPrice || 0), serial: it.serial, warranty: it.warranty, title });
+        createdItems.push({
+          product,
+          qty: Number(it.quantity || 1),
+          unitPrice: Number(it.unitPrice || it.sellingPrice || 0),
+          serial: it.serial,
+          warranty: it.warranty,
+          title,
+          costPrice: Number(it.costPrice ?? it.buyingPrice ?? 0) || 0,
+        });
       }
 
       // upsert order by orderNumber (use serial as orderNumber)
@@ -268,15 +276,44 @@ export async function POST(req: NextRequest) {
           try {
             const existingEntry = await tx.supportDailyEntry.findFirst({ where: { submittedById: attendantId, date: { gte: startOfDay, lte: endOfDay } }, select: { id: true, totalSales: true, totalProfit: true }, });
 
-            const supportReceiptData = { receiptNumber: serial, sellingTotal: total, paymentMethod: PaymentMethod.MPESA, items: { create: items.map((it: any) => ({ productName: String(it.title || it.product || "Item").slice(0, 255), buyingPrice: 0 })) }, };
+            const supportReceiptItems = createdItems.map((it) => ({
+              productName: it.title,
+              buyingPrice: Math.max(0, Number(it.costPrice || 0)),
+            }));
+            const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + Number(item.buyingPrice || 0), 0);
+            const supportReceiptProfit = Math.max(0, Number(total) - supportReceiptBuyingTotal);
+
+            const supportReceiptData = {
+              receiptNumber: serial,
+              sellingTotal: total,
+              paymentMethod: PaymentMethod.MPESA,
+              items: { create: supportReceiptItems },
+            };
 
             if (existingEntry) {
               if (tx.supportReceipt && typeof tx.supportReceipt.create === 'function') {
                 await tx.supportReceipt.create({ data: { dailyEntryId: existingEntry.id, ...supportReceiptData } });
               }
-              await tx.supportDailyEntry.update({ where: { id: existingEntry.id }, data: { totalSales: Number(existingEntry.totalSales || 0) + total } });
+              await tx.supportDailyEntry.update({
+                where: { id: existingEntry.id },
+                data: {
+                  totalSales: Number(existingEntry.totalSales || 0) + total,
+                  totalProfit: Number(existingEntry.totalProfit || 0) + supportReceiptProfit,
+                },
+              });
             } else {
-              await tx.supportDailyEntry.create({ data: { date: entryDate, dayOfWeek, totalSales: total, totalProfit: 0, newBatteries: 0, changedBatteries: 0, submittedById: attendantId, receipts: { create: [supportReceiptData] } } });
+              await tx.supportDailyEntry.create({
+                data: {
+                  date: entryDate,
+                  dayOfWeek,
+                  totalSales: total,
+                  totalProfit: supportReceiptProfit,
+                  newBatteries: 0,
+                  changedBatteries: 0,
+                  submittedById: attendantId,
+                  receipts: { create: [supportReceiptData] },
+                },
+              });
             }
           } catch (e) {
             // ignore support ledger errors in test mocks

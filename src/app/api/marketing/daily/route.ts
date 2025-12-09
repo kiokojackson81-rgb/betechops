@@ -288,6 +288,7 @@ export async function POST(req: Request) {
               title: it.productName || 'Item',
               unitPrice: perItemValue || Number(it.buyingPrice || 0) || 0,
               quantity: 1,
+              costPrice: Number(it.buyingPrice || 0) || 0,
             })),
             taxRate: 0,
             showTax: false,
