@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import ReceiptPrintView from "./_components/ReceiptPrintView";
 import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
@@ -108,37 +108,64 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
     }
   };
 
+  const listRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-            <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
-            <p className="text-sm text-slate-400">Track receipts and create new printable receipts from here.</p>
+      {/* RECEIPTS TOOLBAR (hidden by default) */}
+      <section id="receipts-toolbar" style={{ display: view === "list" ? "" : "none" }}>
+        <div className="rounded-2xl border border-gray-700 bg-[#0A0F1E] p-5">
+          <h3 className="text-xs font-semibold tracking-wide text-gray-400 uppercase">Receipts Desk</h3>
+          <h2 className="text-2xl font-bold text-white mt-1">Betech Customers Operations</h2>
+          <p className="text-gray-400 text-sm mb-4">Track receipts and create new printable receipts from here.</p>
+
+          <div className="flex gap-3 mb-3">
+            <button id="toolbar-create" onClick={() => setView("create")} className="rounded-full bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700">Create</button>
+            <button id="toolbar-view" onClick={() => { setView("list"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95">View receipts</button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={`rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 ${view === "create" ? "bg-white/5" : ""}`}
-              onClick={() => setView("create")}
-            >
-              Create
-            </button>
-            <button
-              type="button"
-              className={`rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ${view === "list" ? "ring-2 ring-emerald-300" : ""}`}
-              onClick={() => setView((v) => (v === "list" ? "create" : "list"))}
-            >
-              View receipts
-            </button>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by receipt number, customer phone or attendant"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="flex-1 rounded-md bg-[#121826] text-white text-sm p-2 focus:outline-none"
+            />
+            <button onClick={() => doSearch()} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95">Search</button>
+            <button onClick={() => { setResults([]); setQuery(""); setSelected(null); }} className="rounded-full bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-600">Clear</button>
           </div>
         </div>
+      </section>
 
-        {/* Inline search panel for attendants (visible when view === 'list') */}
-        {view === "list" && (
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+      {/* CREATE RECEIPT SECTION */}
+      <section id="receipt-create">
+        <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
+              <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
+              <p className="text-sm text-slate-400">Track receipts and create new printable receipts from here.</p>
+            </div>
+
+            <div>
+              <button id="inner-view-receipts" onClick={() => { setView("list"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ring-2 ring-emerald-300">View receipts</button>
+            </div>
+          </div>
+
+          {/* Render the create form */}
+          <div className="mt-4">
+            <ReceiptFormClient />
+          </div>
+        </div>
+      </section>
+
+      {/* RECEIPTS LIST SECTION */}
+      <section id="receipts-list" ref={listRef} style={{ display: view === "list" ? "" : "none" }}>
+        <div className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+          <h3 className="text-xl font-bold text-white mb-2">Search Results</h3>
+          {/* Inline search and results (reuse existing UI) */}
+          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
             <input
               type="text"
               placeholder="Search by receipt number, customer phone or attendant"
@@ -147,23 +174,40 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
               className="col-span-2 rounded-lg bg-slate-900 p-2 text-white placeholder-slate-500"
             />
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => doSearch()}
-                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black"
-              >
-                {loading ? "Searching..." : "Search"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setResults([]); setQuery(""); setSelected(null); }}
-                className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200"
-              >
-                Clear
-              </button>
+              <button type="button" onClick={() => doSearch()} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black">{loading ? "Searching..." : "Search"}</button>
+              <button type="button" onClick={() => { setResults([]); setQuery(""); setSelected(null); }} className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Clear</button>
             </div>
           </div>
-        )}
+
+          {/* Results list */}
+          <div className="mt-3 space-y-2">
+            {results.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No receipts found. Try a different query.</p>
+            ) : (
+              results.map((r) => (
+                <div key={r.id} className="flex items-center justify-between rounded-md bg-slate-950/30 p-3">
+                  <div>
+                    <div className="text-sm font-semibold">{r.orderRef || r.id}</div>
+                    <div className="text-xs text-slate-400">{r.customerName || "-"} • { (r as any).customerPhone || "-" }</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => viewReceipt(r)} className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black">View receipt</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Pagination controls (reuse existing) */}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-slate-400">Showing {results.length} results</div>
+            <div className="flex items-center gap-2">
+              <button disabled={page <= 1} onClick={() => { setPage((p) => Math.max(1, p - 1)); doSearch({ page: Math.max(1, page - 1) }); }} className="rounded border border-white/10 px-3 py-1 text-sm text-slate-200 disabled:opacity-40">Prev</button>
+              <div className="text-sm text-slate-200">Page {page}</div>
+              <button onClick={() => { setPage((p) => p + 1); doSearch({ page: page + 1 }); }} className="rounded border border-white/10 px-3 py-1 text-sm text-slate-200">Next</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Main area: create form or search results + receipt preview */}
