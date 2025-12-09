@@ -670,13 +670,23 @@ export default function MarketingTrackerPage() {
           : "/api/attendants/me";
         const res = await fetch(url, { credentials: "same-origin" });
         if (!res.ok) {
-          router.replace("/attendant/login");
+          try {
+            const cb = typeof window !== "undefined" ? window.location.pathname : "/marketing/tracker";
+            router.replace(`/attendant/login?callbackUrl=${encodeURIComponent(cb)}`);
+          } catch (e) {
+            router.replace("/attendant/login");
+          }
           return;
         }
         const data = await res.json().catch(() => null);
         const user = data?.user;
         if (!user) {
-          router.replace("/attendant/login");
+          try {
+            const cb = typeof window !== "undefined" ? window.location.pathname : "/marketing/tracker";
+            router.replace(`/attendant/login?callbackUrl=${encodeURIComponent(cb)}`);
+          } catch (e) {
+            router.replace("/attendant/login");
+          }
           return;
         }
         setCurrentUserEmail(user.email?.toLowerCase() ?? null);
@@ -688,7 +698,12 @@ export default function MarketingTrackerPage() {
           router.replace(dest);
         }
       } catch {
-        router.replace("/attendant/login");
+        try {
+          const cb = typeof window !== "undefined" ? window.location.pathname : "/marketing/tracker";
+          router.replace(`/attendant/login?callbackUrl=${encodeURIComponent(cb)}`);
+        } catch (e) {
+          router.replace("/attendant/login");
+        }
       }
     })();
   }, [router]);

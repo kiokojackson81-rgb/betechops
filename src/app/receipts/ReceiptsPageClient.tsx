@@ -94,6 +94,8 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const previewRef = useRef<HTMLDivElement | null>(null);
+
   const viewReceipt = async (r: ReceiptRow) => {
     // fetch authoritative receipt with items
     try {
@@ -101,8 +103,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
       const data = await res.json();
       const found = Array.isArray(data.receipts) ? data.receipts[0] : data.receipt ?? null;
       setSelected(found || r);
-      // ensure preview area is visible
-      setView("list");
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
       setSelected(r);
     }
@@ -112,53 +113,23 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {/* RECEIPTS TOOLBAR (hidden by default) */}
-      <section id="receipts-toolbar" style={{ display: view === "list" ? "" : "none" }}>
-        <div className="rounded-2xl border border-gray-700 bg-[#0A0F1E] p-5">
-          <h3 className="text-xs font-semibold tracking-wide text-gray-400 uppercase">Receipts Desk</h3>
-          <h2 className="text-2xl font-bold text-white mt-1">Betech Customers Operations</h2>
-          <p className="text-gray-400 text-sm mb-4">Track receipts and create new printable receipts from here.</p>
-
-          <div className="flex gap-3 mb-3">
-            <button id="toolbar-create" onClick={() => setView("create")} className="rounded-full bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700">Create</button>
-            <button id="toolbar-view" onClick={() => { setView("list"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95">View receipts</button>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Search by receipt number, customer phone or attendant"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 rounded-md bg-[#121826] text-white text-sm p-2 focus:outline-none"
-            />
-            <button onClick={() => doSearch()} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95">Search</button>
-            <button onClick={() => { setResults([]); setQuery(""); setSelected(null); }} className="rounded-full bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-600">Clear</button>
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
+            <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
+            <p className="text-sm text-slate-400">Track receipts and create new printable receipts from here.</p>
         </div>
-      </section>
-
-      {/* CREATE RECEIPT SECTION */}
-      <section id="receipt-create">
-        <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-              <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
-              <p className="text-sm text-slate-400">Track receipts and create new printable receipts from here.</p>
-            </div>
-
-            <div>
-              <button id="inner-view-receipts" onClick={() => { setView("list"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ring-2 ring-emerald-300">View receipts</button>
-            </div>
-          </div>
-
-          {/* Render the create form */}
-          <div className="mt-4">
-            <ReceiptFormClient />
-          </div>
-        </div>
-      </section>
+        <button
+          id="inner-view-receipts"
+          onClick={() => {
+            setView("list");
+            listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ring-2 ring-emerald-300"
+        >
+          View receipts
+        </button>
+      </div>
 
       {/* RECEIPTS LIST SECTION */}
       <section id="receipts-list" ref={listRef} style={{ display: view === "list" ? "" : "none" }}>
@@ -273,7 +244,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
           )}
         </div>
 
-        <div>
+        <div ref={previewRef}>
           <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">Preview</p>
             <h3 className="mt-2 text-xl font-semibold text-white">Receipt preview</h3>
