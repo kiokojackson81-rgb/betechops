@@ -40,6 +40,12 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(num) ? num : 0;
 };
 
+const toBuyingPrice = (value: unknown) => {
+  if (value === null || typeof value === "undefined" || value === "") return 0;
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
+};
+
 const normalizePaymentMethod = (value: string | undefined): PaymentMethod => {
   const normalized = (value ?? "").toUpperCase();
   return normalized === "CASH" ? "CASH" : "MPESA";
@@ -93,12 +99,18 @@ export async function POST(req: Request) {
       const sellingTotal = Math.max(0, toNumber(receipt.sellingTotal));
       const paymentMethod = normalizePaymentMethod(receipt.paymentMethod);
       const receiptNumber = typeof receipt.receiptNumber === "string" ? receipt.receiptNumber.trim() : null;
-      const normalizedItems = (receipt.items.length > 0 ? receipt.items : [{ productName: "Battery sale" }]).map((item) => ({
-        productName: (item.productName ?? "").trim() || "Battery sale",
-        buyingPrice: 0,
-      }));
+      const normalizedItems = (receipt.items.length > 0 ? receipt.items : [{ productName: "Battery sale" }]).map((item) => {
+        const buyingPrice = toBuyingPrice(item.buyingPrice);
+        return {
+          productName: (item.productName ?? "").trim() || "Battery sale",
+          buyingPrice,
+        };
+      });
+      const receiptBuyingTotal = normalizedItems.reduce((sum, item) => sum + item.buyingPrice, 0);
+      const fullyPriced = normalizedItems.every((item) => item.buyingPrice > 0);
+      const profit = fullyPriced ? Math.max(0, sellingTotal - receiptBuyingTotal) : 0;
 
-      return { receiptNumber, sellingTotal, paymentMethod, items: normalizedItems };
+      return { receiptNumber, sellingTotal, paymentMethod, items: normalizedItems, profit };
     })
     .filter((receipt) => receipt.sellingTotal > 0 || receipt.items.length > 0);
 
@@ -107,14 +119,11 @@ export async function POST(req: Request) {
   }
 
   let totalSales = 0;
+  let totalProfit = 0;
   normalizedReceipts.forEach((receipt) => {
     totalSales += receipt.sellingTotal;
+    totalProfit += receipt.profit;
   });
-  // Initial submissions should not carry any profit until the pricing workflow
-  // attaches real buying prices. Profit is recomputed after pricing via the
-  // `/api/support/price-sale` route. Persist zero here to avoid paying
-  // commission before pricing is complete.
-  let totalProfit = 0;
 
   try {
     const entry = await prisma.$transaction(async (tx) => {
@@ -135,7 +144,7 @@ export async function POST(req: Request) {
               items: {
                 create: receipt.items.map((item) => ({
                   productName: item.productName || "Item",
-                  buyingPrice: 0,
+                  buyingPrice: item.buyingPrice,
                 })),
               },
             })),
