@@ -149,7 +149,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={doSearch}
+                onClick={() => doSearch()}
                 className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black"
               >
                 {loading ? "Searching..." : "Search"}
