@@ -107,11 +107,13 @@ export async function commissionCalcJob() {
   const errors: Array<{ userId: string; error: string }> = [];
 
   for (const entry of distinctUsers) {
+    const uid = entry.userId;
+    if (!uid) continue;
     try {
-      const result = await recomputeWeeklySalesCommission({ userId: entry.userId, period });
-      processed.push({ userId: entry.userId, payout: result.payout, totalSales: result.totalSales, updated: result.updated });
+      const result = await recomputeWeeklySalesCommission({ userId: uid, period });
+      processed.push({ userId: uid, payout: result.payout, totalSales: result.totalSales, updated: result.updated });
     } catch (err) {
-      errors.push({ userId: entry.userId, error: err instanceof Error ? err.message : String(err) });
+      errors.push({ userId: uid, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
