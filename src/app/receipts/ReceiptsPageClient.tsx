@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
+import ReceiptPrintView from "./_components/ReceiptPrintView";
 
 type ReceiptRow = {
   id: string;
@@ -35,87 +36,156 @@ const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
 };
 
 export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
-  const summary = useMemo(() => computeSummary(initial || []), [initial]);
-
-  const summaryCards = useMemo(
-    () => [
-      { label: "Receipts loaded", value: summary.totalCount.toLocaleString() },
-      {
-        label: "Total value",
-        value: `KES ${summary.totalValue.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`,
-      },
-      {
-        label: "Average value",
-        value: `KES ${summary.averageValue.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`,
-      },
-      {
-        label: "Last entry",
-        value: summary.lastReceipt
-          ? `${new Date(summary.lastReceipt.createdAt).toLocaleString()} - ${
-              summary.lastReceipt.customerName || "Walk-in"
-            }`
-          : "-",
-      },
-    ],
-    [summary],
-  );
+  // default to create view; allow toggling to inline 'list' search for attendants
+  const [view, setView] = useState<"create" | "list">("create");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ReceiptRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<any | null>(null);
 
   const handleCreated = () => {
-    // placeholder for future summary refresh logic
+    // after create, keep on create view and optionally clear or focus
+    setView("create");
+    // TODO: we could refresh summary or show created receipt
   };
 
-  const scrollToCreate = () => {
-    if (typeof window === "undefined") return;
-    document.getElementById("receipt-create")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const doSearch = async () => {
+    setLoading(true);
+    try {
+      const q = encodeURIComponent(query || "");
+      const res = await fetch(`/api/receipts?q=${q}&includeItems=true`, { cache: "no-store" });
+      const data = await res.json();
+      setResults(data.receipts || []);
+    } catch (e) {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const viewReceipt = async (r: ReceiptRow) => {
+    // fetch authoritative receipt with items
+    try {
+      const res = await fetch(`/api/receipts?q=${encodeURIComponent(r.orderRef || r.id)}&includeItems=true`, { cache: "no-store" });
+      const data = await res.json();
+      const found = Array.isArray(data.receipts) ? data.receipts[0] : data.receipt ?? null;
+      setSelected(found || r);
+      // ensure preview area is visible
+      setView("list");
+    } catch (e) {
+      setSelected(r);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-6">
       <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-inner shadow-black/40">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
             <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
-            <p className="text-sm text-slate-400">
-              Track every printable document, search by customer, and open the PDF drawer without leaving this page.
-            </p>
+            <p className="text-sm text-slate-400">Track receipts and create new printable receipts from here.</p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
-              onClick={scrollToCreate}
+              className={`rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 ${view === "create" ? "bg-white/5" : ""}`}
+              onClick={() => setView("create")}
             >
               Create
             </button>
-            <Link
-              href="/admin/receipts"
-              className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+            <button
+              type="button"
+              className={`rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ${view === "list" ? "ring-2 ring-emerald-300" : ""}`}
+              onClick={() => setView((v) => (v === "list" ? "create" : "list"))}
             >
               View receipts
-            </Link>
+            </button>
           </div>
         </div>
-        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {summaryCards.map((card) => (
-            <div
-              key={card.label}
-              className="rounded-2xl border border-white/5 bg-slate-950/40 px-4 py-3 text-sm text-slate-300"
-            >
-              <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
-              <p className="mt-2 text-lg font-semibold text-white">{card.value}</p>
+
+        {/* Inline search panel for attendants (visible when view === 'list') */}
+        {view === "list" && (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <input
+              type="text"
+              placeholder="Search by receipt number, customer phone or attendant"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="col-span-2 rounded-lg bg-slate-900 p-2 text-white placeholder-slate-500"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={doSearch}
+                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black"
+              >
+                {loading ? "Searching..." : "Search"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setResults([]); setQuery(""); setSelected(null); }}
+                className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200"
+              >
+                Clear
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </section>
 
-      <section
-        id="receipt-create"
-        className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40"
-      >
-        <ReceiptFormClient onCreated={handleCreated} />
-      </section>
+      {/* Main area: create form or search results + receipt preview */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)]">
+        <div>
+          <section id="receipt-create" className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+            <ReceiptFormClient onCreated={handleCreated} />
+          </section>
+
+          {/* When in list mode, show results table */}
+          {view === "list" && (
+            <section className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+              <h3 className="text-sm font-semibold text-slate-200">Search results</h3>
+              {results.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-400">No receipts found. Try a different query.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {results.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between rounded-md bg-slate-950/30 p-3">
+                      <div>
+                        <div className="text-sm font-semibold">{r.orderRef || r.id}</div>
+                        <div className="text-xs text-slate-400">{r.customerName || "-"} • {r.items?.length ? `${r.items.length} items` : "-"}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => viewReceipt(r)}
+                          className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black"
+                        >
+                          View receipt
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        <div>
+          <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">Preview</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Receipt preview</h3>
+            <div className="mt-4">
+              {selected ? (
+                <ReceiptPrintView data={selected} mode="preview" />
+              ) : (
+                <p className="text-sm text-slate-400">Select a receipt from search results to preview it here.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
