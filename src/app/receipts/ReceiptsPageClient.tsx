@@ -63,7 +63,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   );
 
   const handleCreated = () => {
-    setShowForm(false);
+    setView("list");
     setRefreshSignal((val) => val + 1);
   };
 
