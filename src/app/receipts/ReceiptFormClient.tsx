@@ -52,7 +52,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH" | "">("");
+  type PaymentMethodChoice = "" | "MPESA" | "CASH";
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodChoice>("");
   const [paperSize, setPaperSize] = useState<PaperSize>("a5");
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
@@ -162,6 +163,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
     if (!paymentMethod) return showToast("Select payment method", "error");
+    const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
 
     setSaving(true);
     try {
@@ -178,7 +180,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
-        paymentMethod,
+        paymentMethod: resolvedPaymentMethod,
         paperSize,
         notes,
         globalWarranty: globalWarranty || undefined,
@@ -490,8 +492,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 <button
                   key={method}
                   type="button"
-                  onClick={() => setPaymentMethod(method)}
-                  disabled={paymentDetailsShown && method !== "MPESA"}
+            onClick={() => setPaymentMethod(method)}
+            disabled={paymentDetailsShown && method !== "MPESA"}
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
                     paymentMethod === method ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
                   } ${paymentDetailsShown && method !== "MPESA" ? "opacity-50 cursor-not-allowed" : ""}`}
