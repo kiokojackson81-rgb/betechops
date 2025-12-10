@@ -44,7 +44,7 @@ export default function AdminPricingPanel() {
   const fetchSales = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/marketing/unpriced-sales", { cache: "no-store" });
+      const res = await fetch("/api/marketing/unpriced-sales", { cache: "no-store", credentials: "same-origin" });
       if (!res.ok) throw new Error("Failed to load unpriced sales");
       const data = await res.json();
       setSales(data?.sales ?? []);

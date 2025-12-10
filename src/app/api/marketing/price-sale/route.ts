@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { PaymentMethod } from "@prisma/client";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
 
 export const dynamic = "force-dynamic";
 
@@ -66,9 +68,18 @@ export async function POST(req: Request) {
   dayEnd.setDate(dayEnd.getDate() + 1);
   const entryDay = sale.dailyReport?.day ?? dayStart.toLocaleDateString("en-KE", { weekday: "long" });
 
+  // Attribute the pricing entry to the original attendant if possible.
+  // When an admin prices on behalf of an attendant, the commission should
+  // belong to the attendant who submitted the original daily report. Fall
+  // back to the actor (pricing user) if the original attendant cannot be
+  // determined.
+  const originalAttendantId = sale.dailyReport?.user?.id ?? actor.id;
+  const originalAttendantName = sale.dailyReport?.user?.name ?? session?.user?.name ?? actor.name ?? null;
+  const originalAttendantEmail = sale.dailyReport?.user?.email ?? session?.user?.email ?? actor.email ?? null;
+
   let entry = await prisma.marketingDailyEntry.findFirst({
     where: {
-      submittedById: actor.id,
+      submittedById: originalAttendantId,
       date: {
         gte: dayStart,
         lt: dayEnd,
@@ -81,9 +92,9 @@ export async function POST(req: Request) {
       data: {
         date: new Date(reportDate),
         dayOfWeek: entryDay,
-        submittedById: actor.id,
-        submittedByName: session?.user?.name ?? actor.name ?? null,
-        submittedByEmail: session?.user?.email ?? actor.email ?? null,
+        submittedById: originalAttendantId,
+        submittedByName: originalAttendantName,
+        submittedByEmail: originalAttendantEmail,
       },
     });
   }
@@ -177,6 +188,16 @@ export async function POST(req: Request) {
 
       return createdSale;
     });
+    // Trigger a recompute of the attendant's marketing commission ledger so
+    // dashboards and summaries reflect the new buying price immediately.
+    try {
+      const period = getTradingPeriodFor(new Date(reportDate));
+      // Attribute ledger recompute to the original attendant where possible
+      // (we previously set originalAttendantId above).
+      await recomputeMarketingCommissionLedger({ userId: originalAttendantId, period });
+    } catch (ledgerErr) {
+      console.error("[marketing/price-sale] failed to recompute commission ledger", ledgerErr);
+    }
 
     return NextResponse.json({
       ok: true,
