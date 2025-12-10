@@ -110,16 +110,18 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
   marketingEntries.forEach((entry) => {
     const receipts = entry.receipts ?? [];
-      if (receipts.length > 0) {
+    if (receipts.length > 0) {
       receipts.forEach((receipt) => {
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
         const items = receipt.items ?? [];
-        // Only include profit for receipts where all items have a valid buyingPrice
-        const allItemsPriced = items.every((it) => toNumber((it as any).buyingPrice) > 0);
-        if (allItemsPriced) {
-          const buyingSum = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
-          totals.totalProfit += selling - buyingSum;
+        const fallbackCost = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
+        const aggregateCost = toNumber(receipt.buyingTotal);
+        const hasAggregateCost = aggregateCost > 0;
+        const allItemsPriced = items.length > 0 && items.every((it) => toNumber((it as any).buyingPrice) > 0);
+        if (hasAggregateCost || allItemsPriced) {
+          const costToUse = hasAggregateCost ? aggregateCost : fallbackCost;
+          totals.totalProfit += selling - costToUse;
         }
         totals.totalItems += items.length;
         totals.totalReceipts += 1;

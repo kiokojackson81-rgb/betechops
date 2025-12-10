@@ -356,6 +356,7 @@ export async function POST(req: NextRequest) {
               receiptNumber: serial,
               sellingTotal: total,
               paymentMethod: PaymentMethod.MPESA,
+              buyingTotal: supportReceiptBuyingTotal,
               items: { create: supportReceiptItems },
             };
 

@@ -379,31 +379,42 @@ export default function ClientAdminMarketingReport({
             </div>
             <div className="mt-6 space-y-4">
               {selectedEntry.receipts && selectedEntry.receipts.length > 0 ? (
-                selectedEntry.receipts.map((receipt, idx) => (
-                  <div key={receipt.id ?? `receipt-${idx}`} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          Receipt {receipt.receiptNumber || `#${idx + 1}`}
-                        </p>
-                        <p className="text-xs text-slate-400">{receipt.paymentMethod ?? "—"}</p>
+                selectedEntry.receipts.map((receipt, idx) => {
+                  const receiptItems = receipt.items ?? [];
+                  const fallbackTotal = receiptItems.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+                  const receiptBuyingTotal = Math.max(0, Number(receipt.buyingTotal ?? fallbackTotal));
+                  const hasBuyingTotal = receiptBuyingTotal > 0;
+                  return (
+                    <div key={receipt.id ?? `receipt-${idx}`} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            Receipt {receipt.receiptNumber || `#${idx + 1}`}
+                          </p>
+                          <p className="text-xs text-slate-400">{receipt.paymentMethod ?? "-"}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-white">{formatKES(Number(receipt.sellingTotal ?? 0))}</span>
                       </div>
-                      <span className="text-sm font-semibold text-white">{formatKES(Number(receipt.sellingTotal ?? 0))}</span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {(receipt.items || []).length === 0 ? (
-                        <p className="text-xs text-slate-500">No items recorded for this receipt.</p>
-                      ) : (
-                        receipt.items.map((item, itemIdx) => (
-                          <div key={itemIdx} className="flex justify-between text-sm text-white/80">
-                            <span>{item.productName || "(unnamed item)"}</span>
-                            <span>{formatKES(Number(item.buyingPrice ?? 0))}</span>
+                      <div className="mt-3 space-y-2">
+                        {receiptItems.length === 0 ? (
+                          <p className="text-xs text-slate-500">No items recorded for this receipt.</p>
+                        ) : (
+                          receiptItems.map((item, itemIdx) => (
+                            <div key={itemIdx} className="flex justify-between text-sm text-white/80">
+                              <span>{item.productName || "(unnamed item)"}</span>
+                              <span>{formatKES(Number(item.buyingPrice ?? 0))}</span>
+                            </div>
+                          ))
+                        )}
+                        {hasBuyingTotal ? (
+                          <div className="text-xs text-slate-400">
+                            Buying total: {formatKES(receiptBuyingTotal)}
                           </div>
-                        ))
-                      )}
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-400">
                   No receipt data available for this entry.

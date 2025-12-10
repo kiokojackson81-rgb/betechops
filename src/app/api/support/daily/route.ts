@@ -111,7 +111,7 @@ export async function POST(req: Request) {
       const fullyPriced = normalizedItems.every((item) => item.buyingPrice > 0);
       const profit = fullyPriced ? Math.max(0, sellingTotal - receiptBuyingTotal) : 0;
 
-      return { receiptNumber, sellingTotal, paymentMethod, items: normalizedItems, profit };
+      return { receiptNumber, sellingTotal, paymentMethod, buyingTotal: receiptBuyingTotal, items: normalizedItems, profit };
     })
     .filter((receipt) => receipt.sellingTotal > 0 || receipt.items.length > 0);
 
@@ -151,19 +151,20 @@ export async function POST(req: Request) {
           newBatteries: metrics.newBatteries,
           changedBatteries: metrics.changedBatteries,
           submittedById: auth.user.id,
-          receipts: {
-            create: normalizedReceipts.map((receipt) => ({
-              receiptNumber: receipt.receiptNumber,
-              sellingTotal: receipt.sellingTotal,
-              paymentMethod: receipt.paymentMethod,
-              items: {
-                create: receipt.items.map((item) => ({
-                  productName: item.productName || "Item",
-                  buyingPrice: item.buyingPrice,
-                })),
-              },
+      receipts: {
+        create: normalizedReceipts.map((receipt) => ({
+          receiptNumber: receipt.receiptNumber,
+          sellingTotal: receipt.sellingTotal,
+          paymentMethod: receipt.paymentMethod,
+          buyingTotal: receipt.buyingTotal ?? 0,
+          items: {
+            create: receipt.items.map((item) => ({
+              productName: item.productName || "Item",
+              buyingPrice: item.buyingPrice,
             })),
           },
+        })),
+      },
         },
         select: { id: true },
       });

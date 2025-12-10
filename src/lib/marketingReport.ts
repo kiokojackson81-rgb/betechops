@@ -110,10 +110,11 @@ const toNumber = (v: unknown): number => {
 const computeEntryTotals = (entry: MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[]; sales?: MarketingSale[] }) => {
   if (entry.receipts && entry.receipts.length) {
     const totalSales = entry.receipts.reduce((sum, r) => sum + toNumber(r.sellingTotal), 0);
-    const totalProfit = entry.receipts.reduce(
-      (sum, r) => sum + (toNumber(r.sellingTotal) - r.items.reduce((s, it) => s + toNumber(it.buyingPrice), 0)),
-      0
-    );
+    const totalProfit = entry.receipts.reduce((sum, r) => {
+      const fallbackCost = (r.items || []).reduce((s, it) => s + toNumber(it.buyingPrice), 0);
+      const buyingSum = toNumber(r.buyingTotal ?? fallbackCost) || fallbackCost;
+      return sum + (toNumber(r.sellingTotal) - buyingSum);
+    }, 0);
     return { totalSales, totalProfit, totalItems: entry.receipts.reduce((s, r) => s + (r.items?.length || 0), 0) };
   }
   const totalSales = toNumber(entry.totalSales);
@@ -412,8 +413,9 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
         } else {
           dayMpesa += sell;
         }
-        const itemsSum = (r.items || []).reduce((s, it) => s + (Number(it.buyingPrice) || 0), 0);
-        dayProfit += sell - itemsSum;
+        const fallbackCost = (r.items || []).reduce((s, it) => s + (Number(it.buyingPrice) || 0), 0);
+        const buyingTotal = Math.max(0, Number(r.buyingTotal ?? fallbackCost));
+        dayProfit += sell - buyingTotal;
         dayItems += (r.items || []).length;
       }
     } else if (e.sales && e.sales.length) {
