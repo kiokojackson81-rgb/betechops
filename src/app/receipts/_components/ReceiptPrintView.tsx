@@ -75,7 +75,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
       {showFooter && (
         <div className="mt-8 text-center text-xs">
           <p>Thank you for shopping with Betech Solar Solutions. You were served by {data?.attendantName || data?.issuedByName || '____'}.</p>
-          <p>Follow us on all social media platforms: @Betech Solar Solutions Kenya.</p>
+          <p>Good once sold cannot be refunded</p>
           <div className="mt-6 flex justify-center items-center gap-2">
             <span>Official Stamp:</span>
             <span className="inline-block border-b w-48" />

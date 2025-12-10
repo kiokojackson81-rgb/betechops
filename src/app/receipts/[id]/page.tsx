@@ -85,7 +85,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       )}
 
       <section className="mt-4 text-sm text-slate-700">
-        Thank you for shopping with Betech Solar Solutions. You were served by {receipt.order?.attendant?.name || "____"}. Follow us on all social media platforms: @Betech Solar Solutions Kenya.
+        Thank you for shopping with Betech Solar Solutions. You were served by {receipt.order?.attendant?.name || "____"}. Good once sold cannot be refunded
         <div className="mt-2">Official Stamp: __________________________</div>
       </section>
 
