@@ -1,9 +1,12 @@
 "use client";
 import React from "react";
 
+type PaperSize = "a5" | "a4" | "roll80";
+
 type Props = {
   data: any;
   mode?: "editor" | "print" | "preview";
+  paperSize?: PaperSize;
 };
 
 function formatKsh(v: number | string) {
@@ -11,7 +14,7 @@ function formatKsh(v: number | string) {
   return n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
 }
 
-export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
+export default function ReceiptPrintView({ data, mode = "editor", paperSize = "a5" }: Props) {
   const showFooter = mode === "print" || mode === "preview";
   const items = Array.isArray(data?.items) ? data.items : [];
   const date = data?.date ? new Date(data.date) : new Date();
@@ -42,11 +45,10 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const balanceValue = Number(data?.totals?.balance ?? data?.balance ?? 0);
   const customerPhone = data?.customerPhone;
 
+  const sizeClass = `receipt-sheet receipt-sheet--${paperSize}`;
+
   return (
-    <div
-      className="border rounded-md p-6 text-sm bg-white text-black mx-auto"
-      style={{ width: "210mm", minHeight: "279mm" }}
-    >
+    <div className={`${sizeClass} border rounded-md p-6 text-sm bg-white text-black mx-auto`}>
       <div className="text-center mb-4">
         <h2 className="text-xs tracking-[0.35em] uppercase">{docHeading}</h2>
         <h1 className="text-2xl font-extrabold mt-2">BETECH SOLAR SOLUTIONS</h1>

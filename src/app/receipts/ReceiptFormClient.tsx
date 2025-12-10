@@ -44,6 +44,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">("MPESA");
+  const [paperSize, setPaperSize] = useState<"a5" | "a4" | "roll80">("a5");
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
@@ -121,6 +122,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
         paymentMethod,
+        paperSize,
         notes,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
@@ -458,7 +460,19 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2 no-print">
+          <div className="flex flex-wrap gap-3 no-print">
+                <div className="flex flex-col">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">Preview paper</label>
+                  <select
+                    value={paperSize}
+                    onChange={(e) => setPaperSize(e.target.value as typeof paperSize)}
+                    className="mt-1 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
+                  >
+                    <option value="a5">A5</option>
+                    <option value="a4">A4</option>
+                    <option value="roll80">80mm roll</option>
+                  </select>
+                </div>
                 <button
                   type="button"
                   className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
@@ -483,8 +497,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         deposit: docType === "LAYAWAY" ? deposit : undefined,
                         notes,
                       };
+                      draft.paperSize = paperSize;
                       const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-                      window.open(`/receipts/preview?draft=${encoded}`, "_blank");
+                      const url = `/receipts/preview?draft=${encoded}&size=${paperSize}`;
+                      window.open(url, "_blank");
                     } catch (e) {
                       showToast("Failed to open preview", "error");
                     }
@@ -505,7 +521,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
       {printSnapshot && (
         <div className="receipt-print-area print-only">
-          <ReceiptPrintView data={printSnapshot} mode="print" />
+          <ReceiptPrintView data={printSnapshot} mode="print" paperSize={paperSize} />
         </div>
       )}
 

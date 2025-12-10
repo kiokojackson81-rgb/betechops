@@ -160,6 +160,18 @@ input[type="checkbox"] {
 }
 
 /* Print helpers: hide interactive controls and optimize receipts for printing */
+@page receipt-a5 { size: A5 portrait; margin: 10mm; }
+@page receipt-a4 { size: A4 portrait; margin: 10mm; }
+@page receipt-roll80 { size: 80mm 200mm; margin: 5mm; }
+
+.receipt-sheet {
+  width: 100%;
+  max-width: 148mm;
+  margin: 0 auto;
+}
+.receipt-sheet--a4 { max-width: 210mm; }
+.receipt-sheet--roll80 { max-width: 80mm; }
+
 @media print {
   .no-print { display: none !important; }
   /* Make printed text dark on white */
@@ -173,6 +185,9 @@ input[type="checkbox"] {
   .receipt-print-area, .receipt { page-break-inside: avoid !important; }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
+  .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }
+  .receipt-sheet--a4 { width: 210mm; min-height: 297mm; page: receipt-a4; }
+  .receipt-sheet--roll80 { width: 80mm; min-height: 200mm; page: receipt-roll80; }
 }
 
 /* hide print-only sections on screen */
