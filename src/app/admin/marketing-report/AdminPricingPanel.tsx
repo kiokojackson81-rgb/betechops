@@ -556,7 +556,7 @@ export default function AdminPricingPanel() {
                         <Button
                           onClick={() => (isSupportReceipt ? handlePriceSupportReceipt(sale) : handlePriceReceiptGroup(sale))}
                           disabled={pricingKey === getDraftKey(sale)}
-                          className="w-full"
+                          className="w-full bg-emerald-500 text-black font-semibold hover:brightness-95"
                         >
                           {pricingKey === getDraftKey(sale) ? "Saving…" : "Price receipt"}
                         </Button>
@@ -564,7 +564,7 @@ export default function AdminPricingPanel() {
                         <Button
                           onClick={() => handlePriceSale(sale)}
                           disabled={pricingKey === getDraftKey(sale)}
-                          className="w-full"
+                          className="w-full bg-emerald-500 text-black font-semibold hover:brightness-95"
                         >
                           {pricingKey === getDraftKey(sale) ? "Saving…" : "Price sale"}
                         </Button>
