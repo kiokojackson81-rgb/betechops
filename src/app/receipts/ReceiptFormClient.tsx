@@ -25,6 +25,8 @@ const newItem = (): ItemRow => ({
   warranty: "",
 });
 
+type PaperSize = "a5" | "a4" | "roll80";
+
 type ReceiptFormProps = {
   onCreated?: (receipt: any) => void;
   showHero?: boolean;
@@ -44,7 +46,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">("MPESA");
-  const [paperSize, setPaperSize] = useState<"a5" | "a4" | "roll80">("a5");
+  const [paperSize, setPaperSize] = useState<PaperSize>("a5");
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
@@ -478,7 +480,26 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
                   onClick={() => {
                     try {
-                      const draft = {
+                      const draft: {
+                        items: ItemRow[];
+                        subtotal: number;
+                        taxAmount: number;
+                        total: number;
+                        taxRate: number;
+                        showTax: boolean;
+                        discount: number;
+                        showDiscount: boolean;
+                        customerName: string;
+                        customerPhone: string;
+                        serial: string;
+                        docType: string;
+                        attendantName: string;
+                        paymentMethod: "MPESA" | "CASH";
+                        paymentDetailsShown: boolean;
+                        deposit?: number;
+                        notes: string;
+                        paperSize: PaperSize;
+                      } = {
                         items,
                         subtotal,
                         taxAmount,

@@ -126,6 +126,27 @@ export async function POST(req: NextRequest) {
 
   const payload = (await req.json()) as any;
 
+  const parseNumber = (value: unknown, fallback = 0) => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : fallback;
+    }
+    if (typeof value === "string") {
+      const cleaned = value.trim();
+      if (!cleaned) return fallback;
+      const normalized = cleaned.replace(/[^0-9.-]/g, "");
+      if (!normalized) return fallback;
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    return fallback;
+  };
+
+  const parseIntLike = (value: unknown, fallback = 0) => {
+    const parsed = parseNumber(value, fallback);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.trunc(parsed);
+  };
+
   const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
   const attendantId = payload?.attendantId ?? payload?.servedBy ?? null;
@@ -133,12 +154,12 @@ export async function POST(req: NextRequest) {
 
   // compute totals
   const items = Array.isArray(payload?.items) ? payload.items : [];
-  const subtotal = items.reduce((s: number, it: any) => s + (Number(it.unitPrice || it.sellingPrice || 0) * Number(it.quantity || 1)), 0);
-  const taxRate = Number(payload?.taxRate || 0);
+  const subtotal = items.reduce((s: number, it: any) => s + (parseNumber(it.unitPrice || it.sellingPrice || 0) * Math.max(1, parseNumber(it.quantity || 1, 1))), 0);
+  const taxRate = parseNumber(payload?.taxRate || 0);
   const taxAmount = payload?.showTax ? (subtotal * (taxRate / 100)) : 0;
-  const discount = Number(payload?.discount || 0);
+  const discount = parseNumber(payload?.discount || 0);
   const total = subtotal + taxAmount - discount;
-  const deposit = docType === "LAYAWAY" ? Number(payload?.deposit || 0) : 0;
+  const deposit = docType === "LAYAWAY" ? parseNumber(payload?.deposit || 0) : 0;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
 
   try {
@@ -169,14 +190,16 @@ export async function POST(req: NextRequest) {
         if (!product) {
           product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
         }
+        const qty = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
+        const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
         createdItems.push({
           product,
-          qty: Number(it.quantity || 1),
-          unitPrice: Number(it.unitPrice || it.sellingPrice || 0),
+          qty,
+          unitPrice,
           serial: it.serial,
           warranty: it.warranty,
           title,
-          costPrice: Number(it.costPrice ?? it.buyingPrice ?? 0) || 0,
+          costPrice: parseNumber(it.costPrice ?? it.buyingPrice ?? 0),
         });
       }
 
@@ -218,8 +241,8 @@ export async function POST(req: NextRequest) {
           data: {
             orderId: orderUpsert.id,
             productId: it.product.id,
-            quantity: it.qty,
-            sellingPrice: Number(it.unitPrice || 0),
+            quantity: Math.max(1, parseIntLike(it.qty ?? it.quantity ?? 1, 1)),
+            sellingPrice: parseNumber(it.unitPrice ?? 0),
             serial: it.serial ?? null,
             warranty: it.warranty ?? null,
           },
