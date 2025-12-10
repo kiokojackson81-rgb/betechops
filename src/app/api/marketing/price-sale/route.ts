@@ -140,6 +140,7 @@ export async function POST(req: Request) {
             where: { id: existingReceipt.id },
             data: {
               sellingTotal: { increment: sellingPrice },
+              buyingTotal: { increment: roundedBuyingPrice },
               items: {
                 create: [
                   {
@@ -156,6 +157,7 @@ export async function POST(req: Request) {
               dailyEntryId: entry!.id,
               receiptNumber,
               sellingTotal: sellingPrice,
+              buyingTotal: roundedBuyingPrice,
               paymentMethod,
               items: {
                 create: [

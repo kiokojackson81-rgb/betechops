@@ -218,6 +218,7 @@ model MarketingReceipt {
   paymentMethod PaymentMethod
   dailyEntry    MarketingDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         MarketingReceiptItem[]
+  buyingTotal   Int                    @default(0)
 
   @@index([dailyEntryId])
 }
@@ -278,6 +279,7 @@ model SupportReceipt {
   updatedAt     DateTime             @updatedAt
   dailyEntry    SupportDailyEntry    @relation("SupportEntryReceipts", fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         SupportReceiptItem[] @relation("SupportReceiptItems")
+  buyingTotal   Int                  @default(0)
 
   @@index([dailyEntryId])
 }

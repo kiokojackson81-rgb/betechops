@@ -94,6 +94,14 @@ export async function POST(req: Request) {
       recomputedTotalProfit += sell - cost;
     }
 
+    for (const receipt of receipts) {
+      const cost = (receipt.items || []).reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+      await tx.supportReceipt.update({
+        where: { id: receipt.id },
+        data: { buyingTotal: cost },
+      });
+    }
+
     await tx.supportDailyEntry.update({
       where: { id: entryId },
       data: { totalProfit: recomputedTotalProfit },
