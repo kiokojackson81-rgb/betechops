@@ -62,6 +62,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [saving, setSaving] = useState(false);
   const [printSnapshot, setPrintSnapshot] = useState<any>(null);
   const [duplicateOwner, setDuplicateOwner] = useState<any>(null);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [descLoadingId, setDescLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +102,51 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const addRow = () => setItems((s) => [...s, newItem()]);
   const removeRow = (id: string) => setItems((s) => (s.length > 1 ? s.filter((r) => r.id !== id) : s));
   const updateRow = (id: string, patch: Partial<ItemRow>) => setItems((s) => s.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const aiDescription = async (row: ItemRow) => {
+    if (!row.title.trim()) return;
+    setDescLoadingId(row.id);
+    try {
+      const response = await fetch("/api/ai/receipt-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawDescription: row.title }),
+      });
+      if (!response.ok) throw new Error("AI description failed");
+      const data = await response.json().catch(() => null);
+      if (data?.description) {
+        updateRow(row.id, { title: data.description });
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI description failed", "error");
+    } finally {
+      setDescLoadingId(null);
+    }
+  };
+
+  const aiNotes = async () => {
+    if (!items.length) return;
+    setNotesLoading(true);
+    try {
+      const res = await fetch("/api/ai/receipt-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({ description: item.title })),
+          paymentMethod,
+        }),
+      });
+      if (!res.ok) throw new Error("AI notes failed");
+      const data = await res.json().catch(() => null);
+      if (data?.notes) {
+        setNotes(data.notes);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI notes failed", "error");
+    } finally {
+      setNotesLoading(false);
+    }
+  };
 
   const normalizedTaxRate = Number.isFinite(taxRate) ? taxRate : 0;
   const normalizedDiscount = Number.isFinite(discount) ? discount : 0;
@@ -342,6 +389,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               <div className="flex gap-2 md:col-span-1 md:justify-end">
                 <button
                   type="button"
+                  className="rounded-xl border border-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70"
+                  onClick={() => aiDescription(it)}
+                  disabled={descLoadingId === it.id}
+                >
+                  {descLoadingId === it.id ? "..." : "✨ AI"}
+                </button>
+                <button
+                  type="button"
                   className="rounded-xl border border-white/10 px-4 py-2 text-xs text-slate-200 hover:bg-white/5"
                   onClick={() => removeRow(it.id)}
                 >
@@ -452,7 +507,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       </div>
 
       <div>
-        <label className={labelClass}>General notes / terms</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className={labelClass}>General notes / terms</label>
+          <button
+            type="button"
+            onClick={aiNotes}
+            disabled={notesLoading}
+            className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-emerald-400 disabled:opacity-40"
+          >
+            {notesLoading ? "…" : "✨ Generate notes"}
+          </button>
+        </div>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
