@@ -343,11 +343,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             {items.map((it) => (
               <div key={it.id} className="w-full flex items-center gap-3 border-b border-slate-800 pb-2">
                 <textarea
-                  className="w-1/2 min-h-[48px] h-12 px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-none"
+                  className="w-1/2 min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
                   value={it.title}
                   onChange={(e) => updateRow(it.id, { title: e.target.value })}
                   placeholder="Item description"
-                  rows={1}
+                  rows={2}
                 />
                 <button
                   type="button"
