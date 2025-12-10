@@ -52,7 +52,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">("MPESA");
+  const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH" | "">("");
   const [paperSize, setPaperSize] = useState<PaperSize>("a5");
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
@@ -347,6 +347,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 placeholder="Item description"
                 rows={2}
               />
+              <div className="flex flex-col justify-center">
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70 disabled:opacity-50"
+                  onClick={() => aiDescription(it)}
+                  disabled={descLoadingId === it.id}
+                >
+                  {descLoadingId === it.id ? "…" : "✨ AI"}
+                </button>
+              </div>
               <input
                 type="number"
                 min={1}
