@@ -195,7 +195,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const checkboxClass = "h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500";
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="receipt-screen space-y-6">
       {showHero && (
         <header className="space-y-1">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
@@ -547,16 +548,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </button>
         </div>
       </div>
-      {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
-      {printSnapshot && (
-        <div className="receipt-print-area print-only">
-          <ReceiptPrintView data={printSnapshot} mode="print" paperSize={paperSize} />
-        </div>
-      )}
-
-      {duplicateOwner && (
-        <ReceiptDuplicateModal owner={duplicateOwner} onClose={() => setDuplicateOwner(null)} />
-      )}
     </div>
+    {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
+
+    {printSnapshot && (
+      <div className="receipt-print-area print-only">
+        <ReceiptPrintView data={printSnapshot} mode="print" paperSize={paperSize} />
+      </div>
+    )}
+
+    {duplicateOwner && (
+      <ReceiptDuplicateModal owner={duplicateOwner} onClose={() => setDuplicateOwner(null)} />
+    )}
+    </>
   );
 }

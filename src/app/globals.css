@@ -188,6 +188,8 @@ input[type="checkbox"] {
   .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }
   .receipt-sheet--a4 { width: 210mm; min-height: 297mm; page: receipt-a4; }
   .receipt-sheet--roll80 { width: 80mm; min-height: 200mm; page: receipt-roll80; }
+  .receipt-screen { display: none !important; }
+  .receipt-print-area { display: block !important; }
 }
 
 /* hide print-only sections on screen */
