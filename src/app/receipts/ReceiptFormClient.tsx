@@ -339,77 +339,69 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </label>
         </div>
 
-        <div className="space-y-2">
-          {items.map((it) => (
-            <div key={it.id} className="grid items-center gap-2 border-b border-slate-800 pb-2 md:grid-cols-7">
-              <textarea
-                className={`col-span-2 ${compactFieldClass} h-[40px]`}
-                value={it.title}
-                onChange={(e) => updateRow(it.id, { title: e.target.value })}
-                placeholder="Item description"
-                rows={1}
-              />
-              <div className="flex flex-col justify-center">
+          <div className="space-y-2">
+            {items.map((it) => (
+              <div key={it.id} className="w-full flex items-center gap-3 border-b border-slate-800 pb-2">
+                <textarea
+                  className="w-1/2 min-h-[48px] h-12 px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-none"
+                  value={it.title}
+                  onChange={(e) => updateRow(it.id, { title: e.target.value })}
+                  placeholder="Item description"
+                  rows={1}
+                />
                 <button
                   type="button"
-                  className="h-[40px] rounded-xl border border-slate-800 px-3 text-xs text-slate-200 hover:bg-slate-800/70 disabled:opacity-50"
+                  className="h-12 px-4 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 flex items-center justify-center"
                   onClick={() => aiDescription(it)}
                   disabled={descLoadingId === it.id}
                 >
                   {descLoadingId === it.id ? "…" : "✨ AI"}
                 </button>
-              </div>
-              <input
-                type="number"
-                min={1}
-                className={`${compactFieldClass} h-[40px]`}
-                value={it.quantity}
-                onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
-              />
-              <input
-                type="number"
-                min={0}
-                className={compactFieldClass}
-                value={it.unitPrice === "" ? "" : it.unitPrice}
-                onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
-                placeholder="Unit price"
-              />
-              {showSerials ? (
                 <input
-                  className={compactFieldClass}
-                  value={it.serial}
-                  onChange={(e) => updateRow(it.id, { serial: e.target.value })}
-                  placeholder="Serial / IMEI (optional)"
+                  type="number"
+                  min={1}
+                  className="w-20 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                  value={it.quantity}
+                  onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
                 />
-              ) : (
-                <div className="hidden md:block" />
-              )}
-              {showWarranty ? (
-                <select
-                  className={`${compactFieldClass} appearance-none`}
-                  value={it.warranty}
-                  onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
-                >
-                  <option value="">No warranty</option>
-                  {warrantyOptions.map((w) => (
-                    <option key={w} value={w}>{w}</option>
-                  ))}
-                </select>
-              ) : (
-                <div className="hidden md:block" />
-              )}
-              <div className="flex md:col-span-1 md:justify-end">
+                <input
+                  type="number"
+                  min={0}
+                  className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                  value={it.unitPrice === "" ? "" : it.unitPrice}
+                  onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
+                  placeholder="Unit price"
+                />
+                {showSerials && (
+                  <input
+                    className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                    value={it.serial}
+                    onChange={(e) => updateRow(it.id, { serial: e.target.value })}
+                    placeholder="Serial / IMEI (optional)"
+                  />
+                )}
+                {showWarranty && (
+                  <select
+                    className="w-32 h-12 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                    value={it.warranty}
+                    onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
+                  >
+                    <option value="">No warranty</option>
+                    {warrantyOptions.map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
-                  className="rounded-xl border border-white/10 px-4 py-2 text-xs text-slate-200 hover:bg-white/5"
+                  className="h-12 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
                   onClick={() => removeRow(it.id)}
                 >
                   Remove
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
         <div className="mt-2 no-print">
           <button
