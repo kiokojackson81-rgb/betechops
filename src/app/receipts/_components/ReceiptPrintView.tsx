@@ -51,7 +51,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         <h2 className="text-xs tracking-[0.35em] uppercase">{docHeading}</h2>
         <h1 className="text-2xl font-extrabold mt-2">BETECH SOLAR SOLUTIONS</h1>
         <p className="text-xs mt-1">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-        <p className="text-[11px] mt-1">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3</p>
+        <p className="text-[11px] mt-1">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
         <p className="text-[11px]">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
       </div>
 
@@ -96,6 +96,9 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
                   {item.title}
                   {item.serial && (
                     <div className="text-[10px] text-slate-500">Serial / IMEI: {item.serial}</div>
+                  )}
+                  {item.warranty && (
+                    <div className="text-[10px] text-slate-500">Warranty: {item.warranty}</div>
                   )}
                 </td>
                 <td className="py-1 text-right">{formatKsh(unitPrice)}</td>
@@ -153,7 +156,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
       {showFooter && (
         <div className="mt-8 text-center text-xs">
           <p>Thank you for shopping with Betech Solar Solutions. You were served by {servedBy}.</p>
-          <p>Follow us on all social media platforms: @Betech Solar Solutions Kenya.</p>
+          <p>Goods once sold cannot be refunded.</p>
           <div className="mt-6 flex justify-center items-center gap-2">
             <span>Official Stamp:</span>
             <span className="inline-block border-b w-48" />

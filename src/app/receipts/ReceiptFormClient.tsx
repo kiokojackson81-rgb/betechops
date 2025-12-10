@@ -377,7 +377,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <label className={labelClass}>Payment details</label>
           <div className="mt-2 space-y-2">
             <label className="inline-flex items-center text-sm text-slate-200">
-              <input type="checkbox" checked={paymentDetailsShown} onChange={(e) => setPaymentDetailsShown(e.target.checked)} className={`${checkboxClass} mr-2`} />
+              <input
+                type="checkbox"
+                checked={paymentDetailsShown}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setPaymentDetailsShown(checked);
+                  if (checked) setPaymentMethod("MPESA");
+                }}
+                className={`${checkboxClass} mr-2`}
+              />
               Include payment details on receipt
             </label>
             <div className="flex gap-2">
@@ -386,9 +395,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   key={method}
                   type="button"
                   onClick={() => setPaymentMethod(method)}
+                  disabled={paymentDetailsShown && method !== "MPESA"}
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
                     paymentMethod === method ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
-                  }`}
+                  } ${paymentDetailsShown && method !== "MPESA" ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   {method === "MPESA" ? "MPESA" : "Cash"}
                 </button>
