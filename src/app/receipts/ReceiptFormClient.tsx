@@ -561,60 +561,46 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                     <option value="roll80">80mm roll</option>
                   </select>
                 </div>
-                <button
-                  type="button"
-                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
-                  onClick={() => {
-                    try {
-                      const draft: {
-                        items: ItemRow[];
-                        subtotal: number;
-                        taxAmount: number;
-                        total: number;
-                        taxRate: number;
-                        showTax: boolean;
-                        discount: number;
-                        showDiscount: boolean;
-                        customerName: string;
-                        customerPhone: string;
-                        serial: string;
-                        docType: string;
-                        attendantName: string;
-                        paymentMethod: "MPESA" | "CASH";
-                        paymentDetailsShown: boolean;
-                        deposit?: number;
-                        notes: string;
-                        paperSize: PaperSize;
-                      } = {
-                        items,
-                        subtotal,
-                        taxAmount,
-                        total,
-                        taxRate,
-                        showTax,
-                        discount: normalizedDiscount,
-                        showDiscount: effectiveShowDiscount,
-                        customerName,
-                        customerPhone,
-                        serial,
-                        docType,
-                        attendantName: selectedStaff?.name ?? "",
-                        paymentMethod,
-                        paymentDetailsShown,
-                        deposit: docType === "LAYAWAY" ? deposit : undefined,
-                        notes,
-                        paperSize,
-                      };
-                      const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-                      const url = `/receipts/preview?draft=${encoded}&size=${paperSize}`;
-                      window.open(url, "_blank");
-                    } catch (e) {
-                      showToast("Failed to open preview", "error");
-                    }
-                  }}
-                >
-                  Preview receipt
-                </button>
+        <button
+          type="button"
+          className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
+          onClick={() => {
+            if (!paymentMethod) {
+              showToast("Select a payment method before previewing", "error");
+              return;
+            }
+            try {
+              const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
+              const draft = {
+                items,
+                subtotal,
+                taxAmount,
+                total,
+                taxRate,
+                showTax,
+                discount: normalizedDiscount,
+                showDiscount: effectiveShowDiscount,
+                customerName,
+                customerPhone,
+                serial,
+                docType,
+                attendantName: selectedStaff?.name ?? "",
+                paymentMethod: resolvedPaymentMethod,
+                paymentDetailsShown,
+                deposit: docType === "LAYAWAY" ? deposit : undefined,
+                notes,
+                paperSize,
+              };
+              const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+              const url = `/receipts/preview?draft=${encoded}&size=${paperSize}`;
+              window.open(url, "_blank");
+            } catch (e) {
+              showToast("Failed to open preview", "error");
+            }
+          }}
+        >
+          Preview receipt
+        </button>
           <button
             type="button"
             disabled={saving}
