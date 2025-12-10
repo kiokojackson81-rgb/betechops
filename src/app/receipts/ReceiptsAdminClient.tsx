@@ -32,7 +32,7 @@ type FilterState = {
   attendantId: string;
 };
 
-type AttendantOption = { id: string; name: string };
+type StaffOption = { id: string; name: string };
 
 type ReceiptDetailPayload = {
   receipt: any;
@@ -185,7 +185,7 @@ export default function ReceiptsAdminClient({
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
-  const [attendants, setAttendants] = useState<AttendantOption[]>([]);
+  const [staffList, setStaffList] = useState<StaffOption[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
@@ -215,16 +215,16 @@ export default function ReceiptsAdminClient({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/users?roles=ATTENDANT", { cache: "no-store" });
+        const res = await fetch("/api/receipts/staff", { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "Failed to load attendants");
+        if (!res.ok) throw new Error(data?.error || "Failed to load staff");
         if (cancelled) return;
-        const options: AttendantOption[] = (Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [])
+        const options: StaffOption[] = (Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [])
           .filter((u: any) => u?.id)
           .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id }));
-        setAttendants(options);
+        setStaffList(options);
       } catch (err) {
-        console.warn("[receipts] failed to load attendants", err);
+        console.warn("[receipts] failed to load staff", err);
       }
     })();
     return () => {
@@ -409,7 +409,7 @@ export default function ReceiptsAdminClient({
     }
     setExporting(true);
     try {
-      const header = ["Receipt ID", "Order Ref", "Doc Type", "Customer", "Attendant", "Total", "Status", "Created At"];
+      const header = ["Receipt ID", "Order Ref", "Doc Type", "Customer", "Staff", "Total", "Status", "Created At"];
       const csv = [header.join(",")];
       for (const row of rows) {
         csv.push(
@@ -447,7 +447,7 @@ export default function ReceiptsAdminClient({
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs uppercase tracking-wide text-slate-400">
-            Search customer / order / attendant
+            Search customer / order / staff
             <input
               value={filters.q}
               onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
@@ -503,14 +503,14 @@ export default function ReceiptsAdminClient({
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr]">
           <label className="text-xs uppercase tracking-wide text-slate-400">
-            Attendant
+            Staff
             <select
               value={filters.attendantId}
               onChange={(e) => setFilters((prev) => ({ ...prev, attendantId: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
             >
-              <option value="">All attendants</option>
-              {attendants.map((a) => (
+              <option value="">All staff</option>
+              {staffList.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -560,7 +560,7 @@ export default function ReceiptsAdminClient({
               <th className="px-3 py-2 text-left">Order</th>
               <th className="px-3 py-2 text-left">Doc</th>
               <th className="px-3 py-2 text-left">Customer</th>
-              <th className="px-3 py-2 text-left">Attendant</th>
+              <th className="px-3 py-2 text-left">Staff</th>
               <th className="px-3 py-2 text-left">Total</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Created</th>
@@ -781,7 +781,7 @@ export default function ReceiptsAdminClient({
       <EditModal
         open={editState.open}
         draft={editState.draft}
-        attendants={attendants}
+        staffList={staffList}
         saving={editState.saving}
         onClose={() => setEditState({ open: false, draft: null, saving: false })}
         onDraftChange={updateDraft}
@@ -793,14 +793,14 @@ export default function ReceiptsAdminClient({
 type EditModalProps = {
   open: boolean;
   draft: EditDraft | null;
-  attendants: AttendantOption[];
+  staffList: StaffOption[];
   saving: boolean;
   onClose: () => void;
   onDraftChange: (draft: EditDraft) => void;
   onSave: () => void;
 };
 
-function EditModal({ open, draft, attendants, saving, onClose, onDraftChange, onSave }: EditModalProps) {
+function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onSave }: EditModalProps) {
   const totals = useMemo(() => {
     if (!draft) return { subtotal: 0, tax: 0, total: 0 };
     const subtotal = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -847,14 +847,14 @@ function EditModal({ open, draft, attendants, saving, onClose, onDraftChange, on
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="text-xs uppercase tracking-wide text-slate-400">
-            Attendant
+            Staff
             <select
               value={draft.attendantId ?? ""}
               onChange={(e) => onDraftChange({ ...draft, attendantId: e.target.value || null })}
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
             >
               <option value="">Keep existing</option>
-              {attendants.map((att) => (
+              {staffList.map((att) => (
                 <option key={att.id} value={att.id}>
                   {att.name}
                 </option>

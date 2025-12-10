@@ -33,8 +33,8 @@ type ReceiptFormProps = {
 };
 
 export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
-  const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
-  const [attendantId, setAttendantId] = useState<string | null>(null);
+  const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
+  const [staffId, setStaffId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
   const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
   const [customerName, setCustomerName] = useState<string>("");
@@ -60,7 +60,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/users?roles=ATTENDANT");
+        const res = await fetch("/api/receipts/staff");
         const json = await res.json().catch(() => null);
         const rows = Array.isArray(json)
           ? json
@@ -71,15 +71,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         const mapped = rows
           .filter((u: any) => u && u.id)
           .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id, email: u.email ?? null }));
-        setAttendants(mapped);
+        setStaffMembers(mapped);
         if (mapped.length) {
-          setAttendantId((prev) => {
+          setStaffId((prev) => {
             if (prev) return prev;
-            const jeniffer = mapped.find((att) => {
-              const haystack = `${att.name || ""} ${att.email || ""}`.toLowerCase();
-              return haystack.includes("jeniffer");
+            const preferredNames = ["jeniffer", "jennifer", "jenifer"];
+            const defaultStaff = mapped.find((item) => {
+              const haystack = `${item.name || ""} ${item.email || ""}`.toLowerCase();
+              return preferredNames.some((needle) => haystack.includes(needle));
             });
-            return (jeniffer ?? mapped[0]).id;
+            return (defaultStaff ?? mapped[0]).id;
           });
         }
       } catch (e) {
@@ -100,11 +101,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const taxAmount = showTax ? subtotal * (normalizedTaxRate / 100) : 0;
   const total = subtotal + taxAmount - normalizedDiscount;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
-  const selectedAttendant = attendants.find((a) => a.id === attendantId);
+  const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
 
   const handleSave = async () => {
-    if (!attendantId) return showToast("Select attendant", "error");
+    if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
     if (!paymentMethod) return showToast("Select payment method", "error");
 
@@ -116,8 +117,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         date: new Date().toISOString(),
         customerName,
         customerPhone,
-        attendantId,
-        issuedById: attendantId,
+        attendantId: staffId,
+        issuedById: staffId,
         taxRate: normalizedTaxRate,
         showTax,
         discount: normalizedDiscount,
@@ -200,14 +201,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className={labelClass}>Attendant</label>
+          <label className={labelClass}>Staff</label>
           <select
-            value={attendantId ?? ""}
-            onChange={(e) => setAttendantId(e.target.value || null)}
+            value={staffId ?? ""}
+            onChange={(e) => setStaffId(e.target.value || null)}
             className={`${fieldClass} appearance-none`}
           >
-            <option value="">Select attendant</option>
-            {attendants.map((a) => (
+            <option value="">Select staff</option>
+            {staffMembers.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
@@ -512,7 +513,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         customerPhone,
                         serial,
                         docType,
-                        attendantName: selectedAttendant?.name ?? "",
+                        attendantName: selectedStaff?.name ?? "",
                         paymentMethod,
                         paymentDetailsShown,
                         deposit: docType === "LAYAWAY" ? deposit : undefined,
