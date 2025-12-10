@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
-import ReceiptPrintView from "./_components/ReceiptPrintView";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
 
 type ItemRow = {
@@ -61,7 +60,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
   const [globalWarranty, setGlobalWarranty] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [printSnapshot, setPrintSnapshot] = useState<any>(null);
   const [duplicateOwner, setDuplicateOwner] = useState<any>(null);
   const [notesLoading, setNotesLoading] = useState(false);
   const [descLoadingId, setDescLoadingId] = useState<string | null>(null);
@@ -159,6 +157,50 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
 
+  const buildDraft = (resolvedPaymentMethod: "MPESA" | "CASH") => ({
+    items,
+    subtotal,
+    taxAmount,
+    total,
+    taxRate,
+    showTax,
+    discount: normalizedDiscount,
+    showDiscount: effectiveShowDiscount,
+    customerName,
+    customerPhone,
+    serial,
+    docType,
+    attendantName: selectedStaff?.name ?? "",
+    paymentMethod: resolvedPaymentMethod,
+    paymentDetailsShown,
+    deposit: docType === "LAYAWAY" ? deposit : undefined,
+    notes,
+    paperSize,
+  });
+
+  const openPreviewWindow = (draft: ReturnType<typeof buildDraft>, autoPrint = false) => {
+    try {
+      const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+      const url = `/receipts/preview?draft=${encoded}&size=${paperSize}${autoPrint ? "&autoPrint=1" : ""}`;
+      const previewWindow = window.open(url, "_blank");
+      if (!previewWindow) {
+        throw new Error("Popup blocked");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to open preview", "error");
+    }
+  };
+
+  const handlePreview = (autoPrint = false) => {
+    if (!paymentMethod) {
+      showToast("Select a payment method before previewing", "error");
+      return;
+    }
+    const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
+    const draft = buildDraft(resolvedPaymentMethod);
+    openPreviewWindow(draft, autoPrint);
+  };
+
   const handleSave = async () => {
     if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
@@ -209,28 +251,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       showToast("Saved receipt", "success");
       onCreated?.(data);
 
-      // fetch the saved receipt (include items) so we can render exact print view
-      try {
-        const listRes = await fetch(`/api/receipts?includeItems=true&q=${encodeURIComponent(serial)}`);
-        const listJson = await listRes.json().catch(() => null);
-        const found = listJson?.receipts?.find((r: any) => r.orderRef === serial) || (listJson?.receipts && listJson.receipts[0]);
-        if (found) {
-          setPrintSnapshot(found);
-          // allow render, then print
-          setTimeout(() => {
-            window.print();
-            setSerial(generateReceiptSerial());
-            // clear print snapshot after print
-            setTimeout(() => setPrintSnapshot(null), 1000);
-          }, 300);
-        } else {
-          setSerial(generateReceiptSerial());
-          setTimeout(() => window.print(), 300);
-        }
-      } catch (e) {
-        setSerial(generateReceiptSerial());
-        setTimeout(() => window.print(), 300);
-      }
+      handlePreview(true);
+      setSerial(generateReceiptSerial());
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
@@ -548,40 +570,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         <button
           type="button"
           className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
-          onClick={() => {
-            if (!paymentMethod) {
-              showToast("Select a payment method before previewing", "error");
-              return;
-            }
-            try {
-              const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
-              const draft = {
-                items,
-                subtotal,
-                taxAmount,
-                total,
-                taxRate,
-                showTax,
-                discount: normalizedDiscount,
-                showDiscount: effectiveShowDiscount,
-                customerName,
-                customerPhone,
-                serial,
-                docType,
-                attendantName: selectedStaff?.name ?? "",
-                paymentMethod: resolvedPaymentMethod,
-                paymentDetailsShown,
-                deposit: docType === "LAYAWAY" ? deposit : undefined,
-                notes,
-                paperSize,
-              };
-              const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-              const url = `/receipts/preview?draft=${encoded}&size=${paperSize}`;
-              window.open(url, "_blank");
-            } catch (e) {
-              showToast("Failed to open preview", "error");
-            }
-          }}
+          onClick={() => handlePreview(false)}
         >
           Preview receipt
         </button>
@@ -597,12 +586,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       </div>
     </div>
     {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
-
-    {printSnapshot && (
-      <div className="receipt-print-area print-only">
-        <ReceiptPrintView data={printSnapshot} mode="print" paperSize={paperSize} />
-      </div>
-    )}
 
     {duplicateOwner && (
       <ReceiptDuplicateModal owner={duplicateOwner} onClose={() => setDuplicateOwner(null)} />
