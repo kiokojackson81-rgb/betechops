@@ -25,6 +25,13 @@ const newItem = (): ItemRow => ({
   warranty: "",
 });
 
+const sanitizeNumericInput = (value: string): number | "" => {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  if (!cleaned || cleaned === ".") return "";
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : "";
+};
+
 type PaperSize = "a5" | "a4" | "roll80";
 
 type ReceiptFormProps = {
@@ -303,8 +310,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 type="number"
                 min={0}
                 className={compactFieldClass}
-                value={it.unitPrice as any}
-                onChange={(e) => updateRow(it.id, { unitPrice: e.target.value === "" ? "" : Number(e.target.value) })}
+                value={it.unitPrice === "" ? "" : it.unitPrice}
+                onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
                 placeholder="Unit price"
               />
               {showSerials ? (

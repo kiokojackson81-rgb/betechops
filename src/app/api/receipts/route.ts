@@ -190,11 +190,11 @@ export async function POST(req: NextRequest) {
         if (!product) {
           product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
         }
-        const qty = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
+        const quantity = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
         createdItems.push({
           product,
-          qty,
+          quantity,
           unitPrice,
           serial: it.serial,
           warranty: it.warranty,
@@ -237,17 +237,24 @@ export async function POST(req: NextRequest) {
 
       const createdOrderItems: any[] = [];
       for (const it of createdItems) {
-        const item = await tx.orderItem.create({
-          data: {
-            orderId: orderUpsert.id,
-            productId: it.product.id,
-            quantity: Math.max(1, parseIntLike(it.qty ?? it.quantity ?? 1, 1)),
-            sellingPrice: parseNumber(it.unitPrice ?? 0),
-            serial: it.serial ?? null,
-            warranty: it.warranty ?? null,
-          },
-        });
-        createdOrderItems.push(item);
+        const orderItemPayload = {
+          orderId: orderUpsert.id,
+          productId: it.product.id,
+          quantity: Math.max(1, Math.trunc(it.quantity ?? 1)),
+          sellingPrice: it.unitPrice,
+          serial: it.serial ?? null,
+          warranty: it.warranty ?? null,
+        };
+        if (!Number.isFinite(orderItemPayload.sellingPrice)) {
+          throw new Error(`Invalid selling price for item ${it.title}`);
+        }
+        try {
+          const item = await tx.orderItem.create({ data: orderItemPayload });
+          createdOrderItems.push(item);
+        } catch (orderItemError) {
+          console.error("[receipts] failed to persist order item", orderItemPayload, orderItemError);
+          throw orderItemError;
+        }
       }
 
       // Layaway plan creation/update (guarded for test tx mocks)
