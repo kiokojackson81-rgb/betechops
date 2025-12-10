@@ -496,8 +496,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         paymentDetailsShown,
                         deposit: docType === "LAYAWAY" ? deposit : undefined,
                         notes,
+                        paperSize,
                       };
-                      draft.paperSize = paperSize;
                       const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
                       const url = `/receipts/preview?draft=${encoded}&size=${paperSize}`;
                       window.open(url, "_blank");
