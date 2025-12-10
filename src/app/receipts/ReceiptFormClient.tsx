@@ -341,18 +341,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
         <div className="space-y-2">
           {items.map((it) => (
-            <div key={it.id} className="grid items-start gap-2 border-b border-slate-800 pb-2 md:grid-cols-7">
+            <div key={it.id} className="grid items-center gap-2 border-b border-slate-800 pb-2 md:grid-cols-7">
               <textarea
-                className={`col-span-2 ${compactFieldClass} min-h-[40px] resize-y`}
+                className={`col-span-2 ${compactFieldClass} h-[40px]`}
                 value={it.title}
                 onChange={(e) => updateRow(it.id, { title: e.target.value })}
                 placeholder="Item description"
-                rows={2}
+                rows={1}
               />
               <div className="flex flex-col justify-center">
                 <button
                   type="button"
-                  className="rounded-xl border border-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70 disabled:opacity-50"
+                  className="h-[40px] rounded-xl border border-slate-800 px-3 text-xs text-slate-200 hover:bg-slate-800/70 disabled:opacity-50"
                   onClick={() => aiDescription(it)}
                   disabled={descLoadingId === it.id}
                 >
@@ -362,7 +362,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               <input
                 type="number"
                 min={1}
-                className={compactFieldClass}
+                className={`${compactFieldClass} h-[40px]`}
                 value={it.quantity}
                 onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
               />
@@ -398,15 +398,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               ) : (
                 <div className="hidden md:block" />
               )}
-              <div className="flex gap-2 md:col-span-1 md:justify-end">
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800/70"
-                  onClick={() => aiDescription(it)}
-                  disabled={descLoadingId === it.id}
-                >
-                  {descLoadingId === it.id ? "..." : "✨ AI"}
-                </button>
+              <div className="flex md:col-span-1 md:justify-end">
                 <button
                   type="button"
                   className="rounded-xl border border-white/10 px-4 py-2 text-xs text-slate-200 hover:bg-white/5"
