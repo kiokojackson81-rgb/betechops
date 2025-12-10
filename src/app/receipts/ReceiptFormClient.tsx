@@ -89,12 +89,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const addRow = () => setItems((s) => [...s, newItem()]);
   const removeRow = (id: string) => setItems((s) => (s.length > 1 ? s.filter((r) => r.id !== id) : s));
   const updateRow = (id: string, patch: Partial<ItemRow>) => setItems((s) => s.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const normalizedTaxRate = Number.isFinite(taxRate) ? taxRate : 0;
+  const normalizedDiscount = Number.isFinite(discount) ? discount : 0;
+
   const subtotal = useMemo(() => items.reduce((acc, it) => acc + (Number(it.unitPrice || 0) * Number(it.quantity || 1)), 0), [items]);
-  const taxAmount = showTax ? subtotal * (taxRate / 100) : 0;
-  const total = subtotal + taxAmount - discount;
+  const taxAmount = showTax ? subtotal * (normalizedTaxRate / 100) : 0;
+  const total = subtotal + taxAmount - normalizedDiscount;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
   const selectedAttendant = attendants.find((a) => a.id === attendantId);
-  const effectiveShowDiscount = showDiscount || discount > 0;
+  const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
 
   const handleSave = async () => {
     if (!attendantId) return showToast("Select attendant", "error");
@@ -111,9 +115,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         customerPhone,
         attendantId,
         issuedById: attendantId,
-        taxRate,
+        taxRate: normalizedTaxRate,
         showTax,
-        discount,
+        discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
         paymentMethod,
@@ -351,8 +355,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <label className={labelClass}>Tax %</label>
           <input
             type="number"
-            value={taxRate}
-            onChange={(e) => setTaxRate(Number(e.target.value || 0))}
+            value={Number.isFinite(taxRate) ? taxRate : ""}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                setTaxRate(NaN);
+              } else {
+                setTaxRate(Number(raw));
+              }
+            }}
             className={fieldClass}
           />
           <label className="mt-2 inline-flex items-center text-sm text-slate-200">
@@ -364,8 +375,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <label className={labelClass}>Discount (KES)</label>
           <input
             type="number"
-            value={discount}
-            onChange={(e) => setDiscount(Number(e.target.value || 0))}
+            value={Number.isFinite(discount) ? discount : ""}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                setDiscount(NaN);
+              } else {
+                setDiscount(Number(raw));
+              }
+            }}
             className={fieldClass}
           />
           <label className="mt-2 inline-flex items-center text-sm text-slate-200">
@@ -433,7 +451,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         <div className="space-y-1 text-sm text-slate-200">
           <div>Subtotal: KES {subtotal.toLocaleString()}</div>
           {showTax && <div>Tax: KES {taxAmount.toLocaleString()}</div>}
-          {effectiveShowDiscount && <div>Discount: KES {discount.toLocaleString()}</div>}
+          {effectiveShowDiscount && <div>Discount: KES {normalizedDiscount.toLocaleString()}</div>}
           <div className="text-lg font-semibold text-white">Total: KES {total.toLocaleString()}</div>
           {docType === "LAYAWAY" && (
             <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>
@@ -453,7 +471,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         total,
                         taxRate,
                         showTax,
-                        discount,
+                        discount: normalizedDiscount,
                         showDiscount: effectiveShowDiscount,
                         customerName,
                         customerPhone,
