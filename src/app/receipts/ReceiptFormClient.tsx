@@ -93,10 +93,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const taxAmount = showTax ? subtotal * (taxRate / 100) : 0;
   const total = subtotal + taxAmount - discount;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
+  const selectedAttendant = attendants.find((a) => a.id === attendantId);
+  const effectiveShowDiscount = showDiscount || discount > 0;
 
   const handleSave = async () => {
     if (!attendantId) return showToast("Select attendant", "error");
     if (!items.length) return showToast("Add at least one item", "error");
+    if (!paymentMethod) return showToast("Select payment method", "error");
 
     setSaving(true);
     try {
@@ -111,7 +114,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         taxRate,
         showTax,
         discount,
-        showDiscount,
+        showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
         paymentMethod,
         notes,
@@ -382,15 +385,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 <button
                   key={method}
                   type="button"
-                  disabled={!paymentDetailsShown}
                   onClick={() => setPaymentMethod(method)}
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                    paymentMethod === method
-                      ? "bg-emerald-500 text-black disabled:bg-emerald-500/60 disabled:text-black/60"
-                      : "border border-white/10 text-slate-200 disabled:border-white/5 disabled:text-slate-500"
+                    paymentMethod === method ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
                   }`}
                 >
-                  {method}
+                  {method === "MPESA" ? "MPESA" : "Cash"}
                 </button>
               ))}
             </div>
@@ -423,7 +423,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         <div className="space-y-1 text-sm text-slate-200">
           <div>Subtotal: KES {subtotal.toLocaleString()}</div>
           {showTax && <div>Tax: KES {taxAmount.toLocaleString()}</div>}
-          {showDiscount && <div>Discount: KES {discount.toLocaleString()}</div>}
+          {effectiveShowDiscount && <div>Discount: KES {discount.toLocaleString()}</div>}
           <div className="text-lg font-semibold text-white">Total: KES {total.toLocaleString()}</div>
           {docType === "LAYAWAY" && (
             <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>
@@ -436,7 +436,25 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
                   onClick={() => {
                     try {
-                      const draft = { items, subtotal, taxAmount, total, taxRate, showTax, discount, customerName, customerPhone, serial, docType };
+                      const draft = {
+                        items,
+                        subtotal,
+                        taxAmount,
+                        total,
+                        taxRate,
+                        showTax,
+                        discount,
+                        showDiscount: effectiveShowDiscount,
+                        customerName,
+                        customerPhone,
+                        serial,
+                        docType,
+                        attendantName: selectedAttendant?.name ?? "",
+                        paymentMethod,
+                        paymentDetailsShown,
+                        deposit: docType === "LAYAWAY" ? deposit : undefined,
+                        notes,
+                      };
                       const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
                       window.open(`/receipts/preview?draft=${encoded}`, "_blank");
                     } catch (e) {
