@@ -5,9 +5,19 @@ export type ReceiptOwner =
   | { type: "marketing"; id: string; entryId: string }
   | { type: "support"; id: string; entryId: string };
 
+export function canonicalReceiptNumber(receiptNumber?: string) {
+  if (!receiptNumber) return "";
+  const trimmed = receiptNumber.trim();
+  if (!trimmed) return "";
+  if (trimmed.toUpperCase().startsWith("BETECH")) {
+    return `Betech${trimmed.slice(6)}`;
+  }
+  return trimmed;
+}
+
 export async function findReceiptOwner(receiptNumber?: string): Promise<ReceiptOwner | null> {
-  if (!receiptNumber || receiptNumber.trim() === "") return null;
-  const rn = receiptNumber.trim();
+  const rn = canonicalReceiptNumber(receiptNumber);
+  if (!rn) return null;
 
   // Check POS orders (orderNumber + receipt)
   if (prisma.order && typeof (prisma.order as any).findUnique === "function") {

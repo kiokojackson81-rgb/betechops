@@ -25,7 +25,12 @@ const newItem = (): ItemRow => ({
   warranty: "",
 });
 
-export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt: any) => void }) {  
+type ReceiptFormProps = {
+  onCreated?: (receipt: any) => void;
+  showHero?: boolean;
+};
+
+export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
   const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
   const [attendantId, setAttendantId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
@@ -38,6 +43,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
+  const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">("MPESA");
   const [notes, setNotes] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
@@ -107,6 +113,7 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         discount,
         showDiscount,
         paymentDetailsShown,
+        paymentMethod,
         notes,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
@@ -170,13 +177,15 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-        <h1 className="text-2xl font-semibold sm:text-3xl">Betech Customers Operations</h1>
-        <p className="text-sm text-slate-300">
-          Track every printable document, search by customer, and open the PDF drawer without leaving this page.
-        </p>
-      </header>
+      {showHero && (
+        <header className="space-y-1">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Betech Customers Operations</h1>
+          <p className="text-sm text-slate-300">
+            Track every printable document, search by customer, and open the PDF drawer without leaving this page.
+          </p>
+        </header>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
@@ -363,11 +372,28 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
         </div>
         <div>
           <label className={labelClass}>Payment details</label>
-          <div className="mt-2">
+          <div className="mt-2 space-y-2">
             <label className="inline-flex items-center text-sm text-slate-200">
               <input type="checkbox" checked={paymentDetailsShown} onChange={(e) => setPaymentDetailsShown(e.target.checked)} className={`${checkboxClass} mr-2`} />
               Include payment details on receipt
             </label>
+            <div className="flex gap-2">
+              {(["MPESA", "CASH"] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  disabled={!paymentDetailsShown}
+                  onClick={() => setPaymentMethod(method)}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                    paymentMethod === method
+                      ? "bg-emerald-500 text-black disabled:bg-emerald-500/60 disabled:text-black/60"
+                      : "border border-white/10 text-slate-200 disabled:border-white/5 disabled:text-slate-500"
+                  }`}
+                >
+                  {method}
+                </button>
+              ))}
+            </div>
           </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
@@ -396,8 +422,8 @@ export default function ReceiptFormClient({ onCreated }: { onCreated?: (receipt:
       <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl shadow-black/40 md:flex-row md:items-center">
         <div className="space-y-1 text-sm text-slate-200">
           <div>Subtotal: KES {subtotal.toLocaleString()}</div>
-          <div>Tax: KES {taxAmount.toLocaleString()}</div>
-          <div>Discount: KES {discount.toLocaleString()}</div>
+          {showTax && <div>Tax: KES {taxAmount.toLocaleString()}</div>}
+          {showDiscount && <div>Discount: KES {discount.toLocaleString()}</div>}
           <div className="text-lg font-semibold text-white">Total: KES {total.toLocaleString()}</div>
           {docType === "LAYAWAY" && (
             <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>

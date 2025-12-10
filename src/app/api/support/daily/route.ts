@@ -6,6 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,20 @@ export async function POST(req: Request) {
       return { receiptNumber, sellingTotal, paymentMethod, items: normalizedItems, profit };
     })
     .filter((receipt) => receipt.sellingTotal > 0 || receipt.items.length > 0);
+
+  const seenReceipts = new Set<string>();
+  for (const receipt of normalizedReceipts) {
+    const normalized = canonicalReceiptNumber(receipt.receiptNumber || undefined);
+    if (!normalized) continue;
+    if (seenReceipts.has(normalized)) {
+      return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+    }
+    seenReceipts.add(normalized);
+    const owner = await findReceiptOwner(normalized);
+    if (owner) {
+      return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+    }
+  }
 
   if (normalizedReceipts.length === 0) {
     return NextResponse.json({ error: "At least one receipt is required" }, { status: 400 });

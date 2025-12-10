@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, getActorId } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 
 const toNumberOrNull = (value: unknown): number | null => {
   if (value === null || typeof value === "undefined" || value === "") return null;
@@ -175,6 +176,21 @@ export async function POST(req: Request) {
     dayEnd.setDate(dayEnd.getDate() + 1);
 
     const taskSales: any[] = Array.isArray(tasks?.sales) ? tasks?.sales : [];
+
+    // Enforce unique receipt numbers across submissions before we touch the database.
+    const seenReceipts = new Set<string>();
+    for (const sale of taskSales) {
+      const normalized = canonicalReceiptNumber(typeof sale?.receiptNumber === "string" ? sale.receiptNumber : "");
+      if (!normalized) continue;
+      if (seenReceipts.has(normalized)) {
+        return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+      }
+      seenReceipts.add(normalized);
+      const owner = await findReceiptOwner(normalized);
+      if (owner) {
+        return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+      }
+    }
     const derivedProfit =
       toNumberOrNull((tasks?.metrics as any)?.totalProfit) ??
       toNumberOrNull((tasks?.totals as any)?.profit) ??

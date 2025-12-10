@@ -4,6 +4,7 @@ import { requireRole, getActorId } from "@/lib/api";
 import { marketingDayConfigs, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 import { z } from "zod";
 
 const ReceiptItemSchema = z.object({
@@ -146,6 +147,19 @@ export async function POST(req: Request) {
   const weeklyVideoCountRaw = (numeric?.weeklyVideoCount ?? body.weeklyVideoCount) as unknown;
 
   const receiptsClean = normalizeReceipts(receipts);
+  const seenReceipts = new Set<string>();
+  for (const receipt of receiptsClean) {
+    const normalized = canonicalReceiptNumber(receipt.receiptNumber);
+    if (!normalized) continue;
+    if (seenReceipts.has(normalized)) {
+      return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+    }
+    seenReceipts.add(normalized);
+    const owner = await findReceiptOwner(normalized);
+    if (owner) {
+      return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+    }
+  }
   const totalSales = receiptsClean.reduce((sum, r) => sum + r.sellingTotal, 0);
   const totalProfit = receiptsClean.reduce(
     (sum, r) => sum + (r.sellingTotal - r.items.reduce((s, it) => s + it.buyingPrice, 0)),
