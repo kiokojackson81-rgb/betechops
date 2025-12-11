@@ -34,6 +34,8 @@ type FilterState = {
 
 type StaffOption = { id: string; name: string };
 
+type AdminQuickRangeKey = "today" | "this-week" | "custom";
+
 type SupportItemDetail = {
   id: string;
   buyingPrice: number | null;
@@ -138,6 +140,24 @@ const makeDefaultFilters = (): FilterState => {
   };
 };
 
+const startOfDayForRange = (value = new Date()) => {
+  const clone = new Date(value);
+  clone.setHours(0, 0, 0, 0);
+  return clone;
+};
+
+const getWeekBounds = (reference = new Date()) => {
+  const day = reference.getDay();
+  const diff = (day + 6) % 7;
+  const start = new Date(reference);
+  start.setDate(reference.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
 const buildDateParam = (value: string, endOfDay: boolean) => {
   if (!value) return undefined;
   const [y, m, d] = value.split("-").map((part) => Number(part));
@@ -206,6 +226,13 @@ export default function ReceiptsAdminClient({
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summaryTotals, setSummaryTotals] = useState<{
+    totalSales: number;
+    totalProfit: number;
+    totalCost: number;
+  } | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
@@ -302,6 +329,49 @@ export default function ReceiptsAdminClient({
     }
   }, [refreshSignal, loadRows]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const fetchSummary = async () => {
+      setSummaryLoading(true);
+      try {
+        const params = new URLSearchParams();
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        if (startParam) params.set("start", startParam);
+        if (endParam) params.set("end", endParam);
+        if (appliedFilters.attendantId) {
+          params.set("attendantId", appliedFilters.attendantId);
+        }
+        const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Failed to load summary");
+        if (!cancelled) {
+          setSummaryTotals({
+            totalSales: Number(data.totalSales ?? 0),
+            totalProfit: Number(data.totalProfit ?? 0),
+            totalCost: Number(data.totalCost ?? 0),
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[receipts] summary error", err);
+          setSummaryTotals(null);
+        }
+      } finally {
+        if (!cancelled) setSummaryLoading(false);
+      }
+    };
+    fetchSummary();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [appliedFilters]);
+
   const applyFilters = () => {
     setAppliedFilters({ ...filters });
   };
@@ -310,6 +380,25 @@ export default function ReceiptsAdminClient({
     const defaults = makeDefaultFilters();
     setFilters(defaults);
     setAppliedFilters(defaults);
+    setQuickRange("today");
+  };
+
+  const applyQuickRange = (key: "today" | "this-week") => {
+    const now = new Date();
+    const bounds =
+      key === "today"
+        ? {
+            start: formatDateInput(startOfDayForRange(now)),
+            end: formatDateInput(startOfDayForRange(now)),
+          }
+        : (() => {
+            const { start, end } = getWeekBounds(now);
+            return { start: formatDateInput(start), end: formatDateInput(end) };
+          })();
+    const nextFilters = { ...filters, ...bounds };
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters);
+    setQuickRange(key);
   };
 
   const gotoPage = (next: number) => {
@@ -541,8 +630,67 @@ export default function ReceiptsAdminClient({
   const profitColor =
     hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
+  const rangeLabelText =
+    quickRange === "today" ? "Today" : quickRange === "this-week" ? "This week" : "Custom range";
+  const profitColorClass =
+    (summaryTotals?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
+  const summarySalesLabel = summaryLoading
+    ? "Loading…"
+    : formatCurrency(summaryTotals?.totalSales ?? 0);
+  const summaryProfitLabel = summaryLoading
+    ? "Loading…"
+    : formatCurrency(summaryTotals?.totalProfit ?? 0);
   return (
     <div className="space-y-6">
+      <section className="rounded-2xl border border-white/15 bg-slate-900/70 p-4 shadow-inner shadow-black/30">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Snapshot</p>
+            <h2 className="text-lg font-semibold text-white">Receipt totals</h2>
+            <p className="text-sm text-slate-400">
+              Quick filters let you lock the view to today or this week while the list remains read-only.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+            <button
+              type="button"
+              onClick={() => applyQuickRange("today")}
+              className={`rounded-full border px-3 py-1 transition ${
+                quickRange === "today"
+                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                  : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+              }`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => applyQuickRange("this-week")}
+              className={`rounded-full border px-3 py-1 transition ${
+                quickRange === "this-week"
+                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                  : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+              }`}
+            >
+              This week
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
+            <p className="text-xl font-semibold text-emerald-300">{summarySalesLabel}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Total profit</p>
+            <p className={`text-xl font-semibold ${profitColorClass}`}>{summaryProfitLabel}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
+            <p className="text-xl font-semibold text-white">{rangeLabelText}</p>
+          </div>
+        </div>
+      </section>
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -571,31 +719,33 @@ export default function ReceiptsAdminClient({
           </label>
           <label className="text-xs uppercase tracking-wide text-slate-400">
             From
-            <input
-              type="date"
-              value={filters.start}
-              onChange={(e) =>
-                setFilters((prev) => {
-                  const next = { ...prev, start: e.target.value };
-                  if (next.end && next.start && next.start > next.end) next.end = next.start;
-                  return next;
-                })
-              }
-              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            />
+              <input
+                type="date"
+                value={filters.start}
+                onChange={(e) => {
+                  setQuickRange("custom");
+                  setFilters((prev) => {
+                    const next = { ...prev, start: e.target.value };
+                    if (next.end && next.start && next.start > next.end) next.end = next.start;
+                    return next;
+                  });
+                }}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+              />
           </label>
           <label className="text-xs uppercase tracking-wide text-slate-400">
             To
             <input
               type="date"
               value={filters.end}
-              onChange={(e) =>
+              onChange={(e) => {
+                setQuickRange("custom");
                 setFilters((prev) => {
                   const next = { ...prev, end: e.target.value };
                   if (next.start && next.end && next.end < next.start) next.start = next.end;
                   return next;
-                })
-              }
+                });
+              }}
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
             />
           </label>
