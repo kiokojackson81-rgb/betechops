@@ -33,8 +33,8 @@ type OnlineSummaryResponse = {
   platforms: OnlinePlatformSummary[];
 };
 
-const formatKES = (value: number) =>
-  `KES ${value.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+const formatKES = (value: number | null | undefined) =>
+  `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
 export default function AttendantOnlineClient({ initial = [] as any[] }) {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
