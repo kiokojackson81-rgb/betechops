@@ -179,10 +179,22 @@ input[type="checkbox"] {
   /* Remove shadows and rounded corners for compact print */
   .shadow, .shadow-xl, .shadow-inner { box-shadow: none !important; }
   .rounded-3xl, .rounded-2xl, .rounded-md { border-radius: 0 !important; }
+  html, body {
+    width: 148mm;
+    height: 210mm;
+    padding: 0;
+    margin: 0;
+  }
   /* Ensure receipt table spans full width and uses readable font size */
   table { width: 100% !important; font-size: 12px !important; }
   /* Avoid page breaks inside receipt block */
   .receipt-print-area, .receipt { page-break-inside: avoid !important; }
+  .receipt-sheet,
+  .receipt-print-area,
+  .receipt {
+    width: calc(148mm - 20mm);
+    margin: 0 auto !important;
+  }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
   .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }
