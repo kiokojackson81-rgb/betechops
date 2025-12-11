@@ -160,9 +160,9 @@ input[type="checkbox"] {
 }
 
 /* Print helpers: hide interactive controls and optimize receipts for printing */
-@page receipt-a5 { size: A5 portrait; margin: 10mm; }
+@page receipt-a5 { size: A5 portrait; margin: 2mm; }
 @page receipt-a4 { size: A4 portrait; margin: 10mm; }
-@page receipt-roll80 { size: 80mm 200mm; margin: 5mm; }
+@page receipt-roll80 { size: 80mm 200mm; margin: 4mm; }
 
 .receipt-sheet {
   width: 100%;
@@ -197,15 +197,16 @@ input[type="checkbox"] {
   .receipt-print-area { display: flex; justify-content: center; align-items: flex-start; }
   .receipt-sheet {
     width: 100%;
-    max-width: calc(100% - 20mm);
+    /* Fit tightly on A5: account for small @page margin (2mm) -> subtract 4mm */
+    max-width: calc(100% - 4mm);
     box-sizing: border-box;
-    padding: 10mm;
+    padding: 2mm;
     margin: 0 auto !important;
     page: receipt-a5;
     min-height: auto;
   }
   .receipt-sheet--a4 { max-width: calc(100% - 20mm); page: receipt-a4; }
-  .receipt-sheet--roll80 { max-width: calc(100% - 10mm); page: receipt-roll80; }
+  .receipt-sheet--roll80 { max-width: calc(100% - 8mm); page: receipt-roll80; }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
   .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }
