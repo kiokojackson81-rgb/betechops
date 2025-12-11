@@ -59,6 +59,7 @@ type ItemWithCost = {
 type CostSummary = {
   itemsWithCost: ItemWithCost[];
   supportBuyingTotal: number;
+  hasCompleteCosts: boolean;
 };
 
 type EditItem = {
@@ -446,11 +447,12 @@ export default function ReceiptsAdminClient({
 
   const costSummary = useMemo<CostSummary>(() => {
     const orderItems = detail?.receipt?.order?.items ?? [];
-    if (!orderItems.length) {
-      return { itemsWithCost: [], supportBuyingTotal: 0 };
+  if (!orderItems.length) {
+      return { itemsWithCost: [], supportBuyingTotal: 0, hasCompleteCosts: false };
     }
 
     const supportQueue = (detail?.supportItems ?? []).map((item) => ({ ...item }));
+    let allItemCostsKnown = true;
     const itemsWithCost: ItemWithCost[] = orderItems.map((item: any) => {
       const normalizedName = (item.product?.name ?? "").trim();
       const matchIndex =
@@ -463,6 +465,8 @@ export default function ReceiptsAdminClient({
           : -1;
       const matched = matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
       const displayName = item.product?.name ?? matched?.productName ?? "Item";
+      const hasCost = matched?.buyingPrice !== null;
+      if (!hasCost) allItemCostsKnown = false;
       return {
         ...item,
         buyingPrice: matched?.buyingPrice ?? null,
@@ -470,12 +474,25 @@ export default function ReceiptsAdminClient({
       };
     });
 
-    const matchedCost = itemsWithCost.reduce(
-      (sum, item) => sum + (item.buyingPrice ?? 0) * Math.max(1, Number(item.quantity ?? 1)),
-      0,
-    );
-    const extraCost = supportQueue.reduce((sum, entry) => sum + Math.max(0, Number(entry.buyingPrice ?? 0)), 0);
-    return { itemsWithCost, supportBuyingTotal: matchedCost + extraCost };
+    const matchedCost = itemsWithCost.reduce((sum, item) => {
+      if (item.buyingPrice === null) return sum;
+      return sum + item.buyingPrice * Math.max(1, Number(item.quantity ?? 1));
+    }, 0);
+    let supportCostSum = 0;
+    let supportHasUnknown = false;
+    for (const entry of supportQueue) {
+      if (entry.buyingPrice === null) {
+        supportHasUnknown = true;
+        continue;
+      }
+      supportCostSum += Math.max(0, Number(entry.buyingPrice));
+    }
+    const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
+    return {
+      itemsWithCost,
+      supportBuyingTotal: matchedCost + supportCostSum,
+      hasCompleteCosts,
+    };
   }, [detail]);
 
   const handleExport = () => {
@@ -518,10 +535,11 @@ export default function ReceiptsAdminClient({
       setExporting(false);
     }
   };
-  const { itemsWithCost, supportBuyingTotal } = costSummary;
+  const { itemsWithCost, supportBuyingTotal, hasCompleteCosts } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
-  const profitAmount = receiptGrandTotal - supportBuyingTotal;
-  const profitColor = profitAmount >= 0 ? "text-emerald-300" : "text-rose-400";
+  const profitAmount = hasCompleteCosts ? receiptGrandTotal - supportBuyingTotal : 0;
+  const profitColor =
+    hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
   return (
     <div className="space-y-6">
@@ -788,7 +806,9 @@ export default function ReceiptsAdminClient({
                       </div>
                       <div>
                         <p className="text-xs text-slate-500">Profit</p>
-                        <p className={`text-lg font-semibold ${profitColor}`}>{formatCurrency(profitAmount)}</p>
+                        <p className={`text-lg font-semibold ${profitColor}`}>
+                          {hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data"}
+                        </p>
                       </div>
                     </div>
                     {detail.receipt.docType === "LAYAWAY" && (
