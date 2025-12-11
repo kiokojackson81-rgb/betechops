@@ -1,12 +1,9 @@
 "use client";
 import React from "react";
 
-type PaperSize = "a5" | "a4" | "roll80";
-
 type Props = {
   data: any;
   mode?: "editor" | "print" | "preview";
-  paperSize?: PaperSize;
 };
 
 function formatKsh(v: number | string) {
@@ -14,7 +11,7 @@ function formatKsh(v: number | string) {
   return n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
 }
 
-export default function ReceiptPrintView({ data, mode = "editor", paperSize = "a5" }: Props) {
+export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const showFooter = mode === "print" || mode === "preview";
   const items = Array.isArray(data?.items) ? data.items : [];
   const date = data?.date ? new Date(data.date) : new Date();
@@ -45,7 +42,8 @@ export default function ReceiptPrintView({ data, mode = "editor", paperSize = "a
   const balanceValue = Number(data?.totals?.balance ?? data?.balance ?? 0);
   const customerPhone = data?.customerPhone;
 
-  const sizeClass = `receipt-sheet receipt-sheet--${paperSize}`;
+  // Always render using A5 layout for printed receipts
+  const sizeClass = `receipt-sheet receipt-sheet--a5`;
   const borderClass = mode === "print" ? "" : "border";
 
   return (

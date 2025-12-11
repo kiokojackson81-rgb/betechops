@@ -32,7 +32,6 @@ const sanitizeNumericInput = (value: string): number | "" => {
   return Number.isFinite(parsed) ? parsed : "";
 };
 
-type PaperSize = "a5" | "a4" | "roll80";
 
 type ReceiptFormProps = {
   onCreated?: (receipt: any) => void;
@@ -55,7 +54,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const hasPaymentMethodSelection = selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
   const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
-  const [paperSize, setPaperSize] = useState<PaperSize>("a5");
+  // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
@@ -209,7 +208,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     paymentDetailsShown,
     deposit: docType === "LAYAWAY" ? deposit : undefined,
     notes,
-    paperSize,
+    // paperSize: fixed to A5, omitted from draft
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
     paymentBreakdown: {
@@ -223,8 +222,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const buildPreviewUrl = (draft: ReturnType<typeof buildDraft>) => {
     const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-    const sizeParam = draft.paperSize || paperSize;
-    return `/receipts/preview?draft=${encoded}&size=${sizeParam}`;
+    // always preview using A5
+    return `/receipts/preview?draft=${encoded}`;
   };
 
   const openPreviewWindow = (draft: ReturnType<typeof buildDraft>, autoPrint = false) => {
@@ -358,7 +357,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         paymentMethod: resolvedPaymentMethod,
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
-        paperSize,
         notes,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
@@ -783,18 +781,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </div>
 
           <div className="flex flex-wrap gap-3 no-print">
-            <div className="flex flex-col">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Preview paper</label>
-              <select
-                value={paperSize}
-                onChange={(e) => setPaperSize(e.target.value as typeof paperSize)}
-                className="mt-1 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
-              >
-                <option value="a5">A5</option>
-                <option value="a4">A4</option>
-                <option value="roll80">80mm roll</option>
-              </select>
-            </div>
+            {/* Preview paper selector removed — A5 is used by default */}
             <button
               type="button"
               className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
