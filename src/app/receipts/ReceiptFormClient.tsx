@@ -67,8 +67,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [duplicateOwner, setDuplicateOwner] = useState<any>(null);
   const [notesLoading, setNotesLoading] = useState(false);
   const [descLoadingId, setDescLoadingId] = useState<string | null>(null);
-  const [cashPaid, setCashPaid] = useState<number>(0);
-  const [mpesaPaid, setMpesaPaid] = useState<number>(0);
+  const [cashPaid, setCashPaid] = useState<number | "">(0);
+  const [mpesaPaid, setMpesaPaid] = useState<number | "">(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +166,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const normalizedTaxRate = Number.isFinite(taxRate) ? taxRate : 0;
   const normalizedDiscount = Number.isFinite(discount) ? discount : 0;
 
+  const toNumber = (value: number | "") => (typeof value === "number" ? value : 0);
+
   const subtotal = useMemo(() => items.reduce((acc, it) => acc + (Number(it.unitPrice || 0) * Number(it.quantity || 1)), 0), [items]);
   const taxAmount = showTax ? subtotal * (normalizedTaxRate / 100) : 0;
   const total = subtotal + taxAmount - normalizedDiscount;
@@ -173,15 +175,19 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
   const showSplitPaymentInputs = selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
+  const numericCashPaid = toNumber(cashPaid);
+  const numericMpesaPaid = toNumber(mpesaPaid);
 
   useEffect(() => {
-    if (cashPaid > total) {
+    const cash = toNumber(cashPaid);
+    const mpesa = toNumber(mpesaPaid);
+    if (cash > total) {
       setCashPaid(total);
       setMpesaPaid(0);
       return;
     }
-    if (Math.abs(cashPaid + mpesaPaid - total) > 0.1) {
-      setMpesaPaid(Math.max(0, total - cashPaid));
+    if (Math.abs(cash + mpesa - total) > 0.1) {
+      setMpesaPaid(Math.max(0, total - cash));
     }
   }, [total, cashPaid, mpesaPaid]);
 
@@ -207,8 +213,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
     paymentBreakdown: {
-      cash: cashPaid,
-      mpesa: mpesaPaid,
+      cash: numericCashPaid,
+      mpesa: numericMpesaPaid,
     },
     paymentMethods: selectedPaymentMethods,
   });
@@ -256,14 +262,28 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const handleCashPaidChange = (value: number) => {
-    const clamped = Math.max(0, Math.min(total, value));
+  const handleCashPaidChange = (rawValue: string) => {
+    if (rawValue === "") {
+      setCashPaid("");
+      setMpesaPaid(Math.max(0, total));
+      return;
+    }
+    const parsed = Number(rawValue);
+    if (Number.isNaN(parsed)) return;
+    const clamped = Math.max(0, Math.min(total, parsed));
     setCashPaid(clamped);
     setMpesaPaid(Math.max(0, total - clamped));
   };
 
-  const handleMpesaPaidChange = (value: number) => {
-    const clamped = Math.max(0, Math.min(total, value));
+  const handleMpesaPaidChange = (rawValue: string) => {
+    if (rawValue === "") {
+      setMpesaPaid("");
+      setCashPaid(Math.max(0, total));
+      return;
+    }
+    const parsed = Number(rawValue);
+    if (Number.isNaN(parsed)) return;
+    const clamped = Math.max(0, Math.min(total, parsed));
     setMpesaPaid(clamped);
     setCashPaid(Math.max(0, total - clamped));
   };
@@ -276,8 +296,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       `Type: ${customerType}`,
       `Total: KES ${total.toLocaleString()}`,
       `Items: ${items.map((item) => item.title || "Item").join(", ")}`,
-      `MPESA: KES ${mpesaPaid.toLocaleString()}`,
-      `Cash: KES ${cashPaid.toLocaleString()}`,
+      `MPESA: KES ${numericMpesaPaid.toLocaleString()}`,
+      `Cash: KES ${numericCashPaid.toLocaleString()}`,
     ];
     return lines.join("\n");
   }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid]);
@@ -302,7 +322,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return showToast("Delivery marked as failed cannot be submitted", "error");
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
-    if (showSplitPaymentInputs && Math.abs(cashPaid + mpesaPaid - total) > 0.1) {
+    if (showSplitPaymentInputs && Math.abs(numericCashPaid + numericMpesaPaid - total) > 0.1) {
       return showToast("Cash + MPESA must equal the total", "error");
     }
 
@@ -342,8 +362,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
         paymentBreakdown: {
-          cash: cashPaid,
-          mpesa: mpesaPaid,
+          cash: numericCashPaid,
+          mpesa: numericMpesaPaid,
         },
         items: normalizedItems,
       };
@@ -690,25 +710,31 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             <label className={labelClass}>Cash paid (KES)</label>
             <input
               type="number"
-              value={cashPaid}
+              value={cashPaid === "" ? "" : cashPaid}
               min={0}
               max={total}
-              onChange={(e) => handleCashPaidChange(Number(e.target.value || 0))}
+              placeholder="0"
+              onChange={(e) => handleCashPaidChange(e.target.value)}
               className={fieldClass}
             />
-            <p className="text-xs text-slate-400">Automatic MPESA value: KES {(total - cashPaid).toLocaleString()}</p>
+            <p className="text-xs text-slate-400">
+              Automatic MPESA value: KES {(total - numericCashPaid).toLocaleString()}
+            </p>
           </div>
           <div>
             <label className={labelClass}>MPESA paid (KES)</label>
             <input
               type="number"
-              value={mpesaPaid}
+              value={mpesaPaid === "" ? "" : mpesaPaid}
               min={0}
               max={total}
-              onChange={(e) => handleMpesaPaidChange(Number(e.target.value || 0))}
+              placeholder="0"
+              onChange={(e) => handleMpesaPaidChange(e.target.value)}
               className={fieldClass}
             />
-            <p className="text-xs text-slate-400">Cash portion: KES {(total - mpesaPaid).toLocaleString()}</p>
+            <p className="text-xs text-slate-400">
+              Cash portion: KES {(total - numericMpesaPaid).toLocaleString()}
+            </p>
           </div>
         </div>
       )}
