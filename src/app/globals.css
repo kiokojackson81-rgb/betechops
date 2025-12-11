@@ -179,9 +179,11 @@ input[type="checkbox"] {
   /* Remove shadows and rounded corners for compact print */
   .shadow, .shadow-xl, .shadow-inner { box-shadow: none !important; }
   .rounded-3xl, .rounded-2xl, .rounded-md { border-radius: 0 !important; }
+  /* Avoid forcing html/body to a fixed width — let @page define the size
+     and center the receipt within the printable area. Browser print margins
+     differ; we compute the receipt width relative to the page margin so both
+     left and right gutters are equal. */
   html, body {
-    width: 148mm;
-    height: 210mm;
     padding: 0;
     margin: 0;
   }
@@ -189,12 +191,21 @@ input[type="checkbox"] {
   table { width: 100% !important; font-size: 12px !important; }
   /* Avoid page breaks inside receipt block */
   .receipt-print-area, .receipt { page-break-inside: avoid !important; }
-  .receipt-sheet,
-  .receipt-print-area,
-  .receipt {
-    width: calc(148mm - 20mm);
+  /* Center the receipt and ensure it occupies the printable area minus the
+     declared @page margin (10mm). Using calc(100% - 20mm) keeps left/right
+     margins symmetric across different browsers/printers. */
+  .receipt-print-area { display: flex; justify-content: center; align-items: flex-start; }
+  .receipt-sheet {
+    width: 100%;
+    max-width: calc(100% - 20mm);
+    box-sizing: border-box;
+    padding: 10mm;
     margin: 0 auto !important;
+    page: receipt-a5;
+    min-height: auto;
   }
+  .receipt-sheet--a4 { max-width: calc(100% - 20mm); page: receipt-a4; }
+  .receipt-sheet--roll80 { max-width: calc(100% - 10mm); page: receipt-roll80; }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
   .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }

@@ -46,19 +46,27 @@ export default function ReceiptPreviewPage() {
   if (!data) return <div className="p-6">Loading preview.</div>;
 
   return (
-    <div className="p-6 bg-slate-100 min-h-screen flex justify-center">
-      <div className="bg-white shadow max-w-4xl w-full p-8">
-        <div className="no-print flex justify-end mb-4">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-full border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
-          >
-            Print Receipt
-          </button>
+    <>
+      {/* Screen preview: interactive wrapper with print button */}
+      <div className="receipt-screen p-6 bg-slate-100 min-h-screen flex justify-center">
+        <div className="bg-white shadow max-w-4xl w-full p-8">
+          <div className="no-print flex justify-end mb-4">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-full border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+            >
+              Print Receipt
+            </button>
+          </div>
+          <ReceiptPrintView data={data} mode="preview" paperSize={paperSize} />
         </div>
-        <ReceiptPrintView data={data} mode="preview" paperSize={paperSize} />
       </div>
-    </div>
+
+      {/* Print-only block: minimal chrome, visible only to print preview */}
+      <div className="print-only receipt-print-area">
+        <ReceiptPrintView data={data} mode="print" paperSize={paperSize} />
+      </div>
+    </>
   );
 }
