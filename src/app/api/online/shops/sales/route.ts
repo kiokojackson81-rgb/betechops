@@ -32,20 +32,22 @@ export async function GET(req: Request) {
   let startDate: Date | undefined;
   let endDate: Date | undefined;
 
-  if (startParam) {
-    const parsed = new Date(startParam);
-    if (!Number.isNaN(parsed.valueOf())) {
-      startDate = parsed;
-      rangeWhere.weekStart = { ...(rangeWhere.weekStart ?? {}), gte: startDate };
+    if (startParam) {
+      const parsed = new Date(startParam);
+      if (!Number.isNaN(parsed.valueOf())) {
+        startDate = parsed;
+        const current = rangeWhere.weekStart as Prisma.DateTimeFilter | undefined;
+        rangeWhere.weekStart = { ...(current ?? {}), gte: startDate };
+      }
     }
-  }
-  if (endParam) {
-    const parsed = new Date(endParam);
-    if (!Number.isNaN(parsed.valueOf())) {
-      endDate = parsed;
-      rangeWhere.weekStart = { ...(rangeWhere.weekStart ?? {}), lte: endDate };
+    if (endParam) {
+      const parsed = new Date(endParam);
+      if (!Number.isNaN(parsed.valueOf())) {
+        endDate = parsed;
+        const current = rangeWhere.weekStart as Prisma.DateTimeFilter | undefined;
+        rangeWhere.weekStart = { ...(current ?? {}), lte: endDate };
+      }
     }
-  }
 
   const [entries, periodAggregate, totalAggregate] = await Promise.all([
     prisma.weeklySale.findMany({
