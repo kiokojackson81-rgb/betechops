@@ -52,8 +52,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
-  type PaymentMethodChoice = "" | "MPESA" | "CASH";
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodChoice>("");
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
+  const hasPaymentMethodSelection = selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
+  const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
   const [paperSize, setPaperSize] = useState<PaperSize>("a5");
   const [notes, setNotes] = useState<string>("");
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
@@ -145,10 +146,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       const res = await fetch("/api/ai/receipt-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: items.map((item) => ({ description: item.title })),
-          paymentMethod,
-        }),
+          body: JSON.stringify({
+            items: items.map((item) => ({ description: item.title })),
+            paymentMethod: primaryPaymentMethod,
+          }),
       });
       if (!res.ok) throw new Error("AI notes failed");
       const data = await res.json().catch(() => null);
@@ -171,6 +172,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
+  const showSplitPaymentInputs = paymentDetailsShown && selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
 
   useEffect(() => {
     if (cashPaid > total) {
@@ -208,6 +210,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       cash: cashPaid,
       mpesa: mpesaPaid,
     },
+    paymentMethods: selectedPaymentMethods,
   });
 
   const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
@@ -230,6 +233,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to open preview", "error");
     }
+  };
+
+  const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
+    setSelectedPaymentMethods((prev) => {
+      const isActive = prev[method];
+      const other = method === "MPESA" ? "CASH" : "MPESA";
+      if (isActive && !prev[other]) {
+        return prev; // always keep at least one method selected
+      }
+      return { ...prev, [method]: !isActive };
+    });
   };
 
   const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery") => {
@@ -269,19 +283,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid]);
 
   const handlePreview = (autoPrint = false) => {
-    if (!paymentMethod) {
+    if (!hasPaymentMethodSelection) {
       showToast("Select a payment method before previewing", "error");
       return;
     }
-    const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
-    const draft = buildDraft(resolvedPaymentMethod);
+    const draft = buildDraft(primaryPaymentMethod);
     openPreviewWindow(draft, autoPrint);
   };
 
   const handleSave = async () => {
     if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
-    if (!paymentMethod) return showToast("Select payment method", "error");
+    if (!hasPaymentMethodSelection) return showToast("Select payment method", "error");
     if (!customerName.trim()) return showToast("Customer name is required", "error");
     if (!customerPhone.trim()) return showToast("Customer phone is required", "error");
     if (!customerType) return showToast("Select a customer type", "error");
@@ -289,9 +302,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return showToast("Delivery marked as failed cannot be submitted", "error");
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
-    if (Math.abs(cashPaid + mpesaPaid - total) > 0.1) return showToast("Cash + MPESA must equal the total", "error");
+    if (showSplitPaymentInputs && Math.abs(cashPaid + mpesaPaid - total) > 0.1) {
+      return showToast("Cash + MPESA must equal the total", "error");
+    }
 
-    const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
+    const resolvedPaymentMethod = primaryPaymentMethod as "MPESA" | "CASH";
     const normalizedItems = items.map((it) => ({
       title: it.title.trim(),
       quantity: Number(it.quantity || 1),
@@ -622,36 +637,39 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
         <div>
           <label className={labelClass}>Payment details</label>
-          <div className="mt-2 space-y-2">
-            <label className="inline-flex items-center text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={paymentDetailsShown}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setPaymentDetailsShown(checked);
-                  if (checked) setPaymentMethod("MPESA");
-                }}
-                className={`${checkboxClass} mr-2`}
-              />
-              Include payment details on receipt
-            </label>
-            <div className="flex gap-2">
-              {(["MPESA", "CASH"] as const).map((method) => (
-                <button
-                  key={method}
-                  type="button"
-            onClick={() => setPaymentMethod(method)}
-            disabled={paymentDetailsShown && method !== "MPESA"}
-                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                    paymentMethod === method ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
-                  } ${paymentDetailsShown && method !== "MPESA" ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  {method === "MPESA" ? "MPESA" : "Cash"}
-                </button>
-              ))}
+            <div className="mt-2 space-y-2">
+              <label className="inline-flex items-center text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={paymentDetailsShown}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPaymentDetailsShown(checked);
+                    if (checked) setSelectedPaymentMethods((prev) => ({ ...prev, MPESA: true }));
+                  }}
+                  className={`${checkboxClass} mr-2`}
+                />
+                Include payment details on receipt
+              </label>
+              {paymentDetailsShown && (
+                <div className="flex gap-2">
+                  {(["MPESA", "CASH"] as const).map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => togglePaymentMethodSelection(method)}
+                      className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                        selectedPaymentMethods[method]
+                          ? "bg-emerald-500 text-black"
+                          : "border border-white/10 text-slate-200"
+                      }`}
+                    >
+                      {method === "MPESA" ? "MPESA" : "Cash"}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>
@@ -667,32 +685,34 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className={labelClass}>Cash paid (KES)</label>
-          <input
-            type="number"
-            value={cashPaid}
-            min={0}
-            max={total}
-            onChange={(e) => handleCashPaidChange(Number(e.target.value || 0))}
-            className={fieldClass}
-          />
-          <p className="text-xs text-slate-400">Automatic MPESA value: KES {(total - cashPaid).toLocaleString()}</p>
+      {showSplitPaymentInputs && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className={labelClass}>Cash paid (KES)</label>
+            <input
+              type="number"
+              value={cashPaid}
+              min={0}
+              max={total}
+              onChange={(e) => handleCashPaidChange(Number(e.target.value || 0))}
+              className={fieldClass}
+            />
+            <p className="text-xs text-slate-400">Automatic MPESA value: KES {(total - cashPaid).toLocaleString()}</p>
+          </div>
+          <div>
+            <label className={labelClass}>MPESA paid (KES)</label>
+            <input
+              type="number"
+              value={mpesaPaid}
+              min={0}
+              max={total}
+              onChange={(e) => handleMpesaPaidChange(Number(e.target.value || 0))}
+              className={fieldClass}
+            />
+            <p className="text-xs text-slate-400">Cash portion: KES {(total - mpesaPaid).toLocaleString()}</p>
+          </div>
         </div>
-        <div>
-          <label className={labelClass}>MPESA paid (KES)</label>
-          <input
-            type="number"
-            value={mpesaPaid}
-            min={0}
-            max={total}
-            onChange={(e) => handleMpesaPaidChange(Number(e.target.value || 0))}
-            className={fieldClass}
-          />
-          <p className="text-xs text-slate-400">Cash portion: KES {(total - mpesaPaid).toLocaleString()}</p>
-        </div>
-      </div>
+      )}
 
       {whatsappMessage && (
         <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
