@@ -46,9 +46,10 @@ export default function ReceiptPrintView({ data, mode = "editor", paperSize = "a
   const customerPhone = data?.customerPhone;
 
   const sizeClass = `receipt-sheet receipt-sheet--${paperSize}`;
+  const borderClass = mode === "print" ? "" : "border";
 
   return (
-    <div className={`${sizeClass} border rounded-md p-6 text-sm bg-white text-black mx-auto`}>
+    <div className={`${sizeClass} ${borderClass} rounded-md p-6 text-sm bg-white text-black mx-auto`}>
       <div className="text-center mb-4">
         <h2 className="text-xs tracking-[0.35em] uppercase">{docHeading}</h2>
         <h1 className="text-2xl font-extrabold mt-2">BETECH SOLAR SOLUTIONS</h1>
