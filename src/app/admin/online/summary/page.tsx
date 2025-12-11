@@ -141,7 +141,7 @@ export default async function AdminOnlineSummaryPage() {
         <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-amber-100">
           <p className="font-semibold">Some marketplace metrics are unavailable right now.</p>
           <p className="mt-1 text-sm text-amber-200">
-            {warnings.join(", ")}. This usually means the latest database migrations haven't been applied yet or the nightly sync job hasn't populated
+            {warnings.join(", ")}. This usually means the latest database migrations haven&apos;t been applied yet or the nightly sync job hasn&apos;t populated
             data for this environment. Other metrics are still shown below.
           </p>
         </div>

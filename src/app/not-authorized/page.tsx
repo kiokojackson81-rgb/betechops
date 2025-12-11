@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function NotAuthorizedPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-16 text-slate-100">
@@ -9,12 +11,12 @@ export default function NotAuthorizedPage() {
           Please reach out to an admin if you believe this is incorrect.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
-          <a
+          <Link
             href="/"
             className="rounded-full border border-white/10 px-6 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/20"
           >
             Back to home
-          </a>
+          </Link>
         </div>
       </div>
     </div>

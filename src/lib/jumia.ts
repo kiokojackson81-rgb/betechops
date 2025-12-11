@@ -2,11 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { getAccessTokenFromEnv, getJumiaAccessToken, getJumiaTokenInfo, ShopAuthJson, ShopAuthSchema } from '@/lib/oidc';
 import { decryptJson } from '@/lib/crypto/secure-json';
 
+declare global {
+  var __jumiaInflight: Map<string, Promise<unknown>> | undefined;
+  var __jumiaShopsCache: ShopsCache | null | undefined;
+}
+
 type Cache = {
   accessToken?: string;
   exp?: number;
   cfg?: (Config & { loadedAt: number });
 };
+type ShopsCache = { ts: number; items: any[] };
 const cache: Cache = {};
 
 // TODO(copilot): Add p-limit request queue to enforce 4 rps (~200 rpm) caps across all Jumia calls
@@ -544,12 +550,10 @@ export async function jumiaFetch(
     return perKey ? _rateLimiter.schedulePerKey(perKey, attempt) : _rateLimiter.scheduleWithRetry(attempt);
   }
   // simple global in-flight map
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(global as any).__jumiaInflight) (global as any).__jumiaInflight = new Map<string, Promise<unknown>>();
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const inflight: Map<string, Promise<unknown>> = (global as any).__jumiaInflight;
+  if (!globalThis.__jumiaInflight) {
+    globalThis.__jumiaInflight = new Map<string, Promise<unknown>>();
+  }
+  const inflight = globalThis.__jumiaInflight!;
   if (inflight.has(coalesceKey)) return inflight.get(coalesceKey) as Promise<any>;
   const p = perKey ? _rateLimiter.schedulePerKey(perKey, attempt) : _rateLimiter.scheduleWithRetry(attempt);
   inflight.set(coalesceKey, p as Promise<unknown>);
@@ -991,19 +995,17 @@ export async function fetchPayoutsForShop(shopId: string, opts?: { day?: string 
 
 export async function getShops() {
   // GET /shops with simple in-memory caching to avoid repeated calls from UI
-  type ShopsCache = { ts: number; items: any[] };
   const TTL_MS = 10 * 60_000; // 10 minutes
-  // hoist on module scope
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(global as any).__jumiaShopsCache) (global as any).__jumiaShopsCache = null as ShopsCache | null;
+  if (globalThis.__jumiaShopsCache === undefined) {
+    globalThis.__jumiaShopsCache = null;
+  }
   const now = Date.now();
-  const hit = (global as any).__jumiaShopsCache as ShopsCache | null;
+  const hit = globalThis.__jumiaShopsCache;
   if (hit && now - hit.ts < TTL_MS) return hit.items;
 
   const j = await jumiaFetch('/shops');
   const items = j?.shops || j || [];
-  (global as any).__jumiaShopsCache = { ts: now, items } as ShopsCache;
+  globalThis.__jumiaShopsCache = { ts: now, items } as ShopsCache;
   return items;
 }
 

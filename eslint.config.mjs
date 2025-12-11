@@ -18,6 +18,12 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "scripts/**",
+      "tests/**",
+      "tests/**/*.js",
+      "tests/**/*.cjs",
+      "tmp/**",
+      "tmp-check.js",
     ],
   },
   // Global relaxations to prevent CI from failing on incremental typing work

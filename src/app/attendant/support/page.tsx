@@ -546,8 +546,8 @@ function SupportQuickStats({
 }
 
 function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | null }) {
-  if (!summary) return null;
   const { locked, toggle } = useCardLock("support:earnings");
+  if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
   const credits = [
     { label: "Base salary", amount: summary.baseSalary },

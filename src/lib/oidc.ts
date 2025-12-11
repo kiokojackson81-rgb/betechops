@@ -57,13 +57,16 @@ export type AccessToken = {
 
 type CachedTokenRecord = { token: AccessToken; exp: number };
 
+declare global {
+  var __jumiaTokenInflight: Map<string, Promise<CachedTokenRecord>> | undefined;
+  var __jumiaTokenCache: Map<string, { token: AccessToken; exp: number }> | undefined;
+}
+
 function getInflightMap(): Map<string, Promise<CachedTokenRecord>> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(globalThis as any).__jumiaTokenInflight) (globalThis as any).__jumiaTokenInflight = new Map<string, Promise<CachedTokenRecord>>();
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  return (globalThis as any).__jumiaTokenInflight as Map<string, Promise<CachedTokenRecord>>;
+  if (!globalThis.__jumiaTokenInflight) {
+    globalThis.__jumiaTokenInflight = new Map<string, Promise<CachedTokenRecord>>();
+  }
+  return globalThis.__jumiaTokenInflight!;
 }
 
 // Unified token getter: prefers per-shop JSON, falls back to env.
@@ -107,10 +110,10 @@ async function getJumiaAccessTokenWithMeta(
   // Optional simple in-memory cache keyed by (source+clientId)
   const cacheKey = `${source}:${clientId}`;
   const now = Math.floor(Date.now() / 1000);
-  // @ts-ignore - global cache container for tokens; may not be typed on globalThis
-  globalThis.__jumiaTokenCache ??= new Map<string, { token: AccessToken; exp: number }>();
-  // @ts-ignore - global cache container for tokens; may not be typed on globalThis
-  const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }>;
+  if (!globalThis.__jumiaTokenCache) {
+    globalThis.__jumiaTokenCache = new Map<string, { token: AccessToken; exp: number }>();
+  }
+  const cache = globalThis.__jumiaTokenCache!;
   const cached = cache.get(cacheKey);
   if (cached && cached.exp > now + 60) {
     return { ...cached.token, _meta: { source, platform: shopAuth?.platform, tokenUrl } };
@@ -267,8 +270,7 @@ export async function getAccessTokenFromEnv(): Promise<string> {
 
 export function getJumiaTokenInfo() {
   // Try to pick a cached entry if available
-  // @ts-ignore - access global cache if present
-  const cache = globalThis.__jumiaTokenCache as Map<string, { token: AccessToken; exp: number }> | undefined;
+  const cache = globalThis.__jumiaTokenCache;
   if (cache && cache.size > 0) {
     for (const [k, v] of cache.entries()) {
       return { tokenUrl: v.token._meta?.tokenUrl || process.env.JUMIA_OIDC_TOKEN_URL || process.env.OIDC_TOKEN_URL, expiresAt: v.exp * 1000 };

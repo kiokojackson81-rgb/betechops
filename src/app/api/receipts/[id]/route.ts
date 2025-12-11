@@ -22,7 +22,16 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     include: {
       order: {
         include: {
-          items: true,
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
           attendant: { select: { id: true, name: true, email: true } },
           layawayPlan: { include: { payments: true } },
         },
@@ -30,7 +39,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
-  let supportItems: Array<{ id: string; buyingPrice: number | null }> = [];
+  let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   try {
     if (receipt?.order?.orderNumber) {
       const supportReceipts = await prisma.supportReceipt.findMany({
@@ -41,7 +50,8 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
         supportItems = supportReceipts.flatMap((sr) =>
           sr.items.map((it) => ({
             id: it.id,
-            buyingPrice: it.buyingPrice ? Number(it.buyingPrice) : null,
+            buyingPrice: Number.isFinite(Number(it.buyingPrice ?? 0)) ? Number(it.buyingPrice ?? 0) : null,
+            productName: it.productName ?? null,
           })),
         );
       }

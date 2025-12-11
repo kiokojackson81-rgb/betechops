@@ -94,7 +94,7 @@ export default function ClientSupportReport({
         <p className="text-xs uppercase tracking-wide text-emerald-300">Admin</p>
         <h1 className="text-3xl font-semibold">Support Operations Report</h1>
         <p className="text-sm text-slate-400">
-          Track support attendants' daily sales, performance and payouts across the trading period.
+          Track support attendants&apos; daily sales, performance and payouts across the trading period.
         </p>
       </header>
 

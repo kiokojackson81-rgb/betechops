@@ -13,9 +13,9 @@ export default function EarningsCard({
   summary: EarningsSummary | null;
   lockKey?: string;
 }) {
-  if (!summary) return null;
-
   const { locked, toggle } = useCardLock(lockKey ?? "earnings:default");
+
+  if (!summary) return null;
 
   const rows = [
     { label: "Base salary", value: summary.baseSalary },

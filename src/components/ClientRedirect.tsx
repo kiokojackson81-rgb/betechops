@@ -20,7 +20,7 @@ export default function ClientRedirect() {
 
     // session.user may contain attendantCategory from NextAuth callbacks
     // Fallback to root if missing
-    // @ts-ignore
+    // @ts-expect-error - session.user may include attendantCategory even if typing says otherwise
     const category = session.user?.attendantCategory ?? null;
     const dest = getLandingPage(category);
     router.replace(dest);

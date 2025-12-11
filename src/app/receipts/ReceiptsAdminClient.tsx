@@ -34,9 +34,31 @@ type FilterState = {
 
 type StaffOption = { id: string; name: string };
 
+type SupportItemDetail = {
+  id: string;
+  buyingPrice: number | null;
+  productName?: string | null;
+};
+
 type ReceiptDetailPayload = {
   receipt: any;
-  supportItems?: Array<{ id: string; buyingPrice: number | null }>;
+  supportItems?: SupportItemDetail[];
+};
+
+type ItemWithCost = {
+  id: string;
+  quantity: number;
+  sellingPrice: number;
+  serial?: string | null;
+  warranty?: string | null;
+  product?: { name?: string | null } | null;
+  buyingPrice: number | null;
+  displayName: string;
+};
+
+type CostSummary = {
+  itemsWithCost: ItemWithCost[];
+  supportBuyingTotal: number;
 };
 
 type EditItem = {
@@ -422,6 +444,40 @@ export default function ReceiptsAdminClient({
     }
   };
 
+  const costSummary = useMemo<CostSummary>(() => {
+    const orderItems = detail?.receipt?.order?.items ?? [];
+    if (!orderItems.length) {
+      return { itemsWithCost: [], supportBuyingTotal: 0 };
+    }
+
+    const supportQueue = (detail?.supportItems ?? []).map((item) => ({ ...item }));
+    const itemsWithCost: ItemWithCost[] = orderItems.map((item: any) => {
+      const normalizedName = (item.product?.name ?? "").trim();
+      const matchIndex =
+        normalizedName.length > 0
+          ? supportQueue.findIndex(
+              (support) =>
+                support.productName &&
+                support.productName.trim().toLowerCase() === normalizedName.toLowerCase(),
+            )
+          : -1;
+      const matched = matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
+      const displayName = item.product?.name ?? matched?.productName ?? "Item";
+      return {
+        ...item,
+        buyingPrice: matched?.buyingPrice ?? null,
+        displayName,
+      };
+    });
+
+    const matchedCost = itemsWithCost.reduce(
+      (sum, item) => sum + (item.buyingPrice ?? 0) * Math.max(1, Number(item.quantity ?? 1)),
+      0,
+    );
+    const extraCost = supportQueue.reduce((sum, entry) => sum + Math.max(0, Number(entry.buyingPrice ?? 0)), 0);
+    return { itemsWithCost, supportBuyingTotal: matchedCost + extraCost };
+  }, [detail]);
+
   const handleExport = () => {
     if (!rows.length) {
       showToast("No rows to export", "warn");
@@ -462,6 +518,11 @@ export default function ReceiptsAdminClient({
       setExporting(false);
     }
   };
+  const { itemsWithCost, supportBuyingTotal } = costSummary;
+  const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
+  const profitAmount = receiptGrandTotal - supportBuyingTotal;
+  const profitColor = profitAmount >= 0 ? "text-emerald-300" : "text-rose-400";
+  const hasSupportItems = Boolean(detail?.supportItems?.length);
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
@@ -720,6 +781,16 @@ export default function ReceiptsAdminClient({
                         </p>
                       </div>
                     </div>
+                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-300">
+                      <div>
+                        <p className="text-xs text-slate-500">Buying total</p>
+                        <p className="font-semibold text-white">{formatCurrency(supportBuyingTotal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Profit</p>
+                        <p className={`text-lg font-semibold ${profitColor}`}>{formatCurrency(profitAmount)}</p>
+                      </div>
+                    </div>
                     {detail.receipt.docType === "LAYAWAY" && (
                       <p className="mt-2 text-xs text-amber-300">
                         Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
@@ -731,25 +802,70 @@ export default function ReceiptsAdminClient({
                 <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>
                   <div className="mt-3 space-y-2">
-                    {(detail.receipt.order?.items || []).map((item: any) => (
-                      <div key={item.id} className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm">
-                        <div>
-                          <p className="font-semibold text-white">{item.title || item.productName || "Item"}</p>
-                          <p className="text-xs text-slate-500">
-                            Qty {Number(item.quantity || 1).toLocaleString()} - {formatCurrency(item.sellingPrice)}
-                            {item.serial && ` - SN ${item.serial}`}
-                          </p>
+                    {itemsWithCost.map((item) => {
+                      const quantity = Math.max(1, Number(item.quantity ?? 1));
+                      const sellingPrice = Number(item.sellingPrice ?? 0);
+                      const lineTotal = sellingPrice * quantity;
+                      const unitCost = item.buyingPrice;
+                      const totalCost = unitCost !== null ? unitCost * quantity : null;
+                      const lineProfit = totalCost !== null ? lineTotal - totalCost : null;
+                      const profitLabelClass =
+                        lineProfit === null
+                          ? "text-slate-400"
+                          : lineProfit >= 0
+                            ? "text-emerald-300"
+                            : "text-rose-300";
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-semibold text-white">{item.displayName || "Item"}</p>
+                            <p className="text-xs text-slate-400 flex flex-wrap gap-2">
+                              <span>Qty {quantity.toLocaleString()}</span>
+                              <span>Selling {formatCurrency(sellingPrice)}</span>
+                              <span>Cost {unitCost !== null ? formatCurrency(unitCost) : "N/A"}</span>
+                              {lineProfit !== null ? (
+                                <span className={profitLabelClass}>Profit {formatCurrency(lineProfit)}</span>
+                              ) : (
+                                <span className="text-slate-400">Profit N/A</span>
+                              )}
+                              {item.serial && <span>SN {item.serial}</span>}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-emerald-300">{formatCurrency(lineTotal)}</p>
                         </div>
-                        <p className="font-semibold text-emerald-300">
-                          {formatCurrency(Number(item.quantity || 1) * Number(item.sellingPrice || 0))}
-                        </p>
-                      </div>
-                    ))}
-                    {(detail.receipt.order?.items || []).length === 0 && (
+                      );
+                    })}
+                    {itemsWithCost.length === 0 && (
                       <p className="text-sm text-slate-400">No items recorded.</p>
                     )}
                   </div>
                 </div>
+
+                {hasSupportItems && (
+                  <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Support buying costs</p>
+                    <div className="mt-3 space-y-2">
+                      {detail.supportItems?.map((support) => (
+                        <div
+                          key={support.id}
+                          className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
+                        >
+                          <div>
+                            <p className="font-semibold text-white">{support.productName || "Support entry"}</p>
+                            <p className="text-xs text-slate-500">Captured via support ledger</p>
+                          </div>
+                          <p className="text-sm font-semibold text-emerald-300">
+                            {support.buyingPrice !== null ? formatCurrency(support.buyingPrice) : "-"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   <Link

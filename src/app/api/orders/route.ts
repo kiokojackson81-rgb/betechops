@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { addDays } from 'date-fns';
 
+declare global {
+  var __ordersPendingCache: Map<string, { ts: number; data: any }> | undefined;
+}
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
@@ -114,12 +118,10 @@ export async function GET(req: NextRequest) {
   const path = query ? `orders?${query}` : 'orders';
 
   // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(global as any).__ordersPendingCache) (global as any).__ordersPendingCache = new Map<string, { ts: number; data: any }>();
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const cacheMap: Map<string, { ts: number; data: any }> = (global as any).__ordersPendingCache;
+  if (!globalThis.__ordersPendingCache) {
+    globalThis.__ordersPendingCache = new Map<string, { ts: number; data: any }>();
+  }
+  const cacheMap = globalThis.__ordersPendingCache!;
   // Allow short-lived caching to reduce vendor hammering, but make it configurable and bypassable.
   const TTL_MS = Math.max(0, Number(process.env.ORDERS_PENDING_CACHE_TTL_MS ?? 3000)); // default 3s
   const forceFresh = ((qs.fresh || '').toLowerCase() === '1' || (qs.fresh || '').toLowerCase() === 'true');

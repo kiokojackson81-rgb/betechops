@@ -7,7 +7,7 @@ export default function NoCategoryPage() {
         <div className="rounded-2xl bg-slate-900/60 p-8 text-center">
           <h1 className="text-2xl font-semibold">Account missing attendant category</h1>
           <p className="mt-3 text-slate-300">
-            We couldn't determine your attendant category. This prevents access
+            We couldn&apos;t determine your attendant category. This prevents access
             to attendant-only pages. Please contact your administrator so they
             can assign your account a valid attendant category.
           </p>
