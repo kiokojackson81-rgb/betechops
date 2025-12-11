@@ -312,6 +312,7 @@ function EarningsCard({ summary }: EarningsCardProps) {
         ))}
       </div>
     </Card>
+  </div>
   );
 }
 
@@ -435,37 +436,35 @@ function MarketingReceiptsPanel({
   })();
 
   return (
-    <Card
-      id={anchorId}
-      className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40"
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
-          <h2 className="text-lg font-semibold text-slate-100">Read-only receipts history</h2>
-          <p className="text-sm text-slate-400">
-            Explore every receipt captured across the system and filter by date, range, or attendant.
-          </p>
+    <div id={anchorId} className="space-y-5">
+      <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
+            <h2 className="text-lg font-semibold text-slate-100">Read-only receipts history</h2>
+            <p className="text-sm text-slate-400">
+              Explore every receipt captured across the system and filter by date, range, or attendant.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+            {ReceiptRangeOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => applyRange(option.key)}
+                className={`rounded-full border px-4 py-1 transition ${
+                  rangeKey === option.key
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-          {ReceiptRangeOptions.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => applyRange(option.key)}
-              className={`rounded-full border px-4 py-1 transition ${
-                rangeKey === option.key
-                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                  : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      <div className="grid gap-3 lg:grid-cols-4">
+        <div className="grid gap-3 lg:grid-cols-4">
         <label className="text-xs uppercase tracking-wide text-slate-400">
           Search
           <input
@@ -571,8 +570,9 @@ function MarketingReceiptsPanel({
             </div>
           </div>
         ))}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </div>
   );
 }
 
