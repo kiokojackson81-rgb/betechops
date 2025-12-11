@@ -1,16 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ReceiptFormClient from "@/app/receipts/ReceiptFormClient";
-import ReceiptsPageClient from "@/app/receipts/ReceiptsPageClient";
+import Card from "@/app/_components/Card";
+import Button from "@/app/_components/Button";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
-
-type ReceiptStatsRow = {
-  id: string;
-  total?: number | null;
-  items?: any[];
-};
 
 type ShopSummary = {
   id: string;
@@ -18,19 +12,40 @@ type ShopSummary = {
   platform?: string | null;
 };
 
-const COMMISSION_RATE = 0.02;
+// Extend this union with any other known marketplaces you track
+type OnlinePlatformKey = "JUMIA" | "KILIMALL" | "WEBSITE" | "OTHER";
+
+type OnlinePlatformSummary = {
+  key: OnlinePlatformKey;
+  name: string;
+  orders: number;
+  sales: number;
+  commission: number;
+};
+
+type OnlineSummaryResponse = {
+  period: { key: string; label: string; start: string; end: string };
+  totals: {
+    orders: number;
+    sales: number;
+    commission: number;
+  };
+  platforms: OnlinePlatformSummary[];
+};
 
 const formatKES = (value: number) =>
   `KES ${value.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
 export default function AttendantOnlineClient({ initial = [] as any[] }) {
-  const [view, setView] = useState<"create" | "list">("create");
   const [period] = useState(() => getTradingPeriodFor(new Date()));
-  const [receipts, setReceipts] = useState<ReceiptStatsRow[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
   const [shops, setShops] = useState<ShopSummary[]>([]);
   const [shopsLoading, setShopsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const [onlineSummary, setOnlineSummary] = useState<OnlineSummaryResponse | null>(
+    null,
+  );
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -42,28 +57,6 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
       console.warn("[attendant/online] failed to load user", err);
     }
   }, []);
-
-  const loadReceiptStats = useCallback(async () => {
-    setStatsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        start: period.start.toISOString(),
-        end: period.end.toISOString(),
-        includeItems: "true",
-        size: "200",
-      });
-      if (userId) params.set("attendantId", userId);
-      const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load receipts for this period");
-      const data = (await res.json()) as { receipts?: ReceiptStatsRow[] };
-      setReceipts(Array.isArray(data.receipts) ? data.receipts : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load receipt totals";
-      showToast(message, "error");
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [period, userId]);
 
   const loadShops = useCallback(async () => {
     setShopsLoading(true);
@@ -79,122 +72,291 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
     }
   }, []);
 
+  const loadOnlineSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        start: period.start.toISOString(),
+        end: period.end.toISOString(),
+      });
+      if (userId) params.set("attendantId", userId);
+
+      const res = await fetch(`/api/online/summary?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load online sales summary");
+
+      const data = (await res.json()) as OnlineSummaryResponse;
+      setOnlineSummary(data);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to load online sales summary";
+      console.warn("[attendant/online] summary error", err);
+      showToast(message, "error");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [period, userId]);
+
   useEffect(() => {
     fetchUser();
     loadShops();
   }, [fetchUser, loadShops]);
 
   useEffect(() => {
-    void loadReceiptStats();
-  }, [loadReceiptStats]);
+    void loadOnlineSummary();
+  }, [loadOnlineSummary, period, userId]);
 
-  const receiptTotals = useMemo(() => {
-    const totalSales = receipts.reduce((sum, receipt) => sum + (Number(receipt.total) || 0), 0);
-    const totalItems = receipts.reduce((sum, receipt) => sum + (Array.isArray(receipt.items) ? receipt.items.length : 0), 0);
-    return { totalSales, totalItems, totalReceipts: receipts.length };
-  }, [receipts]);
+  const periodLabel = onlineSummary?.period.label ?? period.label;
+  const totals = onlineSummary?.totals ?? {
+    orders: 0,
+    sales: 0,
+    commission: 0,
+  };
+  const platforms = onlineSummary?.platforms ?? [];
 
-  const earnings = useMemo(() => receiptTotals.totalSales * COMMISSION_RATE, [receiptTotals.totalSales]);
+  const averageOrderValue = useMemo(
+    () => (totals.orders > 0 ? totals.sales / totals.orders : 0),
+    [totals.orders, totals.sales],
+  );
+
+  const mainPlatforms = useMemo(
+    () =>
+      platforms.length > 0
+        ? platforms
+        : [
+            {
+              key: "JUMIA" as OnlinePlatformKey,
+              name: "Jumia",
+              orders: 0,
+              sales: 0,
+              commission: 0,
+            },
+            {
+              key: "KILIMALL" as OnlinePlatformKey,
+              name: "Kilimall",
+              orders: 0,
+              sales: 0,
+              commission: 0,
+            },
+          ],
+    [platforms],
+  );
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 pb-16 text-slate-50">
-      <div className="mx-auto w-full max-w-6xl space-y-8 pt-8">
-        <header className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Sales records</p>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Add each receipt for today</h1>
-          <p className="text-sm text-slate-300">Totals are calculated automatically. Quick stats and earnings in this period are driven by the receipts, assigned shops and online accounts you are tied to.</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-6xl space-y-6 p-6">
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold">Online Operations</h1>
+            <p className="text-sm text-slate-300">
+              Track marketplace orders (Jumia, Kilimall, website), commissions,
+              and assigned online shops in one place.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-5"
+            onClick={() => {
+              window.location.href = "/receipts";
+            }}
+          >
+            Open receipts desk
+          </Button>
         </header>
 
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <Card className="border-slate-800 bg-slate-950/70">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">Quick stats</p>
-              <p className="text-sm text-slate-400">Period: {period.label}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Trading period
+              </p>
+              <p className="mt-1 text-sm text-slate-200">{periodLabel}</p>
+              <p className="text-xs text-slate-400">
+                Online stats are pulled from linked marketplaces for this period.
+              </p>
             </div>
-            <div className="text-sm text-slate-400">{statsLoading ? "Refreshing receipt totals…" : `${receiptTotals.totalReceipts} receipts summarized`}</div>
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="text-xs uppercase text-slate-400">Receipts</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-400">{receiptTotals.totalReceipts}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="text-xs uppercase text-slate-400">Sales (KES)</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-400">{formatKES(receiptTotals.totalSales)}</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="text-xs uppercase text-slate-400">Items</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-400">{receiptTotals.totalItems}</p>
-            </div>
-          </div>
-          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
-            <p>Earnings this period</p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-400">{formatKES(earnings)}</p>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Commission ({(COMMISSION_RATE * 100).toFixed(0)}%)</p>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">Assigned shops</p>
-              <p className="text-sm text-slate-400">Sales and online activity are pulled from these locations and the linked admin panel.</p>
-            </div>
-            {shopsLoading && <span className="text-xs text-slate-400">Loading shops…</span>}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {shops.length === 0 && !shopsLoading ? (
-              <span className="rounded-full border border-white/20 px-4 py-2 text-xs text-slate-500">No active shop assignments</span>
-            ) : (
-              shops.map((shop) => (
-                <span
-                  key={shop.id}
-                  className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200"
-                >
-                  {shop.name || "Unnamed shop"}{shop.platform ? ` (${shop.platform})` : ""}
+            <div className="text-right space-y-1 text-sm text-slate-300">
+              <p>
+                Total orders:{" "}
+                <span className="font-semibold text-emerald-300">
+                  {totals.orders.toLocaleString()}
                 </span>
-              ))
-            )}
+              </p>
+              <p>
+                Total sales:{" "}
+                <span className="font-semibold text-emerald-300">
+                  {formatKES(totals.sales)}
+                </span>
+              </p>
+              <p className="text-xs text-slate-500">
+                {summaryLoading ? "Refreshing online summary…" : "Up to date"}
+              </p>
+            </div>
           </div>
-        </section>
+        </Card>
 
-        <div className="space-y-6">
-          <section id="receipt-create" className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-                <h2 className="text-xl font-semibold text-white">Betech Customers Operations</h2>
-                <p className="text-sm text-slate-400">Track every printable document, search by customer, and open the PDF drawer without leaving this page.</p>
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
+            <Card className="space-y-5 border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  Marketplace overview
+                </p>
+                <h2 className="text-xl font-semibold text-slate-100">
+                  Online orders & channels
+                </h2>
+                <p className="text-sm text-slate-400">
+                  See how your sales are distributed across marketplaces.
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 ${view === "create" ? "bg-white/5" : ""}`}
-                  onClick={() => setView("create")}
-                >
-                  Create
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 ${view === "list" ? "ring-2 ring-emerald-300" : ""}`}
-                  onClick={() => setView((v) => (v === "list" ? "create" : "list"))}
-                >
-                  View receipts
-                </button>
-              </div>
-            </div>
-            <div className="mt-4">
-              <ReceiptFormClient />
-            </div>
-          </section>
 
-          {view === "list" && (
-            <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
-              <ReceiptsPageClient initial={initial} />
-            </section>
-          )}
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+                <div className="grid grid-cols-4 gap-2 border-b border-slate-800 bg-slate-900/70 px-4 py-2 text-[11px] uppercase tracking-wide text-slate-400">
+                  <span>Platform</span>
+                  <span className="text-right">Orders</span>
+                  <span className="text-right">Sales (KES)</span>
+                  <span className="text-right">Commission</span>
+                </div>
+                {mainPlatforms.length === 0 ? (
+                  <div className="px-4 py-4 text-sm text-slate-400">
+                    No marketplace data for this period yet.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-slate-800">
+                    {mainPlatforms.map((platform) => (
+                      <li
+                        key={platform.key}
+                        className="grid grid-cols-4 gap-2 px-4 py-3 text-sm"
+                      >
+                        <span className="font-medium text-slate-100">
+                          {platform.name}
+                        </span>
+                        <span className="text-right text-slate-200">
+                          {platform.orders.toLocaleString()}
+                        </span>
+                        <span className="text-right text-emerald-300">
+                          {formatKES(platform.sales)}
+                        </span>
+                        <span className="text-right text-slate-200">
+                          {formatKES(platform.commission)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
+                <div>
+                  <p>
+                    Average order value:{" "}
+                    <span className="font-semibold text-emerald-300">
+                      {formatKES(averageOrderValue || 0)}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Helpful for comparing walk-in vs online performance.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-4"
+                  onClick={() => void loadOnlineSummary()}
+                  disabled={summaryLoading}
+                >
+                  {summaryLoading ? "Refreshing…" : "Refresh online stats"}
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-4 lg:col-span-4">
+            <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-100">
+                    Quick stats
+                  </h2>
+                  <p className="text-xs text-slate-400">{periodLabel}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                    Orders
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-400">
+                    {totals.orders.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                    Sales (KES)
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-400">
+                    {formatKES(totals.sales)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                    Commission (KES)
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-400">
+                    {formatKES(totals.commission)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                    Avg. order value
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-400">
+                    {formatKES(averageOrderValue || 0)}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-400">
+                    Assigned shops
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    Online sales are mapped to these locations and accounts.
+                  </p>
+                </div>
+                {shopsLoading && (
+                  <span className="text-xs text-slate-400">Loading shops…</span>
+                )}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {shops.length === 0 && !shopsLoading ? (
+                  <span className="rounded-full border border-white/20 px-4 py-2 text-xs text-slate-500">
+                    No active shop assignments
+                  </span>
+                ) : (
+                  shops.map((shop) => (
+                    <span
+                      key={shop.id}
+                      className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200"
+                    >
+                      {shop.name || "Unnamed shop"}
+                      {shop.platform ? ` (${shop.platform})` : ""}
+                    </span>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
