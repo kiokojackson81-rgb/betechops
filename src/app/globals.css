@@ -209,9 +209,22 @@ input[type="checkbox"] {
   .receipt-sheet--roll80 { max-width: calc(100% - 8mm); page: receipt-roll80; }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
-  .receipt-sheet { width: 148mm; min-height: 210mm; page: receipt-a5; }
-  .receipt-sheet--a4 { width: 210mm; min-height: 297mm; page: receipt-a4; }
-  .receipt-sheet--roll80 { width: 80mm; min-height: 200mm; page: receipt-roll80; }
+  .receipt-sheet {
+    width: 148mm;
+    min-height: auto;
+    page: receipt-a5;
+    /* Prevent the receipt border/content from splitting across pages */
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    overflow: hidden !important;
+    /* Cap printed height so small overflows don't create a second mostly-empty
+       page that shows only the inner border. This uses the A5 height minus
+       the total vertical page margins (2mm top + 2mm bottom => 4mm). */
+    max-height: calc(210mm - 4mm) !important;
+  }
+  .receipt-sheet--a4 { width: 210mm; min-height: auto; page: receipt-a4; }
+  .receipt-sheet--roll80 { width: 80mm; min-height: auto; page: receipt-roll80; }
   .receipt-screen { display: none !important; }
   .receipt-print-area { display: block !important; }
 }
