@@ -75,14 +75,19 @@ const COMMISSION_RATE = 0.02;
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
+const randomId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
 const createItem = (): ReceiptItem => ({
-  id: crypto.randomUUID(),
+  id: randomId(),
   productName: "",
   buyingPrice: "",
 });
 
 const createReceipt = (): ReceiptRow => ({
-  id: crypto.randomUUID(),
+  id: randomId(),
   receiptNumber: "",
   sellingTotal: "",
   paymentMethod: "",
