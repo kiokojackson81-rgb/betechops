@@ -75,6 +75,8 @@ const COMMISSION_RATE = 0.02;
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
+const safeNumber = (value?: number | null) => Number(value ?? 0);
+
 const randomId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -326,13 +328,13 @@ export default function AttendantOnlineClient() {
                 calculated within this window.
               </p>
             </div>
-            <div className="text-right text-sm text-slate-300">
-              <p>
-                Marketplace orders:{" "}
-                <span className="font-semibold text-emerald-300">
-                  {onlineTotals.orders.toLocaleString()}
-                </span>
-              </p>
+              <div className="text-right text-sm text-slate-300">
+                <p>
+                  Marketplace orders:{" "}
+                  <span className="font-semibold text-emerald-300">
+                    {safeNumber(onlineTotals.orders).toLocaleString()}
+                  </span>
+                </p>
               <p>
                 Marketplace sales:{" "}
                 <span className="font-semibold text-emerald-300">
@@ -423,9 +425,9 @@ export default function AttendantOnlineClient() {
                     <span className="font-medium text-slate-100">
                       {platform.name}
                     </span>
-                    <span className="text-right text-slate-200">
-                      {platform.orders.toLocaleString()}
-                    </span>
+                  <span className="text-right text-slate-200">
+                    {safeNumber(platform.orders).toLocaleString()}
+                  </span>
                     <span className="text-right text-emerald-300">
                       {formatKES(platform.sales)}
                     </span>
@@ -502,15 +504,21 @@ function QuickStatsCard({
   const mask = (value: ReactNode) => (locked ? "•••" : value);
 
   const stats = [
-    { label: "Receipts", value: totals.totalReceipts.toLocaleString() },
+    {
+      label: "Receipts",
+      value: safeNumber(totals.totalReceipts).toLocaleString(),
+    },
     { label: "Sales (KES)", value: formatKES(totals.totalSales) },
-    { label: "Items sold", value: totals.totalItems.toLocaleString() },
+    {
+      label: "Items sold",
+      value: safeNumber(totals.totalItems).toLocaleString(),
+    },
     {
       label: "Commission (KES)",
       value: (
         <SensitiveValue
           value={totals.commission}
-          format={(v) => `KES ${Number(v).toLocaleString()}`}
+          format={(v) => `KES ${safeNumber(Number(v)).toLocaleString()}`}
           storageKey="online:commission"
           forceHidden={locked}
           forceVisible={!locked}
@@ -556,7 +564,7 @@ function OnlineEarningsCard({ summary }: { summary: OnlineEarningsSummary | null
   const { locked, toggle } = useCardLock("online:earnings");
   if (!summary) return null;
   const mask = (value: ReactNode) => (locked ? "•••" : value);
-  const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
+  const formatCurrency = (value: number) => `KES ${safeNumber(value).toLocaleString()}`;
 
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
