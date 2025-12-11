@@ -463,24 +463,26 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       </div>
 
       {customerType === "delivery" && (
-        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
-          <span>Delivery status</span>
-          {(["pending", "delivered", "failed"] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setDeliveryStatus(status)}
-              className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                deliveryStatus === status ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-        </div>
-        {deliveryStatus === "failed" && (
-          <p className="text-xs text-rose-300">Failed deliveries are recorded but cannot be submitted.</p>
-        )}
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+            <span>Delivery status</span>
+            {(["pending", "delivered", "failed"] as const).map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setDeliveryStatus(status)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                  deliveryStatus === status ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+          {deliveryStatus === "failed" && (
+            <p className="text-xs text-rose-300">Failed deliveries are recorded but cannot be submitted.</p>
+          )}
+        </>
       )}
 
       <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
