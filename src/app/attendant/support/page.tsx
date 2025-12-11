@@ -60,6 +60,11 @@ type SupportEarningsSummary = {
 const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 
+const safeLocale = (value?: number | null, fallback = "0") => {
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? num.toLocaleString() : fallback;
+};
+
 const createItem = (): ReceiptItem => ({
   id: crypto.randomUUID(),
   productName: "",
@@ -461,9 +466,9 @@ function SupportQuickStats({
     const mask = (v: React.ReactNode) => (locked ? "•••" : v);
 
     const stats = [
-    { label: "Receipts", value: receipts.toLocaleString() },
-    { label: "Sales (KES)", value: salesKes.toLocaleString() },
-    { label: "Items sold", value: items.toLocaleString() },
+    { label: "Receipts", value: safeLocale(receipts) },
+    { label: "Sales (KES)", value: safeLocale(salesKes) },
+    { label: "Items sold", value: safeLocale(items) },
     // commission shown using SensitiveValue so it can be hidden; unhide requires login
     {
       label: "Commission (KES)",
@@ -477,12 +482,12 @@ function SupportQuickStats({
         />
       ),
     },
-    { label: "New batteries", value: newBatteries.toLocaleString() },
-    { label: "Changed batteries", value: changedBatteries.toLocaleString() },
-    { label: "Total batteries", value: totalBatteries.toLocaleString() },
+    { label: "New batteries", value: safeLocale(newBatteries) },
+    { label: "Changed batteries", value: safeLocale(changedBatteries) },
+    { label: "Total batteries", value: safeLocale(totalBatteries) },
     {
       label: "Performance earnings",
-      value: mask(`KES ${performanceBonus.toLocaleString()}`),
+      value: mask(`KES ${safeLocale(performanceBonus)}`),
     },
     // Placeholder total commission: commission + performance earnings
     {
@@ -490,7 +495,7 @@ function SupportQuickStats({
       value: (
         <SensitiveValue
           value={commissionKes + performanceBonus}
-          format={(v) => `KES ${Number(v).toLocaleString()}`}
+          format={(v) => `KES ${safeLocale(Number(v))}`}
           storageKey={`support:total-commission`}
           forceHidden={locked}
           forceVisible={!locked}
@@ -532,7 +537,7 @@ function SupportQuickStats({
         <p className="text-xs text-slate-200">
           {reachedTop
             ? "Reached highest tier for this period"
-            : `KES ${remaining.toLocaleString()} more to unlock the next tier`}
+            : `KES ${safeLocale(remaining)} more to unlock the next tier`}
         </p>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
           <div
