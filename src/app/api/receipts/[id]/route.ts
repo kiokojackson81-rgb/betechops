@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
+import { cleanupMarketingReceipts, cleanupSupportReceipts } from "@/lib/marketingReceiptCleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -220,6 +221,60 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ ok: true, receipt: updated });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to update receipt";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: NextRequest, context: ParamsContext) {
+  const guard = await requireRole(["ADMIN"]);
+  if (!guard.ok) {
+    const res = guard.res as any;
+    if (res && res.status === 401) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return guard.res;
+  }
+  const { id } = await resolveParams(context);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const receipt = await tx.receipt.findUnique({
+        where: { id },
+        include: {
+          order: {
+            include: {
+              items: true,
+              layawayPlan: true,
+            },
+          },
+        },
+      });
+      if (!receipt) throw new Error("Receipt not found");
+      const order = receipt.order;
+      if (!order) throw new Error("Associated order missing");
+      const orderId = order.id;
+
+      if (order.orderNumber) {
+        await cleanupMarketingReceipts(tx, order.orderNumber);
+        await cleanupSupportReceipts(tx, order.orderNumber);
+      }
+
+      const itemIds = (order.items || []).map((item) => item.id);
+      if (itemIds.length) {
+        await tx.commissionEarning.deleteMany({ where: { orderItemId: { in: itemIds } } });
+      }
+      await tx.commissionRecord.deleteMany({ where: { orderId } });
+      await tx.returnAdjustment.deleteMany({ where: { returnCase: { orderId } } });
+      await tx.returnCase.deleteMany({ where: { orderId } });
+      await tx.settlementRow.deleteMany({ where: { orderId } });
+      if (order.layawayPlan) {
+        await tx.layawayPlan.delete({ where: { id: order.layawayPlan.id } });
+      }
+      await tx.orderItem.deleteMany({ where: { orderId } });
+      await tx.receipt.delete({ where: { id } });
+      await tx.order.delete({ where: { id: orderId } });
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to delete receipt";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

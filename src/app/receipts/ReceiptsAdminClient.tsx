@@ -198,6 +198,7 @@ export default function ReceiptsAdminClient({
     draft: null,
     saving: false,
   });
+  const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const firstLoadRef = useRef(true);
 
@@ -340,6 +341,25 @@ export default function ReceiptsAdminClient({
       showToast(message, "error");
     } finally {
       setSendingChannel(null);
+    }
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!selected || !allowEdit) return;
+    if (!window.confirm("Delete this receipt and all related records from the system?")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/receipts/${selected.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to delete receipt");
+      showToast("Receipt deleted", "success");
+      closeDrawer();
+      await loadRows(page);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete receipt";
+      showToast(message, "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -762,6 +782,16 @@ export default function ReceiptsAdminClient({
                       className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
                     >
                       Edit receipt
+                    </button>
+                  )}
+                  {allowEdit && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteReceipt}
+                      disabled={deleting}
+                      className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
+                    >
+                      {deleting ? "Deleting..." : "Delete receipt"}
                     </button>
                   )}
                 </div>

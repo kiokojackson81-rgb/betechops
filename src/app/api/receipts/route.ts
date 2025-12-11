@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, type Prisma, type SupportReceipt } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant, auth } from "@/lib/auth";
-import { findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
+import { canonicalReceiptNumber, findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
@@ -388,6 +388,109 @@ export async function POST(req: NextRequest) {
           } catch (e) {
             // ignore support ledger errors in test mocks
           }
+        }
+      }
+
+      if (attendantId && tx.marketingDailyEntry && tx.marketingReceipt) {
+        try {
+          const marketingStart = new Date(entryDate);
+          marketingStart.setHours(0, 0, 0, 0);
+          const marketingEnd = new Date(entryDate);
+          marketingEnd.setHours(23, 59, 59, 999);
+          const normalizedSerial = canonicalReceiptNumber(serial);
+          const receiptSellingTotal = Math.round(Number(total) || 0);
+          const receiptItemsPayload = createdItems.map((it) => ({
+            productName: String(it.title || "Item").trim(),
+            buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
+          }));
+          const receiptBuyingTotal = receiptItemsPayload.reduce((sum, item) => sum + item.buyingPrice, 0);
+          const paymentMethod =
+            (typeof payload?.paymentMethod === "string" && payload.paymentMethod.toUpperCase() === "CASH"
+              ? PaymentMethod.CASH
+              : PaymentMethod.MPESA) ?? PaymentMethod.MPESA;
+          let entry = await tx.marketingDailyEntry.findFirst({
+            where: {
+              submittedById: attendantId,
+              date: {
+                gte: marketingStart,
+                lte: marketingEnd,
+              },
+            },
+          });
+          const actorName = guard.user?.name ?? guard.user?.email ?? null;
+          const actorEmail = guard.user?.email ?? null;
+          if (!entry) {
+            entry = await tx.marketingDailyEntry.create({
+              data: {
+                date: entryDate,
+                dayOfWeek,
+                submittedById: attendantId,
+                submittedByName: actorName,
+                submittedByEmail: actorEmail,
+              },
+            });
+          }
+
+          let deltaSales = receiptSellingTotal;
+          let deltaProfit = receiptSellingTotal - receiptBuyingTotal;
+          let receiptRecord;
+          if (normalizedSerial) {
+            receiptRecord = await tx.marketingReceipt.findFirst({
+              where: {
+                dailyEntryId: entry.id,
+                receiptNumber: normalizedSerial,
+              },
+              include: { items: true },
+            });
+          }
+
+          if (receiptRecord) {
+            const prevSelling = Number(receiptRecord.sellingTotal || 0);
+            const prevBuying = Number(receiptRecord.buyingTotal || 0);
+            deltaSales = receiptSellingTotal - prevSelling;
+            deltaProfit = receiptSellingTotal - receiptBuyingTotal - (prevSelling - prevBuying);
+            await tx.marketingReceiptItem.deleteMany({ where: { receiptId: receiptRecord.id } });
+            receiptRecord = await tx.marketingReceipt.update({
+              where: { id: receiptRecord.id },
+              data: {
+                sellingTotal: receiptSellingTotal,
+                buyingTotal: receiptBuyingTotal,
+                paymentMethod,
+                items: receiptItemsPayload.length
+                  ? {
+                      create: receiptItemsPayload,
+                    }
+                  : undefined,
+              },
+            });
+          } else {
+            receiptRecord = await tx.marketingReceipt.create({
+              data: {
+                dailyEntryId: entry.id,
+                receiptNumber: normalizedSerial || undefined,
+                sellingTotal: receiptSellingTotal,
+                buyingTotal: receiptBuyingTotal,
+                paymentMethod,
+                items: receiptItemsPayload.length
+                  ? {
+                      create: receiptItemsPayload,
+                    }
+                  : undefined,
+              },
+            });
+          }
+
+          if ((deltaSales || deltaProfit) && entry.id) {
+            await tx.marketingDailyEntry.update({
+              where: { id: entry.id },
+              data: {
+                totalSales: { increment: deltaSales },
+                totalProfit: { increment: deltaProfit },
+              },
+            });
+          }
+        } catch (e) {
+          console.error("[receipts] failed to update marketing entry", e);
         }
       }
 

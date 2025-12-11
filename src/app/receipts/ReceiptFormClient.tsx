@@ -178,11 +178,20 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     paperSize,
   });
 
+  const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
+
+  const buildPreviewUrl = (draft: ReturnType<typeof buildDraft>) => {
+    const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+    const sizeParam = draft.paperSize || paperSize;
+    return `/receipts/preview?draft=${encoded}&size=${sizeParam}`;
+  };
+
   const openPreviewWindow = (draft: ReturnType<typeof buildDraft>, autoPrint = false) => {
     try {
-      const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
-      const url = `/receipts/preview?draft=${encoded}&size=${paperSize}${autoPrint ? "&autoPrint=1" : ""}`;
-      const previewWindow = window.open(url, "_blank");
+      const url = buildPreviewUrl(draft);
+      setLastPrintableUrl(url);
+      const target = autoPrint ? `${url}&autoPrint=1` : url;
+      const previewWindow = window.open(target, "_blank");
       if (!previewWindow) {
         throw new Error("Popup blocked");
       }
@@ -543,47 +552,57 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         />
       </div>
 
-      <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl shadow-black/40 md:flex-row md:items-center">
-        <div className="space-y-1 text-sm text-slate-200">
-          <div>Subtotal: KES {subtotal.toLocaleString()}</div>
-          {showTax && <div>Tax: KES {taxAmount.toLocaleString()}</div>}
-          {effectiveShowDiscount && <div>Discount: KES {normalizedDiscount.toLocaleString()}</div>}
-          <div className="text-lg font-semibold text-white">Total: KES {total.toLocaleString()}</div>
-          {docType === "LAYAWAY" && (
-            <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>
-          )}
-        </div>
+        <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl shadow-black/40 md:flex-row md:items-center">
+          <div className="space-y-1 text-sm text-slate-200">
+            <div>Subtotal: KES {subtotal.toLocaleString()}</div>
+            {showTax && <div>Tax: KES {taxAmount.toLocaleString()}</div>}
+            {effectiveShowDiscount && <div>Discount: KES {normalizedDiscount.toLocaleString()}</div>}
+            <div className="text-lg font-semibold text-white">Total: KES {total.toLocaleString()}</div>
+            {docType === "LAYAWAY" && (
+              <div className="text-amber-300">Balance after deposit: KES {balance.toLocaleString()}</div>
+            )}
+          </div>
 
           <div className="flex flex-wrap gap-3 no-print">
-                <div className="flex flex-col">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">Preview paper</label>
-                  <select
-                    value={paperSize}
-                    onChange={(e) => setPaperSize(e.target.value as typeof paperSize)}
-                    className="mt-1 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
-                  >
-                    <option value="a5">A5</option>
-                    <option value="a4">A4</option>
-                    <option value="roll80">80mm roll</option>
-                  </select>
-                </div>
-        <button
-          type="button"
-          className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
-          onClick={() => handlePreview(false)}
-        >
-          Preview receipt
-        </button>
-          <button
-            type="button"
-            disabled={saving}
-            className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={handleSave}
-          >
-            {saving ? "Saving..." : "Save to System & Print"}
-          </button>
+            <div className="flex flex-col">
+              <label className="text-xs uppercase tracking-wide text-slate-400">Preview paper</label>
+              <select
+                value={paperSize}
+                onChange={(e) => setPaperSize(e.target.value as typeof paperSize)}
+                className="mt-1 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
+              >
+                <option value="a5">A5</option>
+                <option value="a4">A4</option>
+                <option value="roll80">80mm roll</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
+              onClick={() => handlePreview(false)}
+            >
+              Preview receipt
+            </button>
+            <button
+              type="button"
+              disabled={!lastPrintableUrl}
+              onClick={() => {
+                if (lastPrintableUrl) window.open(lastPrintableUrl, "_blank");
+              }}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Reopen last printable
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSave}
+            >
+              {saving ? "Saving..." : "Save to System & Print"}
+            </button>
+          </div>
         </div>
-      </div>
     </div>
     {/* Print-only snapshot area: rendered when we have server-backed receipt to print */}
 
