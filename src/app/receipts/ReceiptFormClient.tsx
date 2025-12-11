@@ -12,6 +12,7 @@ type ItemRow = {
   unitPrice: number | "";
   serial?: string;
   warranty?: string;
+  isDeliveryFee?: boolean;
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
@@ -55,6 +56,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodChoice>("");
   const [paperSize, setPaperSize] = useState<PaperSize>("a5");
   const [notes, setNotes] = useState<string>("");
+  const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
+  const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
@@ -63,6 +66,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [duplicateOwner, setDuplicateOwner] = useState<any>(null);
   const [notesLoading, setNotesLoading] = useState(false);
   const [descLoadingId, setDescLoadingId] = useState<string | null>(null);
+  const [cashPaid, setCashPaid] = useState<number>(0);
+  const [mpesaPaid, setMpesaPaid] = useState<number>(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +106,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const addRow = () => setItems((s) => [...s, newItem()]);
   const removeRow = (id: string) => setItems((s) => (s.length > 1 ? s.filter((r) => r.id !== id) : s));
   const updateRow = (id: string, patch: Partial<ItemRow>) => setItems((s) => s.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const addDeliveryFeeRow = () =>
+    setItems((s) => [
+      ...s,
+      {
+        ...newItem(),
+        title: "Delivery fee",
+        unitPrice: 0,
+        isDeliveryFee: true,
+      },
+    ]);
 
   const aiDescription = async (row: ItemRow) => {
     if (!row.title.trim()) return;
@@ -157,6 +172,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
 
+  useEffect(() => {
+    if (cashPaid > total) {
+      setCashPaid(total);
+      setMpesaPaid(0);
+      return;
+    }
+    if (Math.abs(cashPaid + mpesaPaid - total) > 0.1) {
+      setMpesaPaid(Math.max(0, total - cashPaid));
+    }
+  }, [total, cashPaid, mpesaPaid]);
+
   const buildDraft = (resolvedPaymentMethod: "MPESA" | "CASH") => ({
     items,
     subtotal,
@@ -176,6 +202,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     deposit: docType === "LAYAWAY" ? deposit : undefined,
     notes,
     paperSize,
+    customerType,
+    deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
+    paymentBreakdown: {
+      cash: cashPaid,
+      mpesa: mpesaPaid,
+    },
   });
 
   const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
@@ -200,6 +232,42 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
+  const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery") => {
+    setCustomerType(type);
+    if (type === "delivery") {
+      setPaymentDetailsShown(true);
+    }
+    if (type !== "delivery") {
+      setDeliveryStatus("pending");
+    }
+  };
+
+  const handleCashPaidChange = (value: number) => {
+    const clamped = Math.max(0, Math.min(total, value));
+    setCashPaid(clamped);
+    setMpesaPaid(Math.max(0, total - clamped));
+  };
+
+  const handleMpesaPaidChange = (value: number) => {
+    const clamped = Math.max(0, Math.min(total, value));
+    setMpesaPaid(clamped);
+    setCashPaid(Math.max(0, total - clamped));
+  };
+
+  const whatsappMessage = useMemo(() => {
+    if (!customerPhone || !customerName || !customerType) return "";
+    const lines = [
+      `Customer: ${customerName}`,
+      `Phone: ${customerPhone}`,
+      `Type: ${customerType}`,
+      `Total: KES ${total.toLocaleString()}`,
+      `Items: ${items.map((item) => item.title || "Item").join(", ")}`,
+      `MPESA: KES ${mpesaPaid.toLocaleString()}`,
+      `Cash: KES ${cashPaid.toLocaleString()}`,
+    ];
+    return lines.join("\n");
+  }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid]);
+
   const handlePreview = (autoPrint = false) => {
     if (!paymentMethod) {
       showToast("Select a payment method before previewing", "error");
@@ -214,7 +282,27 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
     if (!paymentMethod) return showToast("Select payment method", "error");
+    if (!customerName.trim()) return showToast("Customer name is required", "error");
+    if (!customerPhone.trim()) return showToast("Customer phone is required", "error");
+    if (!customerType) return showToast("Select a customer type", "error");
+    if (customerType === "delivery" && deliveryStatus === "failed") {
+      return showToast("Delivery marked as failed cannot be submitted", "error");
+    }
+    if (total <= 0) return showToast("Total must be greater than zero", "error");
+    if (Math.abs(cashPaid + mpesaPaid - total) > 0.1) return showToast("Cash + MPESA must equal the total", "error");
+
     const resolvedPaymentMethod = paymentMethod as "MPESA" | "CASH";
+    const normalizedItems = items.map((it) => ({
+      title: it.title.trim(),
+      quantity: Number(it.quantity || 1),
+      unitPrice: Number(it.unitPrice || 0),
+      serial: showSerials ? it.serial || null : null,
+      warranty: showWarranty ? it.warranty || null : null,
+    }));
+    const hasInvalidItem = normalizedItems.some((it) => !it.title || it.unitPrice <= 0);
+    if (hasInvalidItem) {
+      return showToast("Each item needs a description and price", "error");
+    }
 
     setSaving(true);
     try {
@@ -232,17 +320,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
         paymentMethod: resolvedPaymentMethod,
+        customerType,
+        deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
         paperSize,
         notes,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
-        items: items.map((it) => ({
-          title: it.title,
-          quantity: it.quantity,
-          unitPrice: Number(it.unitPrice || 0),
-          serial: showSerials ? it.serial || null : null,
-          warranty: showWarranty ? it.warranty || null : null,
-        })),
+        paymentBreakdown: {
+          cash: cashPaid,
+          mpesa: mpesaPaid,
+        },
+        items: normalizedItems,
       };
 
       const res = await fetch("/api/receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" });
@@ -358,6 +446,43 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs uppercase tracking-wide text-slate-400">Customer type*</span>
+        {(["walk-in", "online", "delivery"] as const).map((type) => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => handleCustomerTypeSelection(type)}
+            className={`rounded-full px-4 py-1 text-sm font-semibold ${
+              customerType === type ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
+            }`}
+          >
+            {type.replace("-", " ")}
+          </button>
+        ))}
+      </div>
+
+      {customerType === "delivery" && (
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+          <span>Delivery status</span>
+          {(["pending", "delivered", "failed"] as const).map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setDeliveryStatus(status)}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                deliveryStatus === status ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+        {deliveryStatus === "failed" && (
+          <p className="text-xs text-rose-300">Failed deliveries are recorded but cannot be submitted.</p>
+        )}
+      )}
+
       <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-slate-200">
@@ -434,13 +559,20 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             ))}
           </div>
 
-        <div className="mt-2 no-print">
+        <div className="mt-2 no-print flex flex-wrap gap-2">
           <button
             type="button"
             className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
             onClick={addRow}
           >
             + Add item
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-500 hover:bg-emerald-500 hover:text-black"
+            onClick={addDeliveryFeeRow}
+          >
+            + Add delivery fee
           </button>
         </div>
       </section>
@@ -532,6 +664,45 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           )}
         </div>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className={labelClass}>Cash paid (KES)</label>
+          <input
+            type="number"
+            value={cashPaid}
+            min={0}
+            max={total}
+            onChange={(e) => handleCashPaidChange(Number(e.target.value || 0))}
+            className={fieldClass}
+          />
+          <p className="text-xs text-slate-400">Automatic MPESA value: KES {(total - cashPaid).toLocaleString()}</p>
+        </div>
+        <div>
+          <label className={labelClass}>MPESA paid (KES)</label>
+          <input
+            type="number"
+            value={mpesaPaid}
+            min={0}
+            max={total}
+            onChange={(e) => handleMpesaPaidChange(Number(e.target.value || 0))}
+            className={fieldClass}
+          />
+          <p className="text-xs text-slate-400">Cash portion: KES {(total - mpesaPaid).toLocaleString()}</p>
+        </div>
+      </div>
+
+      {whatsappMessage && (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">WhatsApp message</p>
+          <textarea
+            readOnly
+            value={whatsappMessage}
+            rows={5}
+            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-100"
+          />
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between gap-2">
