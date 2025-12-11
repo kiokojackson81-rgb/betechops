@@ -3,20 +3,20 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
+import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
+import SensitiveValue from "@/components/SensitiveValue";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
-import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 
-type ShopSummary = {
+type ReceiptStatsRow = {
   id: string;
-  name?: string | null;
-  platform?: string | null;
+  total?: number | null;
+  items?: any[];
 };
 
-type OnlinePlatformKey = "JUMIA" | "KILIMALL" | "WEBSITE" | "OTHER";
-
 type OnlinePlatformSummary = {
-  key: OnlinePlatformKey;
+  key: string;
   name: string;
   orders: number;
   sales: number;
@@ -33,37 +33,41 @@ type OnlineSummaryResponse = {
   platforms: OnlinePlatformSummary[];
 };
 
-type ReceiptStatsRow = {
+type ShopSalesRow = {
   id: string;
-  total?: number | null;
-  items?: any[];
-};
-
-type ReceiptTotals = {
-  totalReceipts: number;
+  name: string;
+  platform: string;
+  country: string;
+  currency: string;
+  status: string;
+  codeLabel: string;
+  handlerName: string;
+  handlerRole: string;
+  periodLabel: string;
   totalSales: number;
-  totalItems: number;
 };
 
-type ManualSaleRow = {
+type OnlineEarningsSummary = {
+  periodLabel: string;
+  salesCommission: number;
+  otherBonuses: number;
+  netPay: number;
+};
+
+type PaymentMethod = "MPESA" | "CASH" | "";
+
+type ReceiptItem = {
   id: string;
-  shopId: string | null;
-  amount: number;
-  weekStart: string;
-  weekEnd: string;
-  platform: string | null;
-  status: string | null;
-  shop?: { id: string; name: string | null; platform: string | null };
+  productName: string;
+  buyingPrice: number | "";
 };
 
-type TradingWeek = {
-  key: string;
-  label: string;
-  display: string;
-  startInput: string;
-  endInput: string;
-  start: Date;
-  end: Date;
+type ReceiptRow = {
+  id: string;
+  receiptNumber: string;
+  sellingTotal: number | "";
+  paymentMethod: PaymentMethod;
+  items: ReceiptItem[];
 };
 
 const COMMISSION_RATE = 0.02;
@@ -71,81 +75,49 @@ const COMMISSION_RATE = 0.02;
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
+const createItem = (): ReceiptItem => ({
+  id: crypto.randomUUID(),
+  productName: "",
+  buyingPrice: "",
+});
+
+const createReceipt = (): ReceiptRow => ({
+  id: crypto.randomUUID(),
+  receiptNumber: "",
+  sellingTotal: "",
+  paymentMethod: "",
+  items: [createItem()],
+});
+
 const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
-const formatShort = (date: Date) =>
-  date.toLocaleDateString("en-KE", { day: "2-digit", month: "short" });
 
-function buildTradingWeeks(reference = new Date()) {
-  const now = new Date(reference);
-  now.setHours(0, 0, 0, 0);
-
-  const weeks: TradingWeek[] = [];
-  const offsets = [
-    { label: "Week 1", start: -30, end: -26 },
-    { label: "Week 2", start: -25, end: -18 },
-    { label: "Week 3", start: -17, end: -10 },
-    { label: "Week 4", start: -9, end: -2 },
-  ];
-
-  for (const { label, start, end } of offsets) {
-    const startDate = new Date(now);
-    startDate.setDate(now.getDate() + start);
-    const endDate = new Date(now);
-    endDate.setDate(now.getDate() + end);
-    weeks.push({
-      key: `${label.toLowerCase().replace(" ", "-")}-${toInputDate(startDate)}`,
-      label,
-      display: `${formatShort(startDate)} - ${formatShort(endDate)}`,
-      startInput: toInputDate(startDate),
-      endInput: toInputDate(endDate),
-      start: startDate,
-      end: endDate,
-    });
-  }
-
-  let defaultWeek = weeks[weeks.length - 1];
-  for (const wk of weeks) {
-    if (wk.end.getTime() < now.getTime()) {
-      defaultWeek = wk;
-    }
-  }
-
-  return { weeks, defaultWeek };
-}
-
-export default function AttendantOnlineClient({ initial = [] as any[] }) {
+export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
-  const [shops, setShops] = useState<ShopSummary[]>([]);
-  const [shopsLoading, setShopsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([
+    createReceipt(),
+  ]);
+
   const [onlineSummary, setOnlineSummary] = useState<OnlineSummaryResponse | null>(
     null,
   );
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const [receiptTotals, setReceiptTotals] = useState<ReceiptTotals>({
-    totalReceipts: 0,
-    totalSales: 0,
-    totalItems: 0,
-  });
-  const [receiptLoading, setReceiptLoading] = useState(false);
-
-  const [manualSales, setManualSales] = useState<ManualSaleRow[]>([]);
-  const [manualLoading, setManualLoading] = useState(false);
-  const [manualPeriodTotal, setManualPeriodTotal] = useState(0);
-  const [manualAllTimeTotal, setManualAllTimeTotal] = useState(0);
-
-  const tradingWeeks = useMemo(() => buildTradingWeeks(), []);
-  const defaultWeekKey =
-    tradingWeeks.defaultWeek?.key ?? tradingWeeks.weeks[0]?.key ?? "";
-  const [selectedWeekKey, setSelectedWeekKey] = useState(defaultWeekKey);
-  const selectedWeek = useMemo(
-    () =>
-      tradingWeeks.weeks.find((week) => week.key === selectedWeekKey) ??
-      tradingWeeks.defaultWeek ??
-      tradingWeeks.weeks[0],
-    [tradingWeeks, selectedWeekKey],
+  const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
+  const [shopSalesLoading, setShopSalesLoading] = useState(false);
+  const [shopRange, setShopRange] = useState<"period" | "this-week" | "all">(
+    "period",
   );
+  const [shopPeriodLabel, setShopPeriodLabel] = useState(period.label);
+  const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
+  const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
+
+  const [earningsSummary, setEarningsSummary] =
+    useState<OnlineEarningsSummary | null>(null);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -158,51 +130,9 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
     }
   }, []);
 
-  const loadShops = useCallback(async () => {
-    setShopsLoading(true);
-    try {
-      const res = await fetch("/api/attendants/shops", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load assigned shops");
-      const data = (await res.json()) as ShopSummary[];
-      setShops(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("[attendant/online] failed to load shops", err);
-    } finally {
-      setShopsLoading(false);
-    }
-  }, []);
-
-  const loadOnlineSummary = useCallback(async () => {
-    setSummaryLoading(true);
-    try {
-      const params = new URLSearchParams({
-        start: period.start.toISOString(),
-        end: period.end.toISOString(),
-      });
-      if (userId) params.set("attendantId", userId);
-
-      const res = await fetch(`/api/online/summary?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load online sales summary");
-
-      const data = (await res.json()) as OnlineSummaryResponse;
-      setOnlineSummary(data);
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to load online sales summary";
-      console.warn("[attendant/online] summary error", err);
-      showToast(message, "error");
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [period, userId]);
-
   const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
-    setReceiptLoading(true);
+    setStatsLoading(true);
     try {
       const params = new URLSearchParams({
         start: period.start.toISOString(),
@@ -210,152 +140,151 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
         includeItems: "true",
         size: "200",
       });
-      if (userId) params.set("attendantId", userId);
-
+      params.set("attendantId", userId);
       const res = await fetch(`/api/receipts?${params.toString()}`, {
         cache: "no-store",
       });
-      if (!res.ok) throw new Error("Failed to load receipt totals");
+      if (!res.ok) throw new Error("Failed to load receipts for this period");
       const data = (await res.json()) as { receipts?: ReceiptStatsRow[] };
-      const receipts = Array.isArray(data.receipts) ? data.receipts : [];
-      const totalSales = receipts.reduce((sum, receipt) => sum + (Number(receipt.total) || 0), 0);
-      const totalItems = receipts.reduce(
-        (sum, receipt) => sum + (Array.isArray(receipt.items) ? receipt.items.length : 0),
-        0,
-      );
-      setReceiptTotals({
-        totalReceipts: receipts.length,
-        totalSales,
-        totalItems,
-      });
+      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load receipt totals";
       showToast(message, "error");
-      console.error("[attendant/online] receipt totals error", err);
     } finally {
-      setReceiptLoading(false);
+      setStatsLoading(false);
     }
   }, [period, userId]);
 
-  const loadManualSales = useCallback(
-    async (week: TradingWeek | null) => {
-      if (!userId) return;
-      setManualLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (week?.startInput) params.set("weekStart", week.startInput);
-        if (week?.endInput) params.set("weekEnd", week.endInput);
+  const loadOnlineSummary = useCallback(async () => {
+    if (!userId) return;
+    setSummaryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        start: period.start.toISOString(),
+        end: period.end.toISOString(),
+      });
+      params.set("attendantId", userId);
+      const res = await fetch(`/api/online/summary?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load online sales summary");
+      const data = (await res.json()) as OnlineSummaryResponse;
+      setOnlineSummary(data);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to load online sales summary";
+      showToast(message, "error");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [period, userId]);
 
-        const query = params.toString();
-        const suffix = query ? `?${query}` : "";
-        const res = await fetch(`/api/attendant/online/manual-sales${suffix}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error("Failed to load shop sales");
-        const data = (await res.json()) as {
-          entries?: ManualSaleRow[];
-          periodTotal?: number;
-          totalToDate?: number;
-        };
-        setManualSales(Array.isArray(data.entries) ? data.entries : []);
-        setManualPeriodTotal(data.periodTotal ?? 0);
-        setManualAllTimeTotal(data.totalToDate ?? 0);
-      } catch (err) {
-        console.error("[attendant/online] manual sales error", err);
-      } finally {
-        setManualLoading(false);
-      }
-    },
-    [userId],
+  const loadShopSales = useCallback(async () => {
+    if (!userId) return;
+    setShopSalesLoading(true);
+    try {
+      const { start, end } = computeRangeDates(shopRange, period);
+      const params = new URLSearchParams({
+        range: shopRange,
+        attendantId: userId,
+      });
+      if (start) params.set("start", start);
+      if (end) params.set("end", end);
+
+      const res = await fetch(`/api/online/shops/sales?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load shop sales");
+      const data = await res.json();
+      setShopSalesRows(Array.isArray(data.rows) ? data.rows : []);
+      setShopPeriodLabel(data.periodLabel ?? period.label);
+      setShopPeriodTotal(data.periodTotal ?? 0);
+      setShopAllTimeTotal(data.totalToDate ?? 0);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to load shop sales";
+      showToast(message, "error");
+    } finally {
+      setShopSalesLoading(false);
+    }
+  }, [period, shopRange, userId]);
+
+  const loadEarnings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/online/earnings/summary", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as OnlineEarningsSummary;
+      setEarningsSummary(data);
+    } catch (err) {
+      console.warn("[attendant/online] earnings summary error", err);
+    }
+  }, []);
+
+  const receiptTotals = useMemo(() => {
+    const totalSales = receiptRows.reduce(
+      (sum, receipt) => sum + (Number(receipt.total) || 0),
+      0,
+    );
+    const totalItems = receiptRows.reduce(
+      (sum, receipt) => sum + (Array.isArray(receipt.items) ? receipt.items.length : 0),
+      0,
+    );
+    return {
+      totalSales,
+      totalItems,
+      totalReceipts: receiptRows.length,
+      commission: totalSales * COMMISSION_RATE,
+    };
+  }, [receiptRows]);
+
+  const salesRecordsTotals = useMemo(
+    () =>
+      receiptsEditorRows.reduce(
+        (acc, receipt) => {
+          const sale = Number(receipt.sellingTotal || 0);
+          acc.totalSales += sale;
+          acc.totalItems += receipt.items.length;
+          acc.totalReceipts += 1;
+          return acc;
+        },
+        { totalSales: 0, totalItems: 0, totalReceipts: 0 },
+      ),
+    [receiptsEditorRows],
   );
 
-  useEffect(() => {
-    fetchUser();
-    loadShops();
-  }, [fetchUser, loadShops]);
-
-  useEffect(() => {
-    if (!userId) return;
-    void loadOnlineSummary();
-    void loadReceiptStats();
-  }, [loadOnlineSummary, loadReceiptStats, userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    void loadManualSales(selectedWeek ?? null);
-  }, [loadManualSales, selectedWeek, userId]);
-
-  const periodLabel = onlineSummary?.period.label ?? period.label;
-  const totals = onlineSummary?.totals ?? {
+  const onlineTotals = onlineSummary?.totals ?? {
     orders: 0,
     sales: 0,
     commission: 0,
   };
-  const platforms = onlineSummary?.platforms ?? [];
+  const onlinePlatforms = onlineSummary?.platforms.length
+    ? onlineSummary.platforms
+    : [
+        { key: "JUMIA", name: "Jumia", orders: 0, sales: 0, commission: 0 },
+        { key: "KILIMALL", name: "Kilimall", orders: 0, sales: 0, commission: 0 },
+      ];
+  const averageOrderValue =
+    onlineTotals.orders > 0 ? onlineTotals.sales / onlineTotals.orders : 0;
 
-  const averageOrderValue = useMemo(
-    () => (totals.orders > 0 ? totals.sales / totals.orders : 0),
-    [totals.orders, totals.sales],
-  );
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
-  const manualSalesByShop = useMemo(() => {
-    const map = new Map<string, { amount: number; entries: ManualSaleRow[] }>();
-    manualSales.forEach((entry) => {
-      if (!entry.shopId) return;
-      const existing = map.get(entry.shopId) ?? { amount: 0, entries: [] };
-      existing.amount += entry.amount;
-      existing.entries.push(entry);
-      map.set(entry.shopId, existing);
-    });
-    return map;
-  }, [manualSales]);
+  useEffect(() => {
+    if (!userId) return;
+    void loadReceiptStats();
+    void loadOnlineSummary();
+    void loadShopSales();
+  }, [loadOnlineSummary, loadReceiptStats, loadShopSales, userId]);
 
-  const shopSummaries = useMemo(() => {
-    const summary = shops.map((shop) => {
-      const manual = manualSalesByShop.get(shop.id);
-      return {
-        ...shop,
-        amount: manual?.amount ?? 0,
-      };
-    });
-    return [...summary].sort((a, b) => b.amount - a.amount);
-  }, [shops, manualSalesByShop]);
+  useEffect(() => {
+    void loadEarnings();
+  }, [loadEarnings]);
 
-  const mainPlatforms = useMemo(
-    () =>
-      platforms.length > 0
-        ? platforms
-        : [
-            {
-              key: "JUMIA" as OnlinePlatformKey,
-              name: "Jumia",
-              orders: 0,
-              sales: 0,
-              commission: 0,
-            },
-            {
-              key: "KILIMALL" as OnlinePlatformKey,
-              name: "Kilimall",
-              orders: 0,
-              sales: 0,
-              commission: 0,
-            },
-          ],
-    [platforms],
-  );
-
-  const { locked, toggle } = useCardLock("online:quickstats");
-  const mask = (value: ReactNode) => (locked ? "•••" : value);
-
-  const quickStats = [
-    { label: "Orders", value: totals.orders.toLocaleString() },
-    { label: "Sales (KES)", value: formatKES(totals.sales) },
-    { label: "Commission (KES)", value: formatKES(totals.commission) },
-    { label: "Avg. order value", value: formatKES(averageOrderValue || 0) },
-    { label: "Receipts", value: receiptTotals.totalReceipts.toLocaleString() },
-    { label: "Items sold", value: receiptTotals.totalItems.toLocaleString() },
-  ];
+  const periodLabel = onlineSummary?.period.label ?? period.label;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -364,8 +293,8 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
           <div>
             <h1 className="text-3xl font-semibold">Online Operations</h1>
             <p className="text-sm text-slate-300">
-              Track marketplace orders (Jumia, Kilimall, website), commissions,
-              and assigned online shops in one place.
+              Track marketplace shop sales, receipt activity, and payroll-linked
+              earnings in one place.
             </p>
           </div>
           <Button
@@ -384,24 +313,25 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-400">
-                Trading period
+                Earnings period
               </p>
               <p className="mt-1 text-sm text-slate-200">{periodLabel}</p>
               <p className="text-xs text-slate-400">
-                Online stats are pulled from linked marketplaces for this period.
+                Attached to payroll. Marketplace totals and shop sales are
+                calculated within this window.
               </p>
             </div>
-            <div className="text-right space-y-1 text-sm text-slate-300">
+            <div className="text-right text-sm text-slate-300">
               <p>
-                Total orders:{" "}
+                Marketplace orders:{" "}
                 <span className="font-semibold text-emerald-300">
-                  {totals.orders.toLocaleString()}
+                  {onlineTotals.orders.toLocaleString()}
                 </span>
               </p>
               <p>
-                Total sales:{" "}
+                Marketplace sales:{" "}
                 <span className="font-semibold text-emerald-300">
-                  {formatKES(totals.sales)}
+                  {formatKES(onlineTotals.sales)}
                 </span>
               </p>
               <p className="text-xs text-slate-500">
@@ -413,14 +343,61 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
-            <Card className="space-y-5 border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+            <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Sales records
+                </p>
+                <h2 className="text-xl font-semibold">Add each receipt for today</h2>
+                <p className="text-sm text-slate-400">
+                  Totals are calculated automatically. This mirrors the receipts
+                  capture form at{" "}
+                  <span className="font-semibold text-emerald-300">
+                    ops.betech.co.ke/receipts
+                  </span>
+                  .
+                </p>
+              </div>
+
+              <ReceiptsEditor
+                receipts={receiptsEditorRows}
+                setReceipts={setReceiptsEditorRows}
+                totals={{
+                  totalSales: salesRecordsTotals.totalSales,
+                  totalProfit: 0,
+                  totalItems: salesRecordsTotals.totalItems,
+                }}
+                hideBuyingPrice
+              />
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
+                <p>
+                  Total receipts:{" "}
+                  <span className="font-semibold text-emerald-300">
+                    {salesRecordsTotals.totalReceipts}
+                  </span>
+                </p>
+                <p>
+                  Total sales (KES):{" "}
+                  <span className="font-semibold text-emerald-300">
+                    {formatKES(salesRecordsTotals.totalSales)}
+                  </span>
+                </p>
+                <p>
+                  Total items:{" "}
+                  <span className="font-semibold text-emerald-300">
+                    {salesRecordsTotals.totalItems}
+                  </span>
+                </p>
+              </div>
+            </Card>
+
+            <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
               <div className="flex flex-col gap-1">
                 <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Marketplace overview
+                  Online orders &amp; channels
                 </p>
-                <h2 className="text-xl font-semibold text-slate-100">
-                  Online orders & channels
-                </h2>
+                <h2 className="text-lg font-semibold">Marketplace overview</h2>
                 <p className="text-sm text-slate-400">
                   See how your sales are distributed across marketplaces.
                 </p>
@@ -433,33 +410,25 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
                   <span className="text-right">Sales (KES)</span>
                   <span className="text-right">Commission</span>
                 </div>
-                {mainPlatforms.length === 0 ? (
-                  <div className="px-4 py-4 text-sm text-slate-400">
-                    No marketplace data for this period yet.
+                {onlinePlatforms.map((platform) => (
+                  <div
+                    key={platform.key}
+                    className="grid grid-cols-4 gap-2 px-4 py-3 text-sm"
+                  >
+                    <span className="font-medium text-slate-100">
+                      {platform.name}
+                    </span>
+                    <span className="text-right text-slate-200">
+                      {platform.orders.toLocaleString()}
+                    </span>
+                    <span className="text-right text-emerald-300">
+                      {formatKES(platform.sales)}
+                    </span>
+                    <span className="text-right text-slate-200">
+                      {formatKES(platform.commission)}
+                    </span>
                   </div>
-                ) : (
-                  <ul className="divide-y divide-slate-800">
-                    {mainPlatforms.map((platform) => (
-                      <li
-                        key={platform.key}
-                        className="grid grid-cols-4 gap-2 px-4 py-3 text-sm"
-                      >
-                        <span className="font-medium text-slate-100">
-                          {platform.name}
-                        </span>
-                        <span className="text-right text-slate-200">
-                          {platform.orders.toLocaleString()}
-                        </span>
-                        <span className="text-right text-emerald-300">
-                          {formatKES(platform.sales)}
-                        </span>
-                        <span className="text-right text-slate-200">
-                          {formatKES(platform.commission)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                ))}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
@@ -485,228 +454,259 @@ export default function AttendantOnlineClient({ initial = [] as any[] }) {
                 </Button>
               </div>
             </Card>
-
-            <Card className="space-y-6 border-slate-800 bg-slate-900/70 shadow-xl shadow-black/20">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  Sales records
-                </p>
-                <h2 className="text-xl font-semibold text-white">
-                  Add each receipt for today
-                </h2>
-                <p className="text-sm text-slate-400">
-                  Totals are calculated automatically. Receipts are generated in{" "}
-                  <span className="font-medium text-emerald-300">/receipts</span>.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  {
-                    label: "Total receipts",
-                    value: receiptTotals.totalReceipts.toLocaleString(),
-                  },
-                  {
-                    label: "Total sales (KES)",
-                    value: formatKES(receiptTotals.totalSales),
-                  },
-                  {
-                    label: "Total items",
-                    value: receiptTotals.totalItems.toLocaleString(),
-                  },
-                  {
-                    label: "Commission (KES)",
-                    value: formatKES(receiptTotals.totalSales * COMMISSION_RATE),
-                  },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-sm"
-                  >
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
-                      {stat.label}
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-emerald-300">
-                      {stat.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
-                  Receipt snapshot
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                      Selling total (KES)
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
-                      0
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                      Receipt number
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
-                      Required
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-white/20 px-4 py-1 text-xs text-slate-300">
-                    MPESA
-                  </span>
-                  <span className="rounded-full border border-white/20 px-4 py-1 text-xs text-slate-300">
-                    Cash
-                  </span>
-                </div>
-                <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3 text-[11px] uppercase tracking-[0.3em] text-slate-500">
-                  Products in this receipt are managed from the receipts desk.
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-slate-400">
-                  Total receipts: <span className="font-semibold text-white">{receiptTotals.totalReceipts}</span>
-                  <br />
-                  Total sales (KES):{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {formatKES(receiptTotals.totalSales)}
-                  </span>
-                  <br />
-                  Total items:{" "}
-                  <span className="font-semibold text-white">{receiptTotals.totalItems}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    window.location.href = "/receipts";
-                  }}
-                >
-                  Open receipts desk
-                </Button>
-              </div>
-            </Card>
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-            <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-100">
-                    Quick stats
-                  </h2>
-                  <p className="text-xs text-slate-400">{periodLabel}</p>
-                </div>
-                <LockButton locked={locked} onToggle={toggle} />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {quickStats.map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left"
-                  >
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                      {stat.label}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-emerald-400">
-                      {mask(stat.value)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-emerald-400">
-                    Earnings this period
-                  </p>
-                  <h2 className="text-lg font-semibold text-slate-100">
-                    Shop sales (manual)
-                  </h2>
-                  <p className="text-sm text-slate-400">
-                    {selectedWeek?.display ?? periodLabel} · Totals come from{" "}
-                    <span className="font-medium text-emerald-300">
-                      /admin/online/manual
-                    </span>
-                  </p>
-                </div>
-                <select
-                  value={selectedWeekKey}
-                  onChange={(event) => setSelectedWeekKey(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100"
-                >
-                  {tradingWeeks.weeks.map((week) => (
-                    <option key={week.key} value={week.key}>
-                      {week.label} ({week.display})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-                <div>
-                  <p>
-                    Period manual sales:{" "}
-                    <span className="font-semibold text-emerald-300">
-                      {formatKES(manualPeriodTotal)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Total since onboarding: {formatKES(manualAllTimeTotal)}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="px-4"
-                  onClick={() => void loadManualSales(selectedWeek ?? null)}
-                  disabled={manualLoading}
-                >
-                  {manualLoading ? "Refreshing…" : "Refresh shop sales"}
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {shopSummaries.length === 0 && !shopsLoading && (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">
-                    No shops assigned yet.
-                  </div>
-                )}
-                {shopsLoading && (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">
-                    Loading shops…
-                  </div>
-                )}
-                {shopSummaries.map((shop) => (
-                  <div
-                    key={shop.id}
-                    className="rounded-2xl border border-white/5 bg-slate-950/40 px-4 py-3 text-sm text-slate-200"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-white">
-                          {shop.name || "Unnamed shop"}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {shop.platform || "Platform"} · Manual totals
-                        </p>
-                      </div>
-                      <span className="text-sm font-semibold text-emerald-300">
-                        {formatKES(shop.amount)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <QuickStatsCard
+              statsLoading={statsLoading}
+              periodLabel={periodLabel}
+              totals={receiptTotals}
+            />
+            <OnlineEarningsCard summary={earningsSummary} />
+            <ShopSalesCard
+              rows={shopSalesRows}
+              total={shopRange === "all" ? shopAllTimeTotal : shopPeriodTotal}
+              loading={shopSalesLoading}
+              range={shopRange}
+              onRangeChange={(value) => setShopRange(value)}
+              onRefresh={loadShopSales}
+              periodLabel={shopPeriodLabel}
+            />
           </div>
         </div>
       </main>
     </div>
   );
+}
+
+function QuickStatsCard({
+  statsLoading,
+  periodLabel,
+  totals,
+}: {
+  statsLoading: boolean;
+  periodLabel: string;
+  totals: {
+    totalReceipts: number;
+    totalSales: number;
+    totalItems: number;
+    commission: number;
+  };
+}) {
+  const { locked, toggle } = useCardLock("online:quickstats");
+  const mask = (value: ReactNode) => (locked ? "•••" : value);
+
+  const stats = [
+    { label: "Receipts", value: totals.totalReceipts.toLocaleString() },
+    { label: "Sales (KES)", value: formatKES(totals.totalSales) },
+    { label: "Items sold", value: totals.totalItems.toLocaleString() },
+    {
+      label: "Commission (KES)",
+      value: (
+        <SensitiveValue
+          value={totals.commission}
+          format={(v) => `KES ${Number(v).toLocaleString()}`}
+          storageKey="online:commission"
+          forceHidden={locked}
+          forceVisible={!locked}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
+          <p className="text-xs text-slate-400">
+            {periodLabel} •{" "}
+            {statsLoading ? "Refreshing receipt totals…" : "Receipts summary"}
+          </p>
+        </div>
+        <LockButton locked={locked} onToggle={toggle} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left"
+          >
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">
+              {stat.label}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-emerald-400">
+              {typeof stat.value === "string" || typeof stat.value === "number"
+                ? mask(stat.value)
+                : stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function OnlineEarningsCard({ summary }: { summary: OnlineEarningsSummary | null }) {
+  const { locked, toggle } = useCardLock("online:earnings");
+  if (!summary) return null;
+  const mask = (value: ReactNode) => (locked ? "•••" : value);
+  const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
+
+  return (
+    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+              Earnings this period
+            </p>
+            <p className="text-sm text-slate-400">{summary.periodLabel}</p>
+          </div>
+          <LockButton locked={locked} onToggle={toggle} />
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">
+            Net pay
+          </p>
+          <p className="text-2xl font-semibold text-emerald-300">
+            {mask(formatCurrency(summary.netPay))}
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
+          <span className="text-slate-300">Sales commission</span>
+          <span className="font-semibold text-emerald-300">
+            {mask(formatCurrency(summary.salesCommission))}
+          </span>
+        </div>
+        {summary.otherBonuses !== 0 && (
+          <div className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2">
+            <span className="text-slate-300">Other bonuses</span>
+            <span className="font-semibold text-emerald-300">
+              {mask(formatCurrency(summary.otherBonuses))}
+            </span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ShopSalesCard({
+  rows,
+  total,
+  loading,
+  range,
+  onRangeChange,
+  onRefresh,
+  periodLabel,
+}: {
+  rows: ShopSalesRow[];
+  total: number;
+  loading: boolean;
+  range: "period" | "this-week" | "all";
+  onRangeChange: (value: "period" | "this-week" | "all") => void;
+  onRefresh: () => void;
+  periodLabel: string;
+}) {
+  return (
+    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-emerald-400">
+            Shop sales
+          </p>
+          <p className="text-sm text-slate-400">
+            Manual entries from <span className="font-semibold">/admin/online/manual</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={range}
+            onChange={(event) =>
+              onRangeChange(event.target.value as "period" | "this-week" | "all")
+            }
+            className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+          >
+            <option value="period">This earnings period</option>
+            <option value="this-week">This week</option>
+            <option value="all">All time up to period</option>
+          </select>
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-3 py-1 text-xs"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm max-h-80">
+        {rows.length === 0 && !loading && (
+          <p className="text-xs text-slate-400">
+            No shop sales were reported for this range.
+          </p>
+        )}
+        {rows.map((shop) => (
+          <div
+            key={shop.id}
+            className="space-y-1 rounded-xl bg-slate-900/80 px-3 py-2"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-slate-100">{shop.name}</p>
+                <p className="text-[11px] text-slate-400">
+                  {shop.country} • {shop.currency} • {shop.status} •{" "}
+                  {shop.platform.toLowerCase()}
+                </p>
+              </div>
+              <p className="text-sm font-semibold text-emerald-300">
+                {formatKES(shop.totalSales)}
+              </p>
+            </div>
+            <p className="text-[11px] text-slate-400">{shop.codeLabel}</p>
+            <p className="text-[11px] text-slate-400">
+              {shop.handlerName} • {shop.handlerRole}
+            </p>
+            <p className="text-[11px] text-slate-500">{shop.periodLabel}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-slate-300">
+        <span>{periodLabel}</span>
+        <span className="font-semibold text-emerald-300">{formatKES(total)}</span>
+      </div>
+    </Card>
+  );
+}
+
+function computeRangeDates(
+  range: "period" | "this-week" | "all",
+  period: { start: Date; end: Date; label: string },
+) {
+  if (range === "period") {
+    return {
+      start: toInputDate(period.start),
+      end: toInputDate(period.end),
+    };
+  }
+  if (range === "this-week") {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - diffToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+    return { start: toInputDate(weekStart), end: toInputDate(weekEnd) };
+  }
+  return { start: "", end: "" };
 }
