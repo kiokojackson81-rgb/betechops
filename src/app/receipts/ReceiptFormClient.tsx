@@ -172,7 +172,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
-  const showSplitPaymentInputs = paymentDetailsShown && selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
+  const showSplitPaymentInputs = selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
 
   useEffect(() => {
     if (cashPaid > total) {
@@ -637,39 +637,38 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
         <div>
           <label className={labelClass}>Payment details</label>
-            <div className="mt-2 space-y-2">
-              <label className="inline-flex items-center text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={paymentDetailsShown}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setPaymentDetailsShown(checked);
-                    if (checked) setSelectedPaymentMethods((prev) => ({ ...prev, MPESA: true }));
-                  }}
-                  className={`${checkboxClass} mr-2`}
-                />
-                Include payment details on receipt
-              </label>
-              {paymentDetailsShown && (
-                <div className="flex gap-2">
-                  {(["MPESA", "CASH"] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => togglePaymentMethodSelection(method)}
-                      className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                        selectedPaymentMethods[method]
-                          ? "bg-emerald-500 text-black"
-                          : "border border-white/10 text-slate-200"
-                      }`}
-                    >
-                      {method === "MPESA" ? "MPESA" : "Cash"}
-                    </button>
-                  ))}
-                </div>
-              )}
+          <div className="mt-2 space-y-3">
+            <label className="inline-flex items-center text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={paymentDetailsShown}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setPaymentDetailsShown(checked);
+                  if (checked) setSelectedPaymentMethods((prev) => ({ ...prev, MPESA: true }));
+                }}
+                className={`${checkboxClass} mr-2`}
+              />
+              Include payment details on receipt
+            </label>
+            <div className="flex gap-2">
+              {(["MPESA", "CASH"] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => togglePaymentMethodSelection(method)}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                    selectedPaymentMethods[method]
+                      ? "bg-emerald-500 text-black"
+                      : "border border-white/10 text-slate-200"
+                  }`}
+                  aria-pressed={selectedPaymentMethods[method]}
+                >
+                  {method === "MPESA" ? "MPESA" : "Cash"}
+                </button>
+              ))}
             </div>
+          </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>
