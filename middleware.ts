@@ -92,6 +92,7 @@ export async function middleware(req: NextRequest) {
   const category = (token as any)?.attendantCategory ?? (token as any)?.user?.attendantCategory;
   const hasCategory = Boolean(category);
   const alreadyRehydrated = url.searchParams.get("_rehydrated") === "1";
+  const rehydrateCookie = req.cookies.get("_rehydrate_attempt")?.value === "1";
 
   // Temporary debug logging: record masked email, role and category for
   // requests that hit auth/post-login or attendant routes. These logs are
@@ -110,10 +111,15 @@ export async function middleware(req: NextRequest) {
   // If the token is missing attendantCategory (stale JWT), bounce through
   // post-login to re-hydrate the category from the database so we can route
   // Support Ops and other roles to the correct dashboard.
+  // If the token is missing attendantCategory (stale JWT), attempt a
+  // single re-hydration via `/auth/post-login`. Set a short-lived cookie
+  // so that if the re-hydration doesn't attach a category we can avoid
+  // looping and instead send users to a helpful troubleshooting page.
   if (
     role !== "ADMIN" &&
     !hasCategory &&
     !alreadyRehydrated &&
+    !rehydrateCookie &&
     (pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker"))
   ) {
     const originalPathWithQuery = req.nextUrl.pathname + req.nextUrl.search + (req.nextUrl.search ? "&" : "?") + "_rehydrated=1";
@@ -126,73 +132,93 @@ export async function middleware(req: NextRequest) {
     }
     url.pathname = "/auth/post-login";
     url.searchParams.set("callbackUrl", originalPathWithQuery);
+    const res = NextResponse.redirect(url);
+    // Mark that we've attempted rehydration so subsequent requests won't
+    // immediately re-trigger the same redirect and cause loops. Short TTL.
+    try {
+      res.cookies.set("_rehydrate_attempt", "1", {
+        httpOnly: true,
+        maxAge: 60,
+        path: "/",
+      });
+    } catch (e) {
+      // ignore cookie errors
+    }
+    return res;
+  }
+
+  // If we've already tried rehydration (either via the `_rehydrated` query
+  // param or the `_rehydrate_attempt` cookie) and the token still lacks a
+  // category, avoid redirecting back to post-login and instead route the
+  // user to a helpful troubleshooting page where they can contact admin.
+  if (
+    role !== "ADMIN" &&
+    !hasCategory &&
+    (alreadyRehydrated || rehydrateCookie) &&
+    (pathname.startsWith("/attendant") || pathname.startsWith("/marketing/tracker"))
+  ) {
+    url.pathname = "/attendant/no-category";
     return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     if (role !== "ADMIN") {
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
-  }
+      import { NextResponse } from 'next/server';
+      import type { NextRequest } from 'next/server';
+      import { getToken } from 'next-auth/jwt';
 
-  if (role !== "ADMIN" && isCategoryAllowed(category, ["SUPPORT_OPS"])) {
-    if (!pathname.startsWith("/attendant/support")) {
-      url.pathname = "/attendant/support";
-      return NextResponse.redirect(url);
-    }
-  } else if (
-    role !== "ADMIN" &&
-    !isCategoryAllowed(category, ["SUPPORT_OPS"]) &&
-    pathname.startsWith("/attendant/support")
-  ) {
-    const destination = getLandingPage(category as any, role as string);
-    url.pathname = destination;
-    return NextResponse.redirect(url);
-  }
+      const AUTH_IGNORES = ['/api/auth', '/auth', '/_next', '/favicon.ico', '/assets', '/images', '/static'];
+      const ROLE_HOME: Record<string, string> = { ADMIN: '/admin', ATTENDANT: '/attendant/dashboard' };
 
-  for (const { prefix, categories } of routePermissions) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
-      if (role === "ADMIN") return NextResponse.next();
-      // If we don't yet have a category attached to the token (race condition
-      // where the JWT hasn't been enriched with attendantCategory after login),
-      // allow the request through. The app's server/client pages will perform
-      // a DB-backed lookup and resolve the correct landing page. Only enforce
-      // category-based redirects when a category is present and explicitly
-      // disallowed for this route.
-      if (!category) {
+      export async function middleware(req: NextRequest) {
+        const url = req.nextUrl.clone();
+        const { pathname, searchParams } = url;
+
+        if (AUTH_IGNORES.some((p) => pathname.startsWith(p))) return NextResponse.next();
+
+        const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+        const isProtected = !pathname.startsWith('/public');
+        if (isProtected && !token) {
+          const redirectTo = req.nextUrl.clone();
+          redirectTo.pathname = '/auth/login';
+          redirectTo.searchParams.set('callbackUrl', pathname + (req.nextUrl.search || ''));
+          return NextResponse.redirect(redirectTo);
+        }
+
+        // loop breaker: once rehydrated (query or cookie), never redirect to post-login again
+        const alreadyRehydrated =
+          searchParams.get('_rehydrated') === '1' || req.cookies.get('postlogin_done')?.value === '1';
+
+        if (pathname === '/auth/post-login') {
+          const target = req.nextUrl.clone();
+          const role = (token as any)?.role as string | undefined;
+          target.pathname = role && ROLE_HOME[role] ? ROLE_HOME[role] : '/';
+          const res = NextResponse.redirect(target);
+          res.cookies.set('postlogin_done', '1', {
+            maxAge: 60,
+            httpOnly: false,
+            sameSite: 'lax',
+            path: '/',
+            secure: process.env.NODE_ENV === 'production',
+          });
+          return res;
+        }
+
+        // admin-only page guard: don't “rehydrate” attendants—route them home instead
+        if (token && pathname.startsWith('/marketing/tracker')) {
+          const role = (token as any)?.role;
+          if (role === 'ATTENDANT') {
+            const redirectTo = req.nextUrl.clone();
+            redirectTo.pathname = ROLE_HOME.ATTENDANT;
+            return NextResponse.redirect(redirectTo);
+          }
+        }
+
+        // IMPORTANT: Do NOT rehydrate based on missing attendantCategory in middleware.
+        // Handle category inside the page/app, not at the edge.
+
         return NextResponse.next();
       }
-      if (!isCategoryAllowed(category, categories)) {
-        // Wrong category → send to their home instead of /not-authorized.
-        // Avoid redirecting to the same pathname (redirect-to-self) which
-        // produces an infinite redirect loop. If `home` equals the current
-        // pathname, let the request continue so the page can render and
-        // show a helpful message or re-check session on the client.
-        const home = getLandingPage(category as any, role as string);
-        if (home === pathname) {
-          return NextResponse.next();
-        }
-        url.pathname = home;
-        return NextResponse.redirect(url);
-      }
-      break;
-    }
-  }
 
-  return NextResponse.next();
-}
-
-export const config = {
-  matcher: [
-    "/admin",
-    "/admin/:path*",
-    "/attendant",
+      export const config = { matcher: ['/((?!.*\\.).*)'] };
     "/attendant/:path*",
-    "/marketing/tracker",
-    "/marketing/tracker/:path*",
-    "/attendant/support",
-    "/attendant/support/:path*",
-  ],
-};
