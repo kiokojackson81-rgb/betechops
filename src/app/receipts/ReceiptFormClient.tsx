@@ -235,8 +235,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       if (!previewWindow) {
         throw new Error("Popup blocked");
       }
+      return true;
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to open preview", "error");
+      return false;
     }
   };
 
@@ -307,7 +309,24 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return;
     }
     const draft = buildDraft(primaryPaymentMethod);
-    openPreviewWindow(draft, autoPrint);
+    return openPreviewWindow(draft, autoPrint);
+  };
+
+  const resetForm = () => {
+    setItems([newItem()]);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerType("");
+    setDeliveryStatus("pending");
+    setDeposit(0);
+    setShowSerials(false);
+    setShowWarranty(false);
+    setGlobalWarranty("");
+    setCashPaid(0);
+    setMpesaPaid(0);
+    setNotes("");
+    setSerial(generateReceiptSerial());
+    setDocType("RECEIPT");
   };
 
   const handleSave = async () => {
@@ -382,8 +401,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       showToast("Saved receipt", "success");
       onCreated?.(data);
 
-      handlePreview(true);
-      setSerial(generateReceiptSerial());
+      // Open preview and auto-print; if preview opens successfully reset form
+      const previewOpened = handlePreview(true);
+      if (previewOpened) {
+        resetForm();
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
