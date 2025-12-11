@@ -44,9 +44,9 @@ function renderHtml(snapshot: any) {
   `;
 }
 
-export async function generateReceiptPdf(receiptSnapshot: any): Promise<Buffer> {
-  // Use branded template when available
-  const html = renderReceiptTemplate(receiptSnapshot);
+export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer> {
+  // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
+  const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = { args: ['--no-sandbox', '--disable-setuid-sandbox'] };
   if (process.env.PUPPETEER_EXECUTABLE_PATH) launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   const browser = await puppeteer.launch(launchOptions);
@@ -64,24 +64,29 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, include: { order: { include: { items: true } }, issuedBy: true } });
   if (!receipt) throw new Error('Receipt not found');
   const snapshot = receipt.data ?? { order: receipt.order, totals: receipt.totals };
-
-  // generate PDF
-  const pdfBuffer = await generateReceiptPdf(snapshot);
+  // generate two PDFs: one soft copy for customer (no stamp) and one full copy for printing/admin
+  const pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
+  const pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
   const sent: string[] = [];
   const errors: any[] = [];
   const actorId = (await getActorId()) || 'system';
 
   // upload to S3 (optional) so providers can attach media
-  let pdfUrl: string | null = null;
-  let s3Key: string | null = null;
+  // upload both customer and full PDFs if S3 configured
+  let pdfUrlCustomer: string | null = null;
+  let pdfUrlFull: string | null = null;
+  let s3KeyCustomer: string | null = null;
+  let s3KeyFull: string | null = null;
   try {
     const bucket = process.env.S3_BUCKET;
     if (bucket) {
-      const key = `receipts/${receipt.id}/receipt-${Date.now()}.pdf`;
-      // retentionDays comes from env, optional
+      const keyCust = `receipts/${receipt.id}/receipt-customer-${Date.now()}.pdf`;
+      const keyFull = `receipts/${receipt.id}/receipt-full-${Date.now()}.pdf`;
       const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-      pdfUrl = await uploadBufferToS3(bucket, key, pdfBuffer, 'application/pdf', retentionDays);
-      s3Key = key;
+      pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
+      pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
+      s3KeyCustomer = keyCust;
+      s3KeyFull = keyFull;
     }
   } catch (e) {
     console.error('Failed to upload PDF to S3', e);
@@ -90,11 +95,20 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
 
   // Persist ReceiptFile record for audit and lifecycle
   try {
-    const fileData: any = { receiptId: receipt.id, url: pdfUrl ?? (receipt.data as any)?.fileUrl ?? '', contentType: 'application/pdf', size: pdfBuffer.length, uploadedBy: actorId };
-    if (s3Key) fileData.key = s3Key;
+    // create separate records for customer and full PDFs (if available)
     const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-    if (retentionDays) fileData.expiresAt = new Date(Date.now() + retentionDays * 86400000);
-    await prisma.receiptFile.create({ data: fileData });
+    if (pdfUrlCustomer || pdfCustomerBuffer) {
+      const fileDataCust: any = { receiptId: receipt.id, url: pdfUrlCustomer ?? '', contentType: 'application/pdf', size: pdfCustomerBuffer.length, uploadedBy: actorId, tag: 'customer' };
+      if (s3KeyCustomer) fileDataCust.key = s3KeyCustomer;
+      if (retentionDays) fileDataCust.expiresAt = new Date(Date.now() + retentionDays * 86400000);
+      await prisma.receiptFile.create({ data: fileDataCust });
+    }
+    if (pdfUrlFull || pdfFullBuffer) {
+      const fileDataFull: any = { receiptId: receipt.id, url: pdfUrlFull ?? '', contentType: 'application/pdf', size: pdfFullBuffer.length, uploadedBy: actorId, tag: 'print' };
+      if (s3KeyFull) fileDataFull.key = s3KeyFull;
+      if (retentionDays) fileDataFull.expiresAt = new Date(Date.now() + retentionDays * 86400000);
+      await prisma.receiptFile.create({ data: fileDataFull });
+    }
   } catch (e) {
     console.error('Failed to create ReceiptFile record', e);
     errors.push({ channel: 'receiptFile.save', error: String(e) });
@@ -105,14 +119,14 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     const toEmail = (receipt.order as any)?.customerEmail || (receipt.data as any)?.customerEmail;
     const wantEmail = channels.length === 0 || channels.includes('email');
     if (wantEmail && toEmail && process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM) {
+      const attachmentBuffer = pdfUrlCustomer ? pdfCustomerBuffer : pdfCustomerBuffer;
       const msg: any = {
         to: toEmail,
         from: process.env.SENDGRID_FROM,
         subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
         text: `Please find your receipt attached.`,
-        attachments: [{ content: pdfBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }],
-        // include link if available
-        html: `<p>Please find your receipt attached.</p>${pdfUrl ? `<p><a href="${pdfUrl}">Download receipt (link)</a></p>` : ''}`,
+        attachments: [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }],
+        html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
       };
       await sgMail.send(msg);
       sent.push('email');
@@ -132,14 +146,15 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     if (wantWhatsapp && toPhone) {
       if (hasWhatsAppConfig()) {
         try {
-          if (pdfUrl) {
+          if (pdfUrlCustomer) {
             await sendWhatsAppDocumentMessage({
               to: toPhone,
-              link: pdfUrl,
+              link: pdfUrlCustomer,
               filename: `receipt-${receipt.id}.pdf`,
               caption: `Receipt ${receipt.order?.orderNumber ?? receipt.id}`,
             });
           } else {
+            // fallback to sending a text link
             await sendWhatsAppTextMessage({
               to: toPhone,
               body: `Your receipt ${receipt.order?.orderNumber ?? ''}: ${link}`,
@@ -153,7 +168,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
         const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
         const msgPayload: any = { from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`, to: `whatsapp:${toPhone}`, body: `Your receipt: ${link}` };
-        if (pdfUrl) msgPayload.mediaUrl = [pdfUrl];
+          if (pdfUrlCustomer) msgPayload.mediaUrl = [pdfUrlCustomer];
         await client.messages.create(msgPayload);
         sent.push('whatsapp');
       } else {
@@ -164,7 +179,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     if (wantSms && toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
       const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
-      if (pdfUrl) smsPayload.mediaUrl = [pdfUrl];
+      if (pdfUrlCustomer) smsPayload.mediaUrl = [pdfUrlCustomer];
       await client.messages.create(smsPayload);
       sent.push('sms');
     }

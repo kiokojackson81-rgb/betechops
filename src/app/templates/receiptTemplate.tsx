@@ -1,4 +1,4 @@
-export default function renderReceiptTemplate(snapshot: any) {
+export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
   const siteTitle = process.env.RECEIPT_SITE_TITLE || 'Betech Ops';
   const logo = process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png';
   const order = snapshot.order || {};
@@ -52,10 +52,12 @@ export default function renderReceiptTemplate(snapshot: any) {
           <tr><td class="right"><strong>Total</strong></td><td class="right"><strong>${totals.total||''}</strong></td></tr>
         </table>
 
+        ${opts.hideStamp ? "" : `
         <div class="signature">
           <div>_______________________</div>
           <div>Authorized signature</div>
         </div>
+        `}
       </section>
     </div>
   </body>

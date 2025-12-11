@@ -205,6 +205,23 @@ export async function POST(req: Request) {
     } catch (ledgerErr) {
       console.error("[support/daily] failed to recompute commission ledger", ledgerErr);
     }
+    // notify admin via WhatsApp with totals for this attendant's submission
+    try {
+      const adminPhone = process.env.ADMIN_PHONE || "254705663175";
+      if (adminPhone) {
+        const { sendWhatsAppTextMessage } = await import('@/lib/notifications/whatsapp');
+        const actorUser = await prisma.user.findUnique({ where: { id: auth.user.id }, select: { name: true, email: true } }).catch(() => null);
+        const actorName = actorUser?.name || auth.user.id;
+        const adminMsg = `Support report submitted by ${actorName}\nDate: ${date}\nTotal sales: KES ${totalSales.toLocaleString()}\nTotal profit: KES ${totalProfit.toLocaleString()}`;
+        try {
+          await sendWhatsAppTextMessage({ to: adminPhone, body: adminMsg });
+        } catch (waErr) {
+          console.error('[support/daily] failed to send admin WhatsApp', waErr);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('[support/daily] admin notify failed', notifyErr);
+    }
 
     return NextResponse.json(
       {
