@@ -37,4 +37,3 @@ export function middleware(req: NextRequest) {
 // was previously observed. Keep matcher minimal to avoid affecting unrelated
 // paths.
 export const config = { matcher: ["/marketing/:path*", "/attendant/:path*", "/auth/post-login"] };
-    pathname === "/attendant/login" ||
