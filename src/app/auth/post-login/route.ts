@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-
-const ROLE_HOME: Record<string, string> = {
-  ADMIN: '/admin',
-  ATTENDANT: '/attendant/dashboard',
-};
+import getLandingPage from '@/lib/getLandingPage';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -16,8 +12,10 @@ export async function GET(req: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const role = (session.user as any)?.role ?? '';
+  const category = (session.user as any)?.attendantCategory ?? null;
   const rawCallback = url.searchParams.get('callbackUrl') ?? url.searchParams.get('callback');
-  let target = ROLE_HOME[(session.user as any)?.role ?? ''] ?? '/';
+  let target = getLandingPage(category, role);
 
   if (rawCallback) {
     let decoded = rawCallback;
