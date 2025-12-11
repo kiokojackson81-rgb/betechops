@@ -312,6 +312,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const handleSave = async () => {
+    const receiptNumbers = receipts
+      .map((r) => r.receiptNumber.trim())
+      .filter(Boolean);
+    if (receiptNumbers.length !== new Set(receiptNumbers).size) {
+      showToast("Receipt numbers must be unique before saving", "error");
+      return;
+    }
+
     if (!staffId) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
     if (!hasPaymentMethodSelection) return showToast("Select payment method", "error");
