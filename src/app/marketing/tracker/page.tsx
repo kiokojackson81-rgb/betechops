@@ -312,7 +312,6 @@ function EarningsCard({ summary }: EarningsCardProps) {
         ))}
       </div>
     </Card>
-  </div>
   );
 }
 
