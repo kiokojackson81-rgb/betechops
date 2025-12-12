@@ -249,6 +249,7 @@ export default function AttendantOnlineClient() {
     );
     // compute profit: if any item in a receipt lacks a buyingPrice, treat profit for that receipt as 0
     let totalProfit = 0;
+    let awaitingPricingCount = 0;
     for (const receipt of receiptRows) {
       const items = Array.isArray(receipt.items) ? receipt.items : [];
       if (items.length === 0) continue;
@@ -267,6 +268,7 @@ export default function AttendantOnlineClient() {
         }
         buyingSum += n;
       }
+      if (anyMissing) awaitingPricingCount += 1;
       if (!anyMissing) {
         const sale = Number(receipt.total ?? 0);
         totalProfit += Math.max(0, sale - buyingSum);
@@ -279,6 +281,7 @@ export default function AttendantOnlineClient() {
       totalReceipts: receiptRows.length,
       commission: totalSales * COMMISSION_RATE,
       totalProfit,
+      awaitingPricingCount,
     };
   }, [receiptRows]);
 
