@@ -889,10 +889,10 @@ export default function ReceiptsAdminClient({
   const profitColorClass =
     (summaryTotals?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
   const summarySalesLabel = summaryLoading
-    ? "Loading…"
+    ? "Loading..."
     : formatCurrency(summaryTotals?.totalSales ?? 0);
   const summaryProfitLabel = summaryLoading
-    ? "Loading…"
+    ? "Loading..."
     : formatCurrency(summaryTotals?.totalProfit ?? 0);
   const formattedRangeStart = formatRangeLabel(appliedFilters.start);
   const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
@@ -900,7 +900,7 @@ export default function ReceiptsAdminClient({
     formattedRangeStart && formattedRangeEnd
       ? formattedRangeStart === formattedRangeEnd
         ? formattedRangeStart
-        : `${formattedRangeStart} – ${formattedRangeEnd}`
+        : `${formattedRangeStart} - ${formattedRangeEnd}`
       : rangeLabelText;
   return (
     <div className="space-y-6">
