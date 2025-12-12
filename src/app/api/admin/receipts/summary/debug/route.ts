@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../../lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 // Debugging route for admin receipts summary discrepancies.
 // Query params: start=ISO, end=ISO, attendantId (optional)
@@ -26,7 +26,6 @@ export async function GET(request: Request) {
         },
         ...(attendantId ? { attendantId } : {}),
       },
-      include: { items: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -69,7 +68,10 @@ export async function GET(request: Request) {
       return true;
     });
 
-    const receiptTotal = receipts.reduce((s, r) => s + Number(r.sellingTotal ?? 0), 0);
+    const receiptTotal = receipts.reduce(
+      (s, r) => s + Number((r as any)?.totals?.total ?? (r as any)?.order?.totalAmount ?? 0),
+      0,
+    );
     const dedupedTotal = dedupedCombined.reduce((s, r) => s + Number(r.sellingTotal ?? r.total ?? 0), 0);
 
     return NextResponse.json({
@@ -78,7 +80,12 @@ export async function GET(request: Request) {
       attendantId: attendantId ?? null,
       receiptsCount: receipts.length,
       receiptsTotal: receiptTotal,
-      receipts: receipts.map((r) => ({ id: r.id, receiptNumber: r.receiptNumber, sellingTotal: r.sellingTotal, createdAt: r.createdAt, items: r.items })),
+      receipts: receipts.map((r) => ({
+        id: r.id,
+        receiptNumber: (r as any)?.order?.orderNumber ?? r.orderId,
+        sellingTotal: (r as any)?.totals?.total ?? (r as any)?.order?.totalAmount ?? 0,
+        createdAt: r.createdAt,
+      })),
       marketingCount: marketing.length,
       supportCount: support.length,
       dedupedCombinedCount: dedupedCombined.length,
