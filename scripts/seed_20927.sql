@@ -4,7 +4,7 @@
 
 DO $$
 DECLARE
-  srid uuid;
+  srid text;
 BEGIN
   -- find support receipt (if exists)
   SELECT id INTO srid FROM "SupportReceipt" WHERE "receiptNumber" = 'Betech-20251212-20927';
