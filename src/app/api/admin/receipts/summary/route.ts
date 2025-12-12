@@ -20,6 +20,9 @@ const parseDateParam = (value: string | null, fallback: Date, toEnd = false) => 
   return toEnd ? endOfDay(parsed) : startOfDay(parsed);
 };
 
+const hasMissingCostData = (items: Array<{ buyingPrice: number | null; quantity?: number }>) =>
+  items.length === 0 || items.some((item) => item.buyingPrice === null || item.buyingPrice === undefined);
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const startParam = url.searchParams.get("start");
@@ -40,24 +43,59 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [marketingAgg, supportAgg] = await Promise.all([
-      prisma.marketingReceipt.aggregate({
+    const [marketingReceipts, supportReceipts] = await Promise.all([
+      prisma.marketingReceipt.findMany({
         where: { dailyEntry: dailyEntryFilter },
-        _sum: { sellingTotal: true, buyingTotal: true },
+        include: { items: true },
       }),
-      prisma.supportReceipt.aggregate({
+      prisma.supportReceipt.findMany({
         where: { dailyEntry: dailyEntryFilter },
-        _sum: { sellingTotal: true, buyingTotal: true },
+        include: { items: true },
       }),
     ]);
 
-    const totalSales =
-      (marketingAgg._sum.sellingTotal ?? 0) + (supportAgg._sum.sellingTotal ?? 0);
-    const totalCost =
-      (marketingAgg._sum.buyingTotal ?? 0) + (supportAgg._sum.buyingTotal ?? 0);
-    const totalProfit = totalSales - totalCost;
+    const allReceipts = [
+      ...marketingReceipts.map((receipt) => ({ ...receipt, type: "marketing" as const })),
+      ...supportReceipts.map((receipt) => ({ ...receipt, type: "support" as const })),
+    ];
 
-    return NextResponse.json({ totalSales, totalCost, totalProfit });
+    let totalSales = 0;
+    let totalCost = 0;
+    let totalProfit = 0;
+    let itemsCount = 0;
+    let hasIncompleteCosts = false;
+
+    for (const receipt of allReceipts) {
+      const sale = Number(receipt.sellingTotal ?? 0);
+      totalSales += sale;
+      const items = Array.isArray(receipt.items) ? receipt.items : [];
+      // count products sold by summing quantities (default 1)
+      itemsCount += items.reduce((s: number, it: any) => s + (Number(it.quantity ?? 1) || 0), 0);
+      const missingCost = hasMissingCostData(items);
+      if (missingCost) {
+        hasIncompleteCosts = true;
+        continue;
+      }
+      // compute cost taking quantity into account
+      const cost = items.reduce((sum: number, item: any) => {
+        const qty = Math.max(1, Number(item.quantity ?? 1));
+        return sum + qty * Number(item.buyingPrice ?? 0);
+      }, 0);
+      totalCost += cost;
+      totalProfit += sale - cost;
+    }
+
+    const receiptsCount = allReceipts.length;
+    const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
+
+    return NextResponse.json({
+      totalSales,
+      totalCost,
+      totalProfit,
+      receiptsCount,
+      itemsCount,
+      hasCompleteCosts,
+    });
   } catch (error) {
     console.error("[admin/receipts/summary] failed to load summary", error);
     return NextResponse.json(

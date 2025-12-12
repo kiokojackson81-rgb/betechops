@@ -3,6 +3,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReceiptsSummary from "./list/ReceiptsSummary";
+import RowActions from "./list/RowActions";
 import { showToast } from "@/lib/ui/toast";
 
 type ReceiptRow = {
@@ -125,6 +127,13 @@ const formatDateTime = (value?: string | null) => {
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
 
+const formatRangeLabel = (value?: string) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-KE", { day: "numeric", month: "short" });
+};
+
 const makeDefaultFilters = (): FilterState => {
   const today = new Date();
   const start = new Date(today);
@@ -230,6 +239,9 @@ export default function ReceiptsAdminClient({
     totalSales: number;
     totalProfit: number;
     totalCost: number;
+    receiptsCount: number;
+    itemsCount: number;
+    hasCompleteCosts: boolean;
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
@@ -243,6 +255,7 @@ export default function ReceiptsAdminClient({
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [editState, setEditState] = useState<{ open: boolean; draft: EditDraft | null; saving: boolean }>({
     open: false,
     draft: null,
@@ -354,6 +367,9 @@ export default function ReceiptsAdminClient({
             totalSales: Number(data.totalSales ?? 0),
             totalProfit: Number(data.totalProfit ?? 0),
             totalCost: Number(data.totalCost ?? 0),
+            receiptsCount: Number(data.receiptsCount ?? 0),
+            itemsCount: Number(data.itemsCount ?? 0),
+            hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
           });
         }
       } catch (err) {
@@ -456,6 +472,25 @@ export default function ReceiptsAdminClient({
     }
   };
 
+  const sendReceiptById = async (receiptId: string, channel: "email" | "whatsapp") => {
+    setSendingChannel(channel);
+    try {
+      const res = await fetch(`/api/receipts/${receiptId}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channels: [channel] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to queue send");
+      showToast(`Queued ${channel === "email" ? "email" : "WhatsApp"} send`, "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to queue send";
+      showToast(message, "error");
+    } finally {
+      setSendingChannel(null);
+    }
+  };
+
   const handleDeleteReceipt = async () => {
     if (!selected || !allowEdit) return;
     if (!window.confirm("Delete this receipt and all related records from the system?")) return;
@@ -474,6 +509,33 @@ export default function ReceiptsAdminClient({
       setDeleting(false);
     }
   };
+
+  const deleteReceiptById = async (receiptId: string) => {
+    if (!allowEdit) return;
+    if (!window.confirm("Delete this receipt and all related records from the system?")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/receipts/${receiptId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to delete receipt");
+      showToast("Receipt deleted", "success");
+      // if we deleted the currently selected, close drawer
+      if (selected?.id === receiptId) closeDrawer();
+      await loadRows(page);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete receipt";
+      showToast(message, "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (pendingEditId && detail?.receipt?.id === pendingEditId) {
+      setPendingEditId(null);
+      openEditModal();
+    }
+  }, [pendingEditId, detail?.receipt?.id]);
 
   const openEditModal = () => {
     if (!allowEdit) return;
@@ -640,57 +702,23 @@ export default function ReceiptsAdminClient({
   const summaryProfitLabel = summaryLoading
     ? "Loading…"
     : formatCurrency(summaryTotals?.totalProfit ?? 0);
+  const formattedRangeStart = formatRangeLabel(appliedFilters.start);
+  const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
+  const rangeDisplay =
+    formattedRangeStart && formattedRangeEnd
+      ? formattedRangeStart === formattedRangeEnd
+        ? formattedRangeStart
+        : `${formattedRangeStart} – ${formattedRangeEnd}`
+      : rangeLabelText;
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-white/15 bg-slate-900/70 p-4 shadow-inner shadow-black/30">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Snapshot</p>
-            <h2 className="text-lg font-semibold text-white">Receipt totals</h2>
-            <p className="text-sm text-slate-400">
-              Quick filters let you lock the view to today or this week while the list remains read-only.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-            <button
-              type="button"
-              onClick={() => applyQuickRange("today")}
-              className={`rounded-full border px-3 py-1 transition ${
-                quickRange === "today"
-                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                  : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-              }`}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => applyQuickRange("this-week")}
-              className={`rounded-full border px-3 py-1 transition ${
-                quickRange === "this-week"
-                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                  : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-              }`}
-            >
-              This week
-            </button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
-            <p className="text-xl font-semibold text-emerald-300">{summarySalesLabel}</p>
-          </div>
-          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">Total profit</p>
-            <p className={`text-xl font-semibold ${profitColorClass}`}>{summaryProfitLabel}</p>
-          </div>
-          <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
-            <p className="text-xl font-semibold text-white">{rangeLabelText}</p>
-          </div>
-        </div>
-      </section>
+      <ReceiptsSummary
+        summary={summaryTotals ?? null}
+        loading={summaryLoading}
+        quickRange={quickRange}
+        onApplyQuickRange={(k) => applyQuickRange(k)}
+        rangeLabel={rangeDisplay}
+      />
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -851,9 +879,22 @@ export default function ReceiptsAdminClient({
                   </td>
                   <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
                   <td className="px-3 py-3 text-right">
-                    <button className="text-sm text-emerald-300 hover:underline" type="button">
-                      View
-                    </button>
+                    <RowActions
+                      onEdit={() => {
+                        // load detail then open edit modal when ready
+                        setPendingEditId(row.id);
+                        handleRowClick(row);
+                      }}
+                      onEditItems={() => {
+                        setPendingEditId(row.id);
+                        handleRowClick(row);
+                      }}
+                      onDelete={() => void deleteReceiptById(row.id)}
+                      onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
+                      onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
+                      onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
+                      disabled={loading}
+                    />
                   </td>
                 </tr>
               );
