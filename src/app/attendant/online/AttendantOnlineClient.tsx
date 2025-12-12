@@ -247,11 +247,38 @@ export default function AttendantOnlineClient() {
       (sum, receipt) => sum + (Array.isArray(receipt.items) ? receipt.items.length : 0),
       0,
     );
+    // compute profit: if any item in a receipt lacks a buyingPrice, treat profit for that receipt as 0
+    let totalProfit = 0;
+    for (const receipt of receiptRows) {
+      const items = Array.isArray(receipt.items) ? receipt.items : [];
+      if (items.length === 0) continue;
+      let anyMissing = false;
+      let buyingSum = 0;
+      for (const it of items) {
+        const bp = it?.buyingPrice;
+        if (bp === "" || bp === null || bp === undefined) {
+          anyMissing = true;
+          break;
+        }
+        const n = Number(bp ?? 0);
+        if (Number.isNaN(n)) {
+          anyMissing = true;
+          break;
+        }
+        buyingSum += n;
+      }
+      if (!anyMissing) {
+        const sale = Number(receipt.total ?? 0);
+        totalProfit += Math.max(0, sale - buyingSum);
+      }
+    }
+
     return {
       totalSales,
       totalItems,
       totalReceipts: receiptRows.length,
       commission: totalSales * COMMISSION_RATE,
+      totalProfit,
     };
   }, [receiptRows]);
 
@@ -262,10 +289,30 @@ export default function AttendantOnlineClient() {
           const sale = Number(receipt.sellingTotal || 0);
           acc.totalSales += sale;
           acc.totalItems += receipt.items.length;
+          // compute profit for editor rows: if any buyingPrice missing, treat profit as 0
+          const items = receipt.items ?? [];
+          let anyMissing = false;
+          let buyingSum = 0;
+          for (const it of items) {
+            const bp = it?.buyingPrice;
+            if (bp === "" || bp === null || bp === undefined) {
+              anyMissing = true;
+              break;
+            }
+            const n = Number(bp ?? 0);
+            if (Number.isNaN(n)) {
+              anyMissing = true;
+              break;
+            }
+            buyingSum += n;
+          }
+          if (!anyMissing) {
+            acc.totalProfit += Math.max(0, sale - buyingSum);
+          }
           acc.totalReceipts += 1;
           return acc;
         },
-        { totalSales: 0, totalItems: 0, totalReceipts: 0 },
+        { totalSales: 0, totalItems: 0, totalReceipts: 0, totalProfit: 0 },
       ),
     [receiptsEditorRows],
   );
@@ -506,6 +553,7 @@ function QuickStatsCard({
     totalSales: number;
     totalItems: number;
     commission: number;
+    totalProfit?: number;
   };
 }) {
   const { locked, toggle } = useCardLock("online:quickstats");
@@ -517,6 +565,7 @@ function QuickStatsCard({
       value: safeNumber(totals.totalReceipts).toLocaleString(),
     },
     { label: "Sales (KES)", value: formatKES(totals.totalSales) },
+    { label: "Profit (KES)", value: formatKES(totals.totalProfit ?? 0) },
     {
       label: "Items sold",
       value: safeNumber(totals.totalItems).toLocaleString(),
