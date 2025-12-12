@@ -82,12 +82,18 @@ export async function GET(request: NextRequest) {
     const receiptMap = new Map<string, any>();
     for (const r of combined) {
       const key = r.receiptNumber ? `num:${String(r.receiptNumber)}` : `id:${r.type}:${r.id}`;
-      // If we already have a marketing record for this receiptNumber, keep it.
-      if (receiptMap.has(key)) continue;
-      // If key is by receiptNumber and we already have an entry keyed by id for the same
-      // receiptNumber (rare), prefer the receiptNumber-keyed one. Simpler approach: insert
-      // first-seen and skip duplicates.
-      receiptMap.set(key, r);
+      const existing = receiptMap.get(key);
+      if (!existing) {
+        receiptMap.set(key, r);
+        continue;
+      }
+      // If we already have a record for this receiptNumber, prefer a support
+      // receipt over a marketing one so the admin summary reflects support-side
+      // buying prices when available (keeps summary consistent with receipt UI).
+      if (existing.type === "marketing" && r.type === "support") {
+        receiptMap.set(key, r);
+      }
+      // Otherwise keep the existing entry (first-seen).
     }
     const allReceipts = Array.from(receiptMap.values());
 
