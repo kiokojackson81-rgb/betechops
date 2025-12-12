@@ -54,10 +54,25 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const allReceipts = [
+    // Combine marketing and support receipts but dedupe cases where both exist
+    // for the same sale (they share the same receiptNumber). Prefer the
+    // marketing receipt when both are present, otherwise fall back to
+    // support. If no receiptNumber exists, use a stable type+id key.
+    const combined = [
       ...marketingReceipts.map((receipt) => ({ ...receipt, type: "marketing" as const })),
       ...supportReceipts.map((receipt) => ({ ...receipt, type: "support" as const })),
     ];
+    const receiptMap = new Map<string, any>();
+    for (const r of combined) {
+      const key = r.receiptNumber ? `num:${String(r.receiptNumber)}` : `id:${r.type}:${r.id}`;
+      // If we already have a marketing record for this receiptNumber, keep it.
+      if (receiptMap.has(key)) continue;
+      // If key is by receiptNumber and we already have an entry keyed by id for the same
+      // receiptNumber (rare), prefer the receiptNumber-keyed one. Simpler approach: insert
+      // first-seen and skip duplicates.
+      receiptMap.set(key, r);
+    }
+    const allReceipts = Array.from(receiptMap.values());
 
     let totalSales = 0;
     let totalCost = 0;
