@@ -194,7 +194,7 @@ export default function MarketingReceiptsPage() {
             </p>
           </div>
           <Link
-            href="/marketing"
+            href="/marketing/tracker"
             className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
           >
             Back to dashboard
@@ -310,12 +310,16 @@ export default function MarketingReceiptsPage() {
                   <p className="text-sm font-semibold text-emerald-300">
                     {formatKES(receipt.total)}
                   </p>
-                  <Link
-                    href={`/receipts/${receipt.id}`}
-                    className="text-xs text-emerald-300 hover:text-emerald-200"
-                  >
-                    View details
-                  </Link>
+                  {receipt.id ? (
+                    <Link
+                      href={`/receipts/${receipt.id}`}
+                      className="text-xs text-emerald-300 hover:text-emerald-200"
+                    >
+                      View details
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-slate-500">Unavailable</span>
+                  )}
                 </div>
               </div>
             ))}
