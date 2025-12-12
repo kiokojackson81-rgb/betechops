@@ -35,7 +35,7 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
       if (!prod) {
         prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: Number(it.salePrice || 0) } })) as { id: string };
       }
-      const oi = await p.orderItem.create({ data: { orderId: existing.id, productId: prod.id, quantity: it.qty, sellingPrice: it.salePrice } });
+      const oi = await p.orderItem.create({ data: { orderId: existing.id, productId: prod.id, quantity: Math.max(1, Math.trunc(Number(it.qty || 0))), sellingPrice: Number(it.salePrice || 0) } });
       createdItems.push(oi as unknown);
     }
     return { orderId: orderRecord.id, order: orderRecord, createdItems };
@@ -49,7 +49,7 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
     if (!prod) {
       prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: Number(it.salePrice || 0) } })) as { id: string };
     }
-    const oi = await p.orderItem.create({ data: { orderId: created.id, productId: prod.id, quantity: it.qty, sellingPrice: it.salePrice } });
+    const oi = await p.orderItem.create({ data: { orderId: created.id, productId: prod.id, quantity: Math.max(1, Math.trunc(Number(it.qty || 0))), sellingPrice: Number(it.salePrice || 0) } });
     createdItems.push(oi as unknown);
   }
 

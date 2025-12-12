@@ -252,7 +252,10 @@ export default function AttendantOnlineClient() {
     let awaitingPricingCount = 0;
     for (const receipt of receiptRows) {
       const items = Array.isArray(receipt.items) ? receipt.items : [];
-      if (items.length === 0) continue;
+      if (items.length === 0) {
+        awaitingPricingCount += 1;
+        continue;
+      }
       let anyMissing = false;
       let buyingSum = 0;
       for (const it of items) {
