@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { subscribeSummary } from "@/lib/receiptSseBroker";
 
 const startOfDay = (value: Date) => {
   const clone = new Date(value);
@@ -98,14 +99,25 @@ export async function GET(request: NextRequest) {
 
       await sendSnapshot();
 
+      // subscribe to broker so we can push updates immediately when receipts are created
+      const onPublish = () => {
+        if (closed) return;
+        void sendSnapshot();
+      };
+      const unsubscribe = subscribeSummary(onPublish);
+
+      // fallback periodic poll every 10s
       const iv = setInterval(() => {
         if (closed) return;
         void sendSnapshot();
-      }, 5000);
+      }, 10000);
 
       const onAbort = () => {
         closed = true;
         clearInterval(iv);
+        try {
+          unsubscribe();
+        } catch {}
         try {
           controller.close();
         } catch {}

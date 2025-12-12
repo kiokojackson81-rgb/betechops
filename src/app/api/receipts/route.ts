@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod, type Prisma, type SupportReceipt } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { requireAttendant, auth } from "@/lib/auth";
 import { canonicalReceiptNumber, findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
@@ -584,6 +585,13 @@ export async function POST(req: NextRequest) {
       } catch (ledgerErr) {
         console.error("[receipts] failed to recompute support commission ledger", ledgerErr);
       }
+    }
+
+    // notify SSE subscribers about the new receipt so streams can push immediate updates
+    try {
+      publishSummaryUpdate({ attendantId: attendantId ?? null, receiptId: result.receiptId, timestamp: new Date().toISOString() });
+    } catch (err) {
+      console.warn("[receipts] failed to publish summary update", err);
     }
 
     return NextResponse.json({ ok: true, ...result });
