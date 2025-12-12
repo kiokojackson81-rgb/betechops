@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -9,6 +9,7 @@ import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
+import DailyReportReceiptsPanel from "./daily-report-receipts";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -132,6 +133,7 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -536,13 +538,29 @@ export default function DailyReportFinal() {
                 Daily tracker for uploads, engagement, walk-ins and live sessions.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Log out
-            </button>
+            <div className="flex flex-col gap-2 items-start sm:items-end">
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="#my-receipts"
+                  className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Receipts
+                </a>
+                <a
+                  href={`/receipts?start=${date}&end=${date}`}
+                  className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                >
+                  Create receipt
+                </a>
+                <button
+                  type="button"
+                  onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+                  className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Log out
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -558,6 +576,10 @@ export default function DailyReportFinal() {
             </div>
           </div>
         </section>
+        <DailyReportReceiptsPanel
+          date={date}
+          attendantId={impersonateId ?? session?.user?.id ?? null}
+        />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
