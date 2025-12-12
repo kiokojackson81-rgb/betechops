@@ -66,7 +66,7 @@ const getWeekBounds = (reference: Date) => {
 
 const ReceiptRangeOptions: { key: ReceiptRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday & today" },
+  { key: "yesterday", label: "Yesterday" },
   { key: "this-week", label: "This week" },
   { key: "period", label: "This period" },
 ];
@@ -156,7 +156,7 @@ export default function MarketingReceiptsPage() {
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
-    if (rangeKey === "yesterday") return "Yesterday & today";
+    if (rangeKey === "yesterday") return "Yesterday";
     if (rangeKey === "this-week") return "This week";
     if (rangeKey === "period") return periodRange.label;
     return "Custom range";
@@ -171,7 +171,8 @@ export default function MarketingReceiptsPage() {
         const today = new Date(defaultDate);
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
-        return { start: toDateInput(yesterday), end: defaultDate };
+        const yesterdayInput = toDateInput(yesterday);
+        return { start: yesterdayInput, end: yesterdayInput };
       }
       if (key === "this-week") {
         const { start: weekStart, end: weekEnd } = getWeekBounds(new Date());
