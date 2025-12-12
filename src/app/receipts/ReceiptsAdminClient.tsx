@@ -1395,7 +1395,19 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
     const remaining = draft.items.filter((item) => item.id !== id);
     onDraftChange({
       ...draft,
-      items: remaining.length ? remaining : [{ id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null }],
+      items: remaining.length
+        ? remaining
+        : [
+            {
+              id: randomId(),
+              title: "",
+              quantity: 1,
+              unitPrice: 0,
+              serial: null,
+              warranty: null,
+              buyingPrice: 0,
+            },
+          ],
     });
   };
 
