@@ -245,6 +245,10 @@ export default function ReceiptsAdminClient({
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [sseEnabled, setSseEnabled] = useState(false);
+  const [sseOn, setSseOn] = useState<boolean>(true); // user preference: use SSE when supported
+  const [sseStatus, setSseStatus] = useState<"connected" | "reconnecting" | "fallback" | "closed">("fallback");
+  const sseRetryRef = useRef(0);
+  const sseEsRef = useRef<EventSource | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -428,16 +432,30 @@ export default function ReceiptsAdminClient({
 
   // Poll the summary every 30 seconds when SSE is not enabled
   useEffect(() => {
-    if (sseEnabled) return;
+    if (sseEnabled && sseOn) return; // SSE will handle updates
+    // polling active when SSE not supported or user opted out
     const interval = setInterval(() => void fetchSummary(), 30_000);
+    // run an immediate fetch to ensure quick update when switching modes
+    void fetchSummary();
     return () => clearInterval(interval);
-  }, [fetchSummary, sseEnabled]);
+  }, [fetchSummary, sseEnabled, sseOn]);
 
-  // If SSE is enabled, open an EventSource and listen for snapshot messages
+  // If SSE is enabled and user opted-in, open an EventSource with reconnect/backoff
   useEffect(() => {
-    if (!sseEnabled) return;
-    let es: EventSource | null = null;
-    try {
+    if (!sseEnabled || !sseOn) {
+      // ensure any existing ES is closed
+      try {
+        sseEsRef.current?.close();
+      } catch {}
+      sseEsRef.current = null;
+      setSseStatus("fallback");
+      return;
+    }
+
+    let aborted = false;
+
+    const startEventSource = () => {
+      sseRetryRef.current = Math.max(0, sseRetryRef.current);
       const params = new URLSearchParams();
       const startParam = buildDateParam(appliedFilters.start, false);
       const endParam = buildDateParam(appliedFilters.end, true);
@@ -445,35 +463,70 @@ export default function ReceiptsAdminClient({
       if (endParam) params.set("end", endParam);
       if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
       const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
-      es = new EventSource(url);
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          setSummaryTotals({
-            totalSales: Number(data.totalSales ?? 0),
-            totalProfit: Number(data.totalProfit ?? 0),
-            totalCost: Number(data.totalCost ?? 0),
-            receiptsCount: Number(data.receiptsCount ?? 0),
-            itemsCount: Number(data.itemsCount ?? 0),
-            hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
-          });
-        } catch (err) {
-          console.warn("[receipts] failed to parse SSE data", err);
-        }
-      };
-      es.onerror = (err) => {
-        console.warn("[receipts] SSE error", err);
-      };
-    } catch (err) {
-      console.warn("[receipts] failed to create EventSource", err);
-    }
+
+      try {
+        const es = new EventSource(url);
+        sseEsRef.current = es;
+        setSseStatus("reconnecting");
+
+        es.onopen = () => {
+          sseRetryRef.current = 0;
+          setSseStatus("connected");
+        };
+
+        es.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            setSummaryTotals({
+              totalSales: Number(data.totalSales ?? 0),
+              totalProfit: Number(data.totalProfit ?? 0),
+              totalCost: Number(data.totalCost ?? 0),
+              receiptsCount: Number(data.receiptsCount ?? 0),
+              itemsCount: Number(data.itemsCount ?? 0),
+              hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+            });
+          } catch (err) {
+            console.warn("[receipts] failed to parse SSE data", err);
+          }
+        };
+
+        es.onerror = () => {
+          // close and attempt reconnect with backoff
+          try {
+            es.close();
+          } catch {}
+          if (aborted) return;
+          sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
+          const attempt = sseRetryRef.current;
+          const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
+          setSseStatus("reconnecting");
+          setTimeout(() => {
+            if (!aborted) startEventSource();
+          }, delay);
+        };
+      } catch (err) {
+        console.warn("[receipts] failed to create EventSource", err);
+        // schedule reconnection
+        sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
+        const attempt = sseRetryRef.current;
+        const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
+        setSseStatus("reconnecting");
+        setTimeout(() => {
+          if (!aborted) startEventSource();
+        }, delay);
+      }
+    };
+
+    startEventSource();
 
     return () => {
+      aborted = true;
       try {
-        es?.close();
+        sseEsRef.current?.close();
       } catch {}
+      sseEsRef.current = null;
     };
-  }, [sseEnabled, appliedFilters]);
+  }, [sseEnabled, sseOn, appliedFilters]);
 
   const applyFilters = () => {
     setAppliedFilters({ ...filters });
@@ -828,6 +881,9 @@ export default function ReceiptsAdminClient({
         loading={summaryLoading}
         quickRange={quickRange}
         onApplyQuickRange={(k) => applyQuickRange(k)}
+        sseOn={sseOn && sseEnabled}
+        sseStatus={sseStatus}
+        onToggleSse={(v: boolean) => setSseOn(v)}
         rangeLabel={rangeDisplay}
       />
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
