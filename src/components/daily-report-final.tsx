@@ -133,7 +133,8 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
-  const { data: session } = useSession();
+  const sessionResponse = useSession();
+  const session = sessionResponse?.data;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
