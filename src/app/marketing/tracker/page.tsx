@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
@@ -1422,25 +1423,12 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             </p>
           </div>
           <div className="flex gap-2">
-            <Link
-              href="/marketing/receipts"
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Receipts
-            </Link>
-            <a
-              href={`/receipts?start=${form.date}&end=${form.date}`}
-              className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
-            >
-              Create receipt
-            </a>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Log out
-            </button>
+            <HeaderActions
+              receiptsHref="/marketing/receipts"
+              createHref={`/receipts?start=${form.date}&end=${form.date}`}
+              onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
+              showDot={false}
+            />
           </div>
         </header>
 

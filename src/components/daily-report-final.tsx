@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import HeaderActions from "@/components/HeaderActions";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -513,8 +514,36 @@ export default function DailyReportFinal() {
         }}
         className={inputClasses}
       />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const d = new Date();
+            const iso = d.toISOString().split("T")[0];
+            setDate(iso);
+            setDayOfWeek(d.toLocaleDateString("en-KE", { weekday: "long" }));
+          }}
+          className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            const iso = d.toISOString().split("T")[0];
+            setDate(iso);
+            setDayOfWeek(d.toLocaleDateString("en-KE", { weekday: "long" }));
+          }}
+          className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
+        >
+          Yesterday
+        </button>
+      </div>
     </div>
   );
+
 
   const dayOfWeekSelect = (
     <select value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)} className={inputClasses}>
@@ -539,28 +568,14 @@ export default function DailyReportFinal() {
                 Daily tracker for uploads, engagement, walk-ins and live sessions.
               </p>
             </div>
-            <div className="flex flex-col gap-2 items-start sm:items-end">
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href="#my-receipts"
-                  className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-                >
-                  Receipts
-                </a>
-                <a
-                  href={`/receipts?start=${date}&end=${date}`}
-                  className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
-                >
-                  Create receipt
-                </a>
-                <button
-                  type="button"
-                  onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-                  className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-                >
-                  Log out
-                </button>
-              </div>
+            <div>
+              {/* Header actions extracted to shared component */}
+              <HeaderActions
+                receiptsHref="#my-receipts"
+                createHref={`/receipts?view=create`}
+                onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
+                showDot={true}
+              />
             </div>
           </div>
         </div>
