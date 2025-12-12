@@ -102,6 +102,13 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const paidAmount = docType === "LAYAWAY" ? layawayDeposit : total;
 
       // refresh products + items
+      // Delete dependent CommissionEarning rows first to avoid foreign-key violations
+      // (CommissionEarning.orderItemId references OrderItem). If there are existing
+      // items, remove their commission earnings before removing the items.
+      if (existing.order?.items && existing.order.items.length) {
+        const existingItemIds = existing.order.items.map((i) => i.id);
+        await tx.commissionEarning.deleteMany({ where: { orderItemId: { in: existingItemIds } } });
+      }
       await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
       const createdOrderItems: any[] = [];
       for (const it of items) {
