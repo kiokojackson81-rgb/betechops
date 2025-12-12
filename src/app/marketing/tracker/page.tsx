@@ -328,23 +328,6 @@ type MarketingReceiptRow = {
   total?: number | null;
 };
 
-type MarketingReceiptsPanelProps = {
-  anchorId: string;
-  defaultDate: string;
-  periodRange?: { start: string; end: string; label: string };
-};
-
-const ReceiptRangeOptions: Array<{ key: ReceiptRangeKey; label: string }> = [
-  { key: "today", label: "Today" },
-  { key: "this-week", label: "This week" },
-  { key: "period", label: "This period" },
-];
-
-function MarketingReceiptsPanel({
-  anchorId,
-  defaultDate,
-  periodRange,
-}: MarketingReceiptsPanelProps) {
   const [filters, setFilters] = useState({
     start: defaultDate,
     end: defaultDate,
@@ -1423,7 +1406,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
           </div>
           <div className="flex gap-2">
             <Link
-              href="#receiptsList"
+              href="/marketing/receipts"
               className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
             >
               Receipts
@@ -1432,7 +1415,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
               href={`/receipts?start=${form.date}&end=${form.date}`}
               className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
             >
-              View Receipts
+              Create receipt
             </a>
             <button
               type="button"
@@ -1443,12 +1426,6 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             </button>
           </div>
         </header>
-
-        <MarketingReceiptsPanel
-          anchorId="receiptsList"
-          defaultDate={form.date}
-          periodRange={effectivePeriodRange}
-        />
 
         {periodSummary && (
           <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">
