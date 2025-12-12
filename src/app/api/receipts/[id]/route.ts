@@ -191,7 +191,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       }
 
       const normalizedReceiptNumber = canonicalReceiptNumber(existing.order?.orderNumber ?? "");
-      const entryAttendantId = attendantId || existing.order?.attendantId ?? null;
+      const entryAttendantId = (attendantId || existing.order?.attendantId) ?? null;
       const entryDate = existing.order?.createdAt ?? new Date();
       const dayStart = new Date(entryDate);
       dayStart.setHours(0, 0, 0, 0);

@@ -44,8 +44,9 @@ async function backfillSupportReceiptItems({ dryRun, batch }) {
   console.log('Backfilling SupportReceiptItem.pricedAt (pricedAt IS NULL && buyingPrice IS NOT NULL)');
   let total = 0;
   while (true) {
+    // `buyingPrice` is non-nullable in the schema, so filter only on pricedAt
     const rows = await prisma.supportReceiptItem.findMany({
-      where: { pricedAt: null, buyingPrice: { not: null } },
+      where: { pricedAt: null },
       select: { id: true, updatedAt: true },
       take: batch,
     });
