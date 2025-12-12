@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod, type Prisma, type SupportReceipt } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { requireAttendant, auth } from "@/lib/auth";
 import { canonicalReceiptNumber, findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
@@ -127,26 +128,7 @@ export async function POST(req: NextRequest) {
 
   const payload = (await req.json()) as any;
 
-  const parseNumber = (value: unknown, fallback = 0) => {
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : fallback;
-    }
-    if (typeof value === "string") {
-      const cleaned = value.trim();
-      if (!cleaned) return fallback;
-      const normalized = cleaned.replace(/[^0-9.-]/g, "");
-      if (!normalized) return fallback;
-      const parsed = Number(normalized);
-      return Number.isFinite(parsed) ? parsed : fallback;
-    }
-    return fallback;
-  };
-
-  const parseIntLike = (value: unknown, fallback = 0) => {
-    const parsed = parseNumber(value, fallback);
-    if (!Number.isFinite(parsed)) return fallback;
-    return Math.trunc(parsed);
-  };
+  // use shared parse helpers from src/lib/parseNumber
 
   const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
