@@ -250,7 +250,9 @@ export default function ReceiptsAdminClient({
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [sseEnabled, setSseEnabled] = useState(false);
-  const [sseOn, setSseOn] = useState<boolean>(true); // user preference: use SSE when supported
+  // Start with SSE turned off by default to avoid unexpected snapshot reloads
+  // flipping the UI; users can opt-in via the toggle in the UI.
+  const [sseOn, setSseOn] = useState<boolean>(false); // user preference: use SSE when supported
   const [sseStatus, setSseStatus] = useState<"connected" | "reconnecting" | "fallback" | "closed">("fallback");
   const sseRetryRef = useRef(0);
   const sseEsRef = useRef<EventSource | null>(null);
