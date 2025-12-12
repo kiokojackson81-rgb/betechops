@@ -15,7 +15,11 @@ const endOfDay = (value: Date) => {
 
 const parseDateParam = (value: string | null, fallback: Date, toEnd = false) => {
   if (!value) return toEnd ? endOfDay(fallback) : startOfDay(fallback);
-  const parsed = new Date(value);
+  const normalized =
+    /^\d{4}-\d{2}-\d{2}$/.test(value) && !value.includes("T")
+      ? `${value}T00:00:00+03:00`
+      : value;
+  const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return toEnd ? endOfDay(fallback) : startOfDay(fallback);
   return toEnd ? endOfDay(parsed) : startOfDay(parsed);
 };
