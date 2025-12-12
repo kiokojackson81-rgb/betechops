@@ -27,8 +27,10 @@ BEGIN
   DELETE FROM "SupportReceiptItem" WHERE "receiptId" = srid;
 
   -- insert five support items with explicit pricedAt timestamps
-  INSERT INTO "SupportReceiptItem" ("receiptId", "productName", "buyingPrice", "pricedAt", "createdAt", "updatedAt")
-  SELECT srid, v.productName, v.buyingPrice, v.pricedAt, now(), now()
+    -- generate a stable-ish id for each inserted item to satisfy NOT NULL id columns
+    INSERT INTO "SupportReceiptItem" (id, "receiptId", "productName", "buyingPrice", "pricedAt", "createdAt", "updatedAt")
+    SELECT ('seed-' || substring(md5(random()::text || clock_timestamp()::text) from 1 for 24))::text AS id,
+      srid, v.productName, v.buyingPrice, v.pricedAt, now(), now()
   FROM (VALUES
     ('2x1 Tracking', 1256, '2025-12-12T14:44:30.743+03:00'::timestamptz),
     ('Battery Fuse', 1256, '2025-12-12T14:44:31.238+03:00'::timestamptz),
