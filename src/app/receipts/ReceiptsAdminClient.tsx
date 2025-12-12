@@ -36,7 +36,7 @@ type FilterState = {
 
 type StaffOption = { id: string; name: string };
 
-type AdminQuickRangeKey = "today" | "this-week" | "custom";
+type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom";
 
 type SupportItemDetail = {
   id: string;
@@ -297,7 +297,12 @@ export default function ReceiptsAdminClient({
         if (savedEnd) next.end = savedEnd;
         return next;
       });
-      if (savedQuick === "today" || savedQuick === "this-week" || savedQuick === "custom") {
+      if (
+        savedQuick === "today" ||
+        savedQuick === "yesterday" ||
+        savedQuick === "this-week" ||
+        savedQuick === "custom"
+      ) {
         setQuickRange(savedQuick);
       }
     } catch (err) {
@@ -555,7 +560,7 @@ export default function ReceiptsAdminClient({
     }
   };
 
-  const applyQuickRange = (key: "today" | "this-week") => {
+  const applyQuickRange = (key: AdminQuickRangeKey) => {
     const now = new Date();
     const bounds =
       key === "today"
@@ -563,6 +568,16 @@ export default function ReceiptsAdminClient({
             start: formatDateInput(startOfDayForRange(now)),
             end: formatDateInput(startOfDayForRange(now)),
           }
+        : key === "yesterday"
+        ? (() => {
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            const dayStart = startOfDayForRange(yesterday);
+            return {
+              start: formatDateInput(dayStart),
+              end: formatDateInput(dayStart),
+            };
+          })()
         : (() => {
             const { start, end } = getWeekBounds(now);
             return { start: formatDateInput(start), end: formatDateInput(end) };
@@ -857,7 +872,13 @@ export default function ReceiptsAdminClient({
     hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
   const rangeLabelText =
-    quickRange === "today" ? "Today" : quickRange === "this-week" ? "This week" : "Custom range";
+    quickRange === "today"
+      ? "Today"
+      : quickRange === "yesterday"
+      ? "Yesterday"
+      : quickRange === "this-week"
+      ? "This week"
+      : "Custom range";
   const profitColorClass =
     (summaryTotals?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
   const summarySalesLabel = summaryLoading

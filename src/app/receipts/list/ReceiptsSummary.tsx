@@ -20,8 +20,8 @@ export default function ReceiptsSummary({
 }: {
   summary: Summary | null;
   loading: boolean;
-  quickRange: "today" | "this-week" | "custom";
-  onApplyQuickRange: (key: "today" | "this-week") => void;
+  quickRange: "today" | "yesterday" | "this-week" | "custom";
+  onApplyQuickRange: (key: "today" | "yesterday" | "this-week") => void;
   rangeLabel: string;
   sseOn?: boolean;
   sseStatus?: string;
@@ -38,11 +38,12 @@ export default function ReceiptsSummary({
     `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
   const salesLabel = loading ? "Loading…" : formatCurrency(summary?.totalSales ?? 0);
-  const profitLabel = loading
-    ? "Loading…"
+  const profitLabel = loading ? "Loading�" : formatCurrency(summary?.totalProfit ?? 0);
+  const profitNote = loading
+    ? ""
     : summary?.hasCompleteCosts
-    ? formatCurrency(summary?.totalProfit ?? 0)
-    : "Awaiting cost data";
+    ? "All priced receipts"
+    : "Based on priced receipts only";
 
   const receiptsLabel = loading ? "Loading…" : String(summary?.receiptsCount ?? 0);
   const itemsLabel = loading ? "Loading…" : String(summary?.itemsCount ?? 0);
@@ -68,6 +69,17 @@ export default function ReceiptsSummary({
             }`}
           >
             Today
+          </button>
+          <button
+            type="button"
+            onClick={() => onApplyQuickRange("yesterday")}
+            className={`rounded-full border px-3 py-1 transition ${
+              quickRange === "yesterday"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+            }`}
+          >
+            Yesterday
           </button>
           <button
             type="button"
@@ -112,9 +124,14 @@ export default function ReceiptsSummary({
         </div>
         <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Total profit</p>
-          <p className={`text-xl font-semibold ${summary?.hasCompleteCosts ? "text-emerald-300" : "text-slate-400"}`}>
-            {profitLabel}
-          </p>
+          <div>
+            <p className={`text-xl font-semibold ${summary?.hasCompleteCosts ? "text-emerald-300" : "text-slate-400"}`}>
+              {profitLabel}
+            </p>
+            {profitNote && (
+              <p className="text-[11px] text-slate-400">{profitNote}</p>
+            )}
+          </div>
         </div>
         <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
