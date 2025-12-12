@@ -125,7 +125,8 @@ const formatDateTime = (value?: string | null) => {
   return new Date(value).toLocaleString();
 };
 
-const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
+const formatDateInput = (date: Date) =>
+  date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
 
 const formatRangeLabel = (value?: string) => {
   if (!value) return "";
