@@ -34,6 +34,8 @@ type MarketingDailyFormState = {
   fields: Record<string, boolean | number | string | null>;
 };
 
+
+
 type ReceiptItem = { id: string; productName: string; buyingPrice: number | "" };
 type ReceiptRow = {
   id: string;
@@ -140,6 +142,19 @@ const formatDateTime = (value?: string | null) => {
     minute: "2-digit",
   });
 };
+
+// Defaults and options used by the receipts list component (must come after toDateInput)
+const defaultDate = toDateInput(new Date());
+
+const ReceiptRangeOptions = [
+  { key: "today", label: "Today" },
+  { key: "this-week", label: "This week" },
+  { key: "period", label: "This trading period" },
+  { key: "custom", label: "Custom range" },
+];
+
+// Placeholder for optional period range; populated by server or left undefined
+const periodRange: { start?: string; end?: string; label?: string } | undefined = undefined;
 
 const toDateInputFromString = (value: string | undefined, fallback: string) => {
   if (!value) return fallback;
@@ -328,6 +343,8 @@ type MarketingReceiptRow = {
   total?: number | null;
 };
 
+function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
+
   const [filters, setFilters] = useState({
     start: defaultDate,
     end: defaultDate,
@@ -433,7 +450,7 @@ type MarketingReceiptRow = {
               <button
                 key={option.key}
                 type="button"
-                onClick={() => applyRange(option.key)}
+                onClick={() => applyRange(option.key as any)}
                 className={`rounded-full border px-4 py-1 transition ${
                   rangeKey === option.key
                     ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
