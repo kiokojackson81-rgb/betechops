@@ -244,6 +244,7 @@ export default function ReceiptsAdminClient({
     hasCompleteCosts: boolean;
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [sseEnabled, setSseEnabled] = useState(false);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -264,6 +265,41 @@ export default function ReceiptsAdminClient({
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const firstLoadRef = useRef(true);
+  const STORAGE_KEYS = {
+    attendantId: "receipts.attendantId.v1",
+    quickRange: "receipts.quickRange.v1",
+    rangeStart: "receipts.rangeStart.v1",
+    rangeEnd: "receipts.rangeEnd.v1",
+  } as const;
+
+  // load persisted filters (attendant + quick range) on mount
+  useEffect(() => {
+    try {
+      const savedAttendant = window.localStorage.getItem(STORAGE_KEYS.attendantId);
+      const savedQuick = window.localStorage.getItem(STORAGE_KEYS.quickRange) as AdminQuickRangeKey | null;
+      const savedStart = window.localStorage.getItem(STORAGE_KEYS.rangeStart);
+      const savedEnd = window.localStorage.getItem(STORAGE_KEYS.rangeEnd);
+      setFilters((prev) => {
+        let next = { ...prev };
+        if (savedAttendant) next.attendantId = savedAttendant;
+        if (savedStart) next.start = savedStart;
+        if (savedEnd) next.end = savedEnd;
+        return next;
+      });
+      setAppliedFilters((prev) => {
+        let next = { ...prev };
+        if (savedAttendant) next.attendantId = savedAttendant;
+        if (savedStart) next.start = savedStart;
+        if (savedEnd) next.end = savedEnd;
+        return next;
+      });
+      if (savedQuick === "today" || savedQuick === "this-week" || savedQuick === "custom") {
+        setQuickRange(savedQuick);
+      }
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, []);
 
   useEffect(() => {
     setRows(initial);
@@ -342,27 +378,77 @@ export default function ReceiptsAdminClient({
     }
   }, [refreshSignal, loadRows]);
 
+  // Fetch summary (extracted so it can be polled)
+  const fetchSummary = useCallback(async (opts?: { signal?: AbortSignal }) => {
+    setSummaryLoading(true);
+    try {
+      const params = new URLSearchParams();
+      const startParam = buildDateParam(appliedFilters.start, false);
+      const endParam = buildDateParam(appliedFilters.end, true);
+      if (startParam) params.set("start", startParam);
+      if (endParam) params.set("end", endParam);
+      if (appliedFilters.attendantId) {
+        params.set("attendantId", appliedFilters.attendantId);
+      }
+      const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
+        cache: "no-store",
+        signal: opts?.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to load summary");
+      setSummaryTotals({
+        totalSales: Number(data.totalSales ?? 0),
+        totalProfit: Number(data.totalProfit ?? 0),
+        totalCost: Number(data.totalCost ?? 0),
+        receiptsCount: Number(data.receiptsCount ?? 0),
+        itemsCount: Number(data.itemsCount ?? 0),
+        hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+      });
+    } catch (err) {
+      console.warn("[receipts] summary error", err);
+      setSummaryTotals(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [appliedFilters]);
+
+  // initial fetch and when filters change
   useEffect(() => {
-    let cancelled = false;
     const controller = new AbortController();
-    const fetchSummary = async () => {
-      setSummaryLoading(true);
-      try {
-        const params = new URLSearchParams();
-        const startParam = buildDateParam(appliedFilters.start, false);
-        const endParam = buildDateParam(appliedFilters.end, true);
-        if (startParam) params.set("start", startParam);
-        if (endParam) params.set("end", endParam);
-        if (appliedFilters.attendantId) {
-          params.set("attendantId", appliedFilters.attendantId);
-        }
-        const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "Failed to load summary");
-        if (!cancelled) {
+    void fetchSummary({ signal: controller.signal });
+    return () => controller.abort();
+  }, [fetchSummary]);
+
+  // detect EventSource support and prefer SSE when available
+  useEffect(() => {
+    if (typeof window !== "undefined" && "EventSource" in window) {
+      setSseEnabled(true);
+    }
+  }, []);
+
+  // Poll the summary every 30 seconds when SSE is not enabled
+  useEffect(() => {
+    if (sseEnabled) return;
+    const interval = setInterval(() => void fetchSummary(), 30_000);
+    return () => clearInterval(interval);
+  }, [fetchSummary, sseEnabled]);
+
+  // If SSE is enabled, open an EventSource and listen for snapshot messages
+  useEffect(() => {
+    if (!sseEnabled) return;
+    let es: EventSource | null = null;
+    try {
+      const params = new URLSearchParams();
+      const startParam = buildDateParam(appliedFilters.start, false);
+      const endParam = buildDateParam(appliedFilters.end, true);
+      if (startParam) params.set("start", startParam);
+      if (endParam) params.set("end", endParam);
+      if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
+      const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
+      es = new EventSource(url);
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
           setSummaryTotals({
             totalSales: Number(data.totalSales ?? 0),
             totalProfit: Number(data.totalProfit ?? 0),
@@ -371,25 +457,34 @@ export default function ReceiptsAdminClient({
             itemsCount: Number(data.itemsCount ?? 0),
             hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
           });
+        } catch (err) {
+          console.warn("[receipts] failed to parse SSE data", err);
         }
-      } catch (err) {
-        if (!cancelled) {
-          console.warn("[receipts] summary error", err);
-          setSummaryTotals(null);
-        }
-      } finally {
-        if (!cancelled) setSummaryLoading(false);
-      }
-    };
-    fetchSummary();
+      };
+      es.onerror = (err) => {
+        console.warn("[receipts] SSE error", err);
+      };
+    } catch (err) {
+      console.warn("[receipts] failed to create EventSource", err);
+    }
+
     return () => {
-      cancelled = true;
-      controller.abort();
+      try {
+        es?.close();
+      } catch {}
     };
-  }, [appliedFilters]);
+  }, [sseEnabled, appliedFilters]);
 
   const applyFilters = () => {
     setAppliedFilters({ ...filters });
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.attendantId, filters.attendantId || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeStart, filters.start || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeEnd, filters.end || "");
+      window.localStorage.setItem(STORAGE_KEYS.quickRange, quickRange);
+    } catch (err) {
+      // ignore storage errors
+    }
   };
 
   const resetFilters = () => {
@@ -397,6 +492,14 @@ export default function ReceiptsAdminClient({
     setFilters(defaults);
     setAppliedFilters(defaults);
     setQuickRange("today");
+    try {
+      window.localStorage.removeItem(STORAGE_KEYS.attendantId);
+      window.localStorage.removeItem(STORAGE_KEYS.rangeStart);
+      window.localStorage.removeItem(STORAGE_KEYS.rangeEnd);
+      window.localStorage.setItem(STORAGE_KEYS.quickRange, "today");
+    } catch (err) {
+      // ignore
+    }
   };
 
   const applyQuickRange = (key: "today" | "this-week") => {
@@ -415,6 +518,14 @@ export default function ReceiptsAdminClient({
     setFilters(nextFilters);
     setAppliedFilters(nextFilters);
     setQuickRange(key);
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.attendantId, nextFilters.attendantId || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeStart, nextFilters.start || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeEnd, nextFilters.end || "");
+      window.localStorage.setItem(STORAGE_KEYS.quickRange, key);
+    } catch (err) {
+      // ignore
+    }
   };
 
   const gotoPage = (next: number) => {
