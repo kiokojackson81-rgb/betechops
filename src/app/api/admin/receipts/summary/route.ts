@@ -103,57 +103,24 @@ export async function GET(request: NextRequest) {
 
     const receiptsCount = allReceipts.length;
 
-    // Compute profit attributed to this window based on when items were priced.
-    // - marketingSales: these are created at the time of pricing and have explicit buying/selling prices
-    // - supportReceiptItems: attribute per-item profit when the item's buyingPrice was set (use updatedAt)
+    // Compute profit using the UI-style receipt attribution:
+    // For each receipt in the requested window, treat profit = sellingTotal - sum(item.buyingPrice || 0)
+    // This keeps admin summary consistent with the receipt detail UI.
     let totalProfit = 0;
-    try {
-      // marketingSale profits (priced during window)
-      const marketingSales = await prisma.marketingSale.findMany({
-        where: {
-          OR: [
-            { pricedAt: { gte: start, lte: end } },
-            { AND: [{ pricedAt: null }, { createdAt: { gte: start, lte: end } }] },
-          ],
-        },
-        select: { sellingPrice: true, buyingPrice: true, itemsCount: true, pricedAt: true },
-      });
-      for (const ms of marketingSales) {
-        const sell = Number(ms.sellingPrice ?? 0);
-        const buy = Number(ms.buyingPrice ?? 0);
-        totalProfit += Math.max(0, sell - buy);
-      }
+    let totalCost = 0;
+    let awaitingPricingCount = 0;
 
-      // supportReceiptItem profits: consider items whose buyingPrice is set and were updated in window
-      const supportItems = await prisma.supportReceiptItem.findMany({
-        // Select items that have a buyingPrice set and whose pricing date
-        // (prefer `pricedAt` when present) falls within the window. For older
-        // records where `pricedAt` is not yet populated, fall back to `updatedAt`.
-        where: {
-          buyingPrice: { gte: 0 },
-          OR: [
-            { pricedAt: { gte: start, lte: end } },
-            { AND: [{ pricedAt: null }, { updatedAt: { gte: start, lte: end } }] },
-          ],
-        },
-        include: { receipt: { select: { sellingTotal: true, items: true } } },
-      });
-      for (const it of supportItems) {
-        const buy = Number(it.buyingPrice ?? 0);
-        const receipt = it.receipt;
-        const sellingTotal = Number(receipt?.sellingTotal ?? 0);
-        const itemCount = Math.max(1, (receipt?.items ?? []).length || 1);
-        const perItemSell = Math.round(sellingTotal / itemCount);
-        totalProfit += Math.max(0, perItemSell - buy);
+    for (const receipt of allReceipts) {
+      const items = Array.isArray(receipt.items) ? receipt.items : [];
+      const buyingSum = items.reduce((s: number, it: any) => s + Number(it.buyingPrice ?? 0), 0);
+      totalCost += buyingSum;
+      const sell = Number(receipt.sellingTotal ?? 0);
+      totalProfit += sell - buyingSum;
+      if (items.length === 0 || items.some((it) => it.buyingPrice === null || it.buyingPrice === undefined)) {
+        awaitingPricingCount += 1;
       }
-    } catch (e) {
-      console.error("[admin/receipts/summary] failed to compute priced profit", e);
     }
 
-    // totalCost is not meaningful in this priced-by-date model; leave as null for now
-    const totalCost = null;
-
-    // if there are any receipts with missing cost data in the day, surface that as a flag
     const hasIncompleteCosts = allReceipts.some((r) => hasMissingCostData(Array.isArray(r.items) ? r.items : []));
     const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
 
@@ -164,6 +131,7 @@ export async function GET(request: NextRequest) {
       receiptsCount,
       itemsCount,
       hasCompleteCosts,
+      awaitingPricingCount,
     });
   } catch (error) {
     console.error("[admin/receipts/summary] failed to load summary", error);
