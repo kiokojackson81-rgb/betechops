@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
-type ReceiptRangeKey = "today" | "this-week" | "period" | "custom";
+type ReceiptRangeKey = "today" | "yesterday" | "this-week" | "period" | "custom";
 
 type MarketingReceiptRow = {
   id: string;
@@ -36,6 +36,22 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const toStartOfDayIso = (value?: string) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString();
+};
+
+const toEndOfDayIso = (value?: string) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCHours(23, 59, 59, 999);
+  return date.toISOString();
+};
+
 const getWeekBounds = (reference: Date) => {
   const day = reference.getDay();
   const diff = (day + 6) % 7;
@@ -50,6 +66,7 @@ const getWeekBounds = (reference: Date) => {
 
 const ReceiptRangeOptions: { key: ReceiptRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday & today" },
   { key: "this-week", label: "This week" },
   { key: "period", label: "This period" },
 ];
@@ -92,8 +109,10 @@ export default function MarketingReceiptsPage() {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "80");
-        params.set("start", filters.start);
-        params.set("end", filters.end);
+        const startIso = toStartOfDayIso(filters.start);
+        const endIso = toEndOfDayIso(filters.end);
+        if (startIso) params.set("start", startIso);
+        if (endIso) params.set("end", endIso);
         if (filters.query.trim()) {
           params.set("q", filters.query.trim());
         }
@@ -137,6 +156,7 @@ export default function MarketingReceiptsPage() {
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
+    if (rangeKey === "yesterday") return "Yesterday & today";
     if (rangeKey === "this-week") return "This week";
     if (rangeKey === "period") return periodRange.label;
     return "Custom range";
@@ -146,6 +166,12 @@ export default function MarketingReceiptsPage() {
     const { start, end } = (() => {
       if (key === "today") {
         return { start: defaultDate, end: defaultDate };
+      }
+      if (key === "yesterday") {
+        const today = new Date(defaultDate);
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        return { start: toDateInput(yesterday), end: defaultDate };
       }
       if (key === "this-week") {
         const { start: weekStart, end: weekEnd } = getWeekBounds(new Date());
