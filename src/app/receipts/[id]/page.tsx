@@ -11,7 +11,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     return <div className="p-4">Invalid receipt identifier</div>;
   }
 
-  let receipt = null;
+  let receipt: any = null;
   try {
     receipt = await prisma.receipt.findUnique({
       where: { id },
