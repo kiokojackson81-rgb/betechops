@@ -7,6 +7,17 @@ export const dynamic = "force-dynamic";
 export default async function Page({ params }: { params: { id: string } }) {
   const id = params?.id;
   if (!id) {
+    // Log diagnostic info to help identify why requests reach this page without an id.
+    try {
+      // Log params and a small environment hint; avoid leaking sensitive headers.
+      // eslint-disable-next-line no-console
+      console.error("[receipts page] missing params.id", {
+        params: params ?? null,
+        nodeEnv: process.env.NODE_ENV,
+      });
+    } catch (e) {
+      // swallow logging errors
+    }
     // Defensive: avoid throwing a Prisma validation error if params are missing.
     return <div className="p-4">Invalid receipt identifier</div>;
   }
