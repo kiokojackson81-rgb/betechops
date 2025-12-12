@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Edit3, Trash2, Download, Send, Printer } from "lucide-react";
 
 export default function RowActions({
   onEdit,
@@ -19,25 +20,76 @@ export default function RowActions({
   onPrint: () => void;
   disabled?: boolean;
 }) {
+  // Responsive layout: show icon + label on md+, icons-only on small screens
+  const btnBase =
+    "inline-flex items-center gap-2 rounded px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-emerald-400";
+
   return (
-    <div className="flex items-center gap-2">
-      <button className="rounded px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700" onClick={onEdit} disabled={disabled}>
-        Edit
+    <div className="flex items-center justify-end gap-2">
+      <button
+        aria-label="Edit receipt"
+        title="Edit receipt"
+        onClick={onEdit}
+        disabled={disabled}
+        className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
+      >
+        <Edit3 size={16} />
+        <span className="hidden md:inline">Edit</span>
       </button>
-      <button className="rounded px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700" onClick={onEditItems} disabled={disabled}>
-        Edit items
+
+      <button
+        aria-label="Edit items"
+        title="Edit items"
+        onClick={onEditItems}
+        disabled={disabled}
+        className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
+      >
+        <Edit3 size={16} />
+        <span className="hidden md:inline">Items</span>
       </button>
-      <button className="rounded px-2 py-1 text-xs bg-rose-700 hover:bg-rose-600" onClick={onDelete} disabled={disabled}>
-        Delete
+
+      <button
+        aria-label="Delete receipt"
+        title="Delete"
+        onClick={onDelete}
+        disabled={disabled}
+        className={`${btnBase} bg-rose-700 hover:bg-rose-600 text-white`}
+      >
+        <Trash2 size={16} />
+        <span className="hidden md:inline">Delete</span>
       </button>
-      <button className="rounded px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600" onClick={onDownload} disabled={disabled}>
-        Download
+
+      <button
+        aria-label="Download receipt"
+        title="Download"
+        onClick={onDownload}
+        disabled={disabled}
+        className={`${btnBase} bg-slate-700 hover:bg-slate-600 text-slate-100`}
+      >
+        <Download size={16} />
+        <span className="hidden md:inline">Download</span>
       </button>
-      <button className="rounded px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-500" onClick={onSendWhatsapp} disabled={disabled}>
-        WhatsApp
+
+      <button
+        aria-label="Send via WhatsApp"
+        title="WhatsApp"
+        onClick={onSendWhatsapp}
+        disabled={disabled}
+        className={`${btnBase} bg-emerald-600 hover:bg-emerald-500 text-black`}
+      >
+        <Send size={16} />
+        <span className="hidden md:inline">WhatsApp</span>
       </button>
-      <button className="rounded px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700" onClick={onPrint} disabled={disabled}>
-        Print
+
+      <button
+        aria-label="Print receipt"
+        title="Print"
+        onClick={onPrint}
+        disabled={disabled}
+        className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
+      >
+        <Printer size={16} />
+        <span className="hidden md:inline">Print</span>
       </button>
     </div>
   );
