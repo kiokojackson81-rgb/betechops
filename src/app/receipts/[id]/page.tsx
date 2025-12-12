@@ -5,11 +5,25 @@ import PrintControls from "./PrintControls";
 export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const id = params.id;
-  const receipt = await prisma.receipt.findUnique({
-    where: { id },
-    include: { order: { include: { items: true, layawayPlan: { include: { payments: true } }, attendant: { select: { name: true } } } }, issuedBy: true },
-  });
+  const id = params?.id;
+  if (!id) {
+    // Defensive: avoid throwing a Prisma validation error if params are missing.
+    return <div className="p-4">Invalid receipt identifier</div>;
+  }
+
+  let receipt = null;
+  try {
+    receipt = await prisma.receipt.findUnique({
+      where: { id },
+      include: { order: { include: { items: true, layawayPlan: { include: { payments: true } }, attendant: { select: { name: true } } } }, issuedBy: true },
+    });
+  } catch (err) {
+    // Catch and render a friendly message instead of allowing a server exception to surface.
+    // Log the error server-side for diagnostics (kept minimal here).
+    // eslint-disable-next-line no-console
+    console.error("[receipts page] failed to load receipt", err);
+    return <div className="p-4">Failed to load receipt</div>;
+  }
   if (!receipt) return <div className="p-4">Receipt not found</div>;
 
   const data = (receipt.data as any) || {};
