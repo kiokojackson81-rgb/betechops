@@ -37,16 +37,16 @@ export default function ReceiptsSummary({
   const formatCurrency = (value: number) =>
     `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-  const salesLabel = loading ? "Loading…" : formatCurrency(summary?.totalSales ?? 0);
-  const profitLabel = loading ? "Loading�" : formatCurrency(summary?.totalProfit ?? 0);
+  const salesLabel = loading ? "Loading..." : formatCurrency(summary?.totalSales ?? 0);
+  const profitLabel = loading ? "Loading..." : formatCurrency(summary?.totalProfit ?? 0);
   const profitNote = loading
     ? ""
     : summary?.hasCompleteCosts
     ? "All priced receipts"
     : "Based on priced receipts only";
 
-  const receiptsLabel = loading ? "Loading…" : String(summary?.receiptsCount ?? 0);
-  const itemsLabel = loading ? "Loading…" : String(summary?.itemsCount ?? 0);
+  const receiptsLabel = loading ? "Loading..." : String(summary?.receiptsCount ?? 0);
+  const itemsLabel = loading ? "Loading..." : String(summary?.itemsCount ?? 0);
 
   return (
     <section className="rounded-2xl border border-white/15 bg-slate-900/70 p-4 shadow-inner shadow-black/30">
