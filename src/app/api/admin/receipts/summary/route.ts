@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
 
       // supportReceiptItem profits: consider items whose buyingPrice is set and were updated in window
       const supportItems = await prisma.supportReceiptItem.findMany({
-        where: { buyingPrice: { not: null }, updatedAt: { gte: start, lte: end } },
+        where: { NOT: { buyingPrice: null }, updatedAt: { gte: start, lte: end } },
         include: { receipt: { select: { sellingTotal: true, items: true } } },
       });
       for (const it of supportItems) {
