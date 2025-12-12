@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { PaymentMethod } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { getMarketingReport } from "@/lib/marketingReport";
 import { getActorId } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -176,6 +177,13 @@ export async function POST(req: Request) {
     if (!entryAfter) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     const period = getTradingPeriodFor(entryAfter.date);
     const report = await getMarketingReport({ tradingPeriodKey: period.key });
+
+    // Notify admin summary subscribers that marketing receipts changed
+    try {
+      publishSummaryUpdate({ attendantId: entryAfter.submittedById ?? null, timestamp: new Date().toISOString() });
+    } catch (e) {
+      console.warn("[admin/marketing-report/update-entry] failed to publish summary update", e);
+    }
 
     return NextResponse.json({ updated: true, entry: entryAfter, report }, { status: 200 });
   } catch (err: unknown) {
