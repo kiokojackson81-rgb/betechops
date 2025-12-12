@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
-import { cleanupMarketingReceipts, cleanupSupportReceipts } from "@/lib/marketingReceiptCleanup";
+import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import {
+  cleanupMarketingReceipts,
+  cleanupSupportReceipts,
+  recalcMarketingEntry,
+  recalcSupportEntry,
+} from "@/lib/marketingReceiptCleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +118,12 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       }
       await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
       const createdOrderItems: any[] = [];
+      const createdItems: Array<{
+        title: string;
+        quantity: number;
+        costPrice: number;
+        unitPrice: number;
+      }> = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.productName || "Item").slice(0, 255);
         let product = await tx.product.findFirst({ where: { name: title } });
@@ -124,17 +137,26 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             },
           });
         }
+        const quantity = Math.max(1, Number(it.quantity || 1));
+        const unitPrice = Number(it.unitPrice || it.sellingPrice || 0) || 0;
+        const costPrice = Math.max(0, Math.round(Number(it.buyingPrice ?? 0)));
         const createdItem = await tx.orderItem.create({
           data: {
             orderId: existing.orderId,
             productId: product.id,
-            quantity: Number(it.quantity || 1),
-            sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
+            quantity,
+            sellingPrice: unitPrice,
             serial: it.serial ?? null,
             warranty: it.warranty ?? null,
           },
         });
         createdOrderItems.push(createdItem);
+        createdItems.push({
+          title,
+          quantity,
+          unitPrice,
+          costPrice,
+        });
       }
 
       // update order basics
@@ -167,6 +189,35 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           });
         }
       }
+
+      const normalizedReceiptNumber = canonicalReceiptNumber(existing.order?.orderNumber ?? "");
+      const entryAttendantId = attendantId || existing.order?.attendantId ?? null;
+      const entryDate = existing.order?.createdAt ?? new Date();
+      const dayStart = new Date(entryDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+      const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
+      const guardUser = guard.session?.user as { name?: string; email?: string } | undefined;
+      const actorName = guardUser?.name ?? guardUser?.email ?? null;
+      const actorEmail = guardUser?.email ?? null;
+      const receiptItemsData = createdItems.map((item) => ({
+        productName: item.title || "Item",
+        buyingPrice: item.costPrice,
+      }));
+      const totalBuying = createdItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
+      const existingSupportReceipt =
+        normalizedReceiptNumber && tx.supportReceipt
+          ? await tx.supportReceipt.findFirst({ where: { receiptNumber: normalizedReceiptNumber } })
+          : null;
+      const existingMarketingReceipt =
+        normalizedReceiptNumber && tx.marketingReceipt
+          ? await tx.marketingReceipt.findFirst({ where: { receiptNumber: normalizedReceiptNumber } })
+          : null;
+      const previousSupportEntryId = existingSupportReceipt?.dailyEntryId ?? null;
+      const previousMarketingEntryId = existingMarketingReceipt?.dailyEntryId ?? null;
+      const supportPaymentMethod = existingSupportReceipt?.paymentMethod ?? PaymentMethod.MPESA;
+      const marketingPaymentMethod = existingMarketingReceipt?.paymentMethod ?? supportPaymentMethod;
 
       const updatedReceipt = await tx.receipt.update({
         where: { id },
@@ -217,6 +268,116 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         });
       } catch {
         // best-effort audit log
+      }
+
+      if (normalizedReceiptNumber && entryAttendantId && receiptItemsData.length) {
+        let supportEntryId: string | null = null;
+        if (tx.supportDailyEntry) {
+          const supportEntry = await tx.supportDailyEntry.findFirst({
+            where: { submittedById: entryAttendantId, date: { gte: dayStart, lte: dayEnd } },
+            select: { id: true },
+          });
+          supportEntryId = supportEntry?.id ?? null;
+          if (!supportEntryId) {
+            const entry = await tx.supportDailyEntry.create({
+              data: {
+                date: entryDate,
+                dayOfWeek,
+                totalSales: 0,
+                totalProfit: 0,
+                newBatteries: 0,
+                changedBatteries: 0,
+                submittedById: entryAttendantId,
+              },
+            });
+            supportEntryId = entry.id;
+          }
+        }
+
+        if (supportEntryId && tx.supportReceipt) {
+          if (existingSupportReceipt) {
+            await tx.supportReceiptItem.deleteMany({ where: { receiptId: existingSupportReceipt.id } });
+            await tx.supportReceipt.update({
+              where: { id: existingSupportReceipt.id },
+              data: {
+                dailyEntryId: supportEntryId,
+                sellingTotal: total,
+                buyingTotal: totalBuying,
+                paymentMethod: supportPaymentMethod,
+                items: { create: receiptItemsData },
+              },
+            });
+          } else {
+            await tx.supportReceipt.create({
+              data: {
+                dailyEntryId: supportEntryId,
+                receiptNumber: normalizedReceiptNumber,
+                sellingTotal: total,
+                buyingTotal: totalBuying,
+                paymentMethod: supportPaymentMethod,
+                items: { create: receiptItemsData },
+              },
+            });
+          }
+          await recalcSupportEntry(tx, supportEntryId);
+          if (previousSupportEntryId && previousSupportEntryId !== supportEntryId) {
+            await recalcSupportEntry(tx, previousSupportEntryId);
+          }
+        }
+
+        let marketingEntryId: string | null = null;
+        if (tx.marketingDailyEntry) {
+          const marketingEntry = await tx.marketingDailyEntry.findFirst({
+            where: { submittedById: entryAttendantId, date: { gte: dayStart, lte: dayEnd } },
+            select: { id: true },
+          });
+          marketingEntryId = marketingEntry?.id ?? null;
+          if (!marketingEntryId) {
+            const entry = await tx.marketingDailyEntry.create({
+              data: {
+                date: entryDate,
+                dayOfWeek,
+                totalSales: 0,
+                totalProfit: 0,
+                submittedById: entryAttendantId,
+                submittedByName: actorName ?? undefined,
+                submittedByEmail: actorEmail ?? undefined,
+              },
+            });
+            marketingEntryId = entry.id;
+          }
+        }
+
+        if (marketingEntryId && tx.marketingReceipt) {
+          if (existingMarketingReceipt) {
+            await tx.marketingReceiptItem.deleteMany({ where: { receiptId: existingMarketingReceipt.id } });
+            await tx.marketingReceipt.update({
+              where: { id: existingMarketingReceipt.id },
+              data: {
+                dailyEntryId: marketingEntryId,
+                sellingTotal: total,
+                buyingTotal: totalBuying,
+                paymentMethod: marketingPaymentMethod,
+                items: { create: receiptItemsData },
+              },
+            });
+          } else {
+            await tx.marketingReceipt.create({
+              data: {
+                dailyEntryId: marketingEntryId,
+                receiptNumber: normalizedReceiptNumber,
+                sellingTotal: total,
+                buyingTotal: totalBuying,
+                paymentMethod: marketingPaymentMethod,
+                items: { create: receiptItemsData },
+              },
+            });
+          }
+          await recalcMarketingEntry(tx, marketingEntryId);
+          if (previousMarketingEntryId && previousMarketingEntryId !== marketingEntryId) {
+            await recalcMarketingEntry(tx, previousMarketingEntryId);
+          }
+        }
       }
 
       return updatedReceipt;

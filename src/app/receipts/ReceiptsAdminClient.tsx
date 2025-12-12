@@ -73,6 +73,7 @@ type EditItem = {
   unitPrice: number;
   serial?: string | null;
   warranty?: string | null;
+  buyingPrice: number;
 };
 
 type EditDraft = {
@@ -195,6 +196,13 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
   const dataItems = Array.isArray(receipt?.data?.items) ? receipt.data.items : [];
   const orderItems = Array.isArray(order?.items) ? order.items : [];
   const sourceItems = dataItems.length ? dataItems : orderItems;
+  const supportCostMap = new Map<string, number>();
+  (detail.supportItems ?? []).forEach((item) => {
+    const key = String(item.productName ?? "").trim().toLowerCase();
+    if (key) {
+      supportCostMap.set(key, Number(item.buyingPrice ?? 0));
+    }
+  });
   const items: EditItem[] =
     sourceItems.length > 0
       ? sourceItems.map((it: any) => ({
@@ -204,17 +212,21 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
           unitPrice: Number(it.unitPrice ?? it.sellingPrice ?? it.price ?? 0),
           serial: it.serial ?? null,
           warranty: it.warranty ?? null,
+          buyingPrice: Number(
+            it.buyingPrice ?? supportCostMap.get((it.title || it.productName || it.name || "").trim().toLowerCase()) ?? 0,
+          ),
         }))
       : [
-          {
-            id: randomId(),
-            title: "",
-            quantity: 1,
-            unitPrice: 0,
-            serial: null,
-            warranty: null,
-          },
-        ];
+        {
+          id: randomId(),
+          title: "",
+          quantity: 1,
+          unitPrice: 0,
+          serial: null,
+          warranty: null,
+          buyingPrice: 0,
+        },
+      ];
 
   return {
     docType: String(receipt?.docType || "RECEIPT").toUpperCase(),
@@ -751,6 +763,7 @@ export default function ReceiptsAdminClient({
           title: it.title,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
+          buyingPrice: Math.max(0, Number(it.buyingPrice)),
           serial: it.serial,
           warranty: it.warranty,
         })),
@@ -1371,7 +1384,10 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
   const addItem = () => {
     onDraftChange({
       ...draft,
-      items: [...draft.items, { id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null }],
+      items: [
+        ...draft.items,
+        { id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null, buyingPrice: 0 },
+      ],
     });
   };
 
@@ -1530,15 +1546,25 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
                   placeholder="Unit price"
                 />
                 <input
+                  type="number"
+                  min={0}
+                  value={item.buyingPrice}
+                  onChange={(e) =>
+                    updateItem(item.id, { buyingPrice: Math.max(0, Number(e.target.value || 0)) })
+                  }
+                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                  placeholder="Cost price"
+                />
+                <input
                   value={item.serial || ""}
                   onChange={(e) => updateItem(item.id, { serial: e.target.value })}
                   placeholder="Serial"
-                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                  className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                 />
                 <select
                   value={item.warranty || ""}
                   onChange={(e) => updateItem(item.id, { warranty: e.target.value || null })}
-                  className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
+                  className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                 >
                   {WARRANTY_OPTIONS.map((option) => (
                     <option key={option || "none"} value={option}>

@@ -1,13 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 
-type EntryTotals = {
+export type EntryTotals = {
   entryId: string;
   totalSales: number;
   totalProfit: number;
 };
 
-const recalcMarketingEntry = async (tx: Prisma.TransactionClient, entryId: string) => {
+export async function recalcMarketingEntry(tx: Prisma.TransactionClient, entryId: string) {
   const entryWithReceipts = await tx.marketingDailyEntry.findUnique({
     where: { id: entryId },
     include: { receipts: { include: { items: true } } },
@@ -25,7 +25,7 @@ const recalcMarketingEntry = async (tx: Prisma.TransactionClient, entryId: strin
   return { entryId, totalSales, totalProfit };
 };
 
-const recalcSupportEntry = async (tx: Prisma.TransactionClient, entryId: string) => {
+export async function recalcSupportEntry(tx: Prisma.TransactionClient, entryId: string) {
   const entryReceipts = await tx.supportReceipt.findMany({
     where: { dailyEntryId: entryId },
     include: { items: true },
