@@ -169,11 +169,15 @@ const getWeekBounds = (reference = new Date()) => {
 };
 
 const buildDateParam = (value: string, endOfDay: boolean) => {
+  // Expect `value` in `YYYY-MM-DD` format (produced by `formatDateInput`).
+  // Send an explicit Nairobi-local ISO timestamp so server-side parsing
+  // is consistent regardless of the browser's timezone. The admin
+  // summary endpoint also supports raw YYYY-MM-DD, but sending an
+  // explicit `+03:00` offset keeps listing and summary behavior in sync.
   if (!value) return undefined;
-  const [y, m, d] = value.split("-").map((part) => Number(part));
-  if (!y || !m || !d) return undefined;
-  const date = new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
-  return date.toISOString();
+  const match = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!match) return undefined;
+  return endOfDay ? `${value}T23:59:59.999+03:00` : `${value}T00:00:00+03:00`;
 };
 
 const csvEscape = (value: string | number | null | undefined) => {

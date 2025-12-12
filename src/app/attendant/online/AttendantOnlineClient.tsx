@@ -96,7 +96,15 @@ const createReceipt = (): ReceiptRow => ({
   items: [createItem()],
 });
 
-const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
+const toInputDate = (date: Date) =>
+  // produce a YYYY-MM-DD string in Nairobi local date so inputs and
+  // range builders are consistent with server-side Nairobi midnights
+  date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+
+const formatNairobiParam = (date: Date, endOfDay = false) => {
+  const ymd = date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  return endOfDay ? `${ymd}T23:59:59.999+03:00` : `${ymd}T00:00:00+03:00`;
+};
 
 export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
@@ -141,12 +149,12 @@ export default function AttendantOnlineClient() {
     if (!userId) return;
     setStatsLoading(true);
     try {
-      const params = new URLSearchParams({
-        start: period.start.toISOString(),
-        end: period.end.toISOString(),
-        includeItems: "true",
-        size: "200",
-      });
+        const params = new URLSearchParams({
+          start: formatNairobiParam(period.start, false),
+          end: formatNairobiParam(period.end, true),
+          includeItems: "true",
+          size: "200",
+        });
       params.set("attendantId", userId);
       const res = await fetch(`/api/receipts?${params.toString()}`, {
         cache: "no-store",
@@ -168,8 +176,8 @@ export default function AttendantOnlineClient() {
     setSummaryLoading(true);
     try {
       const params = new URLSearchParams({
-        start: period.start.toISOString(),
-        end: period.end.toISOString(),
+        start: formatNairobiParam(period.start, false),
+        end: formatNairobiParam(period.end, true),
       });
       params.set("attendantId", userId);
       const res = await fetch(`/api/online/summary?${params.toString()}`, {
@@ -705,8 +713,8 @@ function computeRangeDates(
 ) {
   if (range === "period") {
     return {
-      start: toInputDate(period.start),
-      end: toInputDate(period.end),
+      start: formatNairobiParam(period.start, false),
+      end: formatNairobiParam(period.end, true),
     };
   }
   if (range === "this-week") {
@@ -719,7 +727,7 @@ function computeRangeDates(
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     weekEnd.setHours(23, 59, 59, 999);
-    return { start: toInputDate(weekStart), end: toInputDate(weekEnd) };
+    return { start: formatNairobiParam(weekStart, false), end: formatNairobiParam(weekEnd, true) };
   }
   return { start: "", end: "" };
 }
