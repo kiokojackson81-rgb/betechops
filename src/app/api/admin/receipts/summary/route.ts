@@ -91,33 +91,56 @@ export async function GET(request: NextRequest) {
     }
     const allReceipts = Array.from(receiptMap.values());
 
+    // Total sales and items: derived from receipts in the requested day window
     let totalSales = 0;
-    let totalCost = 0;
-    let totalProfit = 0;
     let itemsCount = 0;
-    let hasIncompleteCosts = false;
-
     for (const receipt of allReceipts) {
       const sale = Number(receipt.sellingTotal ?? 0);
       totalSales += sale;
       const items = Array.isArray(receipt.items) ? receipt.items : [];
-      // count products sold by summing quantities (default 1)
       itemsCount += items.reduce((s: number, it: any) => s + (Number(it.quantity ?? 1) || 0), 0);
-      const missingCost = hasMissingCostData(items);
-      if (missingCost) {
-        hasIncompleteCosts = true;
-        continue;
-      }
-      // compute cost taking quantity into account
-      const cost = items.reduce((sum: number, item: any) => {
-        const qty = Math.max(1, Number(item.quantity ?? 1));
-        return sum + qty * Number(item.buyingPrice ?? 0);
-      }, 0);
-      totalCost += cost;
-      totalProfit += sale - cost;
     }
 
     const receiptsCount = allReceipts.length;
+
+    // Compute profit attributed to this window based on when items were priced.
+    // - marketingSales: these are created at the time of pricing and have explicit buying/selling prices
+    // - supportReceiptItems: attribute per-item profit when the item's buyingPrice was set (use updatedAt)
+    let totalProfit = 0;
+    try {
+      // marketingSale profits (priced during window)
+      const marketingSales = await prisma.marketingSale.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { sellingPrice: true, buyingPrice: true, itemsCount: true },
+      });
+      for (const ms of marketingSales) {
+        const sell = Number(ms.sellingPrice ?? 0);
+        const buy = Number(ms.buyingPrice ?? 0);
+        totalProfit += Math.max(0, sell - buy);
+      }
+
+      // supportReceiptItem profits: consider items whose buyingPrice is set and were updated in window
+      const supportItems = await prisma.supportReceiptItem.findMany({
+        where: { buyingPrice: { not: null }, updatedAt: { gte: start, lte: end } },
+        include: { receipt: { select: { sellingTotal: true, items: true } } },
+      });
+      for (const it of supportItems) {
+        const buy = Number(it.buyingPrice ?? 0);
+        const receipt = it.receipt;
+        const sellingTotal = Number(receipt?.sellingTotal ?? 0);
+        const itemCount = Math.max(1, (receipt?.items ?? []).length || 1);
+        const perItemSell = Math.round(sellingTotal / itemCount);
+        totalProfit += Math.max(0, perItemSell - buy);
+      }
+    } catch (e) {
+      console.error("[admin/receipts/summary] failed to compute priced profit", e);
+    }
+
+    // totalCost is not meaningful in this priced-by-date model; leave as null for now
+    const totalCost = null;
+
+    // if there are any receipts with missing cost data in the day, surface that as a flag
+    const hasIncompleteCosts = allReceipts.some((r) => hasMissingCostData(Array.isArray(r.items) ? r.items : []));
     const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
 
     return NextResponse.json({
