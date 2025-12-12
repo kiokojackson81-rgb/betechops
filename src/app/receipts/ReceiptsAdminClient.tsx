@@ -824,9 +824,12 @@ export default function ReceiptsAdminClient({
       };
     });
 
+    // Sum support costs by support-item (do not multiply by order.quantity).
+    // The support receipt `buyingPrice` is treated as the per-support-item cost
+    // and the admin summary/receipt UI uses a per-support-item aggregation.
     const matchedCost = itemsWithCost.reduce((sum, item) => {
       if (item.buyingPrice === null) return sum;
-      return sum + item.buyingPrice * Math.max(1, Number(item.quantity ?? 1));
+      return sum + Number(item.buyingPrice ?? 0);
     }, 0);
     let supportCostSum = 0;
     let supportHasUnknown = false;
