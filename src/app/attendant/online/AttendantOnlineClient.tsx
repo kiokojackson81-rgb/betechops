@@ -557,6 +557,7 @@ function QuickStatsCard({
     totalItems: number;
     commission: number;
     totalProfit?: number;
+    awaitingPricingCount?: number;
   };
 }) {
   const { locked, toggle } = useCardLock("online:quickstats");
@@ -565,7 +566,10 @@ function QuickStatsCard({
   const stats = [
     {
       label: "Receipts",
-      value: safeNumber(totals.totalReceipts).toLocaleString(),
+      value:
+        typeof totals.awaitingPricingCount === "number" && totals.awaitingPricingCount > 0
+          ? `${safeNumber(totals.totalReceipts).toLocaleString()} • ${totals.awaitingPricingCount} awaiting pricing`
+          : safeNumber(totals.totalReceipts).toLocaleString(),
     },
     { label: "Sales (KES)", value: formatKES(totals.totalSales) },
     { label: "Profit (KES)", value: formatKES(totals.totalProfit ?? 0) },
