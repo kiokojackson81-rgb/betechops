@@ -578,7 +578,10 @@ export default function DailyReportFinal() {
         </section>
         <DailyReportReceiptsPanel
           date={date}
-          attendantId={impersonateId ?? session?.user?.id ?? null}
+          attendantId={
+            impersonateId ??
+            ((session?.user as { id?: string } | undefined)?.id ?? null)
+          }
         />
       </section>
 
