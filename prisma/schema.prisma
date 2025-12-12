@@ -198,6 +198,7 @@ model MarketingSale {
   sellingPrice  Int
   receiptNumber String?
   paymentMethod PaymentMethod
+  pricedAt      DateTime?
   createdAt     DateTime            @default(now())
   itemsCount    Int                 @default(1)
   dailySaleId   String?
@@ -205,6 +206,7 @@ model MarketingSale {
   entry         MarketingDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([entryId])
+  @@index([pricedAt])
   @@index([dailySaleId])
 }
 
@@ -289,11 +291,13 @@ model SupportReceiptItem {
   receiptId   String
   productName String
   buyingPrice Int
+  pricedAt    DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   receipt     SupportReceipt @relation("SupportReceiptItems", fields: [receiptId], references: [id], onDelete: Cascade)
 
   @@index([receiptId])
+  @@index([pricedAt])
 }
 
 model Shop {

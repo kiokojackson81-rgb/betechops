@@ -110,8 +110,13 @@ export async function GET(request: NextRequest) {
     try {
       // marketingSale profits (priced during window)
       const marketingSales = await prisma.marketingSale.findMany({
-        where: { createdAt: { gte: start, lte: end } },
-        select: { sellingPrice: true, buyingPrice: true, itemsCount: true },
+        where: {
+          OR: [
+            { pricedAt: { gte: start, lte: end } },
+            { AND: [{ pricedAt: null }, { createdAt: { gte: start, lte: end } }] },
+          ],
+        },
+        select: { sellingPrice: true, buyingPrice: true, itemsCount: true, pricedAt: true },
       });
       for (const ms of marketingSales) {
         const sell = Number(ms.sellingPrice ?? 0);
@@ -121,9 +126,16 @@ export async function GET(request: NextRequest) {
 
       // supportReceiptItem profits: consider items whose buyingPrice is set and were updated in window
       const supportItems = await prisma.supportReceiptItem.findMany({
-        // Use an IntFilter (gte: 0) to select items that have a buyingPrice set
-        // This is type-safe for Prisma client typings across versions.
-        where: { buyingPrice: { gte: 0 }, updatedAt: { gte: start, lte: end } },
+        // Select items that have a buyingPrice set and whose pricing date
+        // (prefer `pricedAt` when present) falls within the window. For older
+        // records where `pricedAt` is not yet populated, fall back to `updatedAt`.
+        where: {
+          buyingPrice: { gte: 0 },
+          OR: [
+            { pricedAt: { gte: start, lte: end } },
+            { AND: [{ pricedAt: null }, { updatedAt: { gte: start, lte: end } }] },
+          ],
+        },
         include: { receipt: { select: { sellingTotal: true, items: true } } },
       });
       for (const it of supportItems) {

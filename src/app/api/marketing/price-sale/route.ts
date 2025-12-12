@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
+import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
           receiptNumber: receiptNumber ?? undefined,
           paymentMethod,
           itemsCount: 1,
+          pricedAt: new Date(),
         },
       });
 
@@ -199,6 +201,13 @@ export async function POST(req: Request) {
       await recomputeMarketingCommissionLedger({ userId: originalAttendantId, period });
     } catch (ledgerErr) {
       console.error("[marketing/price-sale] failed to recompute commission ledger", ledgerErr);
+    }
+
+    // Notify admin summary subscribers that marketing receipts/sales changed
+    try {
+      publishSummaryUpdate({ attendantId: originalAttendantId ?? null, timestamp: new Date().toISOString() });
+    } catch (e) {
+      console.warn("[marketing/price-sale] failed to publish summary update", e);
     }
 
     return NextResponse.json({

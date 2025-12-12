@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
+import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
     // update the receipt item
     await tx.supportReceiptItem.update({
       where: { id: receiptItem.id },
-      data: { buyingPrice: roundedPrice },
+      data: { buyingPrice: roundedPrice, pricedAt: new Date() },
     });
 
     // Recompute totalProfit for the whole daily entry in a safe, idempotent way
@@ -116,6 +117,13 @@ export async function POST(req: Request) {
     } catch (ledgerErr) {
       console.error("[support/price-sale] failed to recompute commission ledger", ledgerErr);
     }
+  }
+
+  // Notify admin summary subscribers that support receipt pricing changed
+  try {
+    publishSummaryUpdate({ attendantId: submitterId ?? null, timestamp: new Date().toISOString() });
+  } catch (e) {
+    console.warn("[support/price-sale] failed to publish summary update", e);
   }
 
   return NextResponse.json({
