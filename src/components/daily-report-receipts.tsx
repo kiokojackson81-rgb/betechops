@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ReceiptDetailsDrawer from "@/components/ReceiptDetailsDrawer";
 
 type DailyReportReceiptRow = {
   id: string;
@@ -53,6 +54,9 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!attendantId) {
@@ -113,6 +117,14 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
     return { totalSales, count: receipts.length };
   }, [receipts]);
 
+  // only sum sales for receipts the user has chosen to reveal via "View details"
+  const revealedTotals = useMemo(() => {
+    const totalSales = receipts.reduce((sum, receipt) => {
+      return revealed[receipt.id] ? sum + Number(receipt.total ?? 0) : sum;
+    }, 0);
+    return { totalSales };
+  }, [receipts, revealed]);
+
   const displayDate = (() => {
     const parsed = new Date(date);
     if (date && !Number.isNaN(parsed.getTime())) {
@@ -136,7 +148,7 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
           <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Count</span>
           <span className="text-xl font-semibold text-emerald-300">{summary.count}</span>
           <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Sales</span>
-          <span className="text-xl font-semibold text-white">{formatKES(summary.totalSales)}</span>
+          <span className="text-xl font-semibold text-white">{formatKES(revealedTotals.totalSales)}</span>
         </div>
       </div>
       <div className="mt-5 space-y-3">
@@ -170,13 +182,33 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
                 </div>
                 <div className="text-right text-xs text-slate-400 sm:text-sm">
                   <p>{formatDateTime(receipt.createdAt)}</p>
-                  <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
+                  {/* Amount is hidden until user clicks View details */}
+                  {revealed[receipt.id] ? (
+                    <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
+                  ) : (
+                    <div className="flex items-center justify-end gap-3">
+                      <span className="text-sm font-medium text-slate-500">KES —</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // open drawer and mark as revealed for summary
+                          setSelectedReceiptId(receipt.id);
+                          setDrawerOpen(true);
+                          setRevealed((prev) => ({ ...prev, [receipt.id]: true }));
+                        }}
+                        className="text-xs font-semibold text-emerald-300 hover:underline"
+                      >
+                        View details
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+      <ReceiptDetailsDrawer id={selectedReceiptId} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </section>
   );
 }
