@@ -9,6 +9,7 @@ type Props = {
   receiptsHref?: string;
   createHref?: string;
   onSignOut?: () => void;
+  onReceiptsClick?: () => void;
   showDot?: boolean;
 };
 
@@ -16,6 +17,7 @@ export default function HeaderActions({
   receiptsHref = "/marketing/receipts",
   createHref = "/receipts",
   onSignOut,
+  onReceiptsClick,
   showDot = false,
 }: Props) {
   return (
@@ -24,6 +26,7 @@ export default function HeaderActions({
         <Link
           href={receiptsHref}
           aria-label="My receipts"
+          onClick={onReceiptsClick}
           className="relative flex items-center gap-2 rounded-full border border-white/10 bg-white/3 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
         >
           {showDot && (

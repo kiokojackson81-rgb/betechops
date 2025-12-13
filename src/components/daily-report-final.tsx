@@ -58,24 +58,22 @@ function createEmptyReceipt(): ReceiptRow {
 }
 
 export default function DailyReportFinal() {
-  const [hash, setHash] = useState("");
+  const [showMyReceipts, setShowMyReceipts] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const sync = () => setHash(window.location.hash || "");
+    const sync = () => setShowMyReceipts(window.location.hash === "#my-receipts");
     sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
 
-  const isMyReceiptsView = hash === "#my-receipts";
-
   useEffect(() => {
-    if (!isMyReceiptsView) return;
+    if (!showMyReceipts) return;
     const el = document.getElementById("my-receipts");
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [isMyReceiptsView]);
+  }, [showMyReceipts]);
 
   const [date, setDate] = useState(() => {
     const d = new Date();
@@ -595,6 +593,7 @@ export default function DailyReportFinal() {
                 receiptsHref="#my-receipts"
                 createHref={`/receipts?view=create`}
                 onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
+                onReceiptsClick={() => setShowMyReceipts(true)}
                 showDot={true}
               />
             </div>
@@ -613,9 +612,7 @@ export default function DailyReportFinal() {
             </div>
           </div>
         </section>
-        {isMyReceiptsView ? (
-          <DailyReportReceiptsPanel date={date} attendantId={attendantId} />
-        ) : null}
+        {showMyReceipts && <DailyReportReceiptsPanel date={date} attendantId={attendantId} />}
       </section>
     </div>
   );
