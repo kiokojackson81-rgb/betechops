@@ -4,15 +4,29 @@ import PrintControls from "./PrintControls";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params }: { params: { id: string } }) {
-  const id = params?.id;
+export default async function Page({ params }: { params: any }) {
+  // In some hosting/runtime environments `params` can be a Promise (e.g. when
+  // edge/request context is provided lazily). Defensively await if needed.
+  let resolvedParams = params;
+  if (resolvedParams && typeof resolvedParams.then === "function") {
+    try {
+      resolvedParams = await resolvedParams;
+    } catch (e) {
+      // If awaiting params fails, log and treat as missing.
+      // eslint-disable-next-line no-console
+      console.error("[receipts page] failed to resolve params", { err: e });
+      resolvedParams = null;
+    }
+  }
+
+  const id = resolvedParams?.id;
   if (!id) {
     // Log diagnostic info to help identify why requests reach this page without an id.
     try {
-      // Log params and a small environment hint; avoid leaking sensitive headers.
+      // Log resolved params and a small environment hint; avoid leaking sensitive headers.
       // eslint-disable-next-line no-console
       console.error("[receipts page] missing params.id", {
-        params: params ?? null,
+        params: resolvedParams ?? params ?? null,
         nodeEnv: process.env.NODE_ENV,
       });
     } catch (e) {
