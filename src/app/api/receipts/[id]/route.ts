@@ -47,6 +47,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     },
   });
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
+  let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
   try {
     if (receipt?.order?.orderNumber) {
       const supportReceipts = await prisma.supportReceipt.findMany({
@@ -61,13 +62,16 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
             productName: it.productName ?? null,
           })),
         );
+        // Prefer the first support receipt summary (there should normally be one)
+        const sr = supportReceipts[0];
+        supportReceiptSummary = { id: sr.id, buyingTotal: Number(sr.buyingTotal ?? 0) };
       }
     }
   } catch (e) {
     // best-effort; ignore support lookup failures
   }
   if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ receipt, supportItems });
+  return NextResponse.json({ receipt, supportItems, supportReceiptSummary });
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {

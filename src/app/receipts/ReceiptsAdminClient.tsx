@@ -47,6 +47,7 @@ type SupportItemDetail = {
 type ReceiptDetailPayload = {
   receipt: any;
   supportItems?: SupportItemDetail[];
+  supportReceiptSummary?: { id: string; buyingTotal?: number | null } | null;
 };
 
 type ItemWithCost = {
@@ -800,7 +801,12 @@ export default function ReceiptsAdminClient({
   if (!orderItems.length) {
       return { itemsWithCost: [], supportBuyingTotal: 0, hasCompleteCosts: false };
     }
-
+    // If the server provided a supportReceiptSummary with a stored buyingTotal,
+    // prefer that authoritative DB value for the admin UI to match the DB.
+    const supportReceiptBuyingTotal =
+      detail?.supportReceiptSummary && Number(detail.supportReceiptSummary.buyingTotal ?? 0) > 0
+        ? Number(detail.supportReceiptSummary.buyingTotal ?? 0)
+        : null;
     const supportQueue = (detail?.supportItems ?? []).map((item) => ({ ...item }));
     let allItemCostsKnown = true;
     const itemsWithCost: ItemWithCost[] = orderItems.map((item: any) => {
@@ -843,7 +849,7 @@ export default function ReceiptsAdminClient({
     const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
     return {
       itemsWithCost,
-      supportBuyingTotal: matchedCost + supportCostSum,
+      supportBuyingTotal: supportReceiptBuyingTotal !== null ? supportReceiptBuyingTotal : matchedCost + supportCostSum,
       hasCompleteCosts,
     };
   }, [detail]);
