@@ -60,6 +60,13 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
     let cancelled = false;
     const controller = new AbortController();
 
+    if (!attendantId) {
+      setReceipts([]);
+      setLoading(false);
+      setError(null);
+      return () => controller.abort();
+    }
+
     const fetchReceipts = async () => {
       setLoading(true);
       setError(null);
