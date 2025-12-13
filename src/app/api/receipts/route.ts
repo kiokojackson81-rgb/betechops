@@ -77,7 +77,10 @@ export async function GET(req: NextRequest) {
     // they issued/created (issuedById). Keep any existing order filters intact.
     const orderFilter = { ...(where.order || {}), attendantId };
     where.OR = where.OR || [];
-    where.OR.push({ order: orderFilter }, { issuedById: attendantId });
+    // Also include receipts where the attendantId is stored inside the JSON `data` field
+    // (some receipts persist attendant info inside `data.attendantId`). Use a JSON path
+    // filter so attendants still see those receipts.
+    where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
   }
 
   // compute total count for paging (best-effort; tests may mock only findMany)
