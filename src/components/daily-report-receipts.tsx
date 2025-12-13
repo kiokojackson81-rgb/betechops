@@ -55,6 +55,9 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
+  const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
+  const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,10 +93,14 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
         // (will appear in the browser console)
         // eslint-disable-next-line no-console
         console.debug("[DailyReportReceipts] fetch", { attendantId, url, status: res.status });
+        setLastFetchUrl(url);
+        setLastFetchStatus(res.status);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
-          setReceipts(Array.isArray(data?.receipts) ? data.receipts : []);
+          const arr = Array.isArray(data?.receipts) ? data.receipts : [];
+          setReceipts(arr);
+          setLastFetchCount(arr.length);
         }
       } catch (err) {
         if (!cancelled) {
@@ -139,6 +146,17 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
           <span className="text-xl font-semibold text-white">{formatKES(summary.totalSales)}</span>
         </div>
       </div>
+
+      {/* Debug panel visible when ?debugReceipts=1 is present in the URL */}
+      {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugReceipts") === "1" && (
+        <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-900/10 p-3 text-sm text-yellow-200">
+          <div className="mb-1 text-xs text-yellow-300">Debug: Receipts fetch</div>
+          <div>AttendantId: <span className="font-mono">{String(attendantId)}</span></div>
+          <div>Last status: <span className="font-mono">{String(lastFetchStatus ?? "-")}</span></div>
+          <div>Last count: <span className="font-mono">{String(lastFetchCount ?? "-")}</span></div>
+          <div className="truncate">Last URL: <span className="font-mono">{String(lastFetchUrl ?? "-")}</span></div>
+        </div>
+      )}
 
       <div className="mt-5 space-y-3">
         {loading && <p className="text-xs text-slate-400">Loading receipts…</p>}
