@@ -10,6 +10,7 @@ import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
+import DailyReportReceiptsPanel from "./daily-report-receipts";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -135,6 +136,8 @@ export default function DailyReportFinal() {
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
+  const attendantId =
+    impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -591,6 +594,7 @@ export default function DailyReportFinal() {
             </div>
           </div>
         </section>
+        <DailyReportReceiptsPanel date={date} attendantId={attendantId} />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
