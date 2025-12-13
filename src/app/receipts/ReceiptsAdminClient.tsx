@@ -821,7 +821,7 @@ export default function ReceiptsAdminClient({
           : -1;
       const matched = matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
       const displayName = item.product?.name ?? matched?.productName ?? "Item";
-      const hasCost = matched?.buyingPrice !== null;
+      const hasCost = matched?.buyingPrice !== null && Number(matched?.buyingPrice ?? 0) > 0;
       if (!hasCost) allItemCostsKnown = false;
       return {
         ...item,
@@ -834,13 +834,14 @@ export default function ReceiptsAdminClient({
     // The support receipt `buyingPrice` is treated as the per-support-item cost
     // and the admin summary/receipt UI uses a per-support-item aggregation.
     const matchedCost = itemsWithCost.reduce((sum, item) => {
-      if (item.buyingPrice === null) return sum;
+      // treat missing or non-positive buyingPrice as unknown (do not count)
+      if (item.buyingPrice === null || Number(item.buyingPrice ?? 0) <= 0) return sum;
       return sum + Number(item.buyingPrice ?? 0);
     }, 0);
     let supportCostSum = 0;
     let supportHasUnknown = false;
     for (const entry of supportQueue) {
-      if (entry.buyingPrice === null) {
+      if (entry.buyingPrice === null || Number(entry.buyingPrice ?? 0) <= 0) {
         supportHasUnknown = true;
         continue;
       }
