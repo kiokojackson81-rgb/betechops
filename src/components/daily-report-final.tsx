@@ -10,7 +10,6 @@ import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
-import DailyReportReceiptsPanel from "./daily-report-receipts";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -592,13 +591,6 @@ export default function DailyReportFinal() {
             </div>
           </div>
         </section>
-        <DailyReportReceiptsPanel
-          date={date}
-          attendantId={
-            impersonateId ??
-            ((session?.user as { id?: string } | undefined)?.id ?? null)
-          }
-        />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
