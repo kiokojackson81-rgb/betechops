@@ -111,9 +111,17 @@ const computeEntryTotals = (entry: MarketingDailyEntry & { receipts?: (Marketing
   if (entry.receipts && entry.receipts.length) {
     const totalSales = entry.receipts.reduce((sum, r) => sum + toNumber(r.sellingTotal), 0);
     const totalProfit = entry.receipts.reduce((sum, r) => {
-      const fallbackCost = (r.items || []).reduce((s, it) => s + toNumber(it.buyingPrice), 0);
-      const buyingSum = toNumber(r.buyingTotal ?? fallbackCost) || fallbackCost;
-      return sum + (toNumber(r.sellingTotal) - buyingSum);
+      const items = r.items || [];
+      const fallbackCost = items.reduce((s, it) => s + toNumber(it.buyingPrice), 0);
+      const aggregateCost = toNumber(r.buyingTotal);
+      const hasAggregateCost = aggregateCost > 0;
+      const allItemsPriced = items.length > 0 && items.every((it) => toNumber((it as any).buyingPrice) > 0);
+      if (hasAggregateCost || allItemsPriced) {
+        const buyingSum = hasAggregateCost ? aggregateCost : fallbackCost;
+        return sum + (toNumber(r.sellingTotal) - buyingSum);
+      }
+      // costs incomplete for this receipt; skip including its profit
+      return sum;
     }, 0);
     return { totalSales, totalProfit, totalItems: entry.receipts.reduce((s, r) => s + (r.items?.length || 0), 0) };
   }
@@ -413,9 +421,16 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
         } else {
           dayMpesa += sell;
         }
-        const fallbackCost = (r.items || []).reduce((s, it) => s + (Number(it.buyingPrice) || 0), 0);
-        const buyingTotal = Math.max(0, Number(r.buyingTotal ?? fallbackCost));
-        dayProfit += sell - buyingTotal;
+        const items = r.items || [];
+        const fallbackCost = items.reduce((s, it) => s + (Number(it.buyingPrice) || 0), 0);
+        const aggregateCost = Number(r.buyingTotal ?? 0);
+        const hasAggregateCost = aggregateCost > 0;
+        const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+        if (hasAggregateCost || allItemsPriced) {
+          const buyingTotal = hasAggregateCost ? aggregateCost : fallbackCost;
+          dayProfit += sell - buyingTotal;
+        }
+        // else: costs incomplete -> skip profit for this receipt
         dayItems += (r.items || []).length;
       }
     } else if (e.sales && e.sales.length) {

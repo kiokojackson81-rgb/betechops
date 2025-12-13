@@ -15,8 +15,15 @@ export async function recalcMarketingEntry(tx: Prisma.TransactionClient, entryId
   if (!entryWithReceipts) return null;
   const totalSales = entryWithReceipts.receipts.reduce((sum, r) => sum + Number(r.sellingTotal ?? 0), 0);
   const totalProfit = entryWithReceipts.receipts.reduce((sum, r) => {
-    const buying = (r.items ?? []).reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
-    return sum + (Number(r.sellingTotal ?? 0) - buying);
+    const items = r.items ?? [];
+    const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+    const aggregateCost = Number((r as any).buyingTotal ?? 0);
+    if (aggregateCost > 0 || allItemsPriced) {
+      const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+      const costToUse = aggregateCost > 0 ? aggregateCost : buying;
+      return sum + (Number(r.sellingTotal ?? 0) - costToUse);
+    }
+    return sum;
   }, 0);
   await tx.marketingDailyEntry.update({
     where: { id: entryId },
@@ -32,8 +39,15 @@ export async function recalcSupportEntry(tx: Prisma.TransactionClient, entryId: 
   });
   const totalSales = entryReceipts.reduce((sum, r) => sum + Number(r.sellingTotal ?? 0), 0);
   const totalProfit = entryReceipts.reduce((sum, r) => {
-    const buying = (r.items ?? []).reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
-    return sum + (Number(r.sellingTotal ?? 0) - buying);
+    const items = r.items ?? [];
+    const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+    const aggregateCost = Number((r as any).buyingTotal ?? 0);
+    if (aggregateCost > 0 || allItemsPriced) {
+      const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+      const costToUse = aggregateCost > 0 ? aggregateCost : buying;
+      return sum + (Number(r.sellingTotal ?? 0) - costToUse);
+    }
+    return sum;
   }, 0);
   await tx.supportDailyEntry.update({
     where: { id: entryId },
