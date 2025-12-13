@@ -58,6 +58,25 @@ function createEmptyReceipt(): ReceiptRow {
 }
 
 export default function DailyReportFinal() {
+  const [hash, setHash] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const sync = () => setHash(window.location.hash || "");
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  const isMyReceiptsView = hash === "#my-receipts";
+
+  useEffect(() => {
+    if (!isMyReceiptsView) return;
+    const el = document.getElementById("my-receipts");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isMyReceiptsView]);
+
   const [date, setDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split("T")[0];
@@ -594,7 +613,9 @@ export default function DailyReportFinal() {
             </div>
           </div>
         </section>
-        <DailyReportReceiptsPanel date={date} attendantId={attendantId} />
+        {isMyReceiptsView ? (
+          <DailyReportReceiptsPanel date={date} attendantId={attendantId} />
+        ) : null}
       </section>
     </div>
   );
