@@ -72,7 +72,12 @@ export async function GET(req: NextRequest) {
     }
   }
   if (attendantId) {
-    where.order = { ...(where.order || {}), attendantId };
+    // Allow filtering receipts either by the order.attendantId OR by the receipt issuer (issuedById)
+    // This ensures attendants see receipts they served (order.attendantId) as well as receipts
+    // they issued/created (issuedById). Keep any existing order filters intact.
+    const orderFilter = { ...(where.order || {}), attendantId };
+    where.OR = where.OR || [];
+    where.OR.push({ order: orderFilter }, { issuedById: attendantId });
   }
 
   // compute total count for paging (best-effort; tests may mock only findMany)

@@ -79,10 +79,17 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
         if (attendantId) params.set("attendantId", attendantId);
-        const res = await fetch(`/api/receipts?${params.toString()}`, {
+        const url = `/api/receipts?${params.toString()}`;
+        // include credentials to ensure session cookie is sent
+        const res = await fetch(url, {
           cache: "no-store",
           signal: controller.signal,
+          credentials: "same-origin",
         });
+        // debug info to help trace why an attendant may not see receipts
+        // (will appear in the browser console)
+        // eslint-disable-next-line no-console
+        console.debug("[DailyReportReceipts] fetch", { attendantId, url, status: res.status });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
