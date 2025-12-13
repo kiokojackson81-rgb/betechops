@@ -614,86 +614,88 @@ export default function DailyReportFinal() {
         </section>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-8">
-          <SalesReceiptsCard
-            receipts={receipts}
-            updateReceipt={updateReceipt}
-            updateProduct={updateProduct}
-            addProductToReceipt={addProductToReceipt}
-            removeProductFromReceipt={removeProductFromReceipt}
-            addReceipt={addReceipt}
-            removeReceipt={removeReceipt}
-            salesTotals={salesTotals}
-          />
-
-          <div className="space-y-6">
-            <DaySpecificBlocks
-              selectedDay={dayOfWeek}
-              walkIns={Number(walkinsServed || 0)}
-              onWalkInsChange={(val) => setWalkinsServed(val)}
-              neatness={shopNeatness}
-              onNeatnessChange={setShopNeatness}
-              productTasks={{
-                uploaded: productsUploaded,
-                edited: productsEdited,
-                copied: productsCopied,
-              }}
-              onProductTasksChange={(next) => {
-                setProductsUploaded(next.uploaded);
-                setProductsEdited(next.edited);
-                setProductsCopied(next.copied);
-              }}
-              communications={communications}
-              onCommunicationsChange={setCommunications}
-              marketplace={marketplace}
-              onMarketplaceChange={setMarketplace}
-              liveSession={liveSession}
-              onLiveSessionChange={setLiveSession}
-              thursdayActivities={thursdayActivities}
-              onThursdayActivitiesChange={setThursdayActivities}
-              fridayTasks={fridayTasks}
-              onFridayTasksChange={setFridayTasks}
-              saturdaySummary={saturdaySummary}
-              onSaturdaySummaryChange={setSaturdaySummary}
+      {!showMyReceipts && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
+            <SalesReceiptsCard
+              receipts={receipts}
+              updateReceipt={updateReceipt}
+              updateProduct={updateProduct}
+              addProductToReceipt={addProductToReceipt}
+              removeProductFromReceipt={removeProductFromReceipt}
+              addReceipt={addReceipt}
+              removeReceipt={removeReceipt}
+              salesTotals={salesTotals}
             />
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={handleResetDay}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-              >
-                Reset day
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
-              >
-                {isSubmitting ? "Submitting..." : "Submit report"}
-              </button>
+            <div className="space-y-6">
+              <DaySpecificBlocks
+                selectedDay={dayOfWeek}
+                walkIns={Number(walkinsServed || 0)}
+                onWalkInsChange={(val) => setWalkinsServed(val)}
+                neatness={shopNeatness}
+                onNeatnessChange={setShopNeatness}
+                productTasks={{
+                  uploaded: productsUploaded,
+                  edited: productsEdited,
+                  copied: productsCopied,
+                }}
+                onProductTasksChange={(next) => {
+                  setProductsUploaded(next.uploaded);
+                  setProductsEdited(next.edited);
+                  setProductsCopied(next.copied);
+                }}
+                communications={communications}
+                onCommunicationsChange={setCommunications}
+                marketplace={marketplace}
+                onMarketplaceChange={setMarketplace}
+                liveSession={liveSession}
+                onLiveSessionChange={setLiveSession}
+                thursdayActivities={thursdayActivities}
+                onThursdayActivitiesChange={setThursdayActivities}
+                fridayTasks={fridayTasks}
+                onFridayTasksChange={setFridayTasks}
+                saturdaySummary={saturdaySummary}
+                onSaturdaySummaryChange={setSaturdaySummary}
+              />
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleResetDay}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                >
+                  Reset day
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+                >
+                  {isSubmitting ? "Submitting..." : "Submit report"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-6 lg:col-span-4">
-          <QuickStats
-            receipts={displayedReceipts}
-            salesKes={displayedSalesKes}
-            newProducts={displayedNewProducts}
-            editedProducts={displayedEditedProducts}
-            copiedProducts={displayedCopiedProducts}
-            walkInsServed={displayedWalkInsServed}
-            walkInsPurchased={displayedWalkInsPurchased}
-            commissionKes={commissionForPeriod}
-            tradingPeriodLabel={tradingPeriodLabel}
-          />
+          <div className="space-y-6 lg:col-span-4">
+            <QuickStats
+              receipts={displayedReceipts}
+              salesKes={displayedSalesKes}
+              newProducts={displayedNewProducts}
+              editedProducts={displayedEditedProducts}
+              copiedProducts={displayedCopiedProducts}
+              walkInsServed={displayedWalkInsServed}
+              walkInsPurchased={displayedWalkInsPurchased}
+              commissionKes={commissionForPeriod}
+              tradingPeriodLabel={tradingPeriodLabel}
+            />
 
-          <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
+            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
+          </div>
         </div>
-      </div>
+      )}
 
       {showMyReceipts && <DailyReportReceiptsPanel date={date} attendantId={attendantId} />}
     </div>
