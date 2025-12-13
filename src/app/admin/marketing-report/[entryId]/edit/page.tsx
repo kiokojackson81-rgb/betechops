@@ -6,17 +6,31 @@ import { notFound, redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 type EditDayPageProps = {
-  params: { entryId: string };
+  params: any;
 };
 
 export default async function EditDayPage({ params }: EditDayPageProps) {
+  // Defensively resolve params if hosting provides them as a Promise.
+  let resolvedParams = params;
+  if (resolvedParams && typeof resolvedParams.then === "function") {
+    try {
+      resolvedParams = await resolvedParams;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[admin/marketing-report] failed to resolve params", { err: e });
+      resolvedParams = null;
+    }
+  }
+
+  const entryId = resolvedParams?.entryId;
+  if (!entryId) return null;
   // server-side guard: only ADMIN may access this page
   const session = await auth();
   const role = session?.user?.role;
   if (role !== "ADMIN") return redirect("/not-authorized");
 
   const entry = await prisma.marketingDailyEntry.findUnique({
-    where: { id: params.entryId },
+    where: { id: entryId },
     include: { receipts: { include: { items: true } } },
   });
   if (!entry) return notFound();
