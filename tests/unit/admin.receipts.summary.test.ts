@@ -39,8 +39,9 @@ describe('admin receipts summary', () => {
 
     // totalSales comes from receipts (1000 + 400)
     expect(body.totalSales).toBe(1400);
-    // totalProfit = (1000 - 700) + (400 - 150) = 300 + 250 = 550
-    expect(body.totalProfit).toBe(550);
+    // totalProfit excludes receipts with incomplete cost data; only the support receipt is counted
+    // totalProfit = (400 - 150) = 250
+    expect(body.totalProfit).toBe(250);
     expect(body.receiptsCount).toBe(2);
   });
 });

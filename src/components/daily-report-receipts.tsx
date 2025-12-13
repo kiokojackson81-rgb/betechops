@@ -57,13 +57,6 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!attendantId) {
-      setReceipts([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
     const controller = new AbortController();
 
@@ -73,20 +66,18 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
       try {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
-        params.set("size", "32");
+        params.set("size", "80");
         const startIso = toStartOfDayIso(date);
         const endIso = toEndOfDayIso(date);
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
-        params.set("attendantId", attendantId);
+        if (attendantId) params.set("attendantId", attendantId);
         const res = await fetch(`/api/receipts?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || "Unable to load receipts");
-        }
+        if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
           setReceipts(Array.isArray(data?.receipts) ? data.receipts : []);
         }
@@ -95,26 +86,20 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
           setError(err instanceof Error ? err.message : "Unable to load receipts");
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchReceipts();
-
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, date]);
+  }, [date, attendantId]);
 
   const summary = useMemo(() => {
     const totalSales = receipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
-    return {
-      totalSales,
-      count: receipts.length,
-    };
+    return { totalSales, count: receipts.length };
   }, [receipts]);
 
   const displayDate = (() => {
@@ -126,10 +111,7 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   })();
 
   return (
-    <section
-      id="my-receipts"
-      className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8"
-    >
+    <section id="my-receipts" className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">My receipts</p>
@@ -145,40 +127,32 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
       </div>
 
       <div className="mt-5 space-y-3">
-        {loading && (
-          <p className="text-xs text-slate-400">Loading your receipts for this date…</p>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
-        {!attendantId && (
-          <div className="rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-sm text-slate-300">
-            Sign in to see your receipts.
-          </div>
-        )}
-        {!loading && !error && attendantId && receipts.length === 0 && (
+        {loading && <p className="text-xs text-slate-400">Loading receipts…</p>}
+        {error && <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{error}</div>}
+
+        {!loading && !error && receipts.length === 0 && (
           <p className="text-sm text-slate-400">No receipts found for this date.</p>
         )}
+
         {!!receipts.length && (
-          <div className="divide-y divide-white/5 rounded-2xl border border-white/5 bg-slate-950/60">
+          <div className="space-y-2">
             {receipts.map((receipt) => (
               <div
                 key={receipt.id}
-                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-950/60 px-4 py-3"
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">
-                    {receipt.docType ?? receipt.orderRef ?? "Receipt"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {receipt.customerName ?? "Customer"} · {receipt.attendantName ?? "You"}
-                  </p>
+                  <p className="text-sm font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
+                  <p className="text-[11px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
+                  <p className="text-[11px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
                 </div>
-                <div className="text-right text-xs text-slate-400 sm:text-sm">
-                  <p>{formatDateTime(receipt.createdAt)}</p>
+                <div className="text-right">
                   <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
+                  {receipt.id ? (
+                    <a href={`/receipts/${receipt.id}`} className="text-xs text-emerald-300 hover:text-emerald-200">View details</a>
+                  ) : (
+                    <span className="text-xs text-slate-500">Unavailable</span>
+                  )}
                 </div>
               </div>
             ))}
