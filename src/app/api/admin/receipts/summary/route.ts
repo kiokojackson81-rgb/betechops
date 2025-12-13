@@ -109,25 +109,32 @@ export async function GET(request: NextRequest) {
 
     const receiptsCount = allReceipts.length;
 
-    // Compute profit using the UI-style receipt attribution:
-    // For each receipt in the requested window, treat profit = sellingTotal - sum(item.buyingPrice || 0)
-    // This keeps admin summary consistent with the receipt detail UI.
+    // Compute profit following the admin UI rule:
+    // Only include a receipt's cost/profit when either:
+    //  - the receipt has an explicit aggregate `buyingTotal` > 0, or
+    //  - every item has a positive `buyingPrice` (> 0).
+    // Otherwise the receipt is considered awaiting pricing and its profit is excluded.
     let totalProfit = 0;
     let totalCost = 0;
     let awaitingPricingCount = 0;
 
     for (const receipt of allReceipts) {
       const items = Array.isArray(receipt.items) ? receipt.items : [];
-      const buyingSum = items.reduce((s: number, it: any) => s + Number(it.buyingPrice ?? 0), 0);
-      totalCost += buyingSum;
+      const aggregateCost = Number(receipt.buyingTotal ?? 0);
+      const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+      const hasAggregateCost = aggregateCost > 0;
       const sell = Number(receipt.sellingTotal ?? 0);
-      totalProfit += sell - buyingSum;
-      if (items.length === 0 || items.some((it) => it.buyingPrice === null || it.buyingPrice === undefined)) {
+
+      if (hasAggregateCost || allItemsPriced) {
+        const buyingSum = hasAggregateCost ? aggregateCost : items.reduce((s: number, it: any) => s + Number(it.buyingPrice ?? 0), 0);
+        totalCost += buyingSum;
+        totalProfit += sell - buyingSum;
+      } else {
         awaitingPricingCount += 1;
       }
     }
 
-    const hasIncompleteCosts = allReceipts.some((r) => hasMissingCostData(Array.isArray(r.items) ? r.items : []));
+    const hasIncompleteCosts = awaitingPricingCount > 0;
     const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
 
     return NextResponse.json({
