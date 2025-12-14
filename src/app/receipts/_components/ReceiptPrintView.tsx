@@ -1,9 +1,5 @@
 "use client";
 import React from "react";
-import MarkdownIt from "markdown-it";
-import DOMPurify from "dompurify";
-
-const mdParser = new MarkdownIt({ html: false, linkify: false, typographer: true });
 // small, safe markdown -> HTML renderer supporting **bold**, paragraphs, '-' bullets and numbered lists
 function escapeHtml(unsafe: string) {
   return unsafe
@@ -143,7 +139,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
               <tr key={idx} className="border-b align-top">
                 <td className="py-1">{qty}</td>
                 <td className="py-1 whitespace-pre-wrap">
-                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdParser.render(String(item.title || ""))) }} />
+                  <div dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(String(item.title || "")) }} />
                   {item.serial && (
                     <div className="text-[10px] text-slate-500">Serial / IMEI: {item.serial}</div>
                   )}
@@ -197,7 +193,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         {data?.notes && (
           <div className="mt-2 text-[12px]">
             <strong>Notes:</strong>
-            <div className="mt-1" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdParser.render(String(data.notes || ""))) }} />
+            <div className="mt-1" dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(String(data.notes || "")) }} />
           </div>
         )}
         {data?.paymentDetailsShown && (

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Modal from "@/app/_components/Modal";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import { computeRowStatus } from "@/lib/dailyReportHelpers";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
@@ -604,7 +605,11 @@ export default function AdminDailyReportPage() {
           {badge("Competitors", Boolean(s.competitorsReviewed), "comp")}
           {badge("OOS", Boolean(s.oosReviewed), "oos")}
         </div>
-        {s.notes ? <div className="max-w-[12rem] truncate text-xs text-slate-400">{String(s.notes)}</div> : null}
+        {s.notes ? (
+          <div className="max-w-[12rem] text-xs text-slate-400">
+            <MarkdownRendererClient mdText={String(s.notes)} />
+          </div>
+        ) : null}
       </div>
     );
   }

@@ -104,21 +104,6 @@ export async function GET(request: NextRequest) {
       // Otherwise keep the existing entry (first-seen).
     }
     const allReceipts = Array.from(receiptMap.values());
-    const paymentTotals = allReceipts.reduce(
-      (acc, receipt) => {
-        const method = normalizePaymentMethod(receipt.paymentMethod) ?? "MPESA";
-        const normalized = method.toUpperCase();
-        if (!["MPESA", "CASH"].includes(normalized)) return acc;
-        const bucket = normalized === "CASH" ? acc.cash : acc.mpesa;
-        bucket.totalSales += Number(receipt.sellingTotal ?? 0);
-        bucket.count += 1;
-        return acc;
-      },
-      {
-        mpesa: { totalSales: 0, count: 0 },
-        cash: { totalSales: 0, count: 0 },
-      },
-    );
     const filteredReceipts = paymentMethod
       ? allReceipts.filter((receipt) => normalizePaymentMethod(receipt.paymentMethod) === paymentMethod)
       : allReceipts;

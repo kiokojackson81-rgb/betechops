@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "@/lib/toast";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 
 type Activity = {
   id: string;
@@ -138,7 +139,11 @@ export default function DailySalesCard() {
               <li key={row.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm">
                 <div>
                   <div className="font-semibold text-white">{formatMoney(Number.isFinite(numeric) ? Number(numeric) : 0)}</div>
-                  {row.notes ? <div className="text-xs text-slate-400">{row.notes}</div> : null}
+                  {row.notes ? (
+                    <div className="text-xs text-slate-400">
+                      <MarkdownRendererClient mdText={String(row.notes)} />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="text-xs text-slate-400">{formatDate(row.entryDate)}</div>
               </li>
