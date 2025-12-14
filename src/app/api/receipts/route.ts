@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
           paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
           totalAmount: Number(total) || 0,
           paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || 0,
-          metadata: payload?.metadata ?? null,
+          // metadata already set above (may include deliveryAddress)
         },
         update: {
           customerName: payload?.customerName ?? undefined,
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
           paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || undefined,
           status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
           paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
-          metadata: payload?.metadata ?? undefined,
+          // metadata already set above (may include deliveryAddress)
         },
       });
 
