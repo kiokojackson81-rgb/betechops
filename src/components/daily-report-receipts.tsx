@@ -236,7 +236,7 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
                 <div className="text-right">
                   <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
                   {receipt.id ? (
-                    <a href={`/receipts/${receipt.id}`} className="text-xs text-emerald-300 hover:text-emerald-200">View details</a>
+                    <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-300 hover:text-emerald-200">View details</a>
                   ) : (
                     <span className="text-xs text-slate-500">Unavailable</span>
                   )}
