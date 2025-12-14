@@ -33,14 +33,13 @@ export default async function Page({ params }: { params: { id: string } }) {
   }));
 
   const dataIsObject = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data);
+  const dataHasNotes =
+    dataIsObject && "notes" in receipt.data && typeof (receipt.data as { notes?: string }).notes === "string";
   const snapshot: any = {
     order,
     items,
     totals: receipt.totals ?? {},
-    notes:
-      receipt.notes ??
-      (dataIsObject && "notes" in receipt.data ? (receipt.data as { notes?: string }).notes : undefined) ??
-      "",
+    notes: receipt.notes ?? (dataHasNotes ? (receipt.data as { notes?: string }).notes : undefined) ?? "",
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || "",
     attendantName: receipt.issuedBy?.name || order?.attendant?.name || "",
