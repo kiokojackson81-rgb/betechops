@@ -27,16 +27,20 @@ const formatKES = (value?: number | null) =>
     maximumFractionDigits: 0,
   })}`;
 
+const locale = "en-KE";
+const kenyaTimeZone = "Africa/Nairobi";
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-KE", {
+  return date.toLocaleString(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: kenyaTimeZone,
   });
 };
 
@@ -167,16 +171,29 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
         const s = new Date(start);
         const e = new Date(end);
         if (!Number.isNaN(s.getTime()) && s.toDateString() === e.toDateString()) {
-          return s.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+          return s.toLocaleDateString(locale, {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            timeZone: kenyaTimeZone,
+          });
         }
-        return `${s.toLocaleDateString("en-KE")} — ${e.toLocaleDateString("en-KE")}`;
+        return `${s.toLocaleDateString(locale, { timeZone: kenyaTimeZone })} - ${e.toLocaleDateString(locale, {
+          timeZone: kenyaTimeZone,
+        })}`;
       } catch (e) {
         return "Selected range";
       }
     }
     if (start) {
       const s = new Date(start);
-      if (!Number.isNaN(s.getTime())) return s.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+      if (!Number.isNaN(s.getTime()))
+        return s.toLocaleDateString(locale, {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          timeZone: kenyaTimeZone,
+        });
     }
     return "Selected date";
   })();

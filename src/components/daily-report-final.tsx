@@ -34,6 +34,9 @@ type SaleEntryPayload = {
   receiptNumber: string;
 };
 
+const kenyanLocale = "en-KE";
+const kenyaTimeZone = "Africa/Nairobi";
+
 const cardClasses =
   "rounded-2xl border border-white/10 bg-slate-950/70 shadow-lg shadow-black/30";
 const inputClasses =
@@ -197,7 +200,7 @@ export default function DailyReportFinal() {
   });
   const [dayOfWeek, setDayOfWeek] = useState<string>(() => {
     const d = new Date();
-    return d.toLocaleDateString("en-KE", { weekday: "long" });
+    return d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone });
   });
 
   const [receipts, setReceipts] = useState<ReceiptRow[]>([createEmptyReceipt()]);
@@ -644,7 +647,9 @@ export default function DailyReportFinal() {
           setDate(e.target.value);
           const d = new Date(e.target.value);
           if (!Number.isNaN(d.getTime())) {
-            setDayOfWeek(d.toLocaleDateString("en-KE", { weekday: "long" }));
+            setDayOfWeek(
+              d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
+            );
           }
         }}
         className={inputClasses}
@@ -656,7 +661,9 @@ export default function DailyReportFinal() {
             const d = new Date();
             const iso = d.toISOString().split("T")[0];
             setDate(iso);
-            setDayOfWeek(d.toLocaleDateString("en-KE", { weekday: "long" }));
+            setDayOfWeek(
+              d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
+            );
           }}
           className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
         >
@@ -669,7 +676,9 @@ export default function DailyReportFinal() {
             d.setDate(d.getDate() - 1);
             const iso = d.toISOString().split("T")[0];
             setDate(iso);
-            setDayOfWeek(d.toLocaleDateString("en-KE", { weekday: "long" }));
+            setDayOfWeek(
+              d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
+            );
           }}
           className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
         >
