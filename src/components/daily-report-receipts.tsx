@@ -79,10 +79,15 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
     const controller = new AbortController();
 
     if (!localAttendantId) {
-      // no attendantId yet — abort early
+      // no attendantId yet — abort early. Ensure parent summary is reset so
+      // the summary cards reflect zero until we resolve the session.
       setReceipts([]);
       setLoading(false);
       setError(null);
+      setLastFetchUrl(null);
+      setLastFetchStatus(null);
+      setLastFetchCount(0);
+      if (onSummary) onSummary({ totalSales: 0, count: 0 });
       return () => controller.abort();
     }
 
@@ -246,14 +251,14 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
                 className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-950/60 px-4 py-3"
               >
                 <div>
-                  <p className="text-sm font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
-                  <p className="text-[11px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
-                  <p className="text-[11px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
+                      <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
+                      <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
+                      <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
+                  <p className="text-lg font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
                   {receipt.id ? (
-                    <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-300 hover:text-emerald-200">View details</a>
+                    <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-300 hover:text-emerald-200">View details</a>
                   ) : (
                     <span className="text-xs text-slate-500">Unavailable</span>
                   )}
