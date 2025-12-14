@@ -644,19 +644,55 @@ export default function DailyReportFinal() {
         </div>
 
         <div className="space-y-5">
-          <div className={cardClasses + " px-6 py-6"}>
+          <div className={cardClasses + " px-8 py-8"}>
             <header className="flex items-start justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Receipts list</p>
-                <h2 className="text-xl font-semibold text-white">Read-only receipts history</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Receipts list</p>
+                  <h2 className="text-2xl font-semibold text-white">Read-only receipts history</h2>
                 <p className="text-sm text-slate-400">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => setRange("today")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">Today</button>
-                <button onClick={() => setRange("yesterday")} className="rounded-full bg-emerald-600 px-3 py-2 text-sm font-semibold text-black">Yesterday</button>
-                <button onClick={() => setRange("thisWeek")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This week</button>
-                <button onClick={() => setRange("period")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This period</button>
-              </div>
+                <div className="flex gap-3">
+                  {(() => {
+                    const isoToday = new Date().toISOString().split("T")[0];
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const isoYesterday = yesterday.toISOString().split("T")[0];
+                    const now = new Date();
+                    const day = now.getDay();
+                    const diffToMonday = day === 0 ? -6 : 1 - day;
+                    const monday = new Date(now);
+                    monday.setDate(now.getDate() + diffToMonday);
+                    const isoMonday = monday.toISOString().split("T")[0];
+
+                    const isActive = (range: "today" | "yesterday" | "thisWeek" | "period") => {
+                      if (range === "today") return startDate === isoToday && endDate === isoToday;
+                      if (range === "yesterday") return startDate === isoYesterday && endDate === isoYesterday;
+                      if (range === "thisWeek") return startDate === isoMonday && endDate === isoToday;
+                      return !(startDate === isoToday && endDate === isoToday) && !(startDate === isoYesterday && endDate === isoYesterday) && !(startDate === isoMonday && endDate === isoToday);
+                    };
+
+                    const pill = (label: string, range: Parameters<typeof setRange>[0]) => {
+                      const active = isActive(range as any);
+                      const base = active
+                        ? "rounded-full px-4 py-2 text-sm font-semibold text-black bg-emerald-400"
+                        : "rounded-full border border-slate-800 px-4 py-2 text-sm text-white/90";
+                      return (
+                        <button key={label} onClick={() => setRange(range as any)} className={base}>
+                          {label}
+                        </button>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {pill("Today", "today")}
+                        {pill("Yesterday", "yesterday")}
+                        {pill("This week", "thisWeek")}
+                        {pill("This period", "period")}
+                      </>
+                    );
+                  })()}
+                </div>
             </header>
 
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -682,12 +718,12 @@ export default function DailyReportFinal() {
               </div>
               <div className="rounded-lg border border-slate-800 p-4">
                 <p className="text-xs uppercase text-slate-400">Receipts</p>
-                <p className="text-2xl font-semibold text-emerald-300">{receiptsSummary.count}</p>
+                <p className="text-3xl font-semibold text-emerald-300">{receiptsSummary.count}</p>
                 <p className="text-sm text-slate-400">Captured in the selected window</p>
               </div>
               <div className="rounded-lg border border-slate-800 p-4">
                 <p className="text-xs uppercase text-slate-400">Total sales</p>
-                <p className="text-2xl font-semibold text-emerald-300">KES {Number(receiptsSummary.totalSales ?? 0).toLocaleString("en-KE")}</p>
+                <p className="text-3xl font-semibold text-emerald-300">KES {Number(receiptsSummary.totalSales ?? 0).toLocaleString("en-KE")}</p>
                 <p className="text-sm text-slate-400">Aggregated from the receipts below</p>
               </div>
             </div>
