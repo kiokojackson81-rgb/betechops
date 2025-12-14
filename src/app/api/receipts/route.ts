@@ -203,7 +203,8 @@ export async function POST(req: NextRequest) {
           customerPhone: payload?.customerPhone ?? null,
           customerEmail: payload?.customerEmail ?? null,
           attendantId: attendantId ?? null,
-          deliveryAddress: payload?.deliveryAddress ?? null,
+          // persist deliveryAddress inside `metadata` JSON to avoid schema mismatch
+          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
           shopId,
           status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
           paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
@@ -216,7 +217,8 @@ export async function POST(req: NextRequest) {
           customerPhone: payload?.customerPhone ?? undefined,
           customerEmail: payload?.customerEmail ?? undefined,
           attendantId: attendantId ?? undefined,
-          deliveryAddress: payload?.deliveryAddress ?? undefined,
+          // merge/update metadata to include deliveryAddress when present
+          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
           totalAmount: Number(total) || undefined,
           paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || undefined,
           status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
