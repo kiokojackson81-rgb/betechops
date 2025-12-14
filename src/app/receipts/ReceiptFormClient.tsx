@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import MarkdownIt from "markdown-it";
+import DOMPurify from "dompurify";
+
+const mdParserClient = new MarkdownIt({ html: false, linkify: false, typographer: true });
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
@@ -842,6 +846,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           onChange={(e) => setNotes(e.target.value)}
           className="mt-1 min-h-[60px] w-full rounded-xl border border-slate-800 bg-slate-950/80 p-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
         />
+        {notes && (
+          <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-100">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Notes preview</div>
+            <div className="mt-2 prose max-w-none text-slate-100" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdParserClient.render(notes)) }} />
+          </div>
+        )}
       </div>
 
         <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl shadow-black/40 md:flex-row md:items-center">
