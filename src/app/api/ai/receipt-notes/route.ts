@@ -25,12 +25,13 @@ export async function POST(req: NextRequest) {
         },
         {
           role: "user",
-          content: `Customer bought these items:\n${itemList}\n\nPayment method: ${
-            paymentMethod ?? "Not specified"
-          }.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include: items supplied in good condition, basic warranty/returns wording, and payment confirmation. Return ONLY the notes in Markdown format.`,
-        },
-          role: "user",
           content: `Customer bought these items:\n${itemList}\n\nPayment method: ${paymentMethod ?? "Not specified"}.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include statements about items supplied in good condition, basic warranty/returns guidance, and payment confirmation. Use whichever formatting (sentences, short paragraphs, bullets, or numbers) makes the notes most clear and professional on a printed receipt. Return ONLY the notes in Markdown format.`,
+        },
+      ],
+    });
+    const notes = completion.choices?.[0]?.message?.content ?? "";
+    return new Response(JSON.stringify({ notes: notes.trim() }), {
+      status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
