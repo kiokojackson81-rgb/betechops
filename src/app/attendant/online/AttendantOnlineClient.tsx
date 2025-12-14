@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
-import SensitiveValue from "@/components/SensitiveValue";
-import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+// SensitiveValue and card-lock helpers removed (cards cleaned up)
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
@@ -110,8 +109,7 @@ export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
 
-  const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
+  // receipt totals & quick stats removed from right column
 
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([
     createReceipt(),
@@ -124,15 +122,14 @@ export default function AttendantOnlineClient() {
 
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
   const [shopSalesLoading, setShopSalesLoading] = useState(false);
-  const [shopRange, setShopRange] = useState<"period" | "this-week" | "all">(
+  const [shopRange, setShopRange] = useState<"period" | "this-week" | "last-week" | "all">(
     "period",
   );
   const [shopPeriodLabel, setShopPeriodLabel] = useState(period.label);
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  const [earningsSummary, setEarningsSummary] =
-    useState<OnlineEarningsSummary | null>(null);
+  // earnings summary (payroll) removed from UI
 
   const fetchUser = useCallback(async () => {
     try {
@@ -145,31 +142,7 @@ export default function AttendantOnlineClient() {
     }
   }, []);
 
-  const loadReceiptStats = useCallback(async () => {
-    if (!userId) return;
-    setStatsLoading(true);
-    try {
-        const params = new URLSearchParams({
-          start: formatNairobiParam(period.start, false),
-          end: formatNairobiParam(period.end, true),
-          includeItems: "true",
-          size: "200",
-        });
-      params.set("attendantId", userId);
-      const res = await fetch(`/api/receipts?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load receipts for this period");
-      const data = (await res.json()) as { receipts?: ReceiptStatsRow[] };
-      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to load receipt totals";
-      showToast(message, "error");
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [period, userId]);
+  // receiptTotals loader removed
 
   const loadOnlineSummary = useCallback(async () => {
     if (!userId) return;
@@ -227,66 +200,8 @@ export default function AttendantOnlineClient() {
     }
   }, [period, shopRange, userId]);
 
-  const loadEarnings = useCallback(async () => {
-    try {
-      const res = await fetch("/api/online/earnings/summary", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as OnlineEarningsSummary;
-      setEarningsSummary(data);
-    } catch (err) {
-      console.warn("[attendant/online] earnings summary error", err);
-    }
-  }, []);
 
-  const receiptTotals = useMemo(() => {
-    const totalSales = receiptRows.reduce(
-      (sum, receipt) => sum + (Number(receipt.total) || 0),
-      0,
-    );
-    const totalItems = receiptRows.reduce(
-      (sum, receipt) => sum + (Array.isArray(receipt.items) ? receipt.items.length : 0),
-      0,
-    );
-    // compute profit: if any item in a receipt lacks a buyingPrice, treat profit for that receipt as 0
-    let totalProfit = 0;
-    let awaitingPricingCount = 0;
-    for (const receipt of receiptRows) {
-      const items = Array.isArray(receipt.items) ? receipt.items : [];
-      if (items.length === 0) {
-        awaitingPricingCount += 1;
-        continue;
-      }
-      let anyMissing = false;
-      let buyingSum = 0;
-      for (const it of items) {
-        const bp = it?.buyingPrice;
-        if (bp === "" || bp === null || bp === undefined) {
-          anyMissing = true;
-          break;
-        }
-        const n = Number(bp ?? 0);
-        if (Number.isNaN(n)) {
-          anyMissing = true;
-          break;
-        }
-        buyingSum += n;
-      }
-      if (anyMissing) awaitingPricingCount += 1;
-      if (!anyMissing) {
-        const sale = Number(receipt.total ?? 0);
-        totalProfit += Math.max(0, sale - buyingSum);
-      }
-    }
-
-    return {
-      totalSales,
-      totalItems,
-      totalReceipts: receiptRows.length,
-      commission: totalSales * COMMISSION_RATE,
-      totalProfit,
-      awaitingPricingCount,
-    };
-  }, [receiptRows]);
+  // receiptTotals derived state removed (Quick stats removed)
 
   const salesRecordsTotals = useMemo(
     () =>
@@ -343,14 +258,11 @@ export default function AttendantOnlineClient() {
 
   useEffect(() => {
     if (!userId) return;
-    void loadReceiptStats();
     void loadOnlineSummary();
     void loadShopSales();
-  }, [loadOnlineSummary, loadReceiptStats, loadShopSales, userId]);
+  }, [loadOnlineSummary, loadShopSales, userId]);
 
-  useEffect(() => {
-    void loadEarnings();
-  }, [loadEarnings]);
+  // earnings summary loader removed
 
   const periodLabel = onlineSummary?.period.label ?? period.label;
 
@@ -377,37 +289,7 @@ export default function AttendantOnlineClient() {
           </Button>
         </header>
 
-        <Card className="border-slate-800 bg-slate-950/70">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Earnings period
-              </p>
-              <p className="mt-1 text-sm text-slate-200">{periodLabel}</p>
-              <p className="text-xs text-slate-400">
-                Attached to payroll. Marketplace totals and shop sales are
-                calculated within this window.
-              </p>
-            </div>
-              <div className="text-right text-sm text-slate-300">
-                <p>
-                  Marketplace orders:{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {safeNumber(onlineTotals.orders).toLocaleString()}
-                  </span>
-                </p>
-              <p>
-                Marketplace sales:{" "}
-                <span className="font-semibold text-emerald-300">
-                  {formatKES(onlineTotals.sales)}
-                </span>
-              </p>
-              <p className="text-xs text-slate-500">
-                {summaryLoading ? "Refreshing online summary…" : "Up to date"}
-              </p>
-            </div>
-          </div>
-        </Card>
+        {/* Payroll earnings period banner removed */}
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
@@ -525,21 +407,7 @@ export default function AttendantOnlineClient() {
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-            <QuickStatsCard
-              statsLoading={statsLoading}
-              periodLabel={periodLabel}
-              totals={receiptTotals}
-            />
-            <OnlineEarningsCard summary={earningsSummary} />
-            <ShopSalesCard
-              rows={shopSalesRows}
-              total={shopRange === "all" ? shopAllTimeTotal : shopPeriodTotal}
-              loading={shopSalesLoading}
-              range={shopRange}
-              onRangeChange={(value) => setShopRange(value)}
-              onRefresh={loadShopSales}
-              periodLabel={shopPeriodLabel}
-            />
+            {/* Right column removed: Quick stats / Payroll / Shop sales moved or simplified. */}
           </div>
         </div>
       </main>
@@ -547,136 +415,10 @@ export default function AttendantOnlineClient() {
   );
 }
 
-function QuickStatsCard({
-  statsLoading,
-  periodLabel,
-  totals,
-}: {
-  statsLoading: boolean;
-  periodLabel: string;
-  totals: {
-    totalReceipts: number;
-    totalSales: number;
-    totalItems: number;
-    commission: number;
-    totalProfit?: number;
-    awaitingPricingCount?: number;
-  };
-}) {
-  const { locked, toggle } = useCardLock("online:quickstats");
-  const mask = (value: ReactNode) => (locked ? "•••" : value);
-
-  const stats = [
-    {
-      label: "Receipts",
-      value:
-        typeof totals.awaitingPricingCount === "number" && totals.awaitingPricingCount > 0
-          ? `${safeNumber(totals.totalReceipts).toLocaleString()} • ${totals.awaitingPricingCount} awaiting pricing`
-          : safeNumber(totals.totalReceipts).toLocaleString(),
-    },
-    { label: "Sales (KES)", value: formatKES(totals.totalSales) },
-    { label: "Profit (KES)", value: formatKES(totals.totalProfit ?? 0) },
-    {
-      label: "Items sold",
-      value: safeNumber(totals.totalItems).toLocaleString(),
-    },
-    {
-      label: "Commission (KES)",
-      value: (
-        <SensitiveValue
-          value={totals.commission}
-          format={(v) => `KES ${safeNumber(Number(v)).toLocaleString()}`}
-          storageKey="online:commission"
-          forceHidden={locked}
-          forceVisible={!locked}
-        />
-      ),
-    },
-  ];
-
-  return (
-    <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
-          <p className="text-xs text-slate-400">
-            {periodLabel} •{" "}
-            {statsLoading ? "Refreshing receipt totals…" : "Receipts summary"}
-          </p>
-        </div>
-        <LockButton locked={locked} onToggle={toggle} />
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-2xl bg-slate-950/60 px-3 py-2 text-left"
-          >
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">
-              {stat.label}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-emerald-400">
-              {typeof stat.value === "string" || typeof stat.value === "number"
-                ? mask(stat.value)
-                : stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function OnlineEarningsCard({ summary }: { summary: OnlineEarningsSummary | null }) {
-  const { locked, toggle } = useCardLock("online:earnings");
-  if (!summary) return null;
-  const mask = (value: ReactNode) => (locked ? "•••" : value);
-  const formatCurrency = (value: number) => `KES ${safeNumber(value).toLocaleString()}`;
-
-  return (
-    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Earnings this period
-            </p>
-            <p className="text-sm text-slate-400">{summary.periodLabel}</p>
-          </div>
-          <LockButton locked={locked} onToggle={toggle} />
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] uppercase tracking-wide text-slate-400">
-            Net pay
-          </p>
-          <p className="text-2xl font-semibold text-emerald-300">
-            {mask(formatCurrency(summary.netPay))}
-          </p>
-        </div>
-      </div>
-      <div className="space-y-2 text-sm">
-        <div className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
-          <span className="text-slate-300">Sales commission</span>
-          <span className="font-semibold text-emerald-300">
-            {mask(formatCurrency(summary.salesCommission))}
-          </span>
-        </div>
-        {summary.otherBonuses !== 0 && (
-          <div className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2">
-            <span className="text-slate-300">Other bonuses</span>
-            <span className="font-semibold text-emerald-300">
-              {mask(formatCurrency(summary.otherBonuses))}
-            </span>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
+// QuickStatsCard and OnlineEarningsCard removed — simplified UI now
 
 function ShopSalesCard({
   rows,
-  total,
   loading,
   range,
   onRangeChange,
@@ -684,10 +426,9 @@ function ShopSalesCard({
   periodLabel,
 }: {
   rows: ShopSalesRow[];
-  total: number;
   loading: boolean;
-  range: "period" | "this-week" | "all";
-  onRangeChange: (value: "period" | "this-week" | "all") => void;
+  range: "period" | "this-week" | "last-week" | "all";
+  onRangeChange: (value: "period" | "this-week" | "last-week" | "all") => void;
   onRefresh: () => void;
   periodLabel: string;
 }) {
@@ -696,22 +437,23 @@ function ShopSalesCard({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-emerald-400">
-            Shop sales
+            Marketplace Overview (Last week)
           </p>
-          <p className="text-sm text-slate-400">
-            Manual entries from <span className="font-semibold">/admin/online/manual</span>
-          </p>
+          <p className="text-sm text-slate-400">Assigned shops for the selected range</p>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={range}
             onChange={(event) =>
-              onRangeChange(event.target.value as "period" | "this-week" | "all")
+              onRangeChange(
+                event.target.value as "period" | "this-week" | "last-week" | "all",
+              )
             }
             className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
           >
             <option value="period">This earnings period</option>
             <option value="this-week">This week</option>
+            <option value="last-week">Last week</option>
             <option value="all">All time up to period</option>
           </select>
           <Button
@@ -725,49 +467,33 @@ function ShopSalesCard({
           </Button>
         </div>
       </div>
-
       <div className="space-y-2 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm max-h-80">
         {rows.length === 0 && !loading && (
-          <p className="text-xs text-slate-400">
-            No shop sales were reported for this range.
-          </p>
+          <p className="text-xs text-slate-400">No assigned shops for this range.</p>
         )}
         {rows.map((shop) => (
-          <div
-            key={shop.id}
-            className="space-y-1 rounded-xl bg-slate-900/80 px-3 py-2"
-          >
+          <div key={shop.id} className="space-y-1 rounded-xl bg-slate-900/80 px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-slate-100">{shop.name}</p>
                 <p className="text-[11px] text-slate-400">
-                  {shop.country} • {shop.currency} • {shop.status} •{" "}
-                  {shop.platform.toLowerCase()}
+                  {shop.platform} • {shop.country} • {shop.currency}
                 </p>
               </div>
-              <p className="text-sm font-semibold text-emerald-300">
-                {formatKES(shop.totalSales)}
-              </p>
             </div>
             <p className="text-[11px] text-slate-400">{shop.codeLabel}</p>
             <p className="text-[11px] text-slate-400">
               {shop.handlerName} • {shop.handlerRole}
             </p>
-            <p className="text-[11px] text-slate-500">{shop.periodLabel}</p>
           </div>
         ))}
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-slate-300">
-        <span>{periodLabel}</span>
-        <span className="font-semibold text-emerald-300">{formatKES(total)}</span>
       </div>
     </Card>
   );
 }
 
 function computeRangeDates(
-  range: "period" | "this-week" | "all",
+  range: "period" | "this-week" | "last-week" | "all",
   period: { start: Date; end: Date; label: string },
 ) {
   if (range === "period") {
@@ -787,6 +513,20 @@ function computeRangeDates(
     weekEnd.setDate(weekStart.getDate() + 6);
     weekEnd.setHours(23, 59, 59, 999);
     return { start: formatNairobiParam(weekStart, false), end: formatNairobiParam(weekEnd, true) };
+  }
+  if (range === "last-week") {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(now.getDate() - diffToMonday);
+    thisWeekStart.setHours(0, 0, 0, 0);
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+    lastWeekEnd.setHours(23, 59, 59, 999);
+    return { start: formatNairobiParam(lastWeekStart, false), end: formatNairobiParam(lastWeekEnd, true) };
   }
   return { start: "", end: "" };
 }

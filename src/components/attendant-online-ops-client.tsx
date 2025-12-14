@@ -196,46 +196,7 @@ function TradingWeekPicker({ weeks, value, onChange, loading }: TradingWeekPicke
   );
 }
 
-type AssignedShopsCardProps = {
-  rows: ShopSalesRow[];
-  loading: boolean;
-  weekLabel: string;
-};
-
-function AssignedShopsCard({ rows, loading, weekLabel }: AssignedShopsCardProps) {
-  return (
-    <Card className="space-y-3 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">Marketplace overview</p>
-          <h2 className="text-lg font-semibold">Assigned shops</h2>
-        </div>
-        <span className="text-xs text-slate-400">{weekLabel}</span>
-      </div>
-
-      <div className="space-y-3 text-sm">
-        {loading && <p className="text-xs text-slate-400">Loading shops…</p>}
-        {!loading && rows.length === 0 && (
-          <p className="text-xs text-slate-400">No assigned shops for this week.</p>
-        )}
-        {rows.map((shop) => (
-          <div key={shop.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-slate-100">{shop.name}</p>
-              <span className="text-xs text-slate-400">{shop.platform}</span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              {shop.codeLabel} • {shop.country} • {shop.currency}
-            </p>
-            <p className="text-[11px] text-slate-400">
-              {shop.handlerName} • {shop.handlerRole}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
+import AssignedShopsCard from "@/components/AssignedShopsCard";
 
 type WeeklyEarningsPanelProps = {
   weekly: WeeklyEarningsResponse | null;
@@ -325,8 +286,7 @@ export default function AttendantOnlineOpsClient() {
 
   const [tab, setTab] = useState<"overview" | "shops" | "receipts">("overview");
   const [userId, setUserId] = useState<string | null>(null);
-  const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
+  // receipt totals removed (not used in simplified UI)
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
   const [shopSalesLoading, setShopSalesLoading] = useState(false);
@@ -344,29 +304,7 @@ export default function AttendantOnlineOpsClient() {
     }
   }, []);
 
-  const loadReceiptStats = useCallback(async () => {
-    if (!userId) return;
-    setStatsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        start: formatNairobiParam(receiptsPeriod.start, false),
-        end: formatNairobiParam(receiptsPeriod.end, true),
-        includeItems: "true",
-        size: "200",
-      });
-      params.set("attendantId", userId);
-
-      const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load receipts for payroll period");
-      const data = (await res.json()) as { receipts?: ReceiptStatsRow[] };
-      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load receipt totals";
-      showToast(message, "error");
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [receiptsPeriod, userId]);
+  // receipt totals loader removed — keeping receipts editor only
 
   const loadShopSales = useCallback(async () => {
     if (!userId || !selectedWeek) return;
@@ -435,10 +373,7 @@ export default function AttendantOnlineOpsClient() {
     fetchUser();
   }, [fetchUser]);
 
-  useEffect(() => {
-    if (!userId) return;
-    void loadReceiptStats();
-  }, [loadReceiptStats, userId]);
+  // receipt totals loader previously triggered here; removed
 
   useEffect(() => {
     if (!userId || !selectedWeek) return;
@@ -552,15 +487,6 @@ export default function AttendantOnlineOpsClient() {
                   >
                     Open receipts desk
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="px-4"
-                    onClick={() => void loadReceiptStats()}
-                    disabled={statsLoading}
-                  >
-                    {statsLoading ? "Refreshing…" : "Refresh receipt totals"}
-                  </Button>
                 </div>
               </Card>
             </div>
@@ -589,11 +515,7 @@ export default function AttendantOnlineOpsClient() {
             </div>
 
             <div className="space-y-4 lg:col-span-4">
-              <AssignedShopsCard
-                rows={shopSalesRows}
-                loading={shopSalesLoading}
-                weekLabel={selectedWeek?.label ?? "Week view"}
-              />
+              {/* right column removed for Shops tab (Assigned shops shown in Overview) */}
             </div>
           </div>
         )}
@@ -643,15 +565,6 @@ export default function AttendantOnlineOpsClient() {
                   onClick={() => (window.location.href = "/receipts")}
                 >
                   Open receipts desk
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="px-4"
-                  onClick={() => void loadReceiptStats()}
-                  disabled={statsLoading}
-                >
-                  {statsLoading ? "Refreshing…" : "Refresh receipt totals"}
                 </Button>
               </div>
             </Card>
