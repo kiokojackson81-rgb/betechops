@@ -61,7 +61,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         </div>
         <div class="right">
           <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
-          <div style="margin-top:6px"><strong>AAddress :</strong> ${deliveryAddress || '-'} </div>
+          <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'} </div>
         </div>
       </div>
 

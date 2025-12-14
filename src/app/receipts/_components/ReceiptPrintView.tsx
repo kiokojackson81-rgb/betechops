@@ -60,12 +60,12 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         <div>
           <span className="font-semibold">Date:</span> {date.toLocaleString()}
         </div>
-        <div>
+          <div>
           <span className="font-semibold">{numberLabel}</span> {data?.serial}
           <div style={{ marginTop: 6 }}>
-            <strong>AAddress :</strong> {data?.deliveryAddress || '-'}
+            <strong>Address :</strong> {data?.deliveryAddress || '-'}
           </div>
-        </div>
+         </div>
       </div>
 
       <div className="text-xs mb-4 space-y-1">
@@ -148,6 +148,12 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         <p>
           Payment method: <span className="font-semibold">{paymentLabel}</span>
         </p>
+        {data?.notes && (
+          <div className="mt-2 p-2 bg-gray-50 rounded text-[12px]">
+            <strong>Notes:</strong>
+            <div className="mt-1 whitespace-pre-wrap">{data.notes}</div>
+          </div>
+        )}
         {data?.paymentDetailsShown && (
           <div className="mt-1 space-y-0.5">
             <p>Paybill No. 516600</p>
