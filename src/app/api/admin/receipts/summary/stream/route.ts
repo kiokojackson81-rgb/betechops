@@ -2,6 +2,13 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { subscribeSummary } from "@/lib/receiptSseBroker";
 
+const normalizePaymentMethod = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = value.toUpperCase().trim();
+  if (normalized === "CASH" || normalized === "MPESA") return normalized;
+  return null;
+};
+
 const startOfDay = (value: Date) => {
   const clone = new Date(value);
   clone.setHours(0, 0, 0, 0);
@@ -39,7 +46,12 @@ const parseDateParam = (value: string | null, fallback: Date, toEnd = false) => 
 const hasMissingCostData = (items: Array<{ buyingPrice: number | null; quantity?: number }>) =>
   items.length === 0 || items.some((item) => item.buyingPrice === null || item.buyingPrice === undefined);
 
-async function computeSummary(start: Date, end: Date, attendantId?: string) {
+async function computeSummary(
+  start: Date,
+  end: Date,
+  attendantId?: string,
+  paymentMethod?: "MPESA" | "CASH" | null,
+) {
   const dailyEntryFilter: any = { date: { gte: start, lte: end } };
   if (attendantId) dailyEntryFilter.submittedById = attendantId;
 
@@ -53,13 +65,33 @@ async function computeSummary(start: Date, end: Date, attendantId?: string) {
     ...supportReceipts.map((r) => ({ ...r, type: "support" as const })),
   ];
 
+  const paymentTotals = allReceipts.reduce(
+    (acc, receipt) => {
+      const method = normalizePaymentMethod(receipt.paymentMethod) ?? "MPESA";
+      const normalized = method.toUpperCase();
+      if (!["MPESA", "CASH"].includes(normalized)) return acc;
+      const bucket = normalized === "CASH" ? acc.cash : acc.mpesa;
+      bucket.totalSales += Number(receipt.sellingTotal ?? 0);
+      bucket.count += 1;
+      return acc;
+    },
+    {
+      mpesa: { totalSales: 0, count: 0 },
+      cash: { totalSales: 0, count: 0 },
+    },
+  );
+
+  const filteredReceipts = paymentMethod
+    ? allReceipts.filter((receipt) => normalizePaymentMethod(receipt.paymentMethod) === paymentMethod)
+    : allReceipts;
+
   let totalSales = 0;
   let totalCost = 0;
   let totalProfit = 0;
   let itemsCount = 0;
   let hasIncompleteCosts = false;
 
-  for (const receipt of allReceipts) {
+  for (const receipt of filteredReceipts) {
     const sale = Number(receipt.sellingTotal ?? 0);
     totalSales += sale;
     const items = Array.isArray(receipt.items) ? receipt.items : [];
@@ -77,10 +109,18 @@ async function computeSummary(start: Date, end: Date, attendantId?: string) {
     totalProfit += sale - cost;
   }
 
-  const receiptsCount = allReceipts.length;
+  const receiptsCount = filteredReceipts.length;
   const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
 
-  return { totalSales, totalCost, totalProfit, receiptsCount, itemsCount, hasCompleteCosts };
+  return {
+    totalSales,
+    totalCost,
+    totalProfit,
+    receiptsCount,
+    itemsCount,
+    hasCompleteCosts,
+    paymentTotals,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -88,6 +128,7 @@ export async function GET(request: NextRequest) {
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
   const attendantId = url.searchParams.get("attendantId") || undefined;
+  const paymentMethod = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
 
   const today = new Date();
   const defaultStart = startOfDay(today);
@@ -101,7 +142,7 @@ export async function GET(request: NextRequest) {
 
       const sendSnapshot = async () => {
         try {
-          const snapshot = await computeSummary(start, end, attendantId);
+          const snapshot = await computeSummary(start, end, attendantId, paymentMethod);
           const payload = JSON.stringify(snapshot);
           controller.enqueue(`data: ${payload}\n\n`);
         } catch (err) {

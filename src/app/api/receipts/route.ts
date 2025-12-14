@@ -11,6 +11,14 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 
+const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
+  if (typeof value !== "string") return null;
+  const candidate = value.toUpperCase().trim();
+  if (candidate === "CASH") return "CASH";
+  if (candidate === "MPESA") return "MPESA";
+  return null;
+};
+
 export const dynamic = "force-dynamic";
 
 const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD || 500000);
@@ -29,6 +37,7 @@ export async function GET(req: NextRequest) {
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const attendantId = url.searchParams.get("attendantId") || undefined;
+  const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
@@ -83,6 +92,13 @@ export async function GET(req: NextRequest) {
     where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
   }
 
+  if (paymentMethodParam) {
+    where.data = {
+      path: ["paymentMethod"],
+      equals: paymentMethodParam,
+    };
+  }
+
   // compute total count for paging (best-effort; tests may mock only findMany)
   let totalCount: number | null = null;
   try {
@@ -117,6 +133,8 @@ export async function GET(req: NextRequest) {
     attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
     status: r.order?.status ?? r.order?.paymentStatus ?? null,
     items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
+    paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
+    paymentStatus: (r.order as any)?.paymentStatus ?? null,
   }));
 
   // if we couldn't get totalCount earlier (test mocks), fall back to results length

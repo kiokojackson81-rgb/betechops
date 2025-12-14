@@ -18,6 +18,8 @@ type ReceiptRow = {
   total?: number | string | null;
   status?: string | null;
   items?: Array<{ id: string }> | null;
+  paymentMethod?: "MPESA" | "CASH" | null;
+  paymentStatus?: string | null;
 };
 
 type ReceiptSummary = {
@@ -33,6 +35,12 @@ type FilterState = {
   start: string;
   end: string;
   attendantId: string;
+  paymentMethod: "MPESA" | "CASH" | "";
+};
+
+type PaymentTotals = {
+  mpesa: { totalSales: number; count: number };
+  cash: { totalSales: number; count: number };
 };
 
 type StaffOption = { id: string; name: string };
@@ -150,6 +158,7 @@ const makeDefaultFilters = (): FilterState => {
     start: formatDateInput(start),
     end: formatDateInput(end),
     attendantId: "",
+    paymentMethod: "",
   };
 };
 
@@ -261,6 +270,10 @@ export default function ReceiptsAdminClient({
     receiptsCount: number;
     itemsCount: number;
     hasCompleteCosts: boolean;
+    paymentTotals: {
+      mpesa: { totalSales: number; count: number };
+      cash: { totalSales: number; count: number };
+    };
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [sseEnabled, setSseEnabled] = useState(false);
@@ -295,6 +308,7 @@ export default function ReceiptsAdminClient({
     quickRange: "receipts.quickRange.v1",
     rangeStart: "receipts.rangeStart.v1",
     rangeEnd: "receipts.rangeEnd.v1",
+    paymentMethod: "receipts.paymentMethod.v1",
   } as const;
 
   // load persisted filters (attendant + quick range) on mount
@@ -304,11 +318,13 @@ export default function ReceiptsAdminClient({
       const savedQuick = window.localStorage.getItem(STORAGE_KEYS.quickRange) as AdminQuickRangeKey | null;
       const savedStart = window.localStorage.getItem(STORAGE_KEYS.rangeStart);
       const savedEnd = window.localStorage.getItem(STORAGE_KEYS.rangeEnd);
+      const savedPaymentMethod = window.localStorage.getItem(STORAGE_KEYS.paymentMethod) as "MPESA" | "CASH" | "" | null;
       setFilters((prev) => {
         let next = { ...prev };
         if (savedAttendant) next.attendantId = savedAttendant;
         if (savedStart) next.start = savedStart;
         if (savedEnd) next.end = savedEnd;
+        if (savedPaymentMethod) next.paymentMethod = savedPaymentMethod;
         return next;
       });
       setAppliedFilters((prev) => {
@@ -316,6 +332,7 @@ export default function ReceiptsAdminClient({
         if (savedAttendant) next.attendantId = savedAttendant;
         if (savedStart) next.start = savedStart;
         if (savedEnd) next.end = savedEnd;
+        if (savedPaymentMethod) next.paymentMethod = savedPaymentMethod;
         return next;
       });
       if (
@@ -373,6 +390,7 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
         if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
+        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -417,6 +435,7 @@ export default function ReceiptsAdminClient({
       const endParam = buildDateParam(appliedFilters.end, true);
       if (startParam) params.set("start", startParam);
       if (endParam) params.set("end", endParam);
+      if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
       if (appliedFilters.attendantId) {
         params.set("attendantId", appliedFilters.attendantId);
       }
@@ -433,6 +452,12 @@ export default function ReceiptsAdminClient({
         receiptsCount: Number(data.receiptsCount ?? 0),
         itemsCount: Number(data.itemsCount ?? 0),
         hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+        paymentTotals:
+          data?.paymentTotals ??
+          {
+            mpesa: { totalSales: 0, count: 0 },
+            cash: { totalSales: 0, count: 0 },
+          },
       });
     } catch (err) {
       console.warn("[receipts] summary error", err);
@@ -480,15 +505,16 @@ export default function ReceiptsAdminClient({
 
     let aborted = false;
 
-    const startEventSource = () => {
-      sseRetryRef.current = Math.max(0, sseRetryRef.current);
-      const params = new URLSearchParams();
-      const startParam = buildDateParam(appliedFilters.start, false);
-      const endParam = buildDateParam(appliedFilters.end, true);
-      if (startParam) params.set("start", startParam);
-      if (endParam) params.set("end", endParam);
-      if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
-      const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
+      const startEventSource = () => {
+        sseRetryRef.current = Math.max(0, sseRetryRef.current);
+        const params = new URLSearchParams();
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        if (startParam) params.set("start", startParam);
+        if (endParam) params.set("end", endParam);
+        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
+        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
 
       try {
         const es = new EventSource(url);
@@ -510,6 +536,12 @@ export default function ReceiptsAdminClient({
               receiptsCount: Number(data.receiptsCount ?? 0),
               itemsCount: Number(data.itemsCount ?? 0),
               hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+              paymentTotals:
+                data?.paymentTotals ??
+                {
+                  mpesa: { totalSales: 0, count: 0 },
+                  cash: { totalSales: 0, count: 0 },
+                },
             });
           } catch (err) {
             console.warn("[receipts] failed to parse SSE data", err);
@@ -554,16 +586,25 @@ export default function ReceiptsAdminClient({
     };
   }, [sseEnabled, sseOn, appliedFilters]);
 
-  const applyFilters = () => {
-    setAppliedFilters({ ...filters });
+  const persistFilterValues = (nextFilters: FilterState) => {
     try {
-      window.localStorage.setItem(STORAGE_KEYS.attendantId, filters.attendantId || "");
-      window.localStorage.setItem(STORAGE_KEYS.rangeStart, filters.start || "");
-      window.localStorage.setItem(STORAGE_KEYS.rangeEnd, filters.end || "");
+      window.localStorage.setItem(STORAGE_KEYS.attendantId, nextFilters.attendantId || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeStart, nextFilters.start || "");
+      window.localStorage.setItem(STORAGE_KEYS.rangeEnd, nextFilters.end || "");
+      window.localStorage.setItem(STORAGE_KEYS.paymentMethod, nextFilters.paymentMethod || "");
       window.localStorage.setItem(STORAGE_KEYS.quickRange, quickRange);
     } catch (err) {
       // ignore storage errors
     }
+  };
+
+  const applyFilters = (patch?: Partial<FilterState>) => {
+    setFilters((prev) => {
+      const next = { ...prev, ...patch };
+      setAppliedFilters(next);
+      persistFilterValues(next);
+      return next;
+    });
   };
 
   const resetFilters = () => {
@@ -575,6 +616,7 @@ export default function ReceiptsAdminClient({
       window.localStorage.removeItem(STORAGE_KEYS.attendantId);
       window.localStorage.removeItem(STORAGE_KEYS.rangeStart);
       window.localStorage.removeItem(STORAGE_KEYS.rangeEnd);
+      window.localStorage.removeItem(STORAGE_KEYS.paymentMethod);
       window.localStorage.setItem(STORAGE_KEYS.quickRange, "today");
     } catch (err) {
       // ignore
@@ -926,6 +968,21 @@ export default function ReceiptsAdminClient({
         ? formattedRangeStart
         : `${formattedRangeStart} - ${formattedRangeEnd}`
       : rangeLabelText;
+  const partialTotals = useMemo(() => {
+    const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
+    rows.forEach((row) => {
+      if ((row.status ?? "").toUpperCase() !== "PARTIAL") return;
+      const method = (row.paymentMethod ?? "").toUpperCase();
+      if (method === "MPESA" || method === "CASH") {
+        totals[method] += Number(row.total ?? 0);
+      }
+    });
+    return totals;
+  }, [rows]);
+  const handlePaymentMethodSelect = (method: "" | "MPESA" | "CASH") => {
+    const next = appliedFilters.paymentMethod === method ? "" : method;
+    applyFilters({ paymentMethod: next });
+  };
   return (
     <div className="space-y-6">
       <ReceiptsSummary
@@ -937,6 +994,13 @@ export default function ReceiptsAdminClient({
         sseStatus={sseStatus}
         onToggleSse={(v: boolean) => setSseOn(v)}
         rangeLabel={rangeDisplay}
+      />
+      <PaymentMethodFilterCard
+        totals={summaryTotals?.paymentTotals ?? null}
+        partialTotals={partialTotals}
+        activeMethod={appliedFilters.paymentMethod}
+        loading={summaryLoading}
+        onSelect={handlePaymentMethodSelect}
       />
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -1058,6 +1122,7 @@ export default function ReceiptsAdminClient({
               <th className="px-3 py-2 text-left">Customer</th>
               <th className="px-3 py-2 text-left">Staff</th>
               <th className="px-3 py-2 text-left">Total</th>
+              <th className="px-3 py-2 text-left">Payment</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Created</th>
               <th className="px-3 py-2 text-right">Actions</th>
@@ -1066,7 +1131,7 @@ export default function ReceiptsAdminClient({
           <tbody className="divide-y divide-white/5">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
                   {loading ? "Loading receipts..." : "No receipts match this filter."}
                 </td>
               </tr>
@@ -1093,6 +1158,7 @@ export default function ReceiptsAdminClient({
                   </td>
                   <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
                   <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
+                  <td className="px-3 py-3 text-slate-300">{row.paymentMethod ?? "Unknown"}</td>
                   <td className="px-3 py-3">
                     <span className="text-xs uppercase tracking-wide text-slate-400">{row.status || "-"}</span>
                   </td>
@@ -1366,16 +1432,86 @@ export default function ReceiptsAdminClient({
         </>
       )}
 
-      <EditModal
-        open={editState.open}
-        draft={editState.draft}
-        staffList={staffList}
-        saving={editState.saving}
-        onClose={() => setEditState({ open: false, draft: null, saving: false })}
-        onDraftChange={updateDraft}
-        onSave={handleSaveEdit}
-      />
-    </div>
+  <EditModal
+    open={editState.open}
+    draft={editState.draft}
+    staffList={staffList}
+    saving={editState.saving}
+    onClose={() => setEditState({ open: false, draft: null, saving: false })}
+    onDraftChange={updateDraft}
+    onSave={handleSaveEdit}
+  />
+</div>
+);
+}
+
+type PaymentMethodCardProps = {
+  totals: PaymentTotals | null;
+  partialTotals: Record<"MPESA" | "CASH", number>;
+  activeMethod: "" | "MPESA" | "CASH";
+  loading: boolean;
+  onSelect: (method: "" | "MPESA" | "CASH") => void;
+};
+
+function PaymentMethodFilterCard({
+  totals,
+  partialTotals,
+  activeMethod,
+  loading,
+  onSelect,
+}: PaymentMethodCardProps) {
+  const methods: Array<{ key: "MPESA" | "CASH"; label: string }> = [
+    { key: "MPESA", label: "MPESA" },
+    { key: "CASH", label: "Cash" },
+  ];
+  return (
+    <section className="isolate rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Payments</p>
+          <h2 className="text-lg font-semibold text-white">Filter by method</h2>
+          <p className="text-sm text-slate-400">Tap a method to lock the list to MPESA or cash receipts.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelect("")}
+          className="rounded-full border border-white/15 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 hover:border-emerald-500 hover:text-white"
+        >
+          Show all
+        </button>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {methods.map((method) => {
+          const isActive = activeMethod === method.key;
+          const pool = method.key === "MPESA" ? totals?.mpesa : totals?.cash;
+          const amountLabel = loading ? "Loading..." : formatCurrency(pool?.totalSales ?? 0);
+          const countLabel = loading ? "" : `${pool?.count ?? 0} receipts`;
+          const partialLabel = formatCurrency(partialTotals[method.key]);
+          return (
+            <button
+              key={method.key}
+              type="button"
+              onClick={() => onSelect(method.key)}
+              className={`flex flex-col items-start justify-between gap-2 rounded-2xl border px-4 py-3 text-left transition ${
+                isActive
+                  ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_25px_rgba(16,185,129,0.25)]"
+                  : "border-white/10 bg-slate-950/70 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
+              }`}
+              aria-pressed={isActive}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs uppercase tracking-[0.3em] text-slate-400">{method.label}</span>
+                <span className="text-[11px] text-slate-400">{countLabel}</span>
+              </div>
+              <p className="text-2xl font-semibold">{amountLabel}</p>
+              <p className="text-xs text-slate-400">
+                Partial sum: <span className="font-semibold text-slate-100">{partialLabel}</span>
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 type EditModalProps = {

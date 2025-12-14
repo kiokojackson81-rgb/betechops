@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const normalizePaymentMethod = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = value.toUpperCase().trim();
+  if (normalized === "CASH" || normalized === "MPESA") return normalized;
+  return null;
+};
+
 const startOfDay = (value: Date) => {
   const clone = new Date(value);
   clone.setHours(0, 0, 0, 0);
@@ -51,6 +58,7 @@ export async function GET(request: NextRequest) {
   const defaultEnd = endOfDay(today);
   const start = parseDateParam(startParam, defaultStart);
   const end = parseDateParam(endParam, defaultEnd, true);
+  const paymentMethod = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
 
   const dailyEntryFilter: any = {
     date: { gte: start, lte: end },
@@ -96,18 +104,36 @@ export async function GET(request: NextRequest) {
       // Otherwise keep the existing entry (first-seen).
     }
     const allReceipts = Array.from(receiptMap.values());
+    const paymentTotals = allReceipts.reduce(
+      (acc, receipt) => {
+        const method = normalizePaymentMethod(receipt.paymentMethod) ?? "MPESA";
+        const normalized = method.toUpperCase();
+        if (!["MPESA", "CASH"].includes(normalized)) return acc;
+        const bucket = normalized === "CASH" ? acc.cash : acc.mpesa;
+        bucket.totalSales += Number(receipt.sellingTotal ?? 0);
+        bucket.count += 1;
+        return acc;
+      },
+      {
+        mpesa: { totalSales: 0, count: 0 },
+        cash: { totalSales: 0, count: 0 },
+      },
+    );
+    const filteredReceipts = paymentMethod
+      ? allReceipts.filter((receipt) => normalizePaymentMethod(receipt.paymentMethod) === paymentMethod)
+      : allReceipts;
 
     // Total sales and items: derived from receipts in the requested day window
     let totalSales = 0;
     let itemsCount = 0;
-    for (const receipt of allReceipts) {
+    for (const receipt of filteredReceipts) {
       const sale = Number(receipt.sellingTotal ?? 0);
       totalSales += sale;
       const items = Array.isArray(receipt.items) ? receipt.items : [];
       itemsCount += items.reduce((s: number, it: any) => s + (Number(it.quantity ?? 1) || 0), 0);
     }
 
-    const receiptsCount = allReceipts.length;
+    const receiptsCount = filteredReceipts.length;
 
     // Compute profit following the admin UI rule:
     // Only include a receipt's cost/profit when either:
@@ -118,7 +144,7 @@ export async function GET(request: NextRequest) {
     let totalCost = 0;
     let awaitingPricingCount = 0;
 
-    for (const receipt of allReceipts) {
+    for (const receipt of filteredReceipts) {
       const items = Array.isArray(receipt.items) ? receipt.items : [];
       const aggregateCost = Number(receipt.buyingTotal ?? 0);
       const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
@@ -137,6 +163,21 @@ export async function GET(request: NextRequest) {
     const hasIncompleteCosts = awaitingPricingCount > 0;
     const hasCompleteCosts = receiptsCount === 0 ? true : !hasIncompleteCosts;
 
+    const paymentTotals = allReceipts.reduce(
+      (acc, receipt) => {
+        const method = normalizePaymentMethod(receipt.paymentMethod) ?? "MPESA";
+        const normalized = method.toUpperCase();
+        if (!["MPESA", "CASH"].includes(normalized)) return acc;
+        acc[normalized === "CASH" ? "cash" : "mpesa"].totalSales += Number(receipt.sellingTotal ?? 0);
+        acc[normalized === "CASH" ? "cash" : "mpesa"].count += 1;
+        return acc;
+      },
+      {
+        mpesa: { totalSales: 0, count: 0 },
+        cash: { totalSales: 0, count: 0 },
+      },
+    );
+
     return NextResponse.json({
       totalSales,
       totalCost,
@@ -145,6 +186,7 @@ export async function GET(request: NextRequest) {
       itemsCount,
       hasCompleteCosts,
       awaitingPricingCount,
+      paymentTotals,
     });
   } catch (error) {
     console.error("[admin/receipts/summary] failed to load summary", error);
