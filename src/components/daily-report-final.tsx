@@ -185,7 +185,7 @@ export default function DailyReportFinal() {
           </div>
 
           {/* Include the receipts list - hide the small header inside the panel */}
-          <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={attendantId} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
+          <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={undefined} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
         </div>
       </div>
     );
