@@ -32,19 +32,21 @@ export default async function Page({ params }: { params: { id: string } }) {
     warranty: it.warranty ?? "",
   }));
 
-  const dataIsObject = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data);
-  const dataHasNotes =
-    dataIsObject && "notes" in receipt.data && typeof (receipt.data as { notes?: string }).notes === "string";
+  const data = receipt.data as unknown;
+  const dataIsObject = data !== null && typeof data === "object" && !Array.isArray(data);
+  const dataAny = dataIsObject ? (data as any) : undefined;
+  const dataHasNotes = dataAny !== undefined && typeof dataAny.notes === "string";
   const snapshot: any = {
     order,
     items,
     totals: receipt.totals ?? {},
-    notes: receipt.notes ?? (dataHasNotes ? (receipt.data as { notes?: string }).notes : undefined) ?? "",
+    notes: receipt.notes ?? (dataHasNotes ? ((data as any).notes as string) : undefined) ?? "",
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || "",
     attendantName: receipt.issuedBy?.name || order?.attendant?.name || "",
-    paymentMethod: (receipt.data && receipt.data.paymentMethod) || receipt.paymentMethod || "",
-    deliveryAddress: (order.metadata && order.metadata.deliveryAddress) || (receipt.data && receipt.data.deliveryAddress) || "",
+    paymentMethod: (dataIsObject ? ((data as any)["paymentMethod"] as string | undefined) : undefined) || ((receipt as any).paymentMethod as string | undefined) || "",
+    deliveryAddress:
+      ((order.metadata as any && (order.metadata as any).deliveryAddress as string | undefined) || (dataIsObject ? ((data as any)["deliveryAddress"] as string | undefined) : undefined) || ""),
   };
 
   const html = renderReceiptTemplate(snapshot, { hideStamp: false });
