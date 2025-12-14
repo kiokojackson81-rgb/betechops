@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReceiptsSummary from "./list/ReceiptsSummary";
 import RowActions from "./list/RowActions";
+import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
 
 type ReceiptRow = {
@@ -1344,8 +1345,19 @@ export default function ReceiptsAdminClient({
 
                 {detail.receipt.notes && (
                   <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Notes</p>
-                    <p className="text-slate-200">{detail.receipt.notes}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-wide text-slate-400">Notes</p>
+                      {/* Toggle lives here to let admins preview formatting */}
+                      <div className="no-print">
+                        {/* dynamic import not necessary; component is client side */}
+                        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                        {/* @ts-ignore-next-line */}
+                        <RichFormattingToggle />
+                      </div>
+                    </div>
+                    {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                    {/* @ts-ignore-next-line */}
+                    <MarkdownRendererClient mdText={detail.receipt.notes} />
                   </div>
                 )}
               </div>

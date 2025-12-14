@@ -1,10 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import MarkdownIt from "markdown-it";
-import DOMPurify from "dompurify";
-
-const mdParserClient = new MarkdownIt({ html: false, linkify: false, typographer: true });
+import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
@@ -848,9 +845,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         />
         {notes && (
           <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-100">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Notes preview</div>
-            <div className="mt-2 prose max-w-none text-slate-100" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdParserClient.render(notes)) }} />
-          </div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Notes preview</div>
+                <div className="no-print">
+                  {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                  {/* @ts-ignore-next-line */}
+                  <RichFormattingToggle />
+                </div>
+              </div>
+              {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+              {/* @ts-ignore-next-line */}
+              <MarkdownRendererClient mdText={notes} />
+            </div>
         )}
       </div>
 

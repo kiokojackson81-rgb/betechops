@@ -1,4 +1,5 @@
 import React from "react";
+import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { prisma } from "@/lib/prisma";
 import PrintControls from "./PrintControls";
 
@@ -83,7 +84,12 @@ export default async function Page({ params }: { params: any }) {
           <tbody>
             {(receipt.order?.items || []).map((it: any) => (
               <tr key={it.id}>
-                <td className="border p-1">{it.title || it.productName}</td>
+                <td className="border p-1">
+                  {/* render item title as rich-text if available (client-side sanitized) */}
+                  {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                  {/* @ts-ignore-next-line */}
+                  <MarkdownRendererClient mdText={it.title || it.productName} />
+                </td>
                 <td className="border p-1">{it.quantity}</td>
                  <td className="border p-1">{String(it.sellingPrice ?? "")}</td>
                 <td className="border p-1">{it.serial}</td>
@@ -111,15 +117,25 @@ export default async function Page({ params }: { params: any }) {
 
       {receipt.notes && (
         <section className="mt-4">
-          <p className="font-semibold">Notes</p>
-          <p>{receipt.notes}</p>
+          <div className="flex items-center justify-between">
+            <p className="font-semibold">Notes</p>
+            {/* allow user to toggle formatting in-client (stored in localStorage) */}
+            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+            {/* @ts-ignore-next-line */}
+            <RichFormattingToggle />
+          </div>
+          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+          {/* @ts-ignore-next-line */}
+          <MarkdownRendererClient mdText={receipt.notes} />
         </section>
       )}
 
       {receipt.warrantyText && (
         <section className="mt-2">
           <p className="font-semibold">Warranty</p>
-          <p>{receipt.warrantyText}</p>
+          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+          {/* @ts-ignore-next-line */}
+          <MarkdownRendererClient mdText={receipt.warrantyText} />
         </section>
       )}
 
