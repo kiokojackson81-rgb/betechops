@@ -1,85 +1,121 @@
 import NextAuth from "next-auth/next";
 import type { Session } from "next-auth";
-import type { JWT } from "next-auth/jwt";
-import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import { ADMIN_EMAILS } from "@/lib/auth";
+import bcrypt from "bcryptjs";
+
+type ExtendedToken = {
+  email?: string;
+  sub?: string;
+  role?: string;
+  attendantCategory?: string;
+  isActive?: boolean;
+};
+
+const REQUIRED_DOMAIN = "@betech.co.ke";
 
 export const authOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    CredentialsProvider({
+      name: "Email & Password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = (credentials?.email || "").trim().toLowerCase();
+        const password = credentials?.password || "";
+
+        if (!email || !password) return null;
+        if (!email.endsWith(REQUIRED_DOMAIN)) {
+          // enforce corporate domain
+          return null;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+          // avoid selecting `attendantCategory` here — if the DB enum doesn't match
+          // the Prisma schema this can throw on read. Omit for now to allow login.
+          select: { id: true, email: true, name: true, password: true, role: true, isActive: true },
+        });
+
+        if (!user || !user.isActive || !user.password) return null;
+
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        } as any;
+      },
     }),
   ],
+  session: { strategy: "jwt" },
   callbacks: {
-    // signIn: upsert user and force ADMIN for any configured ADMIN_EMAILS
-    async signIn({ user }: { user: { email?: string; name?: string | null; image?: string | null } }) {
-      const emails = ADMIN_EMAILS;
-      const email = (user.email || "").toLowerCase();
-      if (!email) return false;
-      try {
-        if (emails.includes(email)) {
-          // Force ADMIN
-          await prisma.user.upsert({
-            where: { email },
-            update: { role: "ADMIN", isActive: true },
-            create: { email, name: user.name ?? "Admin", image: user.image ?? "", role: "ADMIN", attendantCategory: "GENERAL", isActive: true },
-          });
-          return true;
-        }
+    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: string; email?: string; id?: string; isActive?: boolean } }) {
+      if (user) {
+        token.role = user.role ?? token.role;
+        token.attendantCategory = user.attendantCategory ?? token.attendantCategory;
+        token.email = user.email ?? token.email;
+        token.sub = user.id ?? token.sub;
+        token.isActive = (user as any).isActive ?? token.isActive ?? true;
+        return token;
+      }
 
-        // Default: ATTENDANT
-        await prisma.user.upsert({
-          where: { email },
-          update: { role: "ATTENDANT", isActive: true },
-          create: { email, name: user.name ?? email.split("@")[0], image: user.image ?? "", role: "ATTENDANT", attendantCategory: "GENERAL", isActive: true },
+      if (!token.email) return token;
+      // Avoid selecting `attendantCategory` directly because a DB enum mismatch
+      // can cause Prisma to throw when reading the field. Fetch essential fields
+      // and skip attendantCategory for now — this lets the jwt flow continue.
+      try {
+        const existing = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { id: true, role: true, isActive: true },
         });
-        return true;
-      } catch {
-        // If DB not ready, still allow sign-in but roles will be resolved later via fallback
-        return true;
+        if (existing) {
+          token.role = existing.role ?? token.role;
+          token.sub = existing.id ?? token.sub;
+          token.isActive = existing.isActive ?? token.isActive ?? true;
+        }
+      } catch (err) {
+        console.error("nextAuth: safe user lookup failed:", err);
       }
-    },
-
-    // jwt: attach DB role to token (lookup by sub (id) or email)
-    async jwt({ token, user }: { token: unknown; user?: { email?: string } }) {
-      // ensure email is set on token when user logs in
-      const t0 = token as { email?: string; role?: string; sub?: string };
-      if (user?.email) t0.email = user.email;
-      const email = (t0.email || "").toLowerCase();
-
-      // If it's the owner email, force ADMIN in the token (no DB needed)
-      if (email === "kiokojackson81@gmail.com") {
-        t0.role = "ADMIN";
-        return token as unknown as JWT;
-      }
-
-      // Otherwise, best-effort fetch from DB; fall back to ATTENDANT if it fails
+      // Attempt to enrich token with `attendantCategory` using a raw query
+      // that casts the DB enum to text. This avoids Prisma enum parsing
+      // errors when the DB enum labels differ from the Prisma schema.
       try {
-        let dbUser: { role?: string } | null = null;
-        const t = token as { sub?: string; email?: string; role?: string };
-        if (t.sub) {
-          dbUser = await prisma.user.findUnique({ where: { id: t.sub }, select: { role: true } });
+        const rows = (await prisma.$queryRaw`
+          SELECT "attendantCategory"::text AS "attendantCategory"
+          FROM "User"
+          WHERE lower(email) = lower(${token.email})
+          LIMIT 1
+        `) as Array<{ attendantCategory?: string | null }>;
+        if (rows && rows[0] && typeof rows[0].attendantCategory !== "undefined") {
+          token.attendantCategory = rows[0].attendantCategory ?? token.attendantCategory;
         }
-        if (!dbUser && t.email) {
-          dbUser = await prisma.user.findUnique({ where: { email: (t.email as string).toLowerCase() }, select: { role: true } });
-        }
-        t0.role = dbUser?.role || "ATTENDANT";
-      } catch {
-        t0.role = "ATTENDANT";
+      } catch (err) {
+        console.error("nextAuth: failed to attach attendantCategory via raw query:", err);
       }
-      return token as unknown as JWT;
+      return token;
     },
 
-    // session: expose role from token
-    async session({ session, token }: { session: unknown; token: unknown }) {
-      const s = session as { user?: Record<string, unknown> };
-      const t = token as { role?: string };
+    async session({ session, token }: { session: Session | Record<string, unknown>; token: ExtendedToken }) {
+      const s = session as Session;
       if (!s.user) s.user = {};
-      (s.user as { role?: string }).role = t.role ?? "ATTENDANT";
-      return s as unknown as Session;
+      (s.user as Record<string, unknown>).role = token.role ?? "ATTENDANT";
+      (s.user as Record<string, unknown>).attendantCategory = token.attendantCategory ?? null;
+      (s.user as Record<string, unknown>).isActive = token.isActive ?? true;
+      // expose the attendant id so API routes depending on session.user.id keep working
+      (s.user as Record<string, unknown>).id = token.sub ?? null;
+      return s;
     },
+  },
+  pages: {
+    signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.SECRET || "",
 };

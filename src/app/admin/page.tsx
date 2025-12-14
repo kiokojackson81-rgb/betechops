@@ -205,6 +205,17 @@ export default async function Overview() {
           <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
             <li><Link className="underline" href="/admin/shops">Create shops, assign attendants/supervisors</Link></li>
             <li><Link className="underline" href="/admin/settings">API credentials</Link></li>
+            <li><Link className="underline" href="/admin/daily-report">Daily sales reports</Link></li>
+            <li><Link className="underline" href="/admin/payroll">Payroll overview</Link></li>
+          </ul>
+        </div>
+        <div className="rounded-xl border border-white/10 p-4 bg-[var(--panel,#121723)]">
+          <h2 className="font-semibold mb-2">Important links</h2>
+          <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
+            <li><Link className="underline" href="/admin/marketing-report">Marketing report</Link></li>
+            <li><Link className="underline" href="/admin/reports">Reports</Link></li>
+            <li><Link className="underline" href="/admin/settings">Settings</Link></li>
+            {/* Add other important links here */}
           </ul>
         </div>
       </section>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "@/lib/toast";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 
 type UploadActivity = {
   id: string;
@@ -53,7 +54,7 @@ export default function ProductUploadsCard() {
           metric: "PRODUCT_UPLOADS",
           intValue: value,
           notes: notes.trim() ? notes.trim() : undefined,
-          category: "PRODUCT_UPLOAD",
+          category: "MARKETING_OPS",
         }),
       });
       if (!res.ok) {
@@ -129,7 +130,11 @@ export default function ProductUploadsCard() {
                 <div className="text-white">
                   <span className="text-lg font-semibold">{row.intValue ?? 0}</span> products
                 </div>
-                {row.notes ? <div className="text-xs text-slate-400">{row.notes}</div> : null}
+                {row.notes ? (
+                  <div className="text-xs text-slate-400">
+                    <MarkdownRendererClient mdText={String(row.notes)} />
+                  </div>
+                ) : null}
               </div>
               <div className="text-xs text-slate-400">{formatDate(row.entryDate)}</div>
             </li>

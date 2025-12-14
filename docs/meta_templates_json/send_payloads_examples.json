@@ -1,0 +1,105 @@
+{
+  "sendExamples": {
+    "customer_receipt": {
+      "method": "POST",
+      "url": "https://graph.facebook.com/v16.0/PHONE_ID/messages",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "TO_PHONE",
+        "type": "template",
+        "template": {
+          "name": "customer_receipt",
+          "language": { "code": "en_US" },
+          "components": [
+            {
+              "type": "body",
+              "parameters": [
+                { "type": "text", "text": "Jane" },
+                { "type": "text", "text": "RCPT-2025-001" },
+                { "type": "text", "text": "1,250" },
+                { "type": "text", "text": "3" },
+                { "type": "text", "text": "MPESA" },
+                { "type": "text", "text": "BeTech Ops" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "admin_daily_summary": {
+      "method": "POST",
+      "url": "https://graph.facebook.com/v16.0/PHONE_ID/messages",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "ADMIN_PHONE",
+        "type": "template",
+        "template": {
+          "name": "admin_daily_summary",
+          "language": { "code": "en_US" },
+          "components": [
+            {
+              "type": "body",
+              "parameters": [
+                { "type": "text", "text": "John Doe" },
+                { "type": "text", "text": "2025-12-11" },
+                { "type": "text", "text": "10,500" },
+                { "type": "text", "text": "2,150" },
+                { "type": "text", "text": "12" },
+                { "type": "text", "text": "18" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "support_acknowledgement": {
+      "method": "POST",
+      "url": "https://graph.facebook.com/v16.0/PHONE_ID/messages",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "ATTENDANT_PHONE",
+        "type": "template",
+        "template": {
+          "name": "support_acknowledgement",
+          "language": { "code": "en_US" },
+          "components": [
+            {
+              "type": "body",
+              "parameters": [
+                { "type": "text", "text": "John Doe" },
+                { "type": "text", "text": "2025-12-11" },
+                { "type": "text", "text": "10,500" },
+                { "type": "text", "text": "12" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "receipt_reminder": {
+      "method": "POST",
+      "url": "https://graph.facebook.com/v16.0/PHONE_ID/messages",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "TO_PHONE",
+        "type": "template",
+        "template": {
+          "name": "receipt_reminder",
+          "language": { "code": "en_US" },
+          "components": [
+            {
+              "type": "body",
+              "parameters": [
+                { "type": "text", "text": "Jane" },
+                { "type": "text", "text": "RCPT-2025-001" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

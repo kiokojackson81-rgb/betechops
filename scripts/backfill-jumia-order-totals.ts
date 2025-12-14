@@ -5,11 +5,13 @@
  *   BACKFILL_BATCH (default 200), BACKFILL_CONCURRENCY (default 4), BACKFILL_MAX_CYCLES (default 200),
  *   BACKFILL_DRY_RUN=1 (log only), BACKFILL_SHOP_ID=<shopId> (scope to one shop).
  */
+export {};
 // CommonJS-style requires to avoid ts-node ESM resolution issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pLimit = (require('p-limit').default || require('p-limit'));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { prisma } = require('../src/lib/prisma.ts');
+// Import prisma with a file-unique name to avoid accidental redeclare across scripts
+const { prisma: prismaBackfillJumiaOrderTotals } = require('../src/lib/prisma.ts');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getJumiaAccessToken, getAccessTokenFromEnv } = require('../src/lib/oidc.ts');
 
@@ -75,7 +77,7 @@ async function fetchItems(shopId: string, orderId: string, orderNumber?: number 
   // Attempt per-shop auth via jumiaShop -> jumiaAccount relation
   let shopAuth: { clientId?: string; refreshToken?: string; platform?: string } | undefined;
   try {
-    const jShop = await prisma.jumiaShop.findUnique({ where: { id: shopId }, include: { account: true } });
+    const jShop = await prismaBackfillJumiaOrderTotals.jumiaShop.findUnique({ where: { id: shopId }, include: { account: true } });
     if (jShop?.account) shopAuth = { clientId: jShop.account.clientId, refreshToken: jShop.account.refreshToken, platform: 'JUMIA' };
   } catch {}
   let accessToken: string;
@@ -149,7 +151,7 @@ async function processOrder(order: { id: string; shopId: string; number?: number
   }
   try {
     // Use raw update to avoid relying on generated types alignment.
-    await prisma.$executeRaw`UPDATE "JumiaOrder" SET "totalAmountLocalCurrency" = ${finalCurrency}, "totalAmountLocalValue" = ${sum} WHERE "id" = ${order.id}`;
+    await prismaBackfillJumiaOrderTotals.$executeRaw`UPDATE "JumiaOrder" SET "totalAmountLocalCurrency" = ${finalCurrency}, "totalAmountLocalValue" = ${sum} WHERE "id" = ${order.id}`;
     return { orderId: order.id, updated: true };
   } catch (err) {
     console.error(`[backfill] update failed id=${order.id}`, err);
@@ -167,7 +169,7 @@ async function main() {
     cycles += 1;
     const where: any = { totalAmountLocalValue: null };
     if (LIMIT_SHOP) where.shopId = LIMIT_SHOP;
-    const missing = await prisma.jumiaOrder.findMany({
+    const missing = await prismaBackfillJumiaOrderTotals.jumiaOrder.findMany({
       where,
       select: { id: true, shopId: true, number: true },
       take: BATCH,
@@ -193,11 +195,11 @@ async function main() {
     }
   }
   console.log(`[backfill] complete cycles=${cycles} seen=${totalSeen} updated=${totalUpdated}`);
-  await prisma.$disconnect();
+  await prismaBackfillJumiaOrderTotals.$disconnect();
 }
 
 main().catch(err => {
   console.error('[backfill] fatal error', err);
-  prisma.$disconnect().catch(() => {});
+  prismaBackfillJumiaOrderTotals.$disconnect().catch(() => {});
   process.exit(1);
 });

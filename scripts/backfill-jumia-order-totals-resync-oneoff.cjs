@@ -11,17 +11,24 @@ try {
 } catch (e) {
   console.warn('[resync-oneoff] tsconfig-paths registration failed (non-fatal):', e && e.message);
 }
-const { prisma } = require('../src/lib/prisma.ts');
+const { prisma: prismaBackfillResync } = require('../src/lib/prisma.ts');
 const { syncOrdersIncremental } = require('../.worker-dist/src/lib/jobs/jumia.js');
 
-async function main() {
-  const lookback = Number(process.env.LOOKBACK_DAYS || process.env.JUMIA_SYNC_LOOKBACK_DAYS || 365);
-  console.log('[resync-oneoff] starting deep incremental lookbackDays=' + lookback);
-  const summary = await syncOrdersIncremental({ lookbackDays: lookback });
-  console.log('[resync-oneoff] summary', summary);
-  const missing = await prisma.jumiaOrder.count({ where: { OR: [ { totalAmountLocalValue: null }, { totalAmountLocalCurrency: null } ] } });
-  console.log('[resync-oneoff] remaining missing totals rows=' + missing);
-  await prisma.$disconnect();
-}
+;(async () => {
+  async function main() {
+    const lookback = Number(process.env.LOOKBACK_DAYS || process.env.JUMIA_SYNC_LOOKBACK_DAYS || 365);
+    console.log('[resync-oneoff] starting deep incremental lookbackDays=' + lookback);
+    const summary = await syncOrdersIncremental({ lookbackDays: lookback });
+    console.log('[resync-oneoff] summary', summary);
+    const missing = await prismaBackfillResync.jumiaOrder.count({ where: { OR: [ { totalAmountLocalValue: null }, { totalAmountLocalCurrency: null } ] } });
+    console.log('[resync-oneoff] remaining missing totals rows=' + missing);
+    await prismaBackfillResync.$disconnect();
+  }
 
-main().catch(err => { console.error('[resync-oneoff] fatal', err); process.exit(1); });
+  try {
+    await main();
+  } catch (err) {
+    console.error('[resync-oneoff] fatal', err);
+    process.exit(1);
+  }
+})();

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 import { useShopsActionsSafe } from './ShopsActionsContext';
-import { attendantCategoryOptions } from '@/lib/attendants/categories';
+import { attendantCategoryOptions } from '@/lib/attendants/definitions';
 
 type AttendantProps = {
   shops: { id: string; name: string }[];
@@ -14,7 +14,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
   const [roleAtShop, setRoleAtShop] = useState('ATTENDANT');
-  const [categories, setCategories] = useState<string[]>(['GENERAL']);
+  const [categories, setCategories] = useState<string[]>(['DIRECT_SALES_OPS']);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const actions = useShopsActionsSafe();
@@ -33,7 +33,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
         if (!r2.ok) throw new Error(j2?.error || 'assign failed');
       }
       // Notify the user and let a parent update the UI in-place if available.
-      setEmail(''); setName(''); setShopId(''); setCategories(['GENERAL']);
+      setEmail(''); setName(''); setShopId(''); setCategories(['DIRECT_SALES_OPS']);
       showToast('Attendant created', 'success');
   // Notify parent via context if available (provider optional).
   actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);

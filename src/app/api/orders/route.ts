@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { addDays } from 'date-fns';
 
+declare global {
+  var __ordersPendingCache: Map<string, { ts: number; data: any }> | undefined;
+}
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
@@ -114,12 +118,10 @@ export async function GET(req: NextRequest) {
   const path = query ? `orders?${query}` : 'orders';
 
   // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(global as any).__ordersPendingCache) (global as any).__ordersPendingCache = new Map<string, { ts: number; data: any }>();
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const cacheMap: Map<string, { ts: number; data: any }> = (global as any).__ordersPendingCache;
+  if (!globalThis.__ordersPendingCache) {
+    globalThis.__ordersPendingCache = new Map<string, { ts: number; data: any }>();
+  }
+  const cacheMap = globalThis.__ordersPendingCache!;
   // Allow short-lived caching to reduce vendor hammering, but make it configurable and bypassable.
   const TTL_MS = Math.max(0, Number(process.env.ORDERS_PENDING_CACHE_TTL_MS ?? 3000)); // default 3s
   const forceFresh = ((qs.fresh || '').toLowerCase() === '1' || (qs.fresh || '').toLowerCase() === 'true');
@@ -367,6 +369,23 @@ export async function GET(req: NextRequest) {
 
       const isLastPage = out.length < pageSize; // conservative: if we couldn't fill, treat as last
   const payload = { orders: out, nextToken, isLastPage };
+      // Enrich merged orders with canonical shop names when available to ensure
+      // live and cached views show consistent shop labels.
+      try {
+        const shopIds = Array.from(new Set((out || []).map((o: any) => (Array.isArray(o?.shopIds) && o.shopIds.length) ? o.shopIds[0] : (o?.shopId || null)).filter(Boolean)));
+        if (shopIds.length) {
+          const shops = await prisma.jumiaShop.findMany({ where: { id: { in: shopIds } }, select: { id: true, name: true, account: { select: { label: true } } } }).catch(() => [] as any[]);
+          const map = new Map<string, { name?: string; accountLabel?: string | null }>();
+          for (const s of shops) map.set(s.id, { name: s.name, accountLabel: s.account?.label ?? null });
+          for (const it of (out || [])) {
+            const sid = Array.isArray(it?.shopIds) && it.shopIds.length ? it.shopIds[0] : (it?.shopId || null);
+            if (sid && map.has(sid) && !it.shopName) {
+              // prefer the explicit shop.name as the stable label
+              it.shopName = map.get(sid)!.name ?? undefined;
+            }
+          }
+        }
+      } catch {}
       if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: payload });
       const resAll = NextResponse.json(payload);
       if (cacheKey) resAll.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
@@ -395,8 +414,23 @@ export async function GET(req: NextRequest) {
     const vendorPath = stripShopIdFromPath(path);
 
     try {
-  const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
-  if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
+      const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
+      // Attach shopName when we know the requested shopId and have a DB entry
+      try {
+        if (qs.shopId && data && (Array.isArray((data as any)?.orders) || Array.isArray((data as any)?.items) || Array.isArray((data as any)?.data))) {
+          const rows = Array.isArray((data as any).orders) ? (data as any).orders : Array.isArray((data as any).items) ? (data as any).items : (data as any).data || [];
+          const shopRow = await prisma.jumiaShop.findUnique({
+            where: { id: qs.shopId },
+            select: { id: true, name: true, account: { select: { label: true } } },
+          }).catch(() => null);
+          if (shopRow) {
+            for (const r of rows) {
+              if (!r.shopName) r.shopName = shopRow.name;
+            }
+          }
+        }
+      } catch {}
+      if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
       const res = NextResponse.json(data);
       if (cacheKey) res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
       return res;

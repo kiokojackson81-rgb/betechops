@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { parseNumber, parseIntLike } from '@/lib/parseNumber';
 import type { NormalizedOrder } from '@/lib/connectors/normalize';
 import { Role } from '@prisma/client';
 
@@ -18,7 +19,7 @@ function mapStatus(s: string) {
 export async function upsertNormalizedOrder(n: NormalizedOrder) {
   const { externalOrderId, shopId, items, buyer, orderedAt, status } = n;
   const orderNumber = externalOrderId;
-  const totalAmount = items.reduce((s, it) => s + (Number(it.salePrice || 0) * Number(it.qty || 0)), 0);
+  const totalAmount = items.reduce((s, it) => s + (parseNumber(it.salePrice || 0) * parseIntLike(it.qty || 0)), 0);
 
   const p = prisma;
 
@@ -33,9 +34,9 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
     for (const it of items) {
       let prod = (await p.product.findUnique({ where: { sku: it.externalSku } }).catch(() => null)) as { id: string } | null;
       if (!prod) {
-        prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: Number(it.salePrice || 0) } })) as { id: string };
+        prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: parseNumber(it.salePrice || 0) } })) as { id: string };
       }
-      const oi = await p.orderItem.create({ data: { orderId: existing.id, productId: prod.id, quantity: it.qty, sellingPrice: it.salePrice } });
+      const oi = await p.orderItem.create({ data: { orderId: existing.id, productId: prod.id, quantity: Math.max(1, parseIntLike(it.qty || 0)), sellingPrice: parseNumber(it.salePrice || 0) } });
       createdItems.push(oi as unknown);
     }
     return { orderId: orderRecord.id, order: orderRecord, createdItems };
@@ -47,9 +48,9 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
   for (const it of items) {
     let prod = (await p.product.findUnique({ where: { sku: it.externalSku } }).catch(() => null)) as { id: string } | null;
     if (!prod) {
-      prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: Number(it.salePrice || 0) } })) as { id: string };
+      prod = (await p.product.create({ data: { sku: it.externalSku, name: it.title || it.externalSku, category: "unknown", sellingPrice: parseNumber(it.salePrice || 0) } })) as { id: string };
     }
-    const oi = await p.orderItem.create({ data: { orderId: created.id, productId: prod.id, quantity: it.qty, sellingPrice: it.salePrice } });
+    const oi = await p.orderItem.create({ data: { orderId: created.id, productId: prod.id, quantity: Math.max(1, parseIntLike(it.qty || 0)), sellingPrice: parseNumber(it.salePrice || 0) } });
     createdItems.push(oi as unknown);
   }
 
@@ -70,6 +71,7 @@ export async function upsertNormalizedOrder(n: NormalizedOrder) {
         createdAtJumia: new Date(orderedAt),
         updatedAtJumia: new Date(orderedAt),
         shopId: shopId,
+        shopName: undefined,
       },
       update: {
         status: status || "UNKNOWN",

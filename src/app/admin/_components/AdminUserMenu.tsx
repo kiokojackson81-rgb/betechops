@@ -20,7 +20,9 @@ export default function AdminUserMenu({ compact = false }: { compact?: boolean }
   useOutside(ref, () => setOpen(false));
 
   // Try to use next-auth session if available
-  const { data: session } = useSession();
+  // Guard useSession return shape to avoid runtime crash when the hook returns undefined
+  const _sess = useSession() as { data?: any } | undefined;
+  const session = _sess?.data;
   const name = session?.user?.name ?? session?.user?.email ?? "Admin";
   const image = session?.user?.image;
   const initial = (name && name.length) ? name.charAt(0).toUpperCase() : "A";

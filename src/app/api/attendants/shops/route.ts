@@ -2,11 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActorId, requireRole } from "@/lib/api";
 
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireRole(["ATTENDANT", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
-
-  const actorId = await getActorId();
+  // allow admin impersonation via query param
+  const url = new URL(req.url);
+  const impersonateId = url.searchParams.get("impersonateId");
+  let actorId = await getActorId();
+  if (impersonateId && auth.role === "ADMIN") {
+    actorId = impersonateId;
+  }
   if (!actorId) return NextResponse.json([], { status: 200 });
 
   const where =

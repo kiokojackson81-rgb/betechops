@@ -9,7 +9,9 @@ import Shortcuts from "./_components/Shortcuts";
 import Announcement from "./_components/Announcement";
 import DailySalesCard from "./_components/DailySalesCard";
 import ProductUploadsCard from "./_components/ProductUploadsCard";
-import { attendantCategoryById } from "@/lib/attendants/categories";
+import Button from "@/app/_components/Button";
+import Sparkline from "@/app/_components/Sparkline";
+import { attendantCategoryById } from "@/lib/attendants/definitions";
 import type { AttendantCategory } from "@prisma/client";
 
 type ProfileResponse = {
@@ -55,22 +57,44 @@ function renderWidget(widget: string, shopId?: string | null) {
 }
 
 export default function AttendantDashboard() {
+  // impersonateId is read from the client-side URL when performing fetches
+  const impersonateIdFromWindow = () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null);
   const [shopId, setShopId] = useState<string | undefined>(undefined);
   const [profile, setProfile] = useState<ProfileResponse["user"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [shops, setShops] = useState<ShopSummary[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
+  const [summary, setSummary] = useState<{ totalProducts: number; totalSales: number } | null>(null);
+  const [recentReports, setRecentReports] = useState<Array<{ date: string; productsCount: number; totalSales: number }>>([]);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("shopId") || undefined : undefined;
     setShopId(saved || undefined);
     void fetchProfile();
     void fetchShops();
+    void fetchSummary();
   }, []);
+
+  async function fetchSummary() {
+    try {
+      const imp = impersonateIdFromWindow();
+      const qp = imp ? `?page=1&pageSize=6&impersonateId=${encodeURIComponent(imp)}` : `?page=1&pageSize=6`;
+      const res = await fetch(`/api/daily-report${qp}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSummary(data.summary ?? null);
+      const reports = (data.reports ?? []).map((r: any) => ({ date: r.date, productsCount: r.productsCount ?? 0, totalSales: r.totalSales ?? 0 }));
+      setRecentReports(reports);
+    } catch {
+      // ignore
+    }
+  }
 
   async function fetchProfile() {
     try {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const imp = impersonateIdFromWindow();
+      const url = imp ? `/api/attendants/me?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/me";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as ProfileResponse;
       setProfile(data.user);
@@ -83,7 +107,9 @@ export default function AttendantDashboard() {
 
   async function fetchShops() {
     try {
-      const res = await fetch("/api/attendants/shops", { cache: "no-store" });
+      const imp = impersonateIdFromWindow();
+      const url = imp ? `/api/attendants/shops?impersonateId=${encodeURIComponent(imp)}` : "/api/attendants/shops";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as ShopSummary[];
       setShops(data);
@@ -110,7 +136,7 @@ export default function AttendantDashboard() {
   }
 
   const categoryOrder = useMemo<AttendantCategory[]>(() => {
-    const fallback = profile?.attendantCategory ?? "GENERAL";
+    const fallback = profile?.attendantCategory ?? "DIRECT_SALES_OPS";
     const raw = profile?.categories ?? [];
     const ordered = [fallback, ...raw].filter(Boolean) as AttendantCategory[];
     return Array.from(new Set(ordered)) as AttendantCategory[];
@@ -118,9 +144,9 @@ export default function AttendantDashboard() {
 
   const definitions = useMemo(() => {
     if (categoryOrder.length) {
-      return categoryOrder.map((cat) => attendantCategoryById[cat] ?? attendantCategoryById.GENERAL);
+      return categoryOrder.map((cat) => (attendantCategoryById as any)[cat] ?? (attendantCategoryById as any)["DIRECT_SALES_OPS"]);
     }
-    return [attendantCategoryById.GENERAL];
+    return [(attendantCategoryById as any)["DIRECT_SALES_OPS"]];
   }, [categoryOrder]);
 
   const widgets = useMemo(() => {
@@ -177,6 +203,25 @@ export default function AttendantDashboard() {
         </div>
       </div>
 
+      {/* KPI header */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="kpi-card">
+          <div className="kpi-title">Total products (recent)</div>
+          <div className="kpi-value">{summary ? summary.totalProducts : "—"}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Total sales (KES)</div>
+          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "—"}</div>
+        </div>
+        <div className="ml-4 text-sm opacity-70">Recent uploads</div>
+        <div className="sparkline">
+          <Sparkline values={recentReports.map((r) => r.productsCount)} color="var(--primary)" />
+        </div>
+        <div className="ml-auto">
+          <Button onClick={() => (window.location.href = "/attendant/daily-report")} variant="primary">Open daily report</Button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">
           Loading your workspace…
@@ -204,3 +249,5 @@ export default function AttendantDashboard() {
     </div>
   );
 }
+
+// sparkline is now provided by `src/app/_components/Sparkline`

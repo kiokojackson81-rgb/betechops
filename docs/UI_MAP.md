@@ -9,7 +9,7 @@ Lists the main app pages and responsibilities. Use this as a guide for the UI ch
 
 ## Admin area (`src/app/admin/*`)
 - `/admin/shops` — Manage shops (create/edit platform credentials, test connection, assign users to shop with `roleAtShop`).
-- `/admin/attendants` — User management for attendants & supervisors.
+- `/admin/users` — User management for attendants & supervisors.
 - `/admin/pending-pricing` — Pending pricing queue (shop filter, assign for pricing).
 - `/admin/returns` — Return management: view waiting pickups, overdue, approve/resolve.
 - `/admin/reports` — Reconciliation reports and exports.
