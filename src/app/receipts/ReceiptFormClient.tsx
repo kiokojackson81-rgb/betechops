@@ -56,8 +56,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
-  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string | undefined>(undefined);
   const [addressLoading, setAddressLoading] = useState(false);
+  const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [deposit, setDeposit] = useState<number>(0);
@@ -260,6 +261,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCustomerType(type);
     if (type === "delivery") {
       setPaymentDetailsShown(true);
+      // ensure address input is visible for delivery customers
+      setShowAddressInput(true);
     }
     if (type !== "delivery") {
       setDeliveryStatus("pending");
@@ -309,6 +312,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const handlePreview = (autoPrint = false) => {
     if (!hasPaymentMethodSelection) {
       showToast("Select a payment method before previewing", "error");
+      return;
+    }
+    if (!customerType) {
+      showToast("Select a customer type before previewing", "error");
       return;
     }
     const draft = buildDraft(primaryPaymentMethod);
@@ -638,28 +645,28 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </button>
           <button
             type="button"
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
-            onClick={() => setDeliveryAddress((prev) => (prev ? prev : ""))}
+            className={`rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold ${showAddressInput ? "text-black bg-emerald-500" : "text-slate-200 hover:bg-white/5"}`}
+            onClick={() => setShowAddressInput((prev) => !prev)}
           >
-            + Add address
+            {showAddressInput ? "Hide address" : "+ Add address"}
           </button>
         </div>
       </section>
 
-      {deliveryAddress !== undefined && (
+      {(showAddressInput || customerType === "delivery") && (
         <div className="mt-3">
           <label className={labelClass}>Delivery address</label>
           <div className="mt-1 flex gap-2">
             <input
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
+              value={deliveryAddress ?? ""}
+              onChange={(e) => setDeliveryAddress(e.target.value || undefined)}
               placeholder="Customer delivery address"
               className={`${fieldClass} flex-1`}
             />
             <button
               type="button"
               onClick={async () => {
-                if (!deliveryAddress.trim()) return;
+                if (!deliveryAddress || !deliveryAddress.trim()) return;
                 setAddressLoading(true);
                 try {
                   const res = await fetch('/api/ai/address-correct', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawAddress: deliveryAddress }) });

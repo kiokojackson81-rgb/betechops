@@ -149,7 +149,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
           Payment method: <span className="font-semibold">{paymentLabel}</span>
         </p>
         {data?.notes && (
-          <div className="mt-2 p-2 bg-gray-50 rounded text-[12px]">
+          <div className="mt-2 text-[12px]">
             <strong>Notes:</strong>
             <div className="mt-1 whitespace-pre-wrap">{data.notes}</div>
           </div>
