@@ -165,6 +165,8 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
                   </div>
                   <Link
                     href={`/receipts/${r.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black"
                   >
                     View receipt

@@ -563,6 +563,8 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
               <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
               <Link
                 href={`/receipts/${receipt.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-xs text-emerald-300 hover:text-emerald-200"
               >
                 View details

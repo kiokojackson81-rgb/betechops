@@ -340,6 +340,8 @@ export default function MarketingReceiptsPage() {
                   {receipt.id ? (
                     <Link
                       href={`/receipts/${receipt.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-xs text-emerald-300 hover:text-emerald-200"
                     >
                       View details

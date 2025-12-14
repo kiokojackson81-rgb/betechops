@@ -1300,6 +1300,7 @@ export default function ReceiptsAdminClient({
                   <Link
                     href={`/receipts/${detail.receipt.id}`}
                     target="_blank"
+                    rel="noopener noreferrer"
                     className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
                   >
                     Open printable
