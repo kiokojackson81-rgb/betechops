@@ -674,8 +674,8 @@ export default function DailyReportFinal() {
                     const pill = (label: string, range: Parameters<typeof setRange>[0]) => {
                       const active = isActive(range as any);
                       const base = active
-                        ? "rounded-full px-4 py-2 text-sm font-semibold text-black bg-emerald-400"
-                        : "rounded-full border border-slate-800 px-4 py-2 text-sm text-white/90";
+                        ? "rounded-full px-4 py-2 text-sm font-semibold text-black bg-emerald-500 shadow-sm"
+                        : "rounded-full border border-slate-800 px-4 py-2 text-sm text-slate-200 bg-slate-900/40";
                       return (
                         <button key={label} onClick={() => setRange(range as any)} className={base}>
                           {label}

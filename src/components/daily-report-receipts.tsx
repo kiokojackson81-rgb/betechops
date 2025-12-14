@@ -248,7 +248,7 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
             {receipts.map((receipt) => (
               <div
                 key={receipt.id}
-                className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-950/60 px-4 py-3"
+                className="flex items-center justify-between rounded-3xl border border-white/5 bg-slate-900/60 px-6 py-4 shadow-md"
               >
                 <div>
                       <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
@@ -258,7 +258,7 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
                 <div className="text-right">
                   <p className="text-lg font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
                   {receipt.id ? (
-                    <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-300 hover:text-emerald-200">View details</a>
+                    <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
                   ) : (
                     <span className="text-xs text-slate-500">Unavailable</span>
                   )}
