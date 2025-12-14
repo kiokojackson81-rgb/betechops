@@ -105,7 +105,13 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
           if (q) params.set("q", q);
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
-        const url = `/api/receipts?${params.toString()}`;
+        let url = `/api/receipts?${params.toString()}`;
+        // If the developer adds `?useMockReceipts=1` to the URL, use a
+        // local mock endpoint to verify UI/summary behavior without needing
+        // a real database or session. This is intended for QA only.
+        if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("useMockReceipts") === "1") {
+          url = "/api/debug/receipts-mock";
+        }
         // include credentials to ensure session cookie is sent
         const res = await fetch(url, {
           cache: "no-store",
