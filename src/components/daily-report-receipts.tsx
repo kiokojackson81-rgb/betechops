@@ -15,6 +15,7 @@ type DailyReportReceiptRow = {
 type Props = {
   date: string;
   attendantId: string | null | undefined;
+  hideHeader?: boolean;
 };
 
 const formatKES = (value?: number | null) =>
@@ -163,30 +164,34 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
 
   return (
     <section id="my-receipts" className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">My receipts</p>
-          <h2 className="text-lg font-semibold text-white">{displayDate}</h2>
-          <p className="text-sm text-slate-400">Showing receipts captured by you for this date.</p>
-        </div>
-        <div className="flex flex-col items-start gap-1 text-sm sm:items-end">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Count</span>
-          <span className="text-xl font-semibold text-emerald-300">{summary.count}</span>
-          <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Sales</span>
-          <span className="text-xl font-semibold text-white">{formatKES(summary.totalSales)}</span>
-        </div>
-      </div>
+      {!hideHeader && (
+        <>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">My receipts</p>
+              <h2 className="text-lg font-semibold text-white">{displayDate}</h2>
+              <p className="text-sm text-slate-400">Showing receipts captured by you for this date.</p>
+            </div>
+            <div className="flex flex-col items-start gap-1 text-sm sm:items-end">
+              <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Count</span>
+              <span className="text-xl font-semibold text-emerald-300">{summary.count}</span>
+              <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Sales</span>
+              <span className="text-xl font-semibold text-white">{formatKES(summary.totalSales)}</span>
+            </div>
+          </div>
 
-      {/* Debug panel visible when ?debugReceipts=1 is present in the URL */}
-      {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugReceipts") === "1" && (
-        <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-900/10 p-3 text-sm text-yellow-200">
-          <div className="mb-1 text-xs text-yellow-300">Debug: Receipts fetch</div>
-          <div>AttendantId (prop): <span className="font-mono">{String(attendantId)}</span></div>
-          <div>AttendantId (resolved): <span className="font-mono">{String(localAttendantId ?? "-")}</span></div>
-          <div>Last status: <span className="font-mono">{String(lastFetchStatus ?? "-")}</span></div>
-          <div>Last count: <span className="font-mono">{String(lastFetchCount ?? "-")}</span></div>
-          <div className="truncate">Last URL: <span className="font-mono">{String(lastFetchUrl ?? "-")}</span></div>
-        </div>
+          {/* Debug panel visible when ?debugReceipts=1 is present in the URL */}
+          {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugReceipts") === "1" && (
+            <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-900/10 p-3 text-sm text-yellow-200">
+              <div className="mb-1 text-xs text-yellow-300">Debug: Receipts fetch</div>
+              <div>AttendantId (prop): <span className="font-mono">{String(attendantId)}</span></div>
+              <div>AttendantId (resolved): <span className="font-mono">{String(localAttendantId ?? "-")}</span></div>
+              <div>Last status: <span className="font-mono">{String(lastFetchStatus ?? "-")}</span></div>
+              <div>Last count: <span className="font-mono">{String(lastFetchCount ?? "-")}</span></div>
+              <div className="truncate">Last URL: <span className="font-mono">{String(lastFetchUrl ?? "-")}</span></div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="mt-5 space-y-3">
