@@ -11,6 +11,7 @@
 "use client";
 
 import { useState } from "react";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import {
   CalendarIcon,
 } from "lucide-react";
@@ -449,6 +450,11 @@ export default function DailyReportStyled() {
               placeholder="Any additional comments or highlights…"
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
             />
+            {notes ? (
+              <div className="mt-2 text-sm text-slate-300">
+                <MarkdownRendererClient mdText={String(notes)} />
+              </div>
+            ) : null}
           </div>
       </div>
       {/* Submit button centered at bottom */}
