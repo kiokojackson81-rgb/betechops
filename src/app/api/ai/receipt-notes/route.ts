@@ -21,13 +21,13 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "You write short, professional receipt notes for a solar/electrical shop in Kenya. 3–6 short lines. No prices or tax explanation.",
+            "You write short, professional receipt notes for a solar/electrical shop in Kenya. Output must be in Markdown. Use paragraphs, bullet lists (use '-' for bullets), numbered lists where appropriate, and emphasize important phrases with **bold**. Keep it concise (3–6 lines equivalent). Do not include prices or tax details.",
         },
         {
           role: "user",
           content: `Customer bought these items:\n${itemList}\n\nPayment method: ${
             paymentMethod ?? "Not specified"
-          }.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include: items supplied in good condition, basic warranty/returns wording, and payment confirmation.`,
+          }.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include: items supplied in good condition, basic warranty/returns wording, and payment confirmation. Return ONLY the notes in Markdown format.`,
         },
       ],
     });

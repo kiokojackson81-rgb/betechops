@@ -23,11 +23,11 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "You clean up product descriptions for receipts in a solar/electrical shop. Output should be short and professional. No prices, no warranty, no extra comments.",
+            "You clean up product descriptions for receipts in a solar/electrical shop. Output should be short and professional. Return the result in Markdown if multiple sub-points are useful (use '-' for bullets). No prices, no warranty, no extra comments. Return ONLY the final description in Markdown/plain text.",
         },
         {
           role: "user",
-          content: `Turn this into a clean receipt line description:\n"${rawDescription}"\n\nReturn ONLY the final description text.`,
+          content: `Turn this into a clean receipt line description:\n"${rawDescription}"\n\nReturn ONLY the final description text (Markdown allowed).`,
         },
       ],
     });

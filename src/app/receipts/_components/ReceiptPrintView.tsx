@@ -1,5 +1,47 @@
 "use client";
 import React from "react";
+// small, safe markdown -> HTML renderer supporting **bold**, paragraphs, '-' bullets and numbered lists
+function escapeHtml(unsafe: string) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function simpleMarkdownToHtml(md: string) {
+  if (!md) return "";
+  // normalize line endings
+  const text = md.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // escape HTML first
+  let out = escapeHtml(text);
+
+  // Handle bold **text**
+  out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // Split into paragraphs by blank lines
+  const paragraphs = out.split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
+  const rendered = paragraphs
+    .map((p) => {
+      const lines = p.split(/\n+/g).map((l) => l.trim());
+      // detect bullet list (lines starting with '-') or numbered list (1.)
+      if (lines.every((l) => /^(-|\d+\.)\s+/.test(l))) {
+        if (/^\d+\./.test(lines[0])) {
+          // ordered list
+          const items = lines.map((l) => l.replace(/^\d+\.\s+/, "")).map((s) => `<li>${s}</li>`).join("");
+          return `<ol>${items}</ol>`;
+        }
+        const items = lines.map((l) => l.replace(/^-\s+/, "")).map((s) => `<li>${s}</li>`).join("");
+        return `<ul>${items}</ul>`;
+      }
+      // fallback: wrap as paragraph, preserving single-line breaks as <br/>
+      return `<p>${lines.join("<br/>")}</p>`;
+    })
+    .join("");
+
+  return rendered;
+}
 
 type Props = {
   data: any;
@@ -97,7 +139,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
               <tr key={idx} className="border-b align-top">
                 <td className="py-1">{qty}</td>
                 <td className="py-1 whitespace-pre-wrap">
-                  {item.title}
+                  <div dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(String(item.title || "")) }} />
                   {item.serial && (
                     <div className="text-[10px] text-slate-500">Serial / IMEI: {item.serial}</div>
                   )}
@@ -151,7 +193,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         {data?.notes && (
           <div className="mt-2 text-[12px]">
             <strong>Notes:</strong>
-            <div className="mt-1 whitespace-pre-wrap">{data.notes}</div>
+            <div className="mt-1" dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(String(data.notes || "")) }} />
           </div>
         )}
         {data?.paymentDetailsShown && (
