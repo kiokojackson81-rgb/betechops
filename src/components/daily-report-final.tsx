@@ -38,7 +38,7 @@ const kenyanLocale = "en-KE";
 const kenyaTimeZone = "Africa/Nairobi";
 
 const cardClasses =
-  "rounded-2xl border border-white/10 bg-slate-950/70 shadow-lg shadow-black/30";
+  "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
 const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 const textareaClasses =
@@ -632,7 +632,7 @@ export default function DailyReportFinal() {
 
   if (showMyReceipts) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">Receipts history</h1>
@@ -649,7 +649,7 @@ export default function DailyReportFinal() {
               <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Receipts list</p>
                   <h2 className="text-2xl font-semibold text-white">Read-only receipts history</h2>
-                <p className="text-sm text-slate-400">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
+                  <p className="text-sm text-slate-300">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
               </div>
                 <div className="flex gap-3">
                   {(() => {
