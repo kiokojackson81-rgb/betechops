@@ -1080,7 +1080,7 @@ export default function ReceiptsAdminClient({
           <div className="flex flex-wrap items-end gap-2">
             <button
               type="button"
-              onClick={applyFilters}
+              onClick={() => applyFilters()}
               className="flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
             >
               Apply filters
