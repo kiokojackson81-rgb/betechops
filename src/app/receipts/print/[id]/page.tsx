@@ -32,11 +32,15 @@ export default async function Page({ params }: { params: { id: string } }) {
     warranty: it.warranty ?? "",
   }));
 
+  const dataIsObject = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data);
   const snapshot: any = {
     order,
     items,
     totals: receipt.totals ?? {},
-    notes: receipt.notes ?? (receipt.data && receipt.data.notes) ?? "",
+    notes:
+      receipt.notes ??
+      (dataIsObject && "notes" in receipt.data ? (receipt.data as { notes?: string }).notes : undefined) ??
+      "",
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || "",
     attendantName: receipt.issuedBy?.name || order?.attendant?.name || "",
