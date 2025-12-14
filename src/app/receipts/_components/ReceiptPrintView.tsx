@@ -62,6 +62,9 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         </div>
         <div>
           <span className="font-semibold">{numberLabel}</span> {data?.serial}
+          <div style={{ marginTop: 6 }}>
+            <strong>AAddress :</strong> {data?.deliveryAddress || '-'}
+          </div>
         </div>
       </div>
 

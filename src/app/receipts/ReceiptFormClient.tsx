@@ -210,6 +210,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     paymentDetailsShown,
     deposit: docType === "LAYAWAY" ? deposit : undefined,
     notes,
+    deliveryAddress,
     // paperSize: fixed to A5, omitted from draft
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
@@ -368,6 +369,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         date: new Date().toISOString(),
         customerName,
         customerPhone,
+        deliveryAddress: deliveryAddress || undefined,
         attendantId: staffId,
         issuedById: staffId,
         taxRate: normalizedTaxRate,
