@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "You write short, professional receipt notes for a solar/electrical shop in Kenya. Output must be in Markdown. Use paragraphs, bullet lists (use '-' for bullets), numbered lists where appropriate, and emphasize important phrases with **bold**. Keep it concise (3–6 lines equivalent). Do not include prices or tax details.",
+            "You are a helpful copywriter for a Kenyan solar/electrical shop producing short, professional receipt notes. Use your judgment to choose the best clear formatting for the information — single sentences, short paragraphs, bullet lists ('-' for bullets), or numbered lists — whichever makes the note most useful on a printed receipt. Emphasize key phrases with **bold** when helpful. Keep output concise and customer-friendly (roughly 2–6 short lines when rendered). Do NOT include prices, tax calculations, or internal debug info. Return only the note text in Markdown format.",
         },
         {
           role: "user",
@@ -29,12 +29,8 @@ export async function POST(req: NextRequest) {
             paymentMethod ?? "Not specified"
           }.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include: items supplied in good condition, basic warranty/returns wording, and payment confirmation. Return ONLY the notes in Markdown format.`,
         },
-      ],
-    });
-
-    const content = completion.choices?.[0]?.message?.content ?? "";
-    return new Response(JSON.stringify({ notes: content.trim() }), {
-      status: 200,
+          role: "user",
+          content: `Customer bought these items:\n${itemList}\n\nPayment method: ${paymentMethod ?? "Not specified"}.\n\nWrite general notes/terms suitable for the bottom of a receipt. Include statements about items supplied in good condition, basic warranty/returns guidance, and payment confirmation. Use whichever formatting (sentences, short paragraphs, bullets, or numbers) makes the notes most clear and professional on a printed receipt. Return ONLY the notes in Markdown format.`,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
