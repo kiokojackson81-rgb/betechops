@@ -58,12 +58,19 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
+  const [localAttendantId, setLocalAttendantId] = useState<string | null | undefined>(attendantId);
+
+  // sync localAttendantId when the prop changes
+  useEffect(() => {
+    setLocalAttendantId(attendantId);
+  }, [attendantId]);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
 
-    if (!attendantId) {
+    if (!localAttendantId) {
+      // no attendantId yet — abort early
       setReceipts([]);
       setLoading(false);
       setError(null);
@@ -81,7 +88,8 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
         const endIso = toEndOfDayIso(date);
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
-        if (attendantId) params.set("attendantId", attendantId);
+        const aid = localAttendantId ?? attendantId;
+        if (aid) params.set("attendantId", aid);
         const url = `/api/receipts?${params.toString()}`;
         // include credentials to ensure session cookie is sent
         const res = await fetch(url, {
@@ -116,7 +124,29 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [date, attendantId]);
+  }, [date, localAttendantId]);
+
+  // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    if (localAttendantId) return () => controller.abort();
+    const fetchSession = async () => {
+      try {
+        const res = await fetch(`/api/debug/session`, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.user?.id) setLocalAttendantId(data.user.id);
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchSession();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [localAttendantId]);
 
   const summary = useMemo(() => {
     const totalSales = receipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
@@ -151,7 +181,8 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
       {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugReceipts") === "1" && (
         <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-900/10 p-3 text-sm text-yellow-200">
           <div className="mb-1 text-xs text-yellow-300">Debug: Receipts fetch</div>
-          <div>AttendantId: <span className="font-mono">{String(attendantId)}</span></div>
+          <div>AttendantId (prop): <span className="font-mono">{String(attendantId)}</span></div>
+          <div>AttendantId (resolved): <span className="font-mono">{String(localAttendantId ?? "-")}</span></div>
           <div>Last status: <span className="font-mono">{String(lastFetchStatus ?? "-")}</span></div>
           <div>Last count: <span className="font-mono">{String(lastFetchCount ?? "-")}</span></div>
           <div className="truncate">Last URL: <span className="font-mono">{String(lastFetchUrl ?? "-")}</span></div>
