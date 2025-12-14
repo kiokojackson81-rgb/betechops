@@ -2,6 +2,8 @@
 
 import { signOut, useSession } from "next-auth/react";
 import HeaderActions from "@/components/HeaderActions";
+import Link from "next/link";
+import Card from "@/app/_components/Card";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -632,106 +634,81 @@ export default function DailyReportFinal() {
 
   if (showMyReceipts) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Receipts history</h1>
-            <p className="text-sm text-slate-400">Browse every receipt captured in the system. Use the range pills or custom dates to narrow the window.</p>
-          </div>
-          <div>
-            <a href="/" className="rounded-full border border-slate-800 bg-slate-900/50 px-4 py-2 text-sm text-white">BACK TO DASHBOARD</a>
-          </div>
-        </div>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-5xl space-y-6 p-6">
+          <header className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold">Receipts history</h1>
+              <p className="text-sm text-slate-300">Browse every receipt captured in the system. Use the range pills or custom dates to narrow the window.</p>
+            </div>
+            <Link
+              href="/attendant/daily-report"
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Back to dashboard
+            </Link>
+          </header>
 
-        <div className="space-y-5">
-          <div className={cardClasses + " px-8 py-8"}>
-            <header className="flex items-start justify-between">
+          <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Receipts list</p>
-                  <h2 className="text-2xl font-semibold text-white">Read-only receipts history</h2>
-                  <p className="text-sm text-slate-300">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
+                <h2 className="text-lg font-semibold text-slate-100">Read-only receipts history</h2>
+                <p className="text-sm text-slate-400">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
               </div>
-                <div className="flex gap-3">
-                  {(() => {
-                    const isoToday = new Date().toISOString().split("T")[0];
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    const isoYesterday = yesterday.toISOString().split("T")[0];
-                    const now = new Date();
-                    const day = now.getDay();
-                    const diffToMonday = day === 0 ? -6 : 1 - day;
-                    const monday = new Date(now);
-                    monday.setDate(now.getDate() + diffToMonday);
-                    const isoMonday = monday.toISOString().split("T")[0];
-
-                    const isActive = (range: "today" | "yesterday" | "thisWeek" | "period") => {
-                      if (range === "today") return startDate === isoToday && endDate === isoToday;
-                      if (range === "yesterday") return startDate === isoYesterday && endDate === isoYesterday;
-                      if (range === "thisWeek") return startDate === isoMonday && endDate === isoToday;
-                      return !(startDate === isoToday && endDate === isoToday) && !(startDate === isoYesterday && endDate === isoYesterday) && !(startDate === isoMonday && endDate === isoToday);
-                    };
-
-                    const pill = (label: string, range: Parameters<typeof setRange>[0]) => {
-                      const active = isActive(range as any);
-                      const base = active
-                        ? "rounded-full px-4 py-2 text-sm font-semibold text-black bg-emerald-500 shadow-sm"
-                        : "rounded-full border border-slate-800 px-4 py-2 text-sm text-slate-200 bg-slate-900/40";
-                      return (
-                        <button key={label} onClick={() => setRange(range as any)} className={base}>
-                          {label}
-                        </button>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {pill("Today", "today")}
-                        {pill("Yesterday", "yesterday")}
-                        {pill("This week", "thisWeek")}
-                        {pill("This period", "period")}
-                      </>
-                    );
-                  })()}
-                </div>
-            </header>
-
-            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <label className="block text-xs uppercase text-slate-400">Search</label>
-                <input className={inputClasses} placeholder="Customer, attendant, receipt..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-xs uppercase text-slate-400">Start date</label>
-                <input className={inputClasses} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-xs uppercase text-slate-400">End date</label>
-                <input className={inputClasses} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                <button onClick={() => setRange("today")} className={`rounded-full border px-4 py-1 transition ${startDate === new Date().toISOString().split("T")[0] && endDate === new Date().toISOString().split("T")[0] ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>
+                  Today
+                </button>
+                <button onClick={() => setRange("yesterday")} className={`rounded-full border px-4 py-1 transition ${(() => { const d = new Date(); d.setDate(d.getDate()-1); const iso = d.toISOString().split("T")[0]; return startDate===iso && endDate===iso ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white" })()}`}>
+                  Yesterday
+                </button>
+                <button onClick={() => setRange("thisWeek")} className={`rounded-full border px-4 py-1 transition ${(() => { const now=new Date(); const day=now.getDay(); const diffToMonday = day===0?-6:1-day; const monday=new Date(now); monday.setDate(now.getDate()+diffToMonday); const isoMonday=monday.toISOString().split("T")[0]; const isoToday=new Date().toISOString().split("T")[0]; return startDate===isoMonday && endDate===isoToday ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white" })()}`}>
+                  This week
+                </button>
+                <button onClick={() => setRange("period")} className="rounded-full border px-4 py-1 transition border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white">This period</button>
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-lg border border-slate-800 p-4">
-                <p className="text-xs uppercase text-slate-400">Range</p>
-                <p className="font-semibold text-white">Selected</p>
-                <p className="text-sm text-slate-400">Showing receipts from {startDate} to {endDate}</p>
+            <div className="grid gap-3 lg:grid-cols-4">
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Search
+                <input placeholder="Customer, attendant, receipt..." value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Start date
+                <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                End date
+                <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
+                <p className="text-sm font-semibold text-slate-100">Selected</p>
+                <p className="text-xs text-slate-400">Showing receipts from {startDate} to {endDate}</p>
               </div>
-              <div className="rounded-lg border border-slate-800 p-4">
-                <p className="text-xs uppercase text-slate-400">Receipts</p>
-                <p className="text-3xl font-semibold text-emerald-300">{receiptsSummary.count}</p>
-                <p className="text-sm text-slate-400">Captured in the selected window</p>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
+                <p className="text-2xl font-semibold text-emerald-300">{receiptsSummary.count}</p>
+                <p className="text-xs text-slate-400">Captured in the selected window</p>
               </div>
-              <div className="rounded-lg border border-slate-800 p-4">
-                <p className="text-xs uppercase text-slate-400">Total sales</p>
-                <p className="text-3xl font-semibold text-emerald-300">KES {Number(receiptsSummary.totalSales ?? 0).toLocaleString("en-KE")}</p>
-                <p className="text-sm text-slate-400">Aggregated from the receipts below</p>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
+                <p className="text-2xl font-semibold text-emerald-300">{formatKES(receiptsSummary.totalSales ?? 0)}</p>
+                <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
               </div>
             </div>
-          </div>
 
-          {/* Include the receipts list - hide the small header inside the panel */}
-          <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={undefined} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
-        </div>
+            <div>
+              {/* Include the receipts list - hide the small header inside the panel */}
+              <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={undefined} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
+            </div>
+          </Card>
+        </main>
       </div>
     );
   }
