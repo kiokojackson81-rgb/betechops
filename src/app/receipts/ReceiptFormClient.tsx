@@ -56,6 +56,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [addressLoading, setAddressLoading] = useState(false);
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [deposit, setDeposit] = useState<number>(0);
@@ -632,8 +634,50 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           >
             + Add delivery fee
           </button>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            onClick={() => setDeliveryAddress((prev) => (prev ? prev : ""))}
+          >
+            + Add address
+          </button>
         </div>
       </section>
+
+      {deliveryAddress !== undefined && (
+        <div className="mt-3">
+          <label className={labelClass}>Delivery address</label>
+          <div className="mt-1 flex gap-2">
+            <input
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              placeholder="Customer delivery address"
+              className={`${fieldClass} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!deliveryAddress.trim()) return;
+                setAddressLoading(true);
+                try {
+                  const res = await fetch('/api/ai/address-correct', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawAddress: deliveryAddress }) });
+                  if (!res.ok) throw new Error('Address correction failed');
+                  const data = await res.json().catch(() => null);
+                  if (data?.address) setDeliveryAddress(data.address);
+                } catch (err) {
+                  showToast(err instanceof Error ? err.message : 'AI address failed', 'error');
+                } finally {
+                  setAddressLoading(false);
+                }
+              }}
+              className="rounded-xl px-3 py-2 bg-[#060b1b] border border-gray-700 text-gray-200"
+              disabled={addressLoading}
+            >
+              {addressLoading ? '…' : '✨ AI'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div>
