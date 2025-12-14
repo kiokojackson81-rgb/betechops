@@ -813,7 +813,7 @@ export default function DailyReportFinal() {
         </div>
       )}
 
-      {showMyReceipts && <DailyReportReceiptsPanel date={date} attendantId={attendantId} />}
+      {showMyReceipts && <DailyReportReceiptsPanel start={date} end={date} attendantId={attendantId} />}
     </div>
   );
 }
