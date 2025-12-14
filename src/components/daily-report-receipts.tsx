@@ -13,9 +13,13 @@ type DailyReportReceiptRow = {
 };
 
 type Props = {
-  date: string;
+  // start and end should be date strings (YYYY-MM-DD) or ISO date strings
+  start?: string | null;
+  end?: string | null;
+  q?: string | null;
   attendantId: string | null | undefined;
   hideHeader?: boolean;
+  onSummary?: (s: { totalSales: number; count: number }) => void;
 };
 
 const formatKES = (value?: number | null) =>
@@ -52,7 +56,7 @@ const toEndOfDayIso = (value?: string) => {
   return date.toISOString();
 };
 
-export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
+export default function DailyReportReceiptsPanel({ start, end, q, attendantId, hideHeader, onSummary }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,10 +89,11 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "80");
-        const startIso = toStartOfDayIso(date);
-        const endIso = toEndOfDayIso(date);
-        if (startIso) params.set("start", startIso);
-        if (endIso) params.set("end", endIso);
+          const startIso = toStartOfDayIso(start ?? undefined);
+          const endIso = toEndOfDayIso(end ?? undefined);
+          if (startIso) params.set("start", startIso);
+          if (endIso) params.set("end", endIso);
+          if (q) params.set("q", q);
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
         const url = `/api/receipts?${params.toString()}`;
@@ -110,6 +115,8 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
           const arr = Array.isArray(data?.receipts) ? data.receipts : [];
           setReceipts(arr);
           setLastFetchCount(arr.length);
+          const totalSales = arr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
+          if (onSummary) onSummary({ totalSales, count: arr.length });
         }
       } catch (err) {
         if (!cancelled) {
@@ -125,7 +132,7 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [date, localAttendantId]);
+  }, [start, end, q, localAttendantId]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
@@ -155,9 +162,21 @@ export default function DailyReportReceiptsPanel({ date, attendantId }: Props) {
   }, [receipts]);
 
   const displayDate = (() => {
-    const parsed = new Date(date);
-    if (date && !Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+    if (start && end) {
+      try {
+        const s = new Date(start);
+        const e = new Date(end);
+        if (!Number.isNaN(s.getTime()) && s.toDateString() === e.toDateString()) {
+          return s.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+        }
+        return `${s.toLocaleDateString("en-KE")} — ${e.toLocaleDateString("en-KE")}`;
+      } catch (e) {
+        return "Selected range";
+      }
+    }
+    if (start) {
+      const s = new Date(start);
+      if (!Number.isNaN(s.getTime())) return s.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
     }
     return "Selected date";
   })();

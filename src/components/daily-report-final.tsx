@@ -60,6 +60,51 @@ function createEmptyReceipt(): ReceiptRow {
 export default function DailyReportFinal() {
   const [showMyReceipts, setShowMyReceipts] = useState(false);
 
+  // receipts-history controls (used when #my-receipts)
+  const todayIso = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState<string>(todayIso);
+  const [endDate, setEndDate] = useState<string>(todayIso);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  const [receiptsSummary, setReceiptsSummary] = useState<{ count: number; totalSales: number }>({ count: 0, totalSales: 0 });
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 250);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const setRange = (range: "today" | "yesterday" | "thisWeek" | "period") => {
+    const now = new Date();
+    if (range === "today") {
+      const iso = now.toISOString().split("T")[0];
+      setStartDate(iso);
+      setEndDate(iso);
+      return;
+    }
+    if (range === "yesterday") {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      const iso = d.toISOString().split("T")[0];
+      setStartDate(iso);
+      setEndDate(iso);
+      return;
+    }
+    if (range === "thisWeek") {
+      const d = new Date(now);
+      const day = d.getDay();
+      // compute Monday as start (if Sunday day=0 -> go back 6)
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const start = new Date(d);
+      start.setDate(d.getDate() + diffToMonday);
+      const isoStart = start.toISOString().split("T")[0];
+      const isoEnd = now.toISOString().split("T")[0];
+      setStartDate(isoStart);
+      setEndDate(isoEnd);
+      return;
+    }
+    // period: leave as-is for manual selection
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -98,49 +143,49 @@ export default function DailyReportFinal() {
                 <p className="text-sm text-slate-400">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
               </div>
               <div className="flex gap-2">
-                <button className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">Today</button>
-                <button className="rounded-full bg-emerald-600 px-3 py-2 text-sm font-semibold text-black">Yesterday</button>
-                <button className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This week</button>
-                <button className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This period</button>
+                <button onClick={() => setRange("today")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">Today</button>
+                <button onClick={() => setRange("yesterday")} className="rounded-full bg-emerald-600 px-3 py-2 text-sm font-semibold text-black">Yesterday</button>
+                <button onClick={() => setRange("thisWeek")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This week</button>
+                <button onClick={() => setRange("period")} className="rounded-full border border-slate-800 px-3 py-2 text-sm text-white/90">This period</button>
               </div>
             </header>
 
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <label className="block text-xs uppercase text-slate-400">Search</label>
-                <input className={inputClasses} placeholder="Customer, attendant, receipt..." />
+                <input className={inputClasses} placeholder="Customer, attendant, receipt..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="block text-xs uppercase text-slate-400">Start date</label>
-                <input className={inputClasses} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input className={inputClasses} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="block text-xs uppercase text-slate-400">End date</label>
-                <input className={inputClasses} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input className={inputClasses} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
               </div>
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-slate-800 p-4">
                 <p className="text-xs uppercase text-slate-400">Range</p>
-                <p className="font-semibold text-white">Yesterday</p>
-                <p className="text-sm text-slate-400">Showing receipts from {date} to {date}</p>
+                <p className="font-semibold text-white">Selected</p>
+                <p className="text-sm text-slate-400">Showing receipts from {startDate} to {endDate}</p>
               </div>
               <div className="rounded-lg border border-slate-800 p-4">
                 <p className="text-xs uppercase text-slate-400">Receipts</p>
-                <p className="text-2xl font-semibold text-emerald-300">{0}</p>
+                <p className="text-2xl font-semibold text-emerald-300">{receiptsSummary.count}</p>
                 <p className="text-sm text-slate-400">Captured in the selected window</p>
               </div>
               <div className="rounded-lg border border-slate-800 p-4">
                 <p className="text-xs uppercase text-slate-400">Total sales</p>
-                <p className="text-2xl font-semibold text-emerald-300">KES 0</p>
+                <p className="text-2xl font-semibold text-emerald-300">KES {Number(receiptsSummary.totalSales ?? 0).toLocaleString("en-KE")}</p>
                 <p className="text-sm text-slate-400">Aggregated from the receipts below</p>
               </div>
             </div>
           </div>
 
           {/* Include the receipts list - hide the small header inside the panel */}
-          <DailyReportReceiptsPanel date={date} attendantId={attendantId} hideHeader />
+          <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={attendantId} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
         </div>
       </div>
     );
