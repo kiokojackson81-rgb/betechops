@@ -5,6 +5,11 @@ import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
+import QuickStatsCard from "@/components/QuickStatsCard";
+import EarningsCard from "@/app/_components/EarningsCard";
+import PayrollTableClient from "@/app/admin/payroll/PayrollTableClient";
+import type { PayrollRow } from "@/app/admin/payroll/types";
+import { mapPayrollToEarningsSummary as mapToEarnings, mapPayrollToPayrollRow as mapToPayrollRow } from "@/lib/payrollMapping";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -12,6 +17,20 @@ type ReceiptStatsRow = {
   id: string;
   total?: number | null;
   items?: Array<{ buyingPrice?: number | "" | null; productName?: string | null }>;
+};
+
+type OnlinePlatformSummary = {
+  key: string;
+  name: string;
+  orders: number;
+  sales: number;
+  commission: number;
+};
+
+type OnlineSummaryResponse = {
+  period: { key: string; label: string; start: string; end: string };
+  totals: { orders: number; sales: number; commission: number };
+  platforms: OnlinePlatformSummary[];
 };
 
 type ReceiptItem = { id: string; productName: string; buyingPrice: number | "" };
@@ -55,6 +74,26 @@ type WeeklyEarningsResponse = {
   rows: WeeklyShopEarningsRow[];
 };
 
+type PayrollSummary = {
+  periodLabel?: string;
+  // possible field names from different endpoints
+  salary?: number; // alias for baseSalary
+  baseSalary?: number;
+  deductions?: number;
+  chamaTotal?: number;
+  latenessTotal?: number;
+  disciplineTotal?: number;
+  otherDeductionsTotal?: number;
+  bonusTotal?: number;
+  commissionTopUpTotal?: number;
+  penalties?: number;
+  directCommission?: number;
+  marketplaceCommission?: number;
+  totalCommission?: number;
+  grossCommission?: number;
+  netPay?: number;
+};
+
 type TradingWeek = {
   key: string;
   label: string;
@@ -85,6 +124,8 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
   const ymd = date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
   return endOfDay ? `${ymd}T23:59:59.999+03:00` : `${ymd}T00:00:00+03:00`;
 };
+
+const DIRECT_RATE = 0.02;
 
 function startOfWeekMonday(date: Date) {
   const copy = new Date(date);
@@ -284,14 +325,29 @@ export default function AttendantOnlineOpsClient() {
     }
   }, [selectedWeekKey, tradingWeeks]);
 
-  const [tab, setTab] = useState<"overview" | "shops" | "receipts">("overview");
+  const [tab, setTab] = useState<"overview" | "shops" | "receipts" | "payroll">("overview");
   const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   // receipt totals removed (not used in simplified UI)
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
   const [shopSalesLoading, setShopSalesLoading] = useState(false);
   const [weeklyEarnings, setWeeklyEarnings] = useState<WeeklyEarningsResponse | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
+
+  // Receipt stats & online summary for QuickStats
+  const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
+  const [receiptStatsLoading, setReceiptStatsLoading] = useState(false);
+
+  const [onlineSummary, setOnlineSummary] = useState<OnlineSummaryResponse | null>(null);
+  const [onlineSummaryLoading, setOnlineSummaryLoading] = useState(false);
+  const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
+  const [payrollRows, setPayrollRows] = useState<PayrollRow[] | null>(null);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+
+  const mapPayrollToEarningsSummary = (p: PayrollSummary | null) => mapToEarnings(p, receiptsCount);
+
+  const mapPayrollToPayrollRow = (p: PayrollSummary | null): PayrollRow => mapToPayrollRow(p, userId);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -303,6 +359,92 @@ export default function AttendantOnlineOpsClient() {
       console.warn("[attendant/online-ops] failed to load user", err);
     }
   }, []);
+
+  const loadReceiptStats = useCallback(async () => {
+    if (!userId) return;
+    setReceiptStatsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(receiptsPeriod.start, false),
+        end: formatNairobiParam(receiptsPeriod.end, true),
+        includeItems: "true",
+        size: "200",
+      });
+
+      const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load receipts for payroll period");
+      const data = (await res.json()) as { receipts?: ReceiptStatsRow[] };
+      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load receipt totals";
+      showToast(msg, "error");
+    } finally {
+      setReceiptStatsLoading(false);
+    }
+  }, [userId, receiptsPeriod, userRole]);
+
+  const loadOnlineSummary = useCallback(async () => {
+    if (!userId) return;
+    setOnlineSummaryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(receiptsPeriod.start, false),
+        end: formatNairobiParam(receiptsPeriod.end, true),
+      });
+
+      const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load online summary for payroll period");
+      const data = (await res.json()) as OnlineSummaryResponse;
+      setOnlineSummary(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load online totals";
+      showToast(msg, "error");
+    } finally {
+      setOnlineSummaryLoading(false);
+    }
+  }, [userId, receiptsPeriod]);
+
+  const loadPayrollSummary = useCallback(async () => {
+    if (!userId) return;
+    setPayrollLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(receiptsPeriod.start, false),
+        end: formatNairobiParam(receiptsPeriod.end, true),
+      });
+
+      setPayrollRows(null);
+
+      // If we're an admin, try the richer admin endpoint which returns many rows
+      if (userRole === "ADMIN") {
+        const adminRes = await fetch(`/api/admin/payroll/summary?${params.toString()}`, { cache: "no-store" });
+        if (adminRes.ok) {
+          const adminData = await adminRes.json();
+          setPayrollRows(Array.isArray(adminData.rows) ? adminData.rows : []);
+          setPayrollSummary(null);
+          return;
+        }
+      }
+
+      const res = await fetch(`/api/payroll/summary?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        // if endpoint missing, show placeholder by clearing summary
+        setPayrollSummary(null);
+        return;
+      }
+      const data = (await res.json()) as PayrollSummary;
+      setPayrollSummary(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load payroll summary";
+      showToast(msg, "error");
+      setPayrollSummary(null);
+    } finally {
+      setPayrollLoading(false);
+    }
+  }, [userId, receiptsPeriod]);
 
   // receipt totals loader removed — keeping receipts editor only
 
@@ -379,7 +521,32 @@ export default function AttendantOnlineOpsClient() {
     if (!userId || !selectedWeek) return;
     void loadShopSales();
     void loadWeeklyEarnings();
-  }, [loadShopSales, loadWeeklyEarnings, selectedWeek, userId]);
+    void loadReceiptStats();
+    void loadOnlineSummary();
+    void loadPayrollSummary();
+  }, [loadShopSales, loadWeeklyEarnings, loadReceiptStats, loadOnlineSummary, loadPayrollSummary, selectedWeek, userId]);
+
+  const directSales = useMemo(() => {
+    return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+  }, [receiptRows]);
+
+  const receiptsCount = receiptRows.length;
+
+  const platformTotals = useMemo(() => {
+    const platforms = onlineSummary?.platforms ?? [];
+    const jumia = platforms.find((p) => String(p.key).toUpperCase() === "JUMIA");
+    const kilimall = platforms.find((p) => String(p.key).toUpperCase() === "KILIMALL");
+
+    return {
+      jumiaSales: Number(jumia?.sales || 0),
+      kilimallSales: Number(kilimall?.sales || 0),
+      marketplaceCommission: Number(onlineSummary?.totals?.commission || 0),
+    };
+  }, [onlineSummary]);
+
+  const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
+
+  const commission = directSales * DIRECT_RATE + platformTotals.marketplaceCommission;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -401,6 +568,9 @@ export default function AttendantOnlineOpsClient() {
               </button>
               <button className={pillClass(tab === "receipts")} onClick={() => setTab("receipts")}>
                 Receipts
+              </button>
+              <button className={pillClass(tab === "payroll")} onClick={() => setTab("payroll")}>
+                Payroll
               </button>
             </div>
           </div>
@@ -443,6 +613,22 @@ export default function AttendantOnlineOpsClient() {
             </div>
 
             <div className="space-y-4 lg:col-span-4">
+              <QuickStatsCard
+                variant="onlineOps"
+                loading={receiptStatsLoading || onlineSummaryLoading}
+                onlineOps={{
+                  periodLabel: receiptsPeriod.label,
+                  jumiaSales: platformTotals.jumiaSales,
+                  kilimallSales: platformTotals.kilimallSales,
+                  directSales,
+                  receiptsCount,
+                  totalSales,
+                  commission,
+                }}
+              />
+
+              <EarningsCard summary={mapPayrollToEarningsSummary(payrollSummary)} />
+
               <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Direct sales</p>
@@ -568,6 +754,24 @@ export default function AttendantOnlineOpsClient() {
                 </Button>
               </div>
             </Card>
+          </div>
+        )}
+
+        {tab === "payroll" && (
+          <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-12">
+              <div className="space-y-6 lg:col-span-12">
+                {payrollLoading && !payrollSummary && !payrollRows ? (
+                  <Card className="p-6 text-center">Loading payroll summary…</Card>
+                ) : payrollRows && payrollRows.length > 0 ? (
+                  <PayrollTableClient rows={payrollRows} periodLabel={receiptsPeriod.label} />
+                ) : payrollSummary ? (
+                  <PayrollTableClient rows={[mapPayrollToPayrollRow(payrollSummary)]} periodLabel={receiptsPeriod.label} />
+                ) : (
+                  <Card className="p-6 text-center">Payroll data not available for this period.</Card>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
