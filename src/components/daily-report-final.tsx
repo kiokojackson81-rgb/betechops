@@ -39,6 +39,9 @@ type SaleEntryPayload = {
 const kenyanLocale = "en-KE";
 const kenyaTimeZone = "Africa/Nairobi";
 
+const formatKES = (value?: number | null) =>
+  `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+
 const cardClasses =
   "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
 const inputClasses =
