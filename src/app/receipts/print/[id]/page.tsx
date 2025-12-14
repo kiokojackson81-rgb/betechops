@@ -35,7 +35,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   const snapshot: any = {
     order,
     items,
-    totals: receipt.totals ?? order.totals ?? {},
+    totals: receipt.totals ?? {},
     notes: receipt.notes ?? (receipt.data && receipt.data.notes) ?? "",
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || "",
