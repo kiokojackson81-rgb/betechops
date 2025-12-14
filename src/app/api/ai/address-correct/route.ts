@@ -36,7 +36,8 @@ export async function POST(req: Request) {
 
         const completion = await client.chat.completions.create({
           model: "gpt-4o-mini",
-          messages,
+          // cast messages to any to satisfy TypeScript overloads in this SDK
+          messages: messages as any,
           temperature: 0.0,
           max_tokens: 200,
         });
