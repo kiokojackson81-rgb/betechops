@@ -110,20 +110,21 @@ export async function GET() {
   const typedEmptyAttendant = null as unknown as { id: string; name: string | null; email: string };
   for (const account of accounts) {
     if (matchedAccountIds.has(account.id)) continue;
+    const attendants = account.assignments
+      .map((assignment) => assignment.attendant)
+      .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
+      .map((attendant) => ({
+        id: attendant.id,
+        name: attendant.name ?? null,
+        email: attendant.email ?? null,
+      }));
     payloadById.set(account.id, {
       id: account.id,
       shopName: account.displayName ?? account.id,
       displayName: account.displayName,
       platform: account.platform as Platform,
-      attendants: account.assignments
-        .map((assignment) => assignment.attendant)
-        .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
-        .map((attendant) => ({
-          id: attendant.id,
-          name: attendant.name ?? null,
-          email: attendant.email ?? null,
-        })),
-      primaryAttendant: typedEmptyAttendant,
+      attendants,
+      primaryAttendant: attendants[0] ?? typedEmptyAttendant,
       identifiers: {
         jumiaShopSid: account.jumiaShopSid,
         kilimallShopCode: account.kilimallShopCode,
