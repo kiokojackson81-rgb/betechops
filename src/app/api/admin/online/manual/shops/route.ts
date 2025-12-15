@@ -132,7 +132,9 @@ export async function GET() {
     });
   }
 
-  const finalPayload = Array.from(payloadById.values()).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
+  const finalPayload = Array.from(payloadById.values())
+    .filter((entry) => entry.identifiers.jumiaShopSid || entry.identifiers.kilimallShopCode)
+    .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
 
   return NextResponse.json(finalPayload);
 }
