@@ -423,6 +423,7 @@ export default function AttendantOnlineClient() {
   }, [platformAggregates, weeklyTotals]);
 
   const averageOrderValue = weeklyTotals.orders > 0 ? weeklyTotals.sales / weeklyTotals.orders : 0;
+  const accountRows = weeklyEarnings?.rows ?? [];
 
   const directSales = useMemo(() => {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
@@ -552,26 +553,47 @@ export default function AttendantOnlineClient() {
                 </div>
                 {/* Week / period totals */}
                 <div className="px-4 pb-3 pt-2 text-sm text-slate-300">
-                  <div className="flex items-center gap-6">
-                    <div className="text-xs text-slate-400">Orders</div>
-                    <div className="text-xs text-slate-400">Sales</div>
-                    <div className="text-xs text-slate-400">Commission</div>
+                  <div className="flex flex-wrap gap-6">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Orders</p>
+                      <p className="text-base font-semibold text-slate-100">{weeklyTotals.orders.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Sales</p>
+                      <p className="text-base font-semibold text-emerald-300">{formatKES(weeklyTotals.sales)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Commission</p>
+                      <p className="text-base font-semibold text-slate-100">{formatKES(weeklyTotals.commission)}</p>
+                    </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-6 text-sm">
-                    <div className="font-semibold text-slate-100">{weeklyTotals.orders.toLocaleString()}</div>
-                    <div className="font-semibold text-emerald-300">{formatKES(weeklyTotals.sales)}</div>
-                    <div className="font-semibold text-slate-100">{formatKES(weeklyTotals.commission)}</div>
-                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Tap a week to refresh the breakdown or choose “This marketplace period” for the full view.
+                  </p>
                 </div>
 
-                {platformAggregates.map((platform) => (
-                  <div key={platform.key} className="grid grid-cols-4 gap-2 px-4 py-3 text-sm">
-                    <span className="font-medium text-slate-100">{platform.name}</span>
-                    <span className="text-right text-slate-200">{(platform.orders || 0).toLocaleString()}</span>
-                    <span className="text-right text-emerald-300">{formatKES(platform.sales)}</span>
-                    <span className="text-right text-slate-200">{formatKES(platform.commission)}</span>
+                <div className="border-t border-slate-800 px-4 pt-3">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                    <span>Accounts</span>
+                    <span className="text-right">Sales / Commission</span>
                   </div>
-                ))}
+                  {accountRows.length === 0 ? (
+                    <div className="py-4 text-sm text-slate-400">Select a week or the full period to see account sales.</div>
+                  ) : (
+                    accountRows.map((row) => (
+                      <div key={`${row.shopId}-${row.weekStart}`} className="grid grid-cols-2 gap-2 border-t border-slate-800 py-3 text-sm text-slate-300">
+                        <div>
+                          <p className="font-semibold text-white">{row.shopName}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">{row.platform}</p>
+                        </div>
+                        <div className="flex flex-col items-end text-right">
+                          <span className="text-emerald-300">{formatKES(row.sales)}</span>
+                          <span className="text-xs text-slate-400">{formatKES(row.commission)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
