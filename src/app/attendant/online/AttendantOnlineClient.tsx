@@ -11,6 +11,48 @@ import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMappi
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
+// Marketplace trading weeks anchor (kept in sync with other clients)
+const MARKETPLACE_ANCHOR_START = new Date("2025-11-24T00:00:00+03:00");
+
+function endOfWeekSunday(start: Date) {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+function formatWeekLabel(start: Date, end: Date) {
+  const fmt = (value: Date) => value.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  return `${fmt(start)} - ${fmt(end)}`;
+}
+
+function buildTradingWeeks(periodStart: Date) {
+  const weeks: { key: string; label: string; start: Date; end: Date }[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const start = new Date(periodStart);
+    start.setDate(periodStart.getDate() + i * 7);
+    start.setHours(0, 0, 0, 0);
+    const end = endOfWeekSunday(start);
+    weeks.push({ key: `${start.toISOString().slice(0, 10)}`, label: `Week ${i + 1} (${formatWeekLabel(start, end)})`, start, end });
+  }
+  return weeks;
+}
+
+function getMarketplaceTradingPeriodFor(date: Date) {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const anchor = new Date(MARKETPLACE_ANCHOR_START);
+  anchor.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((target.getTime() - anchor.getTime()) / DAY_MS);
+  const periodIndex = diffDays >= 0 ? Math.floor(diffDays / 28) : 0;
+  const start = new Date(anchor.getTime() + periodIndex * 28 * DAY_MS);
+  const end = new Date(start.getTime() + 27 * DAY_MS);
+  end.setHours(23, 59, 59, 999);
+  const label = `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
+  return { start, end, label, key: `MP_${periodIndex}` };
+}
+
 type ReceiptStatsRow = {
   id: string;
   total?: number | null;
@@ -133,6 +175,14 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
+  // Assigned shops + weekly earnings/trading weeks for marketplace overview
+  const [assignedShops, setAssignedShops] = useState<ShopSalesRow[]>([]);
+  const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
+  const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string>("");
+  const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+
   // receipt totals & payroll (quick stats + earnings) re-enabled
   const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
   const [receiptStatsLoading, setReceiptStatsLoading] = useState(false);
@@ -151,6 +201,42 @@ export default function AttendantOnlineClient() {
       console.warn("[attendant/online] failed to load user", err);
     }
   }, []);
+
+  const loadAssignedShops = useCallback(async () => {
+    try {
+      const res = await fetch("/api/attendants/shops", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAssignedShops(Array.isArray(data) ? data : []);
+    } catch (err) {
+      // ignore
+    }
+  }, []);
+
+  const loadWeeklyEarnings = useCallback(async (weekKey?: string) => {
+    if (!userId) return;
+    const week = (tradingWeeks || []).find((w) => w.key === (weekKey ?? selectedWeekKey));
+    if (!week) return;
+    setWeeklyLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(week.start, false),
+        end: formatNairobiParam(week.end, true),
+      });
+      const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setWeeklyEarnings(null);
+        return;
+      }
+      const data = await res.json();
+      setWeeklyEarnings(data);
+    } catch (err) {
+      setWeeklyEarnings(null);
+    } finally {
+      setWeeklyLoading(false);
+    }
+  }, [tradingWeeks, selectedWeekKey, userId]);
 
   const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
@@ -221,13 +307,13 @@ export default function AttendantOnlineClient() {
 
   // receiptTotals loader removed
 
-  const loadOnlineSummary = useCallback(async () => {
+  const loadOnlineSummary = useCallback(async (overrides?: { start?: string; end?: string }) => {
     if (!userId) return;
     setSummaryLoading(true);
     try {
       const params = new URLSearchParams({
-        start: formatNairobiParam(period.start, false),
-        end: formatNairobiParam(period.end, true),
+        start: overrides?.start ?? formatNairobiParam(period.start, false),
+        end: overrides?.end ?? formatNairobiParam(period.end, true),
       });
       params.set("attendantId", userId);
       const res = await fetch(`/api/online/summary?${params.toString()}`, {
@@ -237,10 +323,7 @@ export default function AttendantOnlineClient() {
       const data = (await res.json()) as OnlineSummaryResponse;
       setOnlineSummary(data);
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to load online sales summary";
+      const message = err instanceof Error ? err.message : "Unable to load online sales summary";
       showToast(message, "error");
     } finally {
       setSummaryLoading(false);
@@ -351,9 +434,23 @@ export default function AttendantOnlineClient() {
 
   const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
 
+  // helper values for UI
+  const assignedShopNames = assignedShops.map((s) => `${s.name}${s.platform ? ` (${s.platform})` : ""}`).join(", ");
+  const weeklyTotals = weeklyEarnings?.totals ?? null;
+
   useEffect(() => {
     fetchUser();
-  }, [fetchUser]);
+    void loadAssignedShops();
+    // choose default week: previous week to the one containing today (if available)
+    const today = new Date();
+    const idx = tradingWeeks.findIndex((w) => today >= w.start && today <= w.end);
+    const defaultIdx = idx > 0 ? idx - 1 : idx >= 0 ? idx : 0;
+    if (tradingWeeks[defaultIdx]) {
+      setSelectedWeekKey(tradingWeeks[defaultIdx].key);
+    } else if (tradingWeeks[0]) {
+      setSelectedWeekKey(tradingWeeks[0].key);
+    }
+  }, [fetchUser, tradingWeeks]);
 
   useEffect(() => {
     if (!userId) return;
@@ -361,6 +458,7 @@ export default function AttendantOnlineClient() {
     void loadShopSales();
     void loadReceiptStats();
     void loadPayrollSummary();
+    void loadWeeklyEarnings();
   }, [loadOnlineSummary, loadShopSales, userId]);
 
   // earnings summary loader removed
@@ -455,11 +553,36 @@ export default function AttendantOnlineClient() {
               </div>
 
               <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
-                <div className="grid grid-cols-4 gap-2 border-b border-slate-800 bg-slate-900/70 px-4 py-2 text-[11px] uppercase tracking-wide text-slate-400">
-                  <span>Platform</span>
-                  <span className="text-right">Orders</span>
-                  <span className="text-right">Sales (KES)</span>
-                  <span className="text-right">Commission</span>
+                <div className="flex items-center justify-between px-4 py-2">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-400">Platform</div>
+                    <div className="text-xs text-slate-400">Assigned: <span className="text-emerald-300">{assignedShopNames || "—"}</span></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedWeekKey}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSelectedWeekKey(v);
+                        void loadWeeklyEarnings(v);
+                        // refresh online summary for the week range as well
+                        const wk = tradingWeeks.find((w) => w.key === v);
+                        if (wk) void loadOnlineSummary({ start: formatNairobiParam(wk.start, false), end: formatNairobiParam(wk.end, true) });
+                      }}
+                      className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none"
+                    >
+                      {tradingWeeks.map((w) => (
+                        <option key={w.key} value={w.key}>{w.label}</option>
+                      ))}
+                      <option value="period">This marketplace period</option>
+                    </select>
+                    <button
+                      className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100"
+                      onClick={() => void loadOnlineSummary()}
+                    >
+                      Refresh online stats
+                    </button>
+                  </div>
                 </div>
                 {onlinePlatforms.map((platform) => (
                   <div
