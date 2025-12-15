@@ -525,54 +525,17 @@ export default function AttendantOnlineClient() {
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
-            <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Sales records
-                </p>
-                <h2 className="text-xl font-semibold">Add each receipt for today</h2>
-                <p className="text-sm text-slate-400">
-                  Totals are calculated automatically. This mirrors the receipts
-                  capture form at{" "}
-                  <span className="font-semibold text-emerald-300">
-                    ops.betech.co.ke/receipts
-                  </span>
-                  .
-                </p>
-              </div>
-
-              <ReceiptsEditor
-                receipts={receiptsEditorRows}
-                setReceipts={setReceiptsEditorRows}
-                totals={{
-                  totalSales: salesRecordsTotals.totalSales,
-                  totalProfit: 0,
-                  totalItems: salesRecordsTotals.totalItems,
-                }}
-                hideBuyingPrice
-              />
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
-                <p>
-                  Total receipts: {" "}
-                  <span className="font-semibold text-emerald-300">
-                    {salesRecordsTotals.totalReceipts}
-                  </span>
-                </p>
-                <p>
-                  Total sales (KES):{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {formatKES(salesRecordsTotals.totalSales)}
-                  </span>
-                </p>
-                <p>
-                  Total items:{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {salesRecordsTotals.totalItems}
-                  </span>
-                </p>
-              </div>
-            </Card>
+            {/* Render the receipts editor as a single card (it contains its own header/totals) */}
+            <ReceiptsEditor
+              receipts={receiptsEditorRows}
+              setReceipts={setReceiptsEditorRows}
+              totals={{
+                totalSales: salesRecordsTotals.totalSales,
+                totalProfit: 0,
+                totalItems: salesRecordsTotals.totalItems,
+              }}
+              hideBuyingPrice
+            />
 
             <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
               <div className="flex flex-col gap-1">
