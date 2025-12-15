@@ -30,7 +30,7 @@ export async function GET() {
     }),
     prisma.shop.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, platform: true },
+      select: { id: true, name: true, platform: true, apiConfig: { select: { apiKey: true } } },
     }),
   ]);
 
@@ -40,12 +40,23 @@ export async function GET() {
       .filter((shop) => Boolean(shop.name))
       .map((shop) => [shop.name.trim().toLowerCase(), shop]),
   );
+  // map apiConfig.apiKey (per-shop configured key) to shop so we can match
+  // marketplace account identifiers like jumiaShopSid / kilimallShopCode
+  const shopsByApiKey = new Map<string, typeof shops[0]>();
+  for (const shop of shops) {
+    const apiKey = (shop as any).apiConfig?.apiKey;
+    if (apiKey) shopsByApiKey.set(String(apiKey), shop);
+  }
 
   const payload = accounts
     .map((account) => {
       const matchById = shopsById.get(account.id);
       const matchByName = account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined;
-      const shopRecord = matchById ?? matchByName;
+      // try matching by configured per-shop api key (common place to store
+      // marketplace shop identifiers like Jumia SID or Kilimall code)
+      const matchByApiKey = account.jumiaShopSid ? shopsByApiKey.get(account.jumiaShopSid) : undefined;
+      const matchByApiKey2 = !matchByApiKey && account.kilimallShopCode ? shopsByApiKey.get(account.kilimallShopCode) : undefined;
+      const shopRecord = matchById ?? matchByName ?? matchByApiKey ?? matchByApiKey2;
       if (!shopRecord) return null;
 
       const attendants = account.assignments
