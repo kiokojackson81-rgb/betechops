@@ -42,20 +42,6 @@ type ReceiptRow = {
   items: ReceiptItem[];
 };
 
-type ShopSalesRow = {
-  id: string;
-  name: string;
-  platform: string;
-  country: string;
-  currency: string;
-  status: string;
-  codeLabel: string;
-  handlerName: string;
-  handlerRole: string;
-  periodLabel: string;
-  totalSales: number;
-};
-
 type WeeklyShopEarningsRow = {
   shopId: string;
   shopName: string;
@@ -237,8 +223,6 @@ function TradingWeekPicker({ weeks, value, onChange, loading }: TradingWeekPicke
   );
 }
 
-import AssignedShopsCard from "@/components/AssignedShopsCard";
-
 type WeeklyEarningsPanelProps = {
   weekly: WeeklyEarningsResponse | null;
   loading: boolean;
@@ -330,8 +314,6 @@ export default function AttendantOnlineOpsClient() {
   const [userRole, setUserRole] = useState<string | null>(null);
   // receipt totals removed (not used in simplified UI)
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
-  const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
-  const [shopSalesLoading, setShopSalesLoading] = useState(false);
   const [weeklyEarnings, setWeeklyEarnings] = useState<WeeklyEarningsResponse | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
 
@@ -448,28 +430,6 @@ export default function AttendantOnlineOpsClient() {
 
   // receipt totals loader removed — keeping receipts editor only
 
-  const loadShopSales = useCallback(async () => {
-    if (!userId || !selectedWeek) return;
-    setShopSalesLoading(true);
-    try {
-      const params = new URLSearchParams({
-        attendantId: userId,
-        start: formatNairobiParam(selectedWeek.start, false),
-        end: formatNairobiParam(selectedWeek.end, true),
-      });
-
-      const res = await fetch(`/api/online/shops/sales?${params.toString()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load assigned shops");
-      const data = (await res.json()) as { rows?: ShopSalesRow[] };
-      setShopSalesRows(Array.isArray(data.rows) ? data.rows : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load assigned shops";
-      showToast(message, "error");
-    } finally {
-      setShopSalesLoading(false);
-    }
-  }, [selectedWeek, userId]);
-
   const loadWeeklyEarnings = useCallback(async () => {
     if (!userId || !selectedWeek) return;
     setWeeklyLoading(true);
@@ -519,12 +479,11 @@ export default function AttendantOnlineOpsClient() {
 
   useEffect(() => {
     if (!userId || !selectedWeek) return;
-    void loadShopSales();
     void loadWeeklyEarnings();
     void loadReceiptStats();
     void loadOnlineSummary();
     void loadPayrollSummary();
-  }, [loadShopSales, loadWeeklyEarnings, loadReceiptStats, loadOnlineSummary, loadPayrollSummary, selectedWeek, userId]);
+  }, [loadWeeklyEarnings, loadReceiptStats, loadOnlineSummary, loadPayrollSummary, selectedWeek, userId]);
 
   const directSales = useMemo(() => {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
@@ -588,94 +547,69 @@ export default function AttendantOnlineOpsClient() {
         </header>
 
         {tab === "overview" && (
-          <div className="grid gap-6 lg:grid-cols-12">
-            <div className="space-y-6 lg:col-span-8">
-              <AssignedShopsCard
-                rows={shopSalesRows}
-                loading={shopSalesLoading}
-                weekLabel={selectedWeek?.label ?? "Week view"}
-              />
-              <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Weekly earnings</p>
-                    <h2 className="text-lg font-semibold">Your shops &amp; marketplace</h2>
-                  </div>
-                  <TradingWeekPicker
-                    weeks={tradingWeeks}
-                    value={selectedWeekKey}
-                    onChange={setSelectedWeekKey}
-                    loading={weeklyLoading}
-                  />
-                </div>
-                <WeeklyEarningsPanel weekly={weeklyEarnings} loading={weeklyLoading} weekLabel={selectedWeek?.label} />
-              </Card>
-            </div>
+          <div className="space-y-4">
+            <QuickStatsCard
+              variant="onlineOps"
+              loading={receiptStatsLoading || onlineSummaryLoading}
+              onlineOps={{
+                periodLabel: receiptsPeriod.label,
+                jumiaSales: platformTotals.jumiaSales,
+                kilimallSales: platformTotals.kilimallSales,
+                directSales,
+                receiptsCount,
+                totalSales,
+                commission,
+              }}
+            />
 
-            <div className="space-y-4 lg:col-span-4">
-              <QuickStatsCard
-                variant="onlineOps"
-                loading={receiptStatsLoading || onlineSummaryLoading}
-                onlineOps={{
-                  periodLabel: receiptsPeriod.label,
-                  jumiaSales: platformTotals.jumiaSales,
-                  kilimallSales: platformTotals.kilimallSales,
-                  directSales,
-                  receiptsCount,
-                  totalSales,
-                  commission,
+            <EarningsCard summary={mapPayrollToEarningsSummary(payrollSummary)} />
+
+            <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Direct sales</p>
+                <h2 className="text-xl font-semibold">Add receipts for today</h2>
+                <p className="text-sm text-slate-400">
+                  Totals are calculated within your payroll period ({receiptsPeriod.label}).
+                </p>
+              </div>
+
+              <ReceiptsEditor
+                receipts={receiptsEditorRows}
+                setReceipts={setReceiptsEditorRows}
+                totals={{
+                  totalSales: salesRecordsTotals.totalSales,
+                  totalProfit: 0,
+                  totalItems: salesRecordsTotals.totalItems,
                 }}
+                hideBuyingPrice
               />
 
-              <EarningsCard summary={mapPayrollToEarningsSummary(payrollSummary)} />
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
+                <p>
+                  Total receipts:{" "}
+                  <span className="font-semibold text-emerald-300">{salesRecordsTotals.totalReceipts}</span>
+                </p>
+                <p>
+                  Total sales (KES):{" "}
+                  <span className="font-semibold text-emerald-300">{formatKES(salesRecordsTotals.totalSales)}</span>
+                </p>
+                <p>
+                  Total items:{" "}
+                  <span className="font-semibold text-emerald-300">{salesRecordsTotals.totalItems}</span>
+                </p>
+              </div>
 
-              <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Direct sales</p>
-                  <h2 className="text-xl font-semibold">Add receipts for today</h2>
-                  <p className="text-sm text-slate-400">
-                    Totals are calculated within your payroll period ({receiptsPeriod.label}).
-                  </p>
-                </div>
-
-                <ReceiptsEditor
-                  receipts={receiptsEditorRows}
-                  setReceipts={setReceiptsEditorRows}
-                  totals={{
-                    totalSales: salesRecordsTotals.totalSales,
-                    totalProfit: 0,
-                    totalItems: salesRecordsTotals.totalItems,
-                  }}
-                  hideBuyingPrice
-                />
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
-                  <p>
-                    Total receipts:{" "}
-                    <span className="font-semibold text-emerald-300">{salesRecordsTotals.totalReceipts}</span>
-                  </p>
-                  <p>
-                    Total sales (KES):{" "}
-                    <span className="font-semibold text-emerald-300">{formatKES(salesRecordsTotals.totalSales)}</span>
-                  </p>
-                  <p>
-                    Total items:{" "}
-                    <span className="font-semibold text-emerald-300">{salesRecordsTotals.totalItems}</span>
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="px-4"
-                    onClick={() => (window.location.href = "/receipts")}
-                  >
-                    Open receipts desk
-                  </Button>
-                </div>
-              </Card>
-            </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-4"
+                  onClick={() => (window.location.href = "/receipts")}
+                >
+                  Open receipts desk
+                </Button>
+              </div>
+            </Card>
           </div>
         )}
 
