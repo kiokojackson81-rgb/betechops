@@ -424,6 +424,40 @@ export default function AttendantOnlineClient() {
     };
   }, [onlineSummary]);
 
+  // If weekly earnings rows are available for a selected week, aggregate by platform
+  const platformAggregates = useMemo(() => {
+    const rows = weeklyEarnings?.rows ?? null;
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      // fallback to onlineSummary platforms
+      return onlinePlatforms.map((p) => ({
+        key: p.key,
+        name: p.name,
+        orders: p.orders ?? 0,
+        sales: p.sales ?? 0,
+        commission: p.commission ?? 0,
+      }));
+    }
+
+    const map: Record<string, { key: string; name: string; orders: number; sales: number; commission: number }> = {};
+    for (const r of rows) {
+      const key = String(r.platform ?? "UNKNOWN").toUpperCase();
+      if (!map[key]) {
+        map[key] = { key, name: r.platform ?? key, orders: 0, sales: 0, commission: 0 };
+      }
+      map[key].orders += Number(r.orders ?? 0);
+      map[key].sales += Number(r.sales ?? 0);
+      map[key].commission += Number(r.commission ?? 0);
+    }
+
+    // Ensure common platforms appear even if zero
+    const common = ["JUMIA", "KILIMALL"];
+    for (const c of common) {
+      if (!map[c]) map[c] = { key: c, name: c.charAt(0) + c.slice(1).toLowerCase(), orders: 0, sales: 0, commission: 0 };
+    }
+
+    return Object.values(map);
+  }, [weeklyEarnings, onlinePlatforms]);
+
   const directSales = useMemo(() => {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   }, [receiptRows]);
@@ -604,23 +638,12 @@ export default function AttendantOnlineClient() {
                   </div>
                 </div>
 
-                {onlinePlatforms.map((platform) => (
-                  <div
-                    key={platform.key}
-                    className="grid grid-cols-4 gap-2 px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium text-slate-100">
-                      {platform.name}
-                    </span>
-                  <span className="text-right text-slate-200">
-                    {safeNumber(platform.orders).toLocaleString()}
-                  </span>
-                    <span className="text-right text-emerald-300">
-                      {formatKES(platform.sales)}
-                    </span>
-                    <span className="text-right text-slate-200">
-                      {formatKES(platform.commission)}
-                    </span>
+                {platformAggregates.map((platform) => (
+                  <div key={platform.key} className="grid grid-cols-4 gap-2 px-4 py-3 text-sm">
+                    <span className="font-medium text-slate-100">{platform.name}</span>
+                    <span className="text-right text-slate-200">{(platform.orders || 0).toLocaleString()}</span>
+                    <span className="text-right text-emerald-300">{formatKES(platform.sales)}</span>
+                    <span className="text-right text-slate-200">{formatKES(platform.commission)}</span>
                   </div>
                 ))}
               </div>
