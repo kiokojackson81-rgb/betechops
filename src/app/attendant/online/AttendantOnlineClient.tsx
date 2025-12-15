@@ -5,6 +5,9 @@ import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
+import QuickStatsCard from "@/components/QuickStatsCard";
+import EarningsCard from "@/app/_components/EarningsCard";
+import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
@@ -108,6 +111,7 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
 export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // receipt totals & quick stats removed from right column
 
@@ -129,7 +133,12 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  // earnings summary (payroll) removed from UI
+  // receipt totals & payroll (quick stats + earnings) re-enabled
+  const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
+  const [receiptStatsLoading, setReceiptStatsLoading] = useState(false);
+
+  const [payrollSummary, setPayrollSummary] = useState<any | null>(null);
+  const [payrollLoading, setPayrollLoading] = useState(false);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -137,10 +146,78 @@ export default function AttendantOnlineClient() {
       if (!res.ok) return;
       const data = await res.json();
       if (data?.user?.id) setUserId(data.user.id);
+      if (data?.user?.role) setUserRole(data.user.role);
     } catch (err) {
       console.warn("[attendant/online] failed to load user", err);
     }
   }, []);
+
+  const loadReceiptStats = useCallback(async () => {
+    if (!userId) return;
+    setReceiptStatsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(period.start, false),
+        end: formatNairobiParam(period.end, true),
+        includeItems: "true",
+        size: "200",
+      });
+
+      const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load receipts for payroll period");
+      const data = await res.json();
+      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load receipt totals";
+      showToast(msg, "error");
+    } finally {
+      setReceiptStatsLoading(false);
+    }
+  }, [userId, period]);
+
+  const loadPayrollSummary = useCallback(async () => {
+    if (!userId) return;
+    setPayrollLoading(true);
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(period.start, false),
+        end: formatNairobiParam(period.end, true),
+      });
+
+      // If user is an admin, prefer the richer admin endpoint which may return multiple rows
+      if (userRole === "ADMIN") {
+        try {
+          const adminRes = await fetch(`/api/admin/payroll/summary?${params.toString()}`, { cache: "no-store" });
+          if (adminRes.ok) {
+            const adminData = await adminRes.json();
+            // Admin endpoint returns rows — pick the first row as the summary if available
+            if (Array.isArray(adminData.rows) && adminData.rows.length > 0) {
+              setPayrollSummary(adminData.rows[0]);
+              return;
+            }
+          }
+        } catch (e) {
+          // fall through to normal endpoint on error
+        }
+      }
+
+      const res = await fetch(`/api/payroll/summary?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setPayrollSummary(null);
+        return;
+      }
+      const data = await res.json();
+      setPayrollSummary(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load payroll summary";
+      showToast(msg, "error");
+      setPayrollSummary(null);
+    } finally {
+      setPayrollLoading(false);
+    }
+  }, [userId, period]);
 
   // receiptTotals loader removed
 
@@ -252,6 +329,28 @@ export default function AttendantOnlineClient() {
   const averageOrderValue =
     onlineTotals.orders > 0 ? onlineTotals.sales / onlineTotals.orders : 0;
 
+  const platformTotals = useMemo(() => {
+    const platforms = onlineSummary?.platforms ?? [];
+    const jumia = platforms.find((p) => String(p.key).toUpperCase() === "JUMIA");
+    const kilimall = platforms.find((p) => String(p.key).toUpperCase() === "KILIMALL");
+
+    return {
+      jumiaSales: Number(jumia?.sales || 0),
+      kilimallSales: Number(kilimall?.sales || 0),
+      marketplaceCommission: Number(onlineSummary?.totals?.commission || 0),
+    };
+  }, [onlineSummary]);
+
+  const directSales = useMemo(() => {
+    return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+  }, [receiptRows]);
+
+  const receiptsCount = receiptRows.length;
+
+  const totalSales = directSales + (onlineSummary?.totals?.sales ?? 0);
+
+  const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
+
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
@@ -260,6 +359,8 @@ export default function AttendantOnlineClient() {
     if (!userId) return;
     void loadOnlineSummary();
     void loadShopSales();
+    void loadReceiptStats();
+    void loadPayrollSummary();
   }, [loadOnlineSummary, loadShopSales, userId]);
 
   // earnings summary loader removed
@@ -407,7 +508,30 @@ export default function AttendantOnlineClient() {
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-            {/* Right column removed: Quick stats / Payroll / Shop sales moved or simplified. */}
+            <QuickStatsCard
+              variant="onlineOps"
+              loading={receiptStatsLoading || summaryLoading}
+              onlineOps={{
+                periodLabel: periodLabel,
+                jumiaSales: platformTotals.jumiaSales,
+                kilimallSales: platformTotals.kilimallSales,
+                directSales,
+                receiptsCount,
+                totalSales,
+                commission,
+              }}
+            />
+
+            <EarningsCard summary={mapToEarnings(payrollSummary, receiptsCount)} />
+
+            <ShopSalesCard
+              rows={shopSalesRows}
+              loading={shopSalesLoading}
+              range={shopRange}
+              onRangeChange={(v) => setShopRange(v)}
+              onRefresh={() => void loadShopSales()}
+              periodLabel={shopPeriodLabel}
+            />
           </div>
         </div>
       </main>
