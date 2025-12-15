@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { MarketplaceAssignmentRoleValues } from "@/lib/marketplaceAssignment";
 
+type AttendantInfo = { id: string; name: string | null; email: string | null };
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -64,7 +66,7 @@ export async function GET() {
       const attendants = account.assignments
         .map((assignment) => assignment.attendant)
         .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
-        .map((attendant) => ({
+        .map<AttendantInfo>((attendant) => ({
           id: attendant.id,
           name: attendant.name ?? null,
           email: attendant.email ?? null,
@@ -101,13 +103,13 @@ export async function GET() {
         attendants: [],
         // Provide a typed-empty primaryAttendant to satisfy TS inference in
         // production builds. Consumers treat missing attendant as "Unassigned".
-        primaryAttendant: null as unknown as { id: string; name: string | null; email: string },
+        primaryAttendant: null,
         identifiers: { jumiaShopSid: null, kilimallShopCode: null },
       });
     }
   }
 
-  const typedEmptyAttendant = null as unknown as { id: string; name: string | null; email: string };
+  const typedEmptyAttendant: AttendantInfo | null = null;
   for (const account of accounts) {
     if (matchedAccountIds.has(account.id)) continue;
     const attendants = account.assignments
