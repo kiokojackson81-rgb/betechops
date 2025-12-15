@@ -465,9 +465,9 @@ export default function AttendantOnlineClient() {
     void loadWeeklyEarnings();
   }, [loadWeeklyEarnings, userId]);
 
-  // earnings summary loader removed
+    // earnings summary loader removed
 
-    const periodLabel = weeklyEarnings?.rangeLabel ?? period.label;
+  const periodLabel = weeklyEarnings?.rangeLabel ?? period.label;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
