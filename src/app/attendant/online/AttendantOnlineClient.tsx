@@ -647,97 +647,14 @@ export default function AttendantOnlineClient() {
 
             <EarningsCard summary={mapToEarnings(payrollSummary, receiptsCount)} />
 
-            <ShopSalesCard
-              rows={shopSalesRows}
-              loading={shopSalesLoading}
-              range={shopRange}
-              onRangeChange={(v) => setShopRange(v)}
-              onRefresh={() => void loadShopSales()}
-              periodLabel={shopPeriodLabel}
-            />
+            {/* Marketplace Assigned shops card removed as requested */}
           </div>
         </div>
       </main>
     </div>
   );
 }
-
-// QuickStatsCard and OnlineEarningsCard removed — simplified UI now
-
-function ShopSalesCard({
-  rows,
-  loading,
-  range,
-  onRangeChange,
-  onRefresh,
-  periodLabel,
-}: {
-  rows: ShopSalesRow[];
-  loading: boolean;
-  range: "period" | "this-week" | "last-week" | "all";
-  onRangeChange: (value: "period" | "this-week" | "last-week" | "all") => void;
-  onRefresh: () => void;
-  periodLabel: string;
-}) {
-  return (
-    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-emerald-400">
-            Marketplace Overview (Last week)
-          </p>
-          <p className="text-sm text-slate-400">Assigned shops for the selected range</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={range}
-            onChange={(event) =>
-              onRangeChange(
-                event.target.value as "period" | "this-week" | "last-week" | "all",
-              )
-            }
-            className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-          >
-            <option value="period">This earnings period</option>
-            <option value="this-week">This week</option>
-            <option value="last-week">Last week</option>
-            <option value="all">All time up to period</option>
-          </select>
-          <Button
-            type="button"
-            variant="secondary"
-            className="px-3 py-1 text-xs"
-            onClick={onRefresh}
-            disabled={loading}
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </Button>
-        </div>
-      </div>
-      <div className="space-y-2 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm max-h-80">
-        {rows.length === 0 && !loading && (
-          <p className="text-xs text-slate-400">No assigned shops for this range.</p>
-        )}
-        {rows.map((shop) => (
-          <div key={shop.id} className="space-y-1 rounded-xl bg-slate-900/80 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-semibold text-slate-100">{shop.name}</p>
-                <p className="text-[11px] text-slate-400">
-                  {shop.platform} • {shop.country} • {shop.currency}
-                </p>
-              </div>
-            </div>
-            <p className="text-[11px] text-slate-400">{shop.codeLabel}</p>
-            <p className="text-[11px] text-slate-400">
-              {shop.handlerName} • {shop.handlerRole}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
+// Marketplace Assigned shops card removed per request
 
 function computeRangeDates(
   range: "period" | "this-week" | "last-week" | "all",
