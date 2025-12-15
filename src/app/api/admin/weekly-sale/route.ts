@@ -71,9 +71,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "shopId, weekStart, weekEnd and amount are required" }, { status: 400 });
   }
 
-  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { id: true, platform: true } });
+  let shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { id: true, platform: true } });
   if (!shop) {
-    return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    // If a Shop with the provided id doesn't exist, allow passing a
+    // MarketplaceAccount id here by creating a lightweight Shop record.
+    // This lets admins select marketplace accounts that weren't mapped to
+    // Shop rows yet and still save manual weekly sales.
+    const acct = await prisma.marketplaceAccount.findUnique({ where: { id: shopId } });
+    if (!acct) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    // Create a minimal Shop record for this marketplace account. Keep it
+    // active so it appears in future selections. Name uses the account
+    // displayName when available.
+    shop = await prisma.shop.create({
+      data: {
+        name: acct.displayName ?? acct.id,
+        platform: acct.platform,
+        isActive: true,
+      },
+      select: { id: true, platform: true },
+    });
   }
 
   const normalizedWeekStart = new Date(weekStart);
