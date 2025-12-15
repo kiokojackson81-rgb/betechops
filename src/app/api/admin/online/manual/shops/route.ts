@@ -107,6 +107,7 @@ export async function GET() {
     }
   }
 
+  const typedEmptyAttendant = null as unknown as { id: string; name: string | null; email: string };
   for (const account of accounts) {
     if (matchedAccountIds.has(account.id)) continue;
     payloadById.set(account.id, {
@@ -122,7 +123,7 @@ export async function GET() {
           name: attendant.name ?? null,
           email: attendant.email ?? null,
         })),
-      primaryAttendant: null,
+      primaryAttendant: typedEmptyAttendant,
       identifiers: {
         jumiaShopSid: account.jumiaShopSid,
         kilimallShopCode: account.kilimallShopCode,
