@@ -116,8 +116,11 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.weeklySale.findUnique({
     where: { shopId_platform_weekStart_weekEnd: weekKey },
   });
-  if (existing && existing.source === WeeklySaleSource.AUTOMATIC) {
-    return NextResponse.json({ error: "Automatic weekly sale already exists for this period" }, { status: 409 });
+  const overridingAutomatic = existing?.source === WeeklySaleSource.AUTOMATIC;
+  if (overridingAutomatic) {
+    console.info(
+      `Manual override replacing automatic weekly sale ${existing.id} for shop ${shopId} (${normalizedWeekStart.toISOString()} - ${normalizedWeekEnd.toISOString()})`,
+    );
   }
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;

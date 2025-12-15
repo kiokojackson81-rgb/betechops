@@ -205,18 +205,41 @@ export default function ManualWeeklySalesPage() {
 
   const takenShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
-    const seen = new Set<string>();
+    const manualSet = new Set<string>();
     sales.forEach((sale) => {
       if (!sale.shopId) return;
       const saleWeekStart = new Date(sale.weekStart).toISOString().slice(0, 10);
       const saleWeekEnd = new Date(sale.weekEnd).toISOString().slice(0, 10);
-      if (saleWeekStart === form.weekStart && saleWeekEnd === form.weekEnd) {
-        seen.add(sale.shopId);
+      if (
+        saleWeekStart === form.weekStart &&
+        saleWeekEnd === form.weekEnd &&
+        sale.source === WeeklySaleSource.MANUAL
+      ) {
+        manualSet.add(sale.shopId);
       }
     });
-    return Array.from(seen);
+    return Array.from(manualSet);
   }, [sales, form.weekStart, form.weekEnd]);
   const takenShopSet = useMemo(() => new Set(takenShopIdsForWeek), [takenShopIdsForWeek]);
+
+  const autoShopIdsForWeek = useMemo(() => {
+    if (!form.weekStart || !form.weekEnd) return [] as string[];
+    const autoSet = new Set<string>();
+    sales.forEach((sale) => {
+      if (!sale.shopId) return;
+      const saleWeekStart = new Date(sale.weekStart).toISOString().slice(0, 10);
+      const saleWeekEnd = new Date(sale.weekEnd).toISOString().slice(0, 10);
+      if (
+        saleWeekStart === form.weekStart &&
+        saleWeekEnd === form.weekEnd &&
+        sale.source === WeeklySaleSource.AUTOMATIC
+      ) {
+        autoSet.add(sale.shopId);
+      }
+    });
+    return Array.from(autoSet);
+  }, [sales, form.weekStart, form.weekEnd]);
+  const autoShopSet = useMemo(() => new Set(autoShopIdsForWeek), [autoShopIdsForWeek]);
   const availableShops = useMemo(
     () => shops.filter((shop) => !takenShopSet.has(shop.id)),
     [shops, takenShopSet],
@@ -336,6 +359,18 @@ export default function ManualWeeklySalesPage() {
                 ? "Loading shop assignments…"
                 : `${availableShops.length} of ${shops.length} shops still open for ${selectedWeek?.display ?? "this week"}.`}
             </p>
+            {autoShopSet.size > 0 && (
+              <p className="mt-1 text-xs text-amber-300">
+                {autoShopSet.size === 1
+                  ? "1 shop already has an automatic entry this week; saving will overwrite it."
+                  : `${autoShopSet.size} shops already have automatic entries this week; saving will overwrite them.`}
+              </p>
+            )}
+            {selectedShop && autoShopSet.has(selectedShop.id) && (
+              <p className="mt-1 text-xs text-amber-300">
+                Manual entry will overwrite the automatic record for this shop.
+              </p>
+            )}
           </label>
           <label className="text-sm text-slate-300">
             Trading week
