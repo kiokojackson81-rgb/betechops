@@ -17,4 +17,5 @@ Extras
 - Example env file: see `.env.example` in the repo
 - OIDC diagnostics: `/api/debug/oidc?test=true`
 <!-- Redeploy trigger: updated by automation to force Vercel rebuild -->
+Redeploy trigger: 2025-12-15T09:07:00Z
 
