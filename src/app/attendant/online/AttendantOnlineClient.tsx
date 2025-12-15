@@ -564,6 +564,12 @@ export default function AttendantOnlineClient() {
                       onChange={(e) => {
                         const v = e.target.value;
                         setSelectedWeekKey(v);
+                        if (v === "period") {
+                          // load full marketplace period summary
+                          void loadWeeklyEarnings();
+                          void loadOnlineSummary();
+                          return;
+                        }
                         void loadWeeklyEarnings(v);
                         // refresh online summary for the week range as well
                         const wk = tradingWeeks.find((w) => w.key === v);
@@ -584,6 +590,20 @@ export default function AttendantOnlineClient() {
                     </button>
                   </div>
                 </div>
+                {/* Week / period totals */}
+                <div className="px-4 pb-3 pt-2 text-sm text-slate-300">
+                  <div className="flex items-center gap-6">
+                    <div className="text-xs text-slate-400">Orders</div>
+                    <div className="text-xs text-slate-400">Sales</div>
+                    <div className="text-xs text-slate-400">Commission</div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-6 text-sm">
+                    <div className="font-semibold text-slate-100">{(weeklyTotals?.orders ?? onlineTotals.orders).toLocaleString()}</div>
+                    <div className="font-semibold text-emerald-300">{formatKES(weeklyTotals?.sales ?? onlineTotals.sales)}</div>
+                    <div className="font-semibold text-slate-100">{formatKES(weeklyTotals?.commission ?? onlineTotals.commission)}</div>
+                  </div>
+                </div>
+
                 {onlinePlatforms.map((platform) => (
                   <div
                     key={platform.key}
