@@ -89,7 +89,7 @@ export async function GET() {
         // Provide a typed-empty primaryAttendant to satisfy TS inference in
         // production builds. Consumers treat missing attendant as "Unassigned".
         primaryAttendant: null as unknown as { id: string; name: string | null; email: string },
-        identifiers: null,
+        identifiers: { jumiaShopSid: null, kilimallShopCode: null },
       });
     }
   }
