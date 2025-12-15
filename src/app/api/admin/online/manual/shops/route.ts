@@ -48,6 +48,7 @@ export async function GET() {
     if (apiKey) shopsByApiKey.set(String(apiKey), shop);
   }
 
+  const matchedAccountIds = new Set<string>();
   const payload = accounts
     .map((account) => {
       const matchById = shopsById.get(account.id);
@@ -58,6 +59,7 @@ export async function GET() {
       const matchByApiKey2 = !matchByApiKey && account.kilimallShopCode ? shopsByApiKey.get(account.kilimallShopCode) : undefined;
       const shopRecord = matchById ?? matchByName ?? matchByApiKey ?? matchByApiKey2;
       if (!shopRecord) return null;
+      matchedAccountIds.add(account.id);
 
       const attendants = account.assignments
         .map((assignment) => assignment.attendant)
@@ -103,6 +105,29 @@ export async function GET() {
         identifiers: { jumiaShopSid: null, kilimallShopCode: null },
       });
     }
+  }
+
+  for (const account of accounts) {
+    if (matchedAccountIds.has(account.id)) continue;
+    payloadById.set(account.id, {
+      id: account.id,
+      shopName: null,
+      displayName: account.displayName,
+      platform: account.platform as Platform,
+      attendants: account.assignments
+        .map((assignment) => assignment.attendant)
+        .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
+        .map((attendant) => ({
+          id: attendant.id,
+          name: attendant.name ?? null,
+          email: attendant.email ?? null,
+        })),
+      primaryAttendant: null,
+      identifiers: {
+        jumiaShopSid: account.jumiaShopSid,
+        kilimallShopCode: account.kilimallShopCode,
+      },
+    });
   }
 
   const finalPayload = Array.from(payloadById.values()).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
