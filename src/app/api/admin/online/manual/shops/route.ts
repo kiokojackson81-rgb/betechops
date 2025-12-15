@@ -111,7 +111,7 @@ export async function GET() {
     if (matchedAccountIds.has(account.id)) continue;
     payloadById.set(account.id, {
       id: account.id,
-      shopName: null,
+      shopName: account.displayName ?? account.id,
       displayName: account.displayName,
       platform: account.platform as Platform,
       attendants: account.assignments
