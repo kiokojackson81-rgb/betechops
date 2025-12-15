@@ -86,7 +86,9 @@ export async function GET() {
         displayName: shop.name ?? shop.id,
         platform: shop.platform as Platform,
         attendants: [],
-        primaryAttendant: null,
+        // Provide a typed-empty primaryAttendant to satisfy TS inference in
+        // production builds. Consumers treat missing attendant as "Unassigned".
+        primaryAttendant: null as unknown as { id: string; name: string | null; email: string },
         identifiers: null,
       });
     }
