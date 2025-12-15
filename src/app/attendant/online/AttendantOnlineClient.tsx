@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
-import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
+// Receipts editor removed from this page per request
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
 import EarningsCard from "@/app/_components/EarningsCard";
@@ -121,24 +121,6 @@ const formatKES = (value: number | null | undefined) =>
 
 const safeNumber = (value?: number | null) => Number(value ?? 0);
 
-const randomId = () =>
-  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-
-const createItem = (): ReceiptItem => ({
-  id: randomId(),
-  productName: "",
-  buyingPrice: "",
-});
-
-const createReceipt = (): ReceiptRow => ({
-  id: randomId(),
-  receiptNumber: "",
-  sellingTotal: "",
-  paymentMethod: "",
-  items: [createItem()],
-});
 
 const toInputDate = (date: Date) =>
   // produce a YYYY-MM-DD string in Nairobi local date so inputs and
@@ -157,9 +139,7 @@ export default function AttendantOnlineClient() {
 
   // receipt totals & quick stats removed from right column
 
-  const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([
-    createReceipt(),
-  ]);
+  // Receipts editor removed from this page; keep receipts summary loaders intact
 
   const [onlineSummary, setOnlineSummary] = useState<OnlineSummaryResponse | null>(
     null,
@@ -363,40 +343,7 @@ export default function AttendantOnlineClient() {
 
   // receiptTotals derived state removed (Quick stats removed)
 
-  const salesRecordsTotals = useMemo(
-    () =>
-      receiptsEditorRows.reduce(
-        (acc, receipt) => {
-          const sale = Number(receipt.sellingTotal || 0);
-          acc.totalSales += sale;
-          acc.totalItems += receipt.items.length;
-          // compute profit for editor rows: if any buyingPrice missing, treat profit as 0
-          const items = receipt.items ?? [];
-          let anyMissing = false;
-          let buyingSum = 0;
-          for (const it of items) {
-            const bp = it?.buyingPrice;
-            if (bp === "" || bp === null || bp === undefined) {
-              anyMissing = true;
-              break;
-            }
-            const n = Number(bp ?? 0);
-            if (Number.isNaN(n)) {
-              anyMissing = true;
-              break;
-            }
-            buyingSum += n;
-          }
-          if (!anyMissing) {
-            acc.totalProfit += Math.max(0, sale - buyingSum);
-          }
-          acc.totalReceipts += 1;
-          return acc;
-        },
-        { totalSales: 0, totalItems: 0, totalReceipts: 0, totalProfit: 0 },
-      ),
-    [receiptsEditorRows],
-  );
+  // salesRecordsTotals (receipts editor derived totals) removed with UI
 
   const onlineTotals = onlineSummary?.totals ?? {
     orders: 0,
@@ -526,55 +473,6 @@ export default function AttendantOnlineClient() {
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
-            <Card className="space-y-6 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Sales records
-                </p>
-                <h2 className="text-xl font-semibold">Add each receipt for today</h2>
-                <p className="text-sm text-slate-400">
-                  Totals are calculated automatically. This mirrors the receipts
-                  capture form at{" "}
-                  <span className="font-semibold text-emerald-300">
-                    ops.betech.co.ke/receipts
-                  </span>
-                  .
-                </p>
-              </div>
-
-              <ReceiptsEditor
-                receipts={receiptsEditorRows}
-                setReceipts={setReceiptsEditorRows}
-                totals={{
-                  totalSales: salesRecordsTotals.totalSales,
-                  totalProfit: 0,
-                  totalItems: salesRecordsTotals.totalItems,
-                }}
-                hideBuyingPrice
-              />
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
-                <p>
-                  Total receipts:{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {salesRecordsTotals.totalReceipts}
-                  </span>
-                </p>
-                <p>
-                  Total sales (KES):{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {formatKES(salesRecordsTotals.totalSales)}
-                  </span>
-                </p>
-                <p>
-                  Total items:{" "}
-                  <span className="font-semibold text-emerald-300">
-                    {salesRecordsTotals.totalItems}
-                  </span>
-                </p>
-              </div>
-            </Card>
-
             <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
               <div className="flex flex-col gap-1">
                 <p className="text-xs uppercase tracking-wide text-slate-400">
