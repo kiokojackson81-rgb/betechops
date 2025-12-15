@@ -59,24 +59,6 @@ type ReceiptStatsRow = {
   items?: any[];
 };
 
-type OnlinePlatformSummary = {
-  key: string;
-  name: string;
-  orders: number;
-  sales: number;
-  commission: number;
-};
-
-type OnlineSummaryResponse = {
-  period: { key: string; label: string; start: string; end: string };
-  totals: {
-    orders: number;
-    sales: number;
-    commission: number;
-  };
-  platforms: OnlinePlatformSummary[];
-};
-
 type ShopSalesRow = {
   id: string;
   name: string;
@@ -160,11 +142,6 @@ export default function AttendantOnlineClient() {
 
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
 
-  const [onlineSummary, setOnlineSummary] = useState<OnlineSummaryResponse | null>(
-    null,
-  );
-  const [summaryLoading, setSummaryLoading] = useState(false);
-
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
   const [shopSalesLoading, setShopSalesLoading] = useState(false);
   const [shopRange, setShopRange] = useState<"period" | "this-week" | "last-week" | "all">(
@@ -174,8 +151,9 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  // Assigned shops + weekly earnings/trading weeks for marketplace overview
-  const [assignedShops, setAssignedShops] = useState<ShopSalesRow[]>([]);
+  const [assignedAccounts, setAssignedAccounts] = useState<
+    Array<{ accountId: string; accountName: string; platform: string }>
+  >([]);
   const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
   const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>("");
@@ -201,41 +179,72 @@ export default function AttendantOnlineClient() {
     }
   }, []);
 
-  const loadAssignedShops = useCallback(async () => {
+  const loadAssignedAccounts = useCallback(async () => {
     try {
-      const res = await fetch("/api/attendants/shops", { cache: "no-store" });
-      if (!res.ok) return;
+      const res = await fetch("/api/attendants/marketplace-assignments", { cache: "no-store" });
+      if (!res.ok) throw new Error("Unable to load assignments");
       const data = await res.json();
-      setAssignedShops(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        setAssignedAccounts(
+          data.map((entry) => ({
+            accountId: entry.accountId,
+            accountName: entry.accountName,
+            platform: entry.platform,
+          })),
+        );
+      } else {
+        setAssignedAccounts([]);
+      }
     } catch (err) {
-      // ignore
+      console.warn("[attendant/online] failed to load assignments", err);
+      setAssignedAccounts([]);
     }
   }, []);
 
-  const loadWeeklyEarnings = useCallback(async (weekKey?: string) => {
-    if (!userId) return;
-    const week = (tradingWeeks || []).find((w) => w.key === (weekKey ?? selectedWeekKey));
-    if (!week) return;
-    setWeeklyLoading(true);
-    try {
-      const params = new URLSearchParams({
-        attendantId: userId,
-        start: formatNairobiParam(week.start, false),
-        end: formatNairobiParam(week.end, true),
-      });
-      const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
-      if (!res.ok) {
-        setWeeklyEarnings(null);
-        return;
+  const loadWeeklyEarnings = useCallback(
+    async (options?: { rangeKey?: string; start?: Date; end?: Date }) => {
+      if (!userId) return;
+      const selectedKey = options?.rangeKey ?? selectedWeekKey;
+      let start = options?.start;
+      let end = options?.end;
+
+      if (!start || !end) {
+        if (selectedKey === "period") {
+          start = marketplacePeriod.start;
+          end = marketplacePeriod.end;
+        } else {
+          const week = tradingWeeks.find((w) => w.key === selectedKey) ?? tradingWeeks[0];
+          if (week) {
+            start = week.start;
+            end = week.end;
+          }
+        }
       }
-      const data = await res.json();
-      setWeeklyEarnings(data);
-    } catch (err) {
-      setWeeklyEarnings(null);
-    } finally {
-      setWeeklyLoading(false);
-    }
-  }, [tradingWeeks, selectedWeekKey, userId]);
+
+      if (!start || !end) return;
+
+      setWeeklyLoading(true);
+      try {
+        const params = new URLSearchParams({
+          attendantId: userId,
+          start: formatNairobiParam(start, false),
+          end: formatNairobiParam(end, true),
+        });
+        const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
+        if (!res.ok) {
+          setWeeklyEarnings(null);
+          return;
+        }
+        const data = await res.json();
+        setWeeklyEarnings(data);
+      } catch (err) {
+        setWeeklyEarnings(null);
+      } finally {
+        setWeeklyLoading(false);
+      }
+    },
+    [marketplacePeriod.start, marketplacePeriod.end, selectedWeekKey, tradingWeeks, userId],
+  );
 
   const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
@@ -306,29 +315,6 @@ export default function AttendantOnlineClient() {
 
   // receiptTotals loader removed
 
-  const loadOnlineSummary = useCallback(async (overrides?: { start?: string; end?: string }) => {
-    if (!userId) return;
-    setSummaryLoading(true);
-    try {
-      const params = new URLSearchParams({
-        start: overrides?.start ?? formatNairobiParam(period.start, false),
-        end: overrides?.end ?? formatNairobiParam(period.end, true),
-      });
-      params.set("attendantId", userId);
-      const res = await fetch(`/api/online/summary?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load online sales summary");
-      const data = (await res.json()) as OnlineSummaryResponse;
-      setOnlineSummary(data);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load online sales summary";
-      showToast(message, "error");
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [period, userId]);
-
   const loadShopSales = useCallback(async () => {
     if (!userId) return;
     setShopSalesLoading(true);
@@ -397,65 +383,46 @@ export default function AttendantOnlineClient() {
     [receiptsEditorRows],
   );
 
-  const onlineTotals = onlineSummary?.totals ?? {
-    orders: 0,
-    sales: 0,
-    commission: 0,
-  };
-  const onlinePlatforms = onlineSummary?.platforms.length
-    ? onlineSummary.platforms
-    : [
-        { key: "JUMIA", name: "Jumia", orders: 0, sales: 0, commission: 0 },
-        { key: "KILIMALL", name: "Kilimall", orders: 0, sales: 0, commission: 0 },
-      ];
-  const averageOrderValue =
-    onlineTotals.orders > 0 ? onlineTotals.sales / onlineTotals.orders : 0;
-
-  const platformTotals = useMemo(() => {
-    const platforms = onlineSummary?.platforms ?? [];
-    const jumia = platforms.find((p) => String(p.key).toUpperCase() === "JUMIA");
-    const kilimall = platforms.find((p) => String(p.key).toUpperCase() === "KILIMALL");
-
-    return {
-      jumiaSales: Number(jumia?.sales || 0),
-      kilimallSales: Number(kilimall?.sales || 0),
-      marketplaceCommission: Number(onlineSummary?.totals?.commission || 0),
-    };
-  }, [onlineSummary]);
-
-  // If weekly earnings rows are available for a selected week, aggregate by platform
+  const weeklyTotals = weeklyEarnings?.totals ?? { orders: 0, sales: 0, commission: 0, shops: 0 };
   const platformAggregates = useMemo(() => {
-    const rows = weeklyEarnings?.rows ?? null;
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      // fallback to onlineSummary platforms
-      return onlinePlatforms.map((p) => ({
-        key: p.key,
-        name: p.name,
-        orders: p.orders ?? 0,
-        sales: p.sales ?? 0,
-        commission: p.commission ?? 0,
-      }));
-    }
-
+    const rows = weeklyEarnings?.rows ?? [];
     const map: Record<string, { key: string; name: string; orders: number; sales: number; commission: number }> = {};
     for (const r of rows) {
       const key = String(r.platform ?? "UNKNOWN").toUpperCase();
       if (!map[key]) {
         map[key] = { key, name: r.platform ?? key, orders: 0, sales: 0, commission: 0 };
       }
-      map[key].orders += Number(r.orders ?? 0);
-      map[key].sales += Number(r.sales ?? 0);
-      map[key].commission += Number(r.commission ?? 0);
+      map[key] = {
+        ...map[key],
+        orders: map[key].orders + Number(r.orders ?? 0),
+        sales: map[key].sales + Number(r.sales ?? 0),
+        commission: map[key].commission + Number(r.commission ?? 0),
+      };
     }
 
-    // Ensure common platforms appear even if zero
-    const common = ["JUMIA", "KILIMALL"];
-    for (const c of common) {
-      if (!map[c]) map[c] = { key: c, name: c.charAt(0) + c.slice(1).toLowerCase(), orders: 0, sales: 0, commission: 0 };
-    }
+    const ensurePlatform = (code: string, label: string) => {
+      if (!map[code]) {
+        map[code] = { key: code, name: label, orders: 0, sales: 0, commission: 0 };
+      }
+    };
+    ensurePlatform("JUMIA", "Jumia");
+    ensurePlatform("KILIMALL", "Kilimall");
 
     return Object.values(map);
-  }, [weeklyEarnings, onlinePlatforms]);
+  }, [weeklyEarnings]);
+
+  const platformTotals = useMemo(() => {
+    const jumia = platformAggregates.find((p) => p.key === "JUMIA");
+    const kilimall = platformAggregates.find((p) => p.key === "KILIMALL");
+
+    return {
+      jumiaSales: Number(jumia?.sales || 0),
+      kilimallSales: Number(kilimall?.sales || 0),
+      marketplaceCommission: Number(weeklyTotals.commission || 0),
+    };
+  }, [platformAggregates, weeklyTotals]);
+
+  const averageOrderValue = weeklyTotals.orders > 0 ? weeklyTotals.sales / weeklyTotals.orders : 0;
 
   const directSales = useMemo(() => {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
@@ -463,17 +430,18 @@ export default function AttendantOnlineClient() {
 
   const receiptsCount = receiptRows.length;
 
-  const totalSales = directSales + (onlineSummary?.totals?.sales ?? 0);
+  const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
   const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
 
   // helper values for UI
-  const assignedShopNames = assignedShops.map((s) => `${s.name}${s.platform ? ` (${s.platform})` : ""}`).join(", ");
-  const weeklyTotals = weeklyEarnings?.totals ?? null;
+  const assignedAccountNames = assignedAccounts
+    .map((s) => `${s.accountName}${s.platform ? ` (${s.platform})` : ""}`)
+    .join(", ");
 
   useEffect(() => {
     fetchUser();
-    void loadAssignedShops();
+    void loadAssignedAccounts();
     // choose default week: previous week to the one containing today (if available)
     const today = new Date();
     const idx = tradingWeeks.findIndex((w) => today >= w.start && today <= w.end);
@@ -483,20 +451,23 @@ export default function AttendantOnlineClient() {
     } else if (tradingWeeks[0]) {
       setSelectedWeekKey(tradingWeeks[0].key);
     }
-  }, [fetchUser, tradingWeeks]);
+  }, [fetchUser, tradingWeeks, loadAssignedAccounts]);
 
   useEffect(() => {
     if (!userId) return;
-    void loadOnlineSummary();
     void loadShopSales();
     void loadReceiptStats();
     void loadPayrollSummary();
+  }, [loadShopSales, loadReceiptStats, loadPayrollSummary, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
     void loadWeeklyEarnings();
-  }, [loadOnlineSummary, loadShopSales, userId]);
+  }, [loadWeeklyEarnings, userId]);
 
   // earnings summary loader removed
 
-  const periodLabel = onlineSummary?.period.label ?? period.label;
+    const periodLabel = weeklyEarnings?.rangeLabel ?? period.label;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -552,7 +523,9 @@ export default function AttendantOnlineClient() {
                 <div className="flex items-center justify-between px-4 py-2">
                   <div>
                     <div className="text-[11px] uppercase tracking-wide text-slate-400">Platform</div>
-                    <div className="text-xs text-slate-400">Assigned: <span className="text-emerald-300">{assignedShopNames || "—"}</span></div>
+                    <div className="text-xs text-slate-400">
+                      Assigned: <span className="text-emerald-300">{assignedAccountNames || "—"}</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <select
@@ -560,16 +533,7 @@ export default function AttendantOnlineClient() {
                       onChange={(e) => {
                         const v = e.target.value;
                         setSelectedWeekKey(v);
-                        if (v === "period") {
-                          // load full marketplace period summary
-                          void loadWeeklyEarnings();
-                          void loadOnlineSummary();
-                          return;
-                        }
-                        void loadWeeklyEarnings(v);
-                        // refresh online summary for the week range as well
-                        const wk = tradingWeeks.find((w) => w.key === v);
-                        if (wk) void loadOnlineSummary({ start: formatNairobiParam(wk.start, false), end: formatNairobiParam(wk.end, true) });
+                        void loadWeeklyEarnings({ rangeKey: v });
                       }}
                       className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none"
                     >
@@ -580,7 +544,7 @@ export default function AttendantOnlineClient() {
                     </select>
                     <button
                       className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100"
-                      onClick={() => void loadOnlineSummary()}
+                      onClick={() => void loadWeeklyEarnings({ rangeKey: selectedWeekKey })}
                     >
                       Refresh online stats
                     </button>
@@ -594,9 +558,9 @@ export default function AttendantOnlineClient() {
                     <div className="text-xs text-slate-400">Commission</div>
                   </div>
                   <div className="mt-2 flex items-center gap-6 text-sm">
-                    <div className="font-semibold text-slate-100">{(weeklyTotals?.orders ?? onlineTotals.orders).toLocaleString()}</div>
-                    <div className="font-semibold text-emerald-300">{formatKES(weeklyTotals?.sales ?? onlineTotals.sales)}</div>
-                    <div className="font-semibold text-slate-100">{formatKES(weeklyTotals?.commission ?? onlineTotals.commission)}</div>
+                    <div className="font-semibold text-slate-100">{weeklyTotals.orders.toLocaleString()}</div>
+                    <div className="font-semibold text-emerald-300">{formatKES(weeklyTotals.sales)}</div>
+                    <div className="font-semibold text-slate-100">{formatKES(weeklyTotals.commission)}</div>
                   </div>
                 </div>
 
@@ -626,19 +590,19 @@ export default function AttendantOnlineClient() {
                   type="button"
                   variant="secondary"
                   className="px-4"
-                  onClick={() => void loadOnlineSummary()}
-                  disabled={summaryLoading}
+                  onClick={() => void loadWeeklyEarnings({ rangeKey: selectedWeekKey })}
+                  disabled={weeklyLoading}
                 >
-                  {summaryLoading ? "Refreshing…" : "Refresh online stats"}
+                  {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
                 </Button>
               </div>
             </Card>
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-            <QuickStatsCard
-              variant="onlineOps"
-              loading={receiptStatsLoading || summaryLoading}
+              <QuickStatsCard
+                variant="onlineOps"
+                loading={receiptStatsLoading || weeklyLoading}
               onlineOps={{
                 periodLabel: periodLabel,
                 jumiaSales: platformTotals.jumiaSales,
