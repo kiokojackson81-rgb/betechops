@@ -74,5 +74,25 @@ export async function GET() {
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-  return NextResponse.json(payload);
+  // Ensure we return an entry for every active shop even if there's no
+  // matching marketplace account. This guarantees the admin UI always
+  // receives selectable shops (avoids empty "Loading shop assignments…").
+  const payloadById = new Map(payload.map((p) => [p.id, p]));
+  for (const shop of shops) {
+    if (!payloadById.has(shop.id)) {
+      payloadById.set(shop.id, {
+        id: shop.id,
+        shopName: shop.name,
+        displayName: shop.name ?? shop.id,
+        platform: shop.platform as Platform,
+        attendants: [],
+        primaryAttendant: null,
+        identifiers: null,
+      });
+    }
+  }
+
+  const finalPayload = Array.from(payloadById.values()).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
+
+  return NextResponse.json(finalPayload);
 }
