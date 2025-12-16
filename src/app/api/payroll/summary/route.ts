@@ -25,14 +25,14 @@ function parsePeriod(url: URL) {
     if (parts.length === 2) {
       const s = new Date(parts[0]);
       const e = new Date(parts[1]);
-      return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}` };
+      return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}`, key: `${s.toISOString()}_${e.toISOString()}` };
     }
   }
 
   if (startParam && endParam) {
     const s = new Date(startParam);
     const e = new Date(endParam);
-    return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}` };
+    return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}`, key: `${s.toISOString()}_${e.toISOString()}` };
   }
 
   return getTradingPeriodFor(new Date());
