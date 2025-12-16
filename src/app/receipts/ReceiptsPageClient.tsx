@@ -23,6 +23,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const size = 10;
+  const [attendantId, setAttendantId] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
@@ -47,6 +48,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
       params.set("includeItems", "true");
       params.set("page", String(nextPage));
       params.set("size", String(size));
+      if (attendantId) params.set("attendantId", attendantId);
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       setResults(data.receipts || []);
@@ -65,10 +67,33 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, view]);
 
+  // On mount, detect attendantId in the URL and open list view filtered to that attendant
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const aid = sp.get("attendantId");
+        if (aid) {
+          setAttendantId(aid);
+          setView("list");
+          // If server-side provided initial receipts, prefer them; otherwise trigger search
+          if (!initial || initial.length === 0) {
+            void doSearch({ page: 1 });
+          } else {
+            setResults(initial || []);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openListView = () => {
     setView("list");
     setTimeout(() => scrollIntoView(listRef), 100);
-    doSearch({ page: 1 });
+    void doSearch({ page: 1 });
   };
 
   const openCreateView = () => {
@@ -111,9 +136,17 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-              <h2 className="text-xl font-semibold text-white">Search receipts</h2>
-              <p className="text-sm text-slate-400">Search by receipt number, customer phone, or attendant name.</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                {attendantId ? "Receipts list" : "Receipts desk"}
+              </p>
+              <h2 className="text-xl font-semibold text-white">
+                {attendantId ? "Read-only receipts history" : "Search receipts"}
+              </h2>
+              <p className="text-sm text-slate-400">
+                {attendantId
+                  ? "Explore every receipt captured across the system and filter by date, range, or attendant."
+                  : "Search by receipt number, customer phone, or attendant name."}
+              </p>
             </div>
             <button
               onClick={openCreateView}
