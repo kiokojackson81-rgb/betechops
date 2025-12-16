@@ -9,13 +9,14 @@ export async function PUT(req: Request, ctx: any) {
   if (!auth.ok) return auth.res;
 
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
   let body: any;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+  const bodyAttendantId = body?.attendantId as string | undefined;
+  const attendantId = (params.id as string | undefined) ?? bodyAttendantId;
 
   const {
     baseSalary,
@@ -29,6 +30,9 @@ export async function PUT(req: Request, ctx: any) {
   if (typeof baseSalary !== "number") return NextResponse.json({ error: "baseSalary required" }, { status: 400 });
 
   try {
+    if (!attendantId) {
+      return NextResponse.json({ error: "attendantId required" }, { status: 400 });
+    }
     const plan = await prisma.attendantCompPlan.upsert({
       where: { attendantId },
       create: {
