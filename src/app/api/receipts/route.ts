@@ -201,12 +201,14 @@ export async function POST(req: NextRequest) {
         }
         const quantity = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
+        const itemSerial = typeof it.serial === "string" ? it.serial.trim() || null : null;
+        const itemWarranty = typeof it.warranty === "string" ? it.warranty.trim() || null : null;
         createdItems.push({
           product,
           quantity,
           unitPrice,
-          serial: it.serial,
-          warranty: it.warranty,
+          serial: itemSerial,
+          warranty: itemWarranty,
           title,
           costPrice: parseNumber(it.costPrice ?? it.buyingPrice ?? 0),
         });
@@ -250,11 +252,12 @@ export async function POST(req: NextRequest) {
 
       const createdOrderItems: any[] = [];
       for (const it of createdItems) {
+        const sanitizedSellingPrice = parseNumber(it.unitPrice);
         const orderItemPayload = {
           orderId: orderUpsert.id,
           productId: it.product.id,
           quantity: Math.max(1, Math.trunc(it.quantity ?? 1)),
-          sellingPrice: it.unitPrice,
+          sellingPrice: sanitizedSellingPrice,
           serial: it.serial ?? null,
           warranty: it.warranty ?? null,
         };
