@@ -518,28 +518,6 @@ export default function AttendantOnlineClient() {
               onlineOps={quickStatsPayload}
             />
 
-            <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-100">Receipts</h2>
-                <span className="text-xs uppercase tracking-wide text-slate-400">Today</span>
-              </div>
-              <p className="text-sm text-slate-400">Browse and create receipts from the central receipts desk.</p>
-              <div className="flex flex-col gap-2">
-                <Link
-                  href="/receipts"
-                  className="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-center text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
-                >
-                  Create receipt
-                </Link>
-                <Link
-                  href="/api/auth/signout"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-center text-xs font-semibold text-slate-200 transition hover:border-slate-500"
-                >
-                  Log out
-                </Link>
-              </div>
-            </Card>
-
             <PayrollEarningsCard summary={payrollSummary} loading={payrollLoading} periodLabel={periodLabel} />
 
             {/* Marketplace Assigned shops card removed as requested */}
