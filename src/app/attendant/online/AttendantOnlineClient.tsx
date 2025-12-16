@@ -151,12 +151,9 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  const [assignedAccounts, setAssignedAccounts] = useState<
-    Array<{ accountId: string; accountName: string; platform: string }>
-  >([]);
   const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
   const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
-  const [selectedWeekKey, setSelectedWeekKey] = useState<string>("");
+  const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
 
@@ -179,49 +176,24 @@ export default function AttendantOnlineClient() {
     }
   }, []);
 
-  const loadAssignedAccounts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/attendants/marketplace-assignments", { cache: "no-store" });
-      if (!res.ok) throw new Error("Unable to load assignments");
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setAssignedAccounts(
-          data.map((entry) => ({
-            accountId: entry.accountId,
-            accountName: entry.accountName,
-            platform: entry.platform,
-          })),
-        );
-      } else {
-        setAssignedAccounts([]);
-      }
-    } catch (err) {
-      console.warn("[attendant/online] failed to load assignments", err);
-      setAssignedAccounts([]);
+  const getActiveWeekRange = useCallback(() => {
+    const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
+    if (keys.includes("period")) {
+      return { start: marketplacePeriod.start, end: marketplacePeriod.end };
     }
-  }, []);
+    const selectedWeeks = tradingWeeks.filter((week) => keys.includes(week.key));
+    if (!selectedWeeks.length) {
+      return { start: marketplacePeriod.start, end: marketplacePeriod.end };
+    }
+    const start = new Date(Math.min(...selectedWeeks.map((week) => week.start.getTime())));
+    const end = new Date(Math.max(...selectedWeeks.map((week) => week.end.getTime())));
+    return { start, end };
+  }, [activeWeekKeys, tradingWeeks, marketplacePeriod]);
 
-  const loadWeeklyEarnings = useCallback(
-    async (options?: { rangeKey?: string; start?: Date; end?: Date }) => {
-      if (!userId) return;
-      const selectedKey = options?.rangeKey ?? selectedWeekKey;
-      let start = options?.start;
-      let end = options?.end;
-
-      if (!start || !end) {
-        if (selectedKey === "period") {
-          start = marketplacePeriod.start;
-          end = marketplacePeriod.end;
-        } else {
-          const week = tradingWeeks.find((w) => w.key === selectedKey) ?? tradingWeeks[0];
-          if (week) {
-            start = week.start;
-            end = week.end;
-          }
-        }
-      }
-
-      if (!start || !end) return;
+  const loadWeeklyEarnings = useCallback(async () => {
+    if (!userId) return;
+    const { start, end } = getActiveWeekRange();
+    if (!start || !end) return;
 
       setWeeklyLoading(true);
       try {
@@ -243,7 +215,7 @@ export default function AttendantOnlineClient() {
         setWeeklyLoading(false);
       }
     },
-    [marketplacePeriod.start, marketplacePeriod.end, selectedWeekKey, tradingWeeks, userId],
+    [getActiveWeekRange, userId],
   );
 
   const loadReceiptStats = useCallback(async () => {
@@ -422,7 +394,6 @@ export default function AttendantOnlineClient() {
     };
   }, [platformAggregates, weeklyTotals]);
 
-  const averageOrderValue = weeklyTotals.orders > 0 ? weeklyTotals.sales / weeklyTotals.orders : 0;
   const accountRows = weeklyEarnings?.rows ?? [];
 
   const directSales = useMemo(() => {
@@ -435,24 +406,15 @@ export default function AttendantOnlineClient() {
 
   const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
 
-  // helper values for UI
-  const assignedAccountNames = assignedAccounts
-    .map((s) => `${s.accountName}${s.platform ? ` (${s.platform})` : ""}`)
-    .join(", ");
-
   useEffect(() => {
     fetchUser();
-    void loadAssignedAccounts();
     // choose default week: previous week to the one containing today (if available)
     const today = new Date();
     const idx = tradingWeeks.findIndex((w) => today >= w.start && today <= w.end);
     const defaultIdx = idx > 0 ? idx - 1 : idx >= 0 ? idx : 0;
-    if (tradingWeeks[defaultIdx]) {
-      setSelectedWeekKey(tradingWeeks[defaultIdx].key);
-    } else if (tradingWeeks[0]) {
-      setSelectedWeekKey(tradingWeeks[0].key);
-    }
-  }, [fetchUser, tradingWeeks, loadAssignedAccounts]);
+    const defaultKey = tradingWeeks[defaultIdx]?.key ?? tradingWeeks[0]?.key ?? "period";
+    setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
+  }, [fetchUser, tradingWeeks]);
 
   useEffect(() => {
     if (!userId) return;
@@ -521,57 +483,67 @@ export default function AttendantOnlineClient() {
               </div>
 
               <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
-                <div className="flex items-center justify-between px-4 py-2">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-wide text-slate-400">Platform</div>
-                    <div className="text-xs text-slate-400">
-                      Assigned: <span className="text-emerald-300">{assignedAccountNames || "—"}</span>
+                <div className="px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales (selected range)</p>
+                      <p className="text-3xl font-semibold text-white">{formatKES(weeklyTotals.sales)}</p>
+                      <p className="text-xs text-slate-500">Commission: {formatKES(weeklyTotals.commission)}</p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="px-4"
+                      onClick={() => void loadWeeklyEarnings()}
+                      disabled={weeklyLoading}
+                    >
+                      {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedWeekKey}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setSelectedWeekKey(v);
-                        void loadWeeklyEarnings({ rangeKey: v });
-                      }}
-                      className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100 outline-none"
-                    >
-                      {tradingWeeks.map((w) => (
-                        <option key={w.key} value={w.key}>{w.label}</option>
-                      ))}
-                      <option value="period">This marketplace period</option>
-                    </select>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Click week chips to combine totals across multiple weeks or choose the marketplace period for everything.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {tradingWeeks.map((week) => (
+                      <button
+                        key={week.key}
+                        type="button"
+                        onClick={() => {
+                          if (activeWeekKeys.includes("period")) {
+                            setActiveWeekKeys([week.key]);
+                            return;
+                          }
+                          if (activeWeekKeys.includes(week.key)) {
+                            const remaining = activeWeekKeys.filter((key) => key !== week.key);
+                            setActiveWeekKeys(remaining.length ? remaining : [week.key]);
+                            return;
+                          }
+                          setActiveWeekKeys([...activeWeekKeys, week.key]);
+                        }}
+                        className={[
+                          "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                          activeWeekKeys.includes(week.key)
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
+                            : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
+                        ].join(" ")}
+                      >
+                        {week.label}
+                      </button>
+                    ))}
                     <button
-                      className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-slate-100"
-                      onClick={() => void loadWeeklyEarnings({ rangeKey: selectedWeekKey })}
+                      type="button"
+                      onClick={() => setActiveWeekKeys(["period"])}
+                      className={[
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                        activeWeekKeys.includes("period")
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
+                          : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
+                      ].join(" ")}
                     >
-                      Refresh online stats
+                      This marketplace period
                     </button>
                   </div>
                 </div>
-                {/* Week / period totals */}
-                <div className="px-4 pb-3 pt-2 text-sm text-slate-300">
-                  <div className="flex flex-wrap gap-6">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Orders</p>
-                      <p className="text-base font-semibold text-slate-100">{weeklyTotals.orders.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Sales</p>
-                      <p className="text-base font-semibold text-emerald-300">{formatKES(weeklyTotals.sales)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Commission</p>
-                      <p className="text-base font-semibold text-slate-100">{formatKES(weeklyTotals.commission)}</p>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs text-slate-500">
-                    Tap a week to refresh the breakdown or choose “This marketplace period” for the full view.
-                  </p>
-                </div>
-
                 <div className="border-t border-slate-800 px-4 pt-3">
                   <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-wide text-slate-400">
                     <span>Accounts</span>
@@ -594,29 +566,6 @@ export default function AttendantOnlineClient() {
                     ))
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-                <div>
-                  <p>
-                    Average order value:{" "}
-                    <span className="font-semibold text-emerald-300">
-                      {formatKES(averageOrderValue || 0)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Helpful for comparing walk-in vs online performance.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="px-4"
-                  onClick={() => void loadWeeklyEarnings({ rangeKey: selectedWeekKey })}
-                  disabled={weeklyLoading}
-                >
-                  {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
-                </Button>
               </div>
             </Card>
           </div>
