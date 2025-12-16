@@ -6,6 +6,16 @@ import { MarketplaceAssignmentRoleValues } from "@/lib/marketplaceAssignment";
 
 type AttendantInfo = { id: string; name: string | null; email: string | null };
 
+type ShopPayload = {
+  id: string;
+  shopName: string | null;
+  displayName: string | null;
+  platform: Platform;
+  attendants: AttendantInfo[];
+  primaryAttendant: AttendantInfo | null;
+  identifiers: { jumiaShopSid: string | null; kilimallShopCode: string | null };
+};
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -85,14 +95,14 @@ export async function GET() {
           jumiaShopSid: account.jumiaShopSid,
           kilimallShopCode: account.kilimallShopCode,
         },
-      };
+        } as ShopPayload;
     })
-    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    .filter((entry): entry is ShopPayload => Boolean(entry));
 
   // Ensure we return an entry for every active shop even if there's no
   // matching marketplace account. This guarantees the admin UI always
   // receives selectable shops (avoids empty "Loading shop assignments…").
-  const payloadById = new Map(payload.map((p) => [p.id, p]));
+  const payloadById = new Map<string, ShopPayload>(payload.map((p) => [p.id, p]));
   for (const shop of shops) {
     if (!payloadById.has(shop.id)) {
       payloadById.set(shop.id, {
@@ -103,7 +113,7 @@ export async function GET() {
         attendants: [],
         // Provide a typed-empty primaryAttendant to satisfy TS inference in
         // production builds. Consumers treat missing attendant as "Unassigned".
-        primaryAttendant: null as AttendantInfo | null,
+        primaryAttendant: null,
         identifiers: { jumiaShopSid: null, kilimallShopCode: null },
       });
     }
@@ -131,7 +141,7 @@ export async function GET() {
         jumiaShopSid: account.jumiaShopSid,
         kilimallShopCode: account.kilimallShopCode,
       },
-    });
+    } as ShopPayload);
   }
 
   const finalPayload = Array.from(payloadById.values())
