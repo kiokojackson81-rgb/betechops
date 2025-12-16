@@ -233,7 +233,8 @@ export default function AttendantOnlineClient() {
         }
       }
 
-      const res = await fetch(`/api/payroll/summary?${params.toString()}`, { cache: "no-store" });
+      // For attendants, use the attendant earnings summary endpoint (existing route)
+      const res = await fetch(`/api/attendant/earnings/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         setPayrollSummary(null);
         return;

@@ -429,7 +429,8 @@ export default function AttendantOnlineOpsClient() {
         }
       }
 
-      const res = await fetch(`/api/payroll/summary?${params.toString()}`, { cache: "no-store" });
+      // Non-admin attendants should use the attendant earnings summary endpoint
+      const res = await fetch(`/api/attendant/earnings/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         // if endpoint missing, show placeholder by clearing summary
         setPayrollSummary(null);
