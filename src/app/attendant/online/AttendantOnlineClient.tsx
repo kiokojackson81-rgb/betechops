@@ -377,13 +377,33 @@ export default function AttendantOnlineClient() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Online Operations</h1>
             <p className="text-sm text-slate-300">
               Track marketplace shop sales, receipt activity, and payroll-linked
               earnings in one place.
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
+            <Link
+              href="/attendant/online"
+              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+            >
+              Receipts
+            </Link>
+            <Link
+              href="/attendant/daily-report"
+              className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-emerald-200 transition hover:bg-emerald-500/30"
+            >
+              Create receipt
+            </Link>
+            <Link
+              href="/api/auth/signout"
+              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+            >
+              Log out
+            </Link>
           </div>
         </header>
 
