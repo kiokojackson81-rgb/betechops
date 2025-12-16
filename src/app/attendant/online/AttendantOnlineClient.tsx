@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
-import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
 import EarningsCard from "@/app/_components/EarningsCard";
@@ -82,20 +81,6 @@ type OnlineEarningsSummary = {
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
-type ReceiptItem = {
-  id: string;
-  productName: string;
-  buyingPrice: number | "";
-};
-
-type ReceiptRow = {
-  id: string;
-  receiptNumber: string;
-  sellingTotal: number | "";
-  paymentMethod: PaymentMethod;
-  items: ReceiptItem[];
-};
-
 const COMMISSION_RATE = 0.02;
 
 const formatKES = (value: number | null | undefined) =>
@@ -120,27 +105,6 @@ export default function AttendantOnlineClient() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   // receipt totals & quick stats removed from right column
-
-  const randomId = () =>
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-
-  const createItem = (): ReceiptItem => ({
-    id: randomId(),
-    productName: "",
-    buyingPrice: "",
-  });
-
-  const createReceipt = (): ReceiptRow => ({
-    id: randomId(),
-    receiptNumber: "",
-    sellingTotal: "",
-    paymentMethod: "",
-    items: [createItem()],
-  });
-
-  const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
 
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
   const [shopSalesLoading, setShopSalesLoading] = useState(false);
@@ -320,41 +284,6 @@ export default function AttendantOnlineClient() {
 
   // receiptTotals derived state removed (Quick stats removed)
 
-  const salesRecordsTotals = useMemo(
-    () =>
-      receiptsEditorRows.reduce(
-        (acc, receipt) => {
-          const sale = Number(receipt.sellingTotal || 0);
-          acc.totalSales += sale;
-          acc.totalItems += receipt.items.length;
-          // compute profit for editor rows: if any buyingPrice missing, treat profit as 0
-          const items = receipt.items ?? [];
-          let anyMissing = false;
-          let buyingSum = 0;
-          for (const it of items) {
-            const bp = it?.buyingPrice;
-            if (bp === "" || bp === null || bp === undefined) {
-              anyMissing = true;
-              break;
-            }
-            const n = Number(bp ?? 0);
-            if (Number.isNaN(n)) {
-              anyMissing = true;
-              break;
-            }
-            buyingSum += n;
-          }
-          if (!anyMissing) {
-            acc.totalProfit += Math.max(0, sale - buyingSum);
-          }
-          acc.totalReceipts += 1;
-          return acc;
-        },
-        { totalSales: 0, totalItems: 0, totalReceipts: 0, totalProfit: 0 },
-      ),
-    [receiptsEditorRows],
-  );
-
   const weeklyTotals = weeklyEarnings?.totals ?? { orders: 0, sales: 0, commission: 0, shops: 0 };
   const platformAggregates = useMemo(() => {
     const rows = weeklyEarnings?.rows ?? [];
@@ -460,17 +389,6 @@ export default function AttendantOnlineClient() {
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
             {/* Render the receipts editor as a single card (it contains its own header/totals) */}
-            <ReceiptsEditor
-              receipts={receiptsEditorRows}
-              setReceipts={setReceiptsEditorRows}
-              totals={{
-                totalSales: salesRecordsTotals.totalSales,
-                totalProfit: 0,
-                totalItems: salesRecordsTotals.totalItems,
-              }}
-              hideBuyingPrice
-            />
-
             <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
               <div className="flex flex-col gap-1">
                 <p className="text-xs uppercase tracking-wide text-slate-400">
