@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Card from "@/app/_components/Card";
 
 function formatKES(value: number) {
@@ -8,15 +9,14 @@ function formatKES(value: number) {
 
 type OnlineOpsQuickStats = {
   periodLabel: string;
-
   jumiaSales: number;
   kilimallSales: number;
-
   directSales: number;
   receiptsCount: number;
-
   totalSales: number;
   commission: number;
+  nextTierTarget?: number;
+  toNextTier?: number;
 };
 
 export function QuickStatsCard({
@@ -28,7 +28,9 @@ export function QuickStatsCard({
   onlineOps?: OnlineOpsQuickStats | null;
   loading?: boolean;
 }) {
+  const [unlocked, setUnlocked] = useState(false);
   if (variant !== "onlineOps") return null;
+
   const rows = onlineOps
     ? [
         { label: "Jumia sales total", value: formatKES(onlineOps.jumiaSales) },
@@ -40,25 +42,57 @@ export function QuickStatsCard({
       ]
     : [];
 
+  const progress =
+    onlineOps?.nextTierTarget && onlineOps.nextTierTarget > 0
+      ? Math.min(1, Math.max(0, (onlineOps.totalSales || 0) / onlineOps.nextTierTarget))
+      : 0;
+
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
-        <p className="text-xs text-slate-400">{onlineOps?.periodLabel ?? (loading ? "Loading…" : "No data")}{loading ? " • Refreshing…" : ""}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
+          <p className="text-xs text-slate-400">
+            {onlineOps?.periodLabel ?? (loading ? "Loading." : "No data")}
+            {loading ? "  Refreshing." : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500"
+          onClick={() => setUnlocked((prev) => !prev)}
+        >
+          <span>{unlocked ? "🔓" : "🔒"}</span>
+          <span>{unlocked ? "Lock" : "Unlock"}</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {rows.length === 0 && (
-          <div className="col-span-1 sm:col-span-2 text-sm text-slate-400">{loading ? "Loading stats…" : "No stats available"}</div>
+          <div className="col-span-1 sm:col-span-2 text-sm text-slate-400">
+            {loading ? "Loading stats." : "No stats available"}
+          </div>
         )}
-        {rows.map((r) => (
-          <div key={r.label} className="rounded-2xl bg-slate-950/60 px-3 py-3">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">{r.label}</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-300">{r.value}</p>
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-2xl bg-slate-950/60 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">{row.label}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-300">{row.value}</p>
           </div>
         ))}
       </div>
 
+      <div className="space-y-2">
+        <p className="text-[10px] uppercase tracking-wide text-slate-400">To next tier</p>
+        <p className="text-base font-semibold text-slate-100">
+          {onlineOps?.toNextTier != null ? formatKES(onlineOps.toNextTier) : "KES 0"} more to hit next tier
+        </p>
+        <div className="h-2 rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-200"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+      </div>
     </Card>
   );
 }

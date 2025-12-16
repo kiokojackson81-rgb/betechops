@@ -5,8 +5,6 @@ import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
-import EarningsCard from "@/app/_components/EarningsCard";
-import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
@@ -335,6 +333,20 @@ export default function AttendantOnlineClient() {
 
   const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
 
+  const nextTierTarget = 1000000;
+  const toNextTier = Math.max(0, nextTierTarget - totalSales);
+  const quickStatsPayload = {
+    periodLabel,
+    jumiaSales: platformTotals.jumiaSales,
+    kilimallSales: platformTotals.kilimallSales,
+    directSales,
+    receiptsCount,
+    totalSales,
+    commission,
+    nextTierTarget,
+    toNextTier,
+  };
+
   useEffect(() => {
     fetchUser();
     // choose default week: previous week to the one containing today (if available)
@@ -489,21 +501,13 @@ export default function AttendantOnlineClient() {
           </div>
 
           <div className="space-y-4 lg:col-span-4">
-              <QuickStatsCard
-                variant="onlineOps"
-                loading={receiptStatsLoading || weeklyLoading}
-              onlineOps={{
-                periodLabel: periodLabel,
-                jumiaSales: platformTotals.jumiaSales,
-                kilimallSales: platformTotals.kilimallSales,
-                directSales,
-                receiptsCount,
-                totalSales,
-                commission,
-              }}
+            <QuickStatsCard
+              variant="onlineOps"
+              loading={receiptStatsLoading || weeklyLoading}
+              onlineOps={quickStatsPayload}
             />
 
-            <EarningsCard summary={mapToEarnings(payrollSummary, receiptsCount)} />
+            <PayrollEarningsCard summary={payrollSummary} loading={payrollLoading} periodLabel={periodLabel} />
 
             {/* Marketplace Assigned shops card removed as requested */}
           </div>
@@ -513,6 +517,57 @@ export default function AttendantOnlineClient() {
   );
 }
 // Marketplace Assigned shops card removed per request
+
+function PayrollEarningsCard({
+  summary,
+  loading,
+  periodLabel,
+}: {
+  summary: any | null;
+  loading: boolean;
+  periodLabel: string;
+}) {
+  const rows = [
+    { label: "Base salary", value: summary?.baseSalary ?? 0 },
+    { label: "Commission", value: summary?.commission ?? 0 },
+    { label: "Chama", value: summary?.chama ?? 0 },
+  ];
+  const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
+  return (
+    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-100">Earnings this period</h2>
+          <p className="text-xs text-slate-400">{periodLabel}</p>
+        </div>
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500"
+        >
+          <span>🔓</span>
+          <span>Unlock</span>
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+        <span>NET PAY</span>
+        <span className="text-emerald-300 font-semibold">{formatKES(netPay)}</span>
+      </div>
+
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
+            <span className="text-base font-semibold text-emerald-300">{formatKES(row.value)}</span>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 function computeRangeDates(
   range: "period" | "this-week" | "last-week" | "all",
