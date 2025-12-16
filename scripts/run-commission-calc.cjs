@@ -1,5 +1,6 @@
-require('ts-node/register');
+// Load tsconfig-paths first so path aliases are registered before ts-node compiles imports
 require('tsconfig-paths/register');
+require('ts-node/register');
 
 (async () => {
   try {

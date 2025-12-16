@@ -12,6 +12,10 @@ This script will:
 Be careful: the script assumes `node` is installed and the repo's `node_modules` are present.
 #>
 
+param(
+  [switch]$Yes
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -43,8 +47,12 @@ if ($pgdump) { Write-OK "pg_dump available at $($pgdump.Path)"; $canPgDump = $tr
 
 # prompt to continue (safety)
 Write-Host "\nAbout to run database dump (if available) and commission job. This will modify commission ledger records." -ForegroundColor Yellow
-$confirm = Read-Host "Type YES to continue"
-if ($confirm -ne 'YES') { Write-Err "Aborting. Type YES to run."; exit 1 }
+if (-not $Yes) {
+  $confirm = Read-Host "Type YES to continue"
+  if ($confirm -ne 'YES') { Write-Err "Aborting. Type YES to run."; exit 1 }
+} else {
+  Write-Warn "Auto-confirm enabled via -Yes"
+}
 
 # 2) DB dump (if possible)
 $dumpFile = $null
@@ -66,24 +74,47 @@ if ($canPgDump) {
 
 # 3) Run commission job
 Write-Host "\n== Running commission job ==" -ForegroundColor Cyan
-$runner = Join-Path -Path "." -ChildPath "scripts/run-commission-calc.cjs"
-if (!(Test-Path $runner)) { Write-Err "Runner $runner not found. Ensure the repository has it (scripts/run-commission-calc.cjs)."; exit 4 }
-
-# capture output to logfile
+# Prefer running the TypeScript runner with ts-node ESM loader when available.
+$runnerTs = Join-Path -Path "." -ChildPath "scripts/run-commission-calc.ts"
+$runnerCjs = Join-Path -Path "." -ChildPath "scripts/run-commission-calc.cjs"
 $logFile = Join-Path -Path "." -ChildPath ("commission-run-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
 Write-Host "Logging runner output to $logFile"
 
 $nodeExe = 'node'
-$startInfo = @($nodeExe, $runner)
-$runCmdNote = "Running node runner and redirecting stdout+stderr to log (PowerShell 7+)" 
-Write-Host $runCmdNote -ForegroundColor Cyan
-try {
-  # Use PowerShell 7+ redirection operator to merge stdout and stderr into one file
-  & $nodeExe $runner *> $logFile
-  $exitCode = $LASTEXITCODE
-} catch {
-  Write-Warn "Failed to start runner: $($_.Exception.Message)"
-  $exitCode = 1
+if (Test-Path $runnerCjs) {
+  Write-Host "Found CommonJS runner; invoking CJS runner first." -ForegroundColor Cyan
+  try {
+    & $nodeExe $runnerCjs *> $logFile
+    $exitCode = $LASTEXITCODE
+  } catch {
+    Write-Warn "Failed to start CJS runner: $($_.Exception.Message)"
+    $exitCode = 1
+  }
+  if ($exitCode -ne 0) {
+    if (Test-Path $runnerTs) {
+      Write-Host "CJS runner failed; attempting TypeScript runner with ts-node/esm loader." -ForegroundColor Cyan
+      $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
+      try {
+        & $nodeExe $cmd *> $logFile
+        $exitCode = $LASTEXITCODE
+      } catch {
+        Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
+        $exitCode = 1
+      }
+    }
+  }
+} elseif (Test-Path $runnerTs) {
+  Write-Host "Only TypeScript runner found; invoking with ts-node/esm loader." -ForegroundColor Cyan
+  $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
+  try {
+    & $nodeExe $cmd *> $logFile
+    $exitCode = $LASTEXITCODE
+  } catch {
+    Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
+    $exitCode = 1
+  }
+} else {
+  Write-Err "No runner found (neither $runnerTs nor $runnerCjs)."; exit 4
 }
 
 if ($exitCode -eq 0) { Write-OK "Commission job completed successfully (exit code 0)." } else { Write-Warn "Commission job exited with code $exitCode. Check $logFile for details." }
