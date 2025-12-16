@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma, Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { Prisma, Platform, WeeklySaleSource, WeeklySaleStatus, PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 
@@ -150,6 +150,70 @@ export async function POST(req: NextRequest) {
       createdBy: actorId,
     },
   });
+
+  try {
+    const receiptNumber = `manual-weekly-${record.id}`;
+    const entryDate = normalizedWeekStart;
+    const dayStart = new Date(entryDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(entryDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
+    const dailyEntryWhere = { submittedById: userId ?? null, date: { gte: dayStart, lte: dayEnd } };
+    let marketingEntry = await prisma.marketingDailyEntry.findFirst({ where: dailyEntryWhere });
+    if (!marketingEntry) {
+      marketingEntry = await prisma.marketingDailyEntry.create({
+        data: {
+          date: entryDate,
+          dayOfWeek,
+          totalSales: 0,
+          totalProfit: 0,
+          submittedById: userId ?? null,
+        },
+      });
+    }
+    const receiptItemsPayload = [
+      {
+        productName: "Manual weekly sale",
+        buyingPrice: 0,
+      },
+    ];
+    let marketingReceipt = await prisma.marketingReceipt.findFirst({
+      where: { dailyEntryId: marketingEntry.id, receiptNumber },
+    });
+    if (marketingReceipt) {
+      await prisma.marketingReceiptItem.deleteMany({ where: { receiptId: marketingReceipt.id } });
+      marketingReceipt = await prisma.marketingReceipt.update({
+        where: { id: marketingReceipt.id },
+        data: {
+          sellingTotal: amount,
+          buyingTotal: 0,
+          paymentMethod: PaymentMethod.MPESA,
+          items: { create: receiptItemsPayload },
+        },
+      });
+    } else {
+      marketingReceipt = await prisma.marketingReceipt.create({
+        data: {
+          dailyEntryId: marketingEntry.id,
+          receiptNumber,
+          sellingTotal: amount,
+          buyingTotal: 0,
+          paymentMethod: PaymentMethod.MPESA,
+          items: { create: receiptItemsPayload },
+        },
+      });
+    }
+    await prisma.marketingDailyEntry.update({
+      where: { id: marketingEntry.id },
+      data: {
+        totalSales: amount,
+        totalProfit: amount,
+      },
+    });
+  } catch (error) {
+    console.error("[weekly-sale] failed to mirror manual entry to marketing ledger", error);
+  }
 
   const enriched = await prisma.weeklySale.findUnique({
     where: { id: record.id },
