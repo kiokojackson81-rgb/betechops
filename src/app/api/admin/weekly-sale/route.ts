@@ -106,9 +106,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   }
 
+  const resolvedShopId = shop.id;
+  const resolvedPlatform = shop.platform;
   const weekKey = {
-    shopId,
-    platform: shop.platform,
+    shopId: resolvedShopId,
+    platform: resolvedPlatform,
     weekStart: normalizedWeekStart,
     weekEnd: normalizedWeekEnd,
   } as Prisma.WeeklySaleShopIdPlatformWeekStartWeekEndCompoundUniqueInput;
@@ -119,7 +121,7 @@ export async function POST(req: NextRequest) {
   const overridingAutomatic = existing?.source === WeeklySaleSource.AUTOMATIC;
   if (overridingAutomatic) {
     console.info(
-      `Manual override replacing automatic weekly sale ${existing.id} for shop ${shopId} (${normalizedWeekStart.toISOString()} - ${normalizedWeekEnd.toISOString()})`,
+      `Manual override replacing automatic weekly sale ${existing.id} for shop ${resolvedShopId} (${normalizedWeekStart.toISOString()} - ${normalizedWeekEnd.toISOString()})`,
     );
   }
 
@@ -128,8 +130,8 @@ export async function POST(req: NextRequest) {
   const record = await prisma.weeklySale.upsert({
     where: { shopId_platform_weekStart_weekEnd: weekKey },
     create: {
-      shopId,
-      platform: shop.platform,
+      shopId: resolvedShopId,
+      platform: resolvedPlatform,
       weekStart: normalizedWeekStart,
       weekEnd: normalizedWeekEnd,
       amount,
