@@ -387,13 +387,13 @@ export default function AttendantOnlineClient() {
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
             <Link
-              href="/attendant/online"
+              href="/receipts"
               className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
             >
               Receipts
             </Link>
             <Link
-              href="/attendant/daily-report"
+              href="/receipts"
               className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-emerald-200 transition hover:bg-emerald-500/30"
             >
               Create receipt
@@ -523,10 +523,10 @@ export default function AttendantOnlineClient() {
                 <h2 className="text-xl font-semibold text-slate-100">Receipts</h2>
                 <span className="text-xs uppercase tracking-wide text-slate-400">Today</span>
               </div>
-              <p className="text-sm text-slate-400">Captured the same way as the daily report desk.</p>
+              <p className="text-sm text-slate-400">Browse and create receipts from the central receipts desk.</p>
               <div className="flex flex-col gap-2">
                 <Link
-                  href="/attendant/daily-report"
+                  href="/receipts"
                   className="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-center text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
                 >
                   Create receipt
