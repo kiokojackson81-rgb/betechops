@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import Card from "@/app/_components/Card";
 
 function formatKES(value: number) {
@@ -28,7 +29,7 @@ export function QuickStatsCard({
   onlineOps?: OnlineOpsQuickStats | null;
   loading?: boolean;
 }) {
-  const [unlocked, setUnlocked] = useState(false);
+  const { locked, toggle } = useCardLock("onlineops:quickstats");
   if (variant !== "onlineOps") return null;
 
   const rows = onlineOps
@@ -57,14 +58,7 @@ export function QuickStatsCard({
             {loading ? "  Refreshing." : ""}
           </p>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500"
-          onClick={() => setUnlocked((prev) => !prev)}
-        >
-          <span>{unlocked ? "🔓" : "🔒"}</span>
-          <span>{unlocked ? "Lock" : "Unlock"}</span>
-        </button>
+        <LockButton locked={locked} onToggle={toggle} />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -76,7 +70,7 @@ export function QuickStatsCard({
         {rows.map((row) => (
           <div key={row.label} className="rounded-2xl bg-slate-950/60 px-3 py-3">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">{row.label}</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-300">{row.value}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-300">{locked ? "•••" : row.value}</p>
           </div>
         ))}
       </div>
@@ -84,7 +78,7 @@ export function QuickStatsCard({
       <div className="space-y-2">
         <p className="text-[10px] uppercase tracking-wide text-slate-400">To next tier</p>
         <p className="text-base font-semibold text-slate-100">
-          {onlineOps?.toNextTier != null ? formatKES(onlineOps.toNextTier) : "KES 0"} more to hit next tier
+          {locked ? "•••" : (onlineOps?.toNextTier != null ? formatKES(onlineOps.toNextTier) : "KES 0")} more to hit next tier
         </p>
         <div className="h-2 rounded-full bg-slate-800">
           <div

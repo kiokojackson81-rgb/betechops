@@ -5,6 +5,7 @@ import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
+import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
@@ -544,32 +545,31 @@ function PayrollEarningsCard({
     { label: "Chama", value: summary?.chama ?? 0 },
   ];
   const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
+  const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-100">Earnings this period</h2>
           <p className="text-xs text-slate-400">{periodLabel}</p>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500"
-        >
-          <span>🔓</span>
-          <span>Unlock</span>
-        </button>
+        {/** Use shared card lock so unlocking persists and auto-lock works */}
+        <div>
+          <LockButton locked={locked} onToggle={toggle} />
+        </div>
       </div>
 
+      {/** mask values when locked */}
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
         <span>NET PAY</span>
-        <span className="text-emerald-300 font-semibold">{formatKES(netPay)}</span>
+        <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(netPay)}</span>
       </div>
 
       <div className="space-y-2">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
             <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
-            <span className="text-base font-semibold text-emerald-300">{formatKES(row.value)}</span>
+            <span className="text-base font-semibold text-emerald-300">{locked ? "•••" : formatKES(row.value)}</span>
           </div>
         ))}
         {rows.length === 0 && (
