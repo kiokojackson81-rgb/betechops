@@ -59,10 +59,6 @@ export function QuickStatsCard({
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2">
-        <p className="text-[10px] uppercase tracking-wide text-slate-400">Earnings this period</p>
-        <p className="mt-1 text-sm font-semibold text-slate-100">{onlineOps?.periodLabel ?? (loading ? "" : "—")}</p>
-      </div>
     </Card>
   );
 }
