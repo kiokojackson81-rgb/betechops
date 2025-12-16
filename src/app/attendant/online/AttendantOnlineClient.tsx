@@ -335,17 +335,6 @@ export default function AttendantOnlineClient() {
 
   const nextTierTarget = 1000000;
   const toNextTier = Math.max(0, nextTierTarget - totalSales);
-  const quickStatsPayload = {
-    periodLabel,
-    jumiaSales: platformTotals.jumiaSales,
-    kilimallSales: platformTotals.kilimallSales,
-    directSales,
-    receiptsCount,
-    totalSales,
-    commission,
-    nextTierTarget,
-    toNextTier,
-  };
 
   useEffect(() => {
     fetchUser();
@@ -372,6 +361,17 @@ export default function AttendantOnlineClient() {
     // earnings summary loader removed
 
   const periodLabel = weeklyEarnings?.rangeLabel ?? period.label;
+  const quickStatsPayload = {
+    periodLabel,
+    jumiaSales: platformTotals.jumiaSales,
+    kilimallSales: platformTotals.kilimallSales,
+    directSales,
+    receiptsCount,
+    totalSales,
+    commission,
+    nextTierTarget,
+    toNextTier,
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
