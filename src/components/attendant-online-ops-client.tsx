@@ -617,8 +617,8 @@ export default function AttendantOnlineOpsClient() {
   }, [onlineSummary]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
-
-  const marketplaceSales = platformTotals.jumiaSales + platformTotals.kilimallSales;
+  // Prefer server-calculated marketplace sales when available (includes payout weeks and weekly manual)
+  const marketplaceSales = Number(onlineSummary?.totals?.marketplaceSales ?? platformTotals.jumiaSales + platformTotals.kilimallSales);
   const tierInfo = useMemo(() => describeMarketplaceTier(marketplaceSales), [marketplaceSales]);
 
   const quickStatsCommission = useMemo(() => {

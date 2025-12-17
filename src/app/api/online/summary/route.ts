@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   if (!accountIds.length) {
     return NextResponse.json({
       period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
-      totals: { orders: 0, sales: 0, commission: 0 },
+      totals: { orders: 0, sales: 0, commission: 0, marketplaceSales: 0, remainingToNextTier: 2000000 },
       platforms: [],
       assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
     });
@@ -83,6 +83,27 @@ export async function GET(req: Request) {
   }
 
   const platforms = Array.from(platformBuckets.values());
+
+  // include marketplace payout weeks and weekly manual sales in marketplace totals
+  let payoutSales = 0;
+  if (accountIds.length) {
+    const payoutWeeks = await prisma.marketplacePayoutWeek.findMany({
+      where: { accountId: { in: accountIds }, weekEnd: { gte: start, lte: end } },
+      select: { grossSales: true },
+    });
+    payoutSales = payoutWeeks.reduce((s, w) => s + Number(w.grossSales ?? 0), 0);
+  }
+
+  const manualSummary = await prisma.weeklySale.aggregate({
+    _sum: { amount: true },
+    where: { userId: auth.user.id, status: "APPROVED", AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }] },
+  });
+  const weeklyManualSales = Number(manualSummary._sum?.amount ?? 0);
+
+  const marketplaceSales = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
+  const totalSalesWithMarketplace = totalSales + weeklyManualSales + payoutSales;
+  const PROGRESS_TARGET = 2_000_000;
+  const remainingToNextTier = Math.max(0, PROGRESS_TARGET - totalSalesWithMarketplace);
 
   return NextResponse.json({
     period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
