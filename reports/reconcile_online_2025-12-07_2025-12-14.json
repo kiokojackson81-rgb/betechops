@@ -1,0 +1,53 @@
+{
+  "range": {
+    "start": "2025-12-07T21:00:00.000Z",
+    "end": "2025-12-14T20:59:59.999Z"
+  },
+  "generatedAt": "2025-12-17T11:02:11.279Z",
+  "orders": [],
+  "weeklySales": [
+    {
+      "id": "cmj8mxj540008l204coyk7ptw",
+      "shopId": "cmj8mxj4v0006l20464yme4sc",
+      "shopName": "JM Latest Collections",
+      "platform": "JUMIA",
+      "amount": 359881,
+      "source": "MANUAL",
+      "status": "APPROVED",
+      "weekStart": "2025-12-07T00:00:00.000Z",
+      "weekEnd": "2025-12-13T00:00:00.000Z"
+    }
+  ],
+  "ledgers": [
+    {
+      "grossCommission": 425,
+      "netCommission": 425,
+      "penalties": 0
+    },
+    {
+      "grossCommission": 28261,
+      "netCommission": 28261,
+      "penalties": 0
+    },
+    {
+      "grossCommission": 825,
+      "netCommission": 825,
+      "penalties": 0
+    },
+    {
+      "grossCommission": 966,
+      "netCommission": 966,
+      "penalties": 0
+    },
+    {
+      "grossCommission": 4901,
+      "netCommission": 4901,
+      "penalties": 0
+    },
+    {
+      "grossCommission": 11486.34,
+      "netCommission": 11486.34,
+      "penalties": 0
+    }
+  ]
+}

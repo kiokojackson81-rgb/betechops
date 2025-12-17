@@ -1,0 +1,14 @@
+
+> betechops@0.1.0 prisma:seed C:\Projects\betechops
+> node prisma/seed.js
+
+Seeded jackson@betech.co.ke
+Seeded jeniffer@betech.co.ke
+Seeded stephen@betech.co.ke
+Seeded brendah@betech.co.ke
+Seeded benjamin@betech.co.ke
+{
+  shop: 'cmimxe38e0000v5no5xe1t9o1',
+  attendant: 'attendant@betech.co.ke',
+  product: 'BAT-100AH'
+}

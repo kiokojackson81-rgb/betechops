@@ -1,0 +1,7 @@
+columns for User: [
+  'isActive',  'createdAt',
+  'updatedAt', 'role',
+  'id',        'password',
+  'email',     'name',
+  'image'
+]

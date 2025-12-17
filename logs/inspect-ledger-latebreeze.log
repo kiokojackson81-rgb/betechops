@@ -1,0 +1,21 @@
+inspect failed: PrismaClientKnownRequestError: 
+Invalid `prisma.commissionLedger.findMany()` invocation in
+C:\Projects\betechops\scripts\inspect-ledger.js:6:48
+
+  3 (async () => {
+  4   const prisma = new PrismaClient();
+  5   try {
+ΓåÆ 6     const rows = await prisma.commissionLedger.findMany(
+The column `CommissionLedger.commissionDirect` does not exist in the current database.
+    at ei.handleRequestError (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:7268)
+    at ei.handleAndLogRequestError (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async C:\Projects\betechops\scripts\inspect-ledger.js:6:18 {
+  code: 'P2022',
+  meta: {
+    modelName: 'CommissionLedger',
+    column: 'CommissionLedger.commissionDirect'
+  },
+  clientVersion: '6.19.0'
+}
