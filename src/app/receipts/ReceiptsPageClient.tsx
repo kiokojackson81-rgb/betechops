@@ -144,25 +144,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
             </button>
           </div>
 
-          {/* Totals panel */}
-          <div className="mt-4 flex items-center justify-end">
-            <div className="rounded-lg bg-slate-950/50 px-4 py-2 text-sm text-slate-200">
-              <div className="flex gap-4">
-                <div>
-                  <div className="text-xs text-slate-400">Receipts</div>
-                  <div className="text-lg font-semibold">{totals.count}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Amount</div>
-                  <div className="text-lg font-semibold">KSh {totals.amount.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Items</div>
-                  <div className="text-lg font-semibold">{totals.items}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Totals panel removed per request */}
           <div className="mt-4">
             <ReceiptFormClient onCreated={handleCreated} showHero={false} />
           </div>
