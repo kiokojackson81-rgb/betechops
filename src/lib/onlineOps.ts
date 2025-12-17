@@ -113,9 +113,10 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     },
   });
 
-  const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
+  const payoutSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
-  const totalTrackedSales = directStats.sales + weeklyManualSales + marketplaceSales;
+  const marketplaceSales = payoutSales + weeklyManualSales;
+  const totalTrackedSales = directStats.sales + marketplaceSales;
 
   const tiers = commissionConfig?.tiers ?? [];
   let nextTierThreshold = COMMISSION_PROGRESS_TARGET;
@@ -141,7 +142,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     salesKes: totalTrackedSales,
     commissionKes: ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? earnings.grossCommission) : earnings.grossCommission,
     itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
-    directSales: directStats.sales + weeklyManualSales,
+    directSales: directStats.sales,
     marketplaceSales,
     progressTarget: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
     nextTierThreshold: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
