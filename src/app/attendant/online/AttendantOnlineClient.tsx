@@ -6,6 +6,7 @@ import Button from "@/app/_components/Button";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+import { useState } from "react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
@@ -81,7 +82,8 @@ type OnlineEarningsSummary = {
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
-const COMMISSION_RATE = 0.02;
+// Preview commission from server (falls back to null until fetched)
+const COMMISSION_RATE = undefined as unknown as number;
 
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -334,7 +336,9 @@ export default function AttendantOnlineClient() {
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
-  const commission = directSales * COMMISSION_RATE + platformTotals.marketplaceCommission;
+  const [previewCommission, setPreviewCommission] = useState<number | null>(null);
+
+  const commission = payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? previewCommission ?? 0;
 
   const nextTierTarget = 1000000;
   const toNextTier = Math.max(0, nextTierTarget - totalSales);
@@ -348,6 +352,31 @@ export default function AttendantOnlineClient() {
     const defaultKey = tradingWeeks[defaultIdx]?.key ?? tradingWeeks[0]?.key ?? "period";
     setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
   }, [fetchUser, tradingWeeks]);
+
+  const loadCommissionPreview = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const params = new URLSearchParams({
+        attendantId: userId,
+        start: formatNairobiParam(period.start, false),
+        end: formatNairobiParam(period.end, true),
+      });
+      const res = await fetch(`/api/online/preview-commission?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setPreviewCommission(null);
+        return;
+      }
+      const data = await res.json();
+      setPreviewCommission(Number(data.totalCommission ?? data.totalCommission ?? 0));
+    } catch (err) {
+      setPreviewCommission(null);
+    }
+  }, [userId, period]);
+
+  useEffect(() => {
+    if (!userId) return;
+    void loadCommissionPreview();
+  }, [loadCommissionPreview, userId, period]);
 
   useEffect(() => {
     if (!userId) return;
