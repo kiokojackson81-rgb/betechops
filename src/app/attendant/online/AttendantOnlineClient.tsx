@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
-import { useState } from "react";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
