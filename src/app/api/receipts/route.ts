@@ -257,10 +257,29 @@ export async function GET(req: NextRequest) {
     ...marketingReceipts.map(mapMarketingRow),
     ...supportReceipts.map(mapSupportRow),
   ];
-  combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const totalCount = combined.length;
-  const paged = combined.slice((page - 1) * size, page * size);
+  const sourcePriority: Record<"pos" | "marketing" | "support", number> = {
+    pos: 3,
+    marketing: 2,
+    support: 1,
+  };
+
+  const uniqueReceipts = new Map<string, typeof combined[number]>();
+  for (const row of combined) {
+    const normalized = row.orderRef ? canonicalReceiptNumber(row.orderRef) : "";
+    const key = normalized || row.id;
+    const existing = uniqueReceipts.get(key);
+    const priority = sourcePriority[row.source ?? "pos"];
+    const existingPriority = existing ? sourcePriority[existing.source ?? "pos"] : 0;
+    if (!existing || priority > existingPriority) {
+      uniqueReceipts.set(key, row);
+    }
+  }
+
+  const deduped = Array.from(uniqueReceipts.values());
+  deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const totalCount = deduped.length;
+  const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
   return NextResponse.json({ receipts: paged, paging: { page, size, totalCount, totalPages } });
 }
