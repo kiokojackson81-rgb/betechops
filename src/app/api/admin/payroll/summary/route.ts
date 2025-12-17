@@ -104,7 +104,7 @@ export async function GET(req: Request) {
     const baseSalary = plan?.baseSalary ?? 0;
     const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
-    const totalEarnings = baseSalary + transportAllowance + commissions + summary.totalBonus;
+    const totalEarnings = baseSalary + transportAllowance + ledgerCommissionTotal + summary.totalBonus;
     const totalDeductions = summary.totalDeduction + penalties;
     const netPay = totalEarnings - totalDeductions;
 
