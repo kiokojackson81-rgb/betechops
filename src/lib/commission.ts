@@ -115,7 +115,7 @@ export function computeSalesCommissionFromTiers(
   for (let i = 0; i < sorted.length; i++) {
     const tier = sorted[i];
 
-    const bandStart = i === 0 ? tier.minSales : previousMaxSales;
+    const bandStart = Math.max(tier.minSales, previousMaxSales);
     const bandEnd = tier.maxSales ?? tier.minSales;
     const bandWidth = Math.max(0, bandEnd - bandStart);
 

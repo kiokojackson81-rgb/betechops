@@ -60,13 +60,15 @@ export interface PeriodCommissionResult {
 }
 
 export function progressiveAmount(totalSales: Money): Money {
-  let commission = 0;
+  // Band 500k-1M produces up to KES 10k (prorated).
   if (totalSales <= 1_000_000) {
     const progress = (totalSales - 500_000) / 500_000;
     return Math.round(clamp01(progress) * 10_000);
   }
-  commission += 10_000;
 
+  let commission = 10_000;
+
+  // Steps 2M..10M pay out the flat amount only once the threshold is reached.
   for (let i = 0; i < STEP_POINTS.length; i += 1) {
     const point = STEP_POINTS[i];
     const reward = STEP_REWARDS[i];
@@ -74,11 +76,7 @@ export function progressiveAmount(totalSales: Money): Money {
       commission += reward;
       continue;
     }
-    const prev = i === 0 ? 1_000_000 : STEP_POINTS[i - 1];
-    const width = point - prev;
-    const progress = (totalSales - prev) / width;
-    commission += clamp01(progress) * reward;
-    return Math.round(commission);
+    break;
   }
 
   return Math.round(commission);

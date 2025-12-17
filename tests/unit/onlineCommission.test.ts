@@ -18,7 +18,7 @@ describe("onlineCommission helpers", () => {
   });
 
   test("progressiveAmount 3.2M", () => {
-    expect(progressiveAmount(3_200_000)).toBe(49_000);
+    expect(progressiveAmount(3_200_000)).toBe(45_000);
   });
 
   test("marketplace progressive no fallback", () => {
@@ -44,6 +44,6 @@ describe("onlineCommission helpers", () => {
       kilimallSales: 0,
     });
 
-    expect(result.totalCommission).toBe(2_000 + progressiveAmount(1_099_089));
+    expect(result.totalCommission).toBe(12_000);
   });
 });

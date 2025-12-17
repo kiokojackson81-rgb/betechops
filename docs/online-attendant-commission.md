@@ -22,15 +22,15 @@ Discretionary and may be withheld for: abandonment of duties, gross misconduct, 
 
 Ladder (shared progressive logic for both paths when applicable):
 
-500k–1M band → KES 10,000 (pro-rated within this band).
+500k-1M band → KES 10,000 (pro-rated within this band).
 
 2M → KES 15,000 (step).
 
 3M → KES 20,000 (step).
 
-4M–10M → KES 20,000 each (steps).
+4M-10M → KES 20,000 each (steps).
 
-Cumulative: add full rewards for all previous steps; pro-rate inside the current open band.
+Cumulative: add full rewards only when the corresponding step threshold is reached; the only prorated window is the first band (500k-1M), so sales between 1M and the next step do not earn additional commission until the next tier is hit.
 
 Max cumulative around KES 185,000 at 10M+.
 
@@ -106,36 +106,28 @@ const STEP_REWARDS = [15_000,   20_000,   20_000,   20_000,   20_000,   20_000, 
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-/** Shared progressive ladder: prorate 500k–1M band, then add full steps, then prorate within the open band up to 10M. */
+/** Shared progressive ladder: prorate 500k-1M band only, then add full steps for subsequent tiers. */
 export function progressiveAmount(totalSales: Money): Money {
-  let commission = 0;
-
-  // Band 500k–1M → 10k prorated
+  // Band 500k-1M → 10k prorated
   if (totalSales <= 1_000_000) {
-    const progress = (totalSales - 500_000) / 500_000; // band width 500k
+    const progress = (totalSales - 500_000) / 500_000;
     return Math.round(clamp01(progress) * 10_000);
-  } else {
-    commission += 10_000;
   }
 
-  // Steps 2M..10M
+  let commission = 10_000;
+
+  // Steps 2M..10M pay only when the threshold is hit.
   for (let i = 0; i < STEP_POINTS.length; i++) {
     const point = STEP_POINTS[i];
     const reward = STEP_REWARDS[i];
-
     if (totalSales >= point) {
-      commission += reward; // full step reached
-    } else {
-      // prorate between prev and this point
-      const prev = i === 0 ? 1_000_000 : STEP_POINTS[i - 1];
-      const width = point - prev;
-      const progress = (totalSales - prev) / width;
-      commission += clamp01(progress) * reward;
-      return Math.round(commission);
+      commission += reward;
+      continue;
     }
+    break;
   }
 
-  return Math.round(commission); // ≥ 10M
+  return Math.round(commission);
 }
 
 /** DIRECT: 5% of profit below 500k; progressive ≥ 500k. */
@@ -273,7 +265,7 @@ test("marketplace progressive no fallback", () => {
 });
 
 test("progressiveAmount 3.2M", () => {
-  expect(progressiveAmount(3_200_000)).toBe(49_000);
+  expect(progressiveAmount(3_200_000)).toBe(45_000);
 });
 
 test("withheld marketplace", () => {
@@ -292,7 +284,7 @@ test("period aggregator sums channels", () => {
     jumiaSales: 1_099_089,     // ≈ 11,486
     kilimallSales: 0,
   });
-  expect(res.totalCommission).toBe(2000 + progressiveAmount(1_099_089));
+  expect(res.totalCommission).toBe(12_000);
 });
 
 Integration Checklist
@@ -312,3 +304,4 @@ Integration Checklist
 One-Line Summary for Engineers
 
 Online attendants’ commission = Direct (5% profit <500k; progressive ≥500k) + Marketplace (memo ladder only; prorated 500k–1M, fixed bonuses each million; discretionary withholding). Save both parts and the sum to payroll, and display the sum on the front-end. for online attendnands 
+

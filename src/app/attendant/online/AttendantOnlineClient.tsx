@@ -391,9 +391,9 @@ export default function AttendantOnlineClient() {
 
     // earnings summary loader removed
 
-  const periodLabel = weeklyEarnings?.rangeLabel ?? period.label;
+  const quickStatsPeriodLabel = weeklyEarnings?.rangeLabel ?? period.label;
   const quickStatsPayload = {
-    periodLabel,
+    periodLabel: quickStatsPeriodLabel,
     jumiaSales: platformTotals.jumiaSales,
     kilimallSales: platformTotals.kilimallSales,
     directSales,
@@ -551,7 +551,7 @@ export default function AttendantOnlineClient() {
               onlineOps={quickStatsPayload}
             />
 
-            <PayrollEarningsCard summary={payrollSummary} loading={payrollLoading} periodLabel={periodLabel} />
+            <PayrollEarningsCard summary={payrollSummary} loading={payrollLoading} periodLabel={period.label} />
 
             {/* Marketplace Assigned shops card removed as requested */}
           </div>
@@ -571,10 +571,16 @@ function PayrollEarningsCard({
   loading: boolean;
   periodLabel: string;
 }) {
+  const commissionValue = Number(
+    summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? 0,
+  );
+  const chamaValue = Number(
+    summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,
+  );
   const rows = [
-    { label: "Base salary", value: summary?.baseSalary ?? 0 },
-    { label: "Commission", value: summary?.commission ?? 0 },
-    { label: "Chama", value: summary?.chama ?? 0 },
+    { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
+    { label: "Commission", value: commissionValue },
+    { label: "Chama", value: chamaValue },
   ];
   const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
   const { locked, toggle } = useCardLock("onlineops:earnings");
