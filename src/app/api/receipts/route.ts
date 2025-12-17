@@ -582,7 +582,18 @@ export async function POST(req: NextRequest) {
         // Create a CommissionLedger entry for audit (best-effort)
         if (tx.commissionLedger) {
           try {
-            await tx.commissionLedger.create({ data: { userId: attendantId, periodStart: period.startDate, periodEnd: period.endDate, grossCommission: Number(salesCommission), penalties: 0, netCommission: Number(salesCommission), detail: { reason: "Immediate release on threshold" } } });
+            await tx.commissionLedger.create({
+              data: {
+                userId: attendantId,
+                periodStart: period.startDate,
+                periodEnd: period.endDate,
+                grossCommission: Number(salesCommission),
+                penalties: 0,
+                netCommission: Number(salesCommission),
+                commissionTotal: Number(salesCommission),
+                detail: { reason: "Immediate release on threshold" },
+              },
+            });
           } catch (e) {
             console.error("Failed to create CommissionLedger entry", e);
           }

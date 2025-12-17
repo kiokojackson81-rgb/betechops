@@ -166,6 +166,7 @@ export async function recomputeSupportCommissionLedger(opts: {
     update: {
       grossCommission: grossCommission.toString(),
       netCommission: netCommission.toString(),
+      commissionTotal: (Number(existingLedger?.commissionTotal ?? 0) - previousSupportCommission + supportCommission).toString(),
       detail: nextDetail,
     },
     create: {
@@ -174,6 +175,7 @@ export async function recomputeSupportCommissionLedger(opts: {
       periodEnd: period.end,
       grossCommission: grossCommission.toString(),
       netCommission: netCommission.toString(),
+      commissionTotal: supportCommission.toString(),
       detail: nextDetail,
     },
   });

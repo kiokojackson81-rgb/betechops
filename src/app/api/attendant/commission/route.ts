@@ -121,6 +121,23 @@ export async function GET() {
     totalItems,
   };
 
+  const existingLedger = await prisma.commissionLedger.findUnique({
+    where: {
+      userId_periodStart_periodEnd: {
+        userId,
+        periodStart: period.startDate,
+        periodEnd: period.endDate,
+      },
+    },
+  });
+
+  const prevDetail = existingLedger?.detail ?? {};
+  const prevSales = Number(prevDetail.salesCommission ?? 0);
+  const prevNew = Number(prevDetail.newProductCommission ?? 0);
+  const prevCopied = Number(prevDetail.copiedCommission ?? 0);
+  const prevEdited = Number(prevDetail.editedCommission ?? 0);
+  const prevSum = prevSales + prevNew + prevCopied + prevEdited;
+
   await prisma.commissionLedger.upsert({
     where: {
       userId_periodStart_periodEnd: {
@@ -132,6 +149,7 @@ export async function GET() {
     update: {
       grossCommission: grossCommission.toString(),
       netCommission: grossCommission.toString(),
+      commissionTotal: (Number(existingLedger?.commissionTotal ?? 0) - prevSum + grossCommission).toString(),
       detail,
     },
     create: {
@@ -140,6 +158,7 @@ export async function GET() {
       periodEnd: period.endDate,
       grossCommission: grossCommission.toString(),
       netCommission: grossCommission.toString(),
+      commissionTotal: grossCommission.toString(),
       detail,
     },
   });

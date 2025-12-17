@@ -19,5 +19,10 @@ export async function GET(req: NextRequest) {
     getOnlineEarningsSummary(auth.user.id),
   ]);
 
+  // Ensure quick stats commission uses authoritative persisted commissionTotal when available
+  if (earnings?.commissionTotal && Number(earnings.commissionTotal) > 0) {
+    quickStats.commissionKes = Number(earnings.commissionTotal);
+  }
+
   return NextResponse.json({ scope, quickStats, earnings });
 }

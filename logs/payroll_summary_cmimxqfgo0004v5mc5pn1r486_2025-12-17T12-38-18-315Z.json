@@ -1,0 +1,43 @@
+{
+  "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+  "name": "Stephen",
+  "email": "stephen@betech.co.ke",
+  "periodLabel": "2025-11-24 - 2025-12-24",
+  "baseSalary": 25000,
+  "transportAllowance": 0,
+  "commission": 10000,
+  "commissionGross": 10000,
+  "bonusTotal": 0,
+  "deductionTotal": 7000,
+  "totalEarnings": 35000,
+  "totalDeductions": 7000,
+  "netPay": 28000,
+  "totalSales": 0,
+  "totalProfit": 0,
+  "adjustmentBreakdown": {
+    "chama": 7000,
+    "lateness": 0,
+    "discipline": 0,
+    "other": 0,
+    "bonus": 0,
+    "commissionTopUp": 0,
+    "penalties": 0
+  },
+  "ledger": {
+    "grossCommission": 10000,
+    "netCommission": 10000,
+    "penalties": 0,
+    "detail": {
+      "onlineWeekly": {
+        "totals": {
+          "entries": 3,
+          "totalSales": 1099089
+        },
+        "periodKey": "2025-11-24_2025-12-24",
+        "commission": 11486.335,
+        "computedAt": "2025-12-16T19:56:44.346Z"
+      },
+      "onlineWeeklyCommission": 11486.335
+    }
+  }
+}

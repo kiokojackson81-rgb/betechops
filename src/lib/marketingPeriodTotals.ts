@@ -308,6 +308,7 @@ export async function recomputeMarketingCommissionLedger(opts: {
     update: {
       grossCommission: grossCommission.toFixed(2),
       netCommission: netCommission.toFixed(2),
+      commissionTotal: (Number(existingLedger?.commissionTotal ?? 0) - previousMarketingCommission + marketingCommission).toFixed(2),
       detail: nextDetail,
     },
     create: {
@@ -316,6 +317,7 @@ export async function recomputeMarketingCommissionLedger(opts: {
       periodEnd: period.end,
       grossCommission: grossCommission.toFixed(2),
       netCommission: netCommission.toFixed(2),
+      commissionTotal: marketingCommission.toFixed(2),
       detail: nextDetail,
     },
   });

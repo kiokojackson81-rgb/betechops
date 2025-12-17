@@ -52,6 +52,7 @@ export type OnlineEarningsSummary = {
   totalEarnings: number;
   totalDeductions: number;
   netPay: number;
+  commissionTotal?: number;
 };
 
 const COMMISSION_PROGRESS_TARGET = 1_000_000;
@@ -101,6 +102,17 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     getOrCreateCommissionPeriod(period.start),
   ]);
 
+  // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
+  const ledger = await prisma.commissionLedger.findUnique({
+    where: {
+      userId_periodStart_periodEnd: {
+        userId: attendantId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+    },
+  });
+
   const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
   const totalTrackedSales = directStats.sales + weeklyManualSales + marketplaceSales;
@@ -127,7 +139,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     periodLabel: period.label,
     receipts: directStats.receipts + weeklyManual.entries,
     salesKes: totalTrackedSales,
-    commissionKes: earnings.grossCommission,
+    commissionKes: ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? earnings.grossCommission) : earnings.grossCommission,
     itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
     directSales: directStats.sales + weeklyManualSales,
     marketplaceSales,
@@ -188,6 +200,19 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const totalDeductions = summed.chamaTotal + summed.latenessTotal + summed.disciplineTotal + summed.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
+  // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
+  const ledger = await prisma.commissionLedger.findUnique({
+    where: {
+      userId_periodStart_periodEnd: {
+        userId: attendantId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+    },
+  });
+
+  const commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : grossCommission;
+
   return {
     periodKey: period.key,
     periodLabel: period.label,
@@ -210,6 +235,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     totalEarnings,
     totalDeductions,
     netPay,
+    commissionTotal,
   };
 }
 

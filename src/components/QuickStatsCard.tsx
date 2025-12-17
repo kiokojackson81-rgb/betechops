@@ -39,7 +39,13 @@ export function QuickStatsCard({
         { label: "Direct sales", value: formatKES(onlineOps.directSales) },
         { label: "Receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
         { label: "Total sales", value: formatKES(onlineOps.totalSales) },
-        { label: "Commission", value: formatKES(onlineOps.commission) },
+        // Prefer persisted commission_total from server (various field names), fall back to computed `commission`.
+        {
+          label: "Commission",
+          value: formatKES(
+            Number((onlineOps as any).commissionTotal ?? (onlineOps as any).commission_total ?? onlineOps.commission ?? 0),
+          ),
+        },
       ]
     : [];
 

@@ -39,9 +39,12 @@ export async function GET(req: Request) {
   const detail = ledger?.detail as Record<string, any> | undefined;
   const supportDetail = detail && typeof detail === "object" ? (detail.support as Record<string, any> | undefined) : undefined;
   let salesCommission: number | null = null;
-  if (supportDetail && typeof supportDetail.commission === "number") {
+  // Prefer authoritative persisted commissionTotal when present
+  if (ledger && Number(ledger.commissionTotal ?? 0) > 0) {
+    salesCommission = Number(ledger.commissionTotal);
+  } else if (supportDetail && typeof supportDetail.commission === "number") {
     salesCommission = supportDetail.commission;
-  } else if (ledger && typeof ledger.grossCommission === "object") {
+  } else if (ledger && Number(ledger.grossCommission ?? 0) > 0) {
     salesCommission = Number(ledger.grossCommission) || 0;
   }
   if (salesCommission === null) {
