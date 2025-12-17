@@ -100,15 +100,17 @@ if (Test-Path $runnerStandalone) {
     Write-Warn "Failed to start CJS runner: $($_.Exception.Message)"
     $exitCode = 1
   }
-  if ($exitCode -ne 0 -and Test-Path $runnerTs) {
-    Write-Host "CJS runner failed; attempting TypeScript runner with ts-node/esm loader." -ForegroundColor Cyan
-    $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
-    try {
-      & $nodeExe $cmd *> $logFile
-      $exitCode = $LASTEXITCODE
-    } catch {
-      Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
-      $exitCode = 1
+  if ($exitCode -ne 0) {
+    if (Test-Path $runnerTs) {
+      Write-Host "CJS runner failed; attempting TypeScript runner with ts-node/esm loader." -ForegroundColor Cyan
+      $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
+      try {
+        & $nodeExe $cmd *> $logFile
+        $exitCode = $LASTEXITCODE
+      } catch {
+        Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
+        $exitCode = 1
+      }
     }
   }
 } elseif (Test-Path $runnerTs) {
