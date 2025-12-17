@@ -577,10 +577,22 @@ function PayrollEarningsCard({
   const chamaValue = Number(
     summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,
   );
+  const bonusValue = Number(summary?.bonusTotal ?? 0);
+  const totalDeductions = Number(summary?.totalDeductions ?? 0);
+  const deductionBreakdown = [
+    ["Chama", chamaValue],
+    ["Lateness", Number(summary?.latenessTotal ?? 0)],
+    ["Discipline", Number(summary?.disciplineTotal ?? 0)],
+    ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
+    ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
+  ].filter(([, amount]) => Number(amount) > 0);
+
   const rows = [
     { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
     { label: "Commission", value: commissionValue },
     { label: "Chama", value: chamaValue },
+    { label: "Bonuses", value: bonusValue },
+    { label: "Deductions", value: totalDeductions },
   ];
   const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
   const { locked, toggle } = useCardLock("onlineops:earnings");
@@ -612,6 +624,19 @@ function PayrollEarningsCard({
         ))}
         {rows.length === 0 && (
           <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
+        )}
+        {deductionBreakdown.length > 0 && (
+          <div className="space-y-1 rounded-2xl bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
+            <p className="uppercase tracking-wide text-[10px]">Payroll deduction summary</p>
+            <div className="text-sm text-slate-200">
+              {deductionBreakdown.map(([label, amount], index) => (
+                <span key={label}>
+                  {label} {locked ? "•••" : formatKES(Number(amount))}
+                  {index < deductionBreakdown.length - 1 && " · "}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </Card>
