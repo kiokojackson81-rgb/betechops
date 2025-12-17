@@ -55,7 +55,7 @@ export type OnlineEarningsSummary = {
   commissionTotal?: number;
 };
 
-const COMMISSION_PROGRESS_TARGET = 1_000_000;
+const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
 
 export async function getMarketplaceAssignmentsForUser(attendantId: string): Promise<MarketplaceAssignmentSummary> {
