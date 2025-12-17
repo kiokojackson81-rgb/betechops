@@ -210,8 +210,8 @@ async function main() {
     }
 
     const existingLedger = await prisma.commissionLedger.findUnique({ where: { userId_periodStart_periodEnd: { userId: user.id, periodStart: period.start, periodEnd: period.end } } });
-    const previousDetail = existingLedger?.detail ?? {};
-    const previousMarketing = previousDetail?.marketing ?? null;
+    const previousDetail: any = existingLedger?.detail ?? {};
+    const previousMarketing: any = previousDetail?.marketing ?? null;
     const previousMarketingCommission = toNumber(previousMarketing?.commission);
     const grossBeforeMarketing = Math.max(0, toNumber(existingLedger?.grossCommission) - previousMarketingCommission);
     const grossCommission = grossBeforeMarketing + marketingCommission;
