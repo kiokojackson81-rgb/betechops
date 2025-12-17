@@ -29,7 +29,7 @@ type OnlinePlatformSummary = {
 
 type OnlineSummaryResponse = {
   period: { key: string; label: string; start: string; end: string };
-  totals: { orders: number; sales: number; commission: number };
+  totals: { orders: number; sales: number; commission: number; marketplaceSales?: number; remainingToNextTier?: number };
   platforms: OnlinePlatformSummary[];
 };
 
