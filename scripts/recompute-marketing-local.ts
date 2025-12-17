@@ -164,9 +164,9 @@ async function main() {
     }
 
     for (const report of reports) {
-      const tasks = typeof report.tasks === 'object' && report.tasks !== null ? report.tasks : {};
-      const metrics = typeof tasks.metrics === 'object' && tasks.metrics !== null ? tasks.metrics : {};
-      const totalsJson = typeof tasks.totals === 'object' && tasks.totals !== null ? tasks.totals : {};
+      const tasks: any = (report as any).tasks ?? {};
+      const metrics: any = tasks.metrics ?? {};
+      const totalsJson: any = tasks.totals ?? {};
       const profitFromMetrics = toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
       const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : 0;
       const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
