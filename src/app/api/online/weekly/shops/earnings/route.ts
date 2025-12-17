@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { MarketplaceReturnStatus, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
@@ -229,7 +230,12 @@ export async function GET(req: Request) {
       const manualSalesAmount = manualSalesByAccount.get(account.id) ?? 0;
       const manualEntryCount = manualEntriesCountByAccount.get(account.id) ?? 0;
       const totalSales = sales + manualSalesAmount;
-      const totalCommission = profit - chargedReturns + manualSalesAmount;
+      // Use the canonical marketplace commission calculation so manual entries
+      // contribute to sales (and therefore ladder computation) rather than
+      // being treated as a direct commission amount. Subtract charged returns
+      // afterwards to reflect attendant-charged returns.
+      const commissionResult = computeMarketplaceCommission(totalSales);
+      const totalCommission = Math.max(0, Number(commissionResult.amount || 0) - chargedReturns);
 
       return {
         shopId: account.id,
