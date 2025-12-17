@@ -77,12 +77,22 @@ Write-Host "\n== Running commission job ==" -ForegroundColor Cyan
 # Prefer running the TypeScript runner with ts-node ESM loader when available.
 $runnerTs = Join-Path -Path "." -ChildPath "scripts/run-commission-calc.ts"
 $runnerCjs = Join-Path -Path "." -ChildPath "scripts/run-commission-calc.cjs"
+$runnerStandalone = Join-Path -Path "." -ChildPath "scripts/run-commission-standalone.cjs"
 $logFile = Join-Path -Path "." -ChildPath ("commission-run-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
 Write-Host "Logging runner output to $logFile"
 
 $nodeExe = 'node'
-if (Test-Path $runnerCjs) {
-  Write-Host "Found CommonJS runner; invoking CJS runner first." -ForegroundColor Cyan
+if (Test-Path $runnerStandalone) {
+  Write-Host "Found standalone runner; invoking standalone runner first." -ForegroundColor Cyan
+  try {
+    & $nodeExe $runnerStandalone *> $logFile
+    $exitCode = $LASTEXITCODE
+  } catch {
+    Write-Warn "Failed to start standalone runner: $($_.Exception.Message)"
+    $exitCode = 1
+  }
+} elseif (Test-Path $runnerCjs) {
+  Write-Host "Found CommonJS runner; invoking CJS runner." -ForegroundColor Cyan
   try {
     & $nodeExe $runnerCjs *> $logFile
     $exitCode = $LASTEXITCODE
@@ -90,17 +100,15 @@ if (Test-Path $runnerCjs) {
     Write-Warn "Failed to start CJS runner: $($_.Exception.Message)"
     $exitCode = 1
   }
-  if ($exitCode -ne 0) {
-    if (Test-Path $runnerTs) {
-      Write-Host "CJS runner failed; attempting TypeScript runner with ts-node/esm loader." -ForegroundColor Cyan
-      $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
-      try {
-        & $nodeExe $cmd *> $logFile
-        $exitCode = $LASTEXITCODE
-      } catch {
-        Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
-        $exitCode = 1
-      }
+  if ($exitCode -ne 0 -and Test-Path $runnerTs) {
+    Write-Host "CJS runner failed; attempting TypeScript runner with ts-node/esm loader." -ForegroundColor Cyan
+    $cmd = @('--loader','ts-node/esm','-r','tsconfig-paths/register',$runnerTs)
+    try {
+      & $nodeExe $cmd *> $logFile
+      $exitCode = $LASTEXITCODE
+    } catch {
+      Write-Warn "Failed to start TS runner: $($_.Exception.Message)"
+      $exitCode = 1
     }
   }
 } elseif (Test-Path $runnerTs) {
@@ -114,7 +122,7 @@ if (Test-Path $runnerCjs) {
     $exitCode = 1
   }
 } else {
-  Write-Err "No runner found (neither $runnerTs nor $runnerCjs)."; exit 4
+  Write-Err "No runner found (none of $runnerStandalone, $runnerTs or $runnerCjs)."; exit 4
 }
 
 if ($exitCode -eq 0) { Write-OK "Commission job completed successfully (exit code 0)." } else { Write-Warn "Commission job exited with code $exitCode. Check $logFile for details." }
