@@ -20,6 +20,8 @@ type ReceiptRow = {
   items?: Array<{ id: string }> | null;
   paymentMethod?: "MPESA" | "CASH" | null;
   paymentStatus?: string | null;
+  source?: "pos" | "marketing" | "support";
+  detailUrl?: string | null;
 };
 
 type ReceiptSummary = {
@@ -668,6 +670,10 @@ export default function ReceiptsAdminClient({
     void loadRows(page);
   };
   const handleRowClick = (row: ReceiptRow) => {
+    if ((row.source ?? "pos") !== "pos") {
+      showToast("Receipt detail view is only available for POS receipts", "info");
+      return;
+    }
     setSelected(row);
     setDrawerOpen(true);
     setDetail(null);
@@ -696,6 +702,10 @@ export default function ReceiptsAdminClient({
 
   const handleSend = async (channel: "email" | "whatsapp") => {
     if (!selected) return;
+    if ((selected.source ?? "pos") !== "pos") {
+      showToast("Sending is only supported for POS receipts", "info");
+      return;
+    }
     setSendingChannel(channel);
     try {
       const res = await fetch(`/api/receipts/${selected.id}/send`, {
@@ -715,6 +725,10 @@ export default function ReceiptsAdminClient({
   };
 
   const sendReceiptById = async (receiptId: string, channel: "email" | "whatsapp") => {
+    if (receiptId.startsWith("marketing-") || receiptId.startsWith("support-")) {
+      showToast("Sending is only supported for POS receipts", "info");
+      return;
+    }
     setSendingChannel(channel);
     try {
       const res = await fetch(`/api/receipts/${receiptId}/send`, {
@@ -754,6 +768,10 @@ export default function ReceiptsAdminClient({
 
   const deleteReceiptById = async (receiptId: string) => {
     if (!allowEdit) return;
+    if (receiptId.startsWith("marketing-") || receiptId.startsWith("support-")) {
+      showToast("Deletion is only supported for POS receipts", "info");
+      return;
+    }
     if (!window.confirm("Delete this receipt and all related records from the system?")) return;
     setDeleting(true);
     try {
@@ -1164,8 +1182,8 @@ export default function ReceiptsAdminClient({
                   </td>
                   <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
                   <td className="px-3 py-3 text-right">
-                    <RowActions
-                      onEdit={() => {
+                      <RowActions
+                        onEdit={() => {
                         // load detail then open edit modal when ready
                         setPendingEditId(row.id);
                         handleRowClick(row);
@@ -1178,7 +1196,7 @@ export default function ReceiptsAdminClient({
                       onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
                       onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
                       onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
-                      disabled={loading}
+                        disabled={loading || (row.source ?? "pos") !== "pos"}
                     />
                   </td>
                 </tr>

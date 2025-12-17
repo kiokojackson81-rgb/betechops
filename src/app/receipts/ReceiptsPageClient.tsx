@@ -14,6 +14,8 @@ type ReceiptRow = {
   total?: number | null;
   status?: string | null;
   items?: any[];
+  source?: "pos" | "marketing" | "support";
+  detailUrl?: string | null;
 };
 
 export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
@@ -322,14 +324,18 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
                       {r.customerName || "-"} - {(r as any).customerPhone || "-"}
                     </div>
                   </div>
+                {r.detailUrl ? (
                   <Link
-                    href={`/receipts/${r.id}`}
+                    href={r.detailUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black"
                   >
                     View receipt
                   </Link>
+                ) : (
+                  <span className="text-xs text-slate-400">Receipt preview unavailable</span>
+                )}
                 </div>
               ))
             )}

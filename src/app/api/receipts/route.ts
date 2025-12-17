@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const q = url.searchParams.get("q") || undefined;
   const phoneParam = url.searchParams.get("phone") || undefined;
-  const docType = url.searchParams.get("docType") || undefined;
+  const docTypeParam = url.searchParams.get("docType") || undefined;
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const attendantId = url.searchParams.get("attendantId") || undefined;
@@ -47,12 +47,20 @@ export async function GET(req: NextRequest) {
   startDefault.setHours(0, 0, 0, 0);
   const endDefault = new Date(today);
   endDefault.setHours(23, 59, 59, 999);
+  const startDate = start ? new Date(start) : startDefault;
+  const endDate = end ? new Date(end) : endDefault;
 
   const where: any = {};
-  if (docType) where.docType = docType.toUpperCase();
+  const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
+  const isMarketingDocType = normalizedDocType === "MARKETING";
+  const isSupportDocType = normalizedDocType === "SUPPORT";
+  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
+  const includeSupportReceipts = !normalizedDocType || isSupportDocType;
+  if (normalizedDocType && !isMarketingDocType && !isSupportDocType) where.docType = normalizedDocType;
   where.generatedAt = {
-    gte: start ? new Date(start) : startDefault,
-    lte: end ? new Date(end) : endDefault,
+    gte: startDate,
+    lte: endDate,
   };
 
   if (q) {
@@ -99,31 +107,31 @@ export async function GET(req: NextRequest) {
     };
   }
 
-  // compute total count for paging (best-effort; tests may mock only findMany)
-  let totalCount: number | null = null;
-  try {
-    if (prisma.receipt && typeof (prisma.receipt as any).count === "function") {
-      totalCount = await (prisma.receipt as any).count({ where });
-    }
-  } catch (e) {
-    totalCount = null;
-  }
+  const posReceipts = includePosReceipts
+    ? await prisma.receipt.findMany({
+        where,
+        include: {
+          order: includeItems
+            ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+            : {
+                select: {
+                  orderNumber: true,
+                  customerName: true,
+                  attendant: { select: { id: true, name: true } },
+                  status: true,
+                  paymentStatus: true,
+                  totalAmount: true,
+                },
+              },
+          issuedBy: { select: { id: true, name: true } },
+        },
+        orderBy: { generatedAt: "desc" },
+      })
+    : [];
 
-  const receipts = await prisma.receipt.findMany({
-    where,
-    orderBy: { generatedAt: "desc" },
-    skip: (page - 1) * size,
-    take: size,
-    include: {
-      order: includeItems
-        ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
-        : { select: { orderNumber: true, customerName: true, attendant: { select: { id: true, name: true } }, status: true, paymentStatus: true, totalAmount: true } },
-      issuedBy: { select: { id: true, name: true } },
-    },
-  });
-
-  const mapped = receipts.map((r) => ({
+  const mapPosRow = (r: any) => ({
     id: r.id,
+    source: "pos" as const,
     orderRef: r.order?.orderNumber,
     docType: r.docType,
     createdAt: r.generatedAt,
@@ -135,12 +143,126 @@ export async function GET(req: NextRequest) {
     items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
     paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
     paymentStatus: (r.order as any)?.paymentStatus ?? null,
-  }));
+    detailUrl: `/receipts/${r.id}`,
+  });
 
-  // if we couldn't get totalCount earlier (test mocks), fall back to results length
-  if (totalCount === null) totalCount = mapped.length;
-  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / size));
-  return NextResponse.json({ receipts: mapped, paging: { page, size, totalCount, totalPages } });
+  const mapMarketingRow = (receipt: any) => ({
+    id: `marketing-${receipt.id}`,
+    source: "marketing" as const,
+    orderRef: receipt.receiptNumber || undefined,
+    docType: "MARKETING",
+    createdAt: receipt.createdAt,
+    customerName: null,
+    customerPhone: null,
+    total: Number(receipt.sellingTotal ?? 0),
+    attendantName:
+      receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
+    status: "COMPLETED",
+    items: includeItems
+      ? (receipt.items || []).map((item: any) => ({
+          id: item.id,
+          productName: item.productName,
+          buyingPrice: Number(item.buyingPrice ?? 0),
+        }))
+      : undefined,
+    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+    paymentStatus: "PAID",
+    detailUrl: null,
+  });
+
+  const mapSupportRow = (receipt: any) => ({
+    id: `support-${receipt.id}`,
+    source: "support" as const,
+    orderRef: receipt.receiptNumber || undefined,
+    docType: "SUPPORT",
+    createdAt: receipt.createdAt,
+    customerName: null,
+    customerPhone: null,
+    total: Number(receipt.sellingTotal ?? 0),
+    attendantName:
+      receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
+    status: "COMPLETED",
+    items: includeItems
+      ? (receipt.items || []).map((item: any) => ({
+          id: item.id,
+          productName: item.productName,
+          buyingPrice: Number(item.buyingPrice ?? 0),
+        }))
+      : undefined,
+    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+    paymentStatus: "PAID",
+    detailUrl: null,
+  });
+
+  const marketingFilter: any = {
+    dailyEntry: {
+      date: { gte: startDate, lte: endDate },
+    },
+  };
+  if (attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
+  if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
+  if (q) {
+    marketingFilter.OR = [
+      { receiptNumber: { contains: q, mode: "insensitive" } },
+      { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
+      { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
+    ];
+  }
+
+  const supportFilter: any = {
+    dailyEntry: {
+      date: { gte: startDate, lte: endDate },
+    },
+  };
+  if (attendantId) supportFilter.dailyEntry.submittedById = attendantId;
+  if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
+  if (q) {
+    supportFilter.OR = [
+      { receiptNumber: { contains: q, mode: "insensitive" } },
+      { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
+      { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
+    ];
+  }
+
+  const marketingReceipts = includeMarketingReceipts
+    ? await prisma.marketingReceipt.findMany({
+        where: marketingFilter,
+        include: {
+          items: true,
+          dailyEntry: {
+            include: {
+              submittedBy: { select: { id: true, name: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const supportReceipts = includeSupportReceipts
+    ? await prisma.supportReceipt.findMany({
+        where: supportFilter,
+        include: {
+          items: true,
+          dailyEntry: {
+            include: {
+              submittedBy: { select: { id: true, name: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const combined = [
+    ...posReceipts.map(mapPosRow),
+    ...marketingReceipts.map(mapMarketingRow),
+    ...supportReceipts.map(mapSupportRow),
+  ];
+  combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const totalCount = combined.length;
+  const paged = combined.slice((page - 1) * size, page * size);
+  const totalPages = Math.max(1, Math.ceil(totalCount / size));
+  return NextResponse.json({ receipts: paged, paging: { page, size, totalCount, totalPages } });
 }
 
 export async function POST(req: NextRequest) {
