@@ -218,7 +218,7 @@ async function main() {
     const penalties = toNumber(existingLedger?.penalties);
     const netCommission = grossCommission - penalties;
 
-    const nextDetail = { ...(existingLedger?.detail ?? {}), marketing: { periodKey: period.key, totals, commission: marketingCommission, computedAt: new Date().toISOString() } };
+    const nextDetail = { ...previousDetail, marketing: { periodKey: period.key, totals, commission: marketingCommission, computedAt: new Date().toISOString() } };
 
     const ledger = await prisma.commissionLedger.upsert({
       where: { userId_periodStart_periodEnd: { userId: user.id, periodStart: period.start, periodEnd: period.end } },
