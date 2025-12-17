@@ -27,6 +27,7 @@ CREATE TYPE "AttendantCategory_new" AS ENUM (
 
 -- 2) User.attendantCategory
 ALTER TABLE "User"
+  ALTER COLUMN "attendantCategory" DROP DEFAULT,
   ALTER COLUMN "attendantCategory" TYPE text USING "attendantCategory"::text;
 
 UPDATE "User"

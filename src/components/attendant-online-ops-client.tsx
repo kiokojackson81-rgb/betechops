@@ -129,8 +129,6 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
   return endOfDay ? `${ymd}T23:59:59.999+03:00` : `${ymd}T00:00:00+03:00`;
 };
 
-const DIRECT_RATE = 0.02;
-
 function startOfWeekMonday(date: Date) {
   const copy = new Date(date);
   const day = copy.getDay();
@@ -150,6 +148,73 @@ function endOfWeekSunday(start: Date) {
 function formatWeekLabel(start: Date, end: Date) {
   const fmt = (value: Date) => value.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   return `${fmt(start)} - ${fmt(end)}`;
+}
+
+const MARKETPLACE_STEP_POINTS = [
+  2_000_000,
+  3_000_000,
+  4_000_000,
+  5_000_000,
+  6_000_000,
+  7_000_000,
+  8_000_000,
+  9_000_000,
+  10_000_000,
+];
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+type MarketplaceTierInfo = {
+  target: number;
+  remaining: number;
+  progress: number;
+  message: string;
+};
+
+function describeMarketplaceTier(sales: number): MarketplaceTierInfo {
+  const normalized = Math.max(0, Math.round(sales));
+
+  if (normalized < 500_000) {
+    const remaining = 500_000 - normalized;
+    return {
+      target: 500_000,
+      remaining,
+      progress: clamp01(normalized / 500_000),
+      message: `${formatKES(remaining)} to enter the ladder`,
+    };
+  }
+
+  if (normalized < 1_000_000) {
+    const remaining = 1_000_000 - normalized;
+    return {
+      target: 1_000_000,
+      remaining,
+      progress: clamp01((normalized - 500_000) / 500_000),
+      message: `${formatKES(remaining)} to finish the 500k–1M band`,
+    };
+  }
+
+  let previous = 1_000_000;
+  for (const point of MARKETPLACE_STEP_POINTS) {
+    if (normalized < point) {
+      const remaining = point - normalized;
+      const progress = clamp01((normalized - previous) / (point - previous));
+      return {
+        target: point,
+        remaining,
+        progress,
+        message: `${formatKES(remaining)} to reach the ${point / 1_000_000}M tier`,
+      };
+    }
+    previous = point;
+  }
+
+  return {
+    target: MARKETPLACE_STEP_POINTS[MARKETPLACE_STEP_POINTS.length - 1],
+    remaining: 0,
+    progress: 1,
+    message: "Top tier reached",
+  };
 }
 
 function buildTradingWeeks(periodStart: Date) {
@@ -551,7 +616,38 @@ export default function AttendantOnlineOpsClient() {
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
-  const commission = directSales * DIRECT_RATE + platformTotals.marketplaceCommission;
+  const marketplaceSales = platformTotals.jumiaSales + platformTotals.kilimallSales;
+  const tierInfo = useMemo(() => describeMarketplaceTier(marketplaceSales), [marketplaceSales]);
+
+  const quickStatsCommission = useMemo(() => {
+    const payrollValue =
+      payrollSummary?.commissionTotal ??
+      payrollSummary?.grossCommission ??
+      payrollSummary?.salesCommission ??
+      ((payrollSummary?.commissionDirect ?? 0) +
+        (payrollSummary?.commissionMarketplaceJumia ?? 0) +
+        (payrollSummary?.commissionMarketplaceKilimall ?? 0));
+
+    if (payrollValue > 0) {
+      return Math.round(payrollValue);
+    }
+
+    return Math.round(Number(onlineSummary?.totals?.commission ?? 0));
+  }, [onlineSummary, payrollSummary]);
+
+  const quickStatsData = {
+    periodLabel: receiptsPeriod.label,
+    jumiaSales: platformTotals.jumiaSales,
+    kilimallSales: platformTotals.kilimallSales,
+    directSales,
+    receiptsCount,
+    totalSales,
+    commission: quickStatsCommission,
+    marketplaceSales,
+    tierProgress: tierInfo.progress,
+    toNextTier: tierInfo.remaining,
+    tierMessage: tierInfo.message,
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -621,15 +717,7 @@ export default function AttendantOnlineOpsClient() {
               <QuickStatsCard
                 variant="onlineOps"
                 loading={receiptStatsLoading || onlineSummaryLoading}
-                onlineOps={{
-                  periodLabel: receiptsPeriod.label,
-                  jumiaSales: platformTotals.jumiaSales,
-                  kilimallSales: platformTotals.kilimallSales,
-                  directSales,
-                  receiptsCount,
-                  totalSales,
-                  commission,
-                }}
+                onlineOps={quickStatsData}
               />
 
               <EarningsCard summary={mapPayrollToEarningsSummary(payrollSummary)} />

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import Card from "@/app/_components/Card";
 
@@ -16,8 +15,9 @@ type OnlineOpsQuickStats = {
   receiptsCount: number;
   totalSales: number;
   commission: number;
-  nextTierTarget?: number;
   toNextTier?: number;
+  tierProgress?: number;
+  tierMessage?: string;
 };
 
 export function QuickStatsCard({
@@ -43,10 +43,7 @@ export function QuickStatsCard({
       ]
     : [];
 
-  const progress =
-    onlineOps?.nextTierTarget && onlineOps.nextTierTarget > 0
-      ? Math.min(1, Math.max(0, (onlineOps.totalSales || 0) / onlineOps.nextTierTarget))
-      : 0;
+  const progress = onlineOps?.tierProgress ?? 0;
 
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -70,7 +67,7 @@ export function QuickStatsCard({
         {rows.map((row) => (
           <div key={row.label} className="rounded-2xl bg-slate-950/60 px-3 py-3">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">{row.label}</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-300">{locked ? "•••" : row.value}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-300">{locked ? "" : row.value}</p>
           </div>
         ))}
       </div>
@@ -78,8 +75,14 @@ export function QuickStatsCard({
       <div className="space-y-2">
         <p className="text-[10px] uppercase tracking-wide text-slate-400">To next tier</p>
         <p className="text-base font-semibold text-slate-100">
-          {locked ? "•••" : (onlineOps?.toNextTier != null ? formatKES(onlineOps.toNextTier) : "KES 0")} more to hit next tier
+          {locked
+            ? ""
+            : onlineOps?.tierMessage ??
+              (onlineOps?.toNextTier != null
+                ? `${formatKES(onlineOps.toNextTier)} more to hit next tier`
+                : "KES 0 more to hit next tier")}
         </p>
+        <p className="text-[11px] text-slate-400">Memo ladder only; discretionary &amp; may be withheld.</p>
         <div className="h-2 rounded-full bg-slate-800">
           <div
             className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-200"
