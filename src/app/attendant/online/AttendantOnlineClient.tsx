@@ -551,7 +551,12 @@ export default function AttendantOnlineClient() {
               onlineOps={quickStatsPayload}
             />
 
-            <PayrollEarningsCard summary={payrollSummary} loading={payrollLoading} periodLabel={period.label} />
+            <PayrollEarningsCard
+              summary={payrollSummary}
+              loading={payrollLoading}
+              periodLabel={period.label}
+              fallbackCommission={commission}
+            />
 
             {/* Marketplace Assigned shops card removed as requested */}
           </div>
@@ -566,13 +571,15 @@ function PayrollEarningsCard({
   summary,
   loading,
   periodLabel,
+  fallbackCommission = 0,
 }: {
   summary: any | null;
   loading: boolean;
   periodLabel: string;
+  fallbackCommission?: number;
 }) {
   const commissionValue = Number(
-    summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? 0,
+    summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? fallbackCommission ?? 0,
   );
   const chamaValue = Number(
     summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,

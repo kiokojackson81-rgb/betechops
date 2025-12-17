@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
+import {
+  summarizeMarketingReportsForPeriod,
+  recomputeMarketingCommissionLedger,
+} from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
 
@@ -30,20 +33,23 @@ export async function GET(req: Request) {
   const now = new Date();
   const period = getTradingPeriodFor(now);
 
-  const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
+  const [summary, marketingSummary, supportSummary] = await Promise.all([
     getEarningsSummaryForUser({ userId }),
     summarizeMarketingReportsForPeriod({ userId, period }),
     getSupportPeriodAggregates({ userId, period }),
-    prisma.commissionLedger.findUnique({
-      where: {
-        userId_periodStart_periodEnd: {
-          userId,
-          periodStart: period.start,
-          periodEnd: period.end,
-        },
-      },
-    }),
   ]);
+
+  await recomputeMarketingCommissionLedger({ userId, period, client: prisma });
+
+  const ledger = await prisma.commissionLedger.findUnique({
+    where: {
+      userId_periodStart_periodEnd: {
+        userId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+    },
+  });
 
   const supportTotals = supportSummary?.aggregates ?? {
     totalSales: 0,
@@ -62,11 +68,16 @@ export async function GET(req: Request) {
   const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
 
   let salesCommission = marketingCommission + supportCommission;
-  if (salesCommission === 0 && ledger) {
-    salesCommission = Number(ledger.grossCommission ?? 0);
-  }
-  if (salesCommission === 0) {
-    salesCommission = summary.salesCommission;
+  // Prefer persisted, authoritative commissionTotal when present
+  if (ledger && Number(ledger.commissionTotal ?? 0) > 0) {
+    salesCommission = Number(ledger.commissionTotal);
+  } else {
+    if (salesCommission === 0 && ledger) {
+      salesCommission = Number(ledger.grossCommission ?? 0);
+    }
+    if (salesCommission === 0) {
+      salesCommission = summary.salesCommission;
+    }
   }
 
   const grossCommission =
@@ -101,6 +112,7 @@ export async function GET(req: Request) {
       ? {
           grossCommission: Number(ledger.grossCommission),
           netCommission: Number(ledger.netCommission),
+          commissionTotal: Number(ledger.commissionTotal ?? 0),
           penalties: Number(ledger.penalties),
           detail: ledger.detail,
         }
