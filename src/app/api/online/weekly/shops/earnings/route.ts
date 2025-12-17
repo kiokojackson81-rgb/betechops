@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { MarketplaceReturnStatus } from "@prisma/client";
+import { MarketplaceReturnStatus, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
@@ -77,7 +77,13 @@ export async function GET(req: Request) {
 
   const accounts = await prisma.marketplaceAccount.findMany({
     where: { id: { in: accountIds }, isActive: true },
-    select: { id: true, displayName: true, platform: true },
+    select: {
+      id: true,
+      displayName: true,
+      platform: true,
+      jumiaShopSid: true,
+      kilimallShopCode: true,
+    },
     orderBy: [{ platform: "asc" }, { displayName: "asc" }],
   });
 
@@ -88,6 +94,96 @@ export async function GET(req: Request) {
       rows: [],
     });
   }
+
+  const normalizeName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+  const normalizeApiKey = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+  const accountById = new Map<string, string>();
+  const accountByName = new Map<string, string>();
+  const accountByJumiaSid = new Map<string, string>();
+  const accountByKilimallCode = new Map<string, string>();
+  accounts.forEach((account) => {
+    accountById.set(account.id, account.id);
+    const normalizedName = normalizeName(account.displayName);
+    if (normalizedName) {
+      accountByName.set(normalizedName, account.id);
+    }
+    const normalizedJumia = normalizeApiKey(account.jumiaShopSid);
+    if (normalizedJumia) {
+      accountByJumiaSid.set(normalizedJumia, account.id);
+    }
+    const normalizedKilimall = normalizeApiKey(account.kilimallShopCode);
+    if (normalizedKilimall) {
+      accountByKilimallCode.set(normalizedKilimall, account.id);
+    }
+  });
+
+  const manualEntries = await prisma.weeklySale.findMany({
+    where: {
+      status: WeeklySaleStatus.APPROVED,
+      source: WeeklySaleSource.MANUAL,
+      AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
+    },
+    select: {
+      id: true,
+      shopId: true,
+      amount: true,
+      platform: true,
+      shop: {
+        select: {
+          id: true,
+          name: true,
+          platform: true,
+          apiConfig: { select: { apiKey: true } },
+        },
+      },
+    },
+  });
+
+  const manualSalesByAccount = new Map<string, number>();
+  const manualEntriesCountByAccount = new Map<string, number>();
+  manualEntries.forEach((entry) => {
+    let matchedAccountId = entry.shopId && accountById.has(entry.shopId) ? entry.shopId : undefined;
+    const normalizedShopName = normalizeName(entry.shop?.name);
+    const platformKey = (entry.platform ?? entry.shop?.platform ?? "").toUpperCase();
+    const apiKey = normalizeApiKey(entry.shop?.apiConfig?.apiKey);
+    if (!matchedAccountId && normalizedShopName && accountByName.has(normalizedShopName)) {
+      matchedAccountId = accountByName.get(normalizedShopName);
+    }
+    if (
+      !matchedAccountId &&
+      apiKey &&
+      platformKey === "JUMIA" &&
+      accountByJumiaSid.has(apiKey)
+    ) {
+      matchedAccountId = accountByJumiaSid.get(apiKey);
+    }
+    if (
+      !matchedAccountId &&
+      apiKey &&
+      platformKey === "KILIMALL" &&
+      accountByKilimallCode.has(apiKey)
+    ) {
+      matchedAccountId = accountByKilimallCode.get(apiKey);
+    }
+
+    if (!matchedAccountId) {
+      return;
+    }
+
+    const amount = Number(entry.amount ?? 0);
+    if (!amount) {
+      return;
+    }
+
+    manualSalesByAccount.set(
+      matchedAccountId,
+      (manualSalesByAccount.get(matchedAccountId) ?? 0) + amount,
+    );
+    manualEntriesCountByAccount.set(
+      matchedAccountId,
+      (manualEntriesCountByAccount.get(matchedAccountId) ?? 0) + 1,
+    );
+  });
 
   const orders = await prisma.marketplaceOrder.findMany({
     where: {
@@ -130,6 +226,10 @@ export async function GET(req: Request) {
         (sum, entry) => sum + Number(entry.expectedAmount ?? 0),
         0,
       );
+      const manualSalesAmount = manualSalesByAccount.get(account.id) ?? 0;
+      const manualEntryCount = manualEntriesCountByAccount.get(account.id) ?? 0;
+      const totalSales = sales + manualSalesAmount;
+      const totalCommission = profit - chargedReturns + manualSalesAmount;
 
       return {
         shopId: account.id,
@@ -138,9 +238,9 @@ export async function GET(req: Request) {
         weekLabel,
         weekStart: start.toISOString(),
         weekEnd: end.toISOString(),
-        sales,
-        commission: profit - chargedReturns,
-        orders: accountOrders.length,
+        sales: totalSales,
+        commission: totalCommission,
+        orders: accountOrders.length + manualEntryCount,
       };
     })
     .sort((a, b) => b.sales - a.sales);
