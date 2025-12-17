@@ -88,6 +88,7 @@ type PayrollSummary = {
   commissionTopUpTotal?: number;
   penalties?: number;
   commissionTotal?: number;
+  salesCommission?: number;
   directCommission?: number;
   marketplaceCommission?: number;
   totalCommission?: number;
