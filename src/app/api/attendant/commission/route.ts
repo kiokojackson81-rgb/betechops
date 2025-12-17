@@ -131,7 +131,7 @@ export async function GET() {
     },
   });
 
-  const prevDetail = existingLedger?.detail ?? {};
+  const prevDetail: any = existingLedger?.detail ?? {};
   const prevSales = Number(prevDetail.salesCommission ?? 0);
   const prevNew = Number(prevDetail.newProductCommission ?? 0);
   const prevCopied = Number(prevDetail.copiedCommission ?? 0);
