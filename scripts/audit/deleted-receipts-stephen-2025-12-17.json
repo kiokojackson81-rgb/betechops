@@ -1,0 +1,22 @@
+{
+  "deletedBy": "operator-script",
+  "timestamp": "2025-12-17T17:55:00Z",
+  "attendantEmail": "stephen@betech.co.ke",
+  "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+  "deletedReceipts": [
+    {
+      "printId": "marketing-cmjab32f3000ml70445ezwgyp",
+      "rawId": "cmjab32f3000ml70445ezwgyp",
+      "source": "marketing",
+      "amount": 80648
+    },
+    {
+      "printId": "marketing-cmjab2i0u000el704orxcaabq",
+      "rawId": "cmjab2i0u000el704orxcaabq",
+      "source": "marketing",
+      "amount": 215636
+    }
+  ],
+  "sum": 296284,
+  "notes": "Deleted two marketing receipts to match UI Direct sales card per ops request. Kept audit in repo for traceability."
+}
