@@ -751,6 +751,11 @@ model CommissionLedger {
   periodStart     DateTime
   periodEnd       DateTime
   grossCommission Decimal  @default(0) @db.Decimal(12, 2)
+  commissionDirect Decimal  @default(0) @db.Decimal(12, 2)
+  commissionMarketplaceJumia Decimal  @default(0) @db.Decimal(12, 2)
+  commissionMarketplaceKilimall Decimal  @default(0) @db.Decimal(12, 2)
+  commissionTotal Decimal  @default(0) @db.Decimal(12, 2)
+  commissionBreakdown Json?
   penalties       Decimal  @default(0) @db.Decimal(12, 2)
   netCommission   Decimal  @default(0) @db.Decimal(12, 2)
   detail          Json?

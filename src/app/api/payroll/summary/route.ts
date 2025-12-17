@@ -182,11 +182,14 @@ export async function GET(req: Request) {
   const detail = ledger?.detail as Record<string, any> | undefined;
   const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
   const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
+  const ledgerCommissionDirect = ledger ? Number(ledger.commissionDirect ?? 0) : 0;
+  const ledgerCommissionMarketplaceJumia = ledger ? Number(ledger.commissionMarketplaceJumia ?? 0) : 0;
+  const ledgerCommissionMarketplaceKilimall = ledger ? Number(ledger.commissionMarketplaceKilimall ?? 0) : 0;
+  const ledgerCommissionTotal = ledger
+    ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? 0)
+    : 0;
 
-  let salesCommission = marketingCommission + supportCommission;
-  if (salesCommission === 0 && ledger) {
-    salesCommission = Number(ledger.grossCommission ?? 0);
-  }
+  let salesCommission = ledgerCommissionTotal || marketingCommission + supportCommission;
   if (salesCommission === 0) {
     salesCommission = summary.salesCommission;
   }
@@ -217,6 +220,11 @@ export async function GET(req: Request) {
     netPay,
     totalItems: combinedItems,
     totalReceipts: combinedReceipts,
+    commissionDirect: ledgerCommissionDirect,
+    commissionMarketplaceJumia: ledgerCommissionMarketplaceJumia,
+    commissionMarketplaceKilimall: ledgerCommissionMarketplaceKilimall,
+    commissionTotal: ledgerCommissionTotal,
+    commissionBreakdown: ledger?.commissionBreakdown ?? null,
     walkInsServed: marketingSummary.totals.walkInsServed,
     walkInsPurchased: marketingSummary.totals.walkInsPurchased,
     ledger: ledger

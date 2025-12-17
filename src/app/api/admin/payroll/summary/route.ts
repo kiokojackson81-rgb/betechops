@@ -91,7 +91,12 @@ export async function GET(req: Request) {
     const ledger = ledgerMap.get(attendant.id);
     const summary = adjustmentsByAttendant.get(attendant.id) ?? baseSummary();
 
-    const commissions = Number(ledger?.netCommission ?? ledger?.grossCommission ?? 0);
+    const commissionDirect = Number(ledger?.commissionDirect ?? 0);
+    const commissionMarketplaceJumia = Number(ledger?.commissionMarketplaceJumia ?? 0);
+    const commissionMarketplaceKilimall = Number(ledger?.commissionMarketplaceKilimall ?? 0);
+    const ledgerCommissionTotal = Number(
+      ledger?.commissionTotal ?? ledger?.netCommission ?? ledger?.grossCommission ?? 0,
+    );
     const grossCommission = Number(ledger?.grossCommission ?? 0);
     const penalties = Number(ledger?.penalties ?? 0);
     const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
@@ -113,8 +118,13 @@ export async function GET(req: Request) {
       isActive: attendant.isActive,
       baseSalary,
       transportAllowance,
-      commission: commissions,
+      commission: ledgerCommissionTotal,
       commissionGross: grossCommission,
+      commissionDirect,
+      commissionMarketplaceJumia,
+      commissionMarketplaceKilimall,
+      commissionTotal: ledgerCommissionTotal,
+      commissionBreakdown: ledger?.commissionBreakdown ?? null,
       bonusTotal: summary.totalBonus,
       deductionTotal: totalDeductions,
       totalEarnings,

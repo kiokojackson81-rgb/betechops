@@ -18,6 +18,11 @@ export type PayrollRow = {
   transportAllowance: number;
   commission: number;
   commissionGross: number;
+  commissionDirect: number;
+  commissionMarketplaceJumia: number;
+  commissionMarketplaceKilimall: number;
+  commissionTotal: number;
+  commissionBreakdown: unknown | null;
   bonusTotal: number;
   deductionTotal: number;
   totalEarnings: number;

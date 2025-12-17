@@ -371,7 +371,7 @@ export default function AttendantOnlineClient() {
     directSales,
     receiptsCount,
     totalSales,
-    commission,
+    commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
     nextTierTarget,
     toNextTier,
   };
@@ -422,6 +422,9 @@ export default function AttendantOnlineClient() {
                 <h2 className="text-lg font-semibold">Marketplace overview</h2>
                 <p className="text-sm text-slate-400">
                   See how your sales are distributed across marketplaces.
+                </p>
+                <p className="text-[11px] text-amber-300">
+                  Marketplace ladder is memo-only and may be withheld for misconduct, abandonment, or resignation.
                 </p>
               </div>
 

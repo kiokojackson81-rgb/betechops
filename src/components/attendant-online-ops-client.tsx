@@ -92,6 +92,10 @@ type PayrollSummary = {
   totalCommission?: number;
   grossCommission?: number;
   netPay?: number;
+  commissionDirect?: number;
+  commissionMarketplaceJumia?: number;
+  commissionMarketplaceKilimall?: number;
+  commissionBreakdown?: unknown | null;
 };
 
 type TradingWeek = {

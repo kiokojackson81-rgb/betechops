@@ -14,17 +14,26 @@ export type PayrollSummary = {
   penalties?: number;
   directCommission?: number;
   marketplaceCommission?: number;
+  commissionDirect?: number;
+  commissionMarketplaceJumia?: number;
+  commissionMarketplaceKilimall?: number;
+  commissionTotal?: number;
   totalCommission?: number;
   grossCommission?: number;
   netPay?: number;
+  commissionBreakdown?: unknown | null;
 };
 
 export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCount = 0) {
   if (!p) return null;
   const baseSalary = p.baseSalary ?? p.salary ?? 0;
-  const direct = p.directCommission ?? 0;
-  const marketplace = p.marketplaceCommission ?? 0;
-  const totalCommission = p.totalCommission ?? p.grossCommission ?? direct + marketplace;
+  const direct = p.commissionDirect ?? p.directCommission ?? 0;
+  const marketplaceJumia = p.commissionMarketplaceJumia ?? 0;
+  const marketplaceKilimall = p.commissionMarketplaceKilimall ?? 0;
+  const marketplaceTotal =
+    marketplaceJumia + marketplaceKilimall > 0 ? marketplaceJumia + marketplaceKilimall : p.marketplaceCommission ?? 0;
+  const totalCommission =
+    p.commissionTotal ?? p.totalCommission ?? p.grossCommission ?? direct + marketplaceTotal;
   const chama = p.chamaTotal ?? p.deductions ?? 0;
   const lateness = p.latenessTotal ?? 0;
   const discipline = p.disciplineTotal ?? 0;
@@ -68,9 +77,13 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
 
 export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string | null): PayrollRow {
   const salary = p?.baseSalary ?? p?.salary ?? 0;
-  const direct = p?.directCommission ?? 0;
-  const marketplace = p?.marketplaceCommission ?? 0;
-  const totalCommission = p?.totalCommission ?? p?.grossCommission ?? direct + marketplace;
+  const direct = p?.commissionDirect ?? p?.directCommission ?? 0;
+  const marketplaceJumia = p?.commissionMarketplaceJumia ?? 0;
+  const marketplaceKilimall = p?.commissionMarketplaceKilimall ?? 0;
+  const marketplaceTotal =
+    marketplaceJumia + marketplaceKilimall > 0 ? marketplaceJumia + marketplaceKilimall : p?.marketplaceCommission ?? 0;
+  const totalCommission =
+    p?.commissionTotal ?? p?.totalCommission ?? p?.grossCommission ?? direct + marketplaceTotal;
 
   const chama = p?.chamaTotal ?? p?.deductions ?? 0;
   const lateness = p?.latenessTotal ?? 0;
@@ -92,6 +105,11 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     transportAllowance: 0,
     commission: totalCommission,
     commissionGross: totalCommission,
+    commissionDirect: direct,
+    commissionMarketplaceJumia: marketplaceJumia,
+    commissionMarketplaceKilimall: marketplaceKilimall,
+    commissionTotal: totalCommission,
+    commissionBreakdown: p?.commissionBreakdown ?? null,
     bonusTotal: bonus + commissionTopUp,
     deductionTotal: deductionTotal,
     totalEarnings: salary + totalCommission + bonus + commissionTopUp,

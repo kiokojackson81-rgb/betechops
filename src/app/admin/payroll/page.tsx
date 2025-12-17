@@ -92,7 +92,12 @@ export default async function AdminPayrollPage() {
     const ledger = ledgerMap.get(attendant.id);
     const summary = adjustmentsByAttendant.get(attendant.id) ?? baseSummary();
 
-    const commissions = Number(ledger?.netCommission ?? ledger?.grossCommission ?? 0);
+    const commissionDirect = Number(ledger?.commissionDirect ?? 0);
+    const commissionMarketplaceJumia = Number(ledger?.commissionMarketplaceJumia ?? 0);
+    const commissionMarketplaceKilimall = Number(ledger?.commissionMarketplaceKilimall ?? 0);
+    const commissionTotal = Number(
+      ledger?.commissionTotal ?? ledger?.netCommission ?? ledger?.grossCommission ?? 0,
+    );
     const grossCommission = Number(ledger?.grossCommission ?? 0);
     const penalties = Number(ledger?.penalties ?? 0);
     const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
@@ -100,7 +105,7 @@ export default async function AdminPayrollPage() {
     const baseSalary = plan?.baseSalary ?? 0;
     const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
-    const totalEarnings = baseSalary + transportAllowance + commissions + summary.totalBonus;
+    const totalEarnings = baseSalary + transportAllowance + commissionTotal + summary.totalBonus;
     const totalDeductions = summary.totalDeduction + penalties;
     const netPay = totalEarnings - totalDeductions;
 
@@ -114,7 +119,7 @@ export default async function AdminPayrollPage() {
       isActive: attendant.isActive,
       baseSalary,
       transportAllowance,
-      commission: commissions,
+      commission: commissionTotal,
       commissionGross: grossCommission,
       bonusTotal: summary.totalBonus,
       deductionTotal: totalDeductions,
@@ -124,6 +129,11 @@ export default async function AdminPayrollPage() {
       totalSales: Number(detail?.totalSales ?? 0),
       totalProfit: Number(detail?.totalProfit ?? 0),
       adjustmentBreakdown: summary.breakdown as AdjustmentBreakdown,
+      commissionDirect,
+      commissionMarketplaceJumia,
+      commissionMarketplaceKilimall,
+      commissionTotal,
+      commissionBreakdown: ledger?.commissionBreakdown ?? null,
     };
   });
 
