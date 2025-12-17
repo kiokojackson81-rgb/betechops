@@ -648,7 +648,7 @@ export default function AttendantOnlineOpsClient() {
     marketplaceSales,
     tierProgress: tierInfo.progress,
     toNextTier: tierInfo.remaining,
-    tierMessage: tierInfo.message,
+    tierMessage: undefined,
   };
 
   return (

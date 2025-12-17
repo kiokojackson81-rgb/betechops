@@ -1,0 +1,58 @@
+{
+  "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+  "name": "Stephen",
+  "email": "stephen@betech.co.ke",
+  "periodLabel": "2025-11-25 - 2025-12-24",
+  "baseSalary": 25000,
+  "transportAllowance": 0,
+  "commission": 10000,
+  "commissionGross": 10000,
+  "bonusTotal": 0,
+  "deductionTotal": 7000,
+  "totalEarnings": 35000,
+  "totalDeductions": 7000,
+  "netPay": 28000,
+  "totalSales": 0,
+  "totalProfit": 0,
+  "adjustmentBreakdown": {
+    "chama": 7000,
+    "lateness": 0,
+    "discipline": 0,
+    "other": 0,
+    "bonus": 0,
+    "commissionTopUp": 0,
+    "penalties": 0
+  },
+  "ledger": {
+    "grossCommission": 10000,
+    "netCommission": 10000,
+    "penalties": 0,
+    "detail": {
+      "marketing": {
+        "totals": {
+          "totalSales": 0,
+          "totalProfit": 0
+        },
+        "periodKey": "2025-11-25_2025-12-24",
+        "commission": 10000,
+        "computedAt": "2025-12-17T17:00:22.633Z",
+        "correctedAt": "2025-12-17T17:08:53.031Z",
+        "correctedBy": "ops"
+      }
+    }
+  },
+  "adjustmentsFound": 1,
+  "adjustments": [
+    {
+      "id": "cmipv85g20001js04pepbcjdk",
+      "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+      "periodKey": "2025-11-25_2025-12-24",
+      "periodLabel": "Nov 25, 2025 – Dec 24, 2025",
+      "adjustmentType": "CHAMA",
+      "label": "Chama",
+      "amount": 7000,
+      "createdById": "",
+      "createdAt": "2025-12-03T10:29:54.963Z"
+    }
+  ]
+}

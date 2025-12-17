@@ -60,8 +60,8 @@ async function main() {
       const total = (r.totals && typeof r.totals.total === 'number') ? r.totals.total : (r.order ? Number(r.order.totalAmount || 0) : 0);
       return { source: 'pos', id: r.id, orderNumber: r.order?.orderNumber ?? null, total, generatedAt: r.generatedAt, issuedBy: r.issuedBy?.email ?? null };
     });
-    const mRows = marketingReceipts.map((r) => ({ source: 'marketing', id: `marketing-${r.id}`, rawId: r.id, orderNumber: r.receiptNumber ?? null, total: Number(r.sellingTotal || 0), generatedAt: r.createdAt, issuedBy: r.dailyEntry?.submittedBy?.email ?? null }));
-    const sRows = supportReceipts.map((r) => ({ source: 'support', id: `support-${r.id}`, rawId: r.id, orderNumber: r.receiptNumber ?? null, total: Number(r.sellingTotal || 0), generatedAt: r.createdAt, issuedBy: r.dailyEntry?.submittedBy?.email ?? null }));
+    const mRows = marketingReceipts.map((r) => ({ source: 'marketing', id: `marketing-${r.id}`, rawId: r.id, dailyEntryId: r.dailyEntryId ?? (r.dailyEntry ? r.dailyEntry.id : null), orderNumber: r.receiptNumber ?? null, total: Number(r.sellingTotal || 0), generatedAt: r.createdAt, issuedBy: r.dailyEntry?.submittedBy?.email ?? null }));
+    const sRows = supportReceipts.map((r) => ({ source: 'support', id: `support-${r.id}`, rawId: r.id, dailyEntryId: r.dailyEntryId ?? (r.dailyEntry ? r.dailyEntry.id : null), orderNumber: r.receiptNumber ?? null, total: Number(r.sellingTotal || 0), generatedAt: r.createdAt, issuedBy: r.dailyEntry?.submittedBy?.email ?? null }));
 
     const rows = [...posRows, ...mRows, ...sRows];
     console.log('Found', rows.length, 'receipt(s):');
@@ -93,19 +93,36 @@ async function main() {
 
     console.log('\nConfirm=1 detected. Deleting selected receipts in a single transaction...');
     await p.$transaction(async (tx) => {
-      // delete marketing/support items first
+      const marketingEntryIdsToRecalc = new Set();
+      const supportEntryIdsToRecalc = new Set();
+
+      // handle marketing/support by raw id (delete items + receipt), track affected dailyEntry ids
       for (const r of rows) {
         if (!toDelete.includes(r.id)) continue;
         if (r.source === 'marketing') {
-          const { cleanupMarketingReceipts } = require('../src/lib/marketingReceiptCleanup');
-          await cleanupMarketingReceipts(tx, undefined, r.rawId);
-          console.log('Deleted marketing receipt', r.id, r.rawId);
+          const rawId = r.rawId;
+          const mr = await tx.marketingReceipt.findUnique({ where: { id: rawId } });
+          if (!mr) {
+            console.warn('Marketing receipt not found, skipping', rawId);
+            continue;
+          }
+          if (mr.dailyEntryId) marketingEntryIdsToRecalc.add(mr.dailyEntryId);
+          await tx.marketingReceiptItem.deleteMany({ where: { receiptId: rawId } });
+          await tx.marketingReceipt.delete({ where: { id: rawId } });
+          console.log('Deleted marketing receipt', r.id, rawId);
           continue;
         }
         if (r.source === 'support') {
-          const { cleanupSupportReceipts } = require('../src/lib/marketingReceiptCleanup');
-          await cleanupSupportReceipts(tx, undefined, r.rawId);
-          console.log('Deleted support receipt', r.id, r.rawId);
+          const rawId = r.rawId;
+          const sr = await tx.supportReceipt.findUnique({ where: { id: rawId } });
+          if (!sr) {
+            console.warn('Support receipt not found, skipping', rawId);
+            continue;
+          }
+          if (sr.dailyEntryId) supportEntryIdsToRecalc.add(sr.dailyEntryId);
+          await tx.supportReceiptItem.deleteMany({ where: { receiptId: rawId } });
+          await tx.supportReceipt.delete({ where: { id: rawId } });
+          console.log('Deleted support receipt', r.id, rawId);
           continue;
         }
         // pos receipts: find order and cascade delete (similar to API route)
@@ -122,9 +139,21 @@ async function main() {
           }
           const orderId = order.id;
           if (order.orderNumber) {
-            const { cleanupMarketingReceipts, cleanupSupportReceipts } = require('../src/lib/marketingReceiptCleanup');
-            try { await cleanupMarketingReceipts(tx, order.orderNumber); } catch (e) {}
-            try { await cleanupSupportReceipts(tx, order.orderNumber); } catch (e) {}
+            // cleanup marketing/support entries for this orderNumber
+            const norm = order.orderNumber;
+            // delete any marketing receipts that match this orderNumber
+            const mToDel = await tx.marketingReceipt.findMany({ where: { receiptNumber: norm }, select: { id: true, dailyEntryId: true } });
+            for (const md of mToDel) {
+              if (md.dailyEntryId) marketingEntryIdsToRecalc.add(md.dailyEntryId);
+              await tx.marketingReceiptItem.deleteMany({ where: { receiptId: md.id } });
+              await tx.marketingReceipt.delete({ where: { id: md.id } });
+            }
+            const sToDel = await tx.supportReceipt.findMany({ where: { receiptNumber: norm }, select: { id: true, dailyEntryId: true } });
+            for (const sd of sToDel) {
+              if (sd.dailyEntryId) supportEntryIdsToRecalc.add(sd.dailyEntryId);
+              await tx.supportReceiptItem.deleteMany({ where: { receiptId: sd.id } });
+              await tx.supportReceipt.delete({ where: { id: sd.id } });
+            }
           }
           const itemIds = (order.items || []).map(it => it.id);
           if (itemIds.length) await tx.commissionEarning.deleteMany({ where: { orderItemId: { in: itemIds } } });
@@ -139,6 +168,44 @@ async function main() {
           try { await tx.actionLog.create({ data: { actorId: 'operator-script', entity: 'Receipt', entityId: r.id, action: 'DELETE', before: receipt, after: null } }); } catch (e) {}
           console.log('Deleted pos receipt', r.id, 'order', orderId);
         }
+      }
+
+      // Recalc marketing entries totals
+      for (const entryId of marketingEntryIdsToRecalc) {
+        const remaining = await tx.marketingReceipt.findMany({ where: { dailyEntryId: entryId }, include: { items: true } });
+        const totalSales = remaining.reduce((s, rr) => s + Number(rr.sellingTotal ?? 0), 0);
+        const totalProfit = remaining.reduce((sum, rr) => {
+          const items = rr.items ?? [];
+          const allItemsPriced = items.length > 0 && items.every(it => Number(it.buyingPrice ?? 0) > 0);
+          const aggregateCost = Number((rr).buyingTotal ?? 0);
+          if (aggregateCost > 0 || allItemsPriced) {
+            const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+            const costToUse = aggregateCost > 0 ? aggregateCost : buying;
+            return sum + (Number(rr.sellingTotal ?? 0) - costToUse);
+          }
+          return sum;
+        }, 0);
+        await tx.marketingDailyEntry.update({ where: { id: entryId }, data: { totalSales, totalProfit } });
+        console.log('Recalced marketing entry', entryId, 'totals', totalSales, totalProfit);
+      }
+
+      // Recalc support entries totals
+      for (const entryId of supportEntryIdsToRecalc) {
+        const remaining = await tx.supportReceipt.findMany({ where: { dailyEntryId: entryId }, include: { items: true } });
+        const totalSales = remaining.reduce((s, rr) => s + Number(rr.sellingTotal ?? 0), 0);
+        const totalProfit = remaining.reduce((sum, rr) => {
+          const items = rr.items ?? [];
+          const allItemsPriced = items.length > 0 && items.every(it => Number(it.buyingPrice ?? 0) > 0);
+          const aggregateCost = Number((rr).buyingTotal ?? 0);
+          if (aggregateCost > 0 || allItemsPriced) {
+            const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+            const costToUse = aggregateCost > 0 ? aggregateCost : buying;
+            return sum + (Number(rr.sellingTotal ?? 0) - costToUse);
+          }
+          return sum;
+        }, 0);
+        await tx.supportDailyEntry.update({ where: { id: entryId }, data: { totalSales, totalProfit } });
+        console.log('Recalced support entry', entryId, 'totals', totalSales, totalProfit);
       }
     });
 
