@@ -150,7 +150,11 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
     };
 
     if (shouldReplace()) {
-      dedupedMap.set(record.key, record);
+      const merged = { ...record };
+      if (existing?.paymentMethod) {
+        merged.paymentMethod = existing.paymentMethod;
+      }
+      dedupedMap.set(record.key, merged);
     }
   }
 
