@@ -118,8 +118,12 @@ export async function GET(req: Request) {
     platforms,
     assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
     marketplace: {
-      jumiaSales: platforms.find((p) => p.key === "JUMIA")?.sales ?? 0,
-      kilimallSales: platforms.find((p) => p.key === "KILIMALL")?.sales ?? 0,
+      jumiaSales: platforms
+        .filter((p) => (p.key ?? "").toUpperCase().includes("JUMIA"))
+        .reduce((s, p) => s + Number(p.sales || 0), 0),
+      kilimallSales: platforms
+        .filter((p) => (p.key ?? "").toUpperCase().includes("KILIMALL"))
+        .reduce((s, p) => s + Number(p.sales || 0), 0),
       payoutSales,
       weeklyManualSales,
       marketplaceSalesOnly,
