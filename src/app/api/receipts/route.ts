@@ -420,7 +420,7 @@ export async function POST(req: NextRequest) {
         });
 
         try {
-          const item = await tx.orderItem.create({ data: orderItemPayload as Prisma.OrderItemCreateInput });
+          const item = await tx.orderItem.create({ data: orderItemPayload as unknown as Prisma.OrderItemCreateInput });
           createdOrderItems.push(item);
         } catch (orderItemError) {
           console.error("[receipts] failed to persist order item", JSON.stringify(orderItemPayload), orderItemError?.message ?? orderItemError);
