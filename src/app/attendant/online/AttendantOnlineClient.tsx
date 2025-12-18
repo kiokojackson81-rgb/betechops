@@ -419,44 +419,31 @@ export default function AttendantOnlineClient() {
   // Prefer authoritative online summary (trading-period marketplace totals) when available.
   const quickStatsPeriodLabel = onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? period.label;
   const marketplace = onlineSummary?.marketplace ?? null;
-  const hasMarketplaceTotals = Boolean(
-    marketplace &&
-      (Number(marketplace.marketplaceSalesOnly ?? 0) > 0 ||
-        Number(marketplace.jumiaSales ?? 0) > 0 ||
-        Number(marketplace.kilimallSales ?? 0) > 0 ||
-        Number(marketplace.payoutSales ?? 0) > 0 ||
-        Number(marketplace.weeklyManualSales ?? 0) > 0),
-  );
-  const quickStatsPayload = hasMarketplaceTotals
-    ? {
-        periodLabel: quickStatsPeriodLabel,
-        jumiaSales: Number(
-          marketplace?.jumiaSales ??
-            (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("JUMIA")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
-        ),
-        kilimallSales: Number(
-          marketplace?.kilimallSales ??
-            (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("KILIMALL")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
-        ),
-        directSales,
-        receiptsCount,
-        totalSales: Number(marketplace?.marketplaceSalesOnly ?? 0) + directSales,
-        commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
-        toNextTier: Number(marketplace?.toNextTier ?? 0),
-        tierProgress: Number(marketplace?.tierProgress ?? 0),
-        tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
-      }
-    : {
-        periodLabel: quickStatsPeriodLabel,
-        jumiaSales: platformTotals.jumiaSales,
-        kilimallSales: platformTotals.kilimallSales,
-        directSales,
-        receiptsCount,
-        totalSales,
-        commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
-        toNextTier,
-        tierProgress: 0,
-      };
+  const aggregatorJumiaSales = platformTotals.jumiaSales;
+  const aggregatorKilimallSales = platformTotals.kilimallSales;
+  const aggregatorMarketplaceSalesOnly = aggregatorJumiaSales + aggregatorKilimallSales;
+  const quickJumiaSales =
+    marketplace && Number(marketplace.jumiaSales ?? 0) > 0 ? Number(marketplace.jumiaSales) : aggregatorJumiaSales;
+  const quickKilimallSales =
+    marketplace && Number(marketplace.kilimallSales ?? 0) > 0
+      ? Number(marketplace.kilimallSales)
+      : aggregatorKilimallSales;
+  const quickMarketplaceSalesOnly =
+    marketplace && Number(marketplace.marketplaceSalesOnly ?? 0) > 0
+      ? Number(marketplace.marketplaceSalesOnly)
+      : aggregatorMarketplaceSalesOnly;
+  const quickStatsPayload = {
+    periodLabel: quickStatsPeriodLabel,
+    jumiaSales: quickJumiaSales,
+    kilimallSales: quickKilimallSales,
+    directSales,
+    receiptsCount,
+    totalSales: quickMarketplaceSalesOnly + directSales,
+    commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
+    toNextTier: Number(marketplace?.toNextTier ?? toNextTier),
+    tierProgress: Number(marketplace?.tierProgress ?? 0),
+    tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
