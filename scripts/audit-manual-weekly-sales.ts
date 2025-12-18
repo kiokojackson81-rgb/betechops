@@ -1,3 +1,62 @@
+import { PrismaClient, WeeklySaleStatus, WeeklySaleSource } from "@prisma/client";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+async function main() {
+  const email = process.env.USER_EMAIL || process.argv[2] || null;
+  if (!email) {
+    console.error("Usage: USER_EMAIL=someone@betech.co.ke node -r ts-node/register -r tsconfig-paths/register scripts/audit-manual-weekly-sales.ts");
+    process.exit(2);
+  }
+
+  const prisma = new PrismaClient();
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      console.error("User not found:", email);
+      process.exitCode = 3;
+      return;
+    }
+
+    const period = getTradingPeriodFor(new Date());
+    console.log(`Trading period: ${period.start.toISOString()} -> ${period.end.toISOString()}`);
+
+    const entries = await prisma.weeklySale.findMany({
+      where: {
+        userId: user.id,
+        status: WeeklySaleStatus.APPROVED,
+        source: WeeklySaleSource.MANUAL,
+        AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+      },
+      include: {
+        shop: { select: { id: true, name: true, platform: true } },
+        approved: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { weekStart: "asc" },
+    });
+
+    if (!entries.length) {
+      console.log("No approved manual weekly-sale entries found for", email);
+      return;
+    }
+
+    console.log(`Found ${entries.length} approved manual weekly-sale entries for ${email}:`);
+    for (const e of entries) {
+      const shopLabel = e.shop ? `${e.shop.name} (${e.shop.platform})` : `shopId=${e.shopId}`;
+      const weekLabel = `${new Date(e.weekStart).toLocaleDateString("en-KE")} - ${new Date(e.weekEnd).toLocaleDateString("en-KE")}`;
+      const approver = e.approved ? `${e.approved.name ?? e.approved.email} (${e.approved.email})` : "(not approved)";
+      console.log(`- ${weekLabel} | ${shopLabel} | KES ${Number(e.amount).toLocaleString("en-KE")} | approvedBy: ${approver} | id: ${e.id}`);
+    }
+  } catch (err) {
+    console.error(err && (err as Error).stack ? (err as Error).stack : err);
+    process.exitCode = 1;
+  } finally {
+    try {
+      await prisma.$disconnect();
+    } catch (_) {}
+  }
+}
+
+void main();
 import { PrismaClient, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
