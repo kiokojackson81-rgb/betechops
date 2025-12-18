@@ -102,7 +102,30 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     }),
   ]);
 
+  // If there are no marketing/daily report entries for the attendant in this
+  // period, fall back to aggregating approved `WeeklySale` rows. This covers
+  // workflows where weekly sales (used by Quick Stats / online summary) are
+  // the authoritative source of sales but marketing entries are missing.
   if (marketingEntries.length === 0 && reports.length === 0) {
+    const weeklyRows = await client.weeklySale.findMany({
+      where: {
+        userId,
+        status: 'APPROVED',
+        weekStart: { gte: period.start, lte: period.end },
+      },
+    });
+
+    if (weeklyRows.length > 0) {
+      const totalSales = weeklyRows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+      const totals = emptyTotals();
+      totals.totalSales = totalSales;
+      // We don't have profit details on WeeklySale so leave totalProfit = 0
+      totals.totalReceipts = weeklyRows.length;
+      totals.totalItems = 0;
+      totals.paymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
+      return { totals, entryCount: weeklyRows.length };
+    }
+
     return { totals: emptyTotals(), entryCount: 0 };
   }
 
