@@ -189,7 +189,10 @@ async function recompute(emailArg, dateArg) {
     const cliDate = dateArg || process.argv[3] || process.env.RECOMPUTE_DATE;
     const email = cliEmail || process.env.USER_EMAIL || 'brendah@betech.co.ke';
     console.log('Running recompute for', email, cliDate ? `period date=${cliDate}` : '(current period)');
-    const user = await prisma.user.findUnique({ where: { email } });
+    // select only `id` to avoid referencing columns that may not exist in
+    // the target database (e.g. `attendantCategory`). The script only
+    // requires the user's id for recomputation.
+    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (!user) {
       console.error('User not found:', email);
       process.exitCode = 2;
