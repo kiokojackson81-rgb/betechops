@@ -83,6 +83,7 @@ export async function returnsSlaJob() {
           adjustmentType: 'DISCIPLINE',
           label: `Return not picked (${entry.orderItemId})`,
           amount: Math.round(Number(entry.expectedAmount ?? 0)),
+          adjustmentKind: 'DEDUCTION',
           createdById: entry.attendantId,
         },
       });

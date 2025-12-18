@@ -8,6 +8,16 @@ export type AdjustmentBreakdown = {
   penalties: number;
 };
 
+export type AdjustmentKind = "ADDITION" | "DEDUCTION";
+
+export type AdjustmentEntry = {
+  id: string;
+  label: string;
+  amount: number;
+  adjustmentType: string;
+  kind: AdjustmentKind;
+};
+
 export type PayrollRow = {
   attendantId: string;
   name?: string | null;
@@ -31,4 +41,5 @@ export type PayrollRow = {
   totalSales: number;
   totalProfit: number;
   adjustmentBreakdown: AdjustmentBreakdown;
+  adjustmentEntries: AdjustmentEntry[];
 };

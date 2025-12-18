@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
-import type { AdjustmentBreakdown, PayrollRow } from "./types";
+import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "./types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ const baseSummary = () => ({
     commissionTopUp: 0,
     penalties: 0,
   },
+  entries: [] as AdjustmentEntry[],
 });
 
 export default async function AdminPayrollPage() {
@@ -60,6 +62,18 @@ export default async function AdminPayrollPage() {
     }),
   ]);
 
+  const earningsSummaries = await Promise.all(
+    attendantIds.map(async (attendantId) => {
+      try {
+        return await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
+      } catch (err) {
+        console.warn("[admin/payroll] failed to compute earnings summary for", attendantId, err);
+        return null;
+      }
+    }),
+  );
+  const earningsSummaryMap = new Map(attendantIds.map((id, index) => [id, earningsSummaries[index]]));
+
   const planMap = new Map(plans.map((plan) => [plan.attendantId, plan]));
   const ledgerMap = new Map(ledgers.map((ledger) => [ledger.userId, ledger]));
 
@@ -70,12 +84,22 @@ export default async function AdminPayrollPage() {
     const bonusType = adjustment.adjustmentType === "BONUS";
     const topUpType = adjustment.adjustmentType === "COMMISSION_TOPUP";
 
-    if (bonusType) {
+    const kind =
+      (adjustment.adjustmentKind as AdjustmentKind | undefined) ??
+      (bonusType || topUpType ? "ADDITION" : "DEDUCTION");
+    const entry: AdjustmentEntry = {
+      id: adjustment.id,
+      label: adjustment.label,
+      amount,
+      adjustmentType: adjustment.adjustmentType,
+      kind,
+    };
+    existing.entries.push(entry);
+
+    if (kind === "ADDITION") {
       existing.totalBonus += amount;
-      existing.breakdown.bonus += amount;
-    } else if (topUpType) {
-      existing.totalBonus += amount;
-      existing.breakdown.commissionTopUp += amount;
+      if (bonusType) existing.breakdown.bonus += amount;
+      if (topUpType) existing.breakdown.commissionTopUp += amount;
     } else {
       existing.totalDeduction += amount;
       if (adjustment.adjustmentType === "CHAMA") existing.breakdown.chama += amount;
@@ -91,13 +115,18 @@ export default async function AdminPayrollPage() {
     const plan = planMap.get(attendant.id);
     const ledger = ledgerMap.get(attendant.id);
     const summary = adjustmentsByAttendant.get(attendant.id) ?? baseSummary();
+    const earningsSummary = earningsSummaryMap.get(attendant.id) ?? null;
 
     const commissionDirect = Number(ledger?.commissionDirect ?? 0);
     const commissionMarketplaceJumia = Number(ledger?.commissionMarketplaceJumia ?? 0);
     const commissionMarketplaceKilimall = Number(ledger?.commissionMarketplaceKilimall ?? 0);
-    const commissionTotal = Number(
-      ledger?.commissionTotal ?? ledger?.netCommission ?? ledger?.grossCommission ?? 0,
-    );
+    let commissionTotal = Number(ledger?.commissionTotal ?? 0);
+    if (commissionTotal <= 0) {
+      commissionTotal = Number(earningsSummary?.salesCommission ?? 0);
+    }
+    if (commissionTotal <= 0) {
+      commissionTotal = Number(ledger?.netCommission ?? ledger?.grossCommission ?? 0);
+    }
     const grossCommission = Number(ledger?.grossCommission ?? 0);
     const penalties = Number(ledger?.penalties ?? 0);
     const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
@@ -111,26 +140,27 @@ export default async function AdminPayrollPage() {
 
     summary.breakdown.penalties = penalties;
 
-    return {
-      attendantId: attendant.id,
-      name: attendant.name,
-      email: attendant.email,
-      attendantCategory: attendant.attendantCategory,
-      isActive: attendant.isActive,
-      baseSalary,
-      transportAllowance,
-      commission: commissionTotal,
-      commissionGross: grossCommission,
-      bonusTotal: summary.totalBonus,
-      deductionTotal: totalDeductions,
-      totalEarnings,
-      totalDeductions,
-      netPay,
-      totalSales: Number(detail?.totalSales ?? 0),
-      totalProfit: Number(detail?.totalProfit ?? 0),
-      adjustmentBreakdown: summary.breakdown as AdjustmentBreakdown,
-      commissionDirect,
-      commissionMarketplaceJumia,
+      return {
+        attendantId: attendant.id,
+        name: attendant.name,
+        email: attendant.email,
+        attendantCategory: attendant.attendantCategory,
+        isActive: attendant.isActive,
+        baseSalary,
+        transportAllowance,
+        commission: commissionTotal,
+        commissionGross: grossCommission,
+        bonusTotal: summary.totalBonus,
+        deductionTotal: totalDeductions,
+        totalEarnings,
+        totalDeductions,
+        netPay,
+        totalSales: Number(detail?.totalSales ?? 0),
+        totalProfit: Number(detail?.totalProfit ?? 0),
+        adjustmentBreakdown: summary.breakdown as AdjustmentBreakdown,
+        adjustmentEntries: summary.entries,
+        commissionDirect,
+        commissionMarketplaceJumia,
       commissionMarketplaceKilimall,
       commissionTotal,
       commissionBreakdown: ledger?.commissionBreakdown ?? null,

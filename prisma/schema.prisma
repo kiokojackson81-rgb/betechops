@@ -90,6 +90,7 @@ model AttendantPayrollAdjustment {
   periodKey      String
   periodLabel    String
   adjustmentType PayrollAdjustmentType
+  adjustmentKind PayrollAdjustmentKind   @default(DEDUCTION)
   label          String
   amount         Int
   createdById    String
@@ -864,6 +865,11 @@ enum PayrollAdjustmentType {
   BONUS
   COMMISSION_TOPUP
   OTHER
+}
+
+enum PayrollAdjustmentKind {
+  ADDITION
+  DEDUCTION
 }
 
 enum AttendantCategory {

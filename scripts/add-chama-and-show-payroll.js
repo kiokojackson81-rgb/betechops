@@ -52,6 +52,7 @@ async function main() {
         adjustmentType: 'CHAMA',
         label: 'CHAMA',
         amount: amount,
+        adjustmentKind: 'DEDUCTION',
         createdById: 'ops-script',
       },
     });

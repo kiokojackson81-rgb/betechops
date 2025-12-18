@@ -179,6 +179,8 @@ export default function PayrollTableClient({
                   const n = Number(amount);
                   return !Number.isNaN(n) && n > 0;
                 });
+                const additionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "ADDITION");
+                const deductionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "DEDUCTION");
 
                 return (
                   <tr
@@ -221,6 +223,16 @@ export default function PayrollTableClient({
                       <div className="text-[11px] text-slate-500">
                         Bonus {row.adjustmentBreakdown.bonus.toLocaleString("en-US")} · Top-ups {row.adjustmentBreakdown.commissionTopUp.toLocaleString("en-US")}
                       </div>
+                      {additionEntries.length > 0 && (
+                        <div className="text-[11px] text-slate-400">
+                          {additionEntries.map((entry) => (
+                            <div key={entry.id} className="flex items-center justify-between">
+                              <span>{entry.label || entry.adjustmentType}</span>
+                              <span>{formatCurrency(entry.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="text-slate-100">{formatCurrency(row.deductionTotal)}</div>
@@ -231,6 +243,16 @@ export default function PayrollTableClient({
                               {label} {Number(amount).toLocaleString("en-US")}
                               {index < deductionParts.length - 1 && " · "}
                             </span>
+                          ))}
+                        </div>
+                      )}
+                      {deductionEntries.length > 0 && (
+                        <div className="text-[11px] text-slate-400">
+                          {deductionEntries.map((entry) => (
+                            <div key={entry.id} className="flex items-center justify-between">
+                              <span>{entry.label || entry.adjustmentType}</span>
+                              <span>{formatCurrency(entry.amount)}</span>
+                            </div>
                           ))}
                         </div>
                       )}

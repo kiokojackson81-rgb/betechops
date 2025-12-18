@@ -53,6 +53,7 @@ async function main() {
         adjustmentType: 'CHAMA',
         label: 'CHAMA',
         amount: desiredChama,
+        adjustmentKind: 'DEDUCTION',
         createdById: 'ops-script'
       } });
       result.actions.push({ type: 'chama_created', id: created.id, after: created });

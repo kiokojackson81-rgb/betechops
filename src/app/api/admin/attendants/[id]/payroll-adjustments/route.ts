@@ -37,12 +37,14 @@ export async function POST(req: Request, ctx: any) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { periodKey, periodLabel, adjustmentType, label, amount } = body || {};
+  const { periodKey, periodLabel, adjustmentType, label, amount, adjustmentKind } = body || {};
   if (!periodKey || typeof adjustmentType !== "string" || !label || typeof amount !== "number") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
   try {
+    const kindCandidate = String(adjustmentKind ?? "DEDUCTION").toUpperCase();
+    const kind = kindCandidate === "ADDITION" ? "ADDITION" : "DEDUCTION";
     const created = await prisma.attendantPayrollAdjustment.create({
       data: {
         attendantId,
@@ -51,6 +53,7 @@ export async function POST(req: Request, ctx: any) {
         adjustmentType: adjustmentType as any,
         label,
         amount: Math.trunc(Math.max(0, amount)),
+        adjustmentKind: kind as any,
         createdById: (auth.session?.user as any)?.id ?? "",
       },
     });

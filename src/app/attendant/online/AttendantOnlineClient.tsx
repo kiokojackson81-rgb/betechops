@@ -104,6 +104,25 @@ export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
+
+  const appendImpersonateParam = useCallback(
+    (params: URLSearchParams) => {
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+      }
+    },
+    [impersonateId],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const imp = params.get("impersonateId");
+    if (imp) {
+      setImpersonateId(imp);
+    }
+  }, []);
 
   // receipt totals & quick stats removed from right column
 
@@ -133,7 +152,10 @@ export default function AttendantOnlineClient() {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const params = new URLSearchParams();
+      appendImpersonateParam(params);
+      const query = params.toString();
+      const res = await fetch(`/api/attendants/me${query ? `?${query}` : ""}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       if (data?.user?.id) setUserId(data.user.id);
@@ -141,7 +163,7 @@ export default function AttendantOnlineClient() {
     } catch (err) {
       console.warn("[attendant/online] failed to load user", err);
     }
-  }, []);
+  }, [appendImpersonateParam]);
 
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
@@ -169,6 +191,7 @@ export default function AttendantOnlineClient() {
           start: formatNairobiParam(start, false),
           end: formatNairobiParam(end, true),
         });
+        appendImpersonateParam(params);
         const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) {
           setWeeklyEarnings(null);
@@ -182,7 +205,7 @@ export default function AttendantOnlineClient() {
         setWeeklyLoading(false);
       }
     },
-    [getActiveWeekRange, userId],
+    [getActiveWeekRange, userId, appendImpersonateParam],
   );
 
     const loadOnlineSummary = useCallback(async () => {
@@ -193,6 +216,7 @@ export default function AttendantOnlineClient() {
           start: formatNairobiParam(period.start, false),
           end: formatNairobiParam(period.end, true),
         });
+        appendImpersonateParam(params);
         const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) {
           setOnlineSummary(null);
@@ -205,7 +229,7 @@ export default function AttendantOnlineClient() {
       } finally {
         setOnlineSummaryLoading(false);
       }
-    }, [period, userId]);
+    }, [period, userId, appendImpersonateParam]);
 
     const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
@@ -218,6 +242,7 @@ export default function AttendantOnlineClient() {
         includeItems: "true",
         size: "200",
       });
+      appendImpersonateParam(params);
 
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load receipts for payroll period");
@@ -229,7 +254,7 @@ export default function AttendantOnlineClient() {
     } finally {
       setReceiptStatsLoading(false);
     }
-  }, [userId, period]);
+  }, [userId, period, appendImpersonateParam]);
 
   const loadPayrollSummary = useCallback(async () => {
     if (!userId) return;
@@ -240,6 +265,7 @@ export default function AttendantOnlineClient() {
         start: formatNairobiParam(period.start, false),
         end: formatNairobiParam(period.end, true),
       });
+      appendImpersonateParam(params);
 
       // If user is an admin, prefer the richer admin endpoint which may return multiple rows
       if (userRole === "ADMIN") {
@@ -273,7 +299,7 @@ export default function AttendantOnlineClient() {
     } finally {
       setPayrollLoading(false);
     }
-  }, [userId, period]);
+  }, [userId, period, appendImpersonateParam]);
 
   // receiptTotals loader removed
 
@@ -288,6 +314,7 @@ export default function AttendantOnlineClient() {
       });
       if (start) params.set("start", start);
       if (end) params.set("end", end);
+      appendImpersonateParam(params);
 
       const res = await fetch(`/api/online/shops/sales?${params.toString()}`, {
         cache: "no-store",
@@ -305,7 +332,7 @@ export default function AttendantOnlineClient() {
     } finally {
       setShopSalesLoading(false);
     }
-  }, [period, shopRange, userId]);
+  }, [period, shopRange, userId, appendImpersonateParam]);
 
 
   // receiptTotals derived state removed (Quick stats removed)
@@ -384,6 +411,7 @@ export default function AttendantOnlineClient() {
         start: formatNairobiParam(period.start, false),
         end: formatNairobiParam(period.end, true),
       });
+      appendImpersonateParam(params);
       const res = await fetch(`/api/online/preview-commission?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         setPreviewCommission(null);
@@ -394,7 +422,7 @@ export default function AttendantOnlineClient() {
     } catch (err) {
       setPreviewCommission(null);
     }
-  }, [userId, period]);
+  }, [userId, period, appendImpersonateParam]);
 
   useEffect(() => {
     if (!userId) return;
