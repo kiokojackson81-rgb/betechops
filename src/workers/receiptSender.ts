@@ -50,8 +50,13 @@ function renderHtml(snapshot: any) {
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer> {
   // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
-  const launchOptions: any = { args: ['--no-sandbox', '--disable-setuid-sandbox'] };
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  const launchOptions: any = {
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: 'new',
+  };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
   const browser = await puppeteer.launch(launchOptions);
   try {
     const page = await browser.newPage();
