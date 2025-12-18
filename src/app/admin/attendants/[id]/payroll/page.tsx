@@ -4,6 +4,7 @@ import PayrollClient from "./PayrollClient";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
+import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 
@@ -32,7 +33,22 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
   const periodKey = period.key;
   const periodLabel = period.label;
 
-  const summary = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });
+  // Prefer the more robust earnings summary implementation which tolerates
+  // multiple periodKey formats and honours payroll adjustment kinds. Fall
+  // back to the older marketing earnings helper if needed.
+  let summary: any = null;
+  try {
+    const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: new Date() });
+    summary = { sales: userSummary.totalSales, netPay: userSummary.netPay, _raw: userSummary };
+  } catch (e) {
+    // fallback to existing implementation if the new helper fails for any reason
+    try {
+      const old = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });
+      summary = { sales: old.sales ?? 0, netPay: old.netPay ?? 0, _raw: old };
+    } catch (err) {
+      summary = { sales: 0, netPay: 0 };
+    }
+  }
 
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({ where: { attendantId, periodKey }, orderBy: { createdAt: "desc" } });
 
