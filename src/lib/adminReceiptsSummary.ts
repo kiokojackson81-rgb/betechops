@@ -191,16 +191,24 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
+    // Compute per-receipt profit. If cost data is missing, treat profit as 0
+    // (we still mark the receipt as awaiting pricing). This ensures the
+    // admin summary's `totalProfit` is the sum of per-receipt profits where
+    // missing-cost receipts contribute 0 rather than being excluded.
+    let receiptProfit = 0;
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost
         ? aggregateCost
         : items.reduce((sum, it) => sum + Number((it as any)?.buyingPrice ?? 0), 0);
       totalCost += buyingSum;
-      totalProfit += sell - buyingSum;
+      receiptProfit = sell - buyingSum;
     } else {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
+      receiptProfit = 0;
     }
+
+    totalProfit += receiptProfit;
   }
 
   const hasCompleteCosts = filteredMarketingSupport.length === 0 ? true : !hasIncompleteCosts;
