@@ -133,9 +133,23 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
   };
 
   const dedupedMap = new Map<string, ReceiptSummaryRecord>();
+  const recordHasCostData = (record: ReceiptSummaryRecord) => {
+    if (Number(record.buyingTotal ?? 0) > 0) return true;
+    const items = Array.isArray(record.items) ? record.items : [];
+    return items.some((item) => Number(item?.buyingPrice ?? 0) > 0);
+  };
+
   for (const record of combinedRecords) {
     const existing = dedupedMap.get(record.key);
-    if (!existing || sourcePriority[record.source] > sourcePriority[existing.source]) {
+    const candidateHasCost = recordHasCostData(record);
+    const existingHasCost = existing ? recordHasCostData(existing) : false;
+    const shouldReplace = () => {
+      if (!existing) return true;
+      if (candidateHasCost !== existingHasCost) return candidateHasCost;
+      return sourcePriority[record.source] > sourcePriority[existing.source];
+    };
+
+    if (shouldReplace()) {
       dedupedMap.set(record.key, record);
     }
   }
