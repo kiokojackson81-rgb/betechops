@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
+import { recomputeWeeklySalesCommission } from "@/lib/weeklySales";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,22 @@ export async function PATCH(req: NextRequest, context: any) {
       approved: { select: { id: true, name: true, email: true } },
     },
   });
+
+  // Automatically recompute the online commission ledger when manual totals change
+  if (sale.userId && sale.source === WeeklySaleSource.MANUAL) {
+    const shouldRecompute =
+      updates.status === WeeklySaleStatus.APPROVED ||
+      updates.amount !== undefined ||
+      updates.status === WeeklySaleStatus.PENDING;
+    if (shouldRecompute) {
+      try {
+        const period = getTradingPeriodFor(sale.weekStart);
+        await recomputeWeeklySalesCommission({ userId: sale.userId, period });
+      } catch (err) {
+        console.error("[weekly-sale][id] recompute failed", err);
+      }
+    }
+  }
 
   return NextResponse.json(sale);
 }
