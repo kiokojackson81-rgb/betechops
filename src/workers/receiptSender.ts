@@ -6,6 +6,8 @@ import { getActorId } from '@/lib/api';
 import { uploadBufferToS3 } from '@/lib/storage';
 import renderReceiptTemplate from '@/app/templates/receiptTemplate';
 import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage } from '@/lib/notifications/whatsapp';
+import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
+import { normalizePhone } from '@/lib/phone';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
@@ -91,6 +93,73 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   } catch (e) {
     console.error('Failed to upload PDF to S3', e);
     errors.push({ channel: 's3', error: String(e) });
+  }
+
+  const pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
+  const rawCustomerPhone =
+    ((receipt.order as any)?.customerPhone ?? (receipt.data as any)?.customerPhone ?? "")
+      .toString()
+      .trim();
+  const normalizedChatracePhone = normalizePhone(rawCustomerPhone);
+  const totals = typeof receipt.totals === "object" && receipt.totals ? (receipt.totals as Record<string, unknown>) : null;
+  const totalField = totals?.total;
+  const numericTotal =
+    typeof totalField === "number"
+      ? totalField
+      : typeof totalField === "string"
+      ? Number(totalField)
+      : NaN;
+  const invoiceAmount = Number.isFinite(numericTotal)
+    ? numericTotal
+    : typeof receipt.order?.totalAmount === "number"
+    ? receipt.order.totalAmount
+    : 0;
+  const getChatraceMetaUpdate = async (updates: Record<string, unknown>) => {
+    const baseData =
+      typeof receipt.data === "object" && receipt.data
+        ? { ...(receipt.data as Record<string, unknown>) }
+        : {};
+    const existingChatrace =
+      typeof baseData.chatrace === "object" && baseData.chatrace
+        ? { ...(baseData.chatrace as Record<string, unknown>) }
+        : {};
+    const nextData = { ...baseData, chatrace: { ...existingChatrace, ...updates } };
+    try {
+      await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData } });
+    } catch (updateErr) {
+      console.error('[receipts][chatrace] failed to persist metadata', updateErr);
+    }
+  };
+
+  if (pdfUrlForChatrace && normalizedChatracePhone) {
+    try {
+      await pushReceiptToChatrace({
+        phoneE164: normalizedChatracePhone,
+        customerName:
+          (receipt.order as any)?.customerName ??
+          (receipt.data as any)?.customerName ??
+          "Customer",
+        receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+        amount: Math.round(invoiceAmount).toString(),
+        currency: "KES",
+        pdfUrl: pdfUrlForChatrace,
+      });
+      await getChatraceMetaUpdate({
+        status: "sent",
+        lastSentAt: new Date().toISOString(),
+        pdfUrl: pdfUrlForChatrace,
+        receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+      });
+    } catch (chErr) {
+      const message = chErr instanceof Error ? chErr.message : String(chErr);
+      console.error(`[receipts][chatrace] failed to push receipt ${receipt.id}`, message);
+      await getChatraceMetaUpdate({
+        status: "failed",
+        lastAttemptAt: new Date().toISOString(),
+        lastError: message,
+      });
+      // TODO: schedule a background retry job for receipts with chatrace.status=failed
+    }
   }
 
   // Persist ReceiptFile record for audit and lifecycle
