@@ -101,17 +101,51 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
 
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
     where: { attendantId: opts.userId, periodKey },
+    orderBy: { createdAt: "desc" },
   });
 
-  const sum = (filterFn: (a: typeof adjustments[number]) => boolean) =>
-    adjustments.filter(filterFn).reduce((acc, a) => acc + (a.amount ?? 0), 0);
+  // Respect the adjustmentKind (ADDITION | DEDUCTION) when computing totals.
+  // Some adjustment types (e.g., BONUS, COMMISSION_TOPUP) are meaningful as additions,
+  // while CHAMA/LATENESS/DISCIPLINE/OTHER are deductions — but we still honour the
+  // explicit adjustmentKind to allow admin-created additions or deductions.
+  let bonusTotal = 0;
+  let commissionTopUpTotal = 0;
+  let chamaTotal = 0;
+  let latenessTotal = 0;
+  let disciplineTotal = 0;
+  let otherDeductionsTotal = 0;
 
-  const bonusTotal = sum((a) => a.adjustmentType === "BONUS");
-  const commissionTopUpTotal = sum((a) => a.adjustmentType === "COMMISSION_TOPUP");
-  const chamaTotal = sum((a) => a.adjustmentType === "CHAMA");
-  const latenessTotal = sum((a) => a.adjustmentType === "LATENESS");
-  const disciplineTotal = sum((a) => a.adjustmentType === "DISCIPLINE");
-  const otherDeductionsTotal = sum((a) => a.adjustmentType === "OTHER");
+  const adjustmentEntries = adjustments.map((a) => ({
+    id: a.id,
+    label: a.label,
+    amount: a.amount ?? 0,
+    adjustmentType: a.adjustmentType,
+    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+  }));
+
+  for (const a of adjustments) {
+    const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
+    const amt = Number(a.amount ?? 0);
+    const isAddition = kind === "ADDITION";
+    const t = a.adjustmentType;
+
+    if (t === "BONUS") {
+      if (isAddition) bonusTotal += amt; else bonusTotal -= amt;
+    } else if (t === "COMMISSION_TOPUP") {
+      if (isAddition) commissionTopUpTotal += amt; else commissionTopUpTotal -= amt;
+    } else if (t === "CHAMA") {
+      if (!isAddition) chamaTotal += amt; else chamaTotal -= amt;
+    } else if (t === "LATENESS") {
+      if (!isAddition) latenessTotal += amt; else latenessTotal -= amt;
+    } else if (t === "DISCIPLINE") {
+      if (!isAddition) disciplineTotal += amt; else disciplineTotal -= amt;
+    } else if (t === "OTHER") {
+      if (!isAddition) otherDeductionsTotal += amt; else otherDeductionsTotal -= amt;
+    } else {
+      // unknown types: treat as deduction by default
+      if (!isAddition) otherDeductionsTotal += amt; else bonusTotal += amt;
+    }
+  }
 
   // For the attendant-facing earnings summary we use the default behaviour
   // (which applies the configured profit-fallback percent) so this endpoint
@@ -161,5 +195,6 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalDeductions,
     netPay,
     ledger: null,
+    adjustmentEntries,
   };
 }
