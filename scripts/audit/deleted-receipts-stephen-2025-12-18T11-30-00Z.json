@@ -1,0 +1,24 @@
+{
+  "auditGeneratedAt": "2025-12-18T11:30:00.000Z",
+  "operator": "git-agent",
+  "attendantEmail": "stephen@betech.co.ke",
+  "deletedReceipts": [
+    {
+      "id": "marketing-cmjb1vdz2000gic04h6kcjv9t",
+      "rawId": "cmjb1vdz2000gic04h6kcjv9t",
+      "type": "marketing",
+      "dailyEntryId": "cmjab32ev000kl7044812fvup",
+      "amount": 37000
+    },
+    {
+      "id": "marketing-cmjb1uul5000aic04sggjfxj4",
+      "rawId": "cmjb1uul5000aic04sggjfxj4",
+      "type": "marketing",
+      "dailyEntryId": "cmjab2i0m000cl704123zriyh",
+      "amount": 24857
+    }
+  ],
+  "sum": 61857,
+  "notes": "Operator deletion requested by user; marketing receipts removed and affected daily entries recalculated to zero where applicable. See scripts/delete-receipts-for-attendant.js for procedure.",
+  "commitRef": null
+}
