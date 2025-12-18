@@ -449,11 +449,16 @@ export default function ReceiptsAdminClient({
       if (!res.ok) throw new Error(data?.error || "Failed to load summary");
       setSummaryTotals({
         totalSales: Number(data.totalSales ?? 0),
-        totalProfit: Number(data.totalProfit ?? 0),
+        // Prefer the inclusive per-receipt sum if provided, fall back to legacy
+        totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
         totalCost: Number(data.totalCost ?? 0),
+        // expose both variants on data for potential UI use
+        totalProfitPriced: Number(data.totalProfitPriced ?? 0),
+        totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
         receiptsCount: Number(data.receiptsCount ?? 0),
         itemsCount: Number(data.itemsCount ?? 0),
         hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+        awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
         paymentTotals:
           data?.paymentTotals ??
           {
@@ -533,11 +538,14 @@ export default function ReceiptsAdminClient({
             const data = JSON.parse(e.data);
             setSummaryTotals({
               totalSales: Number(data.totalSales ?? 0),
-              totalProfit: Number(data.totalProfit ?? 0),
+              totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
               totalCost: Number(data.totalCost ?? 0),
+              totalProfitPriced: Number(data.totalProfitPriced ?? 0),
+              totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
               receiptsCount: Number(data.receiptsCount ?? 0),
               itemsCount: Number(data.itemsCount ?? 0),
               hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+              awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
               paymentTotals:
                 data?.paymentTotals ??
                 {

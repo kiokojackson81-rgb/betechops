@@ -9,6 +9,7 @@ type Summary = {
   receiptsCount: number;
   itemsCount: number;
   hasCompleteCosts: boolean;
+  awaitingPricingCount?: number;
 };
 
 export default function ReceiptsSummary({
@@ -42,7 +43,7 @@ export default function ReceiptsSummary({
     ? ""
     : summary?.hasCompleteCosts
     ? "All priced receipts"
-    : "Based on priced receipts only";
+    : (summary?.awaitingPricingCount ? `${summary.awaitingPricingCount} awaiting pricing` : "Based on priced receipts only");
 
   const receiptsLabel = loading ? "Loading..." : String(summary?.receiptsCount ?? 0);
   const itemsLabel = loading ? "Loading..." : String(summary?.itemsCount ?? 0);

@@ -181,7 +181,10 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
   const receiptsCount = filteredRecords.length;
 
   let totalCost = 0;
-  let totalProfit = 0;
+  // totalProfitPriced: sum of profits for receipts that have cost data
+  // totalProfitInclusive: sum of per-receipt profits where missing-cost receipts contribute 0
+  let totalProfitPriced = 0;
+  let totalProfitInclusive = 0;
   let awaitingPricingCount = 0;
   let hasIncompleteCosts = false;
   for (const receipt of filteredMarketingSupport) {
@@ -191,10 +194,6 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
-    // Compute per-receipt profit. If cost data is missing, treat profit as 0
-    // (we still mark the receipt as awaiting pricing). This ensures the
-    // admin summary's `totalProfit` is the sum of per-receipt profits where
-    // missing-cost receipts contribute 0 rather than being excluded.
     let receiptProfit = 0;
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost
@@ -202,13 +201,14 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
         : items.reduce((sum, it) => sum + Number((it as any)?.buyingPrice ?? 0), 0);
       totalCost += buyingSum;
       receiptProfit = sell - buyingSum;
+      totalProfitPriced += receiptProfit;
     } else {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
       receiptProfit = 0;
     }
 
-    totalProfit += receiptProfit;
+    totalProfitInclusive += receiptProfit;
   }
 
   const hasCompleteCosts = filteredMarketingSupport.length === 0 ? true : !hasIncompleteCosts;
@@ -216,7 +216,11 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
   return {
     totalSales,
     totalCost,
-    totalProfit,
+    // backward-compatible: keep `totalProfit` as inclusive sum
+    totalProfit: totalProfitInclusive,
+    // explicit fields for clarity
+    totalProfitPriced,
+    totalProfitInclusive,
     receiptsCount,
     itemsCount,
     hasCompleteCosts,
