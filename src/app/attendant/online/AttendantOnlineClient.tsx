@@ -422,8 +422,14 @@ export default function AttendantOnlineClient() {
   const quickStatsPayload = marketplace
     ? {
         periodLabel: quickStatsPeriodLabel,
-        jumiaSales: Number(marketplace.jumiaSales ?? 0),
-        kilimallSales: Number(marketplace.kilimallSales ?? 0),
+        jumiaSales: Number(
+          marketplace.jumiaSales ??
+            (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("JUMIA")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
+        ),
+        kilimallSales: Number(
+          marketplace.kilimallSales ??
+            (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("KILIMALL")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
+        ),
         directSales,
         receiptsCount,
         totalSales: Number(marketplace.marketplaceSalesOnly ?? 0) + directSales,
