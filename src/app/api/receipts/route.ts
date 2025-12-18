@@ -393,23 +393,37 @@ export async function POST(req: NextRequest) {
 
       const createdOrderItems: any[] = [];
       for (const it of createdItems) {
-        const sanitizedSellingPrice = parseNumber(it.unitPrice);
+        // Ensure numeric and integer types are strictly coerced for Prisma
+        const qty = Math.max(1, Math.trunc(Number(it.quantity ?? 1)));
+        const sellingPrice = Number(parseNumber(it.unitPrice));
         const orderItemPayload = {
           orderId: orderUpsert.id,
-          productId: it.product.id,
-          quantity: Math.max(1, Math.trunc(it.quantity ?? 1)),
-          sellingPrice: sanitizedSellingPrice,
+          productId: String(it.product?.id ?? it.product),
+          quantity: qty,
+          sellingPrice: sellingPrice,
           serial: it.serial ?? null,
           warranty: it.warranty ?? null,
-        };
+        } as const;
+
         if (!Number.isFinite(orderItemPayload.sellingPrice)) {
-          throw new Error(`Invalid selling price for item ${it.title}`);
+          throw new Error(`Invalid selling price for item ${it.title} -> ${String(it.unitPrice)}`);
         }
+
+        // Extra logging to help diagnose DB-level "trailing characters" errors
+        console.debug("[receipts] persist order item payload types", {
+          orderIdType: typeof orderItemPayload.orderId,
+          productIdType: typeof orderItemPayload.productId,
+          quantityType: typeof orderItemPayload.quantity,
+          sellingPriceType: typeof orderItemPayload.sellingPrice,
+          serialType: typeof orderItemPayload.serial,
+          warrantyType: typeof orderItemPayload.warranty,
+        });
+
         try {
-          const item = await tx.orderItem.create({ data: orderItemPayload });
+          const item = await tx.orderItem.create({ data: orderItemPayload as Prisma.OrderItemCreateInput });
           createdOrderItems.push(item);
         } catch (orderItemError) {
-          console.error("[receipts] failed to persist order item", orderItemPayload, orderItemError);
+          console.error("[receipts] failed to persist order item", JSON.stringify(orderItemPayload), orderItemError?.message ?? orderItemError);
           throw orderItemError;
         }
       }
