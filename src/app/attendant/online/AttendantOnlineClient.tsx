@@ -419,24 +419,32 @@ export default function AttendantOnlineClient() {
   // Prefer authoritative online summary (trading-period marketplace totals) when available.
   const quickStatsPeriodLabel = onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? period.label;
   const marketplace = onlineSummary?.marketplace ?? null;
-  const quickStatsPayload = marketplace
+  const hasMarketplaceTotals = Boolean(
+    marketplace &&
+      (Number(marketplace.marketplaceSalesOnly ?? 0) > 0 ||
+        Number(marketplace.jumiaSales ?? 0) > 0 ||
+        Number(marketplace.kilimallSales ?? 0) > 0 ||
+        Number(marketplace.payoutSales ?? 0) > 0 ||
+        Number(marketplace.weeklyManualSales ?? 0) > 0),
+  );
+  const quickStatsPayload = hasMarketplaceTotals
     ? {
         periodLabel: quickStatsPeriodLabel,
         jumiaSales: Number(
-          marketplace.jumiaSales ??
+          marketplace?.jumiaSales ??
             (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("JUMIA")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
         ),
         kilimallSales: Number(
-          marketplace.kilimallSales ??
+          marketplace?.kilimallSales ??
             (onlineSummary?.platforms ?? []).filter((p: any) => String(p.key ?? "").toUpperCase().includes("KILIMALL")).reduce((s: number, p: any) => s + Number(p.sales || 0), 0),
         ),
         directSales,
         receiptsCount,
-        totalSales: Number(marketplace.marketplaceSalesOnly ?? 0) + directSales,
+        totalSales: Number(marketplace?.marketplaceSalesOnly ?? 0) + directSales,
         commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
-        toNextTier: Number(marketplace.toNextTier ?? 0),
-        tierProgress: Number(marketplace.tierProgress ?? 0),
-        tierMessage: marketplace.commissionInfo?.nextTarget ? undefined : "Max tier reached",
+        toNextTier: Number(marketplace?.toNextTier ?? 0),
+        tierProgress: Number(marketplace?.tierProgress ?? 0),
+        tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
       }
     : {
         periodLabel: quickStatsPeriodLabel,
