@@ -5,7 +5,7 @@ type PaymentBucket = { totalSales: number; count: number };
 type ReceiptSummaryRecord = {
   paymentMethod: string | null;
   sellingTotal: number;
-  items?: Array<{ quantity?: number } | null>;
+  items?: Array<{ quantity?: number; buyingPrice?: number } | null>;
 };
 
 export type PaymentTotals = {
@@ -93,12 +93,18 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
     ...marketingReceipts.map((receipt) => ({
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       sellingTotal: Number(receipt.sellingTotal ?? 0),
-      items: receipt.items ?? [],
+      items: (receipt.items ?? []).map((it: any) => ({
+        quantity: (it as any)?.quantity ?? 1,
+        buyingPrice: Number((it as any)?.buyingPrice ?? 0),
+      })),
     })),
     ...supportReceipts.map((receipt) => ({
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       sellingTotal: Number(receipt.sellingTotal ?? 0),
-      items: receipt.items ?? [],
+      items: (receipt.items ?? []).map((it: any) => ({
+        quantity: (it as any)?.quantity ?? 1,
+        buyingPrice: Number((it as any)?.buyingPrice ?? 0),
+      })),
     })),
     ...normalizedPosReceipts,
   ];
@@ -125,12 +131,18 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
     ...marketingReceipts.map((receipt) => ({
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       sellingTotal: Number(receipt.sellingTotal ?? 0),
-      items: receipt.items ?? [],
+      items: (receipt.items ?? []).map((it: any) => ({
+        quantity: (it as any)?.quantity ?? 1,
+        buyingPrice: Number((it as any)?.buyingPrice ?? 0),
+      })),
     })),
     ...supportReceipts.map((receipt) => ({
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       sellingTotal: Number(receipt.sellingTotal ?? 0),
-      items: receipt.items ?? [],
+      items: (receipt.items ?? []).map((it: any) => ({
+        quantity: (it as any)?.quantity ?? 1,
+        buyingPrice: Number((it as any)?.buyingPrice ?? 0),
+      })),
     })),
   ];
 
