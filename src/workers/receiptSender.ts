@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import puppeteer from 'puppeteer';
 import sgMail from '@sendgrid/mail';
 import Twilio from 'twilio';
@@ -125,7 +126,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         : {};
     const nextData = { ...baseData, chatrace: { ...existingChatrace, ...updates } };
     try {
-      await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData } });
+      await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData as Prisma.InputJsonValue } });
     } catch (updateErr) {
       console.error('[receipts][chatrace] failed to persist metadata', updateErr);
     }
