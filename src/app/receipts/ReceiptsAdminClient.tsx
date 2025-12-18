@@ -269,9 +269,12 @@ export default function ReceiptsAdminClient({
     totalSales: number;
     totalProfit: number;
     totalCost: number;
+    totalProfitPriced?: number;
+    totalProfitInclusive?: number;
     receiptsCount: number;
     itemsCount: number;
     hasCompleteCosts: boolean;
+    awaitingPricingCount?: number;
     paymentTotals: {
       mpesa: { totalSales: number; count: number };
       cash: { totalSales: number; count: number };
