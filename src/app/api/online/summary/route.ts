@@ -3,6 +3,7 @@ import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -102,13 +103,29 @@ export async function GET(req: Request) {
 
   const marketplaceSales = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
   const totalSalesWithMarketplace = totalSales + weeklyManualSales + payoutSales;
-  const PROGRESS_TARGET = 2_000_000;
-  const remainingToNextTier = Math.max(0, PROGRESS_TARGET - totalSalesWithMarketplace);
+  // marketplace-only sales (exclude direct/receipts) used to compute ladder progress
+  const marketplaceSalesOnly = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
+
+  // commission summary for marketplace totals (used for "To next tier")
+  const commissionInfo = getCommissionSummaryForSales(marketplaceSalesOnly);
+  const nextTarget = commissionInfo.nextTarget ?? null;
+  const toNextTier = nextTarget ? Math.max(0, nextTarget - marketplaceSalesOnly) : 0;
+  const tierProgress = nextTarget ? Math.min(1, marketplaceSalesOnly / nextTarget) : 1;
 
   return NextResponse.json({
     period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
     totals: { orders: orders.length, sales: totalSales, commission: totalCommission },
     platforms,
     assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
+    marketplace: {
+      jumiaSales: platforms.find((p) => p.key === "JUMIA")?.sales ?? 0,
+      kilimallSales: platforms.find((p) => p.key === "KILIMALL")?.sales ?? 0,
+      payoutSales,
+      weeklyManualSales,
+      marketplaceSalesOnly,
+      toNextTier,
+      tierProgress,
+      commissionInfo,
+    },
   });
 }

@@ -121,6 +121,8 @@ export default function AttendantOnlineClient() {
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [onlineSummary, setOnlineSummary] = useState<any | null>(null);
+  const [onlineSummaryLoading, setOnlineSummaryLoading] = useState(false);
 
   // receipt totals & payroll (quick stats + earnings) re-enabled
   const [receiptRows, setReceiptRows] = useState<ReceiptStatsRow[]>([]);
@@ -183,7 +185,29 @@ export default function AttendantOnlineClient() {
     [getActiveWeekRange, userId],
   );
 
-  const loadReceiptStats = useCallback(async () => {
+    const loadOnlineSummary = useCallback(async () => {
+      if (!userId) return;
+      setOnlineSummaryLoading(true);
+      try {
+        const params = new URLSearchParams({
+          start: formatNairobiParam(period.start, false),
+          end: formatNairobiParam(period.end, true),
+        });
+        const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
+        if (!res.ok) {
+          setOnlineSummary(null);
+          return;
+        }
+        const data = await res.json();
+        setOnlineSummary(data);
+      } catch (err) {
+        setOnlineSummary(null);
+      } finally {
+        setOnlineSummaryLoading(false);
+      }
+    }, [period, userId]);
+
+    const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
     setReceiptStatsLoading(true);
     try {
@@ -382,6 +406,7 @@ export default function AttendantOnlineClient() {
     void loadShopSales();
     void loadReceiptStats();
     void loadPayrollSummary();
+    void loadOnlineSummary();
   }, [loadShopSales, loadReceiptStats, loadPayrollSummary, userId]);
 
   useEffect(() => {
@@ -391,18 +416,33 @@ export default function AttendantOnlineClient() {
 
     // earnings summary loader removed
 
-  const quickStatsPeriodLabel = weeklyEarnings?.rangeLabel ?? period.label;
-  const quickStatsPayload = {
-    periodLabel: quickStatsPeriodLabel,
-    jumiaSales: platformTotals.jumiaSales,
-    kilimallSales: platformTotals.kilimallSales,
-    directSales,
-    receiptsCount,
-    totalSales,
-    commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
-    nextTierTarget,
-    toNextTier,
-  };
+  // Prefer authoritative online summary (trading-period marketplace totals) when available.
+  const quickStatsPeriodLabel = onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? period.label;
+  const marketplace = onlineSummary?.marketplace ?? null;
+  const quickStatsPayload = marketplace
+    ? {
+        periodLabel: quickStatsPeriodLabel,
+        jumiaSales: Number(marketplace.jumiaSales ?? 0),
+        kilimallSales: Number(marketplace.kilimallSales ?? 0),
+        directSales,
+        receiptsCount,
+        totalSales: Number(marketplace.marketplaceSalesOnly ?? 0) + directSales,
+        commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
+        toNextTier: Number(marketplace.toNextTier ?? 0),
+        tierProgress: Number(marketplace.tierProgress ?? 0),
+        tierMessage: marketplace.commissionInfo?.nextTarget ? undefined : "Max tier reached",
+      }
+    : {
+        periodLabel: quickStatsPeriodLabel,
+        jumiaSales: platformTotals.jumiaSales,
+        kilimallSales: platformTotals.kilimallSales,
+        directSales,
+        receiptsCount,
+        totalSales,
+        commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
+        toNextTier,
+        tierProgress: 0,
+      };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
