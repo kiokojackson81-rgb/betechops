@@ -134,7 +134,19 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
 
   if (pdfUrlForChatrace && normalizedChatracePhone) {
     try {
-      await pushReceiptToChatrace({
+      // structured log about env presence and inputs
+      console.info('[receipts][chatrace] preparing push', {
+        receiptId: receipt.id,
+        phoneNormalized: normalizedChatracePhone,
+        pdfUrlPresent: !!pdfUrlForChatrace,
+        pdfUrlLength: pdfUrlForChatrace?.length ?? 0,
+        CHATRACE_BASE_URL: !!process.env.CHATRACE_BASE_URL,
+        CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
+        tokenPresent: !!process.env.CHATRACE_API_TOKEN,
+        tagName: 'receipt_created',
+      });
+
+      const chitInput = {
         phoneE164: normalizedChatracePhone,
         customerName:
           (receipt.order as any)?.customerName ??
@@ -144,16 +156,33 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         amount: Math.round(invoiceAmount).toString(),
         currency: "KES",
         pdfUrl: pdfUrlForChatrace,
-      });
+      };
+
+      const result = await pushReceiptToChatrace(chitInput);
+      console.info('[receipts][chatrace] push result', { receiptId: receipt.id, ok: !!result?.ok, steps: result?.debug?.steps });
+
+      // persist summary into receipt.data.chatrace
       await getChatraceMetaUpdate({
-        status: "sent",
-        lastSentAt: new Date().toISOString(),
+        status: result?.ok ? "sent" : "failed",
+        lastSentAt: result?.ok ? new Date().toISOString() : undefined,
+        lastAttemptAt: result?.ok ? undefined : new Date().toISOString(),
         pdfUrl: pdfUrlForChatrace,
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+        debug: result?.debug,
       });
+
+      // Diagnostic: if this is the problematic receipt id, surface full debug
+      if (receipt.id === 'Betech-20251218-21941') {
+        console.error('[receipts][chatrace][DIAGNOSTIC] full debug', { receiptId: receipt.id, debug: result?.debug });
+      }
     } catch (chErr) {
       const message = chErr instanceof Error ? chErr.message : String(chErr);
-      console.error(`[receipts][chatrace] failed to push receipt ${receipt.id}`, message);
+      // Diagnostic mode: for named receipt, log full error
+      if (receipt.id === 'Betech-20251218-21941') {
+        console.error('[receipts][chatrace][DIAGNOSTIC] unexpected error', chErr);
+      } else {
+        console.error(`[receipts][chatrace] failed to push receipt ${receipt.id}`, message);
+      }
       await getChatraceMetaUpdate({
         status: "failed",
         lastAttemptAt: new Date().toISOString(),
