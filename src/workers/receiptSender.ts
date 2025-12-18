@@ -132,7 +132,17 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     }
   };
 
-  if (pdfUrlForChatrace && normalizedChatracePhone) {
+  const site = getSiteUrl();
+  const receiptPageLink = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
+
+  if (!pdfUrlForChatrace) {
+    console.warn('[receipts][chatrace] no PDF URL available for receipt, will fall back to receipt page link', { receiptId: receipt.id, receiptPageLink });
+  }
+
+  // Use PDF URL when available, otherwise fall back to the receipt page link so Chatrace still receives a link.
+  const chatracePdfUrl = pdfUrlForChatrace ?? receiptPageLink;
+
+  if (chatracePdfUrl && normalizedChatracePhone) {
     try {
       // structured log about env presence and inputs
       console.info('[receipts][chatrace] preparing push', {
@@ -155,7 +165,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
         amount: Math.round(invoiceAmount).toString(),
         currency: "KES",
-        pdfUrl: pdfUrlForChatrace,
+        pdfUrl: chatracePdfUrl,
       };
 
       const result = await pushReceiptToChatrace(chitInput);
