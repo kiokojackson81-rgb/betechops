@@ -232,18 +232,28 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   try {
     const toEmail = (receipt.order as any)?.customerEmail || (receipt.data as any)?.customerEmail;
     const wantEmail = channels.length === 0 || channels.includes('email');
-    if (wantEmail && toEmail && process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM) {
-      const attachmentBuffer = pdfUrlCustomer ? pdfCustomerBuffer : pdfCustomerBuffer;
-      const msg: any = {
-        to: toEmail,
-        from: process.env.SENDGRID_FROM,
-        subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
-        text: `Please find your receipt attached.`,
-        attachments: [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }],
-        html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
-      };
-      await sgMail.send(msg);
-      sent.push('email');
+    const sgKey = process.env.SENDGRID_API_KEY;
+    const hasValidSendgrid =
+      typeof sgKey === 'string' &&
+      sgKey.startsWith('SG.') &&
+      Boolean(process.env.SENDGRID_FROM);
+
+    if (wantEmail && toEmail) {
+      if (!hasValidSendgrid) {
+        console.warn('[receiptSender] skipped SendGrid because configuration is missing or invalid');
+      } else {
+        const attachmentBuffer = pdfUrlCustomer ? pdfCustomerBuffer : pdfCustomerBuffer;
+        const msg: any = {
+          to: toEmail,
+          from: process.env.SENDGRID_FROM,
+          subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
+          text: `Please find your receipt attached.`,
+          attachments: [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }],
+          html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
+        };
+        await sgMail.send(msg);
+        sent.push('email');
+      }
     }
   } catch (e) {
     errors.push({ channel: 'email', error: String(e) });
