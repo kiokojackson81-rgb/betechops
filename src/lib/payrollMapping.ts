@@ -126,6 +126,7 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
       commissionTopUp,
       penalties,
     },
+    adjustmentEntries: [],
   };
 }
 
