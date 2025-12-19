@@ -455,7 +455,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const labelClass = "text-xs uppercase tracking-wide text-slate-400";
-  const fieldClass = "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
+  const fieldClass = "mt-1 w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
   const compactFieldClass = "rounded-xl border border-slate-800 bg-slate-950/80 px-2 py-1 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
   const checkboxClass = "h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500";
 
@@ -501,7 +501,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 items-center">
         <div>
           <label className={`${labelClass} flex items-center justify-between`}>
             <span>Serial / Receipt No.</span>
@@ -523,7 +523,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
         <div>
           <label className={labelClass}>Customer Name</label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <input
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
