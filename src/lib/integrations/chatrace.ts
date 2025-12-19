@@ -66,11 +66,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   } as Record<string, unknown>;
 
   const headers = {
-    Authorization: `Bearer ${API_TOKEN}`,
-    'X-API-KEY': API_TOKEN,
-    'Content-Type': 'application/json',
+    'X-ACCESS-TOKEN': API_TOKEN || '',
+    Accept: 'application/json',
   } as Record<string, string>;
-  const headerKeys = Object.keys(headers).filter((key) => key !== 'Content-Type');
+  const headerKeys = Object.keys(headers);
   debug.env.headerKeys = headerKeys;
 
   const accountQuery = `accountId=${encodeURIComponent(ACCOUNT_ID || '')}`;
@@ -79,7 +78,11 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   async function runRequest(method: string, path: string, body?: unknown) {
     const url = pathWithBase(path);
-    const init: RequestInit = { method, headers, body: body ? JSON.stringify(body) : undefined };
+    const requestHeaders: Record<string, string> = { ...headers };
+    if (body && method !== 'GET') {
+      requestHeaders['Content-Type'] = 'application/json';
+    }
+    const init: RequestInit = { method, headers: requestHeaders, body: body ? JSON.stringify(body) : undefined };
     let res: Response | null = null;
     let text = '';
     let json: any = null;
@@ -93,10 +96,11 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       }
       const bodySnippet = (text || '').slice(0, 200);
       console.info('[chatrace][http]', { method, path, url, status: res.status, headerKeys, bodySnippet });
+      console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet });
       return { ok: res.ok, status: res.status, text, json };
     } catch (e) {
       const errMessage = String(e);
-      console.error('[chatrace][http] failed', { method, path, error: errMessage, headerKeys });
+      console.error('[chatrace][http] failed', { method, path, error: errMessage });
       return { ok: false, status: 0, text: errMessage, json: null };
     }
   }

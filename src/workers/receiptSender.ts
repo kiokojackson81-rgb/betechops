@@ -51,14 +51,26 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
-    args: chromium.args,
+    args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
   };
   const defaultViewport = (chromium as any).defaultViewport;
   if (defaultViewport) launchOptions.defaultViewport = defaultViewport;
   const headlessFlag = (chromium as any).headless;
   launchOptions.headless = typeof headlessFlag === 'boolean' ? headlessFlag : true;
+  const isServerless = Boolean(
+    process.env.VERCEL === '1' ||
+    process.env.VERCEL_ENV ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.FUNCTIONS_WORKER_RUNTIME
+  );
+  let executablePath: string | undefined;
   try {
-    const executablePath = await chromium.executablePath();
+    if (isServerless || !process.env.PUPPETEER_EXECUTABLE_PATH) {
+      executablePath = await chromium.executablePath();
+    } else {
+      executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    if (!executablePath) throw new Error('Chromium executable path not resolved');
     launchOptions.executablePath = executablePath;
     console.info('[receiptSender] launching Chromium', { executablePath });
   } catch (err) {
