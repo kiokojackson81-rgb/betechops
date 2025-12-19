@@ -46,6 +46,7 @@
   "exclude": [
     "node_modules",
     "tests",
-    "betechops"
+    "betechops",
+    "services"
   ]
 }
