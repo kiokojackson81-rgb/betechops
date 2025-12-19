@@ -14,68 +14,44 @@ export type SendReceiptToChatraceInput = {
   pdfUrl: string;
 };
 
-function ensureConfig() {
-  if (!BASE_URL) throw new Error("CHATRACE_BASE_URL is not configured");
-  if (!API_TOKEN) throw new Error("CHATRACE_API_TOKEN is not configured");
-  if (!ACCOUNT_ID) throw new Error("CHATRACE_ACCOUNT_ID is not configured");
-}
-
-async function chatraceFetch(path: string, init: RequestInit = {}) {
-  ensureConfig();
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${BASE_URL}${normalizedPath}`;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${API_TOKEN}`,
-    "Content-Type": "application/json",
-    ...(init.headers as Record<string, string>),
-  };
-  const response = await fetch(url, { ...init, headers });
-  if (!response.ok) {
-    const bodyText = await response.text().catch(() => "");
-    const message = bodyText || response.statusText;
-    throw new Error(`Chatrace API failed (${response.status}): ${message}`);
-  }
-  return response.json().catch(() => ({}));
-}
-
-async function findContactByPhone(phone: string) {
-  const data = await chatraceFetch(`/api/v1/contacts?accountId=${encodeURIComponent(ACCOUNT_ID!)}&phone=${encodeURIComponent(phone)}`);
-  if (Array.isArray(data?.contacts) && data.contacts.length) return data.contacts[0];
-  if (Array.isArray(data?.data) && data.data.length) return data.data[0];
-  if (data?.contact) return data.contact;
-  return null;
-}
-
-async function createContact(phone: string, name: string) {
-  return chatraceFetch("/api/v1/contacts", {
-    method: "POST",
-    body: JSON.stringify({ accountId: ACCOUNT_ID, phone, name }),
-  });
-}
-
-async function updateContactFields(contactId: string, payload: Record<string, unknown>) {
-  return chatraceFetch(`/api/v1/contacts/${encodeURIComponent(contactId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ accountId: ACCOUNT_ID, custom_fields: payload }),
-  });
-}
-
-async function applyTag(contactId: string, tag: string) {
-  return chatraceFetch(`/api/v1/contacts/${encodeURIComponent(contactId)}/tags`, {
-    method: "POST",
-    body: JSON.stringify({ accountId: ACCOUNT_ID, tag }),
-  });
+function checkConfig() {
+  const missing: string[] = [];
+  if (!BASE_URL) missing.push("CHATRACE_BASE_URL");
+  if (!API_TOKEN) missing.push("CHATRACE_API_TOKEN");
+  if (!ACCOUNT_ID) missing.push("CHATRACE_ACCOUNT_ID");
+  return missing;
 }
 
 export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): Promise<{ ok: boolean; debug: any }> {
   const { phoneE164, customerName, receiptNumber, amount, currency, pdfUrl } = input;
-  const debug: any = { ok: false, steps: {}, contactId: null, phoneNormalized: phoneE164, pdfUrl };
+  const debug: any = {
+    ok: false,
+    steps: {},
+    contactId: null,
+    phoneNormalized: phoneE164,
+    pdfUrl,
+    env: {
+      baseUrlPresent: !!BASE_URL,
+      accountIdPresent: !!ACCOUNT_ID,
+      tokenPresent: !!API_TOKEN,
+    },
+  };
+
   if (!phoneE164) throw new Error("phoneE164 is required");
   if (!customerName) throw new Error("customerName is required");
   if (!receiptNumber) throw new Error("receiptNumber is required");
   if (!amount) throw new Error("amount is required");
   if (!currency) throw new Error("currency is required");
   if (!pdfUrl) throw new Error("pdfUrl is required");
+
+  const missingConfig = checkConfig();
+  if (missingConfig.length) {
+    const message = `Missing Chatrace env vars: ${missingConfig.join(', ')}`;
+    console.error('[chatrace] config missing', message);
+    debug.error = message;
+    await persistDebug(receiptNumber, debug);
+    return { ok: false, debug };
+  }
 
   const tagName = 'receipt_created';
   const fieldPayload = {
@@ -93,9 +69,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const accountQuery = `accountId=${encodeURIComponent(ACCOUNT_ID || '')}`;
 
-  // Helper to run a fetch and capture response
+  const pathWithBase = (path: string) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+
   async function runRequest(method: string, path: string, body?: unknown) {
-    const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+    const url = pathWithBase(path);
     const init: RequestInit = { method, headers, body: body ? JSON.stringify(body) : undefined };
     let res: Response | null = null;
     let text = '';
@@ -103,20 +80,37 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     try {
       res = await fetch(url, init as any);
       text = await res.text().catch(() => '');
-      try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+      console.info('[chatrace][http]', { method, path, status: res.status, url: path, bodySnippet: text.slice(0, 200) });
       return { ok: res.ok, status: res.status, text, json };
     } catch (e) {
-      return { ok: false, status: 0, text: String(e), json: null };
+      const errMessage = String(e);
+      console.error('[chatrace][http] failed', { method, path, error: errMessage });
+      return { ok: false, status: 0, text: errMessage, json: null };
     }
   }
 
-  console.info('[chatrace] pushReceipt', { receiptNumber, phoneE164, tagName, CHATRACE_BASE_URL: !!BASE_URL, CHATRACE_ACCOUNT_ID: !!ACCOUNT_ID, tokenPresent: !!API_TOKEN, pdfUrlLength: pdfUrl?.length ?? 0 });
+  const ensureHttps = /^https:\/\//i.test(pdfUrl);
+  if (!ensureHttps) {
+    debug.pdfUrlWarning = 'pdfUrl should be HTTPS and publicly reachable';
+    console.warn('[chatrace] pdfUrl does not look public HTTPS', { pdfUrl });
+  }
 
-  // 1) Search contact
+  console.info('[chatrace] pushReceipt', {
+    receiptNumber,
+    phoneE164,
+    tagName,
+    env: debug.env,
+    pdfUrlLength: pdfUrl?.length ?? 0,
+  });
+
   const searchPath = `/api/v1/contacts?${accountQuery}&phone=${encodeURIComponent(phoneE164)}`;
   const searchRes = await runRequest('GET', searchPath);
-  debug.steps.search = { status: searchRes.status, bodySnippet: (searchRes.text || '').slice(0, 200) };
-  console.info('[chatrace][search]', debug.steps.search);
+  debug.steps.search = { status: searchRes.status, bodySnippet: (searchRes.text || '').slice(0, 200), path: searchPath };
 
   let contact: any = null;
   try {
@@ -126,17 +120,19 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     else if (data?.contact) contact = data.contact;
   } catch {}
 
-  // 2) Create contact if not found
   if (!contact) {
-    const createRes = await runRequest('POST', '/api/v1/contacts', { accountId: ACCOUNT_ID, phone: phoneE164, name: customerName });
-    debug.steps.create = { status: createRes.status, bodySnippet: (createRes.text || '').slice(0, 200) };
-    console.info('[chatrace][create]', debug.steps.create);
+    const createPath = '/api/v1/contacts';
+    const createRes = await runRequest('POST', createPath, { accountId: ACCOUNT_ID, phone: phoneE164, name: customerName });
+    debug.steps.create = {
+      status: createRes.status,
+      bodySnippet: (createRes.text || '').slice(0, 200),
+      path: createPath,
+    };
     try {
       const cdata = createRes.json ?? {};
       contact = cdata?.contact ?? cdata?.data ?? cdata;
     } catch {}
     if (!contact || !contact.id) {
-      // persist debug and return
       debug.ok = false;
       await persistDebug(receiptNumber, debug);
       return { ok: false, debug };
@@ -146,10 +142,13 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const contactId = contact.id;
   debug.contactId = contactId;
 
-  // 3) Update custom fields
-  const updateRes = await runRequest('PATCH', `/api/v1/contacts/${encodeURIComponent(contactId)}`, { accountId: ACCOUNT_ID, custom_fields: fieldPayload });
-  debug.steps.updateFields = { status: updateRes.status, bodySnippet: (updateRes.text || '').slice(0, 200) };
-  console.info('[chatrace][updateFields]', debug.steps.updateFields);
+  const updatePath = `/api/v1/contacts/${encodeURIComponent(contactId)}`;
+  const updateRes = await runRequest('PATCH', updatePath, { accountId: ACCOUNT_ID, custom_fields: fieldPayload });
+  debug.steps.updateFields = {
+    status: updateRes.status,
+    bodySnippet: (updateRes.text || '').slice(0, 200),
+    path: updatePath,
+  };
 
   if (!updateRes.ok) {
     debug.ok = false;
@@ -157,10 +156,13 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     return { ok: false, debug };
   }
 
-  // 4) Apply tag
-  const tagRes = await runRequest('POST', `/api/v1/contacts/${encodeURIComponent(contactId)}/tags`, { accountId: ACCOUNT_ID, tag: tagName });
-  debug.steps.applyTag = { status: tagRes.status, bodySnippet: (tagRes.text || '').slice(0, 200) };
-  console.info('[chatrace][applyTag]', debug.steps.applyTag);
+  const tagPath = `/api/v1/contacts/${encodeURIComponent(contactId)}/tags`;
+  const tagRes = await runRequest('POST', tagPath, { accountId: ACCOUNT_ID, tag: tagName });
+  debug.steps.applyTag = {
+    status: tagRes.status,
+    bodySnippet: (tagRes.text || '').slice(0, 200),
+    path: tagPath,
+  };
 
   if (!tagRes.ok) {
     debug.ok = false;

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import sgMail from '@sendgrid/mail';
 import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
@@ -47,24 +48,34 @@ function renderHtml(snapshot: any) {
   `;
 }
 
-export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer> {
+export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
   // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    headless: 'new',
+    args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+    defaultViewport: chromium.defaultViewport,
+    headless: chromium.headless,
   };
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  }
-  const browser = await puppeteer.launch(launchOptions);
   try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'A4', printBackground: true });
-    return pdf;
-  } finally {
-    try { await browser.close(); } catch {}
+    launchOptions.executablePath = await chromium.executablePath();
+  } catch (err) {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+  }
+  try {
+    const browser = await puppeteer.launch(launchOptions);
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdf = await page.pdf({ format: 'A4', printBackground: true });
+      return pdf;
+    } finally {
+      try { await browser.close(); } catch {}
+    }
+  } catch (err) {
+    console.error('[receiptSender] failed to render PDF', err);
+    return null;
   }
 }
 
@@ -75,9 +86,21 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   // generate two PDFs: one soft copy for customer (no stamp) and one full copy for printing/admin
   const pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
   const pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
+  channelStatus.pdf = pdfCustomerBuffer ? 'generated' : 'failed';
+  if (!pdfCustomerBuffer) {
+    errors.push({ channel: 'pdf', error: 'Customer PDF generation failed' });
+  }
   const sent: string[] = [];
   const errors: any[] = [];
   const actorId = (await getActorId()) || 'system';
+  const channelStatus = {
+    pdf: 'pending',
+    pdfUpload: 'pending',
+    email: 'pending',
+    whatsapp: 'pending',
+    sms: 'pending',
+    chatrace: 'pending',
+  };
 
   // upload to S3 (optional) so providers can attach media
   // upload both customer and full PDFs if S3 configured
@@ -87,18 +110,26 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   let s3KeyFull: string | null = null;
   try {
     const bucket = process.env.S3_BUCKET;
-    if (bucket) {
+    if (bucket && (pdfCustomerBuffer || pdfFullBuffer)) {
       const keyCust = `receipts/${receipt.id}/receipt-customer-${Date.now()}.pdf`;
       const keyFull = `receipts/${receipt.id}/receipt-full-${Date.now()}.pdf`;
       const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-      pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
-      pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
-      s3KeyCustomer = keyCust;
-      s3KeyFull = keyFull;
+      if (pdfCustomerBuffer) {
+        pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
+        s3KeyCustomer = keyCust;
+      }
+      if (pdfFullBuffer) {
+        pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
+        s3KeyFull = keyFull;
+      }
+      channelStatus.pdfUpload = 'uploaded';
+    } else {
+      channelStatus.pdfUpload = 'skipped';
     }
   } catch (e) {
     console.error('Failed to upload PDF to S3', e);
     errors.push({ channel: 's3', error: String(e) });
+    channelStatus.pdfUpload = 'failed';
   }
 
   const pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
@@ -174,6 +205,13 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       };
 
       const result = await pushReceiptToChatrace(chitInput);
+      channelStatus.chatrace = result?.ok ? 'sent' : 'failed';
+      if (!result?.ok) {
+        errors.push({
+          channel: 'chatrace',
+          error: result?.debug?.error ?? 'Chatrace push failed',
+        });
+      }
       console.info('[receipts][chatrace] push result', { receiptId: receipt.id, ok: !!result?.ok, steps: result?.debug?.steps });
 
       // persist summary into receipt.data.chatrace
@@ -198,6 +236,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       } else {
         console.error(`[receipts][chatrace] failed to push receipt ${receipt.id}`, message);
       }
+      channelStatus.chatrace = 'failed';
       await getChatraceMetaUpdate({
         status: "failed",
         lastAttemptAt: new Date().toISOString(),
@@ -205,6 +244,8 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       });
       // TODO: schedule a background retry job for receipts with chatrace.status=failed
     }
+  } else {
+    channelStatus.chatrace = 'skipped';
   }
 
   // Persist ReceiptFile record for audit and lifecycle
@@ -232,30 +273,46 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   try {
     const toEmail = (receipt.order as any)?.customerEmail || (receipt.data as any)?.customerEmail;
     const wantEmail = channels.length === 0 || channels.includes('email');
-    const sgKey = process.env.SENDGRID_API_KEY;
-    const hasValidSendgrid =
-      typeof sgKey === 'string' &&
-      sgKey.startsWith('SG.') &&
-      Boolean(process.env.SENDGRID_FROM);
+    const rawSendgridKey = process.env.SENDGRID_API_KEY || process.env.SENDGRID_KEY || '';
+    const sendgridEnv = process.env.SENDGRID_API_KEY
+      ? 'SENDGRID_API_KEY'
+      : process.env.SENDGRID_KEY
+      ? 'SENDGRID_KEY'
+      : 'none';
+    const maskedKey = rawSendgridKey ? `***${rawSendgridKey.slice(-4)}` : 'none';
+    console.info('[receiptSender] SendGrid config', { sendgridEnv, key: maskedKey });
+    const hasValidSendgrid = rawSendgridKey.startsWith('SG.') && Boolean(process.env.SENDGRID_FROM);
 
     if (wantEmail && toEmail) {
       if (!hasValidSendgrid) {
-        console.warn('[receiptSender] skipped SendGrid because configuration is missing or invalid');
+        console.warn('[receiptSender] SendGrid disabled (missing/invalid key)');
+        channelStatus.email = 'skipped';
       } else {
-        const attachmentBuffer = pdfUrlCustomer ? pdfCustomerBuffer : pdfCustomerBuffer;
-        const msg: any = {
-          to: toEmail,
-          from: process.env.SENDGRID_FROM,
-          subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
-          text: `Please find your receipt attached.`,
-          attachments: [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }],
-          html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
-        };
-        await sgMail.send(msg);
-        sent.push('email');
+        try {
+          const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
+          const msg: any = {
+            to: toEmail,
+            from: process.env.SENDGRID_FROM,
+            subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
+            text: `Please find your receipt attached.`,
+            attachments: attachmentBuffer.length
+              ? [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }]
+              : [],
+            html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
+          };
+          await sgMail.send(msg);
+          sent.push('email');
+          channelStatus.email = 'sent';
+        } catch (emailErr) {
+          channelStatus.email = 'failed';
+          errors.push({ channel: 'email', error: emailErr instanceof Error ? emailErr.message : String(emailErr) });
+        }
       }
+    } else {
+      channelStatus.email = wantEmail ? 'missing-recipient' : 'not-requested';
     }
   } catch (e) {
+    channelStatus.email = 'failed';
     errors.push({ channel: 'email', error: String(e) });
   }
 
@@ -264,6 +321,8 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     const toPhone = ((receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || '').trim();
     const wantWhatsapp = channels.includes('whatsapp');
     const wantSms = channels.includes('sms');
+    if (!wantWhatsapp) channelStatus.whatsapp = 'skipped';
+    if (!wantSms) channelStatus.sms = 'skipped';
     const site = getSiteUrl();
     const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
 
@@ -286,7 +345,9 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
             });
           }
           sent.push('whatsapp');
+          channelStatus.whatsapp = 'sent';
         } catch (err) {
+          channelStatus.whatsapp = 'failed';
           errors.push({ channel: 'whatsapp', error: err instanceof Error ? err.message : String(err) });
         }
       } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
@@ -295,19 +356,31 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
           if (pdfUrlCustomer) msgPayload.mediaUrl = [pdfUrlCustomer];
         await client.messages.create(msgPayload);
         sent.push('whatsapp');
+        channelStatus.whatsapp = 'sent';
       } else {
+        channelStatus.whatsapp = 'failed';
         errors.push({ channel: 'whatsapp', error: 'No WhatsApp provider configured' });
       }
+    } else if (wantWhatsapp && !toPhone) {
+      channelStatus.whatsapp = 'missing-phone';
     }
 
-    if (wantSms && toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
-      const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
-      if (pdfUrlCustomer) smsPayload.mediaUrl = [pdfUrlCustomer];
-      await client.messages.create(smsPayload);
-      sent.push('sms');
+    if (wantSms) {
+      if (toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
+        const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
+        if (pdfUrlCustomer) smsPayload.mediaUrl = [pdfUrlCustomer];
+        await client.messages.create(smsPayload);
+        sent.push('sms');
+        channelStatus.sms = 'sent';
+      } else {
+        channelStatus.sms = 'failed';
+        errors.push({ channel: 'sms', error: 'SMS provider not configured or missing phone' });
+      }
     }
   } catch (e) {
+    if (channelStatus.whatsapp === 'pending') channelStatus.whatsapp = 'failed';
+    if (channelStatus.sms === 'pending') channelStatus.sms = 'failed';
     errors.push({ channel: 'twilio', error: String(e) });
   }
 
@@ -319,5 +392,6 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     console.error('Failed to write send action log', e);
   }
 
-  return { ok: true, sent, errors };
+  const ok = errors.length === 0;
+  return { ok, sent, errors, channelStatus };
 }

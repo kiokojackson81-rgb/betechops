@@ -60,6 +60,8 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "twilio": "^4.13.0",
+    "@sparticuz/chromium": "^143.0.0",
+    "puppeteer-core": "^21.11.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
