@@ -16,6 +16,9 @@
   "functions": {
     "api/receipts/**": {
       "maxDuration": 60
+    },
+    "src/app/api/receipts/**": {
+      "maxDuration": 60
     }
   }
 }
