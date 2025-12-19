@@ -13,7 +13,7 @@ async function tryChromiumDownload() {
   try {
     // Attempt to require the Vercel-friendly chromium package and resolve
     // the executable path. This will trigger any on-demand binary fetch.
-    const chromium = require('@sparticuz/chromium-min');
+    const chromium = require('@sparticuz/chromium');
     if (chromium && typeof chromium.executablePath === 'function') {
       console.log('Attempting to resolve chromium executable path (this may download binaries)');
       const p = chromium.executablePath();

@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium-min';
+import chromium from '@sparticuz/chromium';
 
 const app = express();
 app.use(bodyParser.json({ limit: '1mb' }));
