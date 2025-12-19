@@ -13,7 +13,8 @@ export type SendReceiptToChatraceInput = {
   currency: string;
   receiptLink: string;
   pdfUrl?: string;
-  tagName: string;
+  receiptId?: string;
+  tagName?: string;
 };
 
 function checkConfig() {
@@ -25,13 +26,25 @@ function checkConfig() {
 }
 
 export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): Promise<{ ok: boolean; debug: any }> {
-  const { phoneE164, customerName, receiptNumber, amount, currency, receiptLink, pdfUrl, tagName } = input;
+  const {
+    phoneE164,
+    customerName,
+    receiptNumber,
+    amount,
+    currency,
+    receiptLink,
+    pdfUrl,
+    receiptId,
+    tagName,
+  } = input;
+  const pdfUrlTrimmed = pdfUrl?.trim();
   const debug: any = {
     ok: false,
     steps: {},
     contactId: null,
     phoneNormalized: phoneE164,
-    pdfUrl,
+    pdfUrlPresent: !!pdfUrlTrimmed,
+    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
     env: {
       baseUrlPresent: !!BASE_URL,
       accountIdPresent: !!ACCOUNT_ID,
@@ -67,12 +80,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const pathWithBase = (path: string) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
-  async function runRequest(path: string, body: unknown) {
+  async function runRequest(path: string, body: unknown, hdrs: Record<string, string> = headers) {
     const url = pathWithBase(path);
     const init: RequestInit = {
       method: 'POST',
       headers: {
-        ...headers,
+        ...hdrs,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
@@ -119,36 +132,69 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     console.warn('[chatrace] receiptLink does not look public HTTPS', { receiptLink });
   }
 
-  console.info('[chatrace] pushReceipt', {
-    receiptNumber,
-    phoneE164,
-    tagName,
-    baseUrl: BASE_URL,
-    accountId: ACCOUNT_ID,
-    headerKeys,
-    pdfUrlLength: pdfUrl?.length ?? 0,
-    receiptLinkLength: receiptLink.length,
+  const finalTag = tagName?.trim() || 'receipt_created';
+
+  const setField = (fieldName: string, value: any) => ({
+    action: 'set_custom_field',
+    field_id: fieldName,
+    value: value == null ? '' : String(value),
   });
+
+  const USE_SET_FIELD_VALUE = false;
+  const setFieldCompat = (fieldName: string, value: any) =>
+    USE_SET_FIELD_VALUE
+      ? { action: 'set_field_value', field_name: fieldName, value: value == null ? '' : String(value) }
+      : setField(fieldName, value);
+
+  const actions: any[] = [];
+  if (pdfUrlTrimmed) {
+    actions.push(setFieldCompat('pdf_url', pdfUrlTrimmed));
+  }
+  actions.push(setFieldCompat('customer_name', customerName || 'Customer'));
+  actions.push(setFieldCompat('order_placed', receiptNumber));
+  actions.push(setFieldCompat('amount', amount));
+  actions.push(setFieldCompat('currency', currency || 'KES'));
+  if (receiptId) {
+    actions.push(setFieldCompat('receipt_id', receiptId));
+  }
+  if (receiptLink) {
+    actions.push(setFieldCompat('receipt_url', receiptLink));
+  }
+  actions.push({ action: 'add_tag', tag_name: finalTag });
 
   const payload = {
     phone: phoneE164,
-    first_name: customerName,
-    actions: [
-      { action: 'add_tag', tag_name: tagName },
-      { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
-      { action: 'set_field_value', field_name: 'amount', value: amount },
-      { action: 'set_field_value', field_name: 'receipt_link', value: receiptLink },
-      ...(pdfUrl ? [{ action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl }] : []),
-    ],
+    first_name: customerName || 'Customer',
+    actions,
   };
 
+  debug.payloadPreview = {
+    phone: phoneE164,
+    first_name: customerName || 'Customer',
+    actionsCount: actions.length,
+    tag: finalTag,
+    hasPdfUrl: !!pdfUrlTrimmed,
+  };
+
+  console.info('[chatrace] pushReceipt', {
+    receiptNumber,
+    phoneE164,
+    tagName: finalTag,
+    baseUrl: BASE_URL,
+    accountId: ACCOUNT_ID,
+    headerKeys,
+    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
+    receiptLinkLength: receiptLink.length,
+  });
+
   const createPath = '/contacts';
-  const createRes = await runRequest(createPath, payload);
+  const createRes = await runRequest(createPath, payload, headers);
   debug.steps.create = {
     status: createRes.status,
     bodySnippet: (createRes.text || '').slice(0, 200),
     path: createPath,
     bodyError: createRes.bodyError ?? null,
+    ok: createRes.ok,
   };
   if (createRes.bodyError && !debug.error) {
     debug.error =
