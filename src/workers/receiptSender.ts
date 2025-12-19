@@ -16,37 +16,6 @@ function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ops.betech.co.ke';
 }
 
-function renderHtml(snapshot: any) {
-  const orderRef = snapshot.orderRef || snapshot.order?.orderNumber || '';
-  const items = (snapshot.items || snapshot.order?.items || []).map((it: any) => {
-    return `<tr><td>${(it.title || it.productName || '')}</td><td>${it.quantity ?? 1}</td><td>${it.unitPrice ?? it.sellingPrice ?? ''}</td><td>${it.serial ?? ''}</td><td>${it.warranty ?? ''}</td></tr>`;
-  }).join('');
-
-  return `
-  <!doctype html>
-  <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Receipt ${orderRef}</title>
-    <style>
-      body { font-family: Arial, sans-serif; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #ddd; padding: 6px; }
-      th { background: #f4f4f4; }
-    </style>
-  </head>
-  <body>
-    <h2>Receipt ${orderRef}</h2>
-    <table>
-      <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Serial</th><th>Warranty</th></tr></thead>
-      <tbody>${items}</tbody>
-    </table>
-    <p>Total: ${(snapshot.totals?.total ?? snapshot.order?.totalAmount ?? '')}</p>
-  </body>
-  </html>
-  `;
-}
-
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   let browser;
