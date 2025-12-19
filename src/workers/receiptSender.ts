@@ -51,15 +51,17 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
-    args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-    headless: true,
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    headless: chromium.headless,
   };
   try {
-    launchOptions.executablePath = await chromium.executablePath();
+    const executablePath = await chromium.executablePath();
+    launchOptions.executablePath = executablePath;
+    console.info('[receiptSender] launching Chromium', { executablePath });
   } catch (err) {
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
+    console.error('[receiptSender] failed to resolve Chromium executable', err);
+    return null;
   }
   try {
     const browser = await puppeteer.launch(launchOptions);
@@ -100,7 +102,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   };
   const actorId = (await getActorId()) || 'system';
 
-  const needsPdf = Boolean(process.env.S3_BUCKET || wantWhatsapp || wantEmail);
+  const needsPdf = Boolean(process.env.S3_BUCKET || wantEmail);
   let pdfCustomerBuffer: Buffer | null = null;
   let pdfFullBuffer: Buffer | null = null;
   if (needsPdf) {

@@ -34,6 +34,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       baseUrlPresent: !!BASE_URL,
       accountIdPresent: !!ACCOUNT_ID,
       tokenPresent: !!API_TOKEN,
+      baseUrl: BASE_URL,
+      accountId: ACCOUNT_ID,
+      headerKeys: [],
     },
   };
 
@@ -64,8 +67,11 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const headers = {
     Authorization: `Bearer ${API_TOKEN}`,
+    'X-API-KEY': API_TOKEN,
     'Content-Type': 'application/json',
   } as Record<string, string>;
+  const headerKeys = Object.keys(headers).filter((key) => key !== 'Content-Type');
+  debug.env.headerKeys = headerKeys;
 
   const accountQuery = `accountId=${encodeURIComponent(ACCOUNT_ID || '')}`;
 
@@ -85,11 +91,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       } catch {
         json = null;
       }
-      console.info('[chatrace][http]', { method, path, status: res.status, url: path, bodySnippet: text.slice(0, 200) });
+      const bodySnippet = (text || '').slice(0, 200);
+      console.info('[chatrace][http]', { method, path, url, status: res.status, headerKeys, bodySnippet });
       return { ok: res.ok, status: res.status, text, json };
     } catch (e) {
       const errMessage = String(e);
-      console.error('[chatrace][http] failed', { method, path, error: errMessage });
+      console.error('[chatrace][http] failed', { method, path, error: errMessage, headerKeys });
       return { ok: false, status: 0, text: errMessage, json: null };
     }
   }
@@ -104,6 +111,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptNumber,
     phoneE164,
     tagName,
+    baseUrl: BASE_URL,
+    accountId: ACCOUNT_ID,
+    headerKeys,
     env: debug.env,
     pdfUrlLength: pdfUrl?.length ?? 0,
   });
