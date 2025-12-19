@@ -320,31 +320,46 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   try {
     // create separate records for customer and full PDFs (if available)
     const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-    if (pdfUrlCustomer || pdfCustomerBuffer) {
+    const hasNonEmptyUrl = (u?: string | null) => typeof u === 'string' && u.trim().length > 0;
+
+    if (hasNonEmptyUrl(pdfUrlCustomer)) {
       const fileDataCust: any = {
         receiptId: receipt.id,
-        url: pdfUrlCustomer ?? '',
+        key: s3KeyCustomer ?? undefined,
+        url: pdfUrlCustomer!,
         contentType: 'application/pdf',
-        size: pdfCustomerBuffer?.length ?? 0,
-        uploadedBy: actorId,
-        tag: 'customer',
+        size: pdfCustomerBuffer?.length ?? undefined,
+        uploadedBy: actorId ?? undefined,
+        expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
       };
-      if (s3KeyCustomer) fileDataCust.key = s3KeyCustomer;
-      if (retentionDays) fileDataCust.expiresAt = new Date(Date.now() + retentionDays * 86400000);
       await prisma.receiptFile.create({ data: fileDataCust });
+    } else {
+      console.warn('[receiptSender] skipping ReceiptFile.create for customer PDF: missing url', {
+        receiptId: receipt.id,
+        pdfUrlCustomerPresent: hasNonEmptyUrl(pdfUrlCustomer),
+        s3KeyCustomerPresent: !!s3KeyCustomer,
+        bufferLen: pdfCustomerBuffer?.length ?? 0,
+      });
     }
-    if (pdfUrlFull || pdfFullBuffer) {
+
+    if (hasNonEmptyUrl(pdfUrlFull)) {
       const fileDataFull: any = {
         receiptId: receipt.id,
-        url: pdfUrlFull ?? '',
+        key: s3KeyFull ?? undefined,
+        url: pdfUrlFull!,
         contentType: 'application/pdf',
-        size: pdfFullBuffer?.length ?? 0,
-        uploadedBy: actorId,
-        tag: 'print',
+        size: pdfFullBuffer?.length ?? undefined,
+        uploadedBy: actorId ?? undefined,
+        expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
       };
-      if (s3KeyFull) fileDataFull.key = s3KeyFull;
-      if (retentionDays) fileDataFull.expiresAt = new Date(Date.now() + retentionDays * 86400000);
       await prisma.receiptFile.create({ data: fileDataFull });
+    } else {
+      console.warn('[receiptSender] skipping ReceiptFile.create for full PDF: missing url', {
+        receiptId: receipt.id,
+        pdfUrlFullPresent: hasNonEmptyUrl(pdfUrlFull),
+        s3KeyFullPresent: !!s3KeyFull,
+        bufferLen: pdfFullBuffer?.length ?? 0,
+      });
     }
   } catch (e) {
     console.error('Failed to create ReceiptFile record', e);
