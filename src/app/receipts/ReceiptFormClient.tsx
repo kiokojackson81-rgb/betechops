@@ -46,6 +46,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [normalizingName, setNormalizingName] = useState<boolean>(false);
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
   const [showTax, setShowTax] = useState<boolean>(false);
@@ -139,6 +140,34 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       showToast(err instanceof Error ? err.message : "AI description failed", "error");
     } finally {
       setDescLoadingId(null);
+    }
+  };
+
+  const normalizeName = async () => {
+    if (!customerName || !customerName.trim()) return showToast('Enter a name to normalize', 'error');
+    setNormalizingName(true);
+    try {
+      const res = await fetch('/api/ai/normalize-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: customerName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Name normalization failed');
+      }
+      const data = await res.json().catch(() => null);
+      const normalized = data?.name || data?.normalizedName || data?.normalized || null;
+      if (normalized) {
+        setCustomerName(String(normalized));
+        showToast('Name normalized', 'success');
+      } else {
+        showToast('Name normalization returned no value', 'error');
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Name normalization failed', 'error');
+    } finally {
+      setNormalizingName(false);
     }
   };
 
@@ -496,12 +525,22 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
         <div>
           <label className={labelClass}>Customer Name</label>
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Customer name"
-            className={fieldClass}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Customer name"
+              className={fieldClass}
+            />
+            <button
+              type="button"
+              onClick={normalizeName}
+              disabled={normalizingName}
+              className={`ml-1 inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-1 text-sm font-semibold text-amber-300 hover:bg-slate-800 ${normalizingName ? 'opacity-60 pointer-events-none' : ''}`}
+            >
+              {normalizingName ? '…' : '✨ AI'}
+            </button>
+          </div>
         </div>
         <div>
           <label className={labelClass}>Customer Phone</label>
