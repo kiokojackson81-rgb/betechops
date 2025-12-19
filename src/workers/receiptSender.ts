@@ -100,7 +100,9 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   const wantEmail = channels.length === 0 || channels.includes('email');
   const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
   const wantSms = channels.length === 0 || channels.includes('sms');
-  const snapshot = receipt.data ?? { order: receipt.order, totals: receipt.totals };
+  // Normalize receipt.data into a mutable object for template rendering and metadata additions.
+  // `receipt.data` is a Prisma JsonValue (could be string/number/etc) so narrow it to an object first.
+  const snapshot: any = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : { order: receipt.order, totals: receipt.totals };
   if (!snapshot.attendantName) {
     snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
   }
