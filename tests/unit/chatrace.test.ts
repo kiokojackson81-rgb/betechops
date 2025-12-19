@@ -28,7 +28,7 @@ describe('pushReceiptToChatrace', () => {
       });
 
     // single POST /contacts should be performed
-    fetchMock.mockResolvedValueOnce(successResponse({ id: 'c111' }));
+    fetchMock.mockResolvedValueOnce(successResponse({ success: true, data: { id: 'c111' }, contact_created: false }));
 
     const { pushReceiptToChatrace } = await import('@/lib/integrations/chatrace');
     await pushReceiptToChatrace({
@@ -63,7 +63,7 @@ describe('pushReceiptToChatrace', () => {
       });
 
     // single POST /contacts should be performed to create+actions
-    fetchMock.mockResolvedValueOnce(createResponse({ id: 'c222' }));
+    fetchMock.mockResolvedValueOnce(createResponse({ success: true, data: { id: 'c222' }, contact_created: true }));
 
     const { pushReceiptToChatrace } = await import('@/lib/integrations/chatrace');
     await pushReceiptToChatrace({

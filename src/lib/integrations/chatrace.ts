@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 
-const BASE_URL = (process.env.CHATRACE_BASE_URL || "").replace(/\/$/, "");
+const BASE_URL = (process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
 const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
 
@@ -11,16 +11,16 @@ export type SendReceiptToChatraceInput = {
   receiptNumber: string;
   amount: string;
   currency: string;
-  receiptLink: string; // always pass receipt page link
-  pdfUrl?: string | null; // optional - only include when available
-  tagName: string; // receipt_created_pdf | receipt_created_link
+  receiptLink: string;
+  pdfUrl?: string;
+  tagName: string;
 };
 
 function checkConfig() {
   const missing: string[] = [];
-  if (!BASE_URL) missing.push("CHATRACE_BASE_URL");
-  if (!API_TOKEN) missing.push("CHATRACE_API_TOKEN");
-  if (!ACCOUNT_ID) missing.push("CHATRACE_ACCOUNT_ID");
+  if (!BASE_URL) missing.push('CHATRACE_BASE_URL');
+  if (!API_TOKEN) missing.push('CHATRACE_API_TOKEN');
+  if (!ACCOUNT_ID) missing.push('CHATRACE_ACCOUNT_ID');
   return missing;
 }
 
@@ -31,7 +31,6 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     steps: {},
     contactId: null,
     phoneNormalized: phoneE164,
-    receiptLink,
     pdfUrl,
     env: {
       baseUrlPresent: !!BASE_URL,
@@ -49,7 +48,6 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   if (!amount) throw new Error('amount is required');
   if (!currency) throw new Error('currency is required');
   if (!receiptLink) throw new Error('receiptLink is required');
-  if (!tagName) throw new Error('tagName is required');
 
   const missingConfig = checkConfig();
   if (missingConfig.length) {
@@ -69,13 +67,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const pathWithBase = (path: string) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
-  async function runRequest(method: string, path: string, body?: unknown) {
+  async function runRequest(path: string, body: unknown) {
     const url = pathWithBase(path);
-    const requestHeaders: Record<string, string> = { ...headers };
-    if (body && method !== 'GET') {
-      requestHeaders['Content-Type'] = 'application/json';
-    }
-    const init: RequestInit = { method, headers: requestHeaders, body: body ? JSON.stringify(body) : undefined };
+    const init: RequestInit = {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    };
     let res: Response | null = null;
     let text = '';
     let json: any = null;
@@ -88,19 +89,34 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
         json = null;
       }
       const bodySnippet = (text || '').slice(0, 200);
-      const bodyHasError = !!(json && (json.error || json.errors));
-      const bodyError = bodyHasError ? (json.error ?? json.errors) : null;
-      if (bodyHasError) {
-        console.warn('[chatrace][http] response contains error payload', { method, path, url, status: res.status, headerKeys, bodySnippet, bodyError });
-      }
-      console.info('[chatrace][http]', { method, path, url, status: res.status, headerKeys, bodySnippet });
+      const bodyError =
+        json && (json.error ?? (Array.isArray(json.errors) ? json.errors[0] : null))
+          ? json.error ?? json.errors
+          : null;
+      console.info('[chatrace][http]', {
+        method: 'POST',
+        path,
+        url,
+        status: res.status,
+        headerKeys,
+        success: json?.success ?? null,
+        contactCreated: json?.contact_created ?? json?.data?.contact_created ?? null,
+        bodySnippet,
+        bodyError,
+      });
       console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet });
-      return { ok: res.ok && !bodyHasError, status: res.status, text, json, bodyError };
+      return { ok: res.ok, status: res.status, text, json, bodyError };
     } catch (e) {
       const errMessage = String(e);
-      console.error('[chatrace][http] failed', { method, path, error: errMessage });
+      console.error('[chatrace][http] failed', { method: 'POST', path, error: errMessage });
       return { ok: false, status: 0, text: errMessage, json: null, bodyError: errMessage };
     }
+  }
+
+  const ensureHttps = /^https:\/\//i.test(receiptLink);
+  if (!ensureHttps) {
+    debug.pdfUrlWarning = 'receiptLink should be HTTPS and publicly reachable';
+    console.warn('[chatrace] receiptLink does not look public HTTPS', { receiptLink });
   }
 
   console.info('[chatrace] pushReceipt', {
@@ -110,75 +126,68 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     baseUrl: BASE_URL,
     accountId: ACCOUNT_ID,
     headerKeys,
-    env: debug.env,
-    receiptLinkLength: receiptLink?.length ?? 0,
     pdfUrlLength: pdfUrl?.length ?? 0,
+    receiptLinkLength: receiptLink.length,
   });
 
-  // Build actions array: always include receipt_link, only include pdf_url when present
-  const actions: any[] = [
-    { action: 'set_field_value', field_name: 'customer_name', value: customerName },
-    { action: 'set_field_value', field_name: 'order_placed', value: receiptNumber },
-    { action: 'set_field_value', field_name: 'amount', value: amount },
-    { action: 'set_field_value', field_name: 'currency', value: currency },
-    { action: 'set_field_value', field_name: 'receipt_link', value: receiptLink },
-  ];
-  if (pdfUrl) {
-    actions.push({ action: 'set_field_value', field_name: 'pdf_url', value: pdfUrl });
+  const payload = {
+    phone: phoneE164,
+    first_name: customerName,
+    actions: [
+      { action: 'add_tag', tag_name: tagName },
+      { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
+      { action: 'set_field_value', field_name: 'amount', value: amount },
+      { action: 'set_field_value', field_name: 'receipt_link', value: receiptLink },
+      ...(pdfUrl ? [{ action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl }] : []),
+    ],
+  };
+
+  const createPath = '/contacts';
+  const createRes = await runRequest(createPath, payload);
+  debug.steps.create = {
+    status: createRes.status,
+    bodySnippet: (createRes.text || '').slice(0, 200),
+    path: createPath,
+    bodyError: createRes.bodyError ?? null,
+  };
+  if (createRes.bodyError && !debug.error) {
+    debug.error =
+      typeof createRes.bodyError === 'string'
+        ? createRes.bodyError
+        : JSON.stringify(createRes.bodyError);
   }
-  actions.push({ action: 'add_tag', tag_name: tagName });
 
-  // Use single POST /contacts which supports actions (upsert/create + apply actions)
-  try {
-    const createPath = '/contacts';
-    const createBody: any = {
-      phone: phoneE164,
-      first_name: customerName || 'Customer',
-      actions,
-    };
-    const createRes = await runRequest('POST', createPath, createBody);
-    debug.steps.create = { status: createRes.status, path: createPath, bodySnippet: (createRes.text || '').slice(0, 250), bodyError: createRes.bodyError ?? null };
-    if (createRes.bodyError && !debug.error) debug.error = typeof createRes.bodyError === 'string' ? createRes.bodyError : JSON.stringify(createRes.bodyError);
-    if (!createRes.ok) {
-      debug.ok = false;
-      await persistDebug(receiptNumber, debug);
-      return { ok: false, debug };
-    }
+  const json = createRes.json ?? {};
+  const success = Boolean(json?.success);
+  const contactCreated = json?.contact_created ?? json?.data?.contact_created ?? false;
+  console.info('[chatrace] create contact response', {
+    receiptNumber,
+    phoneE164,
+    status: createRes.status,
+    success,
+    contactCreated,
+  });
 
-    // parse returned id in common shapes
-    const cdata = createRes.json ?? {};
-    const contact = cdata?.contact ?? (Array.isArray(cdata?.data) ? cdata.data[0] : cdata) ?? cdata;
-    const contactId = contact?.id ?? contact?.contact_id ?? contact?.contactId ?? null;
-    if (!contactId) {
-      debug.ok = false;
-      await persistDebug(receiptNumber, debug);
-      return { ok: false, debug };
-    }
-    debug.contactId = contactId;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[chatrace] failed to create/apply actions', msg);
-    debug.ok = false;
-    debug.error = debug.error ?? msg;
+  if (createRes.ok && success) {
+    debug.ok = true;
     await persistDebug(receiptNumber, debug);
-    return { ok: false, debug };
+    return { ok: true, debug };
   }
 
-  debug.ok = true;
+  debug.ok = false;
+  if (!debug.error) {
+    debug.error = `Chatrace responded with success=${success} contact_created=${contactCreated}`;
+  }
   await persistDebug(receiptNumber, debug);
-  return { ok: true, debug };
+  return { ok: false, debug };
 }
 
 async function persistDebug(receiptNumber: string, debug: any) {
-  // During unit tests we avoid hitting the real DB to persist debug
-  // (tests mock network calls and don't provision a Prisma DB). Skip
-  // persistence if running under the test environment.
   if (process.env.NODE_ENV === 'test') return;
-
   try {
-    // Find receipt by order number (receipt.order.orderNumber may be used elsewhere), receipts use orderId unique; but receiptNumber is orderNumber or id
-    // We'll try to find by order number field present on receipt.order.orderNumber or fallback to id
-    const receipt = await prisma.receipt.findFirst({ where: { OR: [{ id: receiptNumber }, { order: { orderNumber: receiptNumber } }] } });
+    const receipt = await prisma.receipt.findFirst({
+      where: { OR: [{ id: receiptNumber }, { order: { orderNumber: receiptNumber } }] },
+    });
     if (!receipt) return;
     const baseData = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
     const existing = typeof baseData.chatrace === 'object' && baseData.chatrace ? { ...(baseData.chatrace as Record<string, unknown>) } : {};

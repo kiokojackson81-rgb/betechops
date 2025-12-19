@@ -1,7 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium-min';
 import sgMail from '@sendgrid/mail';
 import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
@@ -10,6 +8,7 @@ import renderReceiptTemplate from '@/app/templates/receiptTemplate';
 import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage } from '@/lib/notifications/whatsapp';
 import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { normalizePhone } from '@/lib/phone';
+import { launchChromiumBrowser } from '@/lib/pdf/chromium';
 
 
 function getSiteUrl() {
@@ -48,46 +47,25 @@ function renderHtml(snapshot: any) {
 }
 
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
-  // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
-  // Use the Vercel-friendly chromium-min package and always resolve
-  // the executable path via its helper. Include additional flags that
-  // improve stability on serverless platforms.
-  const launchOptions: any = {
-    args: [
-      ...chromium.args,
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--single-process',
-    ],
-    defaultViewport: (chromium as any).defaultViewport,
-    executablePath: undefined,
-    headless: (chromium as any).headless,
-  };
+  let browser;
   try {
-    launchOptions.executablePath = await chromium.executablePath();
-    console.info('[receiptSender] chromium resolved', {
-      executablePath: launchOptions.executablePath,
-      headless: launchOptions.headless,
-    });
-  } catch (err) {
-    console.error('[receiptSender] failed to resolve Chromium executable', err);
-    return null;
-  }
-  try {
-    const browser = await puppeteer.launch(launchOptions);
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdf = await page.pdf({ format: 'A4', printBackground: true });
-      return pdf;
-    } finally {
-      try { await browser.close(); } catch {}
-    }
+    browser = await launchChromiumBrowser();
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({ format: 'A4', printBackground: true });
+    return pdf;
   } catch (err) {
     console.error('[receiptSender] failed to render PDF', err);
     return null;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 
@@ -388,7 +366,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
 
     if (wantEmail && toEmail) {
       if (!hasValidSendgrid) {
-        console.warn('[receiptSender] SendGrid disabled (missing/invalid key)');
+        console.warn('[receiptSender] sendgrid_missing_env');
         channelStatus.email = 'skipped';
       } else {
         try {
