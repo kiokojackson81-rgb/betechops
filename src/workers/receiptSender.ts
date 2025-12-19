@@ -9,6 +9,7 @@ import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage
 import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { normalizePhone } from '@/lib/phone';
 import { launchChromiumBrowser } from '@/lib/pdf/chromium';
+import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
 
 
 function getSiteUrl() {
@@ -163,33 +164,78 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     channelStatus.pdf = 'skipped';
   }
 
-  // upload to S3 (optional) so providers can attach media
-  // upload both customer and full PDFs if S3 configured
+  // upload generated PDFs (prefer Vercel Blob, fall back to S3)
   let pdfUrlCustomer: string | null = null;
   let pdfUrlFull: string | null = null;
-  let s3KeyCustomer: string | null = null;
-  let s3KeyFull: string | null = null;
+  let pdfKeyCustomer: string | null = null;
+  let pdfKeyFull: string | null = null;
+  const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
   try {
-    const bucket = process.env.S3_BUCKET;
-    if (bucket && (pdfCustomerBuffer || pdfFullBuffer)) {
-      const keyCust = `receipts/${receipt.id}/receipt-customer-${Date.now()}.pdf`;
-      const keyFull = `receipts/${receipt.id}/receipt-full-${Date.now()}.pdf`;
-      const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-      if (pdfCustomerBuffer) {
-        pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
-        s3KeyCustomer = keyCust;
+    const blobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    let uploadedAny = false;
+
+    if (blobToken && (pdfCustomerBuffer?.length || pdfFullBuffer?.length)) {
+      if (pdfCustomerBuffer?.length) {
+        try {
+          const uploaded = await uploadReceiptPdfToBlob({ receiptId: receipt.id, kind: 'customer', buffer: pdfCustomerBuffer });
+          pdfUrlCustomer = uploaded.url;
+          pdfKeyCustomer = uploaded.key;
+          uploadedAny = true;
+          console.info('[pdf][blob] customer uploaded', {
+            receiptId: receipt.id,
+            key: pdfKeyCustomer,
+            urlLength: pdfUrlCustomer.length,
+            size: pdfCustomerBuffer.length,
+          });
+        } catch (blobErr) {
+          console.error('[pdf][blob] customer upload failed; will fall back to receipt link', {
+            receiptId: receipt.id,
+            error: blobErr instanceof Error ? blobErr.message : String(blobErr),
+          });
+        }
       }
-      if (pdfFullBuffer) {
-        pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
-        s3KeyFull = keyFull;
+      if (pdfFullBuffer?.length) {
+        try {
+          const uploaded = await uploadReceiptPdfToBlob({ receiptId: receipt.id, kind: 'print', buffer: pdfFullBuffer });
+          pdfUrlFull = uploaded.url;
+          pdfKeyFull = uploaded.key;
+          uploadedAny = true;
+          console.info('[pdf][blob] print uploaded', {
+            receiptId: receipt.id,
+            key: pdfKeyFull,
+            urlLength: pdfUrlFull.length,
+            size: pdfFullBuffer.length,
+          });
+        } catch (blobErr) {
+          console.error('[pdf][blob] print upload failed; will fall back to receipt link', {
+            receiptId: receipt.id,
+            error: blobErr instanceof Error ? blobErr.message : String(blobErr),
+          });
+        }
       }
-      channelStatus.pdfUpload = 'uploaded';
-    } else {
-      channelStatus.pdfUpload = 'skipped';
     }
+
+    if (!uploadedAny) {
+      const bucket = process.env.S3_BUCKET;
+      if (bucket && (pdfCustomerBuffer || pdfFullBuffer)) {
+        const keyCust = `receipts/${receipt.id}/receipt-customer-${Date.now()}.pdf`;
+        const keyFull = `receipts/${receipt.id}/receipt-full-${Date.now()}.pdf`;
+        if (pdfCustomerBuffer) {
+          pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
+          pdfKeyCustomer = keyCust;
+        }
+        if (pdfFullBuffer) {
+          pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
+          pdfKeyFull = keyFull;
+        }
+        uploadedAny = Boolean(pdfUrlCustomer || pdfUrlFull);
+      }
+    }
+
+    channelStatus.pdfUpload = uploadedAny ? 'uploaded' : 'skipped';
   } catch (e) {
-    console.error('Failed to upload PDF to S3', e);
-    errors.push({ channel: 's3', error: String(e) });
+    console.error('Failed to upload PDF to storage', e);
+    errors.push({ channel: 'pdfUpload', error: String(e) });
     channelStatus.pdfUpload = 'failed';
   }
 
@@ -325,7 +371,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     if (hasNonEmptyUrl(pdfUrlCustomer)) {
       const fileDataCust: any = {
         receiptId: receipt.id,
-        key: s3KeyCustomer ?? undefined,
+        key: pdfKeyCustomer ?? undefined,
         url: pdfUrlCustomer!,
         contentType: 'application/pdf',
         size: pdfCustomerBuffer?.length ?? undefined,
@@ -337,7 +383,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       console.warn('[receiptSender] skipping ReceiptFile.create for customer PDF: missing url', {
         receiptId: receipt.id,
         pdfUrlCustomerPresent: hasNonEmptyUrl(pdfUrlCustomer),
-        s3KeyCustomerPresent: !!s3KeyCustomer,
+        pdfKeyCustomerPresent: !!pdfKeyCustomer,
         bufferLen: pdfCustomerBuffer?.length ?? 0,
       });
     }
@@ -345,7 +391,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     if (hasNonEmptyUrl(pdfUrlFull)) {
       const fileDataFull: any = {
         receiptId: receipt.id,
-        key: s3KeyFull ?? undefined,
+        key: pdfKeyFull ?? undefined,
         url: pdfUrlFull!,
         contentType: 'application/pdf',
         size: pdfFullBuffer?.length ?? undefined,
@@ -357,7 +403,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       console.warn('[receiptSender] skipping ReceiptFile.create for full PDF: missing url', {
         receiptId: receipt.id,
         pdfUrlFullPresent: hasNonEmptyUrl(pdfUrlFull),
-        s3KeyFullPresent: !!s3KeyFull,
+        pdfKeyFullPresent: !!pdfKeyFull,
         bufferLen: pdfFullBuffer?.length ?? 0,
       });
     }
