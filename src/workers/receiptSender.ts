@@ -52,11 +52,8 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
     args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-    headless: chromium.headless,
+    headless: true,
   };
-  if ((chromium as any).defaultViewport) {
-    launchOptions.defaultViewport = (chromium as any).defaultViewport;
-  }
   try {
     launchOptions.executablePath = await chromium.executablePath();
   } catch (err) {
