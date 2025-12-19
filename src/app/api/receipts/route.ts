@@ -13,6 +13,7 @@ import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
 import { pushOpsEventToChatraceInternal } from "@/lib/chatraceInternal";
 import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
+import { randomUUID } from "crypto";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -297,6 +298,7 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = (await req.json()) as any;
+  const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber
 
@@ -780,53 +782,39 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await notifyInternalReceipt(result.receiptId, docType);
+      await notifyInternalReceipt(result.receiptId, docType, requestId);
     } catch (internalErr) {
       console.error("[receipts] failed to notify internal ops", internalErr);
     }
 
-    const autoResult = await tryAutoSendReceiptWhatsapp(result.receiptId);
-    return NextResponse.json({ ok: true, ...result, whatsapp: autoResult });
+    console.info(`[receiptSender][${requestId}] START send pipeline`);
+    let sendResult;
+    try {
+      sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
+      console.info(`[receiptSender][${requestId}] SEND:ok`, {
+        channelStatus: sendResult.channelStatus,
+      });
+    } catch (sendErr) {
+      console.error(`[receiptSender][${requestId}] SEND:error`, sendErr);
+      sendResult = {
+        ok: false,
+        sent: [],
+        errors: [{ channel: 'send', error: String(sendErr) }],
+        channelStatus: {},
+      };
+    }
+    return NextResponse.json({ ok: true, ...result, send: sendResult });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
-async function tryAutoSendReceiptWhatsapp(receiptId: string) {
-  const receipt = await prisma.receipt.findUnique({
-    where: { id: receiptId },
-    include: { order: true },
-  });
-  if (!receipt) return { sent: false, reason: "receipt_not_found" };
-
-  const inData = typeof receipt.data === "object" && receipt.data ? (receipt.data as Record<string, unknown>) : {};
-  if (inData.whatsappSentAt) return { sent: false, reason: "already_sent" };
-
-  const customerPhone =
-    (receipt.order as any)?.customerPhone ??
-    (receipt.data as any)?.customerPhone ??
-    null;
-  if (!customerPhone) return { sent: false, reason: "missing_phone" };
-
-  const chRes = await sendReceiptChannels(receiptId, ["whatsapp"]);
-  const nextData: Record<string, unknown> = { ...inData, whatsappStatus: chRes.ok ? "sent" : "failed" };
-  if (chRes.ok) {
-    nextData.whatsappSentAt = new Date().toISOString();
-  } else {
-    nextData.whatsappError = chRes.errors?.map((e: any) => e.error).join("; ") ?? "unknown";
-  }
-
-  await prisma.receipt.update({
-    where: { id: receiptId },
-    data: { data: nextData as Prisma.InputJsonValue },
-  });
-
-  return { sent: chRes.ok, errors: chRes.errors };
-}
-
-async function notifyInternalReceipt(receiptId: string, docType?: string) {
+async function notifyInternalReceipt(receiptId: string, docType?: string, requestId?: string) {
   if (docType && docType !== "RECEIPT") return;
+  if (requestId) {
+    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
+  }
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
     include: {
@@ -890,5 +878,8 @@ async function notifyInternalReceipt(receiptId: string, docType?: string) {
     } catch (logErr) {
       console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
     }
+  }
+  if (requestId) {
+    console.info(`[receiptSender][${requestId}] INTERNAL:ok`);
   }
 }

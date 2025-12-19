@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import sgMail from '@sendgrid/mail';
@@ -14,6 +15,22 @@ import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
 
 function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ops.betech.co.ke';
+}
+
+function formatMeta(meta?: Record<string, unknown>) {
+  if (!meta) return '';
+  const entries = Object.entries(meta).filter(([, value]) => value !== undefined);
+  if (!entries.length) return '';
+  return (
+    ' ' +
+    entries
+      .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
+      .join(' ')
+  );
+}
+
+function logStep(requestId: string, step: string, status: string, meta?: Record<string, unknown>) {
+  console.info(`[receiptSender][${requestId}] ${step}:${status}${formatMeta(meta)}`);
 }
 
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
@@ -60,7 +77,13 @@ async function fetchPdfFromService(html: string): Promise<Buffer | null> {
   }
 }
 
-export async function sendReceiptChannels(receiptId: string, channels: string[] = []) {
+export async function sendReceiptChannels(
+  receiptId: string,
+  channels: string[] = [],
+  opts?: { requestId?: string }
+) {
+  const requestId = opts?.requestId ?? randomUUID();
+  const startTime = Date.now();
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
     include: { order: { include: { items: true, attendant: true } }, issuedBy: true },
@@ -69,6 +92,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   const wantEmail = channels.length === 0 || channels.includes('email');
   const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
   const wantSms = channels.length === 0 || channels.includes('sms');
+  logStep(requestId, 'START', 'send_pipeline', { wantEmail, wantWhatsapp, wantSms });
   // Normalize receipt.data into a mutable object for template rendering and metadata additions.
   // `receipt.data` is a Prisma JsonValue (could be string/number/etc) so narrow it to an object first.
   const snapshot: any = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : { order: receipt.order, totals: receipt.totals };
@@ -101,6 +125,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   let pdfCustomerBuffer: Buffer | null = null;
   let pdfFullBuffer: Buffer | null = null;
   if (needsPdf) {
+    logStep(requestId, 'PDF', 'begin');
     // If a remote PDF service is configured, prefer it. Otherwise fall back
     // to local puppeteer rendering.
     const pdfServiceUrl = process.env.PDF_SERVICE_URL;
@@ -131,11 +156,17 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     }
     const anyGenerated = Boolean(pdfCustomerBuffer || pdfFullBuffer);
     channelStatus.pdf = anyGenerated ? 'generated' : 'failed';
+    logStep(requestId, 'PDF', anyGenerated ? 'ok' : 'failed', {
+      bytes_customer: pdfCustomerBuffer?.length ?? 0,
+      bytes_full: pdfFullBuffer?.length ?? 0,
+      reason: anyGenerated ? undefined : 'generation_failed',
+    });
     if (!anyGenerated) {
       errors.push({ channel: 'pdf', error: 'Customer PDF generation failed' });
     }
   } else {
     channelStatus.pdf = 'skipped';
+    logStep(requestId, 'PDF', 'skipped');
   }
 
   // upload generated PDFs (prefer Vercel Blob, fall back to S3)
@@ -145,6 +176,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   let pdfKeyFull: string | null = null;
   const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
   try {
+    logStep(requestId, 'BLOB', 'begin');
     const blobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
     let uploadedAny = false;
 
@@ -207,10 +239,16 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     }
 
     channelStatus.pdfUpload = uploadedAny ? 'uploaded' : 'skipped';
+    logStep(requestId, 'BLOB', uploadedAny ? 'ok' : 'skipped', {
+      url_customer: pdfUrlCustomer,
+      url_full: pdfUrlFull,
+      uploadedAny,
+    });
   } catch (e) {
     console.error('Failed to upload PDF to storage', e);
     errors.push({ channel: 'pdfUpload', error: String(e) });
     channelStatus.pdfUpload = 'failed';
+    logStep(requestId, 'BLOB', 'failed', { error: String(e) });
   }
 
   const pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
@@ -263,6 +301,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   const chatracePdfUrl = pdfUrlForChatrace; // may be null
 
   if (normalizedChatracePhone) {
+    logStep(requestId, 'CHARTRACE', 'begin', { phone: normalizedChatracePhone, pdfUrl: !!pdfUrlForChatrace });
     try {
       // structured log about env presence and inputs
       const tagName = 'receipt_created';
@@ -301,6 +340,12 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         });
       }
       console.info('[receipts][chatrace] push result', { receiptId: receipt.id, ok: !!result?.ok, steps: result?.debug?.steps });
+      logStep(requestId, 'CHARTRACE', result?.ok ? 'ok' : 'failed', {
+        contactCreated: result?.debug?.contactId,
+        tagName,
+        pdfUrl: !!pdfUrlForChatrace,
+        receiptLink: receiptPageLink.length,
+      });
 
       // persist summary into receipt.data.chatrace
       await getChatraceMetaUpdate({
@@ -334,6 +379,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     }
   } else {
     channelStatus.chatrace = 'skipped';
+    logStep(requestId, 'CHARTRACE', 'skipped');
   }
 
   // Persist ReceiptFile record for audit and lifecycle
@@ -403,6 +449,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
       if (!hasValidSendgrid) {
         console.warn('[receiptSender] sendgrid_missing_env');
         channelStatus.email = 'skipped';
+        logStep(requestId, 'EMAIL', 'skipped', { reason: 'missing_sendgrid' });
       } else {
         try {
           sgMail.setApiKey(rawSendgridKey);
@@ -420,17 +467,22 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
           await sgMail.send(msg);
           sent.push('email');
           channelStatus.email = 'sent';
+          logStep(requestId, 'EMAIL', 'ok', { to: toEmail });
         } catch (emailErr) {
           channelStatus.email = 'failed';
           errors.push({ channel: 'email', error: emailErr instanceof Error ? emailErr.message : String(emailErr) });
+          logStep(requestId, 'EMAIL', 'failed', { error: emailErr instanceof Error ? emailErr.message : String(emailErr) });
         }
       }
     } else {
       channelStatus.email = wantEmail ? 'missing-recipient' : 'not-requested';
+      const reason = wantEmail ? 'missing_recipient' : 'not_requested';
+      logStep(requestId, 'EMAIL', reason);
     }
   } catch (e) {
     channelStatus.email = 'failed';
     errors.push({ channel: 'email', error: String(e) });
+    logStep(requestId, 'EMAIL', 'failed', { error: String(e) });
   }
 
   // WhatsApp via Meta Business API or Twilio fallback + optional SMS
@@ -461,9 +513,11 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
           }
           sent.push('whatsapp');
           channelStatus.whatsapp = 'sent';
+          logStep(requestId, 'WHATSAPP', 'ok', { to: toPhone, provider: 'meta' });
         } catch (err) {
           channelStatus.whatsapp = 'failed';
           errors.push({ channel: 'whatsapp', error: err instanceof Error ? err.message : String(err) });
+          logStep(requestId, 'WHATSAPP', 'failed', { error: err instanceof Error ? err.message : String(err) });
         }
       } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
         const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -472,12 +526,15 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         await client.messages.create(msgPayload);
         sent.push('whatsapp');
         channelStatus.whatsapp = 'sent';
+        logStep(requestId, 'WHATSAPP', 'ok', { to: toPhone, provider: 'twilio' });
       } else {
         channelStatus.whatsapp = 'failed';
         errors.push({ channel: 'whatsapp', error: 'No WhatsApp provider configured' });
+        logStep(requestId, 'WHATSAPP', 'failed', { reason: 'no_provider' });
       }
     } else if (wantWhatsapp && !toPhone) {
       channelStatus.whatsapp = 'missing-phone';
+      logStep(requestId, 'WHATSAPP', 'failed', { reason: 'missing_phone' });
     }
 
     if (wantSms) {
@@ -488,15 +545,18 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         await client.messages.create(smsPayload);
         sent.push('sms');
         channelStatus.sms = 'sent';
+        logStep(requestId, 'SMS', 'ok', { to: toPhone });
       } else {
         channelStatus.sms = 'failed';
         errors.push({ channel: 'sms', error: 'SMS provider not configured or missing phone' });
+        logStep(requestId, 'SMS', 'failed', { reason: 'missing_provider_or_phone' });
       }
     }
   } catch (e) {
     if (channelStatus.whatsapp === 'pending') channelStatus.whatsapp = 'failed';
     if (channelStatus.sms === 'pending') channelStatus.sms = 'failed';
     errors.push({ channel: 'twilio', error: String(e) });
+    logStep(requestId, 'SEND', 'failed', { error: String(e) });
   }
 
   // write audit log of send attempt
@@ -508,5 +568,11 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   }
 
   const ok = errors.length === 0;
+  const durationMs = Date.now() - startTime;
+  logStep(requestId, 'END', ok ? 'ok' : 'failed', {
+    durationMs,
+    channelStatus: JSON.stringify(channelStatus),
+    errors: errors.length,
+  });
   return { ok, sent, errors, channelStatus };
 }
