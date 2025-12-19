@@ -61,6 +61,7 @@ export default async function Page({ params }: { params: any }) {
   const viewData = {
     serial: receipt.order?.orderNumber || receipt.serial || "",
     date: receipt.generatedAt,
+    id: receipt.id,
     customerName: receipt.order?.customerName || data.customerName,
     customerPhone: receipt.order?.customerPhone || data.customerPhone,
     deliveryAddress: data.deliveryAddress || receipt.order?.deliveryAddress || "",

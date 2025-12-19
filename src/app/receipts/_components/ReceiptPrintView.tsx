@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 // small, safe markdown -> HTML renderer supporting **bold**, paragraphs, '-' bullets and numbered lists
 function escapeHtml(unsafe: string) {
   return unsafe
@@ -83,6 +83,30 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const depositValue = Number(data?.deposit || data?.totals?.deposit || 0);
   const balanceValue = Number(data?.totals?.balance ?? data?.balance ?? 0);
   const customerPhone = data?.customerPhone;
+  const [name, setName] = useState<string>(data?.customerName || "");
+  const [loading, setLoading] = useState(false);
+
+  const handleNormalize = async () => {
+    if (!name) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/ai/normalize-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, receiptId: (data as any)?.id ?? undefined }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.normalizedName) setName(String(json.normalizedName));
+      } else {
+        console.error("/api/ai/normalize-name returned", res.status);
+      }
+    } catch (e) {
+      console.error("AI normalize error", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Always render using A5 layout for printed receipts
   const sizeClass = `receipt-sheet receipt-sheet--a5`;
@@ -112,7 +136,19 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
 
       <div className="text-xs mb-4 space-y-1">
         <div>
-          <span className="font-semibold">M/S:</span> {data?.customerName || "________________"}
+          <span className="font-semibold">M/S:</span>
+          <span className="ml-1">{name || "________________"}</span>
+          {mode !== "print" && (
+            <button
+              type="button"
+              disabled={!name || loading}
+              onClick={handleNormalize}
+              className="ml-2 inline-flex items-center px-2 py-1 text-[10px] border rounded bg-emerald-50 text-emerald-700"
+              title="Normalize capitalization"
+            >
+              {loading ? "..." : "AI"}
+            </button>
+          )}
         </div>
         {customerPhone && (
           <div>
