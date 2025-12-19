@@ -719,12 +719,19 @@ export default function ReceiptsAdminClient({
     }
     setSendingChannel(channel);
     try {
+      console.log('[receipts][client] sending', { id: selected.id, channel });
       const res = await fetch(`/api/receipts/${selected.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channels: [channel] }),
       });
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error('[receipts][client] failed to parse response JSON', e);
+      }
+      console.log('[receipts][client] send response', { status: res.status, body: data });
       if (!res.ok) throw new Error(data?.error || "Failed to queue send");
       showToast(`Queued ${channel === "email" ? "email" : "WhatsApp"} send`, "success");
     } catch (err) {
