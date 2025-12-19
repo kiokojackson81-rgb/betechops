@@ -39,7 +39,7 @@ describe('pushReceiptToChatrace', () => {
       currency: 'KES',
       receiptLink: 'https://ops.betech.co.ke/receipts/R-42',
       pdfUrl: 'https://files.betech.co.ke/r.pdf',
-      tagName: 'receipt_created_pdf',
+      tagName: 'receipt_created',
     });
 
     // should call single POST /contacts to upsert + apply actions
@@ -74,7 +74,7 @@ describe('pushReceiptToChatrace', () => {
       currency: 'KES',
       receiptLink: 'https://ops.betech.co.ke/receipts/R-99',
       pdfUrl: 'https://files.betech.co.ke/r99.pdf',
-      tagName: 'receipt_created_pdf',
+      tagName: 'receipt_created',
     });
 
     // should call single POST /contacts to create + apply actions

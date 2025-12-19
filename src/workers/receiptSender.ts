@@ -291,7 +291,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   if (normalizedChatracePhone) {
     try {
       // structured log about env presence and inputs
-      const tagName = chatracePdfUrl ? 'receipt_created_pdf' : 'receipt_created_link';
+      const tagName = 'receipt_created';
 
       console.info('[receipts][chatrace] preparing push', {
         receiptId: receipt.id,
