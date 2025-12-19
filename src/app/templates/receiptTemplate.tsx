@@ -11,14 +11,19 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
 
   const itemsHtml = items
-    .map((it: any) => `
+    .map((it: any) => {
+      const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
+      const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
+      const lineTotal = (qty * unit) || '';
+      const title = (it.title || it.productName || '');
+      return `
       <tr>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${(it.title || it.productName || '')}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${it.quantity ?? 1}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${it.unitPrice ?? it.sellingPrice ?? ''}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${it.serial ?? ''}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${it.warranty ?? ''}</td>
-      </tr>`)
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${qty}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">${title}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${unit || ''}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${lineTotal}</td>
+      </tr>`;
+    })
     .join('');
 
   return `
@@ -47,11 +52,14 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   </head>
   <body>
     <div class="page">
-      <header>
-        <h1>${siteTitle}</h1>
-        <p>Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-        <p>Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
-        <p>Email: info@betech.co.ke - Website: www.betech.co.ke</p>
+      <header style="position:relative;display:flex;align-items:center;justify-content:center;">
+        <img src="${logo}" alt="logo" style="height:56px;position:absolute;left:18px;top:10px;" />
+        <div>
+          <h1 style="margin-bottom:6px">${siteTitle}</h1>
+          <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
+          <p style="margin:2px 0">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
+          <p style="margin:2px 0">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
+        </div>
       </header>
 
       <div class="meta">
@@ -89,7 +97,18 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <div class="signature">
         <p>Thank you for shopping with Betech Solar Solutions. You were served by ${attendant || '____'}.</p>
         <p>Goods once sold cannot be refunded.</p>
-        ${opts.hideStamp ? '' : '<div style="margin-top:18px">Official Stamp: __________________________</div>'}
+        ${opts.hideStamp ? '' : '<div style="margin-top:18px">______________________________</div>'}
+      </div>
+
+      <div style="margin-top:18px;border-top:1px dashed #e5e7eb;padding-top:12px;font-size:13px;color:#111827">
+        <div style="font-weight:700;margin-bottom:6px">📲 Connect With Us & Share Your Feedback</div>
+        <div style="margin-bottom:8px">Follow, search, and review us on social media:</div>
+        <div style="line-height:1.6">
+          <div>🔵 Facebook:  Betech Solar Solutions Kenya</div>
+          <div>📸 Instagram: Betech Solar Solutions Kenya</div>
+          <div>🎵 TikTok:    Betech Solar Solutions Kenya</div>
+        </div>
+        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better</div>
       </div>
 
     </div>
