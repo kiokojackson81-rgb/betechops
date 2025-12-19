@@ -10,6 +10,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
+import { sendReceiptChannels } from "@/workers/receiptSender";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -776,9 +777,42 @@ export async function POST(req: NextRequest) {
       console.warn("[receipts] failed to publish summary update", err);
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    const autoResult = await tryAutoSendReceiptWhatsapp(result.receiptId);
+    return NextResponse.json({ ok: true, ...result, whatsapp: autoResult });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+}
+
+async function tryAutoSendReceiptWhatsapp(receiptId: string) {
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: { order: true },
+  });
+  if (!receipt) return { sent: false, reason: "receipt_not_found" };
+
+  const inData = typeof receipt.data === "object" && receipt.data ? (receipt.data as Record<string, unknown>) : {};
+  if (inData.whatsappSentAt) return { sent: false, reason: "already_sent" };
+
+  const customerPhone =
+    (receipt.order as any)?.customerPhone ??
+    (receipt.data as any)?.customerPhone ??
+    null;
+  if (!customerPhone) return { sent: false, reason: "missing_phone" };
+
+  const chRes = await sendReceiptChannels(receiptId, ["whatsapp"]);
+  const nextData = { ...inData, whatsappStatus: chRes.ok ? "sent" : "failed" };
+  if (chRes.ok) {
+    nextData.whatsappSentAt = new Date().toISOString();
+  } else {
+    nextData.whatsappError = chRes.errors?.map((e: any) => e.error).join("; ") ?? "unknown";
+  }
+
+  await prisma.receipt.update({
+    where: { id: receiptId },
+    data: { data: nextData as Prisma.InputJsonValue },
+  });
+
+  return { sent: chRes.ok, errors: chRes.errors };
 }
