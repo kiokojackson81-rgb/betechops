@@ -42,13 +42,15 @@ describe('pushReceiptToChatrace', () => {
       pdfUrl: 'https://files.betech.co.ke/r.pdf',
     });
 
-    // should call search then apply actions on the found contact
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // should call search then apply actions on the found contact, then send_text
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const searchCall = fetchMock.mock.calls[0];
     expect(String(searchCall[0])).toContain('/contacts/find?field_id=phone');
     const actionsCall = fetchMock.mock.calls[1];
     expect(String(actionsCall[0])).toContain('/contacts/');
     expect(actionsCall[1]?.method).toBe('POST');
+    const sendTextCall = fetchMock.mock.calls[2];
+    expect(String(sendTextCall[0])).toContain('/send_text');
   });
 
   it('creates a contact when none exists before updating', async () => {
@@ -80,13 +82,15 @@ describe('pushReceiptToChatrace', () => {
       pdfUrl: 'https://files.betech.co.ke/r99.pdf',
     });
 
-    // should call search, create, then apply actions -> 3 calls
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // should call search, create, then apply actions, then send_text -> 4 calls
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const createCall = fetchMock.mock.calls[1];
     expect(createCall[1]?.method).toBe('POST');
     expect(String(createCall[0])).toContain('/contacts');
     const actionsCall = fetchMock.mock.calls[2];
     expect(String(actionsCall[0])).toContain('/contacts/');
     expect(actionsCall[1]?.method).toBe('POST');
+    const sendTextCall = fetchMock.mock.calls[3];
+    expect(String(sendTextCall[0])).toContain('/send_text');
   });
 });

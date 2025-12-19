@@ -215,27 +215,116 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const contactId = contact.id;
   debug.contactId = contactId;
 
-  // Apply tag and update fields via documented actions endpoint
-  const actionsPath = `/contacts/${encodeURIComponent(contactId)}`;
-  const actionsBody = {
-    actions: [
-      { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
-      { action: 'set_field_value', field_name: 'amount', value: amount },
-      { action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl },
-      { action: 'add_tag', tag_name: tagName },
-    ],
-  } as Record<string, unknown>;
-  const actionsRes = await runRequest('POST', actionsPath, actionsBody);
-  debug.steps.applyActions = {
-    status: actionsRes.status,
-    bodySnippet: (actionsRes.text || '').slice(0, 200),
-    path: actionsPath,
-    bodyError: actionsRes.bodyError ?? null,
+  // If the resolved contact id accidentally contains the phone number (some
+  // API variants return the phone as `id`), using it in the path will produce
+  // a 405 or other method errors. Detect that case and fall back to sending
+  // actions via POST /contacts with `phone` in the body. Coerce to string
+  // so numeric IDs that are actually phone numbers are also detected.
+  const looksLikePhone = (val: any) => {
+    try {
+      const s = String(val || '').replace(/\s+/g, '');
+      return /^\+?\d{6,20}$/.test(s);
+    } catch {
+      return false;
+    }
   };
-  if (actionsRes.bodyError && !debug.error) debug.error = typeof actionsRes.bodyError === 'string' ? actionsRes.bodyError : JSON.stringify(actionsRes.bodyError);
 
-  if (!actionsRes.ok) {
+  async function tryApplyActionsToContactPath(id: string | number) {
+    const actionsPath = `/contacts/${encodeURIComponent(String(id))}`;
+    const actionsBody = {
+      actions: [
+        { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
+        { action: 'set_field_value', field_name: 'amount', value: amount },
+        { action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl },
+        { action: 'add_tag', tag_name: tagName },
+      ],
+    } as Record<string, unknown>;
+    const res = await runRequest('POST', actionsPath, actionsBody);
+    return { res, path: actionsPath };
+  }
+
+  async function tryApplyActionsViaCreate() {
+    const createPath = '/contacts';
+    const createBody: any = {
+      phone: phoneE164,
+      first_name: customerName,
+      actions: [
+        { action: 'add_tag', tag_name: tagName },
+        { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
+        { action: 'set_field_value', field_name: 'amount', value: amount },
+        { action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl },
+      ],
+    };
+    const r = await runRequest('POST', createPath, createBody);
+    return { res: r, path: createPath };
+  }
+
+  // First attempt: if the id looks like a phone, skip using it in the path
+  // because some deployments treat that as an invalid resource identifier.
+  let actionsRes: any = null;
+  let actionsAttemptPath = '';
+  if (looksLikePhone(contactId)) {
+    console.warn('[chatrace] contact.id looks like a phone number, falling back to POST /contacts actions flow', { contactId });
+    const fallback = await tryApplyActionsViaCreate();
+    actionsRes = fallback.res;
+    actionsAttemptPath = fallback.path;
+    debug.steps.applyActions = { status: actionsRes.status, bodySnippet: (actionsRes.text || '').slice(0, 200), path: actionsAttemptPath, bodyError: actionsRes.bodyError ?? null };
+    if (actionsRes.bodyError && !debug.error) debug.error = typeof actionsRes.bodyError === 'string' ? actionsRes.bodyError : JSON.stringify(actionsRes.bodyError);
+    if (!actionsRes.ok) {
+      debug.ok = false;
+      await persistDebug(receiptNumber, debug);
+      return { ok: false, debug };
+    }
+  } else {
+    // Try the documented contact actions path first
+    const attempt = await tryApplyActionsToContactPath(contactId);
+    actionsRes = attempt.res;
+    actionsAttemptPath = attempt.path;
+    debug.steps.applyActions = { status: actionsRes.status, bodySnippet: (actionsRes.text || '').slice(0,200), path: actionsAttemptPath, bodyError: actionsRes.bodyError ?? null };
+    if (actionsRes.bodyError && !debug.error) debug.error = typeof actionsRes.bodyError === 'string' ? actionsRes.bodyError : JSON.stringify(actionsRes.bodyError);
+
+    // If the API responds with 405 (method not allowed) or returns an error
+    // payload indicating the path is unsupported, attempt the create-with-actions
+    // fallback which sends `phone` in the body.
+    const methodNotAllowed = actionsRes.status === 405 || (actionsRes.bodyError && actionsRes.bodyError.code === 405);
+    if (!actionsRes.ok && methodNotAllowed) {
+      console.warn('[chatrace] actions path rejected (405). Falling back to POST /contacts with phone in body', { path: actionsAttemptPath, status: actionsRes.status, bodyError: actionsRes.bodyError });
+      const fallback = await tryApplyActionsViaCreate();
+      actionsRes = fallback.res;
+      actionsAttemptPath = fallback.path;
+      // merge fallback into debug
+      debug.steps.applyActions.fallback = { status: actionsRes.status, bodySnippet: (actionsRes.text || '').slice(0,200), path: actionsAttemptPath, bodyError: actionsRes.bodyError ?? null };
+      if (actionsRes.bodyError && !debug.error) debug.error = typeof actionsRes.bodyError === 'string' ? actionsRes.bodyError : JSON.stringify(actionsRes.bodyError);
+    }
+
+    if (!actionsRes.ok) {
+      debug.ok = false;
+      await persistDebug(receiptNumber, debug);
+      return { ok: false, debug };
+    }
+  }
+
+  // 6) Ask Chatrace to actually send the WhatsApp text to the contact.
+  // Use documented endpoint: POST /contacts/{contact_id}/send_text
+  try {
+    const sendTextPath = `/contacts/${encodeURIComponent(String(contactId))}/send_text`;
+    const sendTextBody = {
+      text: `Receipt ${receiptNumber} (${currency} ${amount}). Link: ${pdfUrl}`,
+      channel: 'whatsapp',
+    };
+    const sendTextRes = await runRequest('POST', sendTextPath, sendTextBody);
+    debug.steps.sendText = { status: sendTextRes.status, path: sendTextPath, bodySnippet: (sendTextRes.text || '').slice(0, 250), bodyError: sendTextRes.bodyError ?? null };
+    if (sendTextRes.bodyError && !debug.error) debug.error = typeof sendTextRes.bodyError === 'string' ? sendTextRes.bodyError : JSON.stringify(sendTextRes.bodyError);
+    if (!sendTextRes.ok) {
+      debug.ok = false;
+      await persistDebug(receiptNumber, debug);
+      return { ok: false, debug };
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[chatrace] failed to request send_text', msg);
     debug.ok = false;
+    debug.error = debug.error ?? msg;
     await persistDebug(receiptNumber, debug);
     return { ok: false, debug };
   }
@@ -246,6 +335,11 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 }
 
 async function persistDebug(receiptNumber: string, debug: any) {
+  // During unit tests we avoid hitting the real DB to persist debug
+  // (tests mock network calls and don't provision a Prisma DB). Skip
+  // persistence if running under the test environment.
+  if (process.env.NODE_ENV === 'test') return;
+
   try {
     // Find receipt by order number (receipt.order.orderNumber may be used elsewhere), receipts use orderId unique; but receiptNumber is orderNumber or id
     // We'll try to find by order number field present on receipt.order.orderNumber or fallback to id
