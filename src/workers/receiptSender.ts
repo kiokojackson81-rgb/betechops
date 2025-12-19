@@ -11,7 +11,6 @@ import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage
 import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { normalizePhone } from '@/lib/phone';
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ops.betech.co.ke';
@@ -53,9 +52,11 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
     args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: chromium.defaultViewport,
     headless: chromium.headless,
   };
+  if ((chromium as any).defaultViewport) {
+    launchOptions.defaultViewport = (chromium as any).defaultViewport;
+  }
   try {
     launchOptions.executablePath = await chromium.executablePath();
   } catch (err) {
@@ -80,19 +81,18 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
 }
 
 export async function sendReceiptChannels(receiptId: string, channels: string[] = []) {
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, include: { order: { include: { items: true } }, issuedBy: true } });
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: { order: { include: { items: true } }, issuedBy: true },
+  });
   if (!receipt) throw new Error('Receipt not found');
+  const wantEmail = channels.length === 0 || channels.includes('email');
+  const wantWhatsapp = channels.includes('whatsapp');
+  const wantSms = channels.includes('sms');
   const snapshot = receipt.data ?? { order: receipt.order, totals: receipt.totals };
-  // generate two PDFs: one soft copy for customer (no stamp) and one full copy for printing/admin
-  const pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
-  const pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
-  channelStatus.pdf = pdfCustomerBuffer ? 'generated' : 'failed';
-  if (!pdfCustomerBuffer) {
-    errors.push({ channel: 'pdf', error: 'Customer PDF generation failed' });
-  }
+
   const sent: string[] = [];
   const errors: any[] = [];
-  const actorId = (await getActorId()) || 'system';
   const channelStatus = {
     pdf: 'pending',
     pdfUpload: 'pending',
@@ -101,6 +101,30 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     sms: 'pending',
     chatrace: 'pending',
   };
+  const actorId = (await getActorId()) || 'system';
+
+  const needsPdf = Boolean(process.env.S3_BUCKET || wantWhatsapp || wantEmail);
+  let pdfCustomerBuffer: Buffer | null = null;
+  let pdfFullBuffer: Buffer | null = null;
+  if (needsPdf) {
+    try {
+      pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
+    } catch (err) {
+      console.error('[receiptSender] customer PDF generation exception', err);
+    }
+    try {
+      pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
+    } catch (err) {
+      console.error('[receiptSender] full PDF generation exception', err);
+    }
+    const anyGenerated = Boolean(pdfCustomerBuffer || pdfFullBuffer);
+    channelStatus.pdf = anyGenerated ? 'generated' : 'failed';
+    if (!anyGenerated) {
+      errors.push({ channel: 'pdf', error: 'Customer PDF generation failed' });
+    }
+  } else {
+    channelStatus.pdf = 'skipped';
+  }
 
   // upload to S3 (optional) so providers can attach media
   // upload both customer and full PDFs if S3 configured
@@ -253,13 +277,27 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     // create separate records for customer and full PDFs (if available)
     const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
     if (pdfUrlCustomer || pdfCustomerBuffer) {
-      const fileDataCust: any = { receiptId: receipt.id, url: pdfUrlCustomer ?? '', contentType: 'application/pdf', size: pdfCustomerBuffer.length, uploadedBy: actorId, tag: 'customer' };
+      const fileDataCust: any = {
+        receiptId: receipt.id,
+        url: pdfUrlCustomer ?? '',
+        contentType: 'application/pdf',
+        size: pdfCustomerBuffer?.length ?? 0,
+        uploadedBy: actorId,
+        tag: 'customer',
+      };
       if (s3KeyCustomer) fileDataCust.key = s3KeyCustomer;
       if (retentionDays) fileDataCust.expiresAt = new Date(Date.now() + retentionDays * 86400000);
       await prisma.receiptFile.create({ data: fileDataCust });
     }
     if (pdfUrlFull || pdfFullBuffer) {
-      const fileDataFull: any = { receiptId: receipt.id, url: pdfUrlFull ?? '', contentType: 'application/pdf', size: pdfFullBuffer.length, uploadedBy: actorId, tag: 'print' };
+      const fileDataFull: any = {
+        receiptId: receipt.id,
+        url: pdfUrlFull ?? '',
+        contentType: 'application/pdf',
+        size: pdfFullBuffer?.length ?? 0,
+        uploadedBy: actorId,
+        tag: 'print',
+      };
       if (s3KeyFull) fileDataFull.key = s3KeyFull;
       if (retentionDays) fileDataFull.expiresAt = new Date(Date.now() + retentionDays * 86400000);
       await prisma.receiptFile.create({ data: fileDataFull });
@@ -289,6 +327,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         channelStatus.email = 'skipped';
       } else {
         try {
+          sgMail.setApiKey(rawSendgridKey);
           const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
           const msg: any = {
             to: toEmail,
@@ -319,8 +358,6 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   // WhatsApp via Meta Business API or Twilio fallback + optional SMS
   try {
     const toPhone = ((receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || '').trim();
-    const wantWhatsapp = channels.includes('whatsapp');
-    const wantSms = channels.includes('sms');
     if (!wantWhatsapp) channelStatus.whatsapp = 'skipped';
     if (!wantSms) channelStatus.sms = 'skipped';
     const site = getSiteUrl();
