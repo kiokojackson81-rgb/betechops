@@ -871,7 +871,8 @@ async function notifyInternalReceipt(receiptId: string, docType?: string) {
     );
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
-  await pushOpsEventToChatraceInternal({
+  console.info('[receipts][internal] attempting push', { receiptId });
+  const result = await pushOpsEventToChatraceInternal({
     tagName: "ops_receipt_created",
     fields: {
       receipt_number: receiptNumber,
@@ -882,4 +883,12 @@ async function notifyInternalReceipt(receiptId: string, docType?: string) {
       receipt_link: receiptLink,
     },
   });
+  console.info('[receipts][internal] push result', result);
+  if (!result?.ok) {
+    try {
+      console.error('[receipts][internal] push failed', result?.debug ?? result);
+    } catch (logErr) {
+      console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
+    }
+  }
 }
