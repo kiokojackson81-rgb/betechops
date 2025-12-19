@@ -802,7 +802,7 @@ async function tryAutoSendReceiptWhatsapp(receiptId: string) {
   if (!customerPhone) return { sent: false, reason: "missing_phone" };
 
   const chRes = await sendReceiptChannels(receiptId, ["whatsapp"]);
-  const nextData = { ...inData, whatsappStatus: chRes.ok ? "sent" : "failed" };
+  const nextData: Record<string, unknown> = { ...inData, whatsappStatus: chRes.ok ? "sent" : "failed" };
   if (chRes.ok) {
     nextData.whatsappSentAt = new Date().toISOString();
   } else {
