@@ -91,6 +91,27 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   }
 }
 
+async function fetchPdfFromService(html: string): Promise<Buffer | null> {
+  const url = process.env.PDF_SERVICE_URL;
+  if (!url) return null;
+  try {
+    const res = await fetch(url.replace(/\/$/, '') + '/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    if (!res.ok) {
+      console.error('[receiptSender] pdf service responded with', res.status);
+      return null;
+    }
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return buffer;
+  } catch (err) {
+    console.error('[receiptSender] failed to fetch pdf from service', err);
+    return null;
+  }
+}
+
 export async function sendReceiptChannels(receiptId: string, channels: string[] = []) {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
@@ -127,15 +148,33 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   let pdfCustomerBuffer: Buffer | null = null;
   let pdfFullBuffer: Buffer | null = null;
   if (needsPdf) {
-    try {
-      pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
-    } catch (err) {
-      console.error('[receiptSender] customer PDF generation exception', err);
-    }
-    try {
-      pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
-    } catch (err) {
-      console.error('[receiptSender] full PDF generation exception', err);
+    // If a remote PDF service is configured, prefer it. Otherwise fall back
+    // to local puppeteer rendering.
+    const pdfServiceUrl = process.env.PDF_SERVICE_URL;
+    if (pdfServiceUrl) {
+      try {
+        const htmlCustomer = renderReceiptTemplate(snapshot, { hideStamp: true });
+        pdfCustomerBuffer = await fetchPdfFromService(htmlCustomer);
+      } catch (err) {
+        console.error('[receiptSender] pdf service customer render exception', err);
+      }
+      try {
+        const htmlFull = renderReceiptTemplate(snapshot, { hideStamp: false });
+        pdfFullBuffer = await fetchPdfFromService(htmlFull);
+      } catch (err) {
+        console.error('[receiptSender] pdf service full render exception', err);
+      }
+    } else {
+      try {
+        pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
+      } catch (err) {
+        console.error('[receiptSender] customer PDF generation exception', err);
+      }
+      try {
+        pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
+      } catch (err) {
+        console.error('[receiptSender] full PDF generation exception', err);
+      }
     }
     const anyGenerated = Boolean(pdfCustomerBuffer || pdfFullBuffer);
     channelStatus.pdf = anyGenerated ? 'generated' : 'failed';
