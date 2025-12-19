@@ -530,15 +530,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Customer name"
-              className={fieldClass}
+              className={`${fieldClass} flex-1`}
             />
             <button
               type="button"
               onClick={normalizeName}
               disabled={normalizingName}
-              className={`ml-1 inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-1 text-sm font-semibold text-amber-300 hover:bg-slate-800 ${normalizingName ? 'opacity-60 pointer-events-none' : ''}`}
+              className={`flex-none inline-flex items-center justify-center whitespace-nowrap h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-amber-300 hover:bg-slate-800 ${normalizingName ? 'opacity-60 pointer-events-none' : ''}`}
             >
-              {normalizingName ? '…' : '✨ AI'}
+              <span className="inline-flex items-center gap-2">{normalizingName ? '…' : <><span>✨</span><span>AI</span></>}</span>
             </button>
           </div>
         </div>
