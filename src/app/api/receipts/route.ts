@@ -781,12 +781,6 @@ export async function POST(req: NextRequest) {
       console.warn("[receipts] failed to publish summary update", err);
     }
 
-    try {
-      await notifyInternalReceipt(result.receiptId, docType, requestId);
-    } catch (internalErr) {
-      console.error("[receipts] failed to notify internal ops", internalErr);
-    }
-
     console.info(`[receiptSender][${requestId}] START send pipeline`);
     let sendResult;
     try {
@@ -803,6 +797,18 @@ export async function POST(req: NextRequest) {
         channelStatus: {},
       };
     }
+
+    const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
+    if (pdfForInternal) {
+      try {
+        await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+      } catch (internalErr) {
+        console.error("[receipts] failed to notify internal ops", internalErr);
+      }
+    } else {
+      console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
+    }
+
     return NextResponse.json({ ok: true, ...result, send: sendResult });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
@@ -810,7 +816,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function notifyInternalReceipt(receiptId: string, docType?: string, requestId?: string) {
+async function notifyInternalReceipt(receiptId: string, docType?: string, requestId?: string, receiptUrl?: string) {
   if (docType && docType !== "RECEIPT") return;
   if (requestId) {
     console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
@@ -860,16 +866,20 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
   console.info('[receipts][internal] attempting push', { receiptId });
+  const internalFields: Record<string, string | number | undefined> = {
+    receipt_number: receiptNumber,
+    amount: amountKES,
+    payment_method: paymentMethod,
+    staff_name: staffName,
+    items_short: itemsShort,
+    receipt_link: receiptLink,
+  };
+  if (receiptUrl) {
+    internalFields.receipt_url = receiptUrl;
+  }
   const result = await pushOpsEventToChatraceInternal({
     tagName: "ops_receipt_created",
-    fields: {
-      receipt_number: receiptNumber,
-      amount: amountKES,
-      payment_method: paymentMethod,
-      staff_name: staffName,
-      items_short: itemsShort,
-      receipt_link: receiptLink,
-    },
+    fields: internalFields,
   });
   console.info('[receipts][internal] push result', result);
   if (!result?.ok) {

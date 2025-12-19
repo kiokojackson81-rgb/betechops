@@ -574,5 +574,5 @@ export async function sendReceiptChannels(
     channelStatus: JSON.stringify(channelStatus),
     errors: errors.length,
   });
-  return { ok, sent, errors, channelStatus };
+  return { ok, sent, errors, channelStatus, pdfUrlCustomer, pdfUrlFull, pdfKeyCustomer, pdfKeyFull };
 }
