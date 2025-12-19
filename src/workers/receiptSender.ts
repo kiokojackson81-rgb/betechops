@@ -100,8 +100,8 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   });
   if (!receipt) throw new Error('Receipt not found');
   const wantEmail = channels.length === 0 || channels.includes('email');
-  const wantWhatsapp = channels.includes('whatsapp');
-  const wantSms = channels.includes('sms');
+  const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
+  const wantSms = channels.length === 0 || channels.includes('sms');
   const snapshot = receipt.data ?? { order: receipt.order, totals: receipt.totals };
 
   const sent: string[] = [];
@@ -116,7 +116,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   };
   const actorId = (await getActorId()) || 'system';
 
-  const needsPdf = Boolean(process.env.S3_BUCKET || wantEmail);
+  const needsPdf = Boolean(process.env.S3_BUCKET || wantEmail || wantWhatsapp);
   let pdfCustomerBuffer: Buffer | null = null;
   let pdfFullBuffer: Buffer | null = null;
   if (needsPdf) {
@@ -212,12 +212,15 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
     console.warn('[receipts][chatrace] no PDF URL available for receipt, will fall back to receipt page link', { receiptId: receipt.id, receiptPageLink });
   }
 
-  // Use PDF URL when available, otherwise fall back to the receipt page link so Chatrace still receives a link.
-  const chatracePdfUrl = pdfUrlForChatrace ?? receiptPageLink;
+  // For Chatrace: pdfUrlForChatrace is the S3 PDF (may be null).
+  // We will always send `receipt_link` and only send `pdf_url` when S3 PDF exists.
+  const chatracePdfUrl = pdfUrlForChatrace; // may be null
 
   if (chatracePdfUrl && normalizedChatracePhone) {
     try {
       // structured log about env presence and inputs
+      const tagName = chatracePdfUrl ? 'receipt_created_pdf' : 'receipt_created_link';
+
       console.info('[receipts][chatrace] preparing push', {
         receiptId: receipt.id,
         phoneNormalized: normalizedChatracePhone,
@@ -226,7 +229,7 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         CHATRACE_BASE_URL: !!process.env.CHATRACE_BASE_URL,
         CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
         tokenPresent: !!process.env.CHATRACE_API_TOKEN,
-        tagName: 'receipt_created',
+        tagName,
       });
 
       const chitInput = {
@@ -238,7 +241,9 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
         amount: Math.round(invoiceAmount).toString(),
         currency: "KES",
-        pdfUrl: chatracePdfUrl,
+        receiptLink: receiptPageLink,
+        pdfUrl: chatracePdfUrl ?? undefined,
+        tagName,
       };
 
       const result = await pushReceiptToChatrace(chitInput);
@@ -323,7 +328,6 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   // Email via SendGrid
   try {
     const toEmail = (receipt.order as any)?.customerEmail || (receipt.data as any)?.customerEmail;
-    const wantEmail = channels.length === 0 || channels.includes('email');
     const rawSendgridKey = process.env.SENDGRID_API_KEY || process.env.SENDGRID_KEY || '';
     const sendgridEnv = process.env.SENDGRID_API_KEY
       ? 'SENDGRID_API_KEY'
