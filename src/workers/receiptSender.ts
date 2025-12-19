@@ -101,6 +101,9 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
   const wantSms = channels.length === 0 || channels.includes('sms');
   const snapshot = receipt.data ?? { order: receipt.order, totals: receipt.totals };
+  if (!snapshot.attendantName) {
+    snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
+  }
 
   const sent: string[] = [];
   const errors: any[] = [];
