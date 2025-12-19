@@ -94,7 +94,7 @@ async function fetchPdfFromService(html: string): Promise<Buffer | null> {
 export async function sendReceiptChannels(receiptId: string, channels: string[] = []) {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
-    include: { order: { include: { items: true } }, issuedBy: true },
+    include: { order: { include: { items: true, attendant: true } }, issuedBy: true },
   });
   if (!receipt) throw new Error('Receipt not found');
   const wantEmail = channels.length === 0 || channels.includes('email');
