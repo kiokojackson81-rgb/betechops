@@ -830,7 +830,7 @@ async function notifyInternalReceipt(receiptId: string, docType?: string) {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
     include: {
-      issuedBy: { select: { full_name: true, name: true, email: true } },
+      issuedBy: { select: { name: true, email: true } },
       order: { select: { orderNumber: true } },
     },
   });
@@ -859,7 +859,6 @@ async function notifyInternalReceipt(receiptId: string, docType?: string) {
     .trim();
 
   const staffName =
-    receipt.issuedBy?.full_name ||
     receipt.issuedBy?.name ||
     receipt.issuedBy?.email ||
     "(unknown)";
