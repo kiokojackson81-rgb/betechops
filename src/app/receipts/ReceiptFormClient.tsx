@@ -519,9 +519,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             placeholder="Auto-generated"
             className={`${fieldClass} cursor-not-allowed text-slate-400`}
           />
-          <p className="mt-1 text-xs text-slate-400">
-            Generated automatically for receipts, invoices, quotations and layaway.
-          </p>
+          
         </div>
         <div>
           <label className={labelClass}>Customer Name</label>
