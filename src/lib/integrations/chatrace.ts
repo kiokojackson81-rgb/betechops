@@ -95,9 +95,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
         json = null;
       }
       const bodySnippet = (text || '').slice(0, 200);
+      // If the backend returns an error object in the JSON body (some endpoints
+      // return HTTP 200 but include an `error` object), treat that as a failure
+      // so callers don't proceed as if the request succeeded.
+      const bodyHasError = !!(json && (json.error || json.errors));
+      if (bodyHasError) {
+        console.warn('[chatrace][http] response contains error payload', { method, path, url, status: res.status, headerKeys, bodySnippet });
+      }
       console.info('[chatrace][http]', { method, path, url, status: res.status, headerKeys, bodySnippet });
       console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet });
-      return { ok: res.ok, status: res.status, text, json };
+      return { ok: res.ok && !bodyHasError, status: res.status, text, json };
     } catch (e) {
       const errMessage = String(e);
       console.error('[chatrace][http] failed', { method, path, error: errMessage });
