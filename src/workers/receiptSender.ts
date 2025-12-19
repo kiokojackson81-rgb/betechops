@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 import sgMail from '@sendgrid/mail';
 import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
@@ -50,29 +50,27 @@ function renderHtml(snapshot: any) {
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
   // Use branded template when available. opts.hideStamp=true produces a soft copy without stamp/signature.
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
+  // Use the Vercel-friendly chromium-min package and always resolve
+  // the executable path via its helper. Include additional flags that
+  // improve stability on serverless platforms.
   const launchOptions: any = {
-    args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+    args: [
+      ...chromium.args,
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--single-process',
+    ],
+    defaultViewport: (chromium as any).defaultViewport,
+    executablePath: undefined,
+    headless: (chromium as any).headless,
   };
-  const defaultViewport = (chromium as any).defaultViewport;
-  if (defaultViewport) launchOptions.defaultViewport = defaultViewport;
-  const headlessFlag = (chromium as any).headless;
-  launchOptions.headless = typeof headlessFlag === 'boolean' ? headlessFlag : true;
-  const isServerless = Boolean(
-    process.env.VERCEL === '1' ||
-    process.env.VERCEL_ENV ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.FUNCTIONS_WORKER_RUNTIME
-  );
-  let executablePath: string | undefined;
   try {
-    if (isServerless || !process.env.PUPPETEER_EXECUTABLE_PATH) {
-      executablePath = await chromium.executablePath();
-    } else {
-      executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
-    if (!executablePath) throw new Error('Chromium executable path not resolved');
-    launchOptions.executablePath = executablePath;
-    console.info('[receiptSender] launching Chromium', { executablePath });
+    launchOptions.executablePath = await chromium.executablePath();
+    console.info('[receiptSender] chromium resolved', {
+      executablePath: launchOptions.executablePath,
+      headless: launchOptions.headless,
+    });
   } catch (err) {
     console.error('[receiptSender] failed to resolve Chromium executable', err);
     return null;
@@ -116,7 +114,16 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
   };
   const actorId = (await getActorId()) || 'system';
 
-  const needsPdf = Boolean(process.env.S3_BUCKET || wantEmail || wantWhatsapp);
+  // Only attempt PDF rendering when the environment explicitly allows it
+  // or when a puppeteer executable path is provided. This prevents noisy
+  // runtime errors in serverless environments that do not include Chromium
+  // (e.g. Vercel serverless functions) and lets us fall back to sending
+  // the receipt page link instead.
+  const canRenderPdf = process.env.NODE_ENV === 'test' || Boolean(process.env.PUPPETEER_EXECUTABLE_PATH) || process.env.ENABLE_PDF_RENDERING === '1';
+  if (!canRenderPdf) {
+    console.warn('[receiptSender] PDF rendering disabled in this environment; will use receipt link fallback');
+  }
+  const needsPdf = canRenderPdf && Boolean(process.env.S3_BUCKET || wantEmail || wantWhatsapp);
   let pdfCustomerBuffer: Buffer | null = null;
   let pdfFullBuffer: Buffer | null = null;
   if (needsPdf) {
@@ -214,9 +221,11 @@ export async function sendReceiptChannels(receiptId: string, channels: string[] 
 
   // For Chatrace: pdfUrlForChatrace is the S3 PDF (may be null).
   // We will always send `receipt_link` and only send `pdf_url` when S3 PDF exists.
+  // Call Chatrace whenever we have a normalized phone number; the payload
+  // will include `receiptLink` and optionally `pdfUrl`.
   const chatracePdfUrl = pdfUrlForChatrace; // may be null
 
-  if (chatracePdfUrl && normalizedChatracePhone) {
+  if (normalizedChatracePhone) {
     try {
       // structured log about env presence and inputs
       const tagName = chatracePdfUrl ? 'receipt_created_pdf' : 'receipt_created_link';

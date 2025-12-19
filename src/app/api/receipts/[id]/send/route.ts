@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendReceiptChannels } from '@/workers/receiptSender';
 import { auth } from '@/lib/auth';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
