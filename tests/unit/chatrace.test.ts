@@ -44,13 +44,13 @@ describe('pushReceiptToChatrace', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const searchCall = fetchMock.mock.calls[0];
-    expect(String(searchCall[0])).toContain('/api/v1/contacts?');
+    expect(String(searchCall[0])).toContain('/v1/contacts?');
     const updateCall = fetchMock.mock.calls[1];
-    expect(String(updateCall[0])).toContain('/api/v1/contacts/c111');
+    expect(String(updateCall[0])).toContain('/v1/contacts/c111');
     expect(updateCall[1]?.method).toBe('PATCH');
     expect(updateCall[1]?.body).toContain('customer_name');
     const tagCall = fetchMock.mock.calls[2];
-    expect(String(tagCall[0])).toContain('/api/v1/contacts/c111/tags');
+    expect(String(tagCall[0])).toContain('/v1/contacts/c111/tags');
     expect(tagCall[1]?.method).toBe('POST');
   });
 
@@ -86,8 +86,8 @@ describe('pushReceiptToChatrace', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
     const createCall = fetchMock.mock.calls[1];
     expect(createCall[1]?.method).toBe('POST');
-    expect(String(createCall[0])).toContain('/api/v1/contacts');
+    expect(String(createCall[0])).toContain('/v1/contacts');
     const updateCall = fetchMock.mock.calls[2];
-    expect(String(updateCall[0])).toContain('/api/v1/contacts/c222');
+    expect(String(updateCall[0])).toContain('/v1/contacts/c222');
   });
 });
