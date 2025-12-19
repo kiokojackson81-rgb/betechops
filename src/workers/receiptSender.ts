@@ -52,9 +52,11 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   const launchOptions: any = {
     args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    headless: chromium.headless,
   };
+  const defaultViewport = (chromium as any).defaultViewport;
+  if (defaultViewport) launchOptions.defaultViewport = defaultViewport;
+  const headlessFlag = (chromium as any).headless;
+  launchOptions.headless = typeof headlessFlag === 'boolean' ? headlessFlag : true;
   try {
     const executablePath = await chromium.executablePath();
     launchOptions.executablePath = executablePath;
