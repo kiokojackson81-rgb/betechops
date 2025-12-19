@@ -11,6 +11,8 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
+import { pushOpsEventToChatraceInternal } from "@/lib/chatraceInternal";
+import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -777,6 +779,12 @@ export async function POST(req: NextRequest) {
       console.warn("[receipts] failed to publish summary update", err);
     }
 
+    try {
+      await notifyInternalReceipt(result.receiptId, docType);
+    } catch (internalErr) {
+      console.error("[receipts] failed to notify internal ops", internalErr);
+    }
+
     const autoResult = await tryAutoSendReceiptWhatsapp(result.receiptId);
     return NextResponse.json({ ok: true, ...result, whatsapp: autoResult });
   } catch (err) {
@@ -815,4 +823,64 @@ async function tryAutoSendReceiptWhatsapp(receiptId: string) {
   });
 
   return { sent: chRes.ok, errors: chRes.errors };
+}
+
+async function notifyInternalReceipt(receiptId: string, docType?: string) {
+  if (docType && docType !== "RECEIPT") return;
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: {
+      issuedBy: { select: { full_name: true, name: true, email: true } },
+      order: { select: { orderNumber: true } },
+    },
+  });
+  if (!receipt) return;
+
+  const receiptNumberValue =
+    (typeof receipt.totals === "object" && receipt.totals
+      ? (receipt.totals as Record<string, any>).receiptNumber
+      : null) ||
+    (typeof receipt.data === "object" && receipt.data
+      ? (receipt.data as Record<string, any>).receiptNumber
+      : null) ||
+    receipt.order?.orderNumber;
+  const receiptNumber = String(receiptNumberValue || receipt.orderId || receipt.id);
+
+  const amountKES = extractReceiptTotalKES(receipt as any);
+  const paymentMethod = String(
+    (typeof receipt.data === "object" && receipt.data
+      ? (receipt.data as Record<string, any>).paymentMethod
+      : null) ||
+      (typeof receipt.totals === "object" && receipt.totals
+        ? (receipt.totals as Record<string, any>).paymentMethod
+        : null) ||
+      ""
+  )
+    .trim();
+
+  const staffName =
+    receipt.issuedBy?.full_name ||
+    receipt.issuedBy?.name ||
+    receipt.issuedBy?.email ||
+    "(unknown)";
+
+  const itemsShort = extractItemsShort(receipt as any);
+  const baseUrl =
+    (process.env.BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "https://ops.betech.co.ke").replace(
+      /\/$/,
+      ""
+    );
+  const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
+
+  await pushOpsEventToChatraceInternal({
+    tagName: "ops_receipt_created",
+    fields: {
+      receipt_number: receiptNumber,
+      amount: amountKES,
+      payment_method: paymentMethod,
+      staff_name: staffName,
+      items_short: itemsShort,
+      receipt_link: receiptLink,
+    },
+  });
 }
