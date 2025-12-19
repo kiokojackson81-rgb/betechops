@@ -28,7 +28,7 @@ describe('pushReceiptToChatrace', () => {
       });
 
     fetchMock
-      .mockResolvedValueOnce(successResponse({ contacts: [{ id: 'c111' }] }))
+      .mockResolvedValueOnce(successResponse({ data: [{ id: 'c111' }] }))
       .mockResolvedValueOnce(successResponse({}))
       .mockResolvedValueOnce(successResponse({}));
 
@@ -42,16 +42,13 @@ describe('pushReceiptToChatrace', () => {
       pdfUrl: 'https://files.betech.co.ke/r.pdf',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // should call search then apply actions on the found contact
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const searchCall = fetchMock.mock.calls[0];
-    expect(String(searchCall[0])).toContain('/v1/contacts?');
-    const updateCall = fetchMock.mock.calls[1];
-    expect(String(updateCall[0])).toContain('/v1/contacts/c111');
-    expect(updateCall[1]?.method).toBe('PATCH');
-    expect(updateCall[1]?.body).toContain('customer_name');
-    const tagCall = fetchMock.mock.calls[2];
-    expect(String(tagCall[0])).toContain('/v1/contacts/c111/tags');
-    expect(tagCall[1]?.method).toBe('POST');
+    expect(String(searchCall[0])).toContain('/contacts/find?field_id=phone');
+    const actionsCall = fetchMock.mock.calls[1];
+    expect(String(actionsCall[0])).toContain('/contacts/');
+    expect(actionsCall[1]?.method).toBe('POST');
   });
 
   it('creates a contact when none exists before updating', async () => {
@@ -68,8 +65,8 @@ describe('pushReceiptToChatrace', () => {
       });
 
     fetchMock
-      .mockResolvedValueOnce(createResponse({ contacts: [] }))
-      .mockResolvedValueOnce(createResponse({ contact: { id: 'c222' } }))
+      .mockResolvedValueOnce(createResponse({ data: [] }))
+      .mockResolvedValueOnce(createResponse({ id: 'c222' }))
       .mockResolvedValueOnce(createResponse({}))
       .mockResolvedValueOnce(createResponse({}));
 
@@ -83,11 +80,13 @@ describe('pushReceiptToChatrace', () => {
       pdfUrl: 'https://files.betech.co.ke/r99.pdf',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // should call search, create, then apply actions -> 3 calls
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const createCall = fetchMock.mock.calls[1];
     expect(createCall[1]?.method).toBe('POST');
-    expect(String(createCall[0])).toContain('/v1/contacts');
-    const updateCall = fetchMock.mock.calls[2];
-    expect(String(updateCall[0])).toContain('/v1/contacts/c222');
+    expect(String(createCall[0])).toContain('/contacts');
+    const actionsCall = fetchMock.mock.calls[2];
+    expect(String(actionsCall[0])).toContain('/contacts/');
+    expect(actionsCall[1]?.method).toBe('POST');
   });
 });

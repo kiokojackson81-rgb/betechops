@@ -130,14 +130,35 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     pdfUrlLength: pdfUrl?.length ?? 0,
   });
 
-  // Chatrace API root paths use `/v1/...` under the configured base URL.
-  // Some deployments document the base as `api.chatrace.com/` so joining
-  // `/api/v1` would duplicate `api` (causing 404). Use `/v1` here and let
-  // the `BASE_URL` include any `api` prefix if required by the environment.
-  const searchPath = `/v1/contacts?${accountQuery}&phone=${encodeURIComponent(phoneE164)}`;
-  const searchRes = await runRequest('GET', searchPath);
+  // Use documented Chatrace endpoints: find by custom field (phone)
+  // GET /contacts/find?field_id=phone&value={phone}
+  const searchPath = `/contacts/find?field_id=phone&value=${encodeURIComponent(phoneE164)}`;
+  let searchRes = await runRequest('GET', searchPath);
   debug.steps.search = { status: searchRes.status, bodySnippet: (searchRes.text || '').slice(0, 200), path: searchPath, bodyError: searchRes.bodyError ?? null };
   if (searchRes.bodyError && !debug.error) debug.error = typeof searchRes.bodyError === 'string' ? searchRes.bodyError : JSON.stringify(searchRes.bodyError);
+
+  // If the response contained an error payload (some deployments return
+  // HTTP 200 with { error: ... }), attempt common alternative paths/param
+  // names and record attempts so we can diagnose endpoint mismatches.
+  if (!searchRes.ok && searchRes.bodyError && (searchRes.bodyError?.code === 404 || searchRes.status === 200)) {
+    const altAttempts: any[] = [];
+    const candidates = [
+      `/api/v1/contacts?${accountQuery}&phone=${encodeURIComponent(phoneE164)}`,
+      `/v1/contacts?account_id=${encodeURIComponent(ACCOUNT_ID || '')}&phone=${encodeURIComponent(phoneE164)}`,
+      `/api/v1/contacts?account_id=${encodeURIComponent(ACCOUNT_ID || '')}&phone=${encodeURIComponent(phoneE164)}`,
+    ];
+    for (const p of candidates) {
+      const r = await runRequest('GET', p);
+      altAttempts.push({ path: p, status: r.status, ok: r.ok, bodyError: r.bodyError ?? null, snippet: (r.text || '').slice(0, 200) });
+      if (r.ok) {
+        searchRes = r;
+        debug.steps.search = { status: searchRes.status, bodySnippet: (searchRes.text || '').slice(0, 200), path: p, bodyError: searchRes.bodyError ?? null };
+        break;
+      }
+    }
+    if (altAttempts.length) debug.steps.search.alternatives = altAttempts;
+    if (searchRes.bodyError && !debug.error) debug.error = typeof searchRes.bodyError === 'string' ? searchRes.bodyError : JSON.stringify(searchRes.bodyError);
+  }
 
   let contact: any = null;
   try {
@@ -148,8 +169,19 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   } catch {}
 
   if (!contact) {
-    const createPath = '/v1/contacts';
-    const createRes = await runRequest('POST', createPath, { accountId: ACCOUNT_ID, phone: phoneE164, name: customerName });
+    // Create a contact using the documented body + actions so we can set tags and fields in one request
+    const createPath = '/contacts';
+    const createBody: any = {
+      phone: phoneE164,
+      first_name: customerName,
+      actions: [
+        { action: 'add_tag', tag_name: tagName },
+        { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
+        { action: 'set_field_value', field_name: 'amount', value: amount },
+        { action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl },
+      ],
+    };
+    const createRes = await runRequest('POST', createPath, createBody);
     debug.steps.create = {
       status: createRes.status,
       bodySnippet: (createRes.text || '').slice(0, 200),
@@ -159,8 +191,20 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     if (createRes.bodyError && !debug.error) debug.error = typeof createRes.bodyError === 'string' ? createRes.bodyError : JSON.stringify(createRes.bodyError);
     try {
       const cdata = createRes.json ?? {};
-      contact = cdata?.contact ?? cdata?.data ?? cdata;
+      // create may return the created contact directly or under data/contact
+      contact = cdata?.contact ?? (Array.isArray(cdata?.data) ? cdata.data[0] : cdata?.data) ?? cdata;
     } catch {}
+
+    // If create didn't return contact id, try to re-run find by phone to fetch id
+    if ((!contact || !contact.id) && createRes.ok) {
+      const reFindRes = await runRequest('GET', `/contacts/find?field_id=phone&value=${encodeURIComponent(phoneE164)}`);
+      debug.steps.create.followupFind = { status: reFindRes.status, bodySnippet: (reFindRes.text || '').slice(0,200), path: `/contacts/find?field_id=phone&value=${encodeURIComponent(phoneE164)}`, bodyError: reFindRes.bodyError ?? null };
+      try {
+        const d = reFindRes.json ?? {};
+        contact = Array.isArray(d?.data) && d.data.length ? d.data[0] : (d?.contact ?? null);
+      } catch {}
+    }
+
     if (!contact || !contact.id) {
       debug.ok = false;
       await persistDebug(receiptNumber, debug);
@@ -171,33 +215,26 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const contactId = contact.id;
   debug.contactId = contactId;
 
-  const updatePath = `/v1/contacts/${encodeURIComponent(contactId)}`;
-  const updateRes = await runRequest('PATCH', updatePath, { accountId: ACCOUNT_ID, custom_fields: fieldPayload });
-  debug.steps.updateFields = {
-    status: updateRes.status,
-    bodySnippet: (updateRes.text || '').slice(0, 200),
-    path: updatePath,
-    bodyError: updateRes.bodyError ?? null,
+  // Apply tag and update fields via documented actions endpoint
+  const actionsPath = `/contacts/${encodeURIComponent(contactId)}`;
+  const actionsBody = {
+    actions: [
+      { action: 'set_field_value', field_name: 'receipt_number', value: receiptNumber },
+      { action: 'set_field_value', field_name: 'amount', value: amount },
+      { action: 'set_field_value', field_name: 'receipt_url', value: pdfUrl },
+      { action: 'add_tag', tag_name: tagName },
+    ],
+  } as Record<string, unknown>;
+  const actionsRes = await runRequest('POST', actionsPath, actionsBody);
+  debug.steps.applyActions = {
+    status: actionsRes.status,
+    bodySnippet: (actionsRes.text || '').slice(0, 200),
+    path: actionsPath,
+    bodyError: actionsRes.bodyError ?? null,
   };
-  if (updateRes.bodyError && !debug.error) debug.error = typeof updateRes.bodyError === 'string' ? updateRes.bodyError : JSON.stringify(updateRes.bodyError);
+  if (actionsRes.bodyError && !debug.error) debug.error = typeof actionsRes.bodyError === 'string' ? actionsRes.bodyError : JSON.stringify(actionsRes.bodyError);
 
-  if (!updateRes.ok) {
-    debug.ok = false;
-    await persistDebug(receiptNumber, debug);
-    return { ok: false, debug };
-  }
-
-  const tagPath = `/v1/contacts/${encodeURIComponent(contactId)}/tags`;
-  const tagRes = await runRequest('POST', tagPath, { accountId: ACCOUNT_ID, tag: tagName });
-  debug.steps.applyTag = {
-    status: tagRes.status,
-    bodySnippet: (tagRes.text || '').slice(0, 200),
-    path: tagPath,
-    bodyError: tagRes.bodyError ?? null,
-  };
-  if (tagRes.bodyError && !debug.error) debug.error = typeof tagRes.bodyError === 'string' ? tagRes.bodyError : JSON.stringify(tagRes.bodyError);
-
-  if (!tagRes.ok) {
+  if (!actionsRes.ok) {
     debug.ok = false;
     await persistDebug(receiptNumber, debug);
     return { ok: false, debug };
