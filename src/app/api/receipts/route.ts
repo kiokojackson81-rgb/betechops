@@ -448,6 +448,15 @@ export async function POST(req: NextRequest) {
             serialType: safePayload.serial === undefined ? 'undefined' : safePayload.serial === null ? 'null' : typeof safePayload.serial,
             warrantyType: safePayload.warranty === undefined ? 'undefined' : safePayload.warranty === null ? 'null' : typeof safePayload.warranty,
           });
+          // Diagnostic: log UTF-8 byte arrays to detect hidden/trailing characters
+          try {
+            console.info('[receipts] creating orderItem bytes', {
+              serialBytes: safePayload.serial ? Array.from(Buffer.from(String(safePayload.serial), 'utf8')) : [],
+              warrantyBytes: safePayload.warranty ? Array.from(Buffer.from(String(safePayload.warranty), 'utf8')) : [],
+            });
+          } catch (e) {
+            // ignore diagnostics failing
+          }
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
         } catch (orderItemError) {
