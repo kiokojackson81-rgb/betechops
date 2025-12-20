@@ -569,8 +569,9 @@ export async function sendReceiptChannels(
       receipt.issuedBy?.name ??
       'Customer';
     const whatsappAttendant = snapshot.attendantName ?? receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
-    const receiptItems = snapshot.items ?? (receipt.order as any)?.items ?? [];
-    const paymentMethodText = snapshot.paymentMethod ?? receipt.order?.paymentMethod;
+    const snapshotAny = snapshot as any;
+    const receiptItems = snapshotAny.items ?? (receipt.order as any)?.items ?? [];
+    const paymentMethodText = snapshotAny.paymentMethod ?? receipt.order?.paymentMethod;
     const whatsappMessage = buildWhatsAppMessage({
       customerName: whatsappCustomerName,
       receiptNumber: receipt.order?.orderNumber ?? receipt.id,
