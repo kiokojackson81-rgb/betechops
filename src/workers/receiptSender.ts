@@ -558,23 +558,37 @@ export async function sendReceiptChannels(
 
   // WhatsApp via Meta Business API or Twilio fallback + optional SMS
   try {
-    const toPhone = ((receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || '').trim();
+    const orderAny = receipt.order as any;
+    const dataAny = (receipt.data as any) || {};
+    const toPhone = (orderAny?.customerPhone || dataAny?.customerPhone || '').trim();
     if (!wantWhatsapp) channelStatus.whatsapp = 'skipped';
     if (!wantSms) channelStatus.sms = 'skipped';
     const site = getSiteUrl();
     const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
-    const whatsappCustomerName =
-      snapshot.customerName ??
-      (receipt.order as any)?.customerName ??
-      receipt.issuedBy?.name ??
-      'Customer';
-    const whatsappAttendant = snapshot.attendantName ?? receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
+
+    // Prefer authoritative values from `receipt.order` when available, then fall back
+    // to `receipt.data` (snapshot) and finally issuedBy or defaults. Also log sources
+    // so we can diagnose mismatches between what was entered and what is sent.
+    const customerName = orderAny?.customerName ?? dataAny?.customerName ?? snapshot.customerName ?? receipt.issuedBy?.name ?? 'Customer';
+    const whatsappAttendant = snapshot.attendantName ?? orderAny?.attendant?.name ?? receipt.issuedBy?.name;
     const snapshotData = snapshot as Record<string, any>;
-    const receiptItems = snapshotData.items ?? (receipt.order as any)?.items ?? [];
-    const paymentMethodText = snapshotData.paymentMethod ?? (receipt.order as any)?.paymentMethod;
+    const receiptItems = orderAny?.items ?? snapshotData.items ?? [];
+    const paymentMethodText = orderAny?.paymentMethod ?? snapshotData.paymentMethod ?? undefined;
+
+    console.info('[receiptSender][whatsapp] composing message', {
+      receiptId: receipt.id,
+      orderNumber: orderAny?.orderNumber ?? null,
+      toPhone,
+      phoneFrom: orderAny?.customerPhone ? 'order' : dataAny?.customerPhone ? 'data' : 'none',
+      customerNameSource: orderAny?.customerName ? 'order' : dataAny?.customerName ? 'data' : snapshot.customerName ? 'snapshot' : 'issuedBy',
+      customerName,
+      paymentMethod: paymentMethodText,
+      itemsCount: Array.isArray(receiptItems) ? receiptItems.length : 0,
+    });
+
     const whatsappMessage = buildWhatsAppMessage({
-      customerName: whatsappCustomerName,
-      receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+      customerName,
+      receiptNumber: orderAny?.orderNumber ?? receipt.id,
       invoiceAmount,
       paymentMethod: paymentMethodText,
       attendant: whatsappAttendant,
