@@ -414,19 +414,14 @@ export async function POST(req: NextRequest) {
             : rawUnitPriceInput;
         if (
           typeof rawUnitPriceInput === 'string' &&
-          normalizedUnitPriceInput !== rawUnitPriceInput &&
-          normalizedUnitPriceInput !== ''
+          normalizedUnitPriceInput !== rawUnitPriceInput
         ) {
           console.warn('[receipts] cleaned unitPrice string', {
             raw: rawUnitPriceInput,
             cleaned: normalizedUnitPriceInput,
           });
         }
-        const sellingPrice = Number(
-          parseNumber(
-            normalizedUnitPriceInput === '' ? rawUnitPriceInput : normalizedUnitPriceInput
-          )
-        );
+        const sellingPrice = Number(parseNumber(normalizedUnitPriceInput));
         const orderItemPayload = {
           orderId: orderUpsert.id,
           productId: String(it.product?.id ?? it.product),
