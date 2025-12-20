@@ -37,7 +37,9 @@ export async function POST(req: Request) {
     logoUrl = res.url;
   }
 
-  const updated = await prisma.branding.upsert({
+  // Cast prisma to any so builds don't fail if generated client types are behind
+  const p: any = prisma as any;
+  const updated = await p.branding.upsert({
     where: { name: 'default' },
     update: {
       ...(letterheadUrl ? { letterheadUrl } : {}),
