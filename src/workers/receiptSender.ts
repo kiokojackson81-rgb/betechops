@@ -181,7 +181,7 @@ export async function sendReceiptChannels(
     sms: 'pending',
     chatrace: 'pending',
   };
-  const actorId = (await getActorId()) || 'system';
+  const actorId = await getActorId();
 
   // Only attempt PDF rendering when the environment explicitly allows it
   // or when a puppeteer executable path is provided. This prevents noisy
@@ -670,7 +670,12 @@ export async function sendReceiptChannels(
 
   // write audit log of send attempt
   try {
-    await prisma.actionLog.create({ data: { actorId, entity: 'Receipt', entityId: receiptId, action: 'SEND', before: receipt as any, after: { sent, errors }, } });
+    if (actorId) {
+      await prisma.actionLog.create({ data: { actorId, entity: 'Receipt', entityId: receiptId, action: 'SEND', before: receipt as any, after: { sent, errors } } });
+    } else {
+      // If no actorId resolved (should be rare), avoid writing a bad FK value.
+      console.warn('[receiptSender] skipping actionLog.create: no actorId available', { receiptId });
+    }
   } catch (e) {
     // non-fatal
     console.error('Failed to write send action log', e);

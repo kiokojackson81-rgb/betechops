@@ -28,11 +28,12 @@ export async function getActorId(): Promise<string | null> {
       if (user?.id) return user.id;
     }
 
-    // Fallback: ensure a system actor exists if configured. This prevents
-    // code from writing a literal 'system' actorId which violates the
-    // ActionLog -> User foreign key constraint when no such user exists.
-    const sysEmail = (process.env.SYSTEM_USER_EMAIL || "").toLowerCase().trim();
-    if (!sysEmail) return null;
+    // Fallback: ensure a system actor exists. Prefer `SYSTEM_USER_EMAIL` when
+    // configured, otherwise create/find a local internal system user so that
+    // server processes can always write ActionLog entries without using the
+    // literal string 'system' which violates the DB foreign key.
+    const configured = (process.env.SYSTEM_USER_EMAIL || "").toLowerCase().trim();
+    const sysEmail = configured || 'system@betech.internal';
 
     let sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
     if (!sysUser) {
