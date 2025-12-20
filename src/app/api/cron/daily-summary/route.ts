@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { pushOpsEventToChatraceInternal } from "@/lib/chatraceInternal";
+import { pushInternalDailySummary } from "@/lib/chatraceInternal";
 import { extractReceiptTotalKES } from "@/lib/receiptExtract";
 
 function decToNumber(value: any): number {
@@ -58,16 +58,14 @@ export async function GET() {
   const totalProfit = decToNumber(profitAgg._sum.profit);
   const summaryDate = start.toISOString().slice(0, 10);
 
-  const chatrace = await pushOpsEventToChatraceInternal({
-    tagName: "ops_daily_summary_8pm",
-    fields: {
-      summary_date: summaryDate,
-      total_receipts: totalReceipts,
-      total_sales: totalSales,
-      total_cash_sales: totalCashSales,
-      total_mpesa_sales: totalMpesaSales,
-      total_profit: totalProfit,
-    },
+  const chatrace = await pushInternalDailySummary({
+    requestId: `daily-${summaryDate}`,
+    dateLabel: summaryDate,
+    totalReceipts: String(totalReceipts),
+    totalSales: String(totalSales),
+    totalProfit: String(totalProfit),
+    totalMpesa: String(totalMpesaSales),
+    totalCash: String(totalCashSales),
   });
 
   return NextResponse.json({

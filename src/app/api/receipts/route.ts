@@ -11,7 +11,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { pushOpsEventToChatraceInternal } from "@/lib/chatraceInternal";
+import { pushInternalReceiptAlert } from "@/lib/chatraceInternal";
 import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
 import { randomUUID } from "crypto";
 
@@ -865,21 +865,23 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
     );
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
-  console.info('[receipts][internal] attempting push', { receiptId });
-  const internalFields: Record<string, string | number | undefined> = {
-    receipt_number: receiptNumber,
-    amount: amountKES,
-    payment_method: paymentMethod,
-    staff_name: staffName,
-    items_short: itemsShort,
-    receipt_link: receiptLink,
-  };
-  if (receiptUrl) {
-    internalFields.receipt_url = receiptUrl;
+  if (!receiptUrl) {
+    console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
+    return;
   }
-  const result = await pushOpsEventToChatraceInternal({
-    tagName: "ops_receipt_created",
-    fields: internalFields,
+  if (requestId) {
+    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
+  }
+  console.info('[receipts][internal] attempting push', { receiptId });
+  const result = await pushInternalReceiptAlert({
+    requestId,
+    receiptNumber,
+    amount: String(Math.round(invoiceAmount)),
+    paymentMethod,
+    createdBy: snapshot.attendantName ?? "(unknown)",
+    itemsText: itemsShort,
+    receiptLink,
+    receiptPdfUrl: receiptUrl,
   });
   console.info('[receipts][internal] push result', result);
   if (!result?.ok) {
