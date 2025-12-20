@@ -184,13 +184,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           });
           throw orderItemErr;
         }
-        createdOrderItems.push(createdItem);
-        createdItems.push({
-          title,
-          quantity,
-          unitPrice,
-          costPrice,
-        });
+        
       }
 
       // update order basics

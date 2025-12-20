@@ -424,8 +424,9 @@ export async function POST(req: NextRequest) {
           warrantyType: typeof orderItemPayload.warranty,
         });
 
+        let safePayload: any = undefined;
         try {
-          const safePayload = {
+          safePayload = {
             orderId: String(orderItemPayload.orderId),
             productId: String(orderItemPayload.productId),
             quantity: Number(orderItemPayload.quantity) || 0,
