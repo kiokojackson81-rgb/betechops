@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
   if (file) {
     const arrayBuffer = await file.arrayBuffer();
-    const res = await put(`branding/letterhead-${Date.now()}.jpg`, new Uint8Array(arrayBuffer), {
+    const res = await put(`branding/letterhead-${Date.now()}.jpg`, Buffer.from(arrayBuffer), {
       access: 'public',
       contentType: file.type || 'image/jpeg',
       token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
   if (logo) {
     const arrayBuffer = await logo.arrayBuffer();
-    const res = await put(`branding/logo-${Date.now()}.png`, new Uint8Array(arrayBuffer), {
+    const res = await put(`branding/logo-${Date.now()}.png`, Buffer.from(arrayBuffer), {
       access: 'public',
       contentType: logo.type || 'image/png',
       token: process.env.BLOB_READ_WRITE_TOKEN,
