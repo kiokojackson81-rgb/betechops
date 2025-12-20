@@ -1,6 +1,12 @@
 export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
-  const siteTitle = process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
-  const logo = process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png';
+  const branding = snapshot.branding || {};
+  const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
+  const letterheadUrl =
+    branding.letterheadUrl ||
+    process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL ||
+    '';
+  const logo = branding.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png';
+  const brandColor = branding.brandColor || '#7A2020';
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
   const totals = snapshot.totals || order.totals || {};
@@ -36,12 +42,12 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
     <style>
       body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
-      header { text-align:center; margin-bottom:12px }
-      header h1 { margin:0; font-size:28px; letter-spacing:1px }
+      header { text-align:center; margin-bottom:12px; display:flex; flex-direction:column; align-items:center; }
+      header h1 { margin:0; font-size:28px; letter-spacing:1px; color:${brandColor}; }
       header p { margin:2px 0; color:#374151 }
       .meta { display:flex; justify-content:space-between; margin:12px 0 }
       table { width:100%; border-collapse: collapse; margin-top:8px }
-      th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb }
+      th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:${brandColor}; }
       td { padding:8px }
       .right { text-align:right }
       .totals { width:100%; margin-top:12px }
@@ -52,9 +58,13 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   </head>
   <body>
     <div class="page">
-      <header style="position:relative;display:flex;align-items:center;justify-content:center;">
-        <img src="${logo}" alt="logo" style="height:56px;position:absolute;left:18px;top:10px;" />
-        <div>
+      <header>
+        ${
+          letterheadUrl
+            ? `<img src="${letterheadUrl}" alt="letterhead" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
+            : `<img src="${logo}" alt="logo" style="height:56px;margin-bottom:12px;" />`
+        }
+        <div style="text-align:center">
           <h1 style="margin-bottom:6px">${siteTitle}</h1>
           <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
           <p style="margin:2px 0">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>

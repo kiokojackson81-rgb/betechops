@@ -11,6 +11,7 @@ import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { normalizePhone } from '@/lib/phone';
 import { launchChromiumBrowser } from '@/lib/pdf/chromium';
 import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
+import { getBranding } from '@/lib/branding';
 
 
 function getSiteUrl() {
@@ -166,7 +167,12 @@ export async function sendReceiptChannels(
   logStep(requestId, 'START', 'send_pipeline', { wantEmail, wantWhatsapp, wantSms });
   // Normalize receipt.data into a mutable object for template rendering and metadata additions.
   // `receipt.data` is a Prisma JsonValue (could be string/number/etc) so narrow it to an object first.
-  const snapshot: any = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : { order: receipt.order, totals: receipt.totals };
+  const snapshot: any =
+    typeof receipt.data === 'object' && receipt.data
+      ? { ...(receipt.data as Record<string, unknown>) }
+      : { order: receipt.order, totals: receipt.totals };
+  const branding = await getBranding();
+  snapshot.branding = branding;
   if (!snapshot.attendantName) {
     snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
   }
