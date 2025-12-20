@@ -39,9 +39,9 @@ async function run(){
   console.log('Dry-run mode:', !args.apply);
   console.log('Range:', from.toISOString(), '->', to.toISOString());
 
-  // Find marketing receipts with missing buyingTotal
+  // Find marketing receipts with missing buyingTotal (schema uses non-null Int default 0)
   const marketing = await prisma.marketingReceipt.findMany({
-    where: { dailyEntry: { date: { gte: from, lte: to } }, OR: [{ buyingTotal: null }, { buyingTotal: 0 }] },
+    where: { dailyEntry: { date: { gte: from, lte: to } }, buyingTotal: 0 },
     include: { items: true },
   });
 

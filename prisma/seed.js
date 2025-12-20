@@ -9,11 +9,16 @@ async function main() {
     shop = await prisma.shop.create({ data: { name: 'Main Shop', location: 'Nairobi CBD', phone: '+254722151083', email: 'shop@betech.co.ke' } });
   }
 
-  const attendant = await prisma.user.upsert({
-    where: { email: 'attendant@betech.co.ke' },
-    update: {},
-    create: { email: 'attendant@betech.co.ke', name: 'Default Attendant', role: 'ATTENDANT', isActive: true, attendantCategory: 'DIRECT_SALES_OPS' },
-  });
+  // NOTE: removed automatic creation of the legacy "Default Attendant" user
+  // to avoid accidentally recreating the account when seeding databases.
+  // If you intentionally want to create this user, run
+  // `node ./scripts/manage_attendants.js` which contains an explicit
+  // delete/create flow and is safer for ad-hoc operations.
+  // const attendant = await prisma.user.upsert({
+  //   where: { email: 'attendant@betech.co.ke' },
+  //   update: {},
+  //   create: { email: 'attendant@betech.co.ke', name: 'Default Attendant', role: 'ATTENDANT', isActive: true, attendantCategory: 'DIRECT_SALES_OPS' },
+  // });
 
   const product = await prisma.product.upsert({
     where: { sku: 'BAT-100AH' },
@@ -90,7 +95,7 @@ async function main() {
     }
   }
 
-  console.log({ shop: shop.id, attendant: attendant.email, product: product.sku });
+  console.log({ shop: shop.id, product: product.sku });
 }
 
 main()

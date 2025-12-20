@@ -825,7 +825,12 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
     where: { id: receiptId },
     include: {
       issuedBy: { select: { name: true, email: true } },
-      order: { select: { orderNumber: true } },
+      order: {
+        select: {
+          orderNumber: true,
+          attendant: { select: { name: true } },
+        },
+      },
     },
   });
   if (!receipt) return;
@@ -840,7 +845,20 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
     receipt.order?.orderNumber;
   const receiptNumber = String(receiptNumberValue || receipt.orderId || receipt.id);
 
+  const snapshot: any =
+    typeof receipt.data === "object" && receipt.data
+      ? { ...(receipt.data as Record<string, unknown>) }
+      : { order: receipt.order, totals: receipt.totals };
+  if (!snapshot.attendantName) {
+    snapshot.attendantName =
+      receipt.order?.attendant?.name ??
+      receipt.issuedBy?.name ??
+      receipt.issuedBy?.email ??
+      "(unknown)";
+  }
+
   const amountKES = extractReceiptTotalKES(receipt as any);
+  const invoiceAmount = Number.isFinite(amountKES) ? amountKES : 0;
   const paymentMethod = String(
     (typeof receipt.data === "object" && receipt.data
       ? (receipt.data as Record<string, any>).paymentMethod

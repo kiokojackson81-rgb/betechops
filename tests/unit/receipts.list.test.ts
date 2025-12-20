@@ -1,7 +1,11 @@
 import { jest } from '@jest/globals';
 
 jest.mock('@/lib/prisma', () => ({
-  prisma: { receipt: { findMany: jest.fn() } },
+  prisma: {
+    receipt: { findMany: jest.fn() },
+    marketingReceipt: { findMany: jest.fn() },
+    supportReceipt: { findMany: jest.fn() },
+  },
 }));
 
 import { GET } from '../../src/app/api/receipts/route';
@@ -12,6 +16,8 @@ describe('GET /api/receipts', () => {
 
   it('returns mapped receipts', async () => {
     (prisma as any).receipt.findMany.mockResolvedValue([{ id: 'r1', order: { orderNumber: 'ORD1', customerName: 'Alice', items: [] }, docType: 'RECEIPT', generatedAt: new Date().toISOString(), totals: { total: 100 }, issuedBy: { name: 'Bob' } }]);
+    (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
     const req = new Request('http://localhost/api/receipts?includeItems=true');
     const res = await GET(req as any);
     expect(res.status).toBe(200);
