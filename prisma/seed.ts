@@ -1,11 +1,8 @@
 import { prisma } from '@/lib/prisma';
 
 async function main() {
-  // Cast to any to avoid TypeScript errors when generated @prisma/client types
-  // are out of sync during CI/build. The SQL/DB migration must still be applied
-  // before this seed is meaningful.
-  const p: any = prisma as any;
-  await p.branding.upsert({
+  // Use the typed Prisma client for seeding.
+  await prisma.branding.upsert({
     where: { name: 'default' },
     update: {
       letterheadUrl: process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '/letterhead.jpg',
