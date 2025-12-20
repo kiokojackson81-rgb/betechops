@@ -443,21 +443,22 @@ export async function POST(req: NextRequest) {
                 ? orderItemPayload.warranty
                 : String(orderItemPayload.warranty),
           };
+          console.info('[receipts] creating orderItem', JSON.stringify(safePayload), {
+            serialType: safePayload.serial === undefined ? 'undefined' : safePayload.serial === null ? 'null' : typeof safePayload.serial,
+            warrantyType: safePayload.warranty === undefined ? 'undefined' : safePayload.warranty === null ? 'null' : typeof safePayload.warranty,
+          });
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
         } catch (orderItemError) {
           const orderItemErrorMsg = (orderItemError as any)?.message ?? String(orderItemError);
-          console.error("[receipts] failed to persist order item", {
+          console.error('[receipts] failed to persist order item', {
             payload: orderItemPayload,
-            safePayload: {
-              orderId: String(orderItemPayload.orderId),
-              productId: String(orderItemPayload.productId),
-              quantity: Number(orderItemPayload.quantity),
-              sellingPrice: Number(orderItemPayload.sellingPrice),
-              serial: orderItemPayload.serial,
-              warranty: orderItemPayload.warranty,
-            },
+            safePayload,
+            serialType: typeof orderItemPayload.serial,
+            warrantyType: typeof orderItemPayload.warranty,
             error: orderItemErrorMsg,
+            errorMeta: (orderItemError as any)?.meta ?? undefined,
+            errorStack: (orderItemError as any)?.stack ?? undefined,
           });
           throw orderItemError;
         }

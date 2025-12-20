@@ -144,26 +144,46 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         const quantity = Math.max(1, Number(it.quantity || 1));
         const unitPrice = Number(it.unitPrice || it.sellingPrice || 0) || 0;
         const costPrice = Math.max(0, Math.round(Number(it.buyingPrice ?? 0)));
-        const createdItem = await tx.orderItem.create({
-          data: {
-            orderId: existing.orderId,
-            productId: product.id,
-            quantity,
-            sellingPrice: unitPrice,
-            serial:
-              it.serial === null || it.serial === undefined
-                ? null
-                : typeof it.serial === 'string'
-                ? it.serial
-                : String(it.serial),
-            warranty:
-              it.warranty === null || it.warranty === undefined
-                ? null
-                : typeof it.warranty === 'string'
-                ? it.warranty
-                : String(it.warranty),
-          },
+        const createPayload = {
+          orderId: existing.orderId,
+          productId: product.id,
+          quantity,
+          sellingPrice: unitPrice,
+          serial:
+            it.serial === null || it.serial === undefined
+              ? null
+              : typeof it.serial === 'string'
+              ? it.serial
+              : String(it.serial),
+          warranty:
+            it.warranty === null || it.warranty === undefined
+              ? null
+              : typeof it.warranty === 'string'
+              ? it.warranty
+              : String(it.warranty),
+        };
+        console.info('[receipts] creating orderItem (patch)', JSON.stringify(createPayload), {
+          serialType: createPayload.serial === null ? 'null' : typeof createPayload.serial,
+          warrantyType: createPayload.warranty === null ? 'null' : typeof createPayload.warranty,
         });
+        try {
+          const createdItem = await tx.orderItem.create({ data: createPayload });
+          createdOrderItems.push(createdItem);
+          createdItems.push({
+            title,
+            quantity,
+            unitPrice,
+            costPrice,
+          });
+        } catch (orderItemErr) {
+          console.error('[receipts] failed to create orderItem (patch)', {
+            createPayload,
+            error: (orderItemErr as any)?.message ?? String(orderItemErr),
+            meta: (orderItemErr as any)?.meta ?? undefined,
+            stack: (orderItemErr as any)?.stack ?? undefined,
+          });
+          throw orderItemErr;
+        }
         createdOrderItems.push(createdItem);
         createdItems.push({
           title,
