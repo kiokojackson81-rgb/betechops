@@ -425,11 +425,30 @@ export async function POST(req: NextRequest) {
         });
 
         try {
-          const item = await tx.orderItem.create({ data: orderItemPayload as unknown as Prisma.OrderItemCreateInput });
+          const safePayload = {
+            orderId: String(orderItemPayload.orderId),
+            productId: String(orderItemPayload.productId),
+            quantity: Number(orderItemPayload.quantity) || 0,
+            sellingPrice: Number(orderItemPayload.sellingPrice) || 0,
+            serial: orderItemPayload.serial ?? undefined,
+            warranty: orderItemPayload.warranty ?? undefined,
+          };
+          const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
         } catch (orderItemError) {
           const orderItemErrorMsg = (orderItemError as any)?.message ?? String(orderItemError);
-          console.error("[receipts] failed to persist order item", JSON.stringify(orderItemPayload), orderItemErrorMsg);
+          console.error("[receipts] failed to persist order item", {
+            payload: orderItemPayload,
+            safePayload: {
+              orderId: String(orderItemPayload.orderId),
+              productId: String(orderItemPayload.productId),
+              quantity: Number(orderItemPayload.quantity),
+              sellingPrice: Number(orderItemPayload.sellingPrice),
+              serial: orderItemPayload.serial,
+              warranty: orderItemPayload.warranty,
+            },
+            error: orderItemErrorMsg,
+          });
           throw orderItemError;
         }
       }
