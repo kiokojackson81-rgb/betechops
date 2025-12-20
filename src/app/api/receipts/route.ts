@@ -400,7 +400,33 @@ export async function POST(req: NextRequest) {
       for (const it of createdItems) {
         // Ensure numeric and integer types are strictly coerced for Prisma
         const qty = Math.max(1, Math.trunc(Number(it.quantity ?? 1)));
-        const sellingPrice = Number(parseNumber(it.unitPrice));
+        const rawUnitPriceInput = it.unitPrice ?? '';
+        if (typeof rawUnitPriceInput === 'string') {
+          console.info('[receipts] raw item.unitPrice before parsing', {
+            orderNumber: serial,
+            itemTitle: it.title,
+            rawUnitPrice: rawUnitPriceInput,
+          });
+        }
+        const normalizedUnitPriceInput =
+          typeof rawUnitPriceInput === 'string'
+            ? rawUnitPriceInput.replace(/[^0-9.\-]/g, '').trim()
+            : rawUnitPriceInput;
+        if (
+          typeof rawUnitPriceInput === 'string' &&
+          normalizedUnitPriceInput !== rawUnitPriceInput &&
+          normalizedUnitPriceInput !== ''
+        ) {
+          console.warn('[receipts] cleaned unitPrice string', {
+            raw: rawUnitPriceInput,
+            cleaned: normalizedUnitPriceInput,
+          });
+        }
+        const sellingPrice = Number(
+          parseNumber(
+            normalizedUnitPriceInput === '' ? rawUnitPriceInput : normalizedUnitPriceInput
+          )
+        );
         const orderItemPayload = {
           orderId: orderUpsert.id,
           productId: String(it.product?.id ?? it.product),
