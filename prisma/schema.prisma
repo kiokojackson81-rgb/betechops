@@ -1031,6 +1031,15 @@ model ReceiptFile {
   @@index([receiptId])
 }
 
+model Branding {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  letterheadUrl String
+  logoUrl       String?
+  brandColor    String?
+  updatedAt     DateTime @updatedAt
+}
+
 model LayawayPlan {
   id         String          @id @default(cuid())
   orderId    String          @unique
