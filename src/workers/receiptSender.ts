@@ -33,6 +33,77 @@ function logStep(requestId: string, step: string, status: string, meta?: Record<
   console.info(`[receiptSender][${requestId}] ${step}:${status}${formatMeta(meta)}`);
 }
 
+function formatCurrencyKes(value: number) {
+  try {
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${Math.round(value)} KES`;
+  }
+}
+
+type WhatsAppMessageParams = {
+  customerName?: string;
+  receiptNumber: string;
+  invoiceAmount: number;
+  paymentMethod?: string;
+  attendant?: string;
+  items?: any[];
+  receiptLink: string;
+  pdfUrl?: string | null;
+  siteTitle: string;
+};
+
+function buildWhatsAppMessage(params: WhatsAppMessageParams) {
+  const {
+    customerName,
+    receiptNumber,
+    invoiceAmount,
+    paymentMethod,
+    attendant,
+    items = [],
+    receiptLink,
+    pdfUrl,
+    siteTitle,
+  } = params;
+
+  const formattedTotal = formatCurrencyKes(invoiceAmount);
+  const greeting = customerName ? `Hello ${customerName},` : 'Hello,';
+  const itemLines = (items || [])
+    .map((item) => {
+      const title = item?.title || item?.productName || 'Item';
+      const qty = Number.isFinite(Number(item?.quantity ?? 1)) ? Number(item?.quantity ?? 1) : 1;
+      const unitPrice = Number.isFinite(Number(item?.unitPrice ?? item?.sellingPrice ?? 0))
+        ? Number(item?.unitPrice ?? item?.sellingPrice ?? 0)
+        : 0;
+      const lineTotal = qty * unitPrice;
+      const amountText = Number.isFinite(lineTotal) ? formatCurrencyKes(lineTotal) : '';
+      return `${title} x${qty}${amountText ? ` (${amountText})` : ''}`;
+    })
+    .slice(0, 3);
+  const itemsText =
+    itemLines.length > 0
+      ? `Items:\n${itemLines.join('\n')}${items.length > 3 ? `\n...and ${items.length - 3} more item(s)` : ''}`
+      : '';
+  const lines = [
+    greeting,
+    '',
+    `Thank you for shopping at ${siteTitle}.`,
+    '',
+    'Your purchase details:',
+    `Receipt Number: ${receiptNumber}`,
+    `Total Amount: ${formattedTotal}`,
+    paymentMethod ? `Payment Method: ${paymentMethod}` : null,
+    attendant ? `Served by: ${attendant}` : null,
+    itemsText || null,
+    '',
+    pdfUrl ? `Download your receipt: ${pdfUrl}` : `View your receipt: ${receiptLink}`,
+    '',
+    'We value your feedback. Share your experience with us on our social media pages.',
+    `Thank you for choosing ${siteTitle}.`,
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
   const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
   let browser;
@@ -492,6 +563,25 @@ export async function sendReceiptChannels(
     if (!wantSms) channelStatus.sms = 'skipped';
     const site = getSiteUrl();
     const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
+    const whatsappCustomerName =
+      snapshot.customerName ??
+      (receipt.order as any)?.customerName ??
+      receipt.issuedBy?.name ??
+      'Customer';
+    const whatsappAttendant = snapshot.attendantName ?? receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
+    const receiptItems = snapshot.items ?? (receipt.order as any)?.items ?? [];
+    const paymentMethodText = snapshot.paymentMethod ?? receipt.order?.paymentMethod;
+    const whatsappMessage = buildWhatsAppMessage({
+      customerName: whatsappCustomerName,
+      receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+      invoiceAmount,
+      paymentMethod: paymentMethodText,
+      attendant: whatsappAttendant,
+      items: receiptItems,
+      receiptLink: link,
+      pdfUrl: pdfUrlCustomer,
+      siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',
+    });
 
     if (wantWhatsapp && toPhone) {
       if (hasWhatsAppConfig()) {
@@ -501,13 +591,13 @@ export async function sendReceiptChannels(
               to: toPhone,
               link: pdfUrlCustomer,
               filename: `receipt-${receipt.id}.pdf`,
-              caption: `Receipt ${receipt.order?.orderNumber ?? receipt.id}`,
+              caption: whatsappMessage,
             });
           } else {
             // fallback to sending a text link
             await sendWhatsAppTextMessage({
               to: toPhone,
-              body: `Your receipt ${receipt.order?.orderNumber ?? ''}: ${link}`,
+              body: whatsappMessage,
               previewUrl: true,
             });
           }
@@ -521,8 +611,12 @@ export async function sendReceiptChannels(
         }
       } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
         const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        const msgPayload: any = { from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`, to: `whatsapp:${toPhone}`, body: `Your receipt: ${link}` };
-          if (pdfUrlCustomer) msgPayload.mediaUrl = [pdfUrlCustomer];
+        const msgPayload: any = {
+          from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`,
+          to: `whatsapp:${toPhone}`,
+          body: whatsappMessage,
+        };
+        if (pdfUrlCustomer) msgPayload.mediaUrl = [pdfUrlCustomer];
         await client.messages.create(msgPayload);
         sent.push('whatsapp');
         channelStatus.whatsapp = 'sent';
