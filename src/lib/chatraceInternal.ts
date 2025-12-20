@@ -74,7 +74,6 @@ export async function pushInternalReceiptAlert(input: {
   if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
   const actions = [
-    { action: "add_tag", tag_name: "receipt_admin_alert" },
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "admin_amount", value: input.amount },
     { action: "set_field_value", field_name: "admin_payment_method", value: input.paymentMethod },
@@ -84,6 +83,7 @@ export async function pushInternalReceiptAlert(input: {
     ...(input.receiptPdfUrl
       ? [{ action: "set_field_value", field_name: "admin_receipt_pdf", value: input.receiptPdfUrl }]
       : []),
+    { action: "add_tag", tag_name: "receipt_admin_alert" },
   ];
 
   const payload = {
@@ -115,13 +115,13 @@ export async function pushInternalDailySummary(input: {
   const payload = {
     phone: env.adminPhone,
     actions: [
-      { action: "add_tag", tag_name: "daily_receipt_summary" },
       { action: "set_field_value", field_name: "summary_date", value: input.dateLabel },
       { action: "set_field_value", field_name: "summary_total_receipts", value: input.totalReceipts },
       { action: "set_field_value", field_name: "summary_total_sales", value: input.totalSales },
       { action: "set_field_value", field_name: "summary_total_profit", value: input.totalProfit },
       { action: "set_field_value", field_name: "summary_total_mpesa", value: input.totalMpesa },
       { action: "set_field_value", field_name: "summary_total_cash", value: input.totalCash },
+      { action: "add_tag", tag_name: "daily_receipt_summary" },
     ],
   };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
