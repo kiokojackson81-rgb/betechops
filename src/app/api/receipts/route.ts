@@ -430,8 +430,18 @@ export async function POST(req: NextRequest) {
             productId: String(orderItemPayload.productId),
             quantity: Number(orderItemPayload.quantity) || 0,
             sellingPrice: Number(orderItemPayload.sellingPrice) || 0,
-            serial: orderItemPayload.serial ?? undefined,
-            warranty: orderItemPayload.warranty ?? undefined,
+            serial:
+              orderItemPayload.serial === null || orderItemPayload.serial === undefined
+                ? undefined
+                : typeof orderItemPayload.serial === 'string'
+                ? orderItemPayload.serial
+                : String(orderItemPayload.serial),
+            warranty:
+              orderItemPayload.warranty === null || orderItemPayload.warranty === undefined
+                ? undefined
+                : typeof orderItemPayload.warranty === 'string'
+                ? orderItemPayload.warranty
+                : String(orderItemPayload.warranty),
           };
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);

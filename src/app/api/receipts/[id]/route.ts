@@ -150,8 +150,18 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             productId: product.id,
             quantity,
             sellingPrice: unitPrice,
-            serial: it.serial ?? null,
-            warranty: it.warranty ?? null,
+            serial:
+              it.serial === null || it.serial === undefined
+                ? null
+                : typeof it.serial === 'string'
+                ? it.serial
+                : String(it.serial),
+            warranty:
+              it.warranty === null || it.warranty === undefined
+                ? null
+                : typeof it.warranty === 'string'
+                ? it.warranty
+                : String(it.warranty),
           },
         });
         createdOrderItems.push(createdItem);
