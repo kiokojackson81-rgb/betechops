@@ -1,3 +1,36 @@
+import { prisma } from '@/lib/prisma';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const receiptId = params.id;
+  try {
+    const file = await prisma.receiptFile.findFirst({
+      where: { receiptId, contentType: 'application/pdf', url: { not: '' } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!file || !file.url) {
+      return new Response(JSON.stringify({ error: 'PDF not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Fetch the underlying blob URL server-side and stream it back.
+    const upstream = await fetch(file.url);
+    if (!upstream.ok) {
+      return new Response(JSON.stringify({ error: 'Failed to fetch upstream PDF' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const headers = new Headers(upstream.headers);
+    headers.set('Content-Type', 'application/pdf');
+    headers.set('Cache-Control', 'no-store');
+
+    const body = await upstream.arrayBuffer();
+    return new Response(body, { status: 200, headers });
+  } catch (e) {
+    console.error('[api/receipts/[id]/pdf] error', e);
+    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateReceiptPdf } from "@/workers/receiptSender";

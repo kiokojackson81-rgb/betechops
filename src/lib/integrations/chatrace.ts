@@ -12,7 +12,7 @@ export type SendReceiptToChatraceInput = {
   amount: string;
   currency: string;
   receiptLink: string;
-  pdfUrl?: string;
+  receiptUrl?: string; // final URL to be written into Chatrace `receipt_url`
   receiptId?: string;
   tagName?: string;
 };
@@ -37,14 +37,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptId,
     tagName,
   } = input;
-  const pdfUrlTrimmed = pdfUrl?.trim();
+  const receiptUrlTrimmed = input.receiptUrl?.trim();
   const debug: any = {
     ok: false,
     steps: {},
     contactId: null,
     phoneNormalized: phoneE164,
-    pdfUrlPresent: !!pdfUrlTrimmed,
-    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
+    receiptUrlPresent: !!receiptUrlTrimmed,
+    receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     env: {
       baseUrlPresent: !!BASE_URL,
       accountIdPresent: !!ACCOUNT_ID,
@@ -132,62 +132,39 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     console.warn('[chatrace] receiptLink does not look public HTTPS', { receiptLink });
   }
 
-  const finalTag = tagName?.trim() || 'receipt_created';
+  const finalTag = tagName?.trim() || '';
 
-  // Hard-fail rule: require a .pdf URL for receipt_url/pdf_url. If absent or not a .pdf, log and abort.
-  const abort = async (message: string) => {
-    console.error('[chatrace] abort:', message, { receiptNumber, pdfUrl: pdfUrlTrimmed });
-    debug.error = message;
-    await persistDebug(receiptNumber, debug);
-    return { ok: false, debug };
-  };
-
-  const looksLikePdf = typeof pdfUrlTrimmed === 'string' && /\.pdf(\?|$)/i.test(pdfUrlTrimmed);
-  if (!looksLikePdf) {
-    return abort('pdfUrl is missing or not a .pdf URL');
-  }
-
-  const setField = (fieldName: string, value: any) => ({
-    action: 'set_custom_field',
-    field_id: fieldName,
+  const setFieldValue = (fieldName: string, value: any) => ({
+    action: 'set_field_value',
+    field_name: fieldName,
     value: value == null ? '' : String(value),
   });
 
-  const USE_SET_FIELD_VALUE = false;
-  const setFieldCompat = (fieldName: string, value: any) =>
-    USE_SET_FIELD_VALUE
-      ? { action: 'set_field_value', field_name: fieldName, value: value == null ? '' : String(value) }
-      : setField(fieldName, value);
-
-  const fieldActions: any[] = [];
-  fieldActions.push(setFieldCompat('pdf_url', pdfUrlTrimmed));
-  fieldActions.push(setFieldCompat('receipt_url', pdfUrlTrimmed));
-  fieldActions.push(setFieldCompat('customer_name', customerName || 'Customer'));
-  fieldActions.push(setFieldCompat('order_placed', receiptNumber));
-  fieldActions.push(setFieldCompat('amount', amount));
-  fieldActions.push(setFieldCompat('currency', currency || 'KES'));
-  if (receiptId) {
-    fieldActions.push(setFieldCompat('receipt_id', receiptId));
+  const actions: any[] = [];
+  // receipt_url should always be set (may be PDF or page link)
+  if (receiptUrlTrimmed) {
+    actions.push(setFieldValue('receipt_url', receiptUrlTrimmed));
+  } else if (receiptLink) {
+    actions.push(setFieldValue('receipt_url', receiptLink));
   }
-  const tagAction = { action: 'add_tag', tag_name: finalTag };
 
-  const fieldsPayload = {
-    phone: phoneE164,
-    first_name: customerName || 'Customer',
-    actions: fieldActions,
-  };
+  actions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  actions.push(setFieldValue('order_placed', receiptNumber));
+  actions.push(setFieldValue('amount', amount));
+  actions.push(setFieldValue('currency', currency || 'KES'));
+  if (receiptId) {
+    actions.push(setFieldValue('receipt_id', receiptId));
+  }
 
-  const tagPayload = {
-    phone: phoneE164,
-    actions: [tagAction],
-  };
+  const tagToApply = finalTag || (receiptUrlTrimmed && \/\.pdf(\?|$)\/i.test(receiptUrlTrimmed) ? 'receipt_created_pdf' : 'receipt_created_link');
+  actions.push({ action: 'add_tag', tag_name: tagToApply });
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
-    actionsCount: fieldActions.length,
-    tag: finalTag,
-    hasPdfUrl: !!pdfUrlTrimmed,
+    actionsCount: actions.length,
+    tag: tagToApply,
+    hasReceiptUrl: !!receiptUrlTrimmed,
   };
 
   console.info('[chatrace] pushReceipt', {
@@ -201,61 +178,26 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptLinkLength: receiptLink.length,
   });
 
-  const fieldsPath = '/contacts';
-  const fieldsRes = await runRequest(fieldsPath, fieldsPayload, headers);
-  debug.steps.fields = {
-    status: fieldsRes.status,
-    bodySnippet: (fieldsRes.text || '').slice(0, 200),
-    path: fieldsPath,
-    bodyError: fieldsRes.bodyError ?? null,
-    ok: fieldsRes.ok,
+  const path = '/contacts';
+  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions }, headers);
+  debug.steps.create = {
+    status: createRes.status,
+    bodySnippet: (createRes.text || '').slice(0, 200),
+    path,
+    bodyError: createRes.bodyError ?? null,
+    ok: createRes.ok,
   };
-  if (fieldsRes.bodyError && !debug.error) {
-    debug.error =
-      typeof fieldsRes.bodyError === 'string'
-        ? fieldsRes.bodyError
-        : JSON.stringify(fieldsRes.bodyError);
-  }
-  if (!fieldsRes.ok) {
-    return abort('chatrace_fields_failed');
+  if (createRes.bodyError && !debug.error) {
+    debug.error = typeof createRes.bodyError === 'string' ? createRes.bodyError : JSON.stringify(createRes.bodyError);
   }
 
-  const fieldsJson = fieldsRes.json ?? {};
-  const fieldsSuccess = Boolean(fieldsJson?.success);
-  const contactCreated =
-    fieldsJson?.contact_created ?? fieldsJson?.data?.contact_created ?? false;
-  console.info('[chatrace] create contact response', {
-    receiptNumber,
-    phoneE164,
-    status: fieldsRes.status,
-    success: fieldsSuccess,
-    contactCreated,
-  });
+  const bodyJson = createRes.json ?? {};
+  const success = Boolean(bodyJson?.success);
+  console.info('[chatrace] create contact response', { receiptNumber, phoneE164, status: createRes.status, success });
 
-  const tagPath = '/contacts';
-  const tagRes = await runRequest(tagPath, tagPayload, headers);
-  debug.steps.tag = {
-    status: tagRes.status,
-    bodySnippet: (tagRes.text || '').slice(0, 200),
-    path: tagPath,
-    bodyError: tagRes.bodyError ?? null,
-    ok: tagRes.ok,
-  };
-  if (tagRes.bodyError && !debug.error) {
-    debug.error =
-      typeof tagRes.bodyError === 'string'
-        ? tagRes.bodyError
-        : JSON.stringify(tagRes.bodyError);
-  }
-  if (!tagRes.ok) {
-    return abort('chatrace_tag_failed');
-  }
-
-  const tagJson = tagRes.json ?? {};
-  const success = Boolean(fieldsRes.ok && tagRes.ok && (tagJson?.success ?? true));
-  debug.ok = success;
+  debug.ok = Boolean(createRes.ok && success);
   await persistDebug(receiptNumber, debug);
-  return { ok: success, debug };
+  return { ok: debug.ok, debug };
 }
 
 async function persistDebug(receiptNumber: string, debug: any) {

@@ -159,14 +159,24 @@ async function wait(ms: number) {
 async function isUrlReachable(url: string, tries = 3) {
   for (let i = 0; i < tries; i += 1) {
     try {
-      const res = await fetch(url, { method: "HEAD" });
+      // Try a HEAD request first. Append cache-bust on subsequent tries.
+      const cacheBust = i > 0 ? (url.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`) : '';
+      const target = `${url}${cacheBust}`;
+      const res = await fetch(target, { method: "HEAD" });
       if (res.ok) return true;
     } catch {
-      // ignore
+      // ignore and retry
     }
     await wait(400 * (i + 1));
   }
-  return false;
+
+  // Final fallback: try GET with Range header to ensure retrievability
+  try {
+    const res = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function isPdfUrlAccessible(url?: string | null) {
@@ -176,17 +186,27 @@ async function isPdfUrlAccessible(url?: string | null) {
 
 async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string | null) {
   const cleanCandidate = candidate?.trim();
+  const proxyUrl = `${site.replace(/\/$/, "")}/api/receipts/${receiptId}/pdf`;
+
+  // 1) Candidate PDF
   if (cleanCandidate) {
-    if (await isUrlReachable(cleanCandidate)) {
-      return cleanCandidate;
-    }
-    console.warn("[receiptSender] chatrace pdf url unreachable, will fallback to proxy", {
-      receiptId,
-      candidate: cleanCandidate,
-    });
+    const candidateOk = await isUrlReachable(cleanCandidate, 3);
+    if (candidateOk) return { receiptUrl: cleanCandidate, mode: 'pdf', candidateOk };
+    console.warn('[receiptSender] chatrace pdf url unreachable, will attempt proxy', { receiptId, candidate: cleanCandidate });
   }
-  const fallback = `${site.replace(/\/$/, "")}/api/receipts/${receiptId}/pdf`;
-  return fallback;
+
+  // 2) Proxy endpoint
+  try {
+    const proxyOk = await isUrlReachable(proxyUrl, 3);
+    if (proxyOk) return { receiptUrl: proxyUrl, mode: 'proxy', proxyOk };
+    console.warn('[receiptSender] proxy endpoint not reachable or missing pdf; will fallback to page link', { receiptId, proxyUrl });
+  } catch (e) {
+    console.warn('[receiptSender] error checking proxy endpoint', e);
+  }
+
+  // 3) Final fallback: receipt page link (text-only)
+  const pageLink = `${site.replace(/\/$/, '')}/receipts/${receiptId}`;
+  return { receiptUrl: pageLink, mode: 'link' };
 }
 
 export async function sendReceiptChannels(
@@ -455,6 +475,12 @@ export async function sendReceiptChannels(
         tagName,
       });
 
+      // determine final receipt_url and tag for Chatrace
+      const resolved = typeof finalChatracePdfUrl === 'string' ? { receiptUrl: finalChatracePdfUrl, mode: finalChatracePdfUrl?.endsWith('.pdf') ? 'pdf' : 'proxy' } : finalChatracePdfUrl;
+      const finalReceiptUrl = resolved?.receiptUrl ?? receiptPageLink;
+      const mode = resolved?.mode ?? (finalReceiptUrl?.endsWith('.pdf') ? 'pdf' : 'link');
+      const finalTagName = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+
       const chitInput = {
         phoneE164: normalizedChatracePhone,
         customerName:
@@ -465,8 +491,8 @@ export async function sendReceiptChannels(
         amount: Math.round(invoiceAmount).toString(),
         currency: "KES",
         receiptLink: receiptPageLink,
-        pdfUrl: chatracePdfUrl ?? undefined,
-        tagName,
+        receiptUrl: finalReceiptUrl,
+        tagName: finalTagName,
       };
 
       console.info('[receipts][chatrace] outbound payload', { chitInput });
@@ -624,97 +650,53 @@ export async function sendReceiptChannels(
     logStep(requestId, 'EMAIL', 'failed', { error: String(e) });
   }
 
-  // WhatsApp via Meta Business API or Twilio fallback + optional SMS
+  // WhatsApp (customer) must be delivered via Chatrace only. Do not call
+  // internal WhatsApp providers for customer notifications. SMS may still be
+  // sent via Twilio if configured.
   try {
     const orderAny = receipt.order as any;
     const dataAny = (receipt.data as any) || {};
     const toPhone = (orderAny?.customerPhone || dataAny?.customerPhone || '').trim();
     if (!wantWhatsapp) channelStatus.whatsapp = 'skipped';
     if (!wantSms) channelStatus.sms = 'skipped';
+
+    // Determine final receipt_url/mode for Chatrace (already computed earlier)
+    const candidatePdf = candidatePdfUrl;
     const site = getSiteUrl();
-    const link = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
+    const receiptPage = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
 
-    // Prefer authoritative values from `receipt.order` when available, then fall back
-    // to `receipt.data` (snapshot) and finally issuedBy or defaults. Also log sources
-    // so we can diagnose mismatches between what was entered and what is sent.
-    const customerName = orderAny?.customerName ?? dataAny?.customerName ?? snapshot.customerName ?? receipt.issuedBy?.name ?? 'Customer';
-    const whatsappAttendant = snapshot.attendantName ?? orderAny?.attendant?.name ?? receipt.issuedBy?.name;
-    const snapshotData = snapshot as Record<string, any>;
-    const receiptItems = orderAny?.items ?? snapshotData.items ?? [];
-    const paymentMethodText = orderAny?.paymentMethod ?? snapshotData.paymentMethod ?? undefined;
+    // finalChatracePdfUrl was resolved earlier as an object or string; normalize
+    const resolved = typeof finalChatracePdfUrl === 'string' ? { receiptUrl: finalChatracePdfUrl, mode: finalChatracePdfUrl?.endsWith('.pdf') ? 'pdf' : 'proxy' } : finalChatracePdfUrl;
+    const finalReceiptUrl = resolved?.receiptUrl ?? receiptPage;
+    const mode = resolved?.mode ?? (finalReceiptUrl?.endsWith('.pdf') ? 'pdf' : 'link');
+    const finalTag = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
 
-    console.info('[receiptSender][whatsapp] composing message', {
+    console.info('[receiptSender] final receipt_url resolution', {
       receiptId: receipt.id,
-      orderNumber: orderAny?.orderNumber ?? null,
-      toPhone,
-      phoneFrom: orderAny?.customerPhone ? 'order' : dataAny?.customerPhone ? 'data' : 'none',
-      customerNameSource: orderAny?.customerName ? 'order' : dataAny?.customerName ? 'data' : snapshot.customerName ? 'snapshot' : 'issuedBy',
-      customerName,
-      paymentMethod: paymentMethodText,
-      itemsCount: Array.isArray(receiptItems) ? receiptItems.length : 0,
+      candidatePdfUrl: candidatePdf,
+      candidatePdfPresent: !!candidatePdf,
+      finalReceiptUrl,
+      mode,
+      finalTag,
+      receiptPage,
     });
 
-    const whatsappMessage = buildWhatsAppMessage({
-      customerName,
-      receiptNumber: orderAny?.orderNumber ?? receipt.id,
-      invoiceAmount,
-      paymentMethod: paymentMethodText,
-      attendant: whatsappAttendant,
-      items: receiptItems,
-      receiptLink: link,
-      pdfUrl: pdfUrlCustomer,
-      siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',
-    });
-
-    if (wantWhatsapp && toPhone) {
-      if (hasWhatsAppConfig()) {
-        try {
-          if (pdfUrlCustomer) {
-            await sendWhatsAppDocumentMessage({
-              to: toPhone,
-              link: pdfUrlCustomer,
-              filename: `receipt-${receipt.id}.pdf`,
-              caption: whatsappMessage,
-            });
-          } else {
-            // fallback to sending a text link
-            await sendWhatsAppTextMessage({
-              to: toPhone,
-              body: whatsappMessage,
-              previewUrl: true,
-            });
-          }
-          sent.push('whatsapp');
-          channelStatus.whatsapp = 'sent';
-          logStep(requestId, 'WHATSAPP', 'ok', { to: toPhone, provider: 'meta' });
-        } catch (err) {
-          channelStatus.whatsapp = 'failed';
-          errors.push({ channel: 'whatsapp', error: err instanceof Error ? err.message : String(err) });
-          logStep(requestId, 'WHATSAPP', 'failed', { error: err instanceof Error ? err.message : String(err) });
-        }
-      } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_WHATSAPP) {
-        const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        const msgPayload: any = {
-          from: `whatsapp:${process.env.TWILIO_FROM_WHATSAPP}`,
-          to: `whatsapp:${toPhone}`,
-          body: whatsappMessage,
-        };
-        if (pdfUrlCustomer) msgPayload.mediaUrl = [pdfUrlCustomer];
-        await client.messages.create(msgPayload);
+    // Set whatsapp channel status based solely on Chatrace push outcome
+    if (wantWhatsapp) {
+      if (channelStatus.chatrace === 'sent') {
+        channelStatus.whatsapp = 'queued_via_chatrace';
         sent.push('whatsapp');
-        channelStatus.whatsapp = 'sent';
-        logStep(requestId, 'WHATSAPP', 'ok', { to: toPhone, provider: 'twilio' });
-      } else {
+        logStep(requestId, 'WHATSAPP', 'queued_via_chatrace', { to: toPhone });
+      } else if (channelStatus.chatrace === 'failed') {
         channelStatus.whatsapp = 'failed';
-        errors.push({ channel: 'whatsapp', error: 'No WhatsApp provider configured' });
-        logStep(requestId, 'WHATSAPP', 'failed', { reason: 'no_provider' });
+        errors.push({ channel: 'whatsapp', error: 'chatrace_push_failed' });
+        logStep(requestId, 'WHATSAPP', 'failed', { reason: 'chatrace_push_failed' });
       }
-    } else if (wantWhatsapp && !toPhone) {
-      channelStatus.whatsapp = 'missing-phone';
-      logStep(requestId, 'WHATSAPP', 'failed', { reason: 'missing_phone' });
     }
 
+    // SMS: keep existing Twilio SMS behavior (if requested)
     if (wantSms) {
+      const link = receiptPage;
       if (toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
         const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
         const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
@@ -732,7 +714,7 @@ export async function sendReceiptChannels(
   } catch (e) {
     if (channelStatus.whatsapp === 'pending') channelStatus.whatsapp = 'failed';
     if (channelStatus.sms === 'pending') channelStatus.sms = 'failed';
-    errors.push({ channel: 'twilio', error: String(e) });
+    errors.push({ channel: 'send', error: String(e) });
     logStep(requestId, 'SEND', 'failed', { error: String(e) });
   }
 
