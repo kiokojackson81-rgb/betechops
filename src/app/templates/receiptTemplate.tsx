@@ -109,45 +109,103 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>${siteTitle} Receipt ${order.orderNumber || ''}</title>
-    <style>
-      body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
-      .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
-      header { text-align:center; margin-bottom:12px; }
-      .meta { display:flex; justify-content:space-between; margin:12px 0 }
-      table { width:100%; border-collapse: collapse; margin-top:8px }
-      th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:${brandColor}; }
-      td { padding:8px }
-      .right { text-align:right }
-      .totals { width:100%; margin-top:12px }
-      .totals td { border:none; padding:6px; color:${brandColor}; }
-      .totals strong { color:${brandColor}; }
-      .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
-      .signature { margin-top:20px; text-align:center }
+      <style>
+        :root { --brandColor: ${brandColor}; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
+        .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
+        header { text-align:center; margin-bottom:12px; }
+        .meta { display:flex; justify-content:space-between; margin:12px 0 }
+        table { width:100%; border-collapse: collapse; margin-top:8px }
+        th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:${brandColor}; }
+        td { padding:8px }
+        .right { text-align:right }
+        .totals { width:100%; margin-top:12px }
+        .totals td { border:none; padding:6px; color:${brandColor}; }
+        .totals strong { color:${brandColor}; }
+        .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
+        .signature { margin-top:20px; text-align:center }
 
-      /* A5-optimized footer styles (compact, single-column, low-ink) */
       .receipt-footer {
         margin-top: 14px;
         padding-top: 10px;
         border-top: 1px dashed rgba(0, 0, 0, 0.35);
+        text-align: center;
         font-size: 11.5px;
         line-height: 1.45;
-        color: #000;
+        color: #111;
       }
 
-      .receipt-footer p { margin: 0 0 6px; }
+      .footer-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border: 1px solid rgba(0, 0, 0, 0.25);
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 11.5px;
+        letter-spacing: 0.2px;
+        margin-bottom: 6px;
+        color: var(--brandColor);
+      }
 
-      .footer-title { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+      .footer-subtitle {
+        margin: 0 0 8px;
+      }
 
-      .social-list { margin: 6px 0 8px; padding-left: 0; list-style: none; }
-      .social-list li { margin: 2px 0; }
-      .social-list a { color: #000; text-decoration: underline; word-break: break-word; }
+      .footer-muted {
+        margin: 0;
+        font-size: 11.5px;
+      }
 
-      .footer-divider { margin: 8px 0; border-top: 1px solid rgba(0, 0, 0, 0.25); }
-      .footer-muted { font-size: 11px; }
-      .hashtag-link { font-weight: 700; color: #000; text-decoration: underline; }
+      .social-row {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        margin: 0 0 10px;
+      }
 
-      @media print { .receipt-footer { page-break-inside: avoid; } }
-    </style>
+      .social-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #111;
+        text-decoration: underline;
+        font-weight: 600;
+      }
+
+      .social-link span {
+        font-weight: 700;
+      }
+
+      .ico {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 14px;
+      }
+
+      .footer-divider {
+        margin: 10px auto;
+        width: 70%;
+        border-top: 1px solid rgba(0, 0, 0, 0.2);
+      }
+
+      .footer-strong {
+        margin: 0 0 2px;
+        font-weight: 800;
+      }
+
+      .hashtag-link {
+        font-weight: 800;
+        text-decoration: underline;
+        color: var(--brandColor);
+      }
+
+      @media print {
+        .receipt-footer {
+          page-break-inside: avoid;
+        }
+      }
+      </style>
   </head>
   <body>
     <div class="page">
@@ -197,16 +255,47 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       </div>
 
       <div class="receipt-footer">
-        <p class="footer-title">Connect With Us</p>
-        <p class="footer-muted">Follow, review &amp; see our latest solar projects:</p>
-        <ul class="social-list">
-          <li>Facebook: <a href="https://web.facebook.com/p/Betech-Solar-Solutions-Kenya-61567374346730/" target="_blank" rel="noopener noreferrer">Betech Solar Solutions Kenya</a></li>
-          <li>Instagram: <a href="https://www.instagram.com/betechsolarsolutionskenya/" target="_blank" rel="noopener noreferrer">@betechsolarsolutionskenya</a></li>
-          <li>TikTok: <a href="https://www.tiktok.com/@betechsolarsolutionske" target="_blank" rel="noopener noreferrer">@betechsolarsolutionske</a></li>
-        </ul>
+        <div class="footer-badge">Connect With Us</div>
+        <p class="footer-muted footer-subtitle">Follow &amp; see our latest solar projects:</p>
+
+        <div class="social-row">
+          <a class="social-link"
+             href="https://web.facebook.com/p/Betech-Solar-Solutions-Kenya-61567374346730/"
+             target="_blank" rel="noopener noreferrer">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M13.5 22v-8h2.7l.4-3H13.5V9.1c0-.9.2-1.5 1.6-1.5H16.8V5.1c-.3 0-1.4-.1-2.7-.1-2.7 0-4.6 1.6-4.6 4.7V11H7v3h2.5v8h4z" fill="currentColor"/>
+            </svg>
+            <span>Facebook:</span> Betech Solar Solutions Kenya
+          </a>
+
+          <a class="social-link"
+             href="https://www.instagram.com/betechsolarsolutionskenya/"
+             target="_blank" rel="noopener noreferrer">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm10 2H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3zm-5 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm5.2-.9a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" fill="currentColor"/>
+            </svg>
+            <span>Instagram:</span> @betechsolarsolutionskenya
+          </a>
+
+          <a class="social-link"
+             href="https://www.tiktok.com/@betechsolarsolutionske"
+             target="_blank" rel="noopener noreferrer">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 3c.4 3 2.6 5.5 6 5.8v3c-2.2 0-4.2-.8-6-2.2V16a6 6 0 1 1-6-6c.3 0 .7 0 1 .1v3.2a3 3 0 1 0 2 2.8V3h3z" fill="currentColor"/>
+            </svg>
+            <span>TikTok:</span> @betechsolarsolutionske
+          </a>
+        </div>
+
         <div class="footer-divider"></div>
-        <p>Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>
-        <p class="footer-muted">View our recent solar installations: <a class="hashtag-link" href="https://www.tiktok.com/tag/betechprojects" target="_blank" rel="noopener noreferrer">#BetechProjects</a></p>
+
+        <p class="footer-strong">Thank you for choosing Betech Solar Solutions.</p>
+        <p class="footer-muted">
+          View our recent installations:
+          <a class="hashtag-link"
+             href="https://www.tiktok.com/tag/betechprojects"
+             target="_blank" rel="noopener noreferrer">#BetechProjects</a>
+        </p>
       </div>
 
     </div>
