@@ -25,19 +25,79 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   const attendant = order?.attendant?.name || snapshot.attendantName || snapshot.issuedByName || '';
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
+  const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
+
+  const toNumberOrNull = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+  const fallbackNumber = (...values: Array<number | null | undefined>) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined) return value;
+    }
+    return null;
+  };
+  const formatAmount = (value: number | null | undefined) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '';
+    return new Intl.NumberFormat('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
+  };
+
+  const itemsSubtotal = items.reduce((sum, it) => {
+    const qty = toNumberOrNull(it.quantity) ?? 1;
+    const unit = toNumberOrNull(it.unitPrice ?? it.sellingPrice) ?? 0;
+    return sum + qty * unit;
+  }, 0);
+  const subtotalCandidate = fallbackNumber(
+    toNumberOrNull(totals.subtotal),
+    toNumberOrNull(snapshot.subtotal),
+    toNumberOrNull(snapshot.subtotalAmount)
+  );
+  const subtotalValue = subtotalCandidate ?? itemsSubtotal;
+
+  const taxCandidate = fallbackNumber(
+    toNumberOrNull(totals.tax),
+    toNumberOrNull(snapshot.taxAmount),
+    toNumberOrNull(snapshot.tax)
+  );
+  const taxValue = taxCandidate ?? 0;
+
+  const totalCandidate = fallbackNumber(
+    toNumberOrNull(totals.total),
+    toNumberOrNull(snapshot.total),
+    toNumberOrNull(snapshot.totalAmount),
+    toNumberOrNull(order?.totalAmount),
+    subtotalValue + taxValue
+  );
+  const totalValue = totalCandidate ?? subtotalValue + taxValue;
+  const balanceValue = fallbackNumber(
+    toNumberOrNull(totals.balance),
+    toNumberOrNull(snapshot.balance),
+    totalValue
+  );
 
   const itemsHtml = items
     .map((it: any) => {
       const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
       const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
-      const lineTotal = (qty * unit) || '';
+      const lineTotal = qty * unit;
+      const unitText = formatAmount(unit) || '';
+      const lineTotalText = formatAmount(lineTotal) || '';
       const title = it.title || it.productName || '';
       return `
       <tr>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${qty}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd">${title}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${unit || ''}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${lineTotal}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${unitText}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${lineTotalText}</td>
       </tr>`;
     })
     .join('');
@@ -95,17 +155,17 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         ${headerHtml}
       </header>
 
-      <div class="meta">
-        <div>
-          <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
-          <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
-          <div><strong>Phone:</strong> ${snapshot.phone || order?.customerPhone || ''}</div>
-        </div>
-        <div class="right">
-          <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
-          <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'}</div>
-        </div>
+    <div class="meta">
+      <div>
+        <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
+        <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
+        <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
       </div>
+      <div class="right">
+        <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
+        <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'}</div>
+      </div>
+    </div>
 
       <table>
         <thead>
@@ -116,11 +176,11 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         </tbody>
       </table>
 
-      <table class="totals">
-        <tr><td></td><td class="right">Subtotal:</td><td class="right">${totals.subtotal ?? ''}</td></tr>
-        ${snapshot.showDiscount ? `<tr><td></td><td class="right">Discount:</td><td class="right">${snapshot.discount ?? totals.discount ?? ''}</td></tr>` : ''}
-        <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${totals.total ?? ''}</strong></td></tr>
-      </table>
+    <table class="totals">
+      <tr><td></td><td class="right">Subtotal:</td><td class="right">${formatAmount(subtotalValue)}</td></tr>
+      ${snapshot.showDiscount ? `<tr><td></td><td class="right">Discount:</td><td class="right">${formatAmount(toNumberOrNull(snapshot.discount) ?? toNumberOrNull(totals.discount))}</td></tr>` : ''}
+      <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
+    </table>
 
       <div style="margin-top:10px">
         <div><strong>Payment method:</strong> ${paymentMethod}</div>
