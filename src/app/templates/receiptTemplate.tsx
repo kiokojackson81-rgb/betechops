@@ -63,6 +63,30 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       .totals strong { color:${brandColor}; }
       .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
       .signature { margin-top:20px; text-align:center }
+
+      /* A5-optimized footer styles (compact, single-column, low-ink) */
+      .receipt-footer {
+        margin-top: 14px;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(0, 0, 0, 0.35);
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: #000;
+      }
+
+      .receipt-footer p { margin: 0 0 6px; }
+
+      .footer-title { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+
+      .social-list { margin: 6px 0 8px; padding-left: 0; list-style: none; }
+      .social-list li { margin: 2px 0; }
+      .social-list a { color: #000; text-decoration: underline; word-break: break-word; }
+
+      .footer-divider { margin: 8px 0; border-top: 1px solid rgba(0, 0, 0, 0.25); }
+      .footer-muted { font-size: 11px; }
+      .hashtag-link { font-weight: 700; color: #000; text-decoration: underline; }
+
+      @media print { .receipt-footer { page-break-inside: avoid; } }
     </style>
   </head>
   <body>
@@ -112,15 +136,17 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         ${opts.hideStamp ? '' : '<div style="margin-top:18px">______________________________</div>'}
       </div>
 
-      <div style="margin-top:18px;border-top:1px dashed #e5e7eb;padding-top:12px;font-size:13px;color:#111827;">
-        <div style="font-weight:700;margin-bottom:6px">📲 Connect With Us & Share Your Feedback</div>
-        <div style="margin-bottom:8px">Follow, search, and review us on social media:</div>
-        <div>🔵 Facebook: Betech Solar Solutions Kenya</div>
-        <div>📸 Instagram: Betech Solar Solutions Kenya</div>
-        <div>🎵 TikTok: Betech Solar Solutions Kenya</div>
-        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better.</div>
-        <div style="margin-top:10px;font-weight:600">Thank you for choosing Betech Solar Solutions.</div>
-        <div style="margin-top:4px">View our recent solar projects on all social media using <strong>#BetechProjects</strong>.</div>
+      <div class="receipt-footer">
+        <p class="footer-title">Connect With Us</p>
+        <p class="footer-muted">Follow, review &amp; see our latest solar projects:</p>
+        <ul class="social-list">
+          <li>Facebook: <a href="https://web.facebook.com/p/Betech-Solar-Solutions-Kenya-61567374346730/" target="_blank" rel="noopener noreferrer">Betech Solar Solutions Kenya</a></li>
+          <li>Instagram: <a href="https://www.instagram.com/betechsolarsolutionskenya/" target="_blank" rel="noopener noreferrer">@betechsolarsolutionskenya</a></li>
+          <li>TikTok: <a href="https://www.tiktok.com/@betechsolarsolutionske" target="_blank" rel="noopener noreferrer">@betechsolarsolutionske</a></li>
+        </ul>
+        <div class="footer-divider"></div>
+        <p>Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>
+        <p class="footer-muted">View our recent solar installations: <a class="hashtag-link" href="https://www.tiktok.com/tag/betechprojects" target="_blank" rel="noopener noreferrer">#BetechProjects</a></p>
       </div>
 
     </div>
