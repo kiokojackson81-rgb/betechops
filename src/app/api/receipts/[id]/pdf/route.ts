@@ -41,7 +41,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   // PDF generation uses the same branding as live HTML rendering.
   try {
     const branding = await getBranding();
-    snapshot.branding = branding;
+    (snapshot as any).branding = branding;
   } catch (e) {
     // Non-fatal: continue without explicit branding if the DB lookup fails
     console.warn('pdf: failed to load branding for snapshot', e);
