@@ -25,6 +25,44 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   const attendant = order?.attendant?.name || snapshot.attendantName || snapshot.issuedByName || '';
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
+  const serialDisplay = snapshot.serialNumber || order.orderNumber || snapshot.serial || '';
+  const paymentBreakdown = snapshot.paymentBreakdown || { cash: 0, mpesa: 0, reference: '' };
+  const mpesaAmount = Number.isFinite(paymentBreakdown.mpesa ?? NaN) ? paymentBreakdown.mpesa ?? 0 : 0;
+  const cashAmount = Number.isFinite(paymentBreakdown.cash ?? NaN) ? paymentBreakdown.cash ?? 0 : 0;
+  const mpesaReference =
+    typeof paymentBreakdown.reference === 'string' && paymentBreakdown.reference.trim()
+      ? paymentBreakdown.reference.trim()
+      : '';
+  const warrantyText = snapshot.warrantyText || '';
+  const formatKes = (value: number | null | undefined) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
+    return `KES ${formatAmount(value)}`;
+  };
+  const formatWarrantyValue = (value: any) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    try {
+      if (typeof value === 'object') return JSON.stringify(value);
+    } catch {
+      // ignore
+    }
+    return String(value);
+  };
+  const itemWarrantyEntries = items
+    .filter((it: any) => (it.serial && String(it.serial).trim()) || (it.warranty && String(it.warranty).trim()))
+    .map((it: any) => {
+      const parts: string[] = [];
+      if (it.serial) {
+        parts.push(`SN ${String(it.serial).trim()}`);
+      }
+      const warrantyValue = formatWarrantyValue(it.warranty);
+      if (warrantyValue) {
+        parts.push(`Warranty: ${warrantyValue}`);
+      }
+      const label = it.title || it.productName || 'Item';
+      return `<div class="item-warranty-row"><strong>${label}</strong>: ${parts.join(' | ')}</div>`;
+    })
+    .join('');
   const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
 
   const toNumberOrNull = (value: unknown): number | null => {
@@ -112,7 +150,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <style>
         :root { --brandColor: ${brandColor}; }
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
-        .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
+      .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
         header { text-align:center; margin-bottom:12px; }
         .meta { display:flex; justify-content:space-between; margin:12px 0 }
         table { width:100%; border-collapse: collapse; margin-top:8px }
@@ -123,7 +161,55 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         .totals td { border:none; padding:6px; color:${brandColor}; }
         .totals strong { color:${brandColor}; }
         .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
-        .signature { margin-top:20px; text-align:center }
+      .signature { margin-top:20px; text-align:center }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: #0f172a;
+      }
+
+      .detail-grid div {
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: #f5f5f5;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+      }
+
+      .payment-details {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px dashed rgba(15, 23, 42, 0.25);
+        background: #fdfdfd;
+      }
+
+      .payment-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 8px;
+        font-size: 12px;
+      }
+
+      .payment-grid span {
+        font-weight: 600;
+      }
+
+      .item-warranty-row {
+        font-size: 11px;
+        color: #1f2937;
+        margin-bottom: 4px;
+      }
+      .item-warranty {
+        margin-top: 10px;
+        border-top: 1px dashed rgba(15, 23, 42, 0.1);
+        padding-top: 8px;
+      }
 
       .receipt-footer {
         margin-top: 14px;
@@ -225,6 +311,12 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       </div>
     </div>
 
+    <div class="detail-grid">
+      <div><strong>Serial No.:</strong> ${serialDisplay || '-'}</div>
+      <div><strong>Warranty:</strong> ${warrantyText || 'Standard warranty applies'}</div>
+      <div><strong>Phone (MPESA):</strong> ${formatKes(mpesaAmount)}${mpesaReference ? ` <span>(Ref: ${mpesaReference})</span>` : ''}</div>
+    </div>
+
       <table>
         <thead>
           <tr><th>Qty</th><th>Particulars</th><th class="right">@ (Ksh)</th><th class="right">Kshs.</th></tr>
@@ -240,18 +332,28 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
     </table>
 
-      <div style="margin-top:10px">
-        <div><strong>Payment method:</strong> ${paymentMethod}</div>
-        ${deliveryAddress ? `<div><strong>Deliver to:</strong> ${deliveryAddress}</div>` : ''}
+      <div class="payment-details">
+        <div><strong>Payment method:</strong> ${paymentMethod || 'N/A'}</div>
+        <div class="payment-grid">
+          <div>
+            <span>MPESA:</span> ${formatKes(mpesaAmount)}
+            ${mpesaReference ? `<small>Ref: ${mpesaReference}</small>` : ''}
+          </div>
+          <div><span>Cash:</span> ${formatKes(cashAmount)}</div>
+        </div>
       </div>
+
+      ${
+        itemWarrantyEntries
+          ? `<div class="item-warranty">${itemWarrantyEntries}</div>`
+          : ''
+      }
 
       ${notes ? `<div class="notes"><strong>Notes:</strong><div style="margin-top:6px">${notes}</div></div>` : ''}
 
       <div class="signature">
-        <p>Thank you for shopping with Betech Solar Solutions.</p>
         <p>You were served by ${attendant || '____'}.</p>
         <p>Goods once sold cannot be refunded.</p>
-        ${opts.hideStamp ? '' : '<div style="margin-top:18px">______________________________</div>'}
       </div>
 
       <div class="receipt-footer">

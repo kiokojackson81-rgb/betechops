@@ -13,6 +13,25 @@ export function buildReceiptSnapshot(receipt: any) {
   const dataAny = dataIsObject ? (data as any) : undefined;
   const dataHasNotes = dataAny !== undefined && typeof dataAny.notes === 'string';
   const notesFromData = dataHasNotes ? (dataAny?.notes as string | undefined) : undefined;
+  const paymentBreakdown =
+    (dataIsObject ? (dataAny?.paymentBreakdown as Record<string, unknown>) : undefined) || {};
+  const paymentDetailsShown =
+    typeof receipt.paymentDetailsShown === 'boolean'
+      ? receipt.paymentDetailsShown
+      : typeof dataAny?.paymentDetailsShown === 'boolean'
+      ? dataAny?.paymentDetailsShown
+      : false;
+  const warrantyText =
+    receipt.warrantyText ||
+    (typeof (dataAny?.globalWarranty ?? dataAny?.warrantyText) === 'string'
+      ? (dataAny?.globalWarranty ?? dataAny?.warrantyText)
+      : '') ||
+    '';
+  const serialNumber =
+    (receipt.order?.orderNumber as string | undefined) ||
+    (order.orderNumber as string | undefined) ||
+    (dataIsObject ? (dataAny?.orderRef as string | undefined) : undefined) ||
+    '';
 
   return {
     order,
@@ -34,5 +53,18 @@ export function buildReceiptSnapshot(receipt: any) {
       ((order.metadata as any)?.deliveryAddress as string | undefined) ||
       (dataIsObject ? (dataAny?.deliveryAddress as string | undefined) : undefined) ||
       '',
+    paymentBreakdown: {
+      cash: typeof paymentBreakdown.cash === 'number' ? paymentBreakdown.cash : 0,
+      mpesa: typeof paymentBreakdown.mpesa === 'number' ? paymentBreakdown.mpesa : 0,
+      reference:
+        typeof paymentBreakdown.reference === 'string'
+          ? paymentBreakdown.reference
+          : typeof paymentBreakdown.mpesaReference === 'string'
+          ? paymentBreakdown.mpesaReference
+          : '',
+    },
+    paymentDetailsShown,
+    warrantyText,
+    serialNumber,
   };
 }
