@@ -130,10 +130,23 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       const unitText = formatAmount(unit) || '';
       const lineTotalText = formatAmount(lineTotal) || '';
       const title = it.title || it.productName || '';
+      const itemMeta: string[] = [];
+      if (it.serial) {
+        itemMeta.push(`Serial / IMEI: ${String(it.serial)}`);
+      }
+      if (it.warranty) {
+        itemMeta.push(`Warranty: ${String(it.warranty)}`);
+      }
+      const itemMetaHtml = itemMeta.length
+        ? `<div class="item-meta">${itemMeta.map((m) => `<span>${m}</span>`).join(' | ')}</div>`
+        : '';
       return `
       <tr>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${qty}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${title}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">
+          ${title}
+          ${itemMetaHtml}
+        </td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${unitText}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${lineTotalText}</td>
       </tr>`;
@@ -209,6 +222,29 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         margin-top: 10px;
         border-top: 1px dashed rgba(15, 23, 42, 0.1);
         padding-top: 8px;
+      }
+      .item-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 10px;
+        color: rgba(15, 23, 42, 0.8);
+      }
+      .item-meta span {
+        background: #f2f6ff;
+        border-radius: 4px;
+        padding: 2px 6px;
+        border: 1px solid rgba(15, 23, 42, 0.15);
+      }
+      .payment-meta {
+        margin-top: 8px;
+        font-size: 11px;
+        text-transform: none;
+        color: #1f2937;
+      }
+      .payment-meta p {
+        margin: 0;
       }
 
       .receipt-footer {
@@ -346,6 +382,16 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       ${
         itemWarrantyEntries
           ? `<div class="item-warranty">${itemWarrantyEntries}</div>`
+          : ''
+      }
+
+      ${
+        snapshot.paymentDetailsShown
+          ? `<div class="payment-meta">
+              <p>Paybill No. 516600</p>
+              <p>Account No. 0710098001</p>
+              <p>DTB Bank</p>
+            </div>`
           : ''
       }
 
