@@ -174,6 +174,7 @@ export async function sendReceiptChannels(
       : { order: receipt.order, totals: receipt.totals };
   const branding = await getBranding();
   snapshot.branding = branding;
+  const brandedSnapshot = { ...snapshot, branding };
   if (!snapshot.attendantName) {
     snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
   }
@@ -209,25 +210,25 @@ export async function sendReceiptChannels(
     const pdfServiceUrl = process.env.PDF_SERVICE_URL;
     if (pdfServiceUrl) {
       try {
-        const htmlCustomer = renderReceiptTemplate(snapshot, { hideStamp: true });
+        const htmlCustomer = renderReceiptTemplate(brandedSnapshot, { hideStamp: true });
         pdfCustomerBuffer = await fetchPdfFromService(htmlCustomer);
       } catch (err) {
         console.error('[receiptSender] pdf service customer render exception', err);
       }
       try {
-        const htmlFull = renderReceiptTemplate(snapshot, { hideStamp: false });
+        const htmlFull = renderReceiptTemplate(brandedSnapshot, { hideStamp: false });
         pdfFullBuffer = await fetchPdfFromService(htmlFull);
       } catch (err) {
         console.error('[receiptSender] pdf service full render exception', err);
       }
     } else {
       try {
-        pdfCustomerBuffer = await generateReceiptPdf(snapshot, { hideStamp: true });
+        pdfCustomerBuffer = await generateReceiptPdf(brandedSnapshot, { hideStamp: true });
       } catch (err) {
         console.error('[receiptSender] customer PDF generation exception', err);
       }
       try {
-        pdfFullBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
+        pdfFullBuffer = await generateReceiptPdf(brandedSnapshot, { hideStamp: false });
       } catch (err) {
         console.error('[receiptSender] full PDF generation exception', err);
       }

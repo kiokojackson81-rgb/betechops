@@ -1,22 +1,19 @@
 export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
   const branding = snapshot.branding || {};
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
+  const brandColor = branding.brandColor || '#7A2020';
   const isHttp = (value: any) => typeof value === 'string' && /^https?:\/\//.test(value);
-  const envLetterheadUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL ?? '')
+  const letterheadUrl = isHttp(branding.letterheadUrl)
+    ? branding.letterheadUrl
+    : isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL ?? '')
     ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL!
     : '';
-  const envLogoUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL ?? '')
+  const logoUrl = isHttp(branding.logoUrl)
+    ? branding.logoUrl
+    : isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL ?? '')
     ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL!
-    : '';
-  const brandColor = branding.brandColor || '#7A2020';
-
-  // Prefer an absolute letterhead URL from branding, then env, then fall
-  // back to any configured logo (branding or env) or the local `/logo.png`.
-  const headerImg = isHttp(branding.letterheadUrl)
-    ? branding.letterheadUrl
-    : isHttp(envLetterheadUrl)
-    ? envLetterheadUrl
-    : (branding.logoUrl || envLogoUrl || '/logo.png');
+    : '/logo.png';
+  const headerImg = letterheadUrl || logoUrl;
 
   // Only render an <img> header when we have a header image. Otherwise leave
   // the header empty so the printed receipt shows just the page content.
@@ -53,7 +50,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Receipt ${order.orderNumber || ''}</title>
+    <title>${siteTitle} Receipt ${order.orderNumber || ''}</title>
     <style>
       body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
@@ -116,16 +113,12 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       </div>
 
       <div style="margin-top:18px;border-top:1px dashed #e5e7eb;padding-top:12px;font-size:13px;color:#111827">
-        <div style="font-weight:700;margin-bottom:6px">📲 Connect With Us & Share Your Feedback</div>
-        <div style="margin-bottom:8px">Follow, search, and review us on social media:</div>
-        <div style="line-height:1.6">
-          <div>🔵 Facebook: Betech Solar Solutions Kenya</div>
-          <div>📸 Instagram: Betech Solar Solutions Kenya</div>
-          <div>🎵 TikTok: Betech Solar Solutions Kenya</div>
+        <div style="font-weight:700;margin-bottom:6px">Thank you for shopping with Betech Solar Solutions.</div>
+        <div style="margin-bottom:6px">
+          Share your experience and explore our recent solar projects on social media using <strong>#BetechProjects</strong>.
         </div>
-        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better.</div>
-        <div style="margin-top:10px;font-weight:600">Thank you for choosing Betech Solar Solutions.</div>
-        <div style="margin-top:4px">View our recent solar projects on all social media using <strong>#BetechProjects</strong>.</div>
+        <div style="margin-bottom:6px;color:#374151">Stay connected: info@betech.co.ke | 0703 241 917</div>
+        <div style="font-weight:600;color:${brandColor};">We deliver solar excellence coast to coast.</div>
       </div>
 
     </div>
