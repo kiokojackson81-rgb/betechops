@@ -42,13 +42,10 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   }
 
   const fileName = `${receipt.order?.orderNumber ?? receipt.id}.pdf`;
-  // Convert Node Buffer to an ArrayBuffer slice suitable for NextResponse body
-  const arrayBuffer = pdfBuffer.buffer.slice(
-    pdfBuffer.byteOffset,
-    pdfBuffer.byteOffset + pdfBuffer.byteLength
-  );
+  // Convert Node Buffer to a Uint8Array which is accepted by NextResponse
+  const uint8 = new Uint8Array(pdfBuffer.buffer, pdfBuffer.byteOffset, pdfBuffer.byteLength);
 
-  return new NextResponse(arrayBuffer, {
+  return new NextResponse(uint8, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
