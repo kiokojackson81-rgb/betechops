@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateReceiptPdf } from "@/workers/receiptSender";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
+import { getBranding } from '@/lib/branding';
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,16 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   }
 
   const snapshot = buildReceiptSnapshot(receipt);
+  // Explicitly fetch branding and attach to the snapshot so the server-side
+  // PDF generation uses the same branding as live HTML rendering.
+  try {
+    const branding = await getBranding();
+    snapshot.branding = branding;
+  } catch (e) {
+    // Non-fatal: continue without explicit branding if the DB lookup fails
+    console.warn('pdf: failed to load branding for snapshot', e);
+  }
+
   const pdfBuffer = await generateReceiptPdf(snapshot, { hideStamp: false });
   if (!pdfBuffer) {
     return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 });
