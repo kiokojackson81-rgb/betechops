@@ -1,0 +1,1490 @@
+
+> betechops@0.1.0 dev C:\Projects\betechops
+> next dev --turbopack
+
+   Γû▓ Next.js 16.0.7 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://192.168.1.187:3000
+   - Environments: .env
+
+ Γ£ô Starting...
+ ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ Γ£ô Ready in 1595ms
+ Γùï Compiling /attendant/online ...
+ GET /attendant/online 200 in 6.2s (compile: 5.8s, proxy.ts: 258ms, render: 162ms)
+ GET /attendant/online 200 in 87ms (compile: 3ms, proxy.ts: 4ms, render: 80ms)
+ GET /api/attendants/shops 401 in 633ms (compile: 567ms, render: 66ms)
+ GET /api/attendants/me 401 in 690ms (compile: 676ms, render: 14ms)
+ GET /api/admin/online/manual/shops 401 in 203ms (compile: 184ms, render: 19ms)
+ GET /attendant/online 200 in 446ms (compile: 257ms, proxy.ts: 92ms, render: 98ms)
+ GET /attendant/online 200 in 39ms (compile: 5ms, proxy.ts: 5ms, render: 29ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 32ms (compile: 6ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 5ms, render: 19ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 27ms (compile: 5ms, proxy.ts: 4ms, render: 19ms)
+ GET /attendant/online 200 in 31ms (compile: 7ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 5ms, render: 23ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 4ms, render: 27ms)
+ GET /attendant/online 200 in 47ms (compile: 6ms, proxy.ts: 4ms, render: 37ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 55ms (compile: 6ms, proxy.ts: 5ms, render: 44ms)
+ GET /attendant/online 200 in 50ms (compile: 3ms, proxy.ts: 4ms, render: 43ms)
+ GET /attendant/online 200 in 59ms (compile: 7ms, proxy.ts: 7ms, render: 45ms)
+ GET /attendant/online 200 in 32ms (compile: 5ms, proxy.ts: 5ms, render: 22ms)
+ GET /attendant/online 200 in 42ms (compile: 5ms, proxy.ts: 7ms, render: 31ms)
+ GET /attendant/online 200 in 30ms (compile: 8ms, proxy.ts: 5ms, render: 17ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 2ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 34ms (compile: 2ms, proxy.ts: 3ms, render: 29ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 8ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 18ms (compile: 1988┬╡s, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 26ms (compile: 1986┬╡s, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 19ms (compile: 3ms, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 19ms (compile: 2ms, proxy.ts: 3ms, render: 13ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 27ms (compile: 2ms, proxy.ts: 2ms, render: 22ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 19ms (compile: 3ms, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 28ms (compile: 2ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 29ms (compile: 2ms, proxy.ts: 2ms, render: 24ms)
+ GET /attendant/online 200 in 20ms (compile: 1931┬╡s, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 4ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 2ms, render: 24ms)
+ GET /attendant/online 200 in 42ms (compile: 4ms, proxy.ts: 5ms, render: 33ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 31ms (compile: 5ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 41ms (compile: 3ms, proxy.ts: 4ms, render: 33ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 5ms, render: 23ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 4ms, render: 25ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 2ms, render: 22ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 3ms, render: 26ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 5ms, render: 24ms)
+ GET /attendant/online 200 in 28ms (compile: 3ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 2ms, render: 26ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 39ms (compile: 4ms, proxy.ts: 3ms, render: 31ms)
+ GET /attendant/online 200 in 37ms (compile: 4ms, proxy.ts: 3ms, render: 30ms)
+ GET /attendant/online 200 in 36ms (compile: 4ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 2ms, render: 27ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 4ms, render: 26ms)
+ GET /attendant/online 200 in 46ms (compile: 3ms, proxy.ts: 3ms, render: 40ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 44ms (compile: 7ms, proxy.ts: 7ms, render: 30ms)
+ GET /attendant/online 200 in 42ms (compile: 5ms, proxy.ts: 5ms, render: 33ms)
+ GET /attendant/online 200 in 40ms (compile: 3ms, proxy.ts: 3ms, render: 34ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 4ms, render: 26ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 31ms (compile: 5ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 41ms (compile: 6ms, proxy.ts: 6ms, render: 29ms)
+ GET /attendant/online 200 in 52ms (compile: 7ms, proxy.ts: 5ms, render: 41ms)
+ GET /attendant/online 200 in 30ms (compile: 5ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 70ms (compile: 6ms, proxy.ts: 8ms, render: 56ms)
+ GET /attendant/online 200 in 56ms (compile: 8ms, proxy.ts: 8ms, render: 40ms)
+ GET /attendant/online 200 in 32ms (compile: 5ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 38ms (compile: 4ms, proxy.ts: 6ms, render: 29ms)
+ GET /attendant/online 200 in 28ms (compile: 6ms, proxy.ts: 5ms, render: 17ms)
+ GET /attendant/online 200 in 40ms (compile: 5ms, proxy.ts: 3ms, render: 31ms)
+ GET /attendant/online 200 in 34ms (compile: 5ms, proxy.ts: 4ms, render: 25ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 5ms, render: 23ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 36ms (compile: 4ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 30ms (compile: 5ms, proxy.ts: 2ms, render: 23ms)
+ GET /attendant/online 200 in 27ms (compile: 5ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 39ms (compile: 5ms, proxy.ts: 3ms, render: 31ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 4ms, render: 23ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 2ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 4ms, render: 25ms)
+ GET /attendant/online 200 in 34ms (compile: 4ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 2ms, render: 28ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 28ms (compile: 3ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 4ms, render: 26ms)
+ GET /attendant/online 200 in 45ms (compile: 3ms, proxy.ts: 3ms, render: 39ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 44ms (compile: 4ms, proxy.ts: 5ms, render: 34ms)
+ GET /attendant/online 200 in 40ms (compile: 3ms, proxy.ts: 3ms, render: 34ms)
+ GET /attendant/online 200 in 39ms (compile: 4ms, proxy.ts: 3ms, render: 32ms)
+ GET /attendant/online 200 in 25ms (compile: 5ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 38ms (compile: 5ms, proxy.ts: 4ms, render: 29ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 40ms (compile: 5ms, proxy.ts: 4ms, render: 32ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 51ms (compile: 4ms, proxy.ts: 2ms, render: 45ms)
+ GET /attendant/online 200 in 45ms (compile: 6ms, proxy.ts: 6ms, render: 34ms)
+ GET /attendant/online 200 in 32ms (compile: 5ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 4ms, render: 19ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 52ms (compile: 5ms, proxy.ts: 6ms, render: 41ms)
+ GET /attendant/online 200 in 47ms (compile: 5ms, proxy.ts: 6ms, render: 36ms)
+ GET /attendant/online 200 in 30ms (compile: 5ms, proxy.ts: 5ms, render: 20ms)
+ GET /attendant/online 200 in 47ms (compile: 5ms, proxy.ts: 4ms, render: 39ms)
+ GET /attendant/online 200 in 39ms (compile: 7ms, proxy.ts: 8ms, render: 24ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 7ms, render: 23ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 3ms, render: 28ms)
+ GET /attendant/online 200 in 34ms (compile: 4ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 32ms (compile: 4ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 2ms, render: 29ms)
+ GET /attendant/online 200 in 44ms (compile: 5ms, proxy.ts: 5ms, render: 35ms)
+ GET /attendant/online 200 in 37ms (compile: 3ms, proxy.ts: 4ms, render: 30ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 6ms, render: 24ms)
+ GET /attendant/online 200 in 28ms (compile: 3ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 27ms (compile: 7ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 3ms, render: 28ms)
+ GET /attendant/online 200 in 30ms (compile: 5ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 28ms (compile: 3ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 40ms (compile: 4ms, proxy.ts: 3ms, render: 33ms)
+ GET /attendant/online 200 in 45ms (compile: 7ms, proxy.ts: 4ms, render: 33ms)
+ GET /attendant/online 200 in 43ms (compile: 5ms, proxy.ts: 7ms, render: 31ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 4ms, render: 19ms)
+ GET /attendant/online 200 in 32ms (compile: 2ms, proxy.ts: 2ms, render: 28ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 34ms (compile: 2ms, proxy.ts: 2ms, render: 29ms)
+ GET /attendant/online 200 in 39ms (compile: 4ms, proxy.ts: 4ms, render: 31ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 4ms, render: 23ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 5ms, render: 22ms)
+ GET /attendant/online 200 in 29ms (compile: 5ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 4ms, render: 24ms)
+ GET /attendant/online 200 in 43ms (compile: 6ms, proxy.ts: 2ms, render: 35ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 5ms, render: 20ms)
+ GET /attendant/online 200 in 44ms (compile: 4ms, proxy.ts: 4ms, render: 36ms)
+ GET /attendant/online 200 in 45ms (compile: 5ms, proxy.ts: 5ms, render: 34ms)
+ GET /attendant/online 200 in 51ms (compile: 5ms, proxy.ts: 5ms, render: 41ms)
+ GET /attendant/online 200 in 35ms (compile: 4ms, proxy.ts: 5ms, render: 26ms)
+ GET /attendant/online 200 in 37ms (compile: 3ms, proxy.ts: 2ms, render: 32ms)
+ GET /attendant/online 200 in 42ms (compile: 6ms, proxy.ts: 6ms, render: 30ms)
+ GET /attendant/online 200 in 46ms (compile: 4ms, proxy.ts: 3ms, render: 38ms)
+ GET /attendant/online 200 in 37ms (compile: 6ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 45ms (compile: 5ms, proxy.ts: 5ms, render: 35ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 37ms (compile: 3ms, proxy.ts: 4ms, render: 30ms)
+ GET /attendant/online 200 in 25ms (compile: 2ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 3ms, render: 28ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 34ms (compile: 3ms, proxy.ts: 2ms, render: 29ms)
+ GET /attendant/online 200 in 44ms (compile: 5ms, proxy.ts: 7ms, render: 32ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 5ms, render: 17ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 2ms, render: 24ms)
+ GET /attendant/online 200 in 21ms (compile: 4ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 1982┬╡s, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 26ms (compile: 2ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 28ms (compile: 2ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 25ms (compile: 2ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 28ms (compile: 2ms, proxy.ts: 2ms, render: 23ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 1951┬╡s, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 32ms (compile: 3ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 2ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 34ms (compile: 4ms, proxy.ts: 6ms, render: 24ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 31ms (compile: 4ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 37ms (compile: 4ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 37ms (compile: 4ms, proxy.ts: 5ms, render: 28ms)
+ GET /attendant/online 200 in 31ms (compile: 5ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 42ms (compile: 4ms, proxy.ts: 2ms, render: 36ms)
+ GET /attendant/online 200 in 38ms (compile: 5ms, proxy.ts: 3ms, render: 29ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 30ms (compile: 2ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 6ms, render: 16ms)
+ GET /attendant/online 200 in 26ms (compile: 2ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 2ms, render: 25ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 5ms, render: 17ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 4ms, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 26ms (compile: 5ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 32ms (compile: 2ms, proxy.ts: 4ms, render: 27ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 28ms (compile: 3ms, proxy.ts: 2ms, render: 23ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 4ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 40ms (compile: 2ms, proxy.ts: 3ms, render: 35ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 28ms (compile: 5ms, proxy.ts: 5ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 33ms (compile: 3ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 25ms (compile: 1962┬╡s, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 1951┬╡s, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 45ms (compile: 3ms, proxy.ts: 2ms, render: 40ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 5ms, render: 19ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 35ms (compile: 1997┬╡s, proxy.ts: 2ms, render: 31ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 22ms (compile: 1955┬╡s, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 30ms (compile: 2ms, proxy.ts: 2ms, render: 26ms)
+ GET /attendant/online 200 in 21ms (compile: 4ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 1975┬╡s, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 2ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 48ms (compile: 5ms, proxy.ts: 4ms, render: 40ms)
+ GET /attendant/online 200 in 36ms (compile: 4ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 4ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 5ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 34ms (compile: 2ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 35ms (compile: 3ms, proxy.ts: 3ms, render: 29ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 24ms (compile: 2ms, proxy.ts: 2ms, render: 19ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 26ms (compile: 2ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 38ms (compile: 4ms, proxy.ts: 4ms, render: 30ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 4ms, render: 19ms)
+ GET /attendant/online 200 in 26ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 2ms, render: 24ms)
+ GET /attendant/online 200 in 29ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 22ms (compile: 4ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 37ms (compile: 5ms, proxy.ts: 3ms, render: 29ms)
+ GET /attendant/online 200 in 29ms (compile: 2ms, proxy.ts: 2ms, render: 25ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 43ms (compile: 3ms, proxy.ts: 5ms, render: 35ms)
+ GET /attendant/online 200 in 50ms (compile: 3ms, proxy.ts: 4ms, render: 43ms)
+ GET /attendant/online 200 in 46ms (compile: 5ms, proxy.ts: 4ms, render: 36ms)
+ GET /attendant/online 200 in 43ms (compile: 5ms, proxy.ts: 3ms, render: 34ms)
+ GET /attendant/online 200 in 31ms (compile: 5ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 59ms (compile: 20ms, proxy.ts: 5ms, render: 34ms)
+ GET /attendant/online 200 in 62ms (compile: 6ms, proxy.ts: 3ms, render: 53ms)
+ GET /attendant/online 200 in 36ms (compile: 11ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 47ms (compile: 3ms, proxy.ts: 3ms, render: 41ms)
+ GET /attendant/online 200 in 50ms (compile: 8ms, proxy.ts: 11ms, render: 31ms)
+ GET /attendant/online 200 in 48ms (compile: 4ms, proxy.ts: 5ms, render: 38ms)
+ GET /attendant/online 200 in 58ms (compile: 6ms, proxy.ts: 5ms, render: 46ms)
+ GET /attendant/online 200 in 45ms (compile: 6ms, proxy.ts: 6ms, render: 33ms)
+ GET /attendant/online 200 in 27ms (compile: 4ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 29ms (compile: 5ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 29ms (compile: 5ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 1978┬╡s, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 36ms (compile: 3ms, proxy.ts: 3ms, render: 30ms)
+ GET /attendant/online 200 in 22ms (compile: 1980┬╡s, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 1946┬╡s, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 19ms (compile: 2ms, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 19ms (compile: 1947┬╡s, proxy.ts: 3ms, render: 14ms)
+ GET /attendant/online 200 in 30ms (compile: 4ms, proxy.ts: 5ms, render: 21ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 20ms (compile: 1946┬╡s, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 33ms (compile: 4ms, proxy.ts: 2ms, render: 26ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 22ms)
+ GET /attendant/online 200 in 27ms (compile: 3ms, proxy.ts: 3ms, render: 21ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 2ms, render: 25ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 20ms (compile: 1933┬╡s, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 2ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 4ms, render: 22ms)
+ GET /attendant/online 200 in 22ms (compile: 1983┬╡s, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 4ms, render: 15ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 6ms, render: 16ms)
+ GET /attendant/online 200 in 39ms (compile: 2ms, proxy.ts: 2ms, render: 35ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 15ms)
+ GET /attendant/online 200 in 24ms (compile: 1994┬╡s, proxy.ts: 2ms, render: 20ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 24ms (compile: 4ms, proxy.ts: 4ms, render: 16ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 4ms, proxy.ts: 2ms, render: 15ms)
+ GET /attendant/online 200 in 21ms (compile: 1971┬╡s, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 3ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 27ms (compile: 5ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 25ms (compile: 2ms, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 32ms (compile: 2ms, proxy.ts: 2ms, render: 27ms)
+ GET /attendant/online 200 in 20ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 4ms, render: 18ms)
+ GET /attendant/online 200 in 31ms (compile: 3ms, proxy.ts: 2ms, render: 25ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 21ms (compile: 2ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 25ms (compile: 1916┬╡s, proxy.ts: 2ms, render: 21ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 2ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 24ms)
+ GET /attendant/online 200 in 21ms (compile: 3ms, proxy.ts: 2ms, render: 16ms)
+ GET /attendant/online 200 in 32ms (compile: 3ms, proxy.ts: 3ms, render: 26ms)
+ GET /attendant/online 200 in 20ms (compile: 3ms, proxy.ts: 2ms, render: 14ms)
+ GET /attendant/online 200 in 23ms (compile: 4ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 2ms, render: 18ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 4ms, render: 20ms)
+ GET /attendant/online 200 in 35ms (compile: 3ms, proxy.ts: 2ms, render: 30ms)
+ GET /attendant/online 200 in 53ms (compile: 4ms, proxy.ts: 4ms, render: 45ms)
+ GET /attendant/online 200 in 26ms (compile: 3ms, proxy.ts: 3ms, render: 20ms)
+ GET /attendant/online 200 in 38ms (compile: 7ms, proxy.ts: 5ms, render: 25ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 2ms, render: 17ms)
+ GET /attendant/online 200 in 50ms (compile: 6ms, proxy.ts: 4ms, render: 40ms)
+ GET /attendant/online 200 in 36ms (compile: 4ms, proxy.ts: 4ms, render: 28ms)
+ GET /attendant/online 200 in 42ms (compile: 6ms, proxy.ts: 6ms, render: 30ms)
+ GET /attendant/online 200 in 30ms (compile: 3ms, proxy.ts: 3ms, render: 25ms)
+ GET /attendant/online 200 in 28ms (compile: 4ms, proxy.ts: 4ms, render: 21ms)
+ GET /attendant/online 200 in 34ms (compile: 4ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 29ms (compile: 3ms, proxy.ts: 3ms, render: 23ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 22ms (compile: 3ms, proxy.ts: 3ms, render: 16ms)
+ GET /attendant/online 200 in 24ms (compile: 2ms, proxy.ts: 3ms, render: 19ms)
+ GET /attendant/online 200 in 24ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 17ms)
+ GET /attendant/online 200 in 34ms (compile: 4ms, proxy.ts: 3ms, render: 27ms)
+ GET /attendant/online 200 in 25ms (compile: 4ms, proxy.ts: 3ms, render: 18ms)
+ GET /attendant/online 200 in 60ms (compile: 9ms, proxy.ts: 14ms, render: 38ms)
+ GET /attendant/online 200 in 23ms (compile: 3ms, proxy.ts: 3ms, render: 18ms)
+ Γ£ô Compiled in 300ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 287ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: assignedShops is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1651:31) {
+  digest: '3154869897'
+}
+ GET /attendant/online 500 in 382ms (compile: 141ms, proxy.ts: 5ms, render: 236ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 270ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: assignedShops is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1651:31) {
+  digest: '3154869897'
+}
+ GET /attendant/online 500 in 208ms (compile: 69ms, proxy.ts: 3ms, render: 135ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 314ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1558:26) {
+  digest: '2607799581'
+}
+ GET /attendant/online 500 in 295ms (compile: 119ms, proxy.ts: 5ms, render: 170ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1533:26) {
+  digest: '2607799581'
+}
+ Γ£ô Compiled in 301ms
+ GET /attendant/online 500 in 238ms (compile: 81ms, proxy.ts: 6ms, render: 151ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1549:26) {
+  digest: '2607799581'
+}
+ Γ£ô Compiled in 286ms
+ GET /attendant/online 500 in 314ms (compile: 110ms, proxy.ts: 4ms, render: 200ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1549:26) {
+  digest: '2607799581'
+}
+ Γ£ô Compiled in 320ms
+ GET /attendant/online 500 in 257ms (compile: 102ms, proxy.ts: 4ms, render: 150ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 276ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1549:26) {
+  digest: '2607799581'
+}
+ GET /attendant/online 500 in 298ms (compile: 107ms, proxy.ts: 6ms, render: 184ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 263ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: onlineSummary is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1549:26) {
+  digest: '2607799581'
+}
+ GET /attendant/online 500 in 369ms (compile: 165ms, proxy.ts: 3ms, render: 200ms)
+ Γ£ô Compiled in 356ms
+ Γ£ô Compiled in 358ms
+ Γ£ô Compiled in 350ms
+ Γ£ô Compiled in 360ms
+ Γ£ô Compiled in 335ms
+ Γ£ô Compiled in 387ms
+ Γ£ô Compiled in 354ms
+ Γ£ô Compiled in 338ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ GET /attendant/online 200 in 396ms (compile: 129ms, proxy.ts: 4ms, render: 263ms)
+ GET /api/attendants/me 401 in 189ms (compile: 146ms, render: 43ms)
+ GET /api/attendants/marketplace-assignments 401 in 452ms (compile: 435ms, render: 18ms)
+ Γ£ô Compiled in 381ms
+ GET /api/attendants/me 401 in 20ms (compile: 4ms, render: 16ms)
+ GET /api/attendants/marketplace-assignments 401 in 22ms (compile: 10ms, render: 12ms)
+ Γ£ô Compiled in 372ms
+ GET /api/attendants/me 401 in 25ms (compile: 5ms, render: 20ms)
+ GET /api/attendants/marketplace-assignments 401 in 30ms (compile: 12ms, render: 18ms)
+ Γ£ô Compiled in 430ms
+ GET /api/attendants/me 401 in 16ms (compile: 3ms, render: 13ms)
+ Γ£ô Compiled in 392ms
+ GET /api/attendants/marketplace-assignments 401 in 26ms (compile: 5ms, render: 20ms)
+ GET /api/attendants/me 401 in 30ms (compile: 15ms, render: 15ms)
+ Γ£ô Compiled in 586ms
+ GET /api/attendants/me 401 in 28ms (compile: 9ms, render: 19ms)
+ GET /api/attendants/marketplace-assignments 401 in 28ms (compile: 14ms, render: 14ms)
+ Γ£ô Compiled in 683ms
+ GET /api/attendants/me 401 in 20ms (compile: 4ms, render: 16ms)
+ GET /api/attendants/marketplace-assignments 401 in 23ms (compile: 9ms, render: 14ms)
+ Γ£ô Compiled in 519ms
+ GET /api/attendants/me 401 in 21ms (compile: 4ms, render: 17ms)
+ GET /api/attendants/marketplace-assignments 401 in 34ms (compile: 13ms, render: 21ms)
+ Γ£ô Compiled in 370ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 289ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: selectedWeekKey is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_3f44a5c5._.js:1400:9) {
+  digest: '2679897500'
+}
+ GET /attendant/online 500 in 470ms (compile: 94ms, proxy.ts: 4ms, render: 372ms)
+ Γ£ô Compiled in 253ms
+ Γ£ô Compiled in 247ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ GET /attendant/online 200 in 190ms (compile: 80ms, proxy.ts: 5ms, render: 105ms)
+ GET /api/attendants/me 401 in 17ms (compile: 4ms, render: 13ms)
+ Γ£ô Compiled in 278ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 255ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_75d006f7._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: receiptsEditorRows is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_75d006f7._.js:1064:9) {
+  digest: '1072227631'
+}
+ GET /attendant/online 500 in 224ms (compile: 80ms, proxy.ts: 4ms, render: 140ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 254ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_75d006f7._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: ReceiptsEditor is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_75d006f7._.js:1188:396) {
+  digest: '1935927670'
+}
+ GET /attendant/online 500 in 200ms (compile: 71ms, proxy.ts: 3ms, render: 126ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 248ms
+ GET /attendant/online 200 in 158ms (compile: 67ms, proxy.ts: 2ms, render: 89ms)
+ GET /api/attendants/me 401 in 38ms (compile: 2ms, render: 35ms)
+ Γ£ô Compiled in 408ms
+ GET /api/attendants/me 401 in 12ms (compile: 3ms, render: 10ms)
+ Γ£ô Compiled in 809ms
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import EarningsCard from "@/app/_components/EarningsCard";
+   9 | import { mapPayrollToEarningsSummary as mapToEarnings } from "@/lib/payrollMapping";
+  10 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ£ô Compiled in 855ms
+ Γ£ô Compiled in 967ms
+ GET /attendant/online 200 in 588ms (compile: 325ms, proxy.ts: 12ms, render: 250ms)
+ Γ£ô Compiled in 978ms
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: EarningsCard is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js:1104:396) {
+  digest: '1138110481'
+}
+ Γ£ô Compiled in 912ms
+ GET /attendant/online 500 in 769ms (compile: 240ms, proxy.ts: 8ms, render: 522ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 261ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: Cannot access 'periodLabel' before initialization
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js:715:9) {
+  digest: '1837317655'
+}
+ GET /attendant/online 500 in 184ms (compile: 80ms, proxy.ts: 4ms, render: 101ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 254ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: Cannot access 'periodLabel' before initialization
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js:715:9) {
+  digest: '1837317655'
+}
+ GET /attendant/online 500 in 195ms (compile: 74ms, proxy.ts: 4ms, render: 117ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 232ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: Cannot access 'periodLabel' before initialization
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js:715:9) {
+  digest: '1837317655'
+}
+ GET /attendant/online 500 in 203ms (compile: 82ms, proxy.ts: 4ms, render: 117ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 892ms
+C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+ Γ¿» ReferenceError: quickStatsPayload is not defined
+    at AttendantOnlineClient (C:\Projects\betechops\.next\dev\server\chunks\ssr\src_ae28ed5b._.js:1092:48) {
+  digest: '682008100'
+}
+ GET /attendant/online 500 in 596ms (compile: 256ms, proxy.ts: 11ms, render: 329ms)
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ Γ£ô Compiled in 845ms
+ GET /attendant/online 200 in 558ms (compile: 245ms, proxy.ts: 10ms, render: 303ms)
+ GET /api/attendants/me 401 in 58ms (compile: 26ms, render: 32ms)
+ Γ£ô Compiled in 865ms
+ GET /api/attendants/me 401 in 46ms (compile: 6ms, render: 40ms)
+ Γ£ô Compiled in 643ms
+ GET /api/attendants/me 401 in 23ms (compile: 4ms, render: 19ms)
+ Γ£ô Compiled in 951ms
+ GET /api/attendants/me 401 in 25ms (compile: 5ms, render: 20ms)
+ Γ£ô Compiled in 904ms
+ GET /api/attendants/me 401 in 43ms (compile: 7ms, render: 36ms)
+ Γ£ô Compiled in 619ms
+ GET /api/attendants/me 401 in 27ms (compile: 5ms, render: 22ms)
+ Γ£ô Compiled in 470ms
+ GET /api/attendants/me 401 in 27ms (compile: 4ms, render: 23ms)
+ Γ£ô Compiled in 543ms
+ GET /api/attendants/me 401 in 41ms (compile: 7ms, render: 34ms)
+ Γ£ô Compiled in 567ms
+ GET /api/attendants/me 401 in 13ms (compile: 4ms, render: 9ms)
+ GET /attendant/online 200 in 996ms (compile: 355ms, proxy.ts: 19ms, render: 622ms)
+ GET /api/attendants/me 401 in 20ms (compile: 4ms, render: 16ms)
+ GET /myreceipts 404 in 1313ms (compile: 1235ms, render: 78ms)
+ GET /myreceipts 404 in 116ms (compile: 11ms, render: 106ms)
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+   9 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+  10 | import { showToast } from "@/lib/ui/toast";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+   9 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+  10 | import { showToast } from "@/lib/ui/toast";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+   9 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+  10 | import { showToast } from "@/lib/ui/toast";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ¿» ./src/app/attendant/online/AttendantOnlineClient.tsx:7:1
+Module not found: Can't resolve '@/components/QuickStatsCard'
+   5 | import Button from "@/app/_components/Button";
+   6 | // SensitiveValue and card-lock helpers removed (cards cleaned up)
+>  7 | import QuickStatsCard from "@/components/QuickStatsCard";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   8 | import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+   9 | import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+  10 | import { showToast } from "@/lib/ui/toast";
+
+Import map: aliased to relative './src/components/QuickStatsCard' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/attendant/online/AttendantOnlineClient.tsx
+    ./src/app/attendant/online/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ Γ£ô Compiled in 1127ms
