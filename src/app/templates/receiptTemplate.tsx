@@ -75,6 +75,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         <div>
           <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
           <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
+          <div><strong>Phone:</strong> ${snapshot.phone || order?.customerPhone || ''}</div>
         </div>
         <div class="right">
           <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
@@ -93,6 +94,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
 
       <table class="totals">
         <tr><td></td><td class="right">Subtotal:</td><td class="right">${totals.subtotal ?? ''}</td></tr>
+        ${snapshot.showDiscount ? `<tr><td></td><td class="right">Discount:</td><td class="right">${snapshot.discount ?? totals.discount ?? ''}</td></tr>` : ''}
         <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${totals.total ?? ''}</strong></td></tr>
       </table>
 

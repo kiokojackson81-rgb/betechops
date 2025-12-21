@@ -19,6 +19,10 @@ export function buildReceiptSnapshot(receipt: any) {
     items,
     totals: receipt.totals ?? {},
     notes: receipt.notes ?? notesFromData ?? '',
+    // include customer phone and discount for templates and downstream
+    phone: order.customerPhone || (dataIsObject ? (dataAny?.customerPhone as string | undefined) : undefined) || '',
+    discount: Number(receipt.discount ?? (dataIsObject ? (dataAny?.discount as number | undefined) : undefined) ?? 0),
+    showDiscount: Boolean(receipt.showDiscount ?? (dataIsObject ? (dataAny?.showDiscount as boolean | undefined) : undefined) || Number(receipt.discount ?? 0) > 0),
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || '',
     attendantName: receipt.issuedBy?.name || order?.attendant?.name || '',
