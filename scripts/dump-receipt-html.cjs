@@ -6,9 +6,19 @@ const prisma = new PrismaClient();
 function renderReceiptTemplate(snapshot, opts = {}) {
   const branding = snapshot.branding || {};
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
-  const letterheadUrl = branding.letterheadUrl || process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '';
-  const logo = branding.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png';
+  const isHttp = (v) => typeof v === 'string' && /^https?:\/\//.test(v);
+  const envLetterheadUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '')
+    ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL
+    : '';
+  const envLogoUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '')
+    ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL
+    : '';
   const brandColor = branding.brandColor || '#7A2020';
+  const headerImg = isHttp(branding.letterheadUrl)
+    ? branding.letterheadUrl
+    : isHttp(envLetterheadUrl)
+    ? envLetterheadUrl
+    : (branding.logoUrl || envLogoUrl || '/logo.png');
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
   const totals = snapshot.totals || order.totals || {};
@@ -61,16 +71,10 @@ function renderReceiptTemplate(snapshot, opts = {}) {
     <div class="page">
       <header>
         ${
-          letterheadUrl
-            ? `<img src="${letterheadUrl}" alt="letterhead" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
-            : `<img src="${logo}" alt="logo" style="height:56px;margin-bottom:12px;" />`
+          headerImg
+            ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
+            : ''
         }
-        <div style="text-align:center">
-          <h1 style="margin-bottom:6px">${siteTitle}</h1>
-          <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-          <p style="margin:2px 0">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
-          <p style="margin:2px 0">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
-        </div>
       </header>
 
       <div class="meta">
