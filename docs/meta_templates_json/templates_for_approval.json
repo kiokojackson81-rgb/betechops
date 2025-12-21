@@ -1,0 +1,28 @@
+{
+  "templates": [
+    {
+      "name": "customer_receipt",
+      "language": "en_US",
+      "category": "TRANSACTIONAL",
+      "body": "Hello {{customerName}},\n\nThank you for your purchase. Your receipt ({{receiptNumber}}) for KES {{total}} is attached.\n\nItems: {{itemsCount}} • Payment: {{paymentMethod}}\n\nIf you have any questions reply to this message.\n\n{{companyName}}"
+    },
+    {
+      "name": "admin_daily_summary",
+      "language": "en_US",
+      "category": "UTILITY",
+      "body": "Daily report from {{attendantName}} ({{date}}):\nTotal Sales: KES {{totalSales}}\nTotal Profit: KES {{totalProfit}}\nReceipts: {{totalReceipts}}\nItems: {{totalItems}}"
+    },
+    {
+      "name": "support_acknowledgement",
+      "language": "en_US",
+      "category": "CONFIRMATION",
+      "body": "Thanks {{attendantName}} — your support report for {{date}} has been saved.\nTotal Sales: KES {{totalSales}} • Receipts: {{totalReceipts}}"
+    },
+    {
+      "name": "receipt_reminder",
+      "language": "en_US",
+      "category": "NOTIFICATION",
+      "body": "Hi {{customerName}}, we couldn't capture all details for receipt {{receiptNumber}}. Please contact support or reply to this message so we can complete your receipt."
+    }
+  ]
+}

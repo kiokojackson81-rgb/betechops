@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { showToast } from '@/lib/ui/toast';
 import { useShopsActionsSafe } from './ShopsActionsContext';
+import { attendantCategoryOptions } from '@/lib/attendants/definitions';
 
 type AttendantProps = {
   shops: { id: string; name: string }[];
@@ -13,6 +14,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
   const [name, setName] = useState('');
   const [shopId, setShopId] = useState('');
   const [roleAtShop, setRoleAtShop] = useState('ATTENDANT');
+  const [categories, setCategories] = useState<string[]>(['DIRECT_SALES_OPS']);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const actions = useShopsActionsSafe();
@@ -21,7 +23,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
-      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name }) });
+      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name, categories }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'failed');
       const user = j.user;
@@ -31,7 +33,7 @@ export default function AttendantForm({ shops }: AttendantProps) {
         if (!r2.ok) throw new Error(j2?.error || 'assign failed');
       }
       // Notify the user and let a parent update the UI in-place if available.
-      setEmail(''); setName(''); setShopId('');
+      setEmail(''); setName(''); setShopId(''); setCategories(['DIRECT_SALES_OPS']);
       showToast('Attendant created', 'success');
   // Notify parent via context if available (provider optional).
   actions.onAttendantCreated(user, shopId ? { shopId, roleAtShop } : undefined);
@@ -50,6 +52,33 @@ export default function AttendantForm({ shops }: AttendantProps) {
       <div>
         <label className="block">Name</label>
         <input value={name} onChange={e=>setName(e.target.value)} className="border p-1" />
+      </div>
+      <div>
+        <label className="block">Categories</label>
+        <div className="flex flex-col gap-1 border border-slate-600/40 p-2 rounded">
+          {attendantCategoryOptions.map(opt => {
+            const checked = categories.includes(opt.id);
+            return (
+              <label key={opt.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? Array.from(new Set([...categories, opt.id]))
+                      : categories.filter(c => c !== opt.id);
+                    if (!next.length) {
+                      showToast('Select at least one category', 'error');
+                      return;
+                    }
+                    setCategories(next);
+                  }}
+                />
+                <span>{opt.label}</span>
+              </label>
+            );
+          })}
+        </div>
       </div>
       <div>
         <label className="block">Assign to shop (optional)</label>

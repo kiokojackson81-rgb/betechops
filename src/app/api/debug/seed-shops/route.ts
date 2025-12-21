@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { Prisma, Platform, PrismaClient } from "@prisma/client";
+import { Prisma, Platform } from "@prisma/client";
 import { encryptJsonForStorage } from "@/lib/crypto/secure-json";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 

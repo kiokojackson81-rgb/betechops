@@ -1,9 +1,11 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { isSyncedStatus } from "@/lib/jumia/orderStatus";
 
-const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELLED","RETURNED","DISPUTED"];
-const SIZE_OPTIONS = [25, 50, 100, 250, 500, 1000];
+// Note: Jumia API uses American spelling for canceled -> "CANCELED"
+const STATUSES = ["PENDING","PACKED","READY_TO_SHIP","DELIVERED","CANCELED","RETURNED","DISPUTED"];
+const SIZE_OPTIONS = [25, 50, 100, 150, 200, 250, 300];
 
 type FiltersState = {
   status: string;
@@ -31,16 +33,21 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   const sp = useSearchParams();
 
   const snapshot = useMemo(() => {
-    const status = sp.get("status") || DEFAULTS.status;
-    const sizeDefault = status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const status = sp?.get("status") || DEFAULTS.status;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(status)) {
+        return status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     return {
       status,
-      country: sp.get("country") || DEFAULTS.country,
-      shopId: sp.get("shopId") || DEFAULTS.shopId,
-      dateFrom: sp.get("dateFrom") || DEFAULTS.dateFrom,
-      dateTo: sp.get("dateTo") || DEFAULTS.dateTo,
-      q: sp.get("q") || DEFAULTS.q,
-      size: sp.get("size") || sizeDefault,
+      country: sp?.get("country") || DEFAULTS.country,
+      shopId: sp?.get("shopId") || DEFAULTS.shopId,
+      dateFrom: sp?.get("dateFrom") || DEFAULTS.dateFrom,
+      dateTo: sp?.get("dateTo") || DEFAULTS.dateTo,
+      q: sp?.get("q") || DEFAULTS.q,
+      size: sp?.get("size") || sizeDefault,
     };
   }, [sp]);
 
@@ -51,7 +58,8 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
   }, [snapshot]);
 
   const apply = () => {
-    const q = new URLSearchParams(sp.toString());
+    // Build query from current pending state (do not start from existing sp to avoid stale deletes)
+    const q = new URLSearchParams();
     const assign = (key: keyof FiltersState, value: string, defaultValue: string) => {
       if (!value || value === defaultValue) {
         q.delete(key);
@@ -66,26 +74,52 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
     assign("dateFrom", pending.dateFrom, DEFAULTS.dateFrom);
     assign("dateTo", pending.dateTo, DEFAULTS.dateTo);
     assign("q", pending.q.trim(), DEFAULTS.q);
-    const sizeDefault = pending.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(pending.status)) {
+        return pending.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     assign("size", pending.size, sizeDefault);
 
     q.delete("nextToken");
-    router.push(`${pathname}?${q.toString()}`);
+    const queryString = q.toString();
+    const target = queryString ? `${pathname ?? "/"}?${queryString}` : (pathname ?? "/");
+    router.push(target);
   };
 
   const reset = () => {
-    const sizeDefault = DEFAULTS.status.toUpperCase() === "PENDING" ? "500" : DEFAULTS.size;
+    const sizeDefault = (() => {
+      if (isSyncedStatus(DEFAULTS.status)) {
+        return DEFAULTS.status.trim().toUpperCase() === "PENDING" ? "300" : "150";
+      }
+      return DEFAULTS.size;
+    })();
     setPending({ ...DEFAULTS, size: sizeDefault });
-    const q = new URLSearchParams(sp.toString());
+    const q = new URLSearchParams(sp?.toString() || "");
     Object.keys(DEFAULTS).forEach((key) => q.delete(key));
     q.delete("nextToken");
     router.push(`${pathname}?${q.toString()}`);
   };
 
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+    // Prevent the browser's native submission to avoid a race between router.push and form submit
+    // and instead perform a single SPA navigation using the cleaned query built from `pending`.
+    e.preventDefault();
+    try {
+      apply();
+    } catch (err) {
+      // Fallback: log and keep page as-is; native submit is avoided to prevent double navigation.
+      // eslint-disable-next-line no-console
+      console.error('[OrdersFilters] apply failed', err);
+    }
+  };
+
   return (
-    <div className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
+    <form action={pathname || undefined} method="GET" onSubmit={onSubmit} className="rounded-xl border border-white/10 bg-[var(--panel,#121723)] p-4 space-y-3">
       <div className="grid md:grid-cols-6 gap-3">
         <select
+          name="status"
           value={pending.status}
           onChange={(e) => setPending((prev) => ({ ...prev, status: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -99,6 +133,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
         </select>
 
         <input
+          name="country"
           value={pending.country}
           onChange={(e) => setPending((prev) => ({ ...prev, country: e.target.value }))}
           placeholder="Country (e.g. KE)"
@@ -106,6 +141,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
         />
 
         <select
+          name="shopId"
           value={pending.shopId}
           onChange={(e) => setPending((prev) => ({ ...prev, shopId: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -120,18 +156,21 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
         <input
           type="date"
+          name="dateFrom"
           value={pending.dateFrom}
           onChange={(e) => setPending((prev) => ({ ...prev, dateFrom: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
         />
         <input
           type="date"
+          name="dateTo"
           value={pending.dateTo}
           onChange={(e) => setPending((prev) => ({ ...prev, dateTo: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
         />
 
         <input
+          name="q"
           value={pending.q}
           onChange={(e) => setPending((prev) => ({ ...prev, q: e.target.value }))}
           placeholder="Search number or name."
@@ -141,6 +180,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
 
       <div className="flex flex-wrap items-center gap-3">
         <select
+          name="size"
           value={pending.size}
           onChange={(e) => setPending((prev) => ({ ...prev, size: e.target.value }))}
           className="border border-white/10 bg-white/5 rounded-lg px-2 py-2"
@@ -152,7 +192,7 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
           ))}
         </select>
         <button
-          onClick={apply}
+          type="submit"
           className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10"
         >
           Apply
@@ -164,6 +204,6 @@ export default function OrdersFilters({ shops }: { shops: Array<{ id: string; na
           Reset
         </button>
       </div>
-    </div>
+    </form>
   );
 }

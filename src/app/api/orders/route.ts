@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jumiaFetch as _jumiaFetch, loadShopAuthById, loadDefaultShopAuth } from '@/lib/jumia';
 import { prisma } from '@/lib/prisma';
+import { zonedTimeToUtc } from 'date-fns-tz';
+import { addDays } from 'date-fns';
+
+declare global {
+  var __ordersPendingCache: Map<string, { ts: number; data: any }> | undefined;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -51,22 +57,29 @@ export async function GET(req: NextRequest) {
   }
   const url = new URL(req.url);
   const qs: Record<string, string> = {};
-  const allow = ['status', 'size', 'country', 'shopId', 'dateFrom', 'dateTo', 'nextToken', 'q'];
+  const allow = ['status', 'size', 'country', 'shopId', 'dateFrom', 'dateTo', 'nextToken', 'q', 'fresh'];
   allow.forEach((k) => {
     const v = url.searchParams.get(k);
     if (v) qs[k] = v;
   });
 
   if (!qs.size) qs.size = '50';
+  const requestedSizeRaw = Number.parseInt(qs.size, 10);
+  const requestedSizeSafe = Number.isFinite(requestedSizeRaw) && requestedSizeRaw > 0 ? requestedSizeRaw : 50;
+  const vendorSize = Math.max(1, Math.min(requestedSizeSafe, 300));
+  qs.size = String(requestedSizeSafe);
 
   // Map friendly dateFrom/dateTo to vendor-supported fields.
-  // For PENDING/MULTIPLE we prefer updatedAfter/updatedBefore (orders can be updated while pending).
-  // For other statuses we fall back to createdAfter/createdBefore.
+  // When a specific status filter is present, prefer updatedAfter/updatedBefore so the
+  // date window reflects when orders transitioned (e.g., DELIVERED today even if created earlier).
+  // If no explicit status filter, default to createdAfter/createdBefore.
   const statusUpper = (qs.status || '').toUpperCase();
-  const isPendingLike = statusUpper === 'PENDING' || statusUpper === 'MULTIPLE';
-  const afterKey = isPendingLike ? 'updatedAfter' : 'createdAfter';
-  const beforeKey = isPendingLike ? 'updatedBefore' : 'createdBefore';
+  const hasExplicitStatus = Boolean(statusUpper && statusUpper !== 'ALL');
+  const useUpdatedWindow = hasExplicitStatus; // broaden to updated window for any status filter
+  const afterKey = useUpdatedWindow ? 'updatedAfter' : 'createdAfter';
+  const beforeKey = useUpdatedWindow ? 'updatedBefore' : 'createdBefore';
   const qsOut: Record<string, string> = { ...qs };
+  qsOut.size = String(vendorSize);
   if (qsOut.dateFrom) {
     qsOut[afterKey] = qsOut.dateFrom;
     delete qsOut.dateFrom;
@@ -75,21 +88,47 @@ export async function GET(req: NextRequest) {
     qsOut[beforeKey] = qsOut.dateTo;
     delete qsOut.dateTo;
   }
-  const query = new URLSearchParams(qsOut).toString();
+  // Normalize date-only filters to full ISO timestamps aligned to Nairobi time
+  const DEFAULT_TZ = 'Africa/Nairobi';
+  const isDateOnly = (s: string | undefined) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const toIsoTs = (dateStr: string, endOfDay = false) => {
+    try {
+      // Build local date in Nairobi TZ at start or end of day, then convert to UTC ISO string
+      const base = new Date(`${dateStr}T00:00:00`);
+      const localStartUtc = zonedTimeToUtc(base, DEFAULT_TZ);
+      if (!endOfDay) return localStartUtc.toISOString();
+      const localEndUtc = addDays(localStartUtc, 1);
+      // Use one microsecond before next day to cover full inclusive day window
+      return new Date(localEndUtc.getTime() - 1).toISOString();
+    } catch {
+      return dateStr;
+    }
+  };
+  if (qsOut[afterKey] && isDateOnly(qsOut[afterKey])) qsOut[afterKey] = toIsoTs(qsOut[afterKey], false);
+  if (qsOut[beforeKey] && isDateOnly(qsOut[beforeKey])) qsOut[beforeKey] = toIsoTs(qsOut[beforeKey], true);
+
+  // Vendor expects `token` for pagination; UI/aggregator may pass `nextToken`.
+  // Keep qsOut for ALL-shops aggregator (it strips nextToken), but translate for single-shop path below.
+  const qsVendor: Record<string, string> = { ...qsOut };
+  if (qsVendor.nextToken) {
+    qsVendor.token = qsVendor.nextToken;
+    delete (qsVendor as any).nextToken;
+  }
+  const query = new URLSearchParams(qsVendor).toString();
   const path = query ? `orders?${query}` : 'orders';
 
   // Short-lived in-memory cache for PENDING queries to reduce vendor hammering (5–10s TTL)
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (!(global as any).__ordersPendingCache) (global as any).__ordersPendingCache = new Map<string, { ts: number; data: any }>();
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const cacheMap: Map<string, { ts: number; data: any }> = (global as any).__ordersPendingCache;
-  const TTL_MS = 7000; // 7 seconds default
+  if (!globalThis.__ordersPendingCache) {
+    globalThis.__ordersPendingCache = new Map<string, { ts: number; data: any }>();
+  }
+  const cacheMap = globalThis.__ordersPendingCache!;
+  // Allow short-lived caching to reduce vendor hammering, but make it configurable and bypassable.
+  const TTL_MS = Math.max(0, Number(process.env.ORDERS_PENDING_CACHE_TTL_MS ?? 3000)); // default 3s
+  const forceFresh = ((qs.fresh || '').toLowerCase() === '1' || (qs.fresh || '').toLowerCase() === 'true');
 
   const isPending = (qs.status || '').toUpperCase() === 'PENDING';
   const hasCursor = Boolean(qs.nextToken || (qs as any).token);
-  const cacheKey = isPending && !hasCursor ? `GET ${path}` : '';
+  const cacheKey = isPending && !hasCursor && !forceFresh ? `GET ${path}` : '';
 
   try {
     // Special scope: aggregate across all active JUMIA shops with composite pagination
@@ -181,6 +220,27 @@ export async function GET(req: NextRequest) {
           { id: 's1', platform: 'JUMIA' },
           { id: 's2', platform: 'JUMIA' },
         ];
+      }
+
+      // If we still have no active JUMIA shops, fall back to a single master call using default creds/env.
+      // This ensures the Admin "Live" card and diagnostics don't show zero due to missing shop rows.
+      if (!Array.isArray(jumiaShops) || jumiaShops.length === 0) {
+        try {
+          const shopAuth = await loadDefaultShopAuth().catch(() => undefined);
+          const j = await jumiaFetch(basePath, shopAuth ? ({ method: 'GET', shopAuth } as any) : ({ method: 'GET' } as any));
+          const arr = Array.isArray((j as any)?.orders)
+            ? (j as any).orders
+            : Array.isArray((j as any)?.items)
+            ? (j as any).items
+            : Array.isArray((j as any)?.data)
+            ? (j as any).data
+            : [];
+          const nextToken = String((j as any)?.nextToken ?? (j as any)?.token ?? '') || null;
+          const resFallback = NextResponse.json({ orders: arr, nextToken, isLastPage: !nextToken });
+          return resFallback;
+        } catch {
+          // Fall through to the normal empty aggregation path below
+        }
       }
 
       // Per-shop state
@@ -308,7 +368,24 @@ export async function GET(req: NextRequest) {
       }
 
       const isLastPage = out.length < pageSize; // conservative: if we couldn't fill, treat as last
-      const payload = { orders: out, nextToken, isLastPage };
+  const payload = { orders: out, nextToken, isLastPage };
+      // Enrich merged orders with canonical shop names when available to ensure
+      // live and cached views show consistent shop labels.
+      try {
+        const shopIds = Array.from(new Set((out || []).map((o: any) => (Array.isArray(o?.shopIds) && o.shopIds.length) ? o.shopIds[0] : (o?.shopId || null)).filter(Boolean)));
+        if (shopIds.length) {
+          const shops = await prisma.jumiaShop.findMany({ where: { id: { in: shopIds } }, select: { id: true, name: true, account: { select: { label: true } } } }).catch(() => [] as any[]);
+          const map = new Map<string, { name?: string; accountLabel?: string | null }>();
+          for (const s of shops) map.set(s.id, { name: s.name, accountLabel: s.account?.label ?? null });
+          for (const it of (out || [])) {
+            const sid = Array.isArray(it?.shopIds) && it.shopIds.length ? it.shopIds[0] : (it?.shopId || null);
+            if (sid && map.has(sid) && !it.shopName) {
+              // prefer the explicit shop.name as the stable label
+              it.shopName = map.get(sid)!.name ?? undefined;
+            }
+          }
+        }
+      } catch {}
       if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: payload });
       const resAll = NextResponse.json(payload);
       if (cacheKey) resAll.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
@@ -337,7 +414,22 @@ export async function GET(req: NextRequest) {
     const vendorPath = stripShopIdFromPath(path);
 
     try {
-  const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
+      const data = await jumiaFetch(vendorPath, shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
+      // Attach shopName when we know the requested shopId and have a DB entry
+      try {
+        if (qs.shopId && data && (Array.isArray((data as any)?.orders) || Array.isArray((data as any)?.items) || Array.isArray((data as any)?.data))) {
+          const rows = Array.isArray((data as any).orders) ? (data as any).orders : Array.isArray((data as any).items) ? (data as any).items : (data as any).data || [];
+          const shopRow = await prisma.jumiaShop.findUnique({
+            where: { id: qs.shopId },
+            select: { id: true, name: true, account: { select: { label: true } } },
+          }).catch(() => null);
+          if (shopRow) {
+            for (const r of rows) {
+              if (!r.shopName) r.shopName = shopRow.name;
+            }
+          }
+        }
+      } catch {}
       if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data });
       const res = NextResponse.json(data);
       if (cacheKey) res.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
@@ -351,7 +443,7 @@ export async function GET(req: NextRequest) {
         q2.delete('shopId');
         const p2 = `orders?${q2.toString()}`;
   const data2 = await jumiaFetch(stripShopIdFromPath(p2), shopAuth ? ({ method: 'GET', shopAuth, shopCode: qs.shopId } as any) : ({ method: 'GET' } as any));
-        if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
+  if (cacheKey) cacheMap.set(cacheKey, { ts: Date.now(), data: data2 });
         const res2 = NextResponse.json(data2);
         if (cacheKey) res2.headers.set('Cache-Control', `private, max-age=${Math.floor(TTL_MS / 1000)}`);
         return res2;

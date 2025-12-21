@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encryptJsonForStorage } from '@/lib/crypto/secure-json';
+import { hasPublicPlatformEnum } from '@/lib/db/guards';
 import type { Prisma, Platform } from '@prisma/client';
 import { requireRole } from '@/lib/api';
 import { z } from 'zod';
@@ -46,6 +47,23 @@ export async function POST(request: Request) {
     const parsed = CreateShopSchema.safeParse({ name, platform, credentials });
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+
+    // Guard: ensure the enum type exists; if missing, guide remediation instead of raw 500
+    const enumOk = await hasPublicPlatformEnum(prisma);
+    if (!enumOk) {
+      return NextResponse.json(
+        {
+          error: 'Platform enum missing in database schema',
+          remediation: [
+            'Run: prisma migrate deploy (or migrate dev) in this environment',
+            'If migrations already deployed, manually create enum: CREATE TYPE "public"."Platform" AS ENUM (\'JUMIA\',\'KILIMALL\');',
+            'Then re-run the deployment so Prisma client matches DB',
+          ],
+          code: 'MISSING_PLATFORM_ENUM'
+        },
+        { status: 503 }
+      );
     }
 
     const encrypted = parsed.data.credentials ? encryptJsonForStorage(parsed.data.credentials) : null;

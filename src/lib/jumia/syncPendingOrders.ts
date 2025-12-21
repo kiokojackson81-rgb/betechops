@@ -3,13 +3,14 @@ import { JumiaClient } from "./client";
 import pLimit from "p-limit";
 import { addDays, format } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
+import { writePendingSnapshot, type PendingSnapshot } from "./pendingSnapshot";
 
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
 const LIMIT_RPS = 4;
-// Sync a full 7-day window so downstream KPIs that read from DB reflect the last week,
-// not just "today" or the last couple of days.
-const WINDOW_DAYS = 7;
+// Sync window for PENDING orders. Some pending orders can linger for weeks.
+// Make this configurable via env JUMIA_PENDING_WINDOW_DAYS, defaulting to 90 days (~3 months of coverage).
+const WINDOW_DAYS = Number(process.env.JUMIA_PENDING_WINDOW_DAYS || 90);
 // The Jumia API reliably supports page sizes up to 100. Larger values can return 400s.
 // Keep this at or below 100 to avoid vendor errors.
 const PAGE_SIZE = 100;
@@ -19,14 +20,35 @@ type SyncResult = {
   shopId: string;
   orders: number;
   pages: number;
+  error?: string | null;
 };
 
 export async function syncAllAccountsPendingOrders() {
+  const startedAt = new Date();
   const accounts = await prisma.jumiaAccount.findMany({
     include: { shops: true },
   });
 
   if (!accounts.length) {
+    const snapshot: PendingSnapshot = {
+      ok: false,
+      error: "no-jumia-accounts",
+      startedAt: startedAt.toISOString(),
+      completedAt: startedAt.toISOString(),
+      tookMs: 0,
+      windowDays: WINDOW_DAYS,
+      pageSize: PAGE_SIZE,
+      totalOrders: 0,
+      totalPages: 0,
+      shopCount: 0,
+      accountCount: 0,
+      perShop: [],
+    };
+    try {
+      await writePendingSnapshot(snapshot);
+    } catch (err) {
+      console.error("[jumia.sync] pending snapshot persist failed (no accounts)", err);
+    }
     return [];
   }
 
@@ -99,6 +121,23 @@ export async function syncAllAccountsPendingOrders() {
 
     const whereShops: any = { accountId: account.id };
     if (remoteIds.size) whereShops.id = { in: Array.from(remoteIds) };
+
+    if (remoteIds.size) {
+      try {
+        const pruned = await prisma.jumiaShop.deleteMany({
+          where: {
+            accountId: account.id,
+            id: { notIn: Array.from(remoteIds) },
+          },
+        });
+        if (pruned.count) {
+          console.log(`[jumia.sync] pruned ${pruned.count} stale jumiaShop rows for account=${account.id}`);
+        }
+      } catch (err) {
+        console.warn(`[jumia.sync] failed pruning stale shops for account=${account.id}`, err);
+      }
+    }
+
     const dbShops = await prisma.jumiaShop.findMany({
       where: whereShops,
       select: { id: true },
@@ -109,15 +148,75 @@ export async function syncAllAccountsPendingOrders() {
 
     for (const shop of dbShops) {
       tasks.push(
-        limiter(() => syncShopPending(client, shop.id).catch((error) => {
-          console.error(`[jumia.sync] shop=${shop.id} error`, error);
-          return { shopId: shop.id, pages: 0, orders: 0 };
-        }))
+        limiter(() =>
+          syncShopPending(client, shop.id).catch((error) => {
+            console.error(`[jumia.sync] shop=${shop.id} error`, error);
+            const message =
+              error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                ? error
+                : "unknown-error";
+            const truncated = message.length > 180 ? `${message.slice(0, 177)}...` : message;
+            return { shopId: shop.id, pages: 0, orders: 0, error: truncated };
+          })
+        )
       );
     }
   }
 
   const results = await Promise.all(tasks);
+  const completedAt = new Date();
+  // Compute a unique DB-backed count of pending orders for the same window to
+  // avoid double-counting when the vendor returns the same order under
+  // multiple shops (per-shop upsert counts can increment the same id several times).
+  const totalOrders = await (async () => {
+    try {
+      const now = new Date();
+      const windowStart = zonedTimeToUtc(addDays(now, -WINDOW_DAYS), DEFAULT_TIMEZONE);
+      const count = await prisma.jumiaOrder.count({
+        where: {
+          status: { in: ['PENDING'] as any },
+          OR: [
+            { updatedAtJumia: { gte: windowStart } },
+            { createdAtJumia: { gte: windowStart } },
+            { AND: [{ updatedAtJumia: null }, { createdAtJumia: null }, { updatedAt: { gte: windowStart } }] },
+          ],
+        },
+      });
+      return count;
+    } catch (err) {
+      // Fall back to the aggregated per-shop sum if DB read fails for any reason
+      return results.reduce((acc, r) => acc + (r?.orders || 0), 0);
+    }
+  })();
+  const totalPages = results.reduce((acc, r) => acc + (r?.pages || 0), 0);
+  const anyError = results.some((r) => r?.error);
+  const shopCount = tasks.length;
+  const snapshot: PendingSnapshot = {
+    ok: shopCount > 0 && !anyError,
+    error: shopCount === 0 ? "no-shops-synced" : anyError ? "partial-shop-errors" : null,
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    tookMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+    windowDays: WINDOW_DAYS,
+    pageSize: PAGE_SIZE,
+    totalOrders,
+    totalPages,
+    shopCount,
+    accountCount: accounts.length,
+    perShop: results.map((r) => ({
+      shopId: r.shopId,
+      orders: r.orders,
+      pages: r.pages,
+      error: r.error ?? null,
+    })),
+  };
+  try {
+    await writePendingSnapshot(snapshot);
+  } catch (err) {
+    console.error("[jumia.sync] pending snapshot persist failed", err);
+  }
   return results;
 }
 
@@ -195,35 +294,46 @@ async function upsertOrder(shopId: string, raw: any) {
     throw new Error("Missing order id in Jumia payload");
   }
 
-  await prisma.jumiaOrder.upsert({
-    where: { id },
-    create: {
-      id,
-      number: parseNullableInt(raw?.number),
-      status,
-      hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
-      pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
-      totalItems: parseNullableInt(raw?.totalItems),
-      packedItems: parseNullableInt(raw?.packedItems),
-      countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
-      isPrepayment: coerceBoolean(raw?.isPrepayment),
-      createdAtJumia: parseOptionalDate(raw?.createdAt),
-      updatedAtJumia: parseOptionalDate(raw?.updatedAt),
-      shopId,
-    },
-    update: {
-      number: parseNullableInt(raw?.number),
-      status,
-      hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
-      pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
-      totalItems: parseNullableInt(raw?.totalItems),
-      packedItems: parseNullableInt(raw?.packedItems),
-      countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
-      isPrepayment: coerceBoolean(raw?.isPrepayment),
-      createdAtJumia: parseOptionalDate(raw?.createdAt),
-      updatedAtJumia: parseOptionalDate(raw?.updatedAt),
-    },
-  });
+    await prisma.jumiaOrder.upsert({
+      where: { id },
+      create: {
+        id,
+        number: parseNullableInt(raw?.number),
+        status,
+        hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+        pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+        totalItems: parseNullableInt(raw?.totalItems),
+        packedItems: parseNullableInt(raw?.packedItems),
+        countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+        isPrepayment: coerceBoolean(raw?.isPrepayment),
+        totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+        totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
+        createdAtJumia: parseOptionalDate(raw?.createdAt),
+        updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+        shopId,
+        // cache the vendor-provided shop name when available for stable UI display
+        shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+          ? String(raw.shop.name)
+          : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : null),
+      },
+      update: {
+        number: parseNullableInt(raw?.number),
+        status,
+        hasMultipleStatus: Boolean(raw?.hasMultipleStatus),
+        pendingSince: isNonEmptyString(raw?.pendingSince) ? String(raw.pendingSince) : null,
+        totalItems: parseNullableInt(raw?.totalItems),
+        packedItems: parseNullableInt(raw?.packedItems),
+        countryCode: isNonEmptyString(raw?.country?.code) ? String(raw.country.code) : null,
+        isPrepayment: coerceBoolean(raw?.isPrepayment),
+        totalAmountLocalCurrency: typeof raw?.totalAmountLocalCurrency === 'string' ? String(raw.totalAmountLocalCurrency) : null,
+        totalAmountLocalValue: (() => { const v = raw?.totalAmountLocalValue ?? raw?.totalAmountLocal; return typeof v === 'number' && Number.isFinite(v) ? v : null; })(),
+        createdAtJumia: parseOptionalDate(raw?.createdAt),
+        updatedAtJumia: parseOptionalDate(raw?.updatedAt),
+        shopName: (raw?.shop && typeof raw.shop === 'object' && raw.shop.name)
+          ? String(raw.shop.name)
+          : (typeof raw?.shopName === 'string' ? raw.shopName : typeof raw?.shop_label === 'string' ? raw.shop_label : undefined),
+      },
+    });
 }
 
 function parseNullableInt(value: unknown): number | null {

@@ -20,7 +20,15 @@ export async function POST(req: NextRequest) {
   let files: string[] = [];
   try {
     const all = await fs.readdir(prismaDir);
-    files = all.filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f)).sort();
+    // Restrict to a safe allowlist to avoid executing obsolete patches
+    const allowlist = new Set<string>([
+      "post_deploy_patch_fix_public_platform_enum.sql",
+      "post_deploy_patch_create_shop.sql",
+    ]);
+    files = all
+      .filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f))
+      .filter((f) => allowlist.has(f))
+      .sort();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, error: `Failed to read prisma dir: ${msg}` }, { status: 500 });
@@ -62,7 +70,14 @@ export async function GET() {
   const prismaDir = path.join(process.cwd(), "prisma");
   try {
     const all = await fs.readdir(prismaDir);
-    const files = all.filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f)).sort();
+    const allowlist = new Set<string>([
+      "post_deploy_patch_fix_public_platform_enum.sql",
+      "post_deploy_patch_create_shop.sql",
+    ]);
+    const files = all
+      .filter((f) => /^post_deploy_patch_.*\.sql$/i.test(f))
+      .filter((f) => allowlist.has(f))
+      .sort();
     return NextResponse.json({ ok: true, files, timestamp: new Date().toISOString() });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

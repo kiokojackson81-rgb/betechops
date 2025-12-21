@@ -1,0 +1,78 @@
+{
+  "before": {
+    "ledger": {
+      "id": "cmj9075x7000dv59oato0erb2",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "periodStart": "2025-11-24T21:00:00.000Z",
+      "periodEnd": "2025-12-24T20:59:59.999Z",
+      "grossCommission": "10000",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "10000",
+      "commissionBreakdown": {
+        "note": "Manual correction per request",
+        "correctedAt": "2025-12-17T12:34:43.613Z",
+        "correctedBy": "ops"
+      },
+      "penalties": "0",
+      "netCommission": "10000",
+      "detail": {
+        "onlineWeekly": {
+          "totals": {
+            "entries": 3,
+            "totalSales": 1099089
+          },
+          "periodKey": "2025-11-24_2025-12-24",
+          "commission": 11486.335,
+          "computedAt": "2025-12-16T19:56:44.346Z"
+        },
+        "onlineWeeklyCommission": 11486.335
+      },
+      "createdAt": "2025-12-16T19:56:44.348Z"
+    }
+  },
+  "actions": [
+    {
+      "type": "ledger_ok",
+      "id": "cmj9075x7000dv59oato0erb2"
+    },
+    {
+      "type": "chama_exists",
+      "id": "cmj9zz5240001v5zw9wj32dzx"
+    }
+  ],
+  "after": {
+    "ledger": {
+      "id": "cmj9075x7000dv59oato0erb2",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "periodStart": "2025-11-24T21:00:00.000Z",
+      "periodEnd": "2025-12-24T20:59:59.999Z",
+      "grossCommission": "10000",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "10000",
+      "commissionBreakdown": {
+        "note": "Manual correction per request",
+        "correctedAt": "2025-12-17T12:34:43.613Z",
+        "correctedBy": "ops"
+      },
+      "penalties": "0",
+      "netCommission": "10000",
+      "detail": {
+        "onlineWeekly": {
+          "totals": {
+            "entries": 3,
+            "totalSales": 1099089
+          },
+          "periodKey": "2025-11-24_2025-12-24",
+          "commission": 11486.335,
+          "computedAt": "2025-12-16T19:56:44.346Z"
+        },
+        "onlineWeeklyCommission": 11486.335
+      },
+      "createdAt": "2025-12-16T19:56:44.348Z"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "type": "requestfailed",
+    "url": "https://ops.betech.co.ke/api/attendant/earnings/summary",
+    "failure": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "requestfailed",
+    "url": "https://ops.betech.co.ke/api/marketing/report/summary?date=2025-12-07",
+    "failure": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "console",
+    "text": "Failed to load resource: the server responded with a status of 401 ()",
+    "location": {
+      "url": "https://ops.betech.co.ke/api/marketing/report/summary?date=2025-12-07&impersonateId=cmimxqf9t0003v5mcjdq8x61p",
+      "lineNumber": 0,
+      "columnNumber": 0
+    }
+  },
+  {
+    "type": "console",
+    "text": "Failed to load resource: the server responded with a status of 403 ()",
+    "location": {
+      "url": "https://ops.betech.co.ke/api/attendant/earnings/summary?impersonateId=cmimxqf9t0003v5mcjdq8x61p",
+      "lineNumber": 0,
+      "columnNumber": 0
+    }
+  }
+]

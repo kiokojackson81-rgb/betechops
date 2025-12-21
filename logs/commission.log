@@ -1,0 +1,11 @@
+Running one-off commissionCalcJob via pnpm dlx ts-node
+Executing ts-node...
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 17, reused 15, downloaded 0, added 0
+Progress: resolved 19, reused 17, downloaded 0, added 0
+Packages: +20
+++++++++++++++++++++
+Progress: resolved 20, reused 18, downloaded 2, added 18
+Progress: resolved 20, reused 18, downloaded 2, added 20, done
+[eval].ts(1,8): error TS2307: Cannot find module '../src/lib/jobs/syncJobs' or its corresponding type declarations.
+

@@ -1,0 +1,18 @@
+
+> betechops@0.1.0 dev C:\Projects\betechops
+> next dev --turbopack
+
+   Γû▓ Next.js 16.0.7 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://192.168.1.187:3000
+   - Environments: .env
+
+ Γ£ô Starting...
+ ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ Γ£ô Ready in 1595ms
+ Γùï Compiling /attendant/online ...
+ GET /attendant/online 200 in 6.2s (compile: 5.8s, proxy.ts: 258ms, render: 162ms)
+ GET /attendant/online 200 in 87ms (compile: 3ms, proxy.ts: 4ms, render: 80ms)
+ GET /api/attendants/shops 401 in 633ms (compile: 567ms, render: 66ms)
+ GET /api/attendants/me 401 in 690ms (compile: 676ms, render: 14ms)
+ GET /api/admin/online/manual/shops 401 in 203ms (compile: 184ms, render: 19ms)

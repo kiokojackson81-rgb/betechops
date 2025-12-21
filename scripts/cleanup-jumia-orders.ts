@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../src/lib/prisma";
 
 export async function performCleanup(retentionDays?: number) {
   // Retain for 90 days by default (3 months)

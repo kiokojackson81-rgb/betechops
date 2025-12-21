@@ -11,6 +11,15 @@
     {
       "path": "/api/jumia/sync-pending",
       "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "0 17 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/receipts/**": {
+      "maxDuration": 60
+    }
+  }
 }

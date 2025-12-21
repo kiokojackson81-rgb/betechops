@@ -3,6 +3,18 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --card-bg: #ffffff;
+  /* Betech Solar brand tokens */
+  --betech-orange: #F59E0B; /* primary - the "Sun" */
+  --betech-maroon: #7f1d1d; /* secondary - the "Roof" */
+  --betech-warmcharcoal: #1c1917; /* warm charcoal background */
+  --primary: var(--betech-orange);
+  --accent: #7c3aed;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #7f1d1d;
 }
 
 @theme inline {
@@ -12,10 +24,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Force light theme even when user prefers dark, to keep receipts/ops UI bright */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #171717;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --card-bg: #ffffff;
+    --primary: var(--betech-orange);
+    --accent: #7c3aed;
+    --success: #16a34a;
+    --warning: #f59e0b;
+    --danger: #7f1d1d;
   }
 }
 
@@ -23,4 +44,190 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
 }
+
+/* Small design tokens used across pages */
+.kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+.kpi-title {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.kpi-value {
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+.badge-success { color: var(--success); }
+.badge-warn { color: var(--warning); }
+.badge-danger { color: var(--danger); }
+
+/* Sparkline container for tiny inline charts */
+.sparkline {
+  width: 120px;
+  height: 28px;
+  display: inline-block;
+}
+
+/* Accessible palette tweaks: slightly tempered tones for contrast */
+:root {
+  --bg-panel: #0f1720; /* dark panel */
+  --text-high: #e6eef7; /* high-contrast text on dark */
+  --muted: #9aa6b2;
+  --border-2: #23303a;
+  --primary-strong: #06b6d4; /* teal bright */
+}
+
+progress {
+  appearance: none;
+}
+progress[value]::-webkit-progress-bar {
+  background-color: rgba(255,255,255,0.04);
+  border-radius: 999px;
+}
+progress[value]::-webkit-progress-value {
+  /* use gradient from maroon to orange */
+  background-image: linear-gradient(90deg, var(--betech-maroon), var(--betech-orange));
+  border-radius: 999px;
+}
+progress {
+  outline: none;
+}
+
+/* Style native checkboxes to use brand accent color when checked */
+input[type="checkbox"] {
+  accent-color: var(--betech-orange);
+}
+
+/* Card top border (2px) mimicking the "roof" */
+.card-top-accent { border-top-width: 2px; border-top-style: solid; border-top-color: var(--betech-maroon); }
+
+/* Button utilities fallback when using CSS variables in components */
+.btn-primary { background-color: var(--betech-orange); color: #000; font-weight: 700; }
+.btn-primary:hover { filter: brightness(0.95); }
+.btn-danger { background-color: var(--betech-maroon); color: #fff; }
+
+/* Progress bar root tweaks */
+.progressbar-root progress[value]::-webkit-progress-bar { background-color: rgba(255,255,255,0.03); }
+.progressbar-root progress[value]::-moz-progress-bar { background-image: linear-gradient(90deg, var(--betech-maroon), var(--betech-orange)); }
+
+/* Tab active state: maroon -> red gradient with subtle orange shadow */
+.tab-active {
+  background: linear-gradient(90deg, var(--betech-maroon), #b91c1c);
+  color: #fff !important;
+  box-shadow: 0 4px 0 0 rgba(245,158,11,0.65);
+}
+
+@layer utilities {
+  .tab-active {
+    @apply text-white;
+    background-image: linear-gradient(90deg, #7f1d1d, #b91c1c);
+    box-shadow: 0 4px 0 0 rgba(245,158,11,0.65);
+  }
+}
+
+
+.progressbar-root label { font-size: 12px; }
+.progressbar-root .text-xs { color: var(--muted); }
+
+
+/* Layout for combined attendant + CS page */
+.att-cs-root {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.25rem;
+  padding: 1rem;
+}
+.att-cs-left {
+  min-width: 0;
+}
+.att-cs-right {
+  position: sticky;
+  top: 1rem;
+}
+.header-row { display:flex; gap:0.75rem; }
+.spark-wrap { background: transparent; padding: 0.5rem; border-radius: 0.5rem; }
+
+@media (max-width: 900px) {
+  .att-cs-root { grid-template-columns: 1fr; }
+  .att-cs-right { position: relative; }
+}
+
+/* Print helpers: hide interactive controls and optimize receipts for printing */
+@page receipt-a5 { size: A5 portrait; margin: 2mm; }
+@page receipt-a4 { size: A4 portrait; margin: 10mm; }
+@page receipt-roll80 { size: 80mm 200mm; margin: 4mm; }
+
+.receipt-sheet {
+  width: 100%;
+  max-width: 148mm;
+  margin: 0 auto;
+}
+.receipt-sheet--a4 { max-width: 210mm; }
+.receipt-sheet--roll80 { max-width: 80mm; }
+
+@media print {
+  .no-print { display: none !important; }
+  /* Make printed text dark on white */
+  body { background: #fff !important; color: #000 !important; }
+  /* Remove shadows and rounded corners for compact print */
+  .shadow, .shadow-xl, .shadow-inner { box-shadow: none !important; }
+  .rounded-3xl, .rounded-2xl, .rounded-md { border-radius: 0 !important; }
+  /* Avoid forcing html/body to a fixed width — let @page define the size
+     and center the receipt within the printable area. Browser print margins
+     differ; we compute the receipt width relative to the page margin so both
+     left and right gutters are equal. */
+  html, body {
+    padding: 0;
+    margin: 0;
+  }
+  /* Ensure receipt table spans full width and uses readable font size */
+  table { width: 100% !important; font-size: 12px !important; }
+  /* Avoid page breaks inside receipt block */
+  .receipt-print-area, .receipt { page-break-inside: avoid !important; }
+  /* Center the receipt and ensure it occupies the printable area minus the
+     declared @page margin (10mm). Using calc(100% - 20mm) keeps left/right
+     margins symmetric across different browsers/printers. */
+  .receipt-print-area { display: flex; justify-content: center; align-items: flex-start; }
+  .receipt-sheet {
+    width: 100%;
+    /* Fit tightly on A5: account for small @page margin (2mm) -> subtract 4mm */
+    max-width: calc(100% - 4mm);
+    box-sizing: border-box;
+    padding: 2mm;
+    margin: 0 auto !important;
+    page: receipt-a5;
+    min-height: auto;
+  }
+  .receipt-sheet--a4 { max-width: calc(100% - 20mm); page: receipt-a4; }
+  .receipt-sheet--roll80 { max-width: calc(100% - 8mm); page: receipt-roll80; }
+  /* print-only area (visible only on print) */
+  .print-only { display: block !important; }
+  .receipt-sheet {
+    width: 148mm;
+    min-height: auto;
+    page: receipt-a5;
+    /* Prevent the receipt border/content from splitting across pages */
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    overflow: hidden !important;
+    /* Cap printed height so small overflows don't create a second mostly-empty
+       page that shows only the inner border. This uses the A5 height minus
+       the total vertical page margins (2mm top + 2mm bottom => 4mm). */
+    max-height: calc(210mm - 4mm) !important;
+  }
+  .receipt-sheet--a4 { width: 210mm; min-height: auto; page: receipt-a4; }
+  .receipt-sheet--roll80 { width: 80mm; min-height: auto; page: receipt-roll80; }
+  .receipt-screen { display: none !important; }
+  .receipt-print-area { display: block !important; }
+}
+
+/* hide print-only sections on screen */
+.print-only { display: none; }

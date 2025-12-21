@@ -77,9 +77,75 @@ Notes:
 - If a provider requires a tracking code, one is auto-generated when missing.
 - After each bulk action, an incremental sync is triggered for fast UI updates.
 
-Prisma migrations
+### Prisma migrations & enum patch
 
 - Migrations are applied in CI (see `.github/workflows/prisma-and-vercel.yml`).
-- You can also run them manually:
+- Manual run:
 	- `npm run prisma:generate`
-	- `npm run prisma:migrate` (alias for `prisma migrate deploy`)
+	- `npm run prisma:migrate` (deploy existing migrations)
+- Post-deploy enum reconciliation (Shop.platform → `public."Platform"`):
+	1. Ensure file `prisma/post_deploy_patch_fix_public_platform_enum.sql` exists in the build.
+	2. Send `POST /api/debug/post-deploy-patch` with header `X-Patch-Secret: $PATCH_SECRET`.
+	3. Response lists applied statements; idempotent (safe to re-run).
+	4. Verify: `select data_type from information_schema.columns where table_name='Shop' and column_name='platform';` should show `USER-DEFINED` and enum present via `\dT+ public.Platform`.
+
+### DB-only orders mode
+
+When `ORDERS_FORCE_DB=1` is set:
+
+- All order statuses are treated as "synced" (no vendor API live fetch divergence logic).
+- Pending page server-render will use only DB snapshot rows; initial blank snapshot triggers a one-time server prefetch to avoid empty UI.
+- KPI endpoint skips live vendor adjustments and relies solely on persisted counters.
+- Use this mode for stability during vendor API outages or to validate server data integrity.
+
+Environment flags influencing orders & KPIs:
+
+- `ORDERS_FORCE_DB`: Force all statuses to be considered synced.
+- `JUMIA_ORDERS_RETENTION_DAYS`: Limit stored historical vendor order rows.
+
+### Shop maintenance scripts
+
+Seeding & export utilities for Jumia (and Kilimall) shops:
+
+| Script | Purpose |
+|--------|---------|
+| `npm run seed:shops [path]` | Upsert shops from a seed file (auto-picks one of `shops.secrets.json`, `shops.local.json`, ...). Encrypts credentials if `SECURE_JSON_KEY` set. |
+| `npm run sync:jumia-shops -- --prune shops.secrets.json` | Synchronize legacy `JumiaShop` records to `Shop` entries; optionally prune extras. |
+| `npm run list:shops` | List all shops (id, platform, active). |
+| `npm run shops:export -- --format=csv` | Export shops in CSV/JSON for auditing. |
+| `npm run dedupe:shops` | Generic case-insensitive deduplication (safe: only deletes duplicates without references). |
+| `npm run fix:duplicate-betech-store` | Targeted merge/removal for a known duplicate case of `Betech Store` vs `Betech store`. |
+
+Seed file format (example `shops.secrets.json`):
+
+```jsonc
+{
+	"shops": [
+		{
+			"name": "JM Collection",
+			"platform": "JUMIA",
+			"active": true,
+			"credentials": {
+				"apiBase": "https://vendor-api.jumia.com",
+				"tokenUrl": "https://vendor-api.jumia.com/token",
+				"clientId": "<clientId>",
+				"refreshToken": "<refreshToken>",
+				"authType": "SELF_AUTHORIZATION"
+			}
+		}
+	]
+}
+```
+
+Kilimall credentials variant requires `appId` and `appSecret`; `apiBase` auto-defaults if missing.
+
+### Post-deploy patch endpoint security
+
+- `PATCH_SECRET` must be set in env; request must supply `X-Patch-Secret` header.
+- Endpoint lists files via `GET /api/debug/post-deploy-patch` for visibility prior to `POST`.
+- Only executes `post_deploy_patch_*.sql` and the enum fix file.
+
+### Cleanup legacy enum patch files
+
+Old patch files (`post_deploy_patch_create_platform_enum.sql`, `post_deploy_patch_cast_platform.sql`, etc.) were superseded by `post_deploy_patch_fix_public_platform_enum.sql`. Remove or archive them to avoid accidental reapplication and schema drift.
+

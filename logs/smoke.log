@@ -1,0 +1,8 @@
+
+> betechops@0.1.0 smoke:local C:\Projects\betechops
+> node scripts/smoke/test-apis.js
+
+Using BASE_URL= http://localhost:3000
+create shop: 401 { error: 'Unauthorized' }
+create user: 401 { error: 'Unauthorized' }
+skipping assign because create failed

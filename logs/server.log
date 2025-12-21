@@ -1,0 +1,81 @@
+
+> betechops@0.1.0 start C:\Projects\betechops
+> next start
+
+   ▲ Next.js 16.0.7
+   - Local:         http://localhost:3000
+   - Network:       http://10.18.185.116:3000
+
+ ✓ Starting...
+ ✓ Ready in 1472ms
+API key does not start with "SG.".
+prisma:error 
+Invalid `prisma.commissionPeriod.findFirst()` invocation:
+
+
+The table `public.CommissionPeriod` does not exist in the current database.
+Error [PrismaClientKnownRequestError]: 
+Invalid `prisma.commissionPeriod.findFirst()` invocation:
+
+
+The table `public.CommissionPeriod` does not exist in the current database.
+    at async i (C:\Projects\betechops\.next\server\chunks\[root-of-the-server]__0862f03e._.js:1:5851)
+    at async s (C:\Projects\betechops\.next\server\chunks\[root-of-the-server]__202b58b4._.js:1:12936)
+    at async T (C:\Projects\betechops\.next\server\chunks\5c2c0_next_dist_esm_build_templates_app-route_bc2306eb.js:1:3416) {
+  code: 'P2021',
+  meta: [Object],
+  clientVersion: '6.19.0'
+}
+prisma:error 
+Invalid `prisma.commissionLedger.findUnique()` invocation:
+
+
+The table `public.CommissionLedger` does not exist in the current database.
+prisma:error 
+Invalid `prisma.marketingDailyEntry.findMany()` invocation:
+
+
+The table `public.MarketingDailyEntry` does not exist in the current database.
+prisma:error 
+Invalid `prisma.supportDailyEntry.findMany()` invocation:
+
+
+The table `public.SupportDailyEntry` does not exist in the current database.
+prisma:error 
+Invalid `prisma.supportDailyEntry.findMany()` invocation:
+
+
+The table `public.SupportDailyEntry` does not exist in the current database.
+Error [PrismaClientKnownRequestError]: 
+Invalid `prisma.supportDailyEntry.findMany()` invocation:
+
+
+The table `public.SupportDailyEntry` does not exist in the current database.
+    at async a (C:\Projects\betechops\.next\server\chunks\[root-of-the-server]__202b58b4._.js:1:7532)
+    at async T (C:\Projects\betechops\.next\server\chunks\5c2c0_next_dist_esm_build_templates_app-route_bc2306eb.js:1:3416)
+    at async d (C:\Projects\betechops\.next\server\chunks\5c2c0_next_dist_esm_build_templates_app-route_bc2306eb.js:1:8322) {
+  code: 'P2021',
+  meta: [Object],
+  clientVersion: '6.19.0'
+}
+prisma:error 
+Invalid `prisma.commissionLedger.findUnique()` invocation:
+
+
+The table `public.CommissionLedger` does not exist in the current database.
+prisma:error 
+Invalid `prisma.commissionPeriod.findFirst()` invocation:
+
+
+The table `public.CommissionPeriod` does not exist in the current database.
+prisma:error 
+Invalid `prisma.marketingDailyEntry.findMany()` invocation:
+
+
+The table `public.MarketingDailyEntry` does not exist in the current database.
+prisma:error Error in PostgreSQL connection: Error { kind: Io, cause: Some(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Io, cause: Some(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Io, cause: Some(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Io, cause: Some(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." }) }
+prisma:error Error in PostgreSQL connection: Error { kind: Io, cause: Some(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." }) }
+ ELIFECYCLE  Command failed with exit code 3221225786.

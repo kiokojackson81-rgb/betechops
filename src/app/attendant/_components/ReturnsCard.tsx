@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import toast from '@/lib/toast';
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 
 export default function ReturnsCard() {
   const [open, setOpen] = useState(false);
@@ -74,6 +75,11 @@ function ReturnModal({ onClose }: { onClose: () => void }) {
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-400">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-transparent px-2 py-1 outline-none" rows={3} />
+            {notes ? (
+              <div className="mt-2 text-xs text-slate-400">
+                <MarkdownRendererClient mdText={String(notes)} />
+              </div>
+            ) : null}
           </div>
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-400">Photo</label>

@@ -192,7 +192,11 @@ export default function Home() {
   // Single source of truth per card to avoid inconsistent values from mixed endpoints
   const pickupPaths = useMemo(() => ["/api/returns/waiting-pickup"], []);
   const pricingPaths = useMemo(() => ["/api/orders/pending-pricing"], []);
-  const pendingPaths = useMemo(() => [] as string[], []);
+  const pendingPaths = useMemo(
+    () =>
+      ["/api/orders?status=PENDING&shopId=ALL&fresh=1&size=200"] as string[],
+    [],
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -204,11 +208,12 @@ export default function Home() {
 
     const run = async () => {
       try {
-        const [c1, c2, kpis] = await Promise.all([
+        const [c1, c2, kpis, fallbackPending] = await Promise.all([
           tryCounts(pickupPaths),
           tryCounts(pricingPaths),
           // DB-only accuracy: disable live vendor boost
-          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1"),
+          fetchJsonWithTimeout<any>("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
+          tryCounts(pendingPaths),
         ]);
         if (!ignore) {
           // Only update when we have a concrete value; keep last value on errors
@@ -220,28 +225,51 @@ export default function Home() {
               ? Number(kpis.pendingAll)
               : null;
           const approx = Boolean(kpis?.approx);
+          const fallbackIsNumber =
+            typeof fallbackPending === "number" && Number.isFinite(fallbackPending);
 
-          if (rawPending !== null) {
+          let finalPending = rawPending;
+          let finalApprox = approx;
+          let usedFallback = false;
+
+          if (finalPending === null && fallbackIsNumber) {
+            finalPending = fallbackPending;
+            finalApprox = false;
+            usedFallback = true;
+          }
+
+          if (finalPending !== null && Number.isFinite(finalPending)) {
             const prev = pendingAll;
             const shouldKeepPrev =
-              approx && typeof prev === "number" && Number.isFinite(prev) && rawPending < prev;
+              finalApprox && typeof prev === "number" && Number.isFinite(prev) && finalPending < prev;
 
             if (!shouldKeepPrev) {
-              setPendingAll(rawPending);
+              setPendingAll(finalPending);
             }
 
             const ts =
-              typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
+              !usedFallback && typeof kpis?.updatedAt === "number" && !Number.isNaN(kpis.updatedAt)
                 ? kpis.updatedAt
                 : Date.now();
             const dt = new Date(ts);
             const hh = String(dt.getHours()).padStart(2, "0");
             const mm = String(dt.getMinutes()).padStart(2, "0");
-            setPendingUpdated(
-              approx
-                ? `Live ${dt.toLocaleDateString()} ${hh}:${mm}`
-                : `Updated ${dt.toLocaleDateString()} ${hh}:${mm}`,
-            );
+            const source = kpis?.pendingSource;
+            const snapshotDays = typeof kpis?.pendingSnapshotWindowDays === 'number' ? kpis.pendingSnapshotWindowDays : null;
+            // KPI card represents a 7-day DB lookback by design. When showing live, label it as Live (7d)
+            const KPI_WINDOW_DAYS = 7;
+            let label = "Updated";
+            if (!usedFallback && typeof source === 'string' && source.startsWith('snapshot')) {
+              const part = source === 'snapshot-partial' ? ' partial' : '';
+              label = `Snapshot${part} (${snapshotDays ?? '?'}d)`;
+            } else if (finalApprox) {
+              label = `Live (${KPI_WINDOW_DAYS}d)`;
+            } else if (usedFallback) {
+              label = `Live fallback (${KPI_WINDOW_DAYS}d)`;
+            } else if (source === 'db') {
+              label = `DB (${KPI_WINDOW_DAYS}d)`;
+            }
+            setPendingUpdated(`${label} ${dt.toLocaleDateString()} ${hh}:${mm}`);
           } else {
             setPendingUpdated(null);
           }

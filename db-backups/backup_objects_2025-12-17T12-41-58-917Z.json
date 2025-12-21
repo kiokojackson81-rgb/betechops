@@ -1,0 +1,357 @@
+{
+  "meta": {
+    "generatedAt": "2025-12-17T12:42:04.012Z"
+  },
+  "commissionLedger": [
+    {
+      "id": "cmirlas420000v5d8a50arayl",
+      "userId": "cmiqttmf10000v55sw48jeawd",
+      "periodStart": "2025-11-25T00:00:00.000Z",
+      "periodEnd": "2025-12-24T00:00:00.000Z",
+      "grossCommission": "425",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "0",
+      "commissionBreakdown": null,
+      "penalties": "0",
+      "netCommission": "425",
+      "detail": {
+        "support": {
+          "totals": {
+            "totalItems": 0,
+            "totalSales": 16000,
+            "totalProfit": 8500,
+            "newBatteries": 0,
+            "totalReceipts": 2,
+            "changedBatteries": 0
+          },
+          "periodKey": "2025-11-25_2025-12-24",
+          "commission": 425,
+          "computedAt": "2025-12-04T15:27:33.840Z"
+        },
+        "supportCommission": 425
+      },
+      "createdAt": "2025-12-04T15:27:33.842Z"
+    },
+    {
+      "id": "cmixez89n0015ib045fgmhdms",
+      "userId": "cmimxqf9t0003v5mcjdq8x61p",
+      "periodStart": "2025-11-25T00:00:00.000Z",
+      "periodEnd": "2025-12-24T23:59:59.999Z",
+      "grossCommission": "28261",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "0",
+      "commissionBreakdown": null,
+      "penalties": "0",
+      "netCommission": "28261",
+      "detail": {
+        "support": {
+          "totals": {
+            "totalItems": 63,
+            "totalSales": 1879989,
+            "totalProfit": 365223,
+            "newBatteries": 0,
+            "totalReceipts": 54,
+            "changedBatteries": 0
+          },
+          "periodKey": "2025-11-25_2025-12-24",
+          "commission": 28261,
+          "computedAt": "2025-12-16T14:58:59.574Z",
+          "tierCommission": 10000,
+          "fallbackCommission": 18261
+        },
+        "supportCommission": 28261
+      },
+      "createdAt": "2025-12-08T17:17:14.268Z"
+    },
+    {
+      "id": "cmirfq2zw0000jx04f4rf1ck9",
+      "userId": "cmiqttmf10000v55sw48jeawd",
+      "periodStart": "2025-11-25T00:00:00.000Z",
+      "periodEnd": "2025-12-24T23:59:59.999Z",
+      "grossCommission": "825",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "0",
+      "commissionBreakdown": null,
+      "penalties": "0",
+      "netCommission": "825",
+      "detail": {
+        "support": {
+          "totals": {
+            "totalItems": 4,
+            "totalSales": 29000,
+            "totalProfit": 16500,
+            "newBatteries": 10,
+            "totalReceipts": 4,
+            "changedBatteries": 0
+          },
+          "periodKey": "2025-11-25_2025-12-24",
+          "commission": 825,
+          "computedAt": "2025-12-04T20:22:16.391Z",
+          "tierCommission": 0,
+          "fallbackCommission": 825
+        },
+        "periodKey": "2025-11-25_2025-12-24",
+        "totalItems": 0,
+        "totalSales": 0,
+        "periodLabel": "Nov 25, 2025 – Dec 24, 2025",
+        "totalProfit": 0,
+        "totalReceipts": 0,
+        "walkInsServed": 0,
+        "salesCommission": 0,
+        "copiedCommission": 0,
+        "editedCommission": 0,
+        "totalNewProducts": 0,
+        "walkInsPurchased": 0,
+        "supportCommission": 825,
+        "totalCopiedProducts": 0,
+        "totalEditedProducts": 0,
+        "newProductCommission": 0
+      },
+      "createdAt": "2025-12-04T12:51:30.093Z"
+    },
+    {
+      "id": "cmix73szj0000v5j8z8w641yz",
+      "userId": "cmimxqfnr0005v5mc05nwhg9o",
+      "periodStart": "2025-11-24T21:00:00.000Z",
+      "periodEnd": "2025-12-24T20:59:59.999Z",
+      "grossCommission": "966",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "0",
+      "commissionBreakdown": null,
+      "penalties": "0",
+      "netCommission": "966",
+      "detail": {
+        "marketing": {
+          "totals": {
+            "totalItems": 12,
+            "totalSales": 215400,
+            "totalProfit": 19320,
+            "paymentStats": {
+              "totalSalesCash": 0,
+              "totalSalesMpesa": 165400,
+              "countCashReceipts": 0,
+              "countMpesaReceipts": 8
+            },
+            "totalReceipts": 9,
+            "walkInsServed": 0,
+            "totalNewProducts": 500,
+            "walkInsPurchased": 5,
+            "totalCopiedProducts": 23,
+            "totalEditedProducts": 65
+          },
+          "periodKey": "2025-11-24_2025-12-24",
+          "commission": 966,
+          "computedAt": "2025-12-10T15:20:08.516Z"
+        }
+      },
+      "createdAt": "2025-12-08T13:36:50.815Z"
+    },
+    {
+      "id": "cmiwr7opo0003js041sks8x3u",
+      "userId": "cmimxqfnr0005v5mc05nwhg9o",
+      "periodStart": "2025-11-25T00:00:00.000Z",
+      "periodEnd": "2025-12-24T23:59:59.999Z",
+      "grossCommission": "4901",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "0",
+      "commissionBreakdown": null,
+      "penalties": "0",
+      "netCommission": "4901",
+      "detail": {
+        "support": {
+          "totals": {
+            "totalItems": 14,
+            "totalSales": 279147,
+            "totalProfit": 78703,
+            "newBatteries": 0,
+            "totalReceipts": 9,
+            "changedBatteries": 0
+          },
+          "periodKey": "2025-11-25_2025-12-24",
+          "commission": 3935,
+          "computedAt": "2025-12-16T13:19:21.911Z",
+          "tierCommission": 0,
+          "fallbackCommission": 3935
+        },
+        "marketing": {
+          "totals": {
+            "totalItems": 24,
+            "totalSales": 492647,
+            "totalProfit": 19320,
+            "paymentStats": {
+              "totalSalesCash": 0,
+              "totalSalesMpesa": 442647,
+              "countCashReceipts": 0,
+              "countMpesaReceipts": 16
+            },
+            "totalReceipts": 21,
+            "walkInsServed": 3,
+            "totalNewProducts": 764,
+            "walkInsPurchased": 8,
+            "totalCopiedProducts": 75,
+            "totalEditedProducts": 299
+          },
+          "periodKey": "2025-11-25_2025-12-24",
+          "commission": 966,
+          "computedAt": "2025-12-16T14:30:43.332Z"
+        },
+        "supportCommission": 3935
+      },
+      "createdAt": "2025-12-08T06:11:58.044Z"
+    },
+    {
+      "id": "cmj9075x7000dv59oato0erb2",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "periodStart": "2025-11-24T21:00:00.000Z",
+      "periodEnd": "2025-12-24T20:59:59.999Z",
+      "grossCommission": "10000",
+      "commissionDirect": "0",
+      "commissionMarketplaceJumia": "0",
+      "commissionMarketplaceKilimall": "0",
+      "commissionTotal": "10000",
+      "commissionBreakdown": {
+        "note": "Manual correction per request",
+        "correctedAt": "2025-12-17T12:34:43.613Z",
+        "correctedBy": "ops"
+      },
+      "penalties": "0",
+      "netCommission": "10000",
+      "detail": {
+        "onlineWeekly": {
+          "totals": {
+            "entries": 3,
+            "totalSales": 1099089
+          },
+          "periodKey": "2025-11-24_2025-12-24",
+          "commission": 11486.335,
+          "computedAt": "2025-12-16T19:56:44.346Z"
+        },
+        "onlineWeeklyCommission": 11486.335
+      },
+      "createdAt": "2025-12-16T19:56:44.348Z"
+    }
+  ],
+  "adjustments": [
+    {
+      "id": "cmipv85g20001js04pepbcjdk",
+      "attendantId": "cmimxqf9t0003v5mcjdq8x61p",
+      "periodKey": "2025-11-25_2025-12-24",
+      "periodLabel": "Nov 25, 2025 – Dec 24, 2025",
+      "adjustmentType": "CHAMA",
+      "label": "Chama",
+      "amount": 7000,
+      "createdById": "",
+      "createdAt": "2025-12-03T10:29:54.963Z"
+    },
+    {
+      "id": "cmj9zz5240001v5zw9wj32dzx",
+      "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+      "periodKey": "2025-11-24T21:00:00.000Z_2025-12-24T20:59:59.999Z",
+      "periodLabel": "2025-11-24T21:00:00.000Z_2025-12-24T20:59:59.999Z",
+      "adjustmentType": "CHAMA",
+      "label": "CHAMA",
+      "amount": 7000,
+      "createdById": "ops-script",
+      "createdAt": "2025-12-17T12:38:16.123Z"
+    }
+  ],
+  "weeklySales": [
+    {
+      "id": "cmj8mxj540008l204coyk7ptw",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "shopId": "cmj8mxj4v0006l20464yme4sc",
+      "platform": "JUMIA",
+      "weekStart": "2025-12-07T00:00:00.000Z",
+      "weekEnd": "2025-12-13T00:00:00.000Z",
+      "amount": "359881",
+      "source": "MANUAL",
+      "status": "APPROVED",
+      "createdBy": "cmimxqevx0002v5mcq02bmpb4",
+      "approvedBy": "cmimxqevx0002v5mcq02bmpb4",
+      "createdAt": "2025-12-16T13:45:19.913Z",
+      "updatedAt": "2025-12-16T13:45:37.623Z"
+    },
+    {
+      "id": "cmj8mw7rp0005l204duqkrye8",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "shopId": "cmj8mw7rj0003l204e9ak5z1i",
+      "platform": "JUMIA",
+      "weekStart": "2025-11-30T00:00:00.000Z",
+      "weekEnd": "2025-12-06T00:00:00.000Z",
+      "amount": "324804",
+      "source": "MANUAL",
+      "status": "APPROVED",
+      "createdBy": "cmimxqevx0002v5mcq02bmpb4",
+      "approvedBy": "cmimxqevx0002v5mcq02bmpb4",
+      "createdAt": "2025-12-16T13:44:18.518Z",
+      "updatedAt": "2025-12-16T13:45:35.675Z"
+    },
+    {
+      "id": "cmj8muwqw0002l204pyloer8f",
+      "userId": "cmimxqfgo0004v5mc5pn1r486",
+      "shopId": "cmj8muwqh0000l20415ciw6su",
+      "platform": "JUMIA",
+      "weekStart": "2025-11-23T00:00:00.000Z",
+      "weekEnd": "2025-11-29T00:00:00.000Z",
+      "amount": "414404",
+      "source": "MANUAL",
+      "status": "APPROVED",
+      "createdBy": "cmimxqevx0002v5mcq02bmpb4",
+      "approvedBy": "cmimxqevx0002v5mcq02bmpb4",
+      "createdAt": "2025-12-16T13:43:17.577Z",
+      "updatedAt": "2025-12-16T13:45:32.791Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "cmiik7x2p0000ie04fh541f6h",
+      "email": "kiokojackson81@gmail.com",
+      "name": "Jackson Kioko"
+    },
+    {
+      "id": "cmiqttmf10000v55sw48jeawd",
+      "email": "justus@betech.co.ke",
+      "name": "Justus"
+    },
+    {
+      "id": "cmj9w0qik0000v5q4tk4nhwbu",
+      "email": "attendant@betech.co.ke",
+      "name": "Default Attendant"
+    },
+    {
+      "id": "cmimxqevx0002v5mcq02bmpb4",
+      "email": "jackson@betech.co.ke",
+      "name": "Jackson"
+    },
+    {
+      "id": "cmimxqf9t0003v5mcjdq8x61p",
+      "email": "jeniffer@betech.co.ke",
+      "name": "Jeniffer"
+    },
+    {
+      "id": "cmimxqfgo0004v5mc5pn1r486",
+      "email": "stephen@betech.co.ke",
+      "name": "Stephen"
+    },
+    {
+      "id": "cmimxqfnr0005v5mc05nwhg9o",
+      "email": "brendah@betech.co.ke",
+      "name": "Brendah"
+    },
+    {
+      "id": "cmimxqfve0006v5mcewkm8waa",
+      "email": "benjamin@betech.co.ke",
+      "name": "Benjamin"
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+
+> betechops@0.1.0 build C:\Projects\betechops
+> next build --turbopack
+
+   Γû▓ Next.js 16.0.7 (Turbopack)
+   - Environments: .env
+
+ ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 30.1s
+   Running TypeScript ...
+   Collecting page data using 7 workers ...
+API key does not start with "SG.".
+   Generating static pages using 7 workers (0/113) ...
+   Generating static pages using 7 workers (28/113) 
+   Generating static pages using 7 workers (56/113) 
+   Generating static pages using 7 workers (84/113) 
+ Γ£ô Generating static pages using 7 workers (113/113) in 3.5s
+   Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /admin
+Γö£ ╞Æ /admin/action-logs
+Γö£ ╞Æ /admin/attendants
+Γö£ ╞Æ /admin/attendants/[id]
+Γö£ ╞Æ /admin/attendants/[id]/payroll
+Γö£ ╞Æ /admin/catalog
+Γö£ ╞Æ /admin/catalog/feeds
+Γö£ ╞Æ /admin/catalog/feeds/create
+Γö£ ╞Æ /admin/catalog/feeds/price
+Γö£ ╞Æ /admin/catalog/feeds/status
+Γö£ ╞Æ /admin/catalog/feeds/stock
+Γö£ ╞Æ /admin/catalog/feeds/update
+Γö£ ╞Æ /admin/daily-report
+Γö£ ╞Æ /admin/health-checks
+Γö£ ╞Æ /admin/jumia-console
+Γö£ ╞Æ /admin/login
+Γö£ ╞Æ /admin/marketing-report
+Γö£ ╞Æ /admin/marketing-report/[entryId]/edit
+Γö£ ╞Æ /admin/online
+Γö£ ╞Æ /admin/online/accounts
+Γö£ ╞Æ /admin/online/manual
+Γö£ ╞Æ /admin/online/returns
+Γö£ ╞Æ /admin/online/summary
+Γö£ ╞Æ /admin/orders
+Γö£ ╞Æ /admin/payroll
+Γö£ ╞Æ /admin/pending-pricing
+Γö£ ╞Æ /admin/pending-pricing/[id]
+Γö£ ╞Æ /admin/receipt-files
+Γö£ ╞Æ /admin/receipts
+Γö£ ╞Æ /admin/reports
+Γö£ ╞Æ /admin/reports/concerns/[category]
+Γö£ ╞Æ /admin/returns
+Γö£ ╞Æ /admin/returns/[id]
+Γö£ ╞Æ /admin/returns/jumia
+Γö£ ╞Æ /admin/settings
+Γö£ ╞Æ /admin/settings/jumia/shipping-stations
+Γö£ ╞Æ /admin/shops
+Γö£ ╞Æ /admin/support-report
+Γö£ ╞Æ /admin/users
+Γö£ ╞Æ /api/admin/action-logs/restore
+Γö£ ╞Æ /api/admin/action-logs/restore/request-confirmation
+Γö£ ╞Æ /api/admin/action-logs/restores
+Γö£ ╞Æ /api/admin/attendants/[id]
+Γö£ ╞Æ /api/admin/attendants/[id]/comp-plan
+Γö£ ╞Æ /api/admin/attendants/[id]/payroll-adjustments
+Γö£ ╞Æ /api/admin/catalog/counters/recompute
+Γö£ ╞Æ /api/admin/daily-report/delete-entry
+Γö£ ╞Æ /api/admin/impersonate
+Γö£ ╞Æ /api/admin/marketing-report/delete-entry
+Γö£ ╞Æ /api/admin/marketing-report/export-day
+Γö£ ╞Æ /api/admin/marketing-report/export-period
+Γö£ ╞Æ /api/admin/marketing-report/export-period-pdf
+Γö£ ╞Æ /api/admin/marketing-report/summary
+Γö£ ╞Æ /api/admin/marketing-report/update-entry
+Γö£ ╞Æ /api/admin/marketing-report/wipe-by-attendant
+Γö£ ╞Æ /api/admin/online/accounts
+Γö£ ╞Æ /api/admin/online/accounts/assign
+Γö£ ╞Æ /api/admin/online/manual/shops
+Γö£ ╞Æ /api/admin/payroll/summary
+Γö£ ╞Æ /api/admin/probe-json
+Γö£ ╞Æ /api/admin/receipts/summary
+Γö£ ╞Æ /api/admin/receipts/summary/debug
+Γö£ ╞Æ /api/admin/receipts/summary/stream
+Γö£ ╞Æ /api/admin/support-report
+Γö£ ╞Æ /api/admin/support-report/delete-entry
+Γö£ ╞Æ /api/admin/weekly-sale
+Γö£ ╞Æ /api/admin/weekly-sale/[id]
+Γö£ ╞Æ /api/ai/address-correct
+Γö£ ╞Æ /api/ai/receipt-description
+Γö£ ╞Æ /api/ai/receipt-notes
+Γö£ ╞Æ /api/assignments/my
+Γö£ ╞Æ /api/assignments/upsert
+Γö£ ╞Æ /api/attendant/commission
+Γö£ ╞Æ /api/attendant/earnings/summary
+Γö£ ╞Æ /api/attendant/online/manual-sales
+Γö£ ╞Æ /api/attendants/activities
+Γö£ ╞Æ /api/attendants/marketplace-assignments
+Γö£ ╞Æ /api/attendants/me
+Γö£ ╞Æ /api/attendants/orders/[id]/price
+Γö£ ╞Æ /api/attendants/orders/price
+Γö£ ╞Æ /api/attendants/pending
+Γö£ ╞Æ /api/attendants/shops
+Γö£ ╞Æ /api/auth/[...nextauth]
+Γö£ ╞Æ /api/catalog/products-count
+Γö£ ╞Æ /api/commissions/balances
+Γö£ ╞Æ /api/commissions/balances/[userId]/adjust
+Γö£ ╞Æ /api/commissions/ledger
+Γö£ ╞Æ /api/commissions/recompute
+Γö£ ╞Æ /api/commissions/rules
+Γö£ ╞Æ /api/costs/catalog/import
+Γö£ ╞Æ /api/credentials
+Γö£ ╞Æ /api/credentials/[id]
+Γö£ ╞Æ /api/daily-report
+Γö£ ╞Æ /api/daily-report/export
+Γö£ ╞Æ /api/daily-report/export/pdf
+Γö£ ╞Æ /api/debug/auth-source
+Γö£ ╞Æ /api/debug/db-inspect
+Γö£ ╞Æ /api/debug/db-status
+Γö£ ╞Æ /api/debug/jumia
+Γö£ ╞Æ /api/debug/jumia-call
+Γö£ ╞Æ /api/debug/jumia-sweep
+Γö£ ╞Æ /api/debug/jumia/products-count
+Γö£ ╞Æ /api/debug/kpis-smoke
+Γö£ ╞Æ /api/debug/me
+Γö£ ╞Æ /api/debug/oidc
+Γö£ ╞Æ /api/debug/post-deploy-patch
+Γö£ ╞Æ /api/debug/receipt-by-number
+Γö£ ╞Æ /api/debug/receipts-mock
+Γö£ ╞Æ /api/debug/runtime
+Γö£ ╞Æ /api/debug/seed-shop
+Γö£ ╞Æ /api/debug/seed-shops
+Γö£ ╞Æ /api/debug/session
+Γö£ ╞Æ /api/debug/shops-auth
+Γö£ ╞Æ /api/fix-admin
+Γö£ ╞Æ /api/health
+Γö£ ╞Æ /api/impersonate/accept
+Γö£ ╞Æ /api/impersonate/stop
+Γö£ ╞Æ /api/jumia/console
+Γö£ ╞Æ /api/jumia/feeds/[feedId]
+Γö£ ╞Æ /api/jumia/feeds/create
+Γö£ ╞Æ /api/jumia/feeds/price
+Γö£ ╞Æ /api/jumia/feeds/stock
+Γö£ ╞Æ /api/jumia/jobs/pull-orders
+Γö£ ╞Æ /api/jumia/jobs/sync-incremental
+Γö£ ╞Æ /api/jumia/orders/[id]/items
+Γö£ ╞Æ /api/jumia/orders/[id]/pack
+Γö£ ╞Æ /api/jumia/orders/[id]/print-labels
+Γö£ ╞Æ /api/jumia/orders/[id]/ready-to-ship
+Γö£ ╞Æ /api/jumia/orders/bulk/pack
+Γö£ ╞Æ /api/jumia/orders/bulk/print-labels
+Γö£ ╞Æ /api/jumia/orders/bulk/ready-to-ship
+Γö£ ╞Æ /api/jumia/orders/recent
+Γö£ ╞Æ /api/jumia/outlets/providers
+Γö£ ╞Æ /api/jumia/providers
+Γö£ ╞Æ /api/jumia/proxy
+Γö£ ╞Æ /api/jumia/sync-pending
+Γö£ ╞Æ /api/layaway/[orderRef]/pay
+Γö£ ╞Æ /api/marketing/daily
+Γö£ ╞Æ /api/marketing/earnings/summary
+Γö£ ╞Æ /api/marketing/ledger
+Γö£ ╞Æ /api/marketing/price-sale
+Γö£ ╞Æ /api/marketing/report/export
+Γö£ ╞Æ /api/marketing/report/summary
+Γö£ ╞Æ /api/marketing/submit
+Γö£ ╞Æ /api/marketing/unpriced-sales
+Γö£ ╞Æ /api/marketing/unpriced-sales/delete
+Γö£ ╞Æ /api/metrics
+Γö£ ╞Æ /api/metrics/kpis
+Γö£ ╞Æ /api/metrics/kpis/refresh
+Γö£ ╞Æ /api/metrics/pending-breakdown
+Γö£ ╞Æ /api/metrics/pending-diff
+Γö£ ╞Æ /api/metrics/pending-live
+Γö£ ╞Æ /api/oauth/token
+Γö£ ╞Æ /api/online/direct-sale
+Γö£ ╞Æ /api/online/earnings/summary
+Γö£ ╞Æ /api/online/jumia-weeks
+Γö£ ╞Æ /api/online/preview-commission
+Γö£ ╞Æ /api/online/price-order
+Γö£ ╞Æ /api/online/returns
+Γö£ ╞Æ /api/online/returns/confirm-pickup
+Γö£ ╞Æ /api/online/shops/sales
+Γö£ ╞Æ /api/online/summary
+Γö£ ╞Æ /api/online/summary/all
+Γö£ ╞Æ /api/online/unpriced-orders
+Γö£ ╞Æ /api/online/weekly/shops/earnings
+Γö£ ╞Æ /api/orders
+Γö£ ╞Æ /api/orders/[id]/finalize-pricing
+Γö£ ╞Æ /api/orders/[id]/mark-picked-up
+Γö£ ╞Æ /api/orders/[id]/packed
+Γö£ ╞Æ /api/orders/[id]/payment
+Γö£ ╞Æ /api/orders/events
+Γö£ ╞Æ /api/orders/items/[id]/cost
+Γö£ ╞Æ /api/orders/labels
+Γö£ ╞Æ /api/orders/pack
+Γö£ ╞Æ /api/orders/pending-pricing
+Γö£ ╞Æ /api/orders/rts
+Γö£ ╞Æ /api/orders/search
+Γö£ ╞Æ /api/orders/synced
+Γö£ ╞Æ /api/payroll/summary
+Γö£ ╞Æ /api/products
+Γö£ ╞Æ /api/products/[productId]/cost
+Γö£ ╞Æ /api/profit/recompute
+Γö£ ╞Æ /api/receipt-files
+Γö£ ╞Æ /api/receipt-files/[id]
+Γö£ ╞Æ /api/receipts
+Γö£ ╞Æ /api/receipts/[id]
+Γö£ ╞Æ /api/receipts/[id]/send
+Γö£ ╞Æ /api/receipts/staff
+Γö£ ╞Æ /api/reconciliation
+Γö£ ╞Æ /api/reconciliation/run
+Γö£ ╞Æ /api/reports/attendants
+Γö£ ╞Æ /api/reports/pending-pricing
+Γö£ ╞Æ /api/reports/sales-today
+Γö£ ╞Æ /api/reports/summary
+Γö£ ╞Æ /api/reports/today
+Γö£ ╞Æ /api/returns
+Γö£ ╞Æ /api/returns/[id]/approve
+Γö£ ╞Æ /api/returns/[id]/evidence
+Γö£ ╞Æ /api/returns/[id]/pick
+Γö£ ╞Æ /api/returns/[id]/pickup
+Γö£ ╞Æ /api/returns/[id]/receive
+Γö£ ╞Æ /api/returns/[id]/resolve
+Γö£ ╞Æ /api/returns/[id]/state
+Γö£ ╞Æ /api/returns/count
+Γö£ ╞Æ /api/returns/waiting-pickup
+Γö£ ╞Æ /api/scan
+Γö£ ╞Æ /api/settings/config
+Γö£ ╞Æ /api/settings/jumia
+Γö£ ╞Æ /api/settings/jumia/accounts
+Γö£ ╞Æ /api/settings/jumia/accounts/[id]
+Γö£ ╞Æ /api/settings/jumia/accounts/[id]/discover
+Γö£ ╞Æ /api/settings/jumia/accounts/[id]/merge
+Γö£ ╞Æ /api/settings/jumia/shipping-defaults
+Γö£ ╞Æ /api/settings/jumia/shipping-defaults/by-name
+Γö£ ╞Æ /api/settlements/import
+Γö£ ╞Æ /api/shops
+Γö£ ╞Æ /api/shops/[id]
+Γö£ ╞Æ /api/shops/[id]/assign
+Γö£ ╞Æ /api/shops/[id]/assignments
+Γö£ ╞Æ /api/shops/[id]/auth-source
+Γö£ ╞Æ /api/shops/by-name
+Γö£ ╞Æ /api/support/daily
+Γö£ ╞Æ /api/support/earnings/summary
+Γö£ ╞Æ /api/support/price-sale
+Γö£ ╞Æ /api/support/report/summary
+Γö£ ╞Æ /api/sync/orders
+Γö£ ╞Æ /api/sync/payouts
+Γö£ ╞Æ /api/uploads/sign
+Γö£ ╞Æ /api/users
+Γö£ ╞Æ /api/users/[id]
+Γö£ ╞Æ /api/users/[id]/password
+Γö£ ╞Æ /api/users/search
+Γö£ Γùï /attendant
+Γö£ Γùï /attendant-and-cs
+Γö£ Γùï /attendant/daily-report
+Γö£ Γùï /attendant/jumia-ops
+Γö£ Γùï /attendant/login
+Γö£ Γùï /attendant/no-category
+Γö£ Γùï /attendant/online
+Γö£ Γùï /attendant/online-ops
+Γö£ ╞Æ /attendant/returns/[id]
+Γö£ Γùï /attendant/support
+Γö£ ╞Æ /auth/post-login
+Γö£ Γùï /login
+Γö£ Γùï /marketing/receipts
+Γö£ Γùï /marketing/tracker
+Γö£ Γùï /not-authorized
+Γö£ ╞Æ /orders
+Γö£ Γùï /receipt
+Γö£ ╞Æ /receipts
+Γö£ ╞Æ /receipts/[id]
+Γö£ ╞Æ /receipts/list
+Γö£ Γùï /receipts/preview
+Γö£ ╞Æ /receipts/print/[id]
+Γöö Γùï /support/dashboard
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

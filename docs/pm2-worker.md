@@ -34,6 +34,12 @@ pm2 save
 pm2 logs jumia-sync --lines 200
 ```
 
+You should see a startup line like:
+
+```
+[jumia-sync-worker] starting, interval(ms)= 2000, incrementalEvery(ms)= 2000, incrementalLookback(days)= 3, deepEvery(ms)= 900000, pendingEvery(ms)= 30000, ...
+```
+
 ## Tuning
 
 - `JUMIA_WORKER_INTERVAL_MS`: tick interval (default 5000). Set to `2000` for ~2s.
@@ -46,6 +52,15 @@ Environment to set (via PM2 env or system env):
 - `REDIS_URL` (optional)
 - Vendor auth (client IDs, refresh tokens if used in your setup)
 
+Worker cadence envs (already included in `ecosystem.worker.config.cjs`):
+
+- `JUMIA_WORKER_INTERVAL_MS` (e.g., `2000`)
+- `JUMIA_WORKER_INCREMENTAL_EVERY_MS` (e.g., `2000`)
+- `JUMIA_WORKER_INCREMENTAL_LOOKBACK_DAYS` (e.g., `3`)
+- `JUMIA_WORKER_INCREMENTAL_DEEP_EVERY_MS` (e.g., `900000` for 15 minutes)
+- `JUMIA_WORKER_PENDING_EVERY_MS` (e.g., `30000`)
+- `JUMIA_SYNC_LOOKBACK_DAYS` (e.g., `120` for deep backfills)
+
 On Windows, install PM2 globally and use PowerShell:
 
 ```
@@ -53,6 +68,18 @@ npm i -g pm2
 npm run build:worker
 pm2 start ecosystem.worker.config.cjs
 pm2 save
+```
+
+To rebuild, reload, and verify cadence settings after config changes:
+
+```powershell
+# From the PM2 host (rebuild bundle, reload with updated env, then check logs)
+pwsh ./scripts/pm2-reload-and-verify.ps1 -Name jumia-sync -Lines 120 -Build
+
+# Manual (if you prefer commands):
+npm run build:worker
+pm2 reload jumia-sync --update-env
+pm2 logs jumia-sync --lines 120
 ```
 
 PM2 auto-start on Windows can be handled with pm2-windows-startup or a scheduled task.
@@ -94,6 +121,7 @@ Environment variables (set before running or via `.env`):
 
 ## Run with PM2
 
+# macOS/Linux
 ```bash
 pm2 start ecosystem.config.js
 pm2 save
@@ -113,4 +141,4 @@ To override env per host, you can copy `ecosystem.config.js` and replace the `en
 
 - If you see auth errors, verify tokens and that the VM/network can reach Jumia vendor API.
 - Rate limits: the sync uses a small concurrency cap; increase interval if you hit vendor limits.
-- Logs: `pm2 logs jumia-sync-worker`.
+- Logs: `pm2 logs jumia-sync`.

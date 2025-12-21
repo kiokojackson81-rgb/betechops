@@ -1,13 +1,1072 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // Use a direct, non-pooled connection for migrations; keep pooled URL for runtime
-  directUrl = env("DIRECT_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id                                   String                         @id @default(cuid())
+  email                                String                         @unique
+  name                                 String?
+  image                                String?
+  role                                 Role                           @default(ATTENDANT)
+  isActive                             Boolean                        @default(true)
+  createdAt                            DateTime                       @default(now())
+  updatedAt                            DateTime                       @updatedAt
+  attendantCategory                    AttendantCategory?
+  password                             String?
+  actionLogs                           ActionLog[]
+  activities                           AttendantActivity[]
+  categoryAssignments                  AttendantCategoryAssignment[]
+  attendantCommissions                 AttendantCommission[]
+  attendantCompPlan                    AttendantCompPlan?
+  attendantPayrollAdjustments          AttendantPayrollAdjustment[]
+  balance                              Balance?
+  commissionEarnings                   CommissionEarning[]
+  commissionRecords                    CommissionRecord[]
+  dailyReports                         DailyReport[]
+  marketingEntries                     MarketingDailyEntry[]
+  marketplaceAccountAssignments        MarketplaceAccountAssignment[] @relation("MarketplaceAccountAssignment_attendant")
+  marketplaceOrdersPriced              MarketplaceOrder[]             @relation("MarketplaceOrder_pricedBy")
+  marketplacePricingTemplatesUpdated   MarketplacePricingTemplate[]   @relation("MarketplacePricingTemplate_updatedBy")
+  marketplaceReturnsAttended           MarketplaceReturn[]            @relation("MarketplaceReturn_attendant")
+  marketplaceReturnsProcessed          MarketplaceReturn[]            @relation("MarketplaceReturn_processedBy")
+  marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[]  @relation("MarketplaceReturnAttachment_uploadedBy")
+  orders                               Order[]
+  issuedReceipts                       Receipt[]                      @relation("issuedBy")
+  returnsApproved                      ReturnCase[]                   @relation("ReturnApprovedBy")
+  returnsCreated                       ReturnCase[]                   @relation("ReturnCreatedBy")
+  evidenceTaken                        ReturnEvidence[]               @relation("EvidenceTaker")
+  returnPickups                        ReturnPickup[]                 @relation("PickupAssignee")
+  assignments                          ShopAssignment[]
+  supportEntries                       SupportDailyEntry[]
+  userShops                            UserShop[]
+  weeklySalesApproved                  WeeklySale[]                   @relation("WeeklySaleApproval")
+  weeklySales                          WeeklySale[]                   @relation("WeeklySaleAttendant")
+  managedShops                         Shop[]                         @relation("ManagedBy")
+}
+
+model AttendantActivity {
+  id           String            @id @default(cuid())
+  userId       String
+  category     AttendantCategory
+  metric       String
+  numericValue Decimal?          @db.Decimal(18, 2)
+  intValue     Int?
+  notes        String?
+  entryDate    DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  user         User              @relation(fields: [userId], references: [id])
+
+  @@index([userId, entryDate])
+  @@index([category, metric, entryDate])
+}
+
+model AttendantCompPlan {
+  id                        String       @id @default(cuid())
+  attendantId               String       @unique
+  baseSalary                Int
+  frequency                 PayFrequency @default(PERIOD)
+  defaultChamaDeduction     Int?
+  defaultOtherDeduction     Int?
+  defaultTransportAllowance Int?
+  isActive                  Boolean      @default(true)
+  notes                     String?
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  attendant                 User         @relation(fields: [attendantId], references: [id])
+}
+
+model AttendantPayrollAdjustment {
+  id             String                @id @default(cuid())
+  attendantId    String
+  periodKey      String
+  periodLabel    String
+  adjustmentType PayrollAdjustmentType
+  label          String
+  amount         Int
+  createdById    String
+  createdAt      DateTime              @default(now())
+  adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
+  attendant      User                  @relation(fields: [attendantId], references: [id])
+
+  @@index([attendantId, periodKey])
+}
+
+model DailyReport {
+  id                       String      @id @default(cuid())
+  date                     DateTime
+  userId                   String?
+  productsCount            Int
+  totalSales               Decimal     @db.Decimal(12, 2)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  /// Day of the week (MONDAY–SATURDAY)
+  day                      String
+  /// Dynamic task results keyed by field name, stored as JSON
+  tasks                    Json?
+  /// Free-text submitter (keeps a copy of whatever the client provided)
+  submittedBy              String?
+  newProducts              Int?        @default(0)
+  productsEdited           Int?        @default(0)
+  copiesUploaded           Int?        @default(0)
+  walkInServed             Int?        @default(0)
+  purchasesMade            Int?        @default(0)
+  liveSessionsCount        Int?        @default(0)
+  commissionEarned         Decimal?    @db.Decimal(12, 2)
+  confirmedCompetitiveness Boolean?    @default(false)
+  marketEngagement         Json?
+  concerns                 String?
+  user                     User?       @relation(fields: [userId], references: [id])
+  sales                    DailySale[]
+
+  @@index([date])
+  @@index([userId])
+}
+
+model DailySale {
+  id             String          @id @default(cuid())
+  dailyReportId  String
+  productName    String
+  price          Decimal         @db.Decimal(12, 2)
+  createdAt      DateTime        @default(now())
+  paymentMethod  PaymentMethod?
+  receiptNumber  String?
+  dailyReport    DailyReport     @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+  marketingSales MarketingSale[]
+
+  @@index([dailyReportId])
+}
+
+model MarketingDailyEntry {
+  id                             String             @id @default(cuid())
+  date                           DateTime
+  dayOfWeek                      String
+  totalSales                     Int                @default(0)
+  totalProfit                    Int                @default(0)
+  photoUrl                       String?
+  tiktokPosted2Videos            Boolean?
+  tiktokRepliedAll               Boolean?
+  igFbYtPosted2VideosEach        Boolean?
+  igFbYtRepliedAll               Boolean?
+  waPostedStatus                 Boolean?
+  waSavedContacts                Boolean?
+  waRespondedAll                 Boolean?
+  waPosted10Statuses             Boolean?
+  waSaved10Contacts              Boolean?
+  stockEnoughFastMovers          Boolean?
+  shot4ProductVideos             Boolean?
+  tiktokPosted4ExplanatoryVideos Boolean?
+  liveViewers                    Int?
+  liveSessionsCount              Int?
+  liveSessionsEstimatedViewers   Int?
+  liveSessionDurationMinutes     Int?
+  liveSessionPlatform            String?
+  shopCleaned                    Boolean?
+  shopWellArranged               Boolean?
+  displayWellLabeled             Boolean?
+  weeklyComment                  String?
+  payload                        Json?
+  submittedById                  String?
+  submittedByName                String?
+  submittedByEmail               String?
+  createdAt                      DateTime           @default(now())
+  updatedAt                      DateTime           @updatedAt
+  weeklyMeetingAttended          Boolean?           @default(false)
+  weeklyVideoCount               Int?               @default(0)
+  weeklyVideoShootParticipated   Boolean?           @default(false)
+  submittedBy                    User?              @relation(fields: [submittedById], references: [id])
+  receipts                       MarketingReceipt[]
+  sales                          MarketingSale[]
+
+  @@index([date])
+  @@index([dayOfWeek])
+  @@index([submittedById])
+}
+
+model MarketingSale {
+  id            String              @id @default(cuid())
+  entryId       String
+  product       String
+  buyingPrice   Int
+  sellingPrice  Int
+  receiptNumber String?
+  paymentMethod PaymentMethod
+  createdAt     DateTime            @default(now())
+  itemsCount    Int                 @default(1)
+  dailySaleId   String?
+  pricedAt      DateTime?           @db.Timestamptz(6)
+  dailySale     DailySale?          @relation(fields: [dailySaleId], references: [id])
+  entry         MarketingDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([pricedAt])
+  @@index([dailySaleId])
+}
+
+model MarketingReceipt {
+  id            String                 @id @default(cuid())
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  dailyEntryId  String
+  receiptNumber String?
+  sellingTotal  Int
+  paymentMethod PaymentMethod
+  buyingTotal   Int                    @default(0)
+  dailyEntry    MarketingDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  items         MarketingReceiptItem[]
+
+  @@index([dailyEntryId])
+}
+
+model MarketingReceiptItem {
+  id          String           @id @default(cuid())
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  receiptId   String
+  productName String
+  buyingPrice Int
+  receipt     MarketingReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+}
+
+model SupportDailyEntry {
+  id               String           @id @default(cuid())
+  date             DateTime
+  dayOfWeek        String
+  totalSales       Int              @default(0)
+  totalProfit      Int              @default(0)
+  newBatteries     Int              @default(0)
+  changedBatteries Int              @default(0)
+  submittedById    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  submittedBy      User?            @relation(fields: [submittedById], references: [id])
+  receipts         SupportReceipt[] @relation("SupportEntryReceipts")
+  sales            SupportSale[]    @relation("SupportEntrySales")
+
+  @@index([date])
+  @@index([submittedById])
+}
+
+model SupportSale {
+  id            String            @id @default(cuid())
+  entryId       String
+  product       String
+  buyingPrice   Int
+  sellingPrice  Int
+  receiptNumber String?
+  paymentMethod PaymentMethod
+  itemsCount    Int               @default(1)
+  createdAt     DateTime          @default(now())
+  entry         SupportDailyEntry @relation("SupportEntrySales", fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+}
+
+model SupportReceipt {
+  id            String               @id @default(cuid())
+  dailyEntryId  String
+  receiptNumber String?
+  sellingTotal  Int
+  paymentMethod PaymentMethod
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  buyingTotal   Int                  @default(0)
+  dailyEntry    SupportDailyEntry    @relation("SupportEntryReceipts", fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  items         SupportReceiptItem[] @relation("SupportReceiptItems")
+
+  @@index([dailyEntryId])
+}
+
+model SupportReceiptItem {
+  id          String         @id @default(cuid())
+  receiptId   String
+  productName String
+  buyingPrice Int
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  pricedAt    DateTime?      @db.Timestamptz(6)
+  receipt     SupportReceipt @relation("SupportReceiptItems", fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([pricedAt])
+}
+
+model Shop {
+  id                   String                @id @default(cuid())
+  name                 String
+  location             String?
+  phone                String?
+  email                String?
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  platform             Platform              @default(JUMIA)
+  credentialsEncrypted Json?
+  /// When true, automated sync jobs should skip fetching orders for this shop.
+  disableAutoSync      Boolean               @default(false)
+  apiCredentials       ApiCredential[]
+  attendantCommissions AttendantCommission[]
+  commissionRules      CommissionRule[]
+  costCatalogs         CostCatalog[]
+  discrepancies        Discrepancy[]
+  fulfillmentAudits    FulfillmentAudit[]
+  orders               Order[]
+  reconciliations      Reconciliation[]
+  returnCases          ReturnCase[]
+  settlementRows       SettlementRow[]
+  apiConfig            ShopApiConfig?
+  assignments          ShopAssignment[]
+  userAssignments      UserShop[]
+  weeklySales          WeeklySale[]
+  managers             User[]                @relation("ManagedBy")
+}
+
+/// WeeklySale records aggregate the total sales for a given attendant (user) and shop
+/// over a Monday→Saturday week. Each record can be marked as PENDING or PAID.
+model WeeklySale {
+  id         String           @id @default(cuid())
+  shopId     String?
+  userId     String?
+  weekStart  DateTime
+  weekEnd    DateTime
+  amount     Decimal          @db.Decimal(12, 2)
+  createdAt  DateTime         @default(now())
+  platform   Platform
+  source     WeeklySaleSource
+  createdBy  String?
+  approvedBy String?
+  updatedAt  DateTime         @default(now()) @updatedAt
+  status     WeeklySaleStatus @default(PENDING)
+  approved   User?            @relation("WeeklySaleApproval", fields: [approvedBy], references: [id])
+  shop       Shop?            @relation(fields: [shopId], references: [id])
+  user       User?            @relation("WeeklySaleAttendant", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, platform, weekStart, weekEnd])
+  @@index([shopId, platform, weekStart, weekEnd])
+}
+
+model JumiaAccount {
+  id           String      @id @default(cuid())
+  label        String
+  clientId     String
+  refreshToken String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  shops        JumiaShop[]
+}
+
+model JumiaShop {
+  id                      String       @id
+  name                    String
+  accountId               String
+  lastOrdersUpdatedBefore DateTime?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  orders                  JumiaOrder[]
+  account                 JumiaAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+}
+
+model JumiaOrder {
+  id                       String    @id
+  number                   Int?
+  status                   String
+  hasMultipleStatus        Boolean?
+  pendingSince             String?
+  totalItems               Int?
+  packedItems              Int?
+  countryCode              String?
+  isPrepayment             Boolean?
+  createdAtJumia           DateTime?
+  updatedAtJumia           DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  shopId                   String
+  totalAmountLocalCurrency String?
+  totalAmountLocalValue    Float?
+  shopName                 String?
+  shop                     JumiaShop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, status])
+  @@index([updatedAtJumia])
+  @@index([createdAtJumia])
+  @@index([shopId, updatedAtJumia])
+}
+
+model ShopApiConfig {
+  id        String   @id @default(cuid())
+  shopId    String   @unique
+  platform  String   @default("JUMIA")
+  apiKey    String
+  apiSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shop      Shop     @relation(fields: [shopId], references: [id])
+}
+
+model Product {
+  id              String      @id @default(cuid())
+  sku             String      @unique
+  name            String
+  category        String
+  sellingPrice    Float
+  lastBuyingPrice Float?
+  minStockLevel   Int         @default(5)
+  stockQuantity   Int         @default(0)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  orders          OrderItem[]
+}
+
+model Order {
+  id                String             @id @default(cuid())
+  orderNumber       String             @unique
+  customerName      String
+  shopId            String
+  attendantId       String?
+  status            OrderStatus        @default(PENDING)
+  totalAmount       Float
+  paidAmount        Float              @default(0)
+  paymentStatus     PaymentStatus      @default(UNPAID)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  customerPhone     String?
+  customerEmail     String?
+  metadata          Json?
+  commissionRecords CommissionRecord[]
+  layawayPlan       LayawayPlan?
+  attendant         User?              @relation(fields: [attendantId], references: [id])
+  shop              Shop               @relation(fields: [shopId], references: [id])
+  items             OrderItem[]
+  receipt           Receipt?
+  returnCases       ReturnCase[]
+  settlementRows    SettlementRow[]
+}
+
+model OrderItem {
+  id                 String              @id @default(cuid())
+  orderId            String
+  productId          String
+  quantity           Int
+  sellingPrice       Float
+  serial             String?
+  warranty           Json?
+  commissionEarnings CommissionEarning[]
+  orderCosts         OrderCost[]
+  order              Order               @relation(fields: [orderId], references: [id])
+  product            Product             @relation(fields: [productId], references: [id])
+  profitSnapshots    ProfitSnapshot[]
+  returnAdjustments  ReturnAdjustment[]
+  returnCases        ReturnCase[]
+  settlementRows     SettlementRow[]
+}
+
+/// Commission configuration and snapshots
+model CommissionPeriod {
+  id                   String                @id @default(cuid())
+  name                 String
+  startDate            DateTime
+  endDate              DateTime
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  attendantCommissions AttendantCommission[]
+  tiers                CommissionTier[]
+}
+
+model CommissionTier {
+  id         String           @id @default(cuid())
+  periodId   String
+  minSales   Float
+  maxSales   Float
+  payoutFlat Float
+  period     CommissionPeriod @relation(fields: [periodId], references: [id])
+}
+
+model AttendantCommission {
+  id         String           @id @default(cuid())
+  userId     String
+  periodId   String
+  shopId     String?
+  sales      Float
+  payout     Float
+  computedAt DateTime         @default(now())
+  period     CommissionPeriod @relation(fields: [periodId], references: [id])
+  shop       Shop?            @relation(fields: [shopId], references: [id])
+  user       User             @relation(fields: [userId], references: [id])
+}
+
+model ApiCredential {
+  id           String   @id @default(cuid())
+  scope        String
+  apiBase      String
+  apiKey       String?
+  apiSecret    String?
+  issuer       String?
+  clientId     String?
+  refreshToken String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shopId       String?
+  shop         Shop?    @relation(fields: [shopId], references: [id])
+
+  @@unique([scope, shopId])
+}
+
+model Config {
+  key       String   @id
+  json      Json
+  updatedAt DateTime @updatedAt
+}
+
+model CostCatalog {
+  id            String    @id @default(cuid())
+  sku           String
+  shopId        String?
+  cost          Decimal   @db.Decimal(12, 2)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  shop          Shop?     @relation(fields: [shopId], references: [id])
+
+  @@index([sku, shopId, effectiveFrom])
+}
+
+model OrderCost {
+  id          String    @id @default(cuid())
+  orderItemId String
+  unitCost    Decimal   @db.Decimal(12, 2)
+  costSource  String
+  createdAt   DateTime  @default(now())
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model SettlementRow {
+  id          String     @id @default(cuid())
+  shopId      String
+  orderId     String?
+  orderItemId String?
+  kind        String
+  amount      Decimal    @db.Decimal(12, 2)
+  ref         String?
+  postedAt    DateTime
+  raw         Json
+  createdAt   DateTime   @default(now())
+  order       Order?     @relation(fields: [orderId], references: [id])
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id])
+  shop        Shop       @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, postedAt])
+  @@index([orderId, orderItemId])
+}
+
+model ProfitSnapshot {
+  id          String    @id @default(cuid())
+  orderItemId String
+  revenue     Decimal   @db.Decimal(12, 2)
+  fees        Decimal   @db.Decimal(12, 2)
+  shipping    Decimal   @db.Decimal(12, 2)
+  refunds     Decimal   @db.Decimal(12, 2)
+  unitCost    Decimal   @db.Decimal(12, 2)
+  qty         Int
+  profit      Decimal   @db.Decimal(12, 2)
+  computedAt  DateTime  @default(now())
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model CommissionRule {
+  id            String    @id @default(cuid())
+  scope         String
+  shopId        String?
+  sku           String?
+  category      String?
+  type          String
+  rateDecimal   Decimal   @db.Decimal(6, 4)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  shop          Shop?     @relation(fields: [shopId], references: [id])
+
+  @@index([scope, shopId, sku, category, effectiveFrom])
+}
+
+model CommissionEarning {
+  id          String    @id @default(cuid())
+  staffId     String
+  orderItemId String
+  basis       String
+  qty         Int
+  amount      Decimal   @db.Decimal(12, 2)
+  status      String
+  calcDetail  Json
+  createdAt   DateTime  @default(now())
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  staff       User      @relation(fields: [staffId], references: [id])
+}
+
+model ReturnCase {
+  id          String             @id @default(cuid())
+  shopId      String
+  orderId     String
+  orderItemId String?
+  reasonCode  String
+  status      String
+  resolution  String?
+  createdBy   String
+  approvedBy  String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  dueAt       DateTime?
+  pickedAt    DateTime?
+  adjustments ReturnAdjustment[]
+  approver    User?              @relation("ReturnApprovedBy", fields: [approvedBy], references: [id])
+  creator     User               @relation("ReturnCreatedBy", fields: [createdBy], references: [id])
+  order       Order              @relation(fields: [orderId], references: [id])
+  orderItem   OrderItem?         @relation(fields: [orderItemId], references: [id])
+  shop        Shop               @relation(fields: [shopId], references: [id])
+  evidence    ReturnEvidence[]
+  pickups     ReturnPickup[]
+
+  @@index([shopId, status])
+}
+
+model ReturnPickup {
+  id           String     @id @default(cuid())
+  returnCaseId String
+  scheduledAt  DateTime
+  carrier      String
+  tracking     String?
+  assignedTo   String
+  notes        String?
+  createdAt    DateTime   @default(now())
+  assignee     User       @relation("PickupAssignee", fields: [assignedTo], references: [id])
+  returnCase   ReturnCase @relation(fields: [returnCaseId], references: [id])
+}
+
+model ReturnEvidence {
+  id           String     @id @default(cuid())
+  returnCaseId String
+  type         String
+  uri          String
+  sha256       String
+  takenBy      String
+  takenAt      DateTime
+  geo          Json?
+  createdAt    DateTime   @default(now())
+  returnCase   ReturnCase @relation(fields: [returnCaseId], references: [id])
+  taker        User       @relation("EvidenceTaker", fields: [takenBy], references: [id])
+}
+
+model ReturnAdjustment {
+  id               String     @id @default(cuid())
+  returnCaseId     String
+  orderItemId      String
+  amount           Decimal    @db.Decimal(12, 2)
+  commissionImpact String
+  notes            String?
+  createdAt        DateTime   @default(now())
+  orderItem        OrderItem  @relation(fields: [orderItemId], references: [id])
+  returnCase       ReturnCase @relation(fields: [returnCaseId], references: [id])
+}
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  actor     User     @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+}
+
+model UserShop {
+  id         String         @id @default(cuid())
+  userId     String
+  shopId     String
+  roleAtShop ShopRoleAtShop
+  shop       Shop           @relation(fields: [shopId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, shopId])
+}
+
+/// Assignment model for supervisors/attendants per shop
+model ShopAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  shopId    String
+  createdAt DateTime @default(now())
+  role      Role
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, shopId, role])
+}
+
+model AttendantCategoryAssignment {
+  id         String            @id @default(cuid())
+  userId     String
+  category   AttendantCategory
+  assignedAt DateTime          @default(now())
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([category])
+}
+
+model ProductCost {
+  id        String      @id @default(cuid())
+  productId String
+  price     Decimal     @db.Decimal(12, 2)
+  byUserId  String?
+  createdAt DateTime    @default(now())
+  source    PriceSource
+
+  @@index([productId])
+}
+
+model CommissionLedger {
+  id                            String   @id @default(cuid())
+  userId                        String
+  periodStart                   DateTime
+  periodEnd                     DateTime
+  grossCommission               Decimal  @default(0) @db.Decimal(12, 2)
+  penalties                     Decimal  @default(0) @db.Decimal(12, 2)
+  netCommission                 Decimal  @default(0) @db.Decimal(12, 2)
+  detail                        Json?
+  createdAt                     DateTime @default(now())
+  commissionDirect              Decimal? @default(0) @db.Decimal(12, 2)
+  commissionMarketplaceJumia    Decimal? @default(0) @db.Decimal(12, 2)
+  commissionMarketplaceKilimall Decimal? @default(0) @db.Decimal(12, 2)
+  commissionTotal               Decimal? @default(0) @db.Decimal(12, 2)
+  commissionBreakdown           Json?
+
+  @@unique([userId, periodStart, periodEnd], name: "userId_periodStart_periodEnd")
+}
+
+model Balance {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  available Decimal   @default(0) @db.Decimal(14, 2)
+  pending   Decimal   @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime? @default(now()) @updatedAt
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Reconciliation {
+  id           String   @id @default(cuid())
+  shopId       String
+  day          DateTime
+  ordersCount  Int
+  payoutAmount Decimal  @default(0) @db.Decimal(12, 2)
+  variance     Decimal  @default(0) @db.Decimal(12, 2)
+  notes        String?
+  createdAt    DateTime @default(now())
+  shop         Shop     @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, day])
+}
+
+model Discrepancy {
+  id        String            @id @default(cuid())
+  shopId    String
+  ref       String
+  amount    Decimal           @default(0) @db.Decimal(12, 2)
+  createdAt DateTime          @default(now())
+  kind      DiscrepancyType
+  status    DiscrepancyStatus @default(OPEN)
+  shop      Shop              @relation(fields: [shopId], references: [id])
+}
+
+model FulfillmentAudit {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  shopId         String
+  orderId        String
+  status         Int
+  ok             Boolean
+  payload        Json
+  s3Bucket       String?
+  s3Key          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  action         String?
+  shop           Shop     @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, orderId])
+}
+
+/// Persisted catalog counters (per shop and aggregate "ALL")
+model CatalogCounters {
+  id          String   @id @default(cuid())
+  scope       String
+  shopId      String?
+  total       Int      @default(0)
+  active      Int      @default(0)
+  inactive    Int      @default(0)
+  deleted     Int      @default(0)
+  pending     Int      @default(0)
+  visibleLive Int      @default(0)
+  qcApproved  Int      @default(0)
+  qcPending   Int      @default(0)
+  qcRejected  Int      @default(0)
+  qcNotReady  Int      @default(0)
+  byStatus    Json?
+  byQcStatus  Json?
+  approx      Boolean  @default(false)
+  computedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, shopId])
+  @@index([scope, shopId, computedAt])
+}
+
+model CommissionRecord {
+  id          String                 @id @default(cuid())
+  orderId     String
+  attendantId String?
+  amount      Decimal?               @db.Decimal(14, 2)
+  status      CommissionRecordStatus @default(PENDING)
+  periodId    String?
+  releasedAt  DateTime?
+  data        Json?
+  createdAt   DateTime               @default(now())
+  attendant   User?                  @relation(fields: [attendantId], references: [id])
+  order       Order                  @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
+
+model Receipt {
+  id                  String        @id @default(cuid())
+  orderId             String        @unique
+  docType             DocType
+  generatedAt         DateTime      @default(now())
+  issuedById          String?
+  taxRate             Decimal?      @db.Decimal(6, 2)
+  discount            Decimal?      @db.Decimal(12, 2)
+  showTax             Boolean       @default(false)
+  showDiscount        Boolean       @default(false)
+  paymentDetailsShown Boolean       @default(false)
+  notes               String?
+  warrantyText        String?
+  totals              Json?
+  data                Json?
+  createdAt           DateTime      @default(now())
+  issuedBy            User?         @relation("issuedBy", fields: [issuedById], references: [id])
+  order               Order         @relation(fields: [orderId], references: [id])
+  files               ReceiptFile[]
+}
+
+model ReceiptFile {
+  id          String    @id @default(cuid())
+  receiptId   String
+  key         String?
+  url         String
+  contentType String?
+  size        Int?
+  uploadedBy  String?
+  uploadedAt  DateTime  @default(now())
+  expiresAt   DateTime?
+  receipt     Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+}
+
+model Branding {
+  id            String   @id @default(cuid()) @db.Text
+  name          String   @unique @db.Text
+  letterheadUrl String   @db.Text
+  logoUrl       String?  @db.Text
+  brandColor    String?  @db.Text
+  updatedAt     DateTime @updatedAt
+}
+
+model LayawayPlan {
+  id         String           @id @default(cuid())
+  orderId    String           @unique
+  deposit    Decimal          @default(0) @db.Decimal(14, 2)
+  balance    Decimal          @default(0) @db.Decimal(14, 2)
+  isComplete Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @default(now()) @updatedAt
+  payments   LayawayPayment[]
+  order      Order            @relation(fields: [orderId], references: [id])
+}
+
+model LayawayPayment {
+  id     String      @id @default(cuid())
+  planId String
+  amount Decimal     @db.Decimal(14, 2)
+  paidAt DateTime    @default(now())
+  method String?
+  ref    String?
+  plan   LayawayPlan @relation(fields: [planId], references: [id])
+}
+
+model MarketplaceAccount {
+  id               String                         @id @default(dbgenerated("gen_random_uuid()"))
+  platform         Platform
+  displayName      String
+  countryCode      String
+  currency         String                         @default("KES")
+  jumiaShopSid     String?
+  kilimallShopCode String?
+  isActive         Boolean                        @default(true)
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  assignments      MarketplaceAccountAssignment[]
+  orders           MarketplaceOrder[]
+  payoutWeeks      MarketplacePayoutWeek[]
+  returns          MarketplaceReturn[]
+
+  @@unique([platform, jumiaShopSid])
+  @@unique([platform, kilimallShopCode])
+}
+
+model MarketplaceAccountAssignment {
+  id          String                    @id @default(dbgenerated("gen_random_uuid()"))
+  accountId   String
+  attendantId String
+  role        MarketplaceAssignmentRole
+  startsAt    DateTime                  @default(now())
+  endsAt      DateTime?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  account     MarketplaceAccount        @relation(fields: [accountId], references: [id])
+  attendant   User                      @relation("MarketplaceAccountAssignment_attendant", fields: [attendantId], references: [id])
+
+  @@unique([accountId, attendantId, role])
+  @@index([attendantId, role])
+}
+
+model MarketplacePayoutWeek {
+  id              String             @id @default(cuid())
+  accountId       String
+  statementNumber String
+  weekStart       DateTime
+  weekEnd         DateTime
+  grossSales      Decimal            @db.Decimal(14, 2)
+  payoutAmount    Decimal            @db.Decimal(14, 2)
+  currency        String             @default("KES")
+  isPaid          Boolean            @default(false)
+  rawPayload      Json
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  account         MarketplaceAccount @relation(fields: [accountId], references: [id])
+
+  @@unique([accountId, statementNumber])
+  @@index([accountId, weekEnd])
+}
+
+model MarketplaceOrder {
+  id           String              @id @default(cuid())
+  accountId    String
+  platform     Platform
+  orderId      String
+  orderItemId  String
+  status       String
+  orderedAt    DateTime
+  productName  String
+  productUrl   String?
+  sellingPrice Decimal             @db.Decimal(14, 2)
+  currency     String              @default("KES")
+  buyingPrice  Decimal?            @db.Decimal(14, 2)
+  profit       Decimal?            @db.Decimal(14, 2)
+  pricedById   String?
+  pricedAt     DateTime?
+  isReturned   Boolean             @default(false)
+  rawPayload   Json
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  account      MarketplaceAccount  @relation(fields: [accountId], references: [id])
+  pricedBy     User?               @relation("MarketplaceOrder_pricedBy", fields: [pricedById], references: [id])
+  returns      MarketplaceReturn[] @relation("MarketplaceOrder_returns")
+
+  @@unique([platform, orderItemId])
+  @@index([accountId, orderedAt])
+  @@index([pricedById])
+}
+
+model MarketplacePricingTemplate {
+  id                    String   @id @default(cuid())
+  platform              Platform
+  normalizedProductName String
+  sellingPrice          Decimal  @db.Decimal(14, 2)
+  defaultBuyingPrice    Decimal  @db.Decimal(14, 2)
+  updatedById           String?
+  updatedAt             DateTime @default(now())
+  updatedBy             User?    @relation("MarketplacePricingTemplate_updatedBy", fields: [updatedById], references: [id])
+
+  @@unique([platform, normalizedProductName, sellingPrice])
+}
+
+model MarketplaceReturn {
+  id                 String                        @id @default(cuid())
+  accountId          String
+  platform           Platform
+  marketplaceOrderId String?
+  orderItemId        String
+  attendantId        String?
+  expectedAmount     Decimal                       @db.Decimal(14, 2)
+  status             MarketplaceReturnStatus       @default(WAITING_AT_HUB)
+  createdAt          DateTime                      @default(now())
+  dueAt              DateTime
+  processedById      String?
+  processedAt        DateTime?
+  notes              String?
+  account            MarketplaceAccount            @relation(fields: [accountId], references: [id])
+  attendant          User?                         @relation("MarketplaceReturn_attendant", fields: [attendantId], references: [id])
+  marketplaceOrder   MarketplaceOrder?             @relation("MarketplaceOrder_returns", fields: [marketplaceOrderId], references: [id])
+  processedBy        User?                         @relation("MarketplaceReturn_processedBy", fields: [processedById], references: [id])
+  attachments        MarketplaceReturnAttachment[]
+
+  @@unique([platform, orderItemId])
+  @@index([attendantId, status])
+  @@index([dueAt, status])
+}
+
+model MarketplaceReturnAttachment {
+  id           String            @id @default(cuid())
+  returnId     String
+  url          String
+  uploadedById String
+  createdAt    DateTime          @default(now())
+  returnRef    MarketplaceReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  uploadedBy   User              @relation("MarketplaceReturnAttachment_uploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([returnId])
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model acc_id {
+  id String?
+
+  @@ignore
+}
+
+model schema_reconciliation_log {
+  id         Int       @id @default(autoincrement())
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  action     String
+  detail     String?
 }
 
 enum Role {
@@ -16,13 +1075,56 @@ enum Role {
   ATTENDANT
 }
 
+enum PayFrequency {
+  MONTHLY
+  PERIOD
+}
+
+enum PayrollAdjustmentType {
+  CHAMA
+  LATENESS
+  DISCIPLINE
+  BONUS
+  COMMISSION_TOPUP
+  OTHER
+}
+
+enum PayrollAdjustmentKind {
+  ADDITION
+  DEDUCTION
+}
+
+enum AttendantCategory {
+  DIRECT_SALES_OPS
+  MARKETING_OPS
+  JUMIA_KILIMALL_OPS
+  SUPPORT_OPS
+  BETECH_OPS
+}
+
 enum Platform {
   JUMIA
   KILIMALL
 }
 
+enum WeeklySaleSource {
+  AUTOMATIC
+  MANUAL
+}
+
+enum WeeklySaleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ShopRoleAtShop {
   ATTENDANT
+  SUPERVISOR
+}
+
+enum MarketplaceAssignmentRole {
+  JUMIA_KILIMALL_OPS
   SUPERVISOR
 }
 
@@ -34,9 +1136,20 @@ enum ReturnStatus {
   OVERDUE
 }
 
+enum MarketplaceReturnStatus {
+  WAITING_AT_HUB
+  PICKED
+  CHARGED_TO_ATTENDANT
+}
+
 enum PriceSource {
   MANUAL
   LEARNED
+}
+
+enum PaymentMethod {
+  CASH
+  MPESA
 }
 
 enum DiscrepancyType {
@@ -66,560 +1179,14 @@ enum PaymentStatus {
   PAID
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  role      Role     @default(ATTENDANT)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // many-to-many: what shops an attendant/supervisor manages
-  managedShops Shop[] @relation("ManagedBy")
-
-  // relations
-  orders Order[]
-  attendantCommissions AttendantCommission[]
-  // ops back-relations
-  commissionEarnings CommissionEarning[]
-  returnsCreated ReturnCase[] @relation("ReturnCreatedBy")
-  returnsApproved ReturnCase[] @relation("ReturnApprovedBy")
-  returnPickups ReturnPickup[] @relation("PickupAssignee")
-  evidenceTaken ReturnEvidence[] @relation("EvidenceTaker")
-  actionLogs ActionLog[]
-  
-  // per-shop assignments
-  userShops UserShop[]
-  // Shop assignments (supervisor/attendant)
-  assignments ShopAssignment[]
+enum DocType {
+  RECEIPT
+  INVOICE
+  QUOTATION
+  LAYAWAY
 }
 
-model Shop {
-  id        String   @id @default(cuid())
-  name      String
-  location  String?
-  phone     String?
-  email     String?
-  isActive  Boolean  @default(true)
-  platform  Platform @default(JUMIA)
-  credentialsEncrypted Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // manager assignments
-  managers User[] @relation("ManagedBy")
-
-  // Jumia API credentials for this shop (optional)
-  apiConfig ShopApiConfig?
-  // multiple credentials (optional)
-  apiCredentials ApiCredential[]
-
-  // fulfillment audit records
-  fulfillmentAudits FulfillmentAudit[]
-
-  // relations
-  orders Order[]
-  attendantCommissions AttendantCommission[]
-  // ops back-relations
-  costCatalogs CostCatalog[]
-  settlementRows SettlementRow[]
-  returnCases ReturnCase[]
-  commissionRules CommissionRule[]
-  
-  // assignments and reconciliation/discrepancy back-relations
-  userAssignments UserShop[]
-  reconciliations Reconciliation[]
-  discrepancies Discrepancy[]
-  // shop assignments for supervisors/attendants
-  assignments ShopAssignment[]
+enum CommissionRecordStatus {
+  PENDING
+  RELEASED
 }
-
-model JumiaAccount {
-  id           String      @id @default(cuid())
-  label        String
-  clientId     String
-  refreshToken String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  shops        JumiaShop[]
-}
-
-model JumiaShop {
-  id                      String       @id
-  name                    String
-  accountId               String
-  lastOrdersUpdatedBefore DateTime?
-  createdAt               DateTime     @default(now())
-  updatedAt               DateTime     @updatedAt
-
-  account                 JumiaAccount @relation(fields: [accountId], references: [id])
-  orders                  JumiaOrder[]
-
-  @@index([accountId])
-}
-
-model JumiaOrder {
-  id                String    @id
-  number            Int?
-  status            String
-  hasMultipleStatus Boolean?
-  pendingSince      String?
-  totalItems        Int?
-  packedItems       Int?
-  countryCode       String?
-  isPrepayment      Boolean?
-  createdAtJumia    DateTime?
-  updatedAtJumia    DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  shopId            String
-  shop              JumiaShop @relation(fields: [shopId], references: [id])
-
-  @@index([shopId, status])
-  // Optimization for incremental sync and retention cleanup
-  @@index([updatedAtJumia])
-  @@index([createdAtJumia])
-  @@index([shopId, updatedAtJumia])
-}
-
-model ShopApiConfig {
-  id        String   @id @default(cuid())
-  shopId    String   @unique
-  platform  String   @default("JUMIA")
-  apiKey    String
-  apiSecret String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  shop Shop @relation(fields: [shopId], references: [id])
-}
-
-model Product {
-  id              String  @id @default(cuid())
-  sku             String  @unique
-  name            String
-  category        String
-  sellingPrice    Float
-  lastBuyingPrice Float?
-  minStockLevel   Int      @default(5)
-  stockQuantity   Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  orders OrderItem[]
-}
-
-model Order {
-  id            String   @id @default(cuid())
-  orderNumber   String   @unique
-  customerName  String
-  shopId        String
-  attendantId   String?
-  status        OrderStatus @default(PENDING)
-  totalAmount   Float
-  paidAmount    Float      @default(0)
-  paymentStatus PaymentStatus @default(UNPAID)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  shop      Shop     @relation(fields: [shopId], references: [id])
-  attendant User?    @relation(fields: [attendantId], references: [id])
-  items     OrderItem[]
-  // ops back-relations
-  settlementRows SettlementRow[]
-  returnCases ReturnCase[]
-}
-model OrderItem {
-  id           String  @id @default(cuid())
-  orderId      String
-  productId    String
-  quantity     Int
-  sellingPrice Float
-
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-  // ops back-relations
-  orderCosts OrderCost[]
-  settlementRows SettlementRow[]
-  profitSnapshots ProfitSnapshot[]
-  commissionEarnings CommissionEarning[]
-  returnAdjustments ReturnAdjustment[]
-  returnCases ReturnCase[]
-}
-
-/// Commission configuration and snapshots
-model CommissionPeriod {
-  id        String   @id @default(cuid())
-  name      String                    // e.g., "Aug 24 → Sep 24"
-  startDate DateTime
-  endDate   DateTime
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  tiers CommissionTier[]
-  attendantCommissions AttendantCommission[]
-}
-
-model CommissionTier {
-  id         String   @id @default(cuid())
-  periodId   String
-  minSales   Float    // inclusive
-  maxSales   Float    // inclusive
-  payoutFlat Float    // flat KES payout for hitting a band
-
-  period CommissionPeriod @relation(fields: [periodId], references: [id])
-}
-
-model AttendantCommission {
-  id        String   @id @default(cuid())
-  userId    String
-  periodId  String
-  shopId    String?     // null means aggregate across assigned shops
-  sales     Float
-  payout    Float
-  computedAt DateTime   @default(now())
-
-  user   User             @relation(fields: [userId], references: [id])
-  period CommissionPeriod @relation(fields: [periodId], references: [id])
-  shop   Shop?            @relation(fields: [shopId], references: [id])
-}
-
-// API credentials for external services (global or shop-scoped)
-model ApiCredential {
-  id        String   @id @default(cuid())
-  scope     String   // "GLOBAL" or "SHOP:<shopId>"
-  apiBase   String
-  apiKey    String?
-  apiSecret String?
-  issuer    String?
-  clientId  String?
-  refreshToken String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // optional: limit which shop this applies to
-  shopId String?
-  shop   Shop? @relation(fields: [shopId], references: [id])
-  @@unique([scope, shopId])
-}
-
-model Config {
-  key   String  @id         // e.g., "commission_window", "admin_emails"
-  json  Json
-  updatedAt DateTime @updatedAt
-}
-
-// Minimal ingest table for Jumia orders
-/// --- Ops extensions ---
-
-model CostCatalog {
-  id            String   @id @default(cuid())
-  sku           String
-  shopId        String?     // null = global cost
-  cost          Decimal  @db.Decimal(12,2)
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  shop Shop? @relation(fields: [shopId], references: [id])
-
-  @@index([sku, shopId, effectiveFrom])
-}
-
-model OrderCost {
-  id          String   @id @default(cuid())
-  orderItemId String
-  unitCost    Decimal  @db.Decimal(12,2)
-  costSource  String   // 'catalog' | 'override'
-  createdAt   DateTime @default(now())
-
-  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
-}
-
-model SettlementRow {
-  id          String   @id @default(cuid())
-  shopId      String
-  orderId     String?
-  orderItemId String?
-  kind        String   // 'item_price','commission','shipping_fee','refund','penalty',...
-  amount      Decimal  @db.Decimal(12,2)
-  ref         String?
-  postedAt    DateTime
-  raw         Json
-  createdAt   DateTime @default(now())
-
-  shop      Shop      @relation(fields: [shopId], references: [id])
-  order     Order?    @relation(fields: [orderId], references: [id])
-  orderItem OrderItem? @relation(fields: [orderItemId], references: [id])
-
-  @@index([shopId, postedAt])
-  @@index([orderId, orderItemId])
-}
-
-model ProfitSnapshot {
-  id          String   @id @default(cuid())
-  orderItemId String
-  revenue     Decimal  @db.Decimal(12,2)
-  fees        Decimal  @db.Decimal(12,2)
-  shipping    Decimal  @db.Decimal(12,2)
-  refunds     Decimal  @db.Decimal(12,2)
-  unitCost    Decimal  @db.Decimal(12,2)
-  qty         Int
-  profit      Decimal  @db.Decimal(12,2)
-  computedAt  DateTime @default(now())
-
-  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
-}
-
-model CommissionRule {
-  id            String  @id @default(cuid())
-  scope         String  // 'shop'|'sku'|'category'|'global'
-  shopId        String?
-  sku           String?
-  category      String?
-  type          String  // 'percent_profit'|'percent_gross'|'flat_per_item'
-  rateDecimal   Decimal @db.Decimal(6,4)
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
-  createdBy     String
-  createdAt     DateTime @default(now())
-
-  shop Shop? @relation(fields: [shopId], references: [id])
-
-  @@index([scope, shopId, sku, category, effectiveFrom])
-}
-
-model CommissionEarning {
-  id          String   @id @default(cuid())
-  staffId     String
-  orderItemId String
-  basis       String   // 'profit'|'gross'|'flat'
-  qty         Int
-  amount      Decimal  @db.Decimal(12,2)
-  status      String   // 'pending'|'approved'|'reversed'
-  calcDetail  Json
-  createdAt   DateTime @default(now())
-
-  staff     User      @relation(fields: [staffId], references: [id])
-  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
-}
-
-model ReturnCase {
-  id          String   @id @default(cuid())
-  shopId      String
-  orderId     String
-  orderItemId String?
-  reasonCode  String
-  // legacy `status` string is kept for compatibility; add `dueAt` and `pickedAt` for SLA tracking
-  status      String   // 'requested'|'approved'|'pickup_scheduled'|'picked_up'|'received'|'resolved'|'rejected'
-  dueAt       DateTime?
-  pickedAt    DateTime?
-  resolution  String?  // 'refund'|'replacement'|'repair'|'deny'
-  createdBy   String
-  approvedBy  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  shop      Shop      @relation(fields: [shopId], references: [id])
-  order     Order     @relation(fields: [orderId], references: [id])
-  orderItem OrderItem? @relation(fields: [orderItemId], references: [id])
-  creator   User      @relation("ReturnCreatedBy", fields: [createdBy], references: [id])
-  approver  User?     @relation("ReturnApprovedBy", fields: [approvedBy], references: [id])
-  pickups   ReturnPickup[]
-  evidence  ReturnEvidence[]
-  adjustments ReturnAdjustment[]
-
-  @@index([shopId, status])
-}
-
-model ReturnPickup {
-  id            String   @id @default(cuid())
-  returnCaseId  String
-  scheduledAt   DateTime
-  carrier       String
-  tracking      String?
-  assignedTo    String   // staffId
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
-  assignee   User       @relation("PickupAssignee", fields: [assignedTo], references: [id])
-}
-
-model ReturnEvidence {
-  id           String   @id @default(cuid())
-  returnCaseId String
-  type         String   // 'photo'|'video'|'signature'|'document'
-  uri          String
-  sha256       String
-  takenBy      String
-  takenAt      DateTime
-  geo          Json?
-  createdAt    DateTime @default(now())
-
-  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
-  taker     User        @relation("EvidenceTaker", fields: [takenBy], references: [id])
-}
-
-model ReturnAdjustment {
-  id             String   @id @default(cuid())
-  returnCaseId   String
-  orderItemId    String
-  amount         Decimal  @db.Decimal(12,2)
-  commissionImpact String // 'none'|'reverse'|'reduce'
-  notes          String?
-  createdAt      DateTime @default(now())
-
-  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id])
-  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id])
-}
-
-model ActionLog {
-  id        String   @id @default(cuid())
-  actorId   String
-  entity    String   // e.g., 'ReturnCase','Order','CommissionRule'
-  entityId  String
-  action    String   // e.g., 'CREATE','UPDATE','APPROVE','STATE_CHANGE'
-  before    Json?
-  after     Json?
-  createdAt DateTime @default(now())
-
-  actor User @relation(fields: [actorId], references: [id])
-  @@index([entity, entityId])
-}
-
-model UserShop {
-  id         String         @id @default(cuid())
-  userId     String
-  shopId     String
-  roleAtShop ShopRoleAtShop
-
-  user       User           @relation(fields: [userId], references: [id])
-  shop       Shop           @relation(fields: [shopId], references: [id])
-
-  @@unique([userId, shopId])
-}
-
-/// Assignment model for supervisors/attendants per shop
-model ShopAssignment {
-  id        String   @id @default(cuid())
-  userId    String
-  shopId    String
-  role      Role
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-  shop Shop @relation(fields: [shopId], references: [id])
-
-  @@unique([userId, shopId, role])
-}
-
-model ProductCost {
-  id        String      @id @default(cuid())
-  productId String
-  price     Decimal     @db.Decimal(12,2)
-  source    PriceSource
-  byUserId  String?
-  createdAt DateTime    @default(now())
-
-  @@index([productId])
-}
-
-model CommissionLedger {
-  id              String   @id @default(cuid())
-  userId          String
-  periodStart     DateTime
-  periodEnd       DateTime
-  grossCommission Decimal  @db.Decimal(12,2) @default("0")
-  penalties       Decimal  @db.Decimal(12,2) @default("0")
-  netCommission   Decimal  @db.Decimal(12,2) @default("0")
-  detail          Json?
-  createdAt       DateTime @default(now())
-}
-
-model Reconciliation {
-  id            String   @id @default(cuid())
-  shopId        String
-  day           DateTime
-  ordersCount   Int
-  payoutAmount  Decimal  @db.Decimal(12,2) @default("0")
-  variance      Decimal  @db.Decimal(12,2) @default("0")
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  shop          Shop     @relation(fields: [shopId], references: [id])
-
-  @@unique([shopId, day])
-}
-
-model Discrepancy {
-  id        String           @id @default(cuid())
-  shopId    String
-  kind      DiscrepancyType
-  ref       String
-  amount    Decimal          @db.Decimal(12,2) @default("0")
-  status    DiscrepancyStatus @default(OPEN)
-  createdAt DateTime         @default(now())
-
-  shop      Shop             @relation(fields: [shopId], references: [id])
-}
-
-model FulfillmentAudit {
-  id             String   @id @default(cuid())
-  idempotencyKey String   @unique
-  shopId         String
-  orderId        String
-  status         Int
-  action         String?
-  ok             Boolean
-  payload        Json
-  s3Bucket       String?
-  s3Key          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  shop Shop @relation(fields: [shopId], references: [id])
-  @@index([shopId, orderId])
-}
-
-/// Persisted catalog counters (per shop and aggregate "ALL")
-model CatalogCounters {
-  id           String   @id @default(cuid())
-  // scope: 'SHOP' for per-shop entries, 'ALL' for aggregate across all shops
-  scope        String
-  shopId       String?
-
-  // totals
-  total        Int       @default(0)
-  active       Int       @default(0)
-  inactive     Int       @default(0)
-  deleted      Int       @default(0)
-  pending      Int       @default(0)
-  visibleLive  Int       @default(0)
-  // QC buckets
-  qcApproved   Int       @default(0)
-  qcPending    Int       @default(0)
-  qcRejected   Int       @default(0)
-  qcNotReady   Int       @default(0)
-  // original granular maps (optional)
-  byStatus     Json?
-  byQcStatus   Json?
-  approx       Boolean   @default(false)
-
-  computedAt   DateTime  @default(now())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  // no explicit relation needed; shopId references Shop.id
-
-  @@unique([scope, shopId])
-  @@index([scope, shopId, computedAt])
-}
-
-

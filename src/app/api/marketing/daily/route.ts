@@ -1,0 +1,352 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireRole, getActorId } from "@/lib/api";
+import { marketingDayConfigs, marketingFieldTypes } from "@/lib/marketingDayConfigs";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
+import { z } from "zod";
+
+const ReceiptItemSchema = z.object({
+  id: z.string().optional(),
+  productName: z.string().min(1),
+  buyingPrice: z.number().min(0),
+});
+
+const ReceiptSchema = z.object({
+  id: z.string().optional(),
+  receiptNumber: z.string().optional().nullable(),
+  sellingTotal: z.number().min(0),
+  paymentMethod: z.enum(["MPESA", "CASH"]),
+  items: z.array(ReceiptItemSchema).min(1),
+});
+
+const DailyPayloadSchema = z.object({
+  date: z.string().min(1),
+  dayOfWeek: z.string().optional(),
+  receipts: z.array(ReceiptSchema).optional(),
+  yesNo: z.record(z.string(), z.any()).optional(),
+  numeric: z.record(z.string(), z.any()).optional(),
+  text: z.record(z.string(), z.any()).optional(),
+  // Optional top-level weekly fields (convenience)
+  weeklyMeetingAttended: z.boolean().optional(),
+  weeklyVideoShootParticipated: z.boolean().optional(),
+  weeklyVideoCount: z.number().optional(),
+});
+
+export const dynamic = "force-dynamic";
+
+type ReceiptPayload = {
+  id?: string;
+  receiptNumber?: string;
+  sellingTotal: number;
+  paymentMethod: "MPESA" | "CASH";
+  items: { id?: string; productName: string; buyingPrice: number }[];
+};
+
+const toNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" => {
+  const v = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return v === "CASH" ? "CASH" : "MPESA";
+};
+
+const normalizeReceipts = (raw: any): ReceiptPayload[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({
+      receiptNumber: typeof r?.receiptNumber === "string" ? r.receiptNumber.trim() : null,
+      sellingTotal: Math.max(0, toNumber(r?.sellingTotal)),
+      paymentMethod: normalizePaymentMethod(r?.paymentMethod),
+      items: Array.isArray(r?.items)
+        ? r.items
+            .map((it: any) => ({
+              productName: typeof it?.productName === "string" ? it.productName.trim() : "",
+              buyingPrice: Math.max(0, toNumber(it?.buyingPrice)),
+            }))
+            .filter((it: any) => it.productName || Number.isFinite(it.buyingPrice))
+        : [],
+    }))
+    .filter((r) => r.sellingTotal > 0 || r.items.length > 0 || (r.receiptNumber ?? "") !== "");
+};
+
+export async function POST(req: Request) {
+  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  if (!auth.ok) return auth.res;
+  // allow admin to submit on behalf of another attendant via impersonateId query param
+  let actorId = await getActorId();
+  try {
+    const url = new URL(req.url);
+    const impersonateId = url.searchParams.get("impersonateId");
+    if (impersonateId && auth.role === "ADMIN") {
+      actorId = impersonateId;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Server-side defense in depth: ensure the actor (either the current
+  // session user or the impersonated user) is allowed to submit marketing
+  // daily entries. Only ADMIN or attendants in DIRECT_SALES_OPS may submit.
+  try {
+    if (!actorId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const actorUser = await prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, role: true, attendantCategory: true },
+    });
+    if (!actorUser) return NextResponse.json({ error: "Actor not found" }, { status: 404 });
+    const isAllowed = actorUser.role === "ADMIN" || actorUser.attendantCategory === "DIRECT_SALES_OPS";
+    if (!isAllowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } catch (e) {
+    return NextResponse.json({ error: "Failed to verify actor" }, { status: 500 });
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Validate payload shape using Zod
+  try {
+    DailyPayloadSchema.parse(body);
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Validation failed", details: err.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const { date, dayOfWeek, receipts = [], yesNo = {}, numeric = {}, text = {} } = body || {};
+  if (!date) return NextResponse.json({ error: "date is required" }, { status: 400 });
+  const entryDate = new Date(date);
+  const day = typeof dayOfWeek === "string" ? dayOfWeek : entryDate.toLocaleDateString("en-KE", { weekday: "long" });
+
+  const allowedDay = marketingDayConfigs.find((c) => c.day === day)?.day;
+  const resolvedDay = allowedDay ?? marketingDayConfigs[0].day;
+
+  const yesNoValues: Record<string, boolean> = {};
+  const numericValues: Record<string, number> = {};
+  const textValues: Record<string, string> = {};
+  Object.entries(marketingFieldTypes).forEach(([key, type]) => {
+    const raw = (type === "yesno" ? yesNo : type === "numeric" ? numeric : text) as Record<string, any>;
+    if (type === "yesno") yesNoValues[key] = Boolean(raw?.[key]);
+    if (type === "numeric") numericValues[key] = toNumber(raw?.[key]);
+    if (type === "text") textValues[key] = typeof raw?.[key] === "string" ? raw[key] : "";
+  });
+
+  // Accept convenience top-level weekly fields and normalize them.
+  const weeklyMeetingAttendedRaw = (yesNo?.weeklyMeetingAttended ?? body.weeklyMeetingAttended) as unknown;
+  const weeklyVideoShootParticipatedRaw = (yesNo?.weeklyVideoShootParticipated ?? body.weeklyVideoShootParticipated) as unknown;
+  const weeklyVideoCountRaw = (numeric?.weeklyVideoCount ?? body.weeklyVideoCount) as unknown;
+
+  const receiptsClean = normalizeReceipts(receipts);
+  const seenReceipts = new Set<string>();
+  for (const receipt of receiptsClean) {
+    const normalized = canonicalReceiptNumber(receipt.receiptNumber);
+    if (!normalized) continue;
+    if (seenReceipts.has(normalized)) {
+      return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+    }
+    seenReceipts.add(normalized);
+    const owner = await findReceiptOwner(normalized);
+    if (owner) {
+      return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+    }
+  }
+  const totalSales = receiptsClean.reduce((sum, r) => sum + r.sellingTotal, 0);
+  const totalProfit = receiptsClean.reduce(
+    (sum, r) => sum + (r.sellingTotal - r.items.reduce((s, it) => s + it.buyingPrice, 0)),
+    0
+  );
+  const totalItems = receiptsClean.reduce((sum, r) => sum + r.items.length, 0);
+  const mpesaTotal = receiptsClean.filter((r) => r.paymentMethod === "MPESA").reduce((s, r) => s + r.sellingTotal, 0);
+  const cashTotal = receiptsClean.filter((r) => r.paymentMethod === "CASH").reduce((s, r) => s + r.sellingTotal, 0);
+
+  try {
+    // Ensure Thursday-only weekly fields are only persisted for Thursday.
+    const isThursday = resolvedDay === "Thursday";
+
+    // Compose final yesNo/numeric values with Thursday-only guards.
+    const finalYesNo = { ...yesNoValues } as Record<string, boolean>;
+    const finalNumeric = { ...numericValues } as Record<string, number>;
+
+    if (isThursday) {
+      if (typeof weeklyMeetingAttendedRaw === "boolean") finalYesNo["weeklyMeetingAttended"] = weeklyMeetingAttendedRaw as boolean;
+      if (typeof weeklyVideoShootParticipatedRaw === "boolean") finalYesNo["weeklyVideoShootParticipated"] = weeklyVideoShootParticipatedRaw as boolean;
+      if (typeof weeklyVideoCountRaw !== "undefined") finalNumeric["weeklyVideoCount"] = toNumber(weeklyVideoCountRaw);
+    } else {
+      // Ensure these keys are present with sensible defaults on non-Thursday days
+      finalYesNo["weeklyMeetingAttended"] = false;
+      finalYesNo["weeklyVideoShootParticipated"] = false;
+      finalNumeric["weeklyVideoCount"] = 0;
+    }
+
+    const entry = await prisma.marketingDailyEntry.create({
+      data: {
+        date: entryDate,
+        dayOfWeek: resolvedDay,
+        totalSales,
+        totalProfit,
+        payload: { yesNo: finalYesNo, numeric: finalNumeric, text: textValues },
+        submittedById: actorId,
+        submittedByName: (auth.session?.user as any)?.name ?? null,
+        submittedByEmail: (auth.session?.user as any)?.email ?? null,
+        receipts: {
+          create: receiptsClean.map((r) => ({
+            receiptNumber: r.receiptNumber || null,
+            sellingTotal: r.sellingTotal,
+            paymentMethod: r.paymentMethod,
+            items: {
+              create: r.items.map((it) => ({
+                productName: it.productName,
+                buyingPrice: it.buyingPrice,
+              })),
+            },
+          })),
+        },
+      },
+      include: { receipts: { include: { items: true } } },
+    });
+
+    const isAdmin = auth.role === "ADMIN";
+    const todaySummary: any = {
+      totalReceipts: entry.receipts.length,
+      totalSales,
+      totalItems,
+      mpesaTotal,
+      cashTotal,
+    };
+    // Never expose profit to non-admins
+    if (isAdmin) todaySummary.totalProfit = totalProfit;
+
+    const period = getTradingPeriodFor(entryDate);
+    const periodEntries = await prisma.marketingDailyEntry.findMany({
+      where: { date: { gte: period.start, lte: period.end } },
+      include: { receipts: { include: { items: true } } },
+    });
+    const periodSales = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.reduce((rs, r) => rs + r.sellingTotal, 0),
+      0
+    );
+    const periodProfit = periodEntries.reduce(
+      (sum, e) =>
+        sum +
+        e.receipts.reduce(
+          (rs, r) => rs + (r.sellingTotal - r.items.reduce((s, it) => s + it.buyingPrice, 0)),
+          0
+        ),
+      0
+    );
+    const periodItems = periodEntries.reduce((sum, e) => sum + e.receipts.reduce((rs, r) => rs + r.items.length, 0), 0);
+    const periodMpesa = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "MPESA").reduce((s, r) => s + r.sellingTotal, 0),
+      0
+    );
+    const periodCash = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").reduce((s, r) => s + r.sellingTotal, 0),
+      0
+    );
+    const periodMpesaCount = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "MPESA").length,
+      0
+    );
+    const periodCashCount = periodEntries.reduce(
+      (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").length,
+      0
+    );
+    const periodTotalReceipts = periodEntries.reduce((sum, e) => sum + e.receipts.length, 0);
+    const commissionInfo = getCommissionSummaryForSales(periodSales);
+    let commissionValue = 0;
+    if (periodProfit > 0) {
+      commissionValue = commissionInfo.commission ?? 0;
+      if (commissionValue === 0 && periodSales > 0 && periodSales < 500_000) {
+        commissionValue = Math.round(Math.max(periodProfit, 0) * 0.05);
+      }
+    }
+
+    const periodSummary: any = {
+      periodLabel: period.label,
+      periodSales,
+      mpesaTotal: periodMpesa,
+      cashTotal: periodCash,
+      countMpesaReceipts: periodMpesaCount,
+      countCashReceipts: periodCashCount,
+      totalReceipts: periodTotalReceipts,
+      totalItems: periodItems,
+      commission: commissionValue,
+      nextTarget: commissionInfo.nextTarget,
+      nextTierAmount: commissionInfo.nextTierReward,
+    };
+    // Only admins see period profit
+    if (isAdmin) periodSummary.periodProfit = periodProfit;
+
+    // Persist unified receipts/orders so marketing tracker sales become canonical receipts
+    const createdReceiptLinks: string[] = [];
+    try {
+      for (const r of entry.receipts) {
+        try {
+          const items = (r.items || []);
+          const perItemValue = items.length > 0 ? Number(r.sellingTotal || 0) / items.length : Number(r.sellingTotal || 0);
+          const payload = {
+            docType: 'RECEIPT',
+            customerName: entry.submittedByName || null,
+            customerPhone: null,
+            items: items.map((it: any) => ({
+              title: it.productName || 'Item',
+              unitPrice: perItemValue || Number(it.buyingPrice || 0) || 0,
+              quantity: 1,
+              costPrice: Number(it.buyingPrice || 0) || 0,
+            })),
+            taxRate: 0,
+            showTax: false,
+            showDiscount: false,
+            paymentDetailsShown: false,
+            notes: `Imported from marketing entry ${entry.id}`,
+            marketingEntryId: entry.id,
+            marketingReceiptId: r.id,
+            attendantId: actorId,
+            serial: r.receiptNumber || `M-${entry.id}-${r.id}`,
+          } as any;
+
+          const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || `https://${(new URL(req.url)).host}`;
+          const apiUrl = `${site.replace(/\/$/, '')}/api/receipts`;
+          // Forward the caller's cookies so the receipts endpoint can authenticate this server-to-server call.
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              cookie: req.headers.get('cookie') || '',
+            },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            const receiptId = json?.receiptId || json?.receipt?.id;
+            if (receiptId) createdReceiptLinks.push(`${site.replace(/\/$/, '')}/receipts/${receiptId}`);
+          } else {
+            const txt = await res.text();
+            console.error('Failed to sync marketing receipt to unified receipts', res.status, txt);
+          }
+        } catch (innerErr) {
+          // Do not fail the main marketing submission if the receipt sync fails; log and continue
+          console.error('Failed to sync marketing receipt to unified receipts', innerErr);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to persist unified receipts for marketing entry', e);
+    }
+
+    return NextResponse.json({ todaySummary, periodSummary, createdReceiptLinks }, { status: 201 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to save marketing entry";
+    console.error("marketing daily submit failed", err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}

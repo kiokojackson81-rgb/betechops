@@ -1,0 +1,13 @@
+TypeError: A dynamic import callback was not specified.
+    at importModuleDynamicallyCallback (node:internal/modules/esm/utils:283:9)
+    at C:\Projects\betechops\[eval].ts:1:1
+    at Script.runInThisContext (node:vm:137:12)
+    at runInContext (C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\repl.ts:673:19)
+    at Object.execCommand (C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\repl.ts:639:28)
+    at C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\repl.ts:661:47
+    at Array.reduce (<anonymous>)
+    at appendCompileAndEvalInput (C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\repl.ts:661:23)
+    at Object.evalCode (C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\repl.ts:205:20)
+    at evalAndExitOnTsError (C:\Users\!ADMIN!\AppData\Local\pnpm-cache\dlx\175f9f5d5c7af8761d30dae8a3e20fc64bfa6ca19c3c35b645b6c9c05efb1094\19b2c3292a8-207c\node_modules\.pnpm\ts-node@10.9.2_@types+node@25.0.3_typescript@5.9.3\node_modules\ts-node\src\bin.ts:780:26) {
+  code: 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING'
+}

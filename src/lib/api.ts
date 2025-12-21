@@ -23,9 +23,28 @@ export async function getActorId(): Promise<string | null> {
   try {
     const session = await auth();
     const email = (session?.user as { email?: string } | undefined)?.email?.toLowerCase() || "";
-    if (!email) return null;
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-    return user?.id || null;
+    if (email) {
+      const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (user?.id) return user.id;
+    }
+
+    // Fallback: ensure a system actor exists. Prefer `SYSTEM_USER_EMAIL` when
+    // configured, otherwise create/find a local internal system user so that
+    // server processes can always write ActionLog entries without using the
+    // literal string 'system' which violates the DB foreign key.
+    const configured = (process.env.SYSTEM_USER_EMAIL || "").toLowerCase().trim();
+    const sysEmail = configured || 'system@betech.internal';
+
+    let sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
+    if (!sysUser) {
+      try {
+        sysUser = await prisma.user.create({ data: { email: sysEmail, name: "System", role: "ADMIN", isActive: true }, select: { id: true } });
+      } catch (createErr) {
+        // If creation fails (race or DB restriction), attempt to read again
+        sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
+      }
+    }
+    return sysUser?.id || null;
   } catch {
     return null;
   }

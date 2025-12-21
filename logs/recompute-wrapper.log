@@ -1,0 +1,19 @@
+Running recompute for brendah@betech.co.ke (current period)
+Recompute failed: PrismaClientKnownRequestError: 
+Invalid `prisma.user.findUnique()` invocation in
+C:\Projects\betechops\scripts\recompute-wrapper.js:192:36
+
+  189 const cliDate = dateArg || process.argv[3] || process.env.RECOMPUTE_DATE;
+  190 const email = cliEmail || process.env.USER_EMAIL || 'brendah@betech.co.ke';
+  191 console.log('Running recompute for', email, cliDate ? `period date=${cliDate}` : '(current period)');
+ΓåÆ 192 const user = await prisma.user.findUnique(
+The column `User.attendantCategory` does not exist in the current database.
+    at ei.handleRequestError (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:7268)
+    at ei.handleAndLogRequestError (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Projects\betechops\node_modules\.pnpm\@prisma+client@6.19.0_prism_0ade0c2032e7f19289902b884120cfab\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async recompute (C:\Projects\betechops\scripts\recompute-wrapper.js:192:18) {
+  code: 'P2022',
+  meta: { modelName: 'User', column: 'User.attendantCategory' },
+  clientVersion: '6.19.0'
+}

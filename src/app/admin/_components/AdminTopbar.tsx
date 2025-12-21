@@ -32,7 +32,7 @@ export default function AdminTopbar() {
     <nav className="flex items-center gap-3 p-3">
       <Link href="/admin" className="px-3 py-1 rounded bg-white/5">Dashboard</Link>
       <Link href="/admin/shops" className="px-3 py-1 rounded bg-white/5">Shops</Link>
-      <Link href="/admin/attendants" className="px-3 py-1 rounded bg-white/5">Attendants</Link>
+      <Link href="/admin/users" className="px-3 py-1 rounded bg-white/5">Users</Link>
 
       <Link href="/admin/pending-pricing" className="px-3 py-1 rounded bg-white/5 relative">
         Pending Pricing
@@ -44,6 +44,8 @@ export default function AdminTopbar() {
       </Link>
 
       <Link href="/admin/reports" className="px-3 py-1 rounded bg-white/5">Reports</Link>
+
+      <Link href="/admin/marketing-report" className="px-3 py-1 rounded bg-white/5">Marketing Report</Link>
 
       <Link href="/admin/returns" className="px-3 py-1 rounded bg-white/5 relative">
         Returns

@@ -1,0 +1,49 @@
+{
+  "cookies": [
+    {
+      "name": "__Host-next-auth.csrf-token",
+      "value": "eb4d2fd7ec1eb3c6dcb0836f3fa66dc9f594d7d4643dac31b846861a279bace5%7Cd6040b6a8107c82d40af496e65b4a51f3d255b31cb83fbfeffdcb738dfc6e256",
+      "domain": "ops.betech.co.ke",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Fops.betech.co.ke%2Fauth%2Fpost-login",
+      "domain": "ops.betech.co.ke",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-next-auth.session-token",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..2Dq0pUekntTza94I.P9HsS9kDWIU2OFfYaLiH4-2JjYTZ7kdteA2130JftUGlAD_OJxSemimShh9-_oIqK1UHXxFETCA2rvaZ54fLNxmi1x5ODjxkdWuNYo0RyKbnUtukUoygJbnEtHWboXEXi3pHRJmd-IS39c6JcSueHV0jVNy144uxLx3PJLHJ6msK6KonjJL0YvQ_7D3y7KgfboR2xCqbGRFqhGUNTGU8GLhnCuySzEFOlt8Q18GUJqGsZGpoJ7zX8Du5wL8WnwNLsC5i2vLQTg.OBCUQYkeNgkiHL1mp-rC-g",
+      "domain": "ops.betech.co.ke",
+      "path": "/",
+      "expires": 1767672641.655093,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://ops.betech.co.ke",
+      "localStorage": [
+        {
+          "name": "lock:marketing:quickstats",
+          "value": "0"
+        },
+        {
+          "name": "lock:marketing:earnings",
+          "value": "0"
+        }
+      ]
+    }
+  ]
+}

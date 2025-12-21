@@ -20,16 +20,20 @@ export async function GET() {
         },
       },
     });
-    return NextResponse.json({
+    const res = NextResponse.json({
       count: total,
       window: {
         from: windowStart.toISOString(),
         to: now.toISOString(),
       },
     });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ count: 0, error: msg }, { status: 200 });
+    const res = NextResponse.json({ count: 0, error: msg }, { status: 200 });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   }
 }
  

@@ -1,6 +1,8 @@
 // app/admin/page.tsx — unified admin console
 import { prisma } from "@/lib/prisma";
 import { absUrl } from "@/lib/abs-url";
+import { addDays } from "date-fns";
+import { zonedTimeToUtc } from "date-fns-tz";
 // Switch to API-based KPIs for cross-shop totals
 // Keep DB metrics local
 import Link from "next/link";
@@ -14,7 +16,11 @@ type Stats = {
   productsAll: number;
   shops: number;
   attendants: number;
-  pendingAll: number;
+  pendingDb: number;
+  pendingLive: number | null;
+  vendorShopsActiveJumia?: number | null;
+  vendorLastStatus?: number | null;
+  vendorLastError?: string | null;
   revenue: number;
   productsDb: number;
   returnsDb: number;
@@ -30,36 +36,89 @@ async function getStats(): Promise<Stats> {
       prisma.order.aggregate({ _sum: { paidAmount: true } }),
     ]);
 
+    // Cross-shop vendor KPIs (products) and DB-only pending for accuracy
     let kpis: any = null;
+    let kpisDbOnly: any = null;
+    let pendingDiff: any = null;
+    const pendingWindowDays = Number(process.env.JUMIA_PENDING_WINDOW_DAYS ?? 30);
     try {
-      const metricsUrl = await absUrl("/api/metrics/kpis");
-      const resp = await fetch(metricsUrl, { cache: "no-store" });
-      if (resp.ok) kpis = await resp.json();
+      const [metricsUrl, metricsDbUrl, diffUrl] = await Promise.all([
+        absUrl("/api/metrics/kpis"),
+        absUrl("/api/metrics/kpis?noLive=1&pendingStatuses=PENDING"),
+        absUrl(`/api/metrics/pending-diff?days=${pendingWindowDays}`),
+      ]);
+      const [resp, respDb, respDiff] = await Promise.all([
+        fetch(metricsUrl, { cache: "no-store" }).catch(() => null),
+        fetch(metricsDbUrl, { cache: "no-store" }).catch(() => null),
+        fetch(diffUrl, { cache: "no-store" }).catch(() => null),
+      ]);
+      if (resp && resp.ok) kpis = await resp.json();
+      if (respDb && respDb.ok) kpisDbOnly = await respDb.json();
+      if (respDiff && respDiff.ok) pendingDiff = await respDiff.json();
     } catch {
-      kpis = null;
+      kpis = kpisDbOnly = pendingDiff = null;
     }
 
-    let productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
+    const productsAll = typeof kpis?.productsAll === "number" ? Number(kpis.productsAll) : 0;
     const approxProducts = Boolean(kpis?.approx);
+    const now = new Date();
 
-    // Use cross-shop persisted KPI for Pending orders only (no local DB sum)
-    // This avoids flicker and double counting.
-    let pendingAll = typeof kpis?.pendingAll === "number" ? Number(kpis.pendingAll) : 0;
-    let approxPending = Boolean(kpis?.approx);
+    // DB-only pending to avoid live adjustments here; we'll show live separately.
+    // Fall back to a direct Prisma count if the API fetch failed (common during cold starts).
+    let pendingDb: number | null = typeof kpisDbOnly?.pendingAll === "number" ? Number(kpisDbOnly.pendingAll) : null;
+    let approxPending = Boolean(kpisDbOnly?.approx);
+    if (pendingDb === null) {
+      try {
+        const DEFAULT_TZ = "Africa/Nairobi";
+        const window = Number.isFinite(pendingWindowDays) && pendingWindowDays > 0 ? pendingWindowDays : 30;
+        const since = zonedTimeToUtc(addDays(now, -window), DEFAULT_TZ);
+        pendingDb = await prisma.jumiaOrder.count({
+          where: {
+            status: { in: ["PENDING"] as any },
+            OR: [
+              { updatedAtJumia: { gte: since } },
+              { createdAtJumia: { gte: since } },
+              {
+                AND: [
+                  { updatedAtJumia: null },
+                  { createdAtJumia: null },
+                  { updatedAt: { gte: since } },
+                ],
+              },
+            ],
+          },
+        });
+        approxPending = false;
+      } catch {
+        pendingDb = 0;
+      }
+    }
+    const pendingLive = typeof pendingDiff?.vendor?.pending === "number"
+      ? Number(pendingDiff.vendor.pending)
+      : typeof kpis?.pendingAll === "number"
+        ? Number(kpis.pendingAll)
+        : null;
+    const vendorShopsActiveJumia = typeof pendingDiff?.vendor?.shopsActiveJumia === "number" ? Number(pendingDiff.vendor.shopsActiveJumia) : null;
+    const vendorLastStatus = typeof pendingDiff?.vendor?.lastStatus === "number" ? Number(pendingDiff.vendor.lastStatus) : null;
+    const vendorLastError = typeof pendingDiff?.vendor?.lastError === "string" ? String(pendingDiff.vendor.lastError) : null;
 
     return {
       productsAll,
       productsDb: dbProducts,
       shops,
       attendants,
-      pendingAll,
+      pendingDb: pendingDb ?? 0,
+      pendingLive,
+      vendorShopsActiveJumia,
+      vendorLastStatus,
+      vendorLastError,
       returnsDb,
       revenue: revenueAgg._sum.paidAmount ?? 0,
       approxProducts,
       approxPending,
     };
   } catch {
-    return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingAll: 0, returnsDb: 0, revenue: 0, _degraded: true as const };
+    return { productsAll: 0, productsDb: 0, shops: 0, attendants: 0, pendingDb: 0, pendingLive: null, returnsDb: 0, revenue: 0, _degraded: true as const };
   }
 }
 
@@ -80,6 +139,14 @@ function Card({ title, value, Icon, sub }: { title: string; value: string | numb
 
 export default async function Overview() {
   const s = await getStats();
+  const liveSub = (() => {
+    if (s.pendingLive == null) return "Vendor timed out/error — check API credentials";
+    if (s.pendingLive === 0) {
+      if (typeof s.vendorShopsActiveJumia === 'number' && s.vendorShopsActiveJumia === 0) return "No active JUMIA shops in DB — add shops or set env creds";
+      if (typeof s.vendorLastStatus === 'number' && s.vendorLastStatus >= 400) return `Vendor ${s.vendorLastStatus} — check credentials`;
+    }
+    return "Vendor live (timeboxed)";
+  })();
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-bold">Overview</h1>
@@ -97,10 +164,16 @@ export default async function Overview() {
         <Card title="Shops" value={s.shops} Icon={Store} />
         <Card title="Attendants" value={s.attendants} Icon={Users} />
         <Card
-          title="Pending Orders (All)"
-          value={s.pendingAll}
+          title="Pending Orders (DB)"
+          value={s.pendingDb}
           Icon={Receipt}
-          sub={s.approxPending ? "Live vendor count (DB sync pending)" : undefined}
+          sub={s.approxPending ? "DB exact (windowed)" : "DB exact"}
+        />
+        <Card
+          title="Pending Orders (Live API)"
+          value={s.pendingLive ?? "—"}
+          Icon={Receipt}
+          sub={liveSub}
         />
         <Card title="Revenue (paid)" value={`Ksh ${s.revenue.toLocaleString()}`} Icon={Wallet} sub="Sum of paid amounts" />
       </section>
@@ -132,6 +205,17 @@ export default async function Overview() {
           <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
             <li><Link className="underline" href="/admin/shops">Create shops, assign attendants/supervisors</Link></li>
             <li><Link className="underline" href="/admin/settings">API credentials</Link></li>
+            <li><Link className="underline" href="/admin/daily-report">Daily sales reports</Link></li>
+            <li><Link className="underline" href="/admin/payroll">Payroll overview</Link></li>
+          </ul>
+        </div>
+        <div className="rounded-xl border border-white/10 p-4 bg-[var(--panel,#121723)]">
+          <h2 className="font-semibold mb-2">Important links</h2>
+          <ul className="text-slate-300 space-y-1 text-sm list-disc ml-5">
+            <li><Link className="underline" href="/admin/marketing-report">Marketing report</Link></li>
+            <li><Link className="underline" href="/admin/reports">Reports</Link></li>
+            <li><Link className="underline" href="/admin/settings">Settings</Link></li>
+            {/* Add other important links here */}
           </ul>
         </div>
       </section>

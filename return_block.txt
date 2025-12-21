@@ -1,0 +1,4 @@
+from pathlib import Path
+text = Path('src/components/daily-report-final.tsx').read_text()
+start = text.index('  return (')
+print(text[start:])

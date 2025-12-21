@@ -30,10 +30,12 @@ export default function OrdersLiveData({
   const [rows, setRows] = useState<OrdersRow[]>(initialRows ?? []);
   const [nextToken, setNextToken] = useState<string | null>(initialNextToken ?? null);
   const [isLastPage, setIsLastPage] = useState<boolean>(initialIsLastPage ?? true);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now());
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(() => Date.now());
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string>('—');
   const busyRef = useRef<Promise<void> | null>(null);
   const lastFetchTsRef = useRef<number>(0);
   const MIN_INTERVAL_MS = 2500;
+  const freshOnceRef = useRef<boolean>(false);
 
   const query = useMemo(() => {
     const qs = new URLSearchParams();
@@ -64,7 +66,9 @@ export default function OrdersLiveData({
       try {
         lastFetchTsRef.current = Date.now();
         const endpoint = disableClientFetch ? "/api/orders/synced" : "/api/orders";
-        const res = await fetch(`${endpoint}?${query}`, { cache: "no-store" });
+        // If a manual refresh was requested (e.g., after actions), bypass in-memory cache once using fresh=1
+        const freshParam = (!disableClientFetch && freshOnceRef.current) ? (query ? `${query}&fresh=1` : `fresh=1`) : query;
+        const res = await fetch(`${endpoint}?${freshParam}`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         const incoming = Array.isArray(data?.orders) ? (data.orders as OrdersRow[]) : [];
@@ -113,9 +117,23 @@ export default function OrdersLiveData({
   }, [disableClientFetch, query, storageKey]);
 
   useEffect(() => {
+    setLastUpdatedLabel(
+      new Date(lastUpdatedAt).toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+    );
+  }, [lastUpdatedAt]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = () => {
-      fetchLatest();
+      // mark next fetch as fresh to bypass short-lived cache
+      freshOnceRef.current = true;
+      fetchLatest().finally(() => {
+        freshOnceRef.current = false;
+      });
     };
     window.addEventListener("orders:refresh", handler as EventListener);
     return () => {
@@ -169,7 +187,7 @@ export default function OrdersLiveData({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-slate-500">Updated: {new Date(lastUpdatedAt).toLocaleTimeString()}</div>
+      <div className="text-xs text-slate-500">Updated: {lastUpdatedLabel}</div>
       <OrdersTable rows={rows} nextToken={nextToken} isLastPage={isLastPage} />
     </div>
   );
