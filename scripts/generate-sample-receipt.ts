@@ -19,6 +19,20 @@ async function main() {
     notes: '',
   } as any;
 
+  const isHttp = (v: any) => typeof v === 'string' && /^https?:\/\//.test(v);
+  const envLetterheadUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '')
+    ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL
+    : '';
+  const envLogoUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '')
+    ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL
+    : '';
+  const brandColor = '#7A2020';
+  const headerImg = isHttp((snapshot as any).branding?.letterheadUrl)
+    ? (snapshot as any).branding.letterheadUrl
+    : isHttp(envLetterheadUrl)
+    ? envLetterheadUrl
+    : (snapshot as any).branding?.logoUrl || envLogoUrl || '/logo.png';
+
   const html = `<!doctype html>
   <html>
   <head>
@@ -45,12 +59,7 @@ async function main() {
   <body>
     <div class="page">
       <header style="position:relative;display:flex;align-items:center;justify-content:center;">
-        <div>
-          <h1 style="margin-bottom:6px">BETECH SOLAR SOLUTIONS</h1>
-          <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-          <p style="margin:2px 0">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
-          <p style="margin:2px 0">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
-        </div>
+        ${headerImg ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />` : ''}
       </header>
 
       <div class="meta">
