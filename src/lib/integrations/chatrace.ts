@@ -167,7 +167,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   if (receiptId) {
     actions.push(setFieldCompat('receipt_id', receiptId));
   }
-  if (receiptLink) {
+  // Prefer providing the direct PDF url in `receipt_url` so Chatrace flows
+  // that reference `{{receipt_url}}` will receive the downloadable PDF link
+  // (many flows were mistakenly configured to use receipt_url for file).
+  if (pdfUrlTrimmed) {
+    actions.push(setFieldCompat('receipt_url', pdfUrlTrimmed));
+  } else if (receiptLink) {
     actions.push(setFieldCompat('receipt_url', receiptLink));
   }
   actions.push({ action: 'add_tag', tag_name: finalTag });
