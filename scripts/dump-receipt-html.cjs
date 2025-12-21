@@ -1,31 +1,24 @@
-export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
+const fs = require('fs');
+const path = require('path');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+function renderReceiptTemplate(snapshot, opts = {}) {
   const branding = snapshot.branding || {};
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
-  const isAbsolute = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
-
-  const letterheadUrl = isAbsolute(branding.letterheadUrl)
-    ? branding.letterheadUrl
-    : isAbsolute(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL)
-    ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL!
-    : '';
-
-  const logo = isAbsolute(branding.logoUrl)
-    ? branding.logoUrl
-    : isAbsolute(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL)
-    ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL!
-    : branding.logoUrl || '/logo.png';
+  const letterheadUrl = branding.letterheadUrl || process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '';
+  const logo = branding.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png';
   const brandColor = branding.brandColor || '#7A2020';
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
   const totals = snapshot.totals || order.totals || {};
   const notes = snapshot.notes || '';
-  const attendant = (order?.attendant?.name) || snapshot.attendantName || snapshot.issuedByName || '';
-  const paymentMethod = snapshot.paymentMethod || (order?.paymentMethod || '');
-  const customerPhone = snapshot.customerPhone || order?.customerPhone || '';
-  const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
+  const attendant = (order && order.attendant && order.attendant.name) || snapshot.attendantName || snapshot.issuedByName || '';
+  const paymentMethod = snapshot.paymentMethod || (order && order.paymentMethod) || '';
+  const deliveryAddress = snapshot.deliveryAddress || (order && order.deliveryAddress) || '';
 
   const itemsHtml = items
-    .map((it: any) => {
+    .map((it) => {
       const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
       const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
       const lineTotal = (qty * unit) || '';
@@ -67,12 +60,11 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   <body>
     <div class="page">
       <header>
-        ${(() => {
-          const headerImg = letterheadUrl || logo;
-          return headerImg
-            ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
-            : '';
-        })()}
+        ${
+          letterheadUrl
+            ? `<img src="${letterheadUrl}" alt="letterhead" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
+            : `<img src="${logo}" alt="logo" style="height:56px;margin-bottom:12px;" />`
+        }
         <div style="text-align:center">
           <h1 style="margin-bottom:6px">${siteTitle}</h1>
           <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
@@ -84,7 +76,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <div class="meta">
         <div>
           <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
-          <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
+          <div><strong>M/S:</strong> ${snapshot.customerName || (order && order.customerName) || ''}</div>
         </div>
         <div class="right">
           <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
@@ -135,3 +127,43 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   </html>
   `;
 }
+
+async function main() {
+  const id = process.argv[2] || 'Betech-20251221-37008';
+  const receipt = await prisma.receipt.findUnique({ where: { id }, include: { order: { include: { items: true, attendant: true } }, issuedBy: true } });
+  let snapshot;
+  if (!receipt) {
+    console.warn('Receipt not found, generating sample for', id);
+    snapshot = {
+      generatedAt: new Date().toISOString(),
+      order: { orderNumber: id, customerName: 'Sample Customer' },
+      items: [{ title: 'Sample Item', quantity: 1, unitPrice: 1000 }],
+      totals: { subtotal: 1000, total: 1000 },
+      notes: 'Generated sample because receipt was not present in DB.',
+      attendantName: 'System',
+      paymentMethod: 'CASH',
+      deliveryAddress: 'Sample Address',
+    };
+  } else {
+    snapshot = typeof receipt.data === 'object' && receipt.data ? { ...receipt.data } : { order: receipt.order, totals: receipt.totals };
+  }
+  snapshot.generatedAt = new Date().toISOString();
+  const brandingRec = await prisma.branding.findUnique({ where: { name: 'default' } });
+  snapshot.branding = {
+    letterheadUrl: brandingRec?.letterheadUrl || process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '/letterhead.jpg',
+    logoUrl: brandingRec?.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png',
+    brandColor: brandingRec?.brandColor || '#7A2020',
+    siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',
+  };
+  if (!snapshot.attendantName) snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
+
+  const html = renderReceiptTemplate(snapshot, { hideStamp: false });
+  const outdir = path.resolve(process.cwd(), 'tmp');
+  if (!fs.existsSync(outdir)) fs.mkdirSync(outdir, { recursive: true });
+  const out = path.join(outdir, `${id}.html`);
+  fs.writeFileSync(out, html, 'utf8');
+  console.log('WROTE', out);
+  await prisma.$disconnect();
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
