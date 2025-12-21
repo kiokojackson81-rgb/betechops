@@ -39,7 +39,7 @@ export default function ReceiptPreviewPage() {
   if (!html) return <div className="p-6">Loading preview.</div>;
 
   return (
-    <div className="receipt-screen p-6 bg-slate-100 min-h-screen flex justify-center">
+    <div className="receipt-screen receipt-print-area p-6 bg-slate-100 min-h-screen flex justify-center">
       <div className="bg-white shadow max-w-4xl w-full p-8">
         <div className="no-print flex justify-end mb-4">
           <button
