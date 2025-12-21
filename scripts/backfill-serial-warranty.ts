@@ -1,4 +1,5 @@
 import { prisma } from '../src/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 async function main() {
   console.log('Starting backfill of serial/warranty from legacy tables');
@@ -28,7 +29,17 @@ async function main() {
         if (!product) continue;
 
         // update order item(s) that match and have null serial/warranty
-        const updated = await prisma.orderItem.updateMany({ where: { orderId: order.id, productId: product.id, AND: [{ serial: null }, { warranty: null }] }, data: { serial: serial ?? undefined, warranty: warranty ?? undefined } });
+        const updated = await prisma.orderItem.updateMany({
+          where: {
+            orderId: order.id,
+            productId: product.id,
+            AND: [
+              ({ serial: { equals: null } } as any),
+              ({ warranty: { in: [Prisma.DbNull, Prisma.JsonNull] } } as any),
+            ],
+          },
+          data: { serial: serial ?? undefined, warranty: warranty ?? undefined },
+        });
         if (updated.count && updated.count > 0) {
           console.log(`Updated ${updated.count} orderItem(s) for order ${order.orderNumber}`);
           totalUpdated += updated.count;
