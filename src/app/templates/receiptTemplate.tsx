@@ -3,16 +3,14 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
   const brandColor = branding.brandColor || '#7A2020';
   const isHttp = (value: any) => typeof value === 'string' && /^https?:\/\//.test(value);
-  const letterheadUrl = isHttp(branding.letterheadUrl)
-    ? branding.letterheadUrl
-    : isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL ?? '')
-    ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL!
-    : '';
-  const logoUrl = isHttp(branding.logoUrl)
-    ? branding.logoUrl
-    : isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL ?? '')
-    ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL!
-    : '/logo.png';
+  const letterheadUrl =
+    branding.letterheadUrl && isHttp(branding.letterheadUrl)
+      ? branding.letterheadUrl
+      : (process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '');
+  const logoUrl =
+    branding.logoUrl && isHttp(branding.logoUrl)
+      ? branding.logoUrl
+      : (process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png');
   const headerImg = letterheadUrl || logoUrl;
 
   // Only render an <img> header when we have a header image. Otherwise leave
@@ -112,13 +110,15 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         ${opts.hideStamp ? '' : '<div style="margin-top:18px">______________________________</div>'}
       </div>
 
-      <div style="margin-top:18px;border-top:1px dashed #e5e7eb;padding-top:12px;font-size:13px;color:#111827">
-        <div style="font-weight:700;margin-bottom:6px">Thank you for shopping with Betech Solar Solutions.</div>
-        <div style="margin-bottom:6px">
-          Share your experience and explore our recent solar projects on social media using <strong>#BetechProjects</strong>.
-        </div>
-        <div style="margin-bottom:6px;color:#374151">Stay connected: info@betech.co.ke | 0703 241 917</div>
-        <div style="font-weight:600;color:${brandColor};">We deliver solar excellence coast to coast.</div>
+      <div style="margin-top:18px;border-top:1px dashed #e5e7eb;padding-top:12px;font-size:13px;color:#111827;">
+        <div style="font-weight:700;margin-bottom:6px">📲 Connect With Us & Share Your Feedback</div>
+        <div style="margin-bottom:8px">Follow, search, and review us on social media:</div>
+        <div>🔵 Facebook: Betech Solar Solutions Kenya</div>
+        <div>📸 Instagram: Betech Solar Solutions Kenya</div>
+        <div>🎵 TikTok: Betech Solar Solutions Kenya</div>
+        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better.</div>
+        <div style="margin-top:10px;font-weight:600">Thank you for choosing Betech Solar Solutions.</div>
+        <div style="margin-top:4px">View our recent solar projects on all social media using <strong>#BetechProjects</strong>.</div>
       </div>
 
     </div>
