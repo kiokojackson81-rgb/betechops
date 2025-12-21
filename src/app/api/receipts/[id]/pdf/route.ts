@@ -42,7 +42,13 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   }
 
   const fileName = `${receipt.order?.orderNumber ?? receipt.id}.pdf`;
-  return new NextResponse(pdfBuffer, {
+  // Convert Node Buffer to an ArrayBuffer slice suitable for NextResponse body
+  const arrayBuffer = pdfBuffer.buffer.slice(
+    pdfBuffer.byteOffset,
+    pdfBuffer.byteOffset + pdfBuffer.byteLength
+  );
+
+  return new NextResponse(arrayBuffer, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
