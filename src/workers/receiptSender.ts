@@ -332,7 +332,7 @@ export async function sendReceiptChannels(
     logStep(requestId, 'BLOB', 'failed', { error: String(e) });
   }
 
-  const pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
+  let pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
   const rawCustomerPhone =
     ((receipt.order as any)?.customerPhone ?? (receipt.data as any)?.customerPhone ?? "")
       .toString()
@@ -370,6 +370,42 @@ export async function sendReceiptChannels(
 
   const site = getSiteUrl();
   const receiptPageLink = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
+
+  // If the uploaded blob URL isn't publicly fetchable, prefer the server
+  // proxy endpoint `/api/receipts/{id}/pdf` which will serve the PDF to
+  // third-party services (Chatrace/WhatsApp) even when storage URLs are
+  // private/expiring.
+  const publicPdfEndpoint = `${site.replace(/\/$/, '')}/api/receipts/${receipt.id}/pdf`;
+
+  async function isPdfUrlAccessible(url?: string | null) {
+    if (!url) return false;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      clearTimeout(timer);
+      const ct = res.headers.get('content-type') || '';
+      return res.ok && /pdf/i.test(ct);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // If we have a blob/S3 URL but it's not reachable from the public internet,
+  // fall back to the canonical server endpoint so Chatrace receives a stable
+  // downloadable link.
+  try {
+    if (pdfUrlForChatrace) {
+      const ok = await isPdfUrlAccessible(pdfUrlForChatrace);
+      if (!ok) {
+        console.warn('[receipts] uploaded PDF not publicly reachable; using server proxy endpoint for Chatrace', { receiptId: receipt.id, originalPdfUrlLength: pdfUrlForChatrace.length });
+        pdfUrlForChatrace = publicPdfEndpoint;
+      }
+    }
+  } catch (e) {
+    console.warn('[receipts] error checking PDF accessibility, falling back to server endpoint', e);
+    pdfUrlForChatrace = publicPdfEndpoint;
+  }
 
   if (!pdfUrlForChatrace) {
     console.warn('[receipts][chatrace] no PDF URL available for receipt, will fall back to receipt page link', { receiptId: receipt.id, receiptPageLink });
