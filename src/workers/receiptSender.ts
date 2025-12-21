@@ -174,7 +174,7 @@ async function isPdfUrlAccessible(url?: string | null) {
   return isUrlReachable(url);
 }
 
-async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string) {
+async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string | null) {
   const cleanCandidate = candidate?.trim();
   if (cleanCandidate) {
     if (await isUrlReachable(cleanCandidate)) {
