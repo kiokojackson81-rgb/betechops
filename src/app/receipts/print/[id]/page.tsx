@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import renderReceiptTemplate from "@/app/templates/receiptTemplate";
+import { getBranding } from "@/lib/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,8 @@ export default async function Page({ params }: { params: { id: string } }) {
     deliveryAddress:
       ((order.metadata as any && (order.metadata as any).deliveryAddress as string | undefined) || (dataIsObject ? ((data as any)["deliveryAddress"] as string | undefined) : undefined) || ""),
   };
+  const branding = await getBranding();
+  snapshot.branding = branding;
 
   const html = renderReceiptTemplate(snapshot, { hideStamp: false });
 
