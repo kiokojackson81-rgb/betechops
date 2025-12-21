@@ -135,13 +135,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const finalTag = tagName?.trim() || 'receipt_created';
 
   // Hard-fail rule: require a .pdf URL for receipt_url/pdf_url. If absent or not a .pdf, log and abort.
-  const looksLikePdf = typeof pdfUrlTrimmed === 'string' && /\.pdf(\?|$)/i.test(pdfUrlTrimmed);
-  if (!looksLikePdf) {
-    const message = 'pdfUrl is missing or not a .pdf URL; aborting Chatrace push';
-    console.error('[chatrace] abort: pdfUrl invalid', { receiptNumber, pdfUrl: pdfUrlTrimmed });
+  const abort = async (message: string) => {
+    console.error('[chatrace] abort:', message, { receiptNumber, pdfUrl: pdfUrlTrimmed });
     debug.error = message;
     await persistDebug(receiptNumber, debug);
     return { ok: false, debug };
+  };
+
+  const looksLikePdf = typeof pdfUrlTrimmed === 'string' && /\.pdf(\?|$)/i.test(pdfUrlTrimmed);
+  if (!looksLikePdf) {
+    return abort('pdfUrl is missing or not a .pdf URL');
   }
 
   const setField = (fieldName: string, value: any) => ({
@@ -156,37 +159,33 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       ? { action: 'set_field_value', field_name: fieldName, value: value == null ? '' : String(value) }
       : setField(fieldName, value);
 
-  const actions: any[] = [];
-  if (pdfUrlTrimmed) {
-    actions.push(setFieldCompat('pdf_url', pdfUrlTrimmed));
-  }
-  actions.push(setFieldCompat('customer_name', customerName || 'Customer'));
-  actions.push(setFieldCompat('order_placed', receiptNumber));
-  actions.push(setFieldCompat('amount', amount));
-  actions.push(setFieldCompat('currency', currency || 'KES'));
+  const fieldActions: any[] = [];
+  fieldActions.push(setFieldCompat('pdf_url', pdfUrlTrimmed));
+  fieldActions.push(setFieldCompat('receipt_url', pdfUrlTrimmed));
+  fieldActions.push(setFieldCompat('customer_name', customerName || 'Customer'));
+  fieldActions.push(setFieldCompat('order_placed', receiptNumber));
+  fieldActions.push(setFieldCompat('amount', amount));
+  fieldActions.push(setFieldCompat('currency', currency || 'KES'));
   if (receiptId) {
-    actions.push(setFieldCompat('receipt_id', receiptId));
+    fieldActions.push(setFieldCompat('receipt_id', receiptId));
   }
-  // Prefer providing the direct PDF url in `receipt_url` so Chatrace flows
-  // that reference `{{receipt_url}}` will receive the downloadable PDF link
-  // (many flows were mistakenly configured to use receipt_url for file).
-  if (pdfUrlTrimmed) {
-    actions.push(setFieldCompat('receipt_url', pdfUrlTrimmed));
-  } else if (receiptLink) {
-    actions.push(setFieldCompat('receipt_url', receiptLink));
-  }
-  actions.push({ action: 'add_tag', tag_name: finalTag });
+  const tagAction = { action: 'add_tag', tag_name: finalTag };
 
-  const payload = {
+  const fieldsPayload = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
-    actions,
+    actions: fieldActions,
+  };
+
+  const tagPayload = {
+    phone: phoneE164,
+    actions: [tagAction],
   };
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
-    actionsCount: actions.length,
+    actionsCount: fieldActions.length,
     tag: finalTag,
     hasPdfUrl: !!pdfUrlTrimmed,
   };
@@ -202,45 +201,61 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptLinkLength: receiptLink.length,
   });
 
-  const createPath = '/contacts';
-  const createRes = await runRequest(createPath, payload, headers);
-  debug.steps.create = {
-    status: createRes.status,
-    bodySnippet: (createRes.text || '').slice(0, 200),
-    path: createPath,
-    bodyError: createRes.bodyError ?? null,
-    ok: createRes.ok,
+  const fieldsPath = '/contacts';
+  const fieldsRes = await runRequest(fieldsPath, fieldsPayload, headers);
+  debug.steps.fields = {
+    status: fieldsRes.status,
+    bodySnippet: (fieldsRes.text || '').slice(0, 200),
+    path: fieldsPath,
+    bodyError: fieldsRes.bodyError ?? null,
+    ok: fieldsRes.ok,
   };
-  if (createRes.bodyError && !debug.error) {
+  if (fieldsRes.bodyError && !debug.error) {
     debug.error =
-      typeof createRes.bodyError === 'string'
-        ? createRes.bodyError
-        : JSON.stringify(createRes.bodyError);
+      typeof fieldsRes.bodyError === 'string'
+        ? fieldsRes.bodyError
+        : JSON.stringify(fieldsRes.bodyError);
+  }
+  if (!fieldsRes.ok) {
+    return abort('chatrace_fields_failed');
   }
 
-  const json = createRes.json ?? {};
-  const success = Boolean(json?.success);
-  const contactCreated = json?.contact_created ?? json?.data?.contact_created ?? false;
+  const fieldsJson = fieldsRes.json ?? {};
+  const fieldsSuccess = Boolean(fieldsJson?.success);
+  const contactCreated =
+    fieldsJson?.contact_created ?? fieldsJson?.data?.contact_created ?? false;
   console.info('[chatrace] create contact response', {
     receiptNumber,
     phoneE164,
-    status: createRes.status,
-    success,
+    status: fieldsRes.status,
+    success: fieldsSuccess,
     contactCreated,
   });
 
-  if (createRes.ok && success) {
-    debug.ok = true;
-    await persistDebug(receiptNumber, debug);
-    return { ok: true, debug };
+  const tagPath = '/contacts';
+  const tagRes = await runRequest(tagPath, tagPayload, headers);
+  debug.steps.tag = {
+    status: tagRes.status,
+    bodySnippet: (tagRes.text || '').slice(0, 200),
+    path: tagPath,
+    bodyError: tagRes.bodyError ?? null,
+    ok: tagRes.ok,
+  };
+  if (tagRes.bodyError && !debug.error) {
+    debug.error =
+      typeof tagRes.bodyError === 'string'
+        ? tagRes.bodyError
+        : JSON.stringify(tagRes.bodyError);
+  }
+  if (!tagRes.ok) {
+    return abort('chatrace_tag_failed');
   }
 
-  debug.ok = false;
-  if (!debug.error) {
-    debug.error = `Chatrace responded with success=${success} contact_created=${contactCreated}`;
-  }
+  const tagJson = tagRes.json ?? {};
+  const success = Boolean(fieldsRes.ok && tagRes.ok && (tagJson?.success ?? true));
+  debug.ok = success;
   await persistDebug(receiptNumber, debug);
-  return { ok: false, debug };
+  return { ok: success, debug };
 }
 
 async function persistDebug(receiptNumber: string, debug: any) {

@@ -152,6 +152,38 @@ async function fetchPdfFromService(html: string): Promise<Buffer | null> {
   }
 }
 
+async function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function isUrlReachable(url: string, tries = 3) {
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) return true;
+    } catch {
+      // ignore
+    }
+    await wait(400 * (i + 1));
+  }
+  return false;
+}
+
+async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string) {
+  const cleanCandidate = candidate?.trim();
+  if (cleanCandidate) {
+    if (await isUrlReachable(cleanCandidate)) {
+      return cleanCandidate;
+    }
+    console.warn("[receiptSender] chatrace pdf url unreachable, will fallback to proxy", {
+      receiptId,
+      candidate: cleanCandidate,
+    });
+  }
+  const fallback = `${site.replace(/\/$/, "")}/api/receipts/${receiptId}/pdf`;
+  return fallback;
+}
+
 export async function sendReceiptChannels(
   receiptId: string,
   channels: string[] = [],
@@ -356,7 +388,7 @@ export async function sendReceiptChannels(
     logStep(requestId, 'BLOB', 'failed', { error: String(e) });
   }
 
-  let pdfUrlForChatrace = pdfUrlCustomer ?? pdfUrlFull;
+  const candidatePdfUrl = pdfUrlCustomer ?? pdfUrlFull;
   const rawCustomerPhone =
     ((receipt.order as any)?.customerPhone ?? (receipt.data as any)?.customerPhone ?? "")
       .toString()
@@ -394,62 +426,15 @@ export async function sendReceiptChannels(
 
   const site = getSiteUrl();
   const receiptPageLink = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
-
-  // If the uploaded blob URL isn't publicly fetchable, prefer the server
-  // proxy endpoint `/api/receipts/{id}/pdf` which will serve the PDF to
-  // third-party services (Chatrace/WhatsApp) even when storage URLs are
-  // private/expiring.
-  const publicPdfEndpoint = `${site.replace(/\/$/, '')}/api/receipts/${receipt.id}/pdf`;
-
-  async function isPdfUrlAccessible(url?: string | null) {
-    if (!url) return false;
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      // Use GET to ensure the resource is actually retrievable (some storage
-      // backends return misleading HEAD responses). Fetch only the first
-      // byte to avoid downloading the whole file where supported.
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { Range: 'bytes=0-0' },
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      const ct = res.headers.get('content-type') || '';
-      return res.ok && /pdf/i.test(ct);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // If we have a blob/S3 URL but it's not reachable from the public internet,
-  // fall back to the canonical server endpoint so Chatrace receives a stable
-  // downloadable link.
-  try {
-    if (pdfUrlForChatrace) {
-      const ok = await isPdfUrlAccessible(pdfUrlForChatrace);
-      if (!ok) {
-        console.warn('[receipts] uploaded PDF not publicly reachable; using server proxy endpoint for Chatrace', { receiptId: receipt.id, originalPdfUrlLength: pdfUrlForChatrace.length });
-        pdfUrlForChatrace = publicPdfEndpoint;
-      }
-    }
-  } catch (e) {
-    console.warn('[receipts] error checking PDF accessibility, falling back to server endpoint', e);
-    pdfUrlForChatrace = publicPdfEndpoint;
-  }
-
-  if (!pdfUrlForChatrace) {
-    console.warn('[receipts][chatrace] no PDF URL available for receipt, will fall back to receipt page link', { receiptId: receipt.id, receiptPageLink });
-  }
-
-  // For Chatrace: pdfUrlForChatrace is the S3 PDF (may be null).
-  // We will always send `receipt_link` and only send `pdf_url` when S3 PDF exists.
-  // Call Chatrace whenever we have a normalized phone number; the payload
-  // will include `receiptLink` and optionally `pdfUrl`.
-  const chatracePdfUrl = pdfUrlForChatrace; // may be null
+  const finalChatracePdfUrl = await resolveChatracePdfUrl(site, receipt.id, candidatePdfUrl);
+  const chatracePdfUrl = finalChatracePdfUrl;
 
   if (normalizedChatracePhone) {
-    logStep(requestId, 'CHARTRACE', 'begin', { phone: normalizedChatracePhone, pdfUrl: !!pdfUrlForChatrace });
+    logStep(requestId, 'CHARTRACE', 'begin', {
+      phone: normalizedChatracePhone,
+      pdfUrl: !!finalChatracePdfUrl,
+      candidatePdfUrl: !!candidatePdfUrl,
+    });
     try {
       // structured log about env presence and inputs
       const tagName = 'receipt_created';
@@ -457,8 +442,8 @@ export async function sendReceiptChannels(
       console.info('[receipts][chatrace] preparing push', {
         receiptId: receipt.id,
         phoneNormalized: normalizedChatracePhone,
-        pdfUrlPresent: !!pdfUrlForChatrace,
-        pdfUrlLength: pdfUrlForChatrace?.length ?? 0,
+        pdfUrlPresent: !!finalChatracePdfUrl,
+        pdfUrlLength: finalChatracePdfUrl?.length ?? 0,
         CHATRACE_BASE_URL: !!process.env.CHATRACE_BASE_URL,
         CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
         tokenPresent: !!process.env.CHATRACE_API_TOKEN,
@@ -492,7 +477,7 @@ export async function sendReceiptChannels(
       logStep(requestId, 'CHARTRACE', result?.ok ? 'ok' : 'failed', {
         contactCreated: result?.debug?.contactId,
         tagName,
-        pdfUrl: !!pdfUrlForChatrace,
+        pdfUrl: !!finalChatracePdfUrl,
         receiptLink: receiptPageLink.length,
       });
 
@@ -501,7 +486,7 @@ export async function sendReceiptChannels(
         status: result?.ok ? "sent" : "failed",
         lastSentAt: result?.ok ? new Date().toISOString() : undefined,
         lastAttemptAt: result?.ok ? undefined : new Date().toISOString(),
-        pdfUrl: pdfUrlForChatrace,
+        pdfUrl: finalChatracePdfUrl,
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
         debug: result?.debug,
       });
