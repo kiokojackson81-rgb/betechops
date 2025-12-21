@@ -45,7 +45,8 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   // Convert Node Buffer to a Uint8Array which is accepted by NextResponse
   const uint8 = new Uint8Array(pdfBuffer.buffer, pdfBuffer.byteOffset, pdfBuffer.byteLength);
 
-  return new NextResponse(uint8, {
+  // Cast to BodyInit to satisfy NextResponse TypeScript typing on build
+  return new NextResponse(uint8 as unknown as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
