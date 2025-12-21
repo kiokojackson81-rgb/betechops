@@ -87,6 +87,9 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "optionalDependencies": {
     "puppeteer": "^21.11.0",
     "puppeteer-core": "^24.31.0"
