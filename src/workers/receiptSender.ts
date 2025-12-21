@@ -169,6 +169,11 @@ async function isUrlReachable(url: string, tries = 3) {
   return false;
 }
 
+async function isPdfUrlAccessible(url?: string | null) {
+  if (!url) return false;
+  return isUrlReachable(url);
+}
+
 async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string) {
   const cleanCandidate = candidate?.trim();
   if (cleanCandidate) {
