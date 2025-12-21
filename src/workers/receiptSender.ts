@@ -106,7 +106,8 @@ function buildWhatsAppMessage(params: WhatsAppMessageParams) {
 }
 
 export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
-  const html = renderReceiptTemplate(receiptSnapshot, { hideStamp: Boolean(opts.hideStamp) });
+  const branding = await getBranding();
+  const html = renderReceiptTemplate({ ...receiptSnapshot, branding }, { hideStamp: Boolean(opts.hideStamp) });
   let browser;
   try {
     browser = await launchChromiumBrowser();
