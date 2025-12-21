@@ -28,7 +28,9 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const snapshot = buildReceiptSnapshot(receipt);
   const branding = await getBranding();
-  snapshot.branding = branding;
+  // buildReceiptSnapshot returns a typed object; cast to `any` to attach
+  // `branding` without a type error during the Next.js build.
+  (snapshot as any).branding = branding;
 
   const html = renderReceiptTemplate(snapshot, { hideStamp: false });
 
