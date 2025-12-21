@@ -57,11 +57,20 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   const uint8 = new Uint8Array(pdfBuffer.buffer, pdfBuffer.byteOffset, pdfBuffer.byteLength);
 
   // Cast to BodyInit to satisfy NextResponse TypeScript typing on build
-  return new NextResponse(uint8 as unknown as BodyInit, {
+  const res = new NextResponse(uint8 as unknown as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="${fileName}"`,
+      "Cache-Control": "no-store",
+      "X-Receipt-Renderer": "pdf",
+      "X-Receipt-Commit": process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
     },
   });
+
+  // add letterhead debug header
+  const letterhead = (snapshot as any)?.branding?.letterheadUrl || process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || 'none';
+  res.headers.set('X-Receipt-Letterhead', String(letterhead).slice(0, 120));
+
+  return res;
 }

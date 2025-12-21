@@ -134,6 +134,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const finalTag = tagName?.trim() || 'receipt_created';
 
+  // Hard-fail rule: require a .pdf URL for receipt_url/pdf_url. If absent or not a .pdf, log and abort.
+  const looksLikePdf = typeof pdfUrlTrimmed === 'string' && /\.pdf(\?|$)/i.test(pdfUrlTrimmed);
+  if (!looksLikePdf) {
+    const message = 'pdfUrl is missing or not a .pdf URL; aborting Chatrace push';
+    console.error('[chatrace] abort: pdfUrl invalid', { receiptNumber, pdfUrl: pdfUrlTrimmed });
+    debug.error = message;
+    await persistDebug(receiptNumber, debug);
+    return { ok: false, debug };
+  }
+
   const setField = (fieldName: string, value: any) => ({
     action: 'set_custom_field',
     field_id: fieldName,

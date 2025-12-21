@@ -71,14 +71,17 @@ async function respondWithPdf(orderItemIds: string[], identifier: string, shopId
   const label = extractLabel(result, identifier);
   if (!label) return null;
   const buf = Buffer.from(label.base64, "base64");
-  return new NextResponse(buf, {
+  const res = new NextResponse(buf, {
     headers: {
       "Content-Type": label.contentType,
       "Content-Length": String(buf.length),
       "Cache-Control": "no-store",
       "Content-Disposition": `inline; filename="${encodeURIComponent(label.filename)}"`,
+      "X-Receipt-Renderer": "pdf",
+      "X-Receipt-Commit": process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
     },
   });
+  return res;
 }
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
