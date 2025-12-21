@@ -1,27 +1,34 @@
 export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
   const branding = snapshot.branding || {};
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
-  const isAbsolute = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
-
-  const letterheadUrl = isAbsolute(branding.letterheadUrl)
-    ? branding.letterheadUrl
-    : isAbsolute(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL)
+  const isHttp = (value: any) => typeof value === 'string' && /^https?:\/\//.test(value);
+  const envLetterheadUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL ?? '')
     ? process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL!
     : '';
-
-  const logo = isAbsolute(branding.logoUrl)
-    ? branding.logoUrl
-    : isAbsolute(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL)
+  const envLogoUrl = isHttp(process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL ?? '')
     ? process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL!
-    : branding.logoUrl || '/logo.png';
+    : '';
   const brandColor = branding.brandColor || '#7A2020';
+
+  // Prefer an absolute letterhead URL from branding, then env, then fall
+  // back to any configured logo (branding or env) or the local `/logo.png`.
+  const headerImg = isHttp(branding.letterheadUrl)
+    ? branding.letterheadUrl
+    : isHttp(envLetterheadUrl)
+    ? envLetterheadUrl
+    : (branding.logoUrl || envLogoUrl || '/logo.png');
+
+  // Only render an <img> header when we have a header image. Otherwise leave
+  // the header empty so the printed receipt shows just the page content.
+  const headerHtml = headerImg
+    ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
+    : '';
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
   const totals = snapshot.totals || order.totals || {};
   const notes = snapshot.notes || '';
-  const attendant = (order?.attendant?.name) || snapshot.attendantName || snapshot.issuedByName || '';
-  const paymentMethod = snapshot.paymentMethod || (order?.paymentMethod || '');
-  const customerPhone = snapshot.customerPhone || order?.customerPhone || '';
+  const attendant = order?.attendant?.name || snapshot.attendantName || snapshot.issuedByName || '';
+  const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
 
   const itemsHtml = items
@@ -29,7 +36,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
       const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
       const lineTotal = (qty * unit) || '';
-      const title = (it.title || it.productName || '');
+      const title = it.title || it.productName || '';
       return `
       <tr>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${qty}</td>
@@ -50,16 +57,15 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
     <style>
       body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; border:1px solid #cbd5e1; border-radius:8px }
-      header { text-align:center; margin-bottom:12px; display:flex; flex-direction:column; align-items:center; }
-      header h1 { margin:0; font-size:28px; letter-spacing:1px; color:${brandColor}; }
-      header p { margin:2px 0; color:#374151 }
+      header { text-align:center; margin-bottom:12px; }
       .meta { display:flex; justify-content:space-between; margin:12px 0 }
       table { width:100%; border-collapse: collapse; margin-top:8px }
       th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:${brandColor}; }
       td { padding:8px }
       .right { text-align:right }
       .totals { width:100%; margin-top:12px }
-      .totals td { border:none; padding:6px }
+      .totals td { border:none; padding:6px; color:${brandColor}; }
+      .totals strong { color:${brandColor}; }
       .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
       .signature { margin-top:20px; text-align:center }
     </style>
@@ -67,18 +73,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   <body>
     <div class="page">
       <header>
-        ${(() => {
-          const headerImg = letterheadUrl || logo;
-          return headerImg
-            ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
-            : '';
-        })()}
-        <div style="text-align:center">
-          <h1 style="margin-bottom:6px">${siteTitle}</h1>
-          <p style="margin:0">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-          <p style="margin:2px 0">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
-          <p style="margin:2px 0">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
-        </div>
+        ${headerHtml}
       </header>
 
       <div class="meta">
@@ -88,7 +83,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         </div>
         <div class="right">
           <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
-          <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'} </div>
+          <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'}</div>
         </div>
       </div>
 
@@ -114,7 +109,8 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       ${notes ? `<div class="notes"><strong>Notes:</strong><div style="margin-top:6px">${notes}</div></div>` : ''}
 
       <div class="signature">
-        <p>Thank you for shopping with Betech Solar Solutions. You were served by ${attendant || '____'}.</p>
+        <p>Thank you for shopping with Betech Solar Solutions.</p>
+        <p>You were served by ${attendant || '____'}.</p>
         <p>Goods once sold cannot be refunded.</p>
         ${opts.hideStamp ? '' : '<div style="margin-top:18px">______________________________</div>'}
       </div>
@@ -123,11 +119,13 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         <div style="font-weight:700;margin-bottom:6px">📲 Connect With Us & Share Your Feedback</div>
         <div style="margin-bottom:8px">Follow, search, and review us on social media:</div>
         <div style="line-height:1.6">
-          <div>🔵 Facebook:  Betech Solar Solutions Kenya</div>
+          <div>🔵 Facebook: Betech Solar Solutions Kenya</div>
           <div>📸 Instagram: Betech Solar Solutions Kenya</div>
-          <div>🎵 TikTok:    Betech Solar Solutions Kenya</div>
+          <div>🎵 TikTok: Betech Solar Solutions Kenya</div>
         </div>
-        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better</div>
+        <div style="margin-top:10px;color:#374151">Your feedback helps us serve you better.</div>
+        <div style="margin-top:10px;font-weight:600">Thank you for choosing Betech Solar Solutions.</div>
+        <div style="margin-top:4px">View our recent solar projects on all social media using <strong>#BetechProjects</strong>.</div>
       </div>
 
     </div>
