@@ -1,11 +1,8 @@
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 
 async function main() {
-  // Cast to any to avoid TypeScript errors when generated @prisma/client types
-  // are briefly out-of-sync during CI/build. The DB migration must still be
-  // applied for this seed to be meaningful.
-  const p: any = prisma as any;
-  await p.branding.upsert({
+  const prisma = new PrismaClient();
+  await prisma.branding.upsert({
     where: { name: 'default' },
     update: {
       letterheadUrl: process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '/letterhead.jpg',
@@ -19,6 +16,7 @@ async function main() {
       brandColor: '#7A2020',
     },
   });
+  await prisma.$disconnect();
 }
 
 main().catch((err) => {
