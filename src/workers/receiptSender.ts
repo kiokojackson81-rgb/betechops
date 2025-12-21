@@ -319,6 +319,30 @@ export async function sendReceiptChannels(
       }
     }
 
+    // Verify uploaded blob URLs are actually reachable (avoid sending bad
+    // storage links to third-party services). If verification fails, clear
+    // the URL so callers will fall back to the server proxy endpoint.
+    try {
+      if (pdfUrlCustomer) {
+        const ok = await isPdfUrlAccessible(pdfUrlCustomer);
+        if (!ok) {
+          console.warn('[pdf][blob] uploaded customer PDF not accessible after upload; clearing URL', { receiptId: receipt.id, url: pdfUrlCustomer });
+          pdfUrlCustomer = null;
+          pdfKeyCustomer = null;
+        }
+      }
+      if (pdfUrlFull) {
+        const okFull = await isPdfUrlAccessible(pdfUrlFull);
+        if (!okFull) {
+          console.warn('[pdf][blob] uploaded full PDF not accessible after upload; clearing URL', { receiptId: receipt.id, url: pdfUrlFull });
+          pdfUrlFull = null;
+          pdfKeyFull = null;
+        }
+      }
+    } catch (e) {
+      console.warn('[pdf][blob] error verifying uploaded blob URLs', e);
+    }
+
     channelStatus.pdfUpload = uploadedAny ? 'uploaded' : 'skipped';
     logStep(requestId, 'BLOB', uploadedAny ? 'ok' : 'skipped', {
       url_customer: pdfUrlCustomer,
@@ -382,7 +406,14 @@ export async function sendReceiptChannels(
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      // Use GET to ensure the resource is actually retrievable (some storage
+      // backends return misleading HEAD responses). Fetch only the first
+      // byte to avoid downloading the whole file where supported.
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        signal: controller.signal,
+      });
       clearTimeout(timer);
       const ct = res.headers.get('content-type') || '';
       return res.ok && /pdf/i.test(ct);
@@ -448,6 +479,7 @@ export async function sendReceiptChannels(
         tagName,
       };
 
+      console.info('[receipts][chatrace] outbound payload', { chitInput });
       const result = await pushReceiptToChatrace(chitInput);
       channelStatus.chatrace = result?.ok ? 'sent' : 'failed';
       if (!result?.ok) {
