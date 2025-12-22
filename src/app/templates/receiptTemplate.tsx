@@ -157,7 +157,7 @@ export default function renderReceiptTemplate(
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
       /* Print layout: force A5, prevent unwanted page breaks and keep footer on same page */
-      @page { size: A5 portrait; margin: 0; }
+      @page { size: A5 portrait; margin: 2mm; }
       @media print {
         html,
         body {
@@ -178,11 +178,11 @@ export default function renderReceiptTemplate(
         .page {
           box-sizing: border-box;
           width: 100%;
-          max-width: 148mm;
-          max-height: 210mm;
+          max-width: calc(148mm - 4mm);
+          max-height: calc(210mm - 4mm);
           display: flex;
           flex-direction: column;
-          padding: 4mm;
+          padding: 2mm;
           margin: 0 auto;
           box-shadow: none;
           page-break-inside: avoid;

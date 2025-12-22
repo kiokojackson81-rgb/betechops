@@ -4,11 +4,14 @@ import React, { useEffect, useState } from "react";
 export default function ReceiptPreviewPage() {
   const [html, setHtml] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
+  const [autoPrint, setAutoPrint] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const params = new URLSearchParams(window.location.search);
+        const shouldAutoPrint = params.get("autoPrint") === "1";
+        setAutoPrint(shouldAutoPrint);
         const enc = params.get("draft");
         if (!enc) return setErr("No draft provided");
 
@@ -37,6 +40,12 @@ export default function ReceiptPreviewPage() {
 
   if (err) return <div className="p-6">{err}</div>;
   if (!html) return <div className="p-6">Loading preview.</div>;
+
+  useEffect(() => {
+    if (!autoPrint || !html) return;
+    const timer = window.setTimeout(() => window.print(), 0);
+    return () => window.clearTimeout(timer);
+  }, [autoPrint, html]);
 
   return (
     <div className="receipt-screen receipt-print-area p-6 bg-slate-100 min-h-screen flex justify-center">
