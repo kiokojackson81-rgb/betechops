@@ -464,11 +464,13 @@ export async function sendReceiptChannels(
       // structured log about env presence and inputs
       const tagName = 'receipt_created';
 
+      const receiptUrlStr = typeof (finalChatracePdfUrl as any) === 'string' ? (finalChatracePdfUrl as any) : String((finalChatracePdfUrl as any)?.receiptUrl ?? '');
+      const computedPdfUrlLength = receiptUrlStr ? receiptUrlStr.length : 0;
       console.info('[receipts][chatrace] preparing push', {
         receiptId: receipt.id,
         phoneNormalized: normalizedChatracePhone,
         pdfUrlPresent: !!finalChatracePdfUrl,
-        pdfUrlLength: finalChatracePdfUrl?.length ?? 0,
+        pdfUrlLength: computedPdfUrlLength,
         CHATRACE_BASE_URL: !!process.env.CHATRACE_BASE_URL,
         CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
         tokenPresent: !!process.env.CHATRACE_API_TOKEN,
@@ -476,9 +478,9 @@ export async function sendReceiptChannels(
       });
 
       // determine final receipt_url and tag for Chatrace
-      const resolved = typeof finalChatracePdfUrl === 'string' ? { receiptUrl: finalChatracePdfUrl, mode: finalChatracePdfUrl?.endsWith('.pdf') ? 'pdf' : 'proxy' } : finalChatracePdfUrl;
+      const resolved = finalChatracePdfUrl as any;
       const finalReceiptUrl = resolved?.receiptUrl ?? receiptPageLink;
-      const mode = resolved?.mode ?? (finalReceiptUrl?.endsWith('.pdf') ? 'pdf' : 'link');
+      const mode = resolved?.mode ?? (String(finalReceiptUrl).toLowerCase().endsWith('.pdf') ? 'pdf' : 'link');
       const finalTagName = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
 
       const chitInput = {
@@ -665,10 +667,10 @@ export async function sendReceiptChannels(
     const site = getSiteUrl();
     const receiptPage = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
 
-    // finalChatracePdfUrl was resolved earlier as an object or string; normalize
-    const resolved = typeof finalChatracePdfUrl === 'string' ? { receiptUrl: finalChatracePdfUrl, mode: finalChatracePdfUrl?.endsWith('.pdf') ? 'pdf' : 'proxy' } : finalChatracePdfUrl;
+    // finalChatracePdfUrl was resolved earlier as an object; normalize
+    const resolved = finalChatracePdfUrl as any;
     const finalReceiptUrl = resolved?.receiptUrl ?? receiptPage;
-    const mode = resolved?.mode ?? (finalReceiptUrl?.endsWith('.pdf') ? 'pdf' : 'link');
+    const mode = resolved?.mode ?? (String(finalReceiptUrl).toLowerCase().endsWith('.pdf') ? 'pdf' : 'link');
     const finalTag = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
 
     console.info('[receiptSender] final receipt_url resolution', {
