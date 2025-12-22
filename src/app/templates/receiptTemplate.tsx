@@ -156,6 +156,28 @@ export default function renderReceiptTemplate(
         :root { --brandColor: ${brandColor}; }
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
+      /* Print layout: force A5, prevent unwanted page breaks and keep footer on same page */
+      @page { size: A5 portrait; margin: 8mm; }
+      @media print {
+        html, body { width: 148mm; height: 210mm; }
+        .page { box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column; padding: 8mm; margin: 0; box-shadow: none; }
+        /* Keep header and footer from breaking */
+        header { flex: 0 0 auto; }
+        .signature { flex: 0 0 auto; }
+        .receipt-footer { flex: 0 0 auto; page-break-inside: avoid; break-inside: avoid; margin-top: 8px; }
+        /* Main content should take remaining space but not overflow to a new page */
+        .meta, table, .item-warranty, .notes { page-break-inside: avoid; break-inside: avoid; }
+        table { page-break-after: auto; }
+        tr { page-break-inside: avoid; break-inside: avoid; }
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+        /* Pin footer to bottom of the page */
+        .page > .receipt-footer-container { margin-top: auto; }
+        /* Tighten typography slightly to help fit single page */
+        body, .page { font-size: 11px; line-height: 1.15; }
+        /* Ensure colors print accurately */
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
         header { text-align:center; margin-bottom:12px; }
         .meta { display:flex; justify-content:space-between; margin:12px 0 }
         table { width:100%; border-collapse: collapse; margin-top:8px }
@@ -317,6 +339,7 @@ export default function renderReceiptTemplate(
         <p>Goods once sold cannot be refunded.</p>
       </div>
 
+      <div class="receipt-footer-container">
       <div class="receipt-footer">
         <div class="footer-badge">Connect With Us</div>
         <p class="footer-muted footer-subtitle">Follow &amp; see our latest solar projects:</p>
@@ -359,6 +382,7 @@ export default function renderReceiptTemplate(
              href="https://www.tiktok.com/tag/betechprojects"
              target="_blank" rel="noopener noreferrer">#BetechProjects</a>
         </p>
+      </div>
       </div>
 
     </div>

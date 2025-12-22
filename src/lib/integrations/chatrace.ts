@@ -144,15 +144,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   });
 
   const actions: any[] = [];
-  // receipt_url should always be set (may be PDF or page link)
+  const receiptMode = receiptUrlTrimmed ? 'pdf' : 'link';
   if (receiptUrlTrimmed) {
     actions.push(setFieldValue('receipt_url', receiptUrlTrimmed));
-    // Add alternate field names to improve compatibility with external flows
     actions.push(setFieldValue('media_url', receiptUrlTrimmed));
     actions.push(setFieldValue('receipt_pdf_url', receiptUrlTrimmed));
     actions.push(setFieldValue('file_url', receiptUrlTrimmed));
-  } else if (receiptLink) {
-    actions.push(setFieldValue('receipt_url', receiptLink));
   }
 
   actions.push(setFieldValue('customer_name', customerName || 'Customer'));
@@ -162,11 +159,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   if (receiptId) {
     actions.push(setFieldValue('receipt_id', receiptId));
   }
+  actions.push(setFieldValue('receipt_channel', 'customer'));
 
-  const receiptUrlForTag = receiptUrlTrimmed || receiptLink;
-  const normalizedReceiptUrl = receiptUrlForTag?.split('?')[0].toLowerCase();
-  const looksLikePdf = normalizedReceiptUrl?.endsWith('.pdf') ?? false;
-  const tagToApply = finalTag || (looksLikePdf ? 'receipt_created_pdf' : 'receipt_created_link');
+  const tagToApply =
+    finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link');
   actions.push({ action: 'add_tag', tag_name: tagToApply });
 
   debug.payloadPreview = {
@@ -175,6 +171,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     actionsCount: actions.length,
     tag: tagToApply,
     hasReceiptUrl: !!receiptUrlTrimmed,
+    receiptMode,
   };
 
   console.info('[chatrace] pushReceipt', {
@@ -185,9 +182,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     accountId: ACCOUNT_ID,
     headerKeys,
     receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
-    receiptLinkLength: receiptLink.length,
-    receiptUrlForTag,
-    looksLikePdf,
+    receiptMode,
+    receiptUrlSnippet: receiptUrlTrimmed ? receiptUrlTrimmed.slice(0, 120) : '',
     tagToApply,
   });
 

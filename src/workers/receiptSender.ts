@@ -6,7 +6,6 @@ import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
 import { uploadBufferToS3 } from '@/lib/storage';
 import renderReceiptTemplate from '@/app/templates/receiptTemplate';
-import { hasWhatsAppConfig, sendWhatsAppDocumentMessage, sendWhatsAppTextMessage } from '@/lib/notifications/whatsapp';
 import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { normalizePhone } from '@/lib/phone';
 import { launchChromiumBrowser } from '@/lib/pdf/chromium';
@@ -105,7 +104,43 @@ function buildWhatsAppMessage(params: WhatsAppMessageParams) {
   return lines.join('\n');
 }
 
-export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp?: boolean } = {}): Promise<Buffer | null> {
+const PDF_MIN_BYTES = 5_000;
+const DEBUG_HTML_SIGNATURE = process.env.DEBUG_RECEIPT_HTML === '1';
+
+function logHtmlSignature(label: string, html: string) {
+  if (!DEBUG_HTML_SIGNATURE) return;
+  console.info('[receiptSender] html signature', {
+    label,
+    htmlLen: html.length,
+    htmlHead: html.slice(0, 80),
+    hasTable: html.includes('<table'),
+    hasFooter: html.includes('Thank you for choosing'),
+  });
+}
+
+function isPdfBuffer(buffer?: Buffer | null, minBytes = PDF_MIN_BYTES) {
+  if (!buffer || !buffer.length) return false;
+  if (buffer.length < minBytes) return false;
+  return buffer.toString('utf8', 0, 4) === '%PDF';
+}
+
+function sanitizePdfBuffer(buffer: Buffer | null, label: string) {
+  if (!buffer) return null;
+  if (!isPdfBuffer(buffer)) {
+    console.error('[receiptSender] rejecting invalid PDF buffer', {
+      label,
+      length: buffer.length,
+      head: buffer.slice(0, Math.min(32, buffer.length)).toString('utf8'),
+    });
+    return null;
+  }
+  return buffer;
+}
+
+export async function generateReceiptPdf(
+  receiptSnapshot: any,
+  opts: { hideStamp?: boolean; htmlLabel?: string } = {}
+): Promise<Buffer | null> {
   // Prefer branding already present on the snapshot (caller-provided) to avoid
   // reading from a different DB/context; fall back to `getBranding()`.
   const branding = receiptSnapshot?.branding ?? (await getBranding());
@@ -113,6 +148,7 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
     { ...receiptSnapshot, branding },
     { hideStamp: Boolean(opts.hideStamp), hideItemWarrantySummary: true }
   );
+  logHtmlSignature(opts.htmlLabel ?? (opts.hideStamp ? 'pdf-stamp' : 'pdf-full'), html);
   let browser;
   try {
     browser = await launchChromiumBrowser();
@@ -137,21 +173,47 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
 async function fetchPdfFromService(html: string): Promise<Buffer | null> {
   const url = process.env.PDF_SERVICE_URL;
   if (!url) return null;
+  const endpoint = `${url.replace(/\/$/, '')}/render`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const res = await fetch(url.replace(/\/$/, '') + '/render', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ html }),
+      signal: controller.signal,
     });
+    const contentType = res.headers.get('content-type') || '';
+    const contentLength = res.headers.get('content-length') || '';
     if (!res.ok) {
-      console.error('[receiptSender] pdf service responded with', res.status);
+      const textSnippet = await res.text().catch(() => '');
+      console.error('[receiptSender] pdf service responded with non-OK', {
+        status: res.status,
+        contentType,
+        contentLength,
+        responseSnippet: textSnippet.slice(0, 200),
+      });
       return null;
     }
     const buffer = Buffer.from(await res.arrayBuffer());
+    const head = buffer.slice(0, Math.min(32, buffer.length)).toString('utf8');
+    if (!isPdfBuffer(buffer)) {
+      console.error('[receiptSender] pdf service returned invalid/suspicious PDF', {
+        status: res.status,
+        contentType,
+        contentLength,
+        bufferLength: buffer.length,
+        bufferHead: head,
+      });
+      return null;
+    }
     return buffer;
   } catch (err) {
-    console.error('[receiptSender] failed to fetch pdf from service', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[receiptSender] failed to fetch pdf from service', { endpoint, error: message });
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -161,25 +223,23 @@ async function wait(ms: number) {
 
 async function isUrlReachable(url: string, tries = 3) {
   for (let i = 0; i < tries; i += 1) {
+    const cacheBust = i > 0 ? (url.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`) : '';
+    const target = `${url}${cacheBust}`;
     try {
-      // Try a HEAD request first. Append cache-bust on subsequent tries.
-      const cacheBust = i > 0 ? (url.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`) : '';
-      const target = `${url}${cacheBust}`;
-      const res = await fetch(target, { method: "HEAD" });
-      if (res.ok) return true;
+      const headRes = await fetch(target, { method: "HEAD" });
+      if (headRes.ok) return true;
     } catch {
-      // ignore and retry
+      // ignore
+    }
+    try {
+      const getRes = await fetch(target, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+      if (getRes.ok || getRes.status === 206) return true;
+    } catch {
+      // ignore
     }
     await wait(400 * (i + 1));
   }
-
-  // Final fallback: try GET with Range header to ensure retrievability
-  try {
-    const res = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' } });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 async function isPdfUrlAccessible(url?: string | null) {
@@ -187,29 +247,38 @@ async function isPdfUrlAccessible(url?: string | null) {
   return isUrlReachable(url);
 }
 
-async function resolveChatracePdfUrl(site: string, receiptId: string, candidate?: string | null) {
-  const cleanCandidate = candidate?.trim();
-  const proxyUrl = `${site.replace(/\/$/, "")}/api/receipts/${receiptId}/pdf`;
+type ReceiptUrlResolution = {
+  receiptUrl: string | null;
+  mode: 'pdf' | 'proxy' | 'link';
+};
 
-  // 1) Candidate PDF
+async function resolveChatracePdfUrl(
+  site: string,
+  receiptId: string,
+  candidate?: string | null
+): Promise<ReceiptUrlResolution> {
+  const cleanCandidate = candidate?.trim();
+  const proxyUrl = `${site.replace(/\/$/, '')}/api/receipts/${receiptId}/receipt.pdf`;
+
   if (cleanCandidate) {
     const candidateOk = await isUrlReachable(cleanCandidate, 3);
-    if (candidateOk) return { receiptUrl: cleanCandidate, mode: 'pdf', candidateOk };
-    console.warn('[receiptSender] chatrace pdf url unreachable, will attempt proxy', { receiptId, candidate: cleanCandidate });
+    if (candidateOk) {
+      return { receiptUrl: cleanCandidate, mode: 'pdf' };
+    }
+    console.warn('[receiptSender] chatrace pdf url unreachable; trying proxy', { receiptId, candidate: cleanCandidate });
   }
 
-  // 2) Proxy endpoint
   try {
     const proxyOk = await isUrlReachable(proxyUrl, 3);
-    if (proxyOk) return { receiptUrl: proxyUrl, mode: 'proxy', proxyOk };
-    console.warn('[receiptSender] proxy endpoint not reachable or missing pdf; will fallback to page link', { receiptId, proxyUrl });
-  } catch (e) {
-    console.warn('[receiptSender] error checking proxy endpoint', e);
+    if (proxyOk) {
+      return { receiptUrl: proxyUrl, mode: 'proxy' };
+    }
+    console.warn('[receiptSender] proxy pdf endpoint not reachable', { receiptId, proxyUrl });
+  } catch (err) {
+    console.warn('[receiptSender] error checking proxy pdf endpoint', { receiptId, error: err instanceof Error ? err.message : String(err) });
   }
 
-  // 3) Final fallback: receipt page link (text-only)
-  const pageLink = `${site.replace(/\/$/, '')}/receipts/${receiptId}`;
-  return { receiptUrl: pageLink, mode: 'link' };
+  return { receiptUrl: null, mode: 'link' };
 }
 
 export async function sendReceiptChannels(
@@ -270,13 +339,19 @@ export async function sendReceiptChannels(
     // If a remote PDF service is configured, prefer it. Otherwise fall back
     // to local puppeteer rendering.
     const pdfServiceUrl = process.env.PDF_SERVICE_URL;
+    console.info('[receiptSender] pdf renderer config', {
+      hasPdfService: Boolean(pdfServiceUrl),
+      canRenderPdf,
+      needsPdf,
+    });
     if (pdfServiceUrl) {
       try {
         const htmlCustomer = renderReceiptTemplate(brandedSnapshot, {
           hideStamp: true,
           hideItemWarrantySummary: true,
         });
-        pdfCustomerBuffer = await fetchPdfFromService(htmlCustomer);
+        logHtmlSignature('customer-service', htmlCustomer);
+        pdfCustomerBuffer = sanitizePdfBuffer(await fetchPdfFromService(htmlCustomer), 'customer-service');
       } catch (err) {
         console.error('[receiptSender] pdf service customer render exception', err);
       }
@@ -285,22 +360,35 @@ export async function sendReceiptChannels(
           hideStamp: false,
           hideItemWarrantySummary: true,
         });
-        pdfFullBuffer = await fetchPdfFromService(htmlFull);
+        logHtmlSignature('full-service', htmlFull);
+        pdfFullBuffer = sanitizePdfBuffer(await fetchPdfFromService(htmlFull), 'full-service');
       } catch (err) {
         console.error('[receiptSender] pdf service full render exception', err);
       }
-    } else {
-      try {
-        pdfCustomerBuffer = await generateReceiptPdf(brandedSnapshot, { hideStamp: true });
-      } catch (err) {
-        console.error('[receiptSender] customer PDF generation exception', err);
+      } else {
+        try {
+          pdfCustomerBuffer = sanitizePdfBuffer(
+            await generateReceiptPdf(brandedSnapshot, {
+              hideStamp: true,
+              htmlLabel: 'customer-local',
+            }),
+            'customer-local'
+          );
+        } catch (err) {
+          console.error('[receiptSender] customer PDF generation exception', err);
+        }
+        try {
+          pdfFullBuffer = sanitizePdfBuffer(
+            await generateReceiptPdf(brandedSnapshot, {
+              hideStamp: false,
+              htmlLabel: 'full-local',
+            }),
+            'full-local'
+          );
+        } catch (err) {
+          console.error('[receiptSender] full PDF generation exception', err);
+        }
       }
-      try {
-        pdfFullBuffer = await generateReceiptPdf(brandedSnapshot, { hideStamp: false });
-      } catch (err) {
-        console.error('[receiptSender] full PDF generation exception', err);
-      }
-    }
     const anyGenerated = Boolean(pdfCustomerBuffer || pdfFullBuffer);
     channelStatus.pdf = anyGenerated ? 'generated' : 'failed';
     logStep(requestId, 'PDF', anyGenerated ? 'ok' : 'failed', {
@@ -422,6 +510,18 @@ export async function sendReceiptChannels(
     logStep(requestId, 'BLOB', 'failed', { error: String(e) });
   }
 
+  await persistReceiptFiles({
+    receiptId: receipt.id,
+    pdfUrlCustomer,
+    pdfKeyCustomer,
+    pdfCustomerBuffer,
+    pdfUrlFull,
+    pdfKeyFull,
+    pdfFullBuffer,
+    actorId,
+    retentionDays,
+  });
+
   const candidatePdfUrl = pdfUrlCustomer ?? pdfUrlFull;
   const rawCustomerPhone =
     ((receipt.order as any)?.customerPhone ?? (receipt.data as any)?.customerPhone ?? "")
@@ -461,48 +561,47 @@ export async function sendReceiptChannels(
   const site = getSiteUrl();
   const receiptPageLink = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
   const finalChatracePdfUrl = await resolveChatracePdfUrl(site, receipt.id, candidatePdfUrl);
-  const chatracePdfUrl = finalChatracePdfUrl;
+  const chatracePdfUrl = finalChatracePdfUrl.receiptUrl;
 
   if (normalizedChatracePhone) {
     logStep(requestId, 'CHARTRACE', 'begin', {
       phone: normalizedChatracePhone,
-      pdfUrl: !!finalChatracePdfUrl,
+      receiptUrlPresent: !!finalChatracePdfUrl.receiptUrl,
+      mode: finalChatracePdfUrl.mode,
       candidatePdfUrl: !!candidatePdfUrl,
     });
     try {
-      // structured log about env presence and inputs
-      const tagName = 'receipt_created';
+      const receiptUrlStr = finalChatracePdfUrl.receiptUrl ?? '';
+      const computedPdfUrlLength = receiptUrlStr.length;
+      const finalMode = finalChatracePdfUrl.mode;
+      const finalTagName = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+      const finalReceiptUrl =
+        finalMode === 'pdf' || finalMode === 'proxy' ? finalChatracePdfUrl.receiptUrl ?? undefined : undefined;
 
-      const receiptUrlStr = typeof (finalChatracePdfUrl as any) === 'string' ? (finalChatracePdfUrl as any) : String((finalChatracePdfUrl as any)?.receiptUrl ?? '');
-      const computedPdfUrlLength = receiptUrlStr ? receiptUrlStr.length : 0;
       console.info('[receipts][chatrace] preparing push', {
         receiptId: receipt.id,
         phoneNormalized: normalizedChatracePhone,
-        pdfUrlPresent: !!finalChatracePdfUrl,
-        pdfUrlLength: computedPdfUrlLength,
+        receiptUrlPresent: !!finalChatracePdfUrl.receiptUrl,
+        receiptUrlLength: computedPdfUrlLength,
+        receiptMode: finalMode,
         CHATRACE_BASE_URL: !!process.env.CHATRACE_BASE_URL,
         CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
         tokenPresent: !!process.env.CHATRACE_API_TOKEN,
-        tagName,
+        tagName: finalTagName,
       });
-
-      // determine final receipt_url and tag for Chatrace
-      const resolved = finalChatracePdfUrl as any;
-      const finalReceiptUrl = resolved?.receiptUrl ?? receiptPageLink;
-      const mode = resolved?.mode ?? (String(finalReceiptUrl).toLowerCase().endsWith('.pdf') ? 'pdf' : 'link');
-      const finalTagName = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
 
       const chitInput = {
         phoneE164: normalizedChatracePhone,
         customerName:
           (receipt.order as any)?.customerName ??
           (receipt.data as any)?.customerName ??
-          "Customer",
+          'Customer',
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
         amount: Math.round(invoiceAmount).toString(),
-        currency: "KES",
+        currency: 'KES',
         receiptLink: receiptPageLink,
         receiptUrl: finalReceiptUrl,
+        receiptId: receipt.id,
         tagName: finalTagName,
       };
 
@@ -515,31 +614,33 @@ export async function sendReceiptChannels(
           error: result?.debug?.error ?? 'Chatrace push failed',
         });
       }
-      console.info('[receipts][chatrace] push result', { receiptId: receipt.id, ok: !!result?.ok, steps: result?.debug?.steps });
+      console.info('[receipts][chatrace] push result', {
+        receiptId: receipt.id,
+        ok: !!result?.ok,
+        steps: result?.debug?.steps,
+      });
       logStep(requestId, 'CHARTRACE', result?.ok ? 'ok' : 'failed', {
         contactCreated: result?.debug?.contactId,
-        tagName,
-        pdfUrl: !!finalChatracePdfUrl,
+        tagName: finalTagName,
+        mode: finalMode,
         receiptLink: receiptPageLink.length,
       });
 
-      // persist summary into receipt.data.chatrace
       await getChatraceMetaUpdate({
-        status: result?.ok ? "sent" : "failed",
+        status: result?.ok ? 'sent' : 'failed',
         lastSentAt: result?.ok ? new Date().toISOString() : undefined,
         lastAttemptAt: result?.ok ? undefined : new Date().toISOString(),
-        pdfUrl: finalChatracePdfUrl,
+        pdfUrl: finalChatracePdfUrl.receiptUrl ?? null,
+        pdfMode: finalMode,
         receiptNumber: receipt.order?.orderNumber ?? receipt.id,
         debug: result?.debug,
       });
 
-      // Diagnostic: if this is the problematic receipt id, surface full debug
       if (receipt.id === 'Betech-20251218-21941') {
         console.error('[receipts][chatrace][DIAGNOSTIC] full debug', { receiptId: receipt.id, debug: result?.debug });
       }
     } catch (chErr) {
       const message = chErr instanceof Error ? chErr.message : String(chErr);
-      // Diagnostic mode: for named receipt, log full error
       if (receipt.id === 'Betech-20251218-21941') {
         console.error('[receipts][chatrace][DIAGNOSTIC] unexpected error', chErr);
       } else {
@@ -547,65 +648,14 @@ export async function sendReceiptChannels(
       }
       channelStatus.chatrace = 'failed';
       await getChatraceMetaUpdate({
-        status: "failed",
+        status: 'failed',
         lastAttemptAt: new Date().toISOString(),
         lastError: message,
       });
-      // TODO: schedule a background retry job for receipts with chatrace.status=failed
     }
   } else {
     channelStatus.chatrace = 'skipped';
     logStep(requestId, 'CHARTRACE', 'skipped');
-  }
-
-  // Persist ReceiptFile record for audit and lifecycle
-  try {
-    // create separate records for customer and full PDFs (if available)
-    const retentionDays = process.env.RECEIPT_RETENTION_DAYS ? Number(process.env.RECEIPT_RETENTION_DAYS) : undefined;
-    const hasNonEmptyUrl = (u?: string | null) => typeof u === 'string' && u.trim().length > 0;
-
-    if (hasNonEmptyUrl(pdfUrlCustomer)) {
-      const fileDataCust: any = {
-        receiptId: receipt.id,
-        key: pdfKeyCustomer ?? undefined,
-        url: pdfUrlCustomer!,
-        contentType: 'application/pdf',
-        size: pdfCustomerBuffer?.length ?? undefined,
-        uploadedBy: actorId ?? undefined,
-        expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
-      };
-      await prisma.receiptFile.create({ data: fileDataCust });
-    } else {
-      console.warn('[receiptSender] skipping ReceiptFile.create for customer PDF: missing url', {
-        receiptId: receipt.id,
-        pdfUrlCustomerPresent: hasNonEmptyUrl(pdfUrlCustomer),
-        pdfKeyCustomerPresent: !!pdfKeyCustomer,
-        bufferLen: pdfCustomerBuffer?.length ?? 0,
-      });
-    }
-
-    if (hasNonEmptyUrl(pdfUrlFull)) {
-      const fileDataFull: any = {
-        receiptId: receipt.id,
-        key: pdfKeyFull ?? undefined,
-        url: pdfUrlFull!,
-        contentType: 'application/pdf',
-        size: pdfFullBuffer?.length ?? undefined,
-        uploadedBy: actorId ?? undefined,
-        expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
-      };
-      await prisma.receiptFile.create({ data: fileDataFull });
-    } else {
-      console.warn('[receiptSender] skipping ReceiptFile.create for full PDF: missing url', {
-        receiptId: receipt.id,
-        pdfUrlFullPresent: hasNonEmptyUrl(pdfUrlFull),
-        pdfKeyFullPresent: !!pdfKeyFull,
-        bufferLen: pdfFullBuffer?.length ?? 0,
-      });
-    }
-  } catch (e) {
-    console.error('Failed to create ReceiptFile record', e);
-    errors.push({ channel: 'receiptFile.save', error: String(e) });
   }
 
   // Email via SendGrid
@@ -676,18 +726,17 @@ export async function sendReceiptChannels(
     const site = getSiteUrl();
     const receiptPage = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
 
-    // finalChatracePdfUrl was resolved earlier as an object; normalize
-    const resolved = finalChatracePdfUrl as any;
-    const finalReceiptUrl = resolved?.receiptUrl ?? receiptPage;
-    const mode = resolved?.mode ?? (String(finalReceiptUrl).toLowerCase().endsWith('.pdf') ? 'pdf' : 'link');
-    const finalTag = mode === 'pdf' || mode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+    const finalMode = finalChatracePdfUrl.mode;
+    const finalReceiptUrl =
+      finalMode === 'pdf' || finalMode === 'proxy' ? finalChatracePdfUrl.receiptUrl ?? undefined : undefined;
+    const finalTag = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
 
     console.info('[receiptSender] final receipt_url resolution', {
       receiptId: receipt.id,
       candidatePdfUrl: candidatePdf,
       candidatePdfPresent: !!candidatePdf,
       finalReceiptUrl,
-      mode,
+      mode: finalMode,
       finalTag,
       receiptPage,
     });
@@ -750,4 +799,77 @@ export async function sendReceiptChannels(
     errors: errors.length,
   });
   return { ok, sent, errors, channelStatus, pdfUrlCustomer, pdfUrlFull, pdfKeyCustomer, pdfKeyFull };
+}
+
+type PersistReceiptFilesParams = {
+  receiptId: string;
+  pdfUrlCustomer: string | null;
+  pdfKeyCustomer: string | null;
+  pdfCustomerBuffer: Buffer | null;
+  pdfUrlFull: string | null;
+  pdfKeyFull: string | null;
+  pdfFullBuffer: Buffer | null;
+  actorId?: string;
+  retentionDays?: number;
+};
+
+async function persistReceiptFiles(params: PersistReceiptFilesParams) {
+  const {
+    receiptId,
+    pdfUrlCustomer,
+    pdfKeyCustomer,
+    pdfCustomerBuffer,
+    pdfUrlFull,
+    pdfKeyFull,
+    pdfFullBuffer,
+    actorId,
+    retentionDays,
+  } = params;
+  const hasNonEmptyUrl = (value?: string | null) => typeof value === 'string' && value.trim().length > 0;
+
+  try {
+    if (hasNonEmptyUrl(pdfUrlCustomer)) {
+      await prisma.receiptFile.create({
+        data: {
+          receiptId,
+          key: pdfKeyCustomer ?? undefined,
+          url: pdfUrlCustomer!,
+          contentType: 'application/pdf',
+          size: pdfCustomerBuffer?.length ?? undefined,
+          uploadedBy: actorId ?? undefined,
+          expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
+        },
+      });
+    } else {
+      console.warn('[receiptSender] skipping ReceiptFile.create for customer PDF: missing url', {
+        receiptId,
+        pdfUrlCustomerPresent: hasNonEmptyUrl(pdfUrlCustomer),
+        pdfKeyCustomerPresent: !!pdfKeyCustomer,
+        bufferLen: pdfCustomerBuffer?.length ?? 0,
+      });
+    }
+
+    if (hasNonEmptyUrl(pdfUrlFull)) {
+      await prisma.receiptFile.create({
+        data: {
+          receiptId,
+          key: pdfKeyFull ?? undefined,
+          url: pdfUrlFull!,
+          contentType: 'application/pdf',
+          size: pdfFullBuffer?.length ?? undefined,
+          uploadedBy: actorId ?? undefined,
+          expiresAt: retentionDays ? new Date(Date.now() + retentionDays * 86400000) : undefined,
+        },
+      });
+    } else {
+      console.warn('[receiptSender] skipping ReceiptFile.create for full PDF: missing url', {
+        receiptId,
+        pdfUrlFullPresent: hasNonEmptyUrl(pdfUrlFull),
+        pdfKeyFullPresent: !!pdfKeyFull,
+        bufferLen: pdfFullBuffer?.length ?? 0,
+      });
+    }
+  } catch (error) {
+    console.error('[receiptSender] failed to create ReceiptFile record', error);
+  }
 }
