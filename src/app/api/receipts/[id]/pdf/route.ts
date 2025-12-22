@@ -1,15 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface ParamsContext {
-  params: { id: string };
-}
-
-export async function GET(_req: NextRequest, context: ParamsContext) {
-  const receiptId = context?.params?.id;
+export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const receiptId = params?.id;
   if (!receiptId) {
     return new Response(JSON.stringify({ error: 'Missing receipt id' }), {
       status: 400,
