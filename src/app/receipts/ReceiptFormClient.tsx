@@ -327,9 +327,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const whatsappMessage = useMemo(() => {
     if (!customerPhone || !customerName || !customerType) return "";
+    const servedBy = selectedStaff?.name || "Betech Solar Solutions";
     const lines = [
       `Customer: ${customerName}`,
       `Phone: ${customerPhone}`,
+      `Served by: ${servedBy}`,
       `Type: ${customerType}`,
       `Total: KES ${total.toLocaleString()}`,
       `Items: ${items.map((item) => item.title || "Item").join(", ")}`,
@@ -337,7 +339,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       `Cash: KES ${numericCashPaid.toLocaleString()}`,
     ];
     return lines.join("\n");
-  }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid]);
+  }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid, selectedStaff]);
 
   const handlePreview = (autoPrint = false) => {
     if (!hasPaymentMethodSelection) {
