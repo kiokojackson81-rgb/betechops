@@ -56,6 +56,7 @@ export default function renderReceiptTemplate(
         })
         .join('');
   const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
+  const allowMarketingFooter = (items.length || 0) <= 5;
 
   const toNumberOrNull = (value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -426,6 +427,7 @@ export default function renderReceiptTemplate(
         <p>Goods once sold cannot be refunded.</p>
       </div>
 
+      ${allowMarketingFooter ? `
       <div class="receipt-footer-container">
       <div class="receipt-footer">
         <div class="footer-badge">Connect With Us</div>
@@ -471,6 +473,7 @@ export default function renderReceiptTemplate(
         </p>
       </div>
       </div>
+      ` : ""}
 
     </div>
   </body>
