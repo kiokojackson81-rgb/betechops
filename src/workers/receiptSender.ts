@@ -109,7 +109,10 @@ export async function generateReceiptPdf(receiptSnapshot: any, opts: { hideStamp
   // Prefer branding already present on the snapshot (caller-provided) to avoid
   // reading from a different DB/context; fall back to `getBranding()`.
   const branding = receiptSnapshot?.branding ?? (await getBranding());
-  const html = renderReceiptTemplate({ ...receiptSnapshot, branding }, { hideStamp: Boolean(opts.hideStamp) });
+  const html = renderReceiptTemplate(
+    { ...receiptSnapshot, branding },
+    { hideStamp: Boolean(opts.hideStamp), hideItemWarrantySummary: true }
+  );
   let browser;
   try {
     browser = await launchChromiumBrowser();
@@ -269,13 +272,19 @@ export async function sendReceiptChannels(
     const pdfServiceUrl = process.env.PDF_SERVICE_URL;
     if (pdfServiceUrl) {
       try {
-        const htmlCustomer = renderReceiptTemplate(brandedSnapshot, { hideStamp: true });
+        const htmlCustomer = renderReceiptTemplate(brandedSnapshot, {
+          hideStamp: true,
+          hideItemWarrantySummary: true,
+        });
         pdfCustomerBuffer = await fetchPdfFromService(htmlCustomer);
       } catch (err) {
         console.error('[receiptSender] pdf service customer render exception', err);
       }
       try {
-        const htmlFull = renderReceiptTemplate(brandedSnapshot, { hideStamp: false });
+        const htmlFull = renderReceiptTemplate(brandedSnapshot, {
+          hideStamp: false,
+          hideItemWarrantySummary: true,
+        });
         pdfFullBuffer = await fetchPdfFromService(htmlFull);
       } catch (err) {
         console.error('[receiptSender] pdf service full render exception', err);

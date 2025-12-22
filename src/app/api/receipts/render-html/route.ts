@@ -15,7 +15,10 @@ export async function POST(req: Request) {
   }
 
   const branding = await getBranding();
-  const html = renderReceiptTemplate({ ...(draft as any), branding }, { hideStamp: false });
+  const html = renderReceiptTemplate(
+    { ...(draft as any), branding },
+    { hideStamp: false, hideItemWarrantySummary: true }
+  );
 
   const res = NextResponse.json({ html });
   res.headers.set("Cache-Control", "no-store");

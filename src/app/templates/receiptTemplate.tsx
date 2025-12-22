@@ -1,4 +1,7 @@
-export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?: boolean } = {}) {
+export default function renderReceiptTemplate(
+  snapshot: any,
+  opts: { hideStamp?: boolean; hideItemWarrantySummary?: boolean } = {}
+) {
   const branding = snapshot.branding || {};
   const siteTitle = branding.siteTitle || process.env.RECEIPT_SITE_TITLE || 'BETECH SOLAR SOLUTIONS';
   const brandColor = branding.brandColor || '#7A2020';
@@ -35,21 +38,23 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
     }
     return String(value);
   };
-  const itemWarrantyEntries = items
-    .filter((it: any) => (it.serial && String(it.serial).trim()) || (it.warranty && String(it.warranty).trim()))
-    .map((it: any) => {
-      const parts: string[] = [];
-      if (it.serial) {
-        parts.push(`SN ${String(it.serial).trim()}`);
-      }
-      const warrantyValue = formatWarrantyValue(it.warranty);
-      if (warrantyValue) {
-        parts.push(`Warranty: ${warrantyValue}`);
-      }
-      const label = it.title || it.productName || 'Item';
-      return `<div class="item-warranty-row"><strong>${label}</strong>: ${parts.join(' | ')}</div>`;
-    })
-    .join('');
+  const itemWarrantyEntries = opts.hideItemWarrantySummary
+    ? ''
+    : items
+        .filter((it: any) => (it.serial && String(it.serial).trim()) || (it.warranty && String(it.warranty).trim()))
+        .map((it: any) => {
+          const parts: string[] = [];
+          if (it.serial) {
+            parts.push(`SN ${String(it.serial).trim()}`);
+          }
+          const warrantyValue = formatWarrantyValue(it.warranty);
+          if (warrantyValue) {
+            parts.push(`Warranty: ${warrantyValue}`);
+          }
+          const label = it.title || it.productName || 'Item';
+          return `<div class="item-warranty-row"><strong>${label}</strong>: ${parts.join(' | ')}</div>`;
+        })
+        .join('');
   const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
 
   const toNumberOrNull = (value: unknown): number | null => {
@@ -303,11 +308,7 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
     </table>
 
-      ${
-        itemWarrantyEntries
-          ? `<div class="item-warranty">${itemWarrantyEntries}</div>`
-          : ''
-      }
+      ${itemWarrantyEntries ? `<div class="item-warranty">${itemWarrantyEntries}</div>` : ''}
 
       ${notes ? `<div class="notes"><strong>Notes:</strong><div style="margin-top:6px">${notes}</div></div>` : ''}
 

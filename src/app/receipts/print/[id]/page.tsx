@@ -30,7 +30,10 @@ export default async function Page({ params }: { params: { id: string } }) {
   const branding = await getBranding();
   // buildReceiptSnapshot returns a typed object; cast to `any` so we can spread it
   // and inject `branding` without a type error during the Next.js build.
-  const html = renderReceiptTemplate({ ...(snapshot as any), branding }, { hideStamp: false });
+  const html = renderReceiptTemplate(
+    { ...(snapshot as any), branding },
+    { hideStamp: false, hideItemWarrantySummary: true }
+  );
 
   // Render the template HTML directly into the page so it behaves like the printable route.
   return (
