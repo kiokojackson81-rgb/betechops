@@ -33,7 +33,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     amount,
     currency,
     receiptLink,
-    pdfUrl,
+    receiptUrl,
     receiptId,
     tagName,
   } = input;
@@ -156,7 +156,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     actions.push(setFieldValue('receipt_id', receiptId));
   }
 
-  const tagToApply = finalTag || (receiptUrlTrimmed && \/\.pdf(\?|$)\/i.test(receiptUrlTrimmed) ? 'receipt_created_pdf' : 'receipt_created_link');
+  const pdfRegex = /\.pdf(\?|$)/i;
+  const tagToApply =
+    finalTag || (receiptUrlTrimmed && pdfRegex.test(receiptUrlTrimmed) ? 'receipt_created_pdf' : 'receipt_created_link');
   actions.push({ action: 'add_tag', tag_name: tagToApply });
 
   debug.payloadPreview = {
@@ -174,7 +176,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     baseUrl: BASE_URL,
     accountId: ACCOUNT_ID,
     headerKeys,
-    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
+    pdfUrlLength: receiptUrlTrimmed?.length ?? 0,
     receiptLinkLength: receiptLink.length,
   });
 
