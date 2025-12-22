@@ -135,7 +135,13 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     console.warn('[chatrace] receiptLink does not look public HTTPS', { receiptLink });
   }
 
-  const finalTag = tagName?.trim() || '';
+  const finalTag = (tagName?.trim() || '').toLowerCase();
+  const receiptMode = receiptUrlTrimmed ? 'pdf' : 'link';
+
+  const finalReceiptUrl = (receiptUrlTrimmed || receiptLink || '').trim();
+  if (!finalReceiptUrl) {
+    throw new Error('finalReceiptUrl is empty (receiptUrl + receiptLink both missing)');
+  }
 
   const setFieldValue = (fieldName: string, value: any) => ({
     action: 'set_field_value',
@@ -144,13 +150,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   });
 
   const actions: any[] = [];
-  const receiptMode = receiptUrlTrimmed ? 'pdf' : 'link';
-  if (receiptUrlTrimmed) {
-    actions.push(setFieldValue('receipt_url', receiptUrlTrimmed));
-    actions.push(setFieldValue('media_url', receiptUrlTrimmed));
-    actions.push(setFieldValue('receipt_pdf_url', receiptUrlTrimmed));
-    actions.push(setFieldValue('file_url', receiptUrlTrimmed));
-  }
+  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
+  actions.push(setFieldValue('media_url', finalReceiptUrl));
+  actions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
+  actions.push(setFieldValue('file_url', finalReceiptUrl));
 
   actions.push(setFieldValue('customer_name', customerName || 'Customer'));
   actions.push(setFieldValue('order_placed', receiptNumber));
@@ -161,37 +164,42 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   }
   actions.push(setFieldValue('receipt_channel', 'customer'));
 
-  const tagToApply =
-    finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link');
-  actions.push({ action: 'add_tag', tag_name: tagToApply });
+  actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+  actions.push({
+    action: 'add_tag',
+    tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+  });
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
     actionsCount: actions.length,
-    tag: tagToApply,
-    hasReceiptUrl: !!receiptUrlTrimmed,
+    tag: 'receipt_created',
+    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+    hasReceiptUrl: !!finalReceiptUrl,
     receiptMode,
+    finalReceiptUrlLength: finalReceiptUrl.length,
   };
 
   console.info('[chatrace] pushReceipt', {
     receiptNumber,
     phoneE164,
-    tagName: finalTag,
     baseUrl: BASE_URL,
     accountId: ACCOUNT_ID,
     headerKeys,
-    receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     receiptMode,
-    receiptUrlSnippet: receiptUrlTrimmed ? receiptUrlTrimmed.slice(0, 120) : '',
-    tagToApply,
+    receiptUrlTrimmedLength: receiptUrlTrimmed?.length ?? 0,
+    finalReceiptUrlLength: finalReceiptUrl.length,
+    finalReceiptUrlSnippet: finalReceiptUrl.slice(0, 120),
+    tagToApply: 'receipt_created',
+    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
   });
 
   // summary log for monitoring integrations (phone, final receipt_url, tag, mode)
   console.info('[chatrace] pushSummary', {
     phone: phoneE164,
-    receipt_url: receiptUrlTrimmed ?? null,
-    tag: tagToApply,
+    receipt_url: finalReceiptUrl,
+    tag: 'receipt_created',
     receiptMode,
   });
 
