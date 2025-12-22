@@ -157,24 +157,84 @@ export default function renderReceiptTemplate(
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
       /* Print layout: force A5, prevent unwanted page breaks and keep footer on same page */
-      @page { size: A5 portrait; margin: 8mm; }
+      @page { size: A5 portrait; margin: 6mm; }
       @media print {
-        html, body { width: 148mm; height: 210mm; }
-        .page { box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column; padding: 8mm; margin: 0; box-shadow: none; }
+        html, body {
+          width: 148mm;
+          height: 210mm;
+          margin: 0;
+          padding: 0;
+          font-size: 10px;
+          line-height: 1.1;
+          word-break: keep-all;
+          hyphens: none;
+        }
+        body {
+          min-height: 210mm;
+          overflow: hidden;
+        }
+        .page {
+          box-sizing: border-box;
+          width: 100%;
+          height: 100%;
+          max-height: calc(210mm - 12mm);
+          display: flex;
+          flex-direction: column;
+          padding: 6mm;
+          margin: 0;
+          box-shadow: none;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
         /* Keep header and footer from breaking */
         header { flex: 0 0 auto; }
         .signature { flex: 0 0 auto; }
-        .receipt-footer { flex: 0 0 auto; page-break-inside: avoid; break-inside: avoid; margin-top: 8px; }
-        /* Main content should take remaining space but not overflow to a new page */
-        .meta, table, .item-warranty, .notes { page-break-inside: avoid; break-inside: avoid; }
-        table { page-break-after: auto; }
-        tr { page-break-inside: avoid; break-inside: avoid; }
+        .receipt-footer {
+          flex: 0 0 auto;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          margin-top: 10px;
+          font-size: 10px;
+        }
+        .receipt-footer-container {
+          margin-top: auto;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .meta, table, .item-warranty, .notes {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        table {
+          page-break-after: auto;
+        }
+        tr {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
         thead { display: table-header-group; }
         tfoot { display: table-footer-group; }
-        /* Pin footer to bottom of the page */
-        .page > .receipt-footer-container { margin-top: auto; }
-        /* Tighten typography slightly to help fit single page */
-        body, .page { font-size: 11px; line-height: 1.15; }
+        th, td {
+          padding: 5px 6px;
+        }
+        .meta {
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+        .receipt-footer {
+          margin-top: 10px;
+        }
+        .social-row {
+          gap: 4px;
+        }
+        .social-link {
+          font-size: 10px;
+        }
+        .footer-divider {
+          margin: 6px auto;
+          width: 85%;
+        }
+        body, .page { font-size: 10px; }
         /* Ensure colors print accurately */
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
