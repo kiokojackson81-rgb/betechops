@@ -189,6 +189,7 @@ export default function renderReceiptTemplate(
           break-inside: avoid;
           background: #fff;
           border-radius: 0;
+          overflow: hidden;
         }
         /* Keep header and footer from breaking */
         header { flex: 0 0 auto; }
@@ -239,6 +240,21 @@ export default function renderReceiptTemplate(
           width: 85%;
         }
         body, .page { font-size: 10px; }
+        body {
+          zoom: 0.94;
+        }
+        table {
+          font-size: 9px;
+        }
+        td, th {
+          padding: 4px 5px;
+        }
+        .meta {
+          font-size: 9px;
+        }
+        h1, h2, h3 {
+          font-size: 10px;
+        }
         /* Ensure colors print accurately */
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
