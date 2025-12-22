@@ -12,7 +12,8 @@ export async function uploadReceiptPdfToBlob(opts: UploadReceiptPdfOptions) {
     throw new Error("Missing BLOB_READ_WRITE_TOKEN");
   }
 
-  const pathname = `receipts/${opts.receiptId}/${opts.kind}.pdf`;
+  // include timestamp prefix and keep random suffix to ensure uniqueness
+  const pathname = `receipts/${opts.receiptId}/${opts.kind}-${Date.now()}.pdf`;
   const blob = await put(pathname, opts.buffer, {
     access: "public",
     contentType: "application/pdf",

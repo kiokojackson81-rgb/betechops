@@ -118,22 +118,33 @@ function logHtmlSignature(label: string, html: string) {
   });
 }
 
-function isPdfBuffer(buffer?: Buffer | null, minBytes = PDF_MIN_BYTES) {
-  if (!buffer || !buffer.length) return false;
-  if (buffer.length < minBytes) return false;
-  return buffer.toString('utf8', 0, 4) === '%PDF';
+function isPdfBuffer(buffer?: Buffer | null) {
+  if (!buffer || buffer.length < 5) return false;
+
+  // Check bytes for "%PDF-"
+  return (
+    buffer[0] === 0x25 && // %
+    buffer[1] === 0x50 && // P
+    buffer[2] === 0x44 && // D
+    buffer[3] === 0x46 && // F
+    buffer[4] === 0x2d    // -
+  );
 }
 
 function sanitizePdfBuffer(buffer: Buffer | null, label: string) {
   if (!buffer) return null;
+
   if (!isPdfBuffer(buffer)) {
+    const head = buffer.slice(0, Math.min(16, buffer.length));
     console.error('[receiptSender] rejecting invalid PDF buffer', {
       label,
       length: buffer.length,
-      head: buffer.slice(0, Math.min(32, buffer.length)).toString('utf8'),
+      headAscii: head.toString('utf8'),
+      headHex: head.toString('hex'),
     });
     return null;
   }
+
   return buffer;
 }
 
@@ -226,16 +237,32 @@ async function isUrlReachable(url: string, tries = 3) {
     const cacheBust = i > 0 ? (url.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`) : '';
     const target = `${url}${cacheBust}`;
     try {
-      const headRes = await fetch(target, { method: "HEAD" });
-      if (headRes.ok) return true;
+      // Try HEAD first
+      let headRes: Response | null = null;
+      try {
+        headRes = await fetch(target, { method: 'HEAD' });
+        if (headRes.ok) {
+          console.info('[receiptSender] isUrlReachable: HEAD ok', { url: target, status: headRes.status });
+          return true;
+        }
+        console.info('[receiptSender] isUrlReachable: HEAD returned', { url: target, status: headRes.status });
+      } catch (headErr) {
+        console.info('[receiptSender] isUrlReachable: HEAD failed', { url: target, error: headErr instanceof Error ? headErr.message : String(headErr) });
+      }
+
+      // If HEAD failed or returned 403/405, try GET with Range
+      try {
+        const getRes = await fetch(target, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+        if (getRes.ok || getRes.status === 206) {
+          console.info('[receiptSender] isUrlReachable: GET(range) ok', { url: target, status: getRes.status });
+          return true;
+        }
+        console.info('[receiptSender] isUrlReachable: GET(range) returned', { url: target, status: getRes.status });
+      } catch (getErr) {
+        console.info('[receiptSender] isUrlReachable: GET(range) failed', { url: target, error: getErr instanceof Error ? getErr.message : String(getErr) });
+      }
     } catch {
-      // ignore
-    }
-    try {
-      const getRes = await fetch(target, { method: 'GET', headers: { Range: 'bytes=0-0' } });
-      if (getRes.ok || getRes.status === 206) return true;
-    } catch {
-      // ignore
+      // ignore outer errors
     }
     await wait(400 * (i + 1));
   }
@@ -258,7 +285,7 @@ async function resolveChatracePdfUrl(
   candidate?: string | null
 ): Promise<ReceiptUrlResolution> {
   const cleanCandidate = candidate?.trim();
-  const proxyUrl = `${site.replace(/\/$/, '')}/api/receipts/${receiptId}/receipt.pdf`;
+  const proxyUrl = `${site.replace(/\/$/, '')}/api/receipts/${receiptId}/pdf`;
 
   if (cleanCandidate) {
     const candidateOk = await isUrlReachable(cleanCandidate, 3);
@@ -391,6 +418,17 @@ export async function sendReceiptChannels(
       }
     const anyGenerated = Boolean(pdfCustomerBuffer || pdfFullBuffer);
     channelStatus.pdf = anyGenerated ? 'generated' : 'failed';
+    // Additional debug: log presence, sizes, and first bytes (hex) of generated PDFs
+    const headHex = (buf?: Buffer | null, len = 8) => (buf ? buf.slice(0, Math.min(len, buf.length)).toString('hex') : null);
+    console.info('[receiptSender] pdf generation summary', {
+      receiptId: receipt.id,
+      customerPdfPresent: !!pdfCustomerBuffer,
+      customerPdfBytes: pdfCustomerBuffer?.length ?? 0,
+      customerPdfHeadHex: headHex(pdfCustomerBuffer),
+      fullPdfPresent: !!pdfFullBuffer,
+      fullPdfBytes: pdfFullBuffer?.length ?? 0,
+      fullPdfHeadHex: headHex(pdfFullBuffer),
+    });
     logStep(requestId, 'PDF', anyGenerated ? 'ok' : 'failed', {
       bytes_customer: pdfCustomerBuffer?.length ?? 0,
       bytes_full: pdfFullBuffer?.length ?? 0,
@@ -425,9 +463,21 @@ export async function sendReceiptChannels(
           console.info('[pdf][blob] customer uploaded', {
             receiptId: receipt.id,
             key: pdfKeyCustomer,
-            urlLength: pdfUrlCustomer.length,
+            url: pdfUrlCustomer,
             size: pdfCustomerBuffer.length,
           });
+
+          // Immediately verify blob URL with HEAD, fallback to GET range if HEAD fails
+          try {
+            const headRes = await fetch(pdfUrlCustomer, { method: 'HEAD' });
+            console.info('[pdf][blob] HEAD check', { receiptId: receipt.id, url: pdfUrlCustomer, status: headRes.status, contentType: headRes.headers.get('content-type'), contentLength: headRes.headers.get('content-length'), cacheControl: headRes.headers.get('cache-control') });
+            if (!headRes.ok && (headRes.status === 403 || headRes.status === 405)) {
+              const getRes = await fetch(pdfUrlCustomer, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+              console.info('[pdf][blob] GET(range) check (HEAD returned 403/405)', { receiptId: receipt.id, url: pdfUrlCustomer, status: getRes.status, contentType: getRes.headers.get('content-type'), contentLength: getRes.headers.get('content-length'), cacheControl: getRes.headers.get('cache-control') });
+            }
+          } catch (checkErr) {
+            console.warn('[pdf][blob] verification request failed', { receiptId: receipt.id, url: pdfUrlCustomer, error: checkErr instanceof Error ? checkErr.message : String(checkErr) });
+          }
         } catch (blobErr) {
           console.error('[pdf][blob] customer upload failed; will fall back to receipt link', {
             receiptId: receipt.id,
@@ -444,9 +494,20 @@ export async function sendReceiptChannels(
           console.info('[pdf][blob] print uploaded', {
             receiptId: receipt.id,
             key: pdfKeyFull,
-            urlLength: pdfUrlFull.length,
+            url: pdfUrlFull,
             size: pdfFullBuffer.length,
           });
+
+          try {
+            const headRes = await fetch(pdfUrlFull, { method: 'HEAD' });
+            console.info('[pdf][blob] HEAD check', { receiptId: receipt.id, url: pdfUrlFull, status: headRes.status, contentType: headRes.headers.get('content-type'), contentLength: headRes.headers.get('content-length'), cacheControl: headRes.headers.get('cache-control') });
+            if (!headRes.ok && (headRes.status === 403 || headRes.status === 405)) {
+              const getRes = await fetch(pdfUrlFull, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+              console.info('[pdf][blob] GET(range) check (HEAD returned 403/405)', { receiptId: receipt.id, url: pdfUrlFull, status: getRes.status, contentType: getRes.headers.get('content-type'), contentLength: getRes.headers.get('content-length'), cacheControl: getRes.headers.get('cache-control') });
+            }
+          } catch (checkErr) {
+            console.warn('[pdf][blob] verification request failed', { receiptId: receipt.id, url: pdfUrlFull, error: checkErr instanceof Error ? checkErr.message : String(checkErr) });
+          }
         } catch (blobErr) {
           console.error('[pdf][blob] print upload failed; will fall back to receipt link', {
             receiptId: receipt.id,

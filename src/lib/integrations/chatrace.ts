@@ -187,6 +187,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     tagToApply,
   });
 
+  // summary log for monitoring integrations (phone, final receipt_url, tag, mode)
+  console.info('[chatrace] pushSummary', {
+    phone: phoneE164,
+    receipt_url: receiptUrlTrimmed ?? null,
+    tag: tagToApply,
+    receiptMode,
+  });
+
   const path = '/contacts';
   const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions }, headers);
   debug.steps.create = {
