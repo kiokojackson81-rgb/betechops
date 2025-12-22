@@ -37,7 +37,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptId,
     tagName,
   } = input;
-  const receiptUrlTrimmed = input.receiptUrl?.trim();
+  const receiptUrlTrimmed = receiptUrl?.trim();
   const debug: any = {
     ok: false,
     steps: {},
@@ -75,6 +75,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     'X-ACCESS-TOKEN': API_TOKEN || '',
     Accept: 'application/json',
   } as Record<string, string>;
+  if (ACCOUNT_ID) {
+    headers['X-ACCOUNT-ID'] = ACCOUNT_ID;
+  }
   const headerKeys = Object.keys(headers);
   debug.env.headerKeys = headerKeys;
 
@@ -144,6 +147,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   // receipt_url should always be set (may be PDF or page link)
   if (receiptUrlTrimmed) {
     actions.push(setFieldValue('receipt_url', receiptUrlTrimmed));
+    // Add alternate field names to improve compatibility with external flows
+    actions.push(setFieldValue('media_url', receiptUrlTrimmed));
+    actions.push(setFieldValue('receipt_pdf_url', receiptUrlTrimmed));
+    actions.push(setFieldValue('file_url', receiptUrlTrimmed));
   } else if (receiptLink) {
     actions.push(setFieldValue('receipt_url', receiptLink));
   }
@@ -156,9 +163,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     actions.push(setFieldValue('receipt_id', receiptId));
   }
 
-  const pdfRegex = /\.pdf(\?|$)/i;
-  const tagToApply =
-    finalTag || (receiptUrlTrimmed && pdfRegex.test(receiptUrlTrimmed) ? 'receipt_created_pdf' : 'receipt_created_link');
+  const receiptUrlForTag = receiptUrlTrimmed || receiptLink;
+  const normalizedReceiptUrl = receiptUrlForTag?.split('?')[0].toLowerCase();
+  const looksLikePdf = normalizedReceiptUrl?.endsWith('.pdf') ?? false;
+  const tagToApply = finalTag || (looksLikePdf ? 'receipt_created_pdf' : 'receipt_created_link');
   actions.push({ action: 'add_tag', tag_name: tagToApply });
 
   debug.payloadPreview = {
@@ -176,8 +184,11 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     baseUrl: BASE_URL,
     accountId: ACCOUNT_ID,
     headerKeys,
-    pdfUrlLength: receiptUrlTrimmed?.length ?? 0,
+    receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     receiptLinkLength: receiptLink.length,
+    receiptUrlForTag,
+    looksLikePdf,
+    tagToApply,
   });
 
   const path = '/contacts';
@@ -194,6 +205,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   }
 
   const bodyJson = createRes.json ?? {};
+  // capture contact id and full response for debugging
+  debug.contactId = bodyJson?.data?.id ?? bodyJson?.id ?? null;
+  debug.responseJson = bodyJson;
+  debug.steps.create.response = bodyJson;
   const success = Boolean(bodyJson?.success);
   console.info('[chatrace] create contact response', { receiptNumber, phoneE164, status: createRes.status, success });
 
