@@ -157,9 +157,10 @@ export default function renderReceiptTemplate(
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
       .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
       /* Print layout: force A5, prevent unwanted page breaks and keep footer on same page */
-      @page { size: A5 portrait; margin: 6mm; }
+      @page { size: A5 portrait; margin: 0; }
       @media print {
-        html, body {
+        html,
+        body {
           width: 148mm;
           height: 210mm;
           margin: 0;
@@ -168,6 +169,7 @@ export default function renderReceiptTemplate(
           line-height: 1.1;
           word-break: keep-all;
           hyphens: none;
+          background: #fff;
         }
         body {
           min-height: 210mm;
@@ -176,15 +178,17 @@ export default function renderReceiptTemplate(
         .page {
           box-sizing: border-box;
           width: 100%;
-          height: 100%;
-          max-height: calc(210mm - 12mm);
+          max-width: 148mm;
+          max-height: 210mm;
           display: flex;
           flex-direction: column;
-          padding: 6mm;
-          margin: 0;
+          padding: 4mm;
+          margin: 0 auto;
           box-shadow: none;
           page-break-inside: avoid;
           break-inside: avoid;
+          background: #fff;
+          border-radius: 0;
         }
         /* Keep header and footer from breaking */
         header { flex: 0 0 auto; }
