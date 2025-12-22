@@ -809,7 +809,7 @@ type PersistReceiptFilesParams = {
   pdfUrlFull: string | null;
   pdfKeyFull: string | null;
   pdfFullBuffer: Buffer | null;
-  actorId?: string;
+  actorId?: string | null;
   retentionDays?: number;
 };
 
