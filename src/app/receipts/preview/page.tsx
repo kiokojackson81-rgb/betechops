@@ -38,14 +38,14 @@ export default function ReceiptPreviewPage() {
     })();
   }, []);
 
-  if (err) return <div className="p-6">{err}</div>;
-  if (!html) return <div className="p-6">Loading preview.</div>;
-
   useEffect(() => {
     if (!autoPrint || !html) return;
     const timer = window.setTimeout(() => window.print(), 0);
     return () => window.clearTimeout(timer);
   }, [autoPrint, html]);
+
+  if (err) return <div className="p-6">{err}</div>;
+  if (!html) return <div className="p-6">Loading preview.</div>;
 
   return (
     <div className="receipt-screen receipt-print-area p-6 bg-slate-100 min-h-screen flex justify-center">
