@@ -225,6 +225,13 @@ export default function renderReceiptTemplate(
         color: #111;
       }
 
+      /* Ensure the footer container stays on the same printed page */
+      .receipt-footer-container {
+        margin-top: auto;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
       .footer-badge {
         display: inline-block;
         padding: 4px 10px;

@@ -518,7 +518,7 @@ export async function sendReceiptChannels(
     pdfUrlFull,
     pdfKeyFull,
     pdfFullBuffer,
-    actorId,
+    actorId: actorId ?? undefined,
     retentionDays,
   });
 
