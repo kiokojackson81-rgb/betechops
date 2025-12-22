@@ -25,19 +25,6 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
   const attendant = order?.attendant?.name || snapshot.attendantName || snapshot.issuedByName || '';
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
-  const serialDisplay = snapshot.serialNumber || order.orderNumber || snapshot.serial || '';
-  const paymentBreakdown = snapshot.paymentBreakdown || { cash: 0, mpesa: 0, reference: '' };
-  const mpesaAmount = Number.isFinite(paymentBreakdown.mpesa ?? NaN) ? paymentBreakdown.mpesa ?? 0 : 0;
-  const cashAmount = Number.isFinite(paymentBreakdown.cash ?? NaN) ? paymentBreakdown.cash ?? 0 : 0;
-  const mpesaReference =
-    typeof paymentBreakdown.reference === 'string' && paymentBreakdown.reference.trim()
-      ? paymentBreakdown.reference.trim()
-      : '';
-  const warrantyText = snapshot.warrantyText || '';
-  const formatKes = (value: number | null | undefined) => {
-    if (value === null || value === undefined || Number.isNaN(value)) return '-';
-    return `KES ${formatAmount(value)}`;
-  };
   const formatWarrantyValue = (value: any) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -176,43 +163,6 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
       .signature { margin-top:20px; text-align:center }
 
-      .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 10px;
-        margin-bottom: 12px;
-        font-size: 12px;
-        color: #0f172a;
-      }
-
-      .detail-grid div {
-        padding: 6px 10px;
-        border-radius: 6px;
-        background: #f5f5f5;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-      }
-
-      .payment-details {
-        margin-top: 12px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px dashed rgba(15, 23, 42, 0.25);
-        background: #fdfdfd;
-      }
-
-      .payment-grid {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 12px;
-        margin-top: 8px;
-        font-size: 12px;
-      }
-
-      .payment-grid span {
-        font-weight: 600;
-      }
-
       .item-warranty-row {
         font-size: 11px;
         color: #1f2937;
@@ -236,15 +186,6 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
         border-radius: 4px;
         padding: 2px 6px;
         border: 1px solid rgba(15, 23, 42, 0.15);
-      }
-      .payment-meta {
-        margin-top: 8px;
-        font-size: 11px;
-        text-transform: none;
-        color: #1f2937;
-      }
-      .payment-meta p {
-        margin: 0;
       }
 
       .receipt-footer {
@@ -347,12 +288,6 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       </div>
     </div>
 
-    <div class="detail-grid">
-      <div><strong>Serial No.:</strong> ${serialDisplay || '-'}</div>
-      <div><strong>Warranty:</strong> ${warrantyText || 'Standard warranty applies'}</div>
-      <div><strong>Phone (MPESA):</strong> ${formatKes(mpesaAmount)}${mpesaReference ? ` <span>(Ref: ${mpesaReference})</span>` : ''}</div>
-    </div>
-
       <table>
         <thead>
           <tr><th>Qty</th><th>Particulars</th><th class="right">@ (Ksh)</th><th class="right">Kshs.</th></tr>
@@ -368,30 +303,9 @@ export default function renderReceiptTemplate(snapshot: any, opts: { hideStamp?:
       <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
     </table>
 
-      <div class="payment-details">
-        <div><strong>Payment method:</strong> ${paymentMethod || 'N/A'}</div>
-        <div class="payment-grid">
-          <div>
-            <span>MPESA:</span> ${formatKes(mpesaAmount)}
-            ${mpesaReference ? `<small>Ref: ${mpesaReference}</small>` : ''}
-          </div>
-          <div><span>Cash:</span> ${formatKes(cashAmount)}</div>
-        </div>
-      </div>
-
       ${
         itemWarrantyEntries
           ? `<div class="item-warranty">${itemWarrantyEntries}</div>`
-          : ''
-      }
-
-      ${
-        snapshot.paymentDetailsShown
-          ? `<div class="payment-meta">
-              <p>Paybill No. 516600</p>
-              <p>Account No. 0710098001</p>
-              <p>DTB Bank</p>
-            </div>`
           : ''
       }
 
