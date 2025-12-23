@@ -331,11 +331,11 @@ export async function sendReceiptChannels(
       ? { ...(receipt.data as Record<string, unknown>) }
       : { order: receipt.order, totals: receipt.totals };
   const branding = await getBranding();
-  snapshot.branding = branding;
-  const brandedSnapshot = { ...snapshot, branding };
   if (!snapshot.attendantName) {
     snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
   }
+  snapshot.branding = branding;
+  const brandedSnapshot = { ...snapshot, branding };
 
   const sent: string[] = [];
   const errors: any[] = [];
