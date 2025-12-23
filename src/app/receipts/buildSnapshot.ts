@@ -1,9 +1,17 @@
 export function buildReceiptSnapshot(receipt: any) {
   const order = receipt.order || {};
-  const items = (order.items || []).map((it: any) => ({
-    title: it.product?.name || it.title || it.productName || '',
+  // Prefer order.items (joined via Prisma). If not present, fall back to
+  // items stored inside `receipt.data.items` (used by some flows).
+  const rawItems: any[] = (order.items && (order.items as any[]).length)
+    ? (order.items as any[])
+    : Array.isArray(dataAny?.items)
+    ? (dataAny?.items as any[])
+    : [];
+
+  const items = rawItems.map((it: any) => ({
+    title: (it.product && it.product.name) || it.title || it.productName || it.name || '',
     quantity: it.quantity ?? 1,
-    unitPrice: it.sellingPrice ?? it.unitPrice ?? 0,
+    unitPrice: it.sellingPrice ?? it.unitPrice ?? it.price ?? 0,
     serial: it.serial ?? '',
     warranty: it.warranty ?? '',
   }));

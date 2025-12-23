@@ -42,7 +42,16 @@ export default async function Page({ params }: { params: any }) {
   try {
     receipt = await prisma.receipt.findUnique({
       where: { id },
-      include: { order: { include: { items: true, layawayPlan: { include: { payments: true } }, attendant: { select: { name: true } } } }, issuedBy: true },
+      include: {
+        order: {
+          include: {
+            items: { include: { product: { select: { id: true, name: true } } } },
+            layawayPlan: { include: { payments: true } },
+            attendant: { select: { name: true } },
+          },
+        },
+        issuedBy: true,
+      },
     });
   } catch (err) {
     // Catch and render a friendly message instead of allowing a server exception to surface.
