@@ -20,6 +20,18 @@ export async function GET(req: Request, ctx: any) {
   const attendantId = paramsId ?? queryAttendantId ?? pathAttendantId;
   const periodKey = url.searchParams.get("periodKey") || undefined;
 
+  // TEMP LOGGING: record incoming request for staging diagnostics
+  try {
+    console.info('[payroll-adjustments][req][GET]', {
+      url: req.url,
+      paramsId,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      periodKey,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   try {
     const where: any = { attendantId };
     if (periodKey) {
@@ -57,6 +69,19 @@ export async function POST(req: Request, ctx: any) {
   const queryAttendantId = url.searchParams.get('attendantId') || undefined;
   const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId ?? pathAttendantId;
 
+  // TEMP LOGGING: record incoming request body and derived attendantId
+  try {
+    const bodySnippet = JSON.stringify(body || {}).slice(0, 2000);
+    console.info('[payroll-adjustments][req][POST]', {
+      url: req.url,
+      paramsId,
+      bodySnippet,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   const { periodKey, periodLabel, adjustmentType, label, amount, adjustmentKind } = body || {};
   if (!periodKey || typeof adjustmentType !== "string" || !label || typeof amount !== "number") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -115,6 +140,20 @@ export async function DELETE(req: Request, ctx: any) {
   if (!adjustmentId) return NextResponse.json({ error: "adjustmentId required" }, { status: 400 });
   if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
+  // TEMP LOGGING: record incoming DELETE request context for staging
+  try {
+    const bodySnippet = body ? JSON.stringify(body).slice(0, 2000) : null;
+    console.info('[payroll-adjustments][req][DELETE]', {
+      url: req.url,
+      paramsId,
+      bodySnippet,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      adjustmentId,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   try {
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

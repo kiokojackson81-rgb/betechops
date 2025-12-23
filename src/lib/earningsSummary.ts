@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
+import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -93,6 +94,16 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     newProducts += report.newProducts ?? 0;
     editedProducts += report.productsEdited ?? 0;
     copiedProducts += report.copiesUploaded ?? 0;
+  }
+
+  const marketingSummary = await summarizeMarketingReportsForPeriod({
+    userId: opts.userId,
+    period: tradingPeriod,
+  });
+  const marketingTotals = marketingSummary.totals;
+  if (totalSales === 0 && marketingTotals.totalSales > 0) {
+    totalSales = marketingTotals.totalSales;
+    totalProfit = marketingTotals.totalProfit;
   }
 
   const plan = await prisma.attendantCompPlan.findUnique({ where: { attendantId: opts.userId } });
