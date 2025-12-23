@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pushInternalReceiptAlert } from "@/lib/chatraceInternal";
+import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
 
 export async function GET() {
   const result = await pushInternalReceiptAlert({

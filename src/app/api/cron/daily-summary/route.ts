@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { pushInternalDailySummary } from "@/lib/chatraceInternal";
+import { pushInternalDailySummary } from "@/lib/chatraceInternalFixed";
 import { extractReceiptTotalKES } from "@/lib/receiptExtract";
 
 function decToNumber(value: any): number {

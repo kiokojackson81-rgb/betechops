@@ -11,7 +11,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { pushInternalReceiptAlert } from "@/lib/chatraceInternal";
+import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
 import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
 import { randomUUID } from "crypto";
 
