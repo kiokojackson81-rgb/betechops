@@ -101,7 +101,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     period: tradingPeriod,
   });
   const marketingTotals = marketingSummary.totals;
-  if (totalSales === 0 && marketingTotals.totalSales > 0) {
+  if (marketingTotals.totalSales > totalSales) {
     totalSales = marketingTotals.totalSales;
     totalProfit = marketingTotals.totalProfit;
   }
