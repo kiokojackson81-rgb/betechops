@@ -9,8 +9,15 @@ export async function GET(req: Request, ctx: any) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
+  const paramsId = params.id as string | undefined;
   const url = new URL(req.url);
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+  const queryAttendantId = url.searchParams.get('attendantId') || undefined;
+  const attendantId = paramsId ?? queryAttendantId ?? pathAttendantId;
   const periodKey = url.searchParams.get("periodKey") || undefined;
 
   try {
@@ -40,7 +47,15 @@ export async function POST(req: Request, ctx: any) {
   }
 
   const bodyAttendantId = body?.attendantId as string | undefined;
-  const attendantId = (params.id as string | undefined) ?? bodyAttendantId;
+  const paramsId = (params.id as string | undefined) ?? undefined;
+  const url = new URL(req.url);
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+  const queryAttendantId = url.searchParams.get('attendantId') || undefined;
+  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId ?? pathAttendantId;
 
   const { periodKey, periodLabel, adjustmentType, label, amount, adjustmentKind } = body || {};
   if (!periodKey || typeof adjustmentType !== "string" || !label || typeof amount !== "number") {
@@ -86,9 +101,15 @@ export async function DELETE(req: Request, ctx: any) {
     body = null;
   }
 
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+
   const queryAttendantId = url.searchParams.get("attendantId") || undefined;
   const bodyAttendantId = body?.attendantId as string | undefined;
-  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId;
+  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId ?? pathAttendantId;
 
   const adjustmentId = url.searchParams.get("adjustmentId");
   if (!adjustmentId) return NextResponse.json({ error: "adjustmentId required" }, { status: 400 });
