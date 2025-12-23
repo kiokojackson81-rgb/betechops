@@ -82,6 +82,18 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const discountValue = Number(data?.discount || 0);
   const depositValue = Number(data?.deposit || data?.totals?.deposit || 0);
   const balanceValue = Number(data?.totals?.balance ?? data?.balance ?? 0);
+  const paymentBreakdown = (data?.paymentBreakdown ?? {}) as {
+    mpesa?: number;
+    cash?: number;
+    reference?: string;
+    mpesaReference?: string;
+  };
+  const mpesaPaidAmount = Number(paymentBreakdown.mpesa ?? 0);
+  const cashPaidAmount = Number(paymentBreakdown.cash ?? 0);
+  const paymentReference =
+    (typeof paymentBreakdown.reference === "string" && paymentBreakdown.reference.trim()) ||
+    (typeof paymentBreakdown.mpesaReference === "string" && paymentBreakdown.mpesaReference.trim()) ||
+    "";
   const customerPhone = data?.customerPhone;
   const [name, setName] = useState<string>(data?.customerName || "");
   const [loading, setLoading] = useState(false);
@@ -232,11 +244,16 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
             <div className="mt-1" dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(String(data.notes || "")) }} />
           </div>
         )}
-        {data?.paymentDetailsShown && (
-          <div className="mt-1 space-y-0.5">
-            <p>Paybill No. 516600</p>
-            <p>Account No. 0710098001</p>
-            <p>DTB Bank</p>
+        {(mpesaPaidAmount > 0 || cashPaidAmount > 0 || paymentReference) && (
+          <div className="mt-2 space-y-0.5">
+            <p className="font-semibold">Payment details</p>
+            {mpesaPaidAmount > 0 && (
+              <p>
+                MPESA: KES {formatKsh(mpesaPaidAmount)}
+                {paymentReference ? ` (Ref: ${paymentReference})` : ""}
+              </p>
+            )}
+            {cashPaidAmount > 0 && <p>Cash: KES {formatKsh(cashPaidAmount)}</p>}
           </div>
         )}
       </div>

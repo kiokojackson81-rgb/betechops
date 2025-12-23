@@ -52,10 +52,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showTax, setShowTax] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
-  const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const hasPaymentMethodSelection = selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
   const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
+  const paymentDetailsShown = true;
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
   const [deliveryAddress, setDeliveryAddress] = useState<string | undefined>(undefined);
@@ -290,7 +290,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery") => {
     setCustomerType(type);
     if (type === "delivery") {
-      setPaymentDetailsShown(true);
       // ensure address input is visible for delivery customers
       setShowAddressInput(true);
     }
@@ -771,38 +770,23 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </label>
         </div>
         <div>
-          <label className={labelClass}>Payment details</label>
-          <div className="mt-2 space-y-3">
-            <label className="inline-flex items-center text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={paymentDetailsShown}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setPaymentDetailsShown(checked);
-                  if (checked) setSelectedPaymentMethods((prev) => ({ ...prev, MPESA: true }));
-                }}
-                className={`${checkboxClass} mr-2`}
-              />
-              Include payment details on receipt
-            </label>
-            <div className="flex gap-2">
-              {(["MPESA", "CASH"] as const).map((method) => (
-                <button
-                  key={method}
-                  type="button"
-                  onClick={() => togglePaymentMethodSelection(method)}
-                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                    selectedPaymentMethods[method]
-                      ? "bg-emerald-500 text-black"
-                      : "border border-white/10 text-slate-200"
-                  }`}
-                  aria-pressed={selectedPaymentMethods[method]}
-                >
-                  {method === "MPESA" ? "MPESA" : "Cash"}
-                </button>
-              ))}
-            </div>
+          <label className={labelClass}>Payment method</label>
+          <div className="mt-2 flex gap-2">
+            {(["MPESA", "CASH"] as const).map((method) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => togglePaymentMethodSelection(method)}
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  selectedPaymentMethods[method]
+                    ? "bg-emerald-500 text-black"
+                    : "border border-white/10 text-slate-200"
+                }`}
+                aria-pressed={selectedPaymentMethods[method]}
+              >
+                {method === "MPESA" ? "MPESA" : "Cash"}
+              </button>
+            ))}
           </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
