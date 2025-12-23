@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const attendantId = url.searchParams.get("attendantId") || undefined;
+  const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
@@ -93,15 +94,20 @@ export async function GET(req: NextRequest) {
     }
   }
   if (attendantId) {
-    // Allow filtering receipts either by the order.attendantId OR by the receipt issuer (issuedById)
-    // This ensures attendants see receipts they served (order.attendantId) as well as receipts
-    // they issued/created (issuedById). Keep any existing order filters intact.
-    const orderFilter = { ...(where.order || {}), attendantId };
-    where.OR = where.OR || [];
-    // Also include receipts where the attendantId is stored inside the JSON `data` field
-    // (some receipts persist attendant info inside `data.attendantId`). Use a JSON path
-    // filter so attendants still see those receipts.
-    where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
+    if (issuerOnly) {
+      // Only include receipts the attendant issued/created via the POS UI (issuedById)
+      where.issuedById = attendantId;
+    } else {
+      // Allow filtering receipts either by the order.attendantId OR by the receipt issuer (issuedById)
+      // This ensures attendants see receipts they served (order.attendantId) as well as receipts
+      // they issued/created (issuedById). Keep any existing order filters intact.
+      const orderFilter = { ...(where.order || {}), attendantId };
+      where.OR = where.OR || [];
+      // Also include receipts where the attendantId is stored inside the JSON `data` field
+      // (some receipts persist attendant info inside `data.attendantId`). Use a JSON path
+      // filter so attendants still see those receipts.
+      where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
+    }
   }
 
   if (paymentMethodParam) {
@@ -203,7 +209,7 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
+  if (attendantId && !issuerOnly) marketingFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -218,7 +224,7 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId) supportFilter.dailyEntry.submittedById = attendantId;
+  if (attendantId && !issuerOnly) supportFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [

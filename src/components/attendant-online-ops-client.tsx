@@ -439,6 +439,7 @@ export default function AttendantOnlineOpsClient() {
         attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
+        issuerOnly: "true",
         includeItems: "true",
         size: "200",
       });
