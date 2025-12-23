@@ -145,6 +145,10 @@ export async function GET(req: Request) {
   const manualSalesByAccount = new Map<string, number>();
   const manualEntriesCountByAccount = new Map<string, number>();
   manualEntries.forEach((entry) => {
+    const amount = Number(entry.amount ?? 0);
+    if (!amount) {
+      return;
+    }
     let matchedAccountId = entry.shopId && accountById.has(entry.shopId) ? entry.shopId : undefined;
     const normalizedShopName = normalizeName(entry.shop?.name);
     const platformKey = (entry.platform ?? entry.shop?.platform ?? "").toUpperCase();
