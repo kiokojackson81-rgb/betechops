@@ -140,6 +140,8 @@ export async function GET(req: Request) {
     },
   });
 
+  const unmatchedManualByPlatform = new Map<string, { sales: number; entries: number }>();
+
   const manualSalesByAccount = new Map<string, number>();
   const manualEntriesCountByAccount = new Map<string, number>();
   manualEntries.forEach((entry) => {
@@ -168,6 +170,11 @@ export async function GET(req: Request) {
     }
 
     if (!matchedAccountId) {
+      const key = platformKey || "UNKNOWN";
+      const current = unmatchedManualByPlatform.get(key) ?? { sales: 0, entries: 0 };
+      current.sales += amount;
+      current.entries += 1;
+      unmatchedManualByPlatform.set(key, current);
       return;
     }
 
@@ -251,7 +258,24 @@ export async function GET(req: Request) {
     })
     .sort((a, b) => b.sales - a.sales);
 
-  const totals = rows.reduce(
+  const manualSummaryRows = Array.from(unmatchedManualByPlatform.entries()).map(([platform, data]) => {
+    const commissionResult = computeMarketplaceCommission(data.sales);
+    return {
+      shopId: `manual-${platform}-${start.toISOString()}`,
+      shopName: `Manual ${platform}`,
+      platform,
+      weekLabel,
+      weekStart: start.toISOString(),
+      weekEnd: end.toISOString(),
+      sales: data.sales,
+      commission: Number(commissionResult.amount || 0),
+      orders: data.entries,
+    };
+  });
+
+  const finalRows = [...rows, ...manualSummaryRows].sort((a, b) => b.sales - a.sales);
+
+  const totals = finalRows.reduce(
     (acc, row) => {
       acc.sales += row.sales;
       acc.commission += row.commission;
@@ -263,7 +287,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     rangeLabel,
-    totals: { ...totals, shops: rows.length },
-    rows,
+    totals: { ...totals, shops: finalRows.length },
+    rows: finalRows,
   });
 }

@@ -135,8 +135,17 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
+  const [marketplacePeriodIndex, setMarketplacePeriodIndex] = useState(0);
+  const marketplacePeriod = useMemo(() => {
+    const reference = new Date();
+    reference.setHours(0, 0, 0, 0);
+    reference.setDate(reference.getDate() + marketplacePeriodIndex * 28);
+    return getMarketplaceTradingPeriodFor(reference);
+  }, [marketplacePeriodIndex]);
   const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
+  useEffect(() => {
+    setTradingWeeks(buildTradingWeeks(marketplacePeriod.start));
+  }, [marketplacePeriod]);
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -582,9 +591,30 @@ export default function AttendantOnlineClient() {
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
                           : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
                       ].join(" ")}
+                        >
+                          This marketplace period
+                        </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                      Marketplace window:
+                    </span>
+                    <span className="text-sm text-emerald-300">{marketplacePeriod.label}</span>
+                    <Button
+                      variant="secondary"
+                      className="px-3"
+                      onClick={() => setMarketplacePeriodIndex((prev) => Math.max(prev - 1, -12))}
+                    >
+                      Previous marketplace period
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-3"
+                      onClick={() => setMarketplacePeriodIndex(0)}
+                      disabled={marketplacePeriodIndex === 0}
                     >
                       This marketplace period
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div className="border-t border-slate-800 px-4 pt-3">
