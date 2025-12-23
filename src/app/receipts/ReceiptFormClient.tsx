@@ -324,22 +324,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCashPaid(Math.max(0, total - clamped));
   };
 
-  const whatsappMessage = useMemo(() => {
-    if (!customerPhone || !customerName || !customerType) return "";
-    const servedBy = selectedStaff?.name || "Betech Solar Solutions";
-    const lines = [
-      `Customer: ${customerName}`,
-      `Phone: ${customerPhone}`,
-      `Served by: ${servedBy}`,
-      `Type: ${customerType}`,
-      `Total: KES ${total.toLocaleString()}`,
-      `Items: ${items.map((item) => item.title || "Item").join(", ")}`,
-      `MPESA: KES ${numericMpesaPaid.toLocaleString()}`,
-      `Cash: KES ${numericCashPaid.toLocaleString()}`,
-    ];
-    return lines.join("\n");
-  }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid, selectedStaff]);
-
   const handlePreview = (autoPrint = false) => {
     if (!hasPaymentMethodSelection) {
       showToast("Select a payment method before previewing", "error");
@@ -835,18 +819,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               Cash portion: KES {(total - numericMpesaPaid).toLocaleString()}
             </p>
           </div>
-        </div>
-      )}
-
-      {whatsappMessage && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">WhatsApp message</p>
-          <textarea
-            readOnly
-            value={whatsappMessage}
-            rows={5}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-100"
-          />
         </div>
       )}
 
