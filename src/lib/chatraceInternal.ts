@@ -79,7 +79,6 @@ export async function pushInternalReceiptAlert(input: {
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
   if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
-  const sendAdminPdf = process.env.CHATRACE_SEND_ADMIN_PDF === "1";
   const actions = [
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "admin_amount", value: input.amount },
@@ -87,9 +86,6 @@ export async function pushInternalReceiptAlert(input: {
     { action: "set_field_value", field_name: "admin_created_by", value: input.createdBy },
     { action: "set_field_value", field_name: "admin_items", value: input.itemsText },
     { action: "set_field_value", field_name: "admin_receipt_link", value: input.receiptLink },
-    ...(sendAdminPdf && input.receiptPdfUrl
-      ? [{ action: "set_field_value", field_name: "admin_receipt_pdf", value: input.receiptPdfUrl }]
-      : []),
     { action: "add_tag", tag_name: "receipt_admin_alert" },
   ];
 
