@@ -1,5 +1,9 @@
 export function buildReceiptSnapshot(receipt: any) {
   const order = receipt.order || {};
+  const data = receipt.data;
+  const dataIsObject = data !== null && typeof data === 'object' && !Array.isArray(data);
+  const dataAny = dataIsObject ? (data as any) : undefined;
+
   // Prefer order.items (joined via Prisma). If not present, fall back to
   // items stored inside `receipt.data.items` (used by some flows).
   const rawItems: any[] = (order.items && (order.items as any[]).length)
@@ -15,10 +19,6 @@ export function buildReceiptSnapshot(receipt: any) {
     serial: it.serial ?? '',
     warranty: it.warranty ?? '',
   }));
-
-  const data = receipt.data;
-  const dataIsObject = data !== null && typeof data === 'object' && !Array.isArray(data);
-  const dataAny = dataIsObject ? (data as any) : undefined;
   const dataHasNotes = dataAny !== undefined && typeof dataAny.notes === 'string';
   const notesFromData = dataHasNotes ? (dataAny?.notes as string | undefined) : undefined;
   const paymentBreakdown =
