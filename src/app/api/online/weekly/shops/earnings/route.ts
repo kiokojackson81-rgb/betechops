@@ -145,8 +145,8 @@ export async function GET(req: Request) {
   const manualSalesByAccount = new Map<string, number>();
   const manualEntriesCountByAccount = new Map<string, number>();
   manualEntries.forEach((entry) => {
-    const amount = Number(entry.amount ?? 0);
-    if (!amount) {
+    const manualAmount = Number(entry.amount ?? 0);
+    if (!manualAmount) {
       return;
     }
     let matchedAccountId = entry.shopId && accountById.has(entry.shopId) ? entry.shopId : undefined;
@@ -176,7 +176,7 @@ export async function GET(req: Request) {
     if (!matchedAccountId) {
       const key = platformKey || "UNKNOWN";
       const current = unmatchedManualByPlatform.get(key) ?? { sales: 0, entries: 0 };
-      current.sales += amount;
+      current.sales += manualAmount;
       current.entries += 1;
       unmatchedManualByPlatform.set(key, current);
       return;
