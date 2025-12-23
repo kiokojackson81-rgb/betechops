@@ -85,26 +85,31 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   async function runRequest(path: string, body: unknown, hdrs: Record<string, string> = headers) {
     const url = pathWithBase(path);
+    const timeoutMs = 8_000;
+    const controller = new AbortController();
     const init: RequestInit = {
       method: 'POST',
+      signal: controller.signal as any,
       headers: {
         ...hdrs,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
     };
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response | null = null;
     let text = '';
     let json: any = null;
     try {
       res = await fetch(url, init as any);
+      clearTimeout(timer);
       text = await res.text().catch(() => '');
       try {
         json = text ? JSON.parse(text) : null;
       } catch {
         json = null;
       }
-      const bodySnippet = (text || '').slice(0, 200);
+      const bodySnippet = (text || '').slice(0, 500);
       const bodyError =
         json && (json.error ?? (Array.isArray(json.errors) ? json.errors[0] : null))
           ? json.error ?? json.errors
@@ -120,11 +125,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
         bodySnippet,
         bodyError,
       });
-      console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet });
+      console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet, json: json ?? null, rawHead: text ? (text.length > 500 ? text.slice(0, 500) : text) : null });
+      if (!res.ok) {
+        console.error('[chatrace][http] non-2xx response', { path, status: res.status, bodySnippet });
+      }
       return { ok: res.ok, status: res.status, text, json, bodyError };
-    } catch (e) {
+    } catch (e: any) {
+      clearTimeout(timer);
       const errMessage = String(e);
-      console.error('[chatrace][http] failed', { method: 'POST', path, error: errMessage });
+      const stack = e && e.stack ? e.stack : null;
+      console.error('[chatrace][http] failed', { method: 'POST', path, error: errMessage, stack });
       return { ok: false, status: 0, text: errMessage, json: null, bodyError: errMessage };
     }
   }

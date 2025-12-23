@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { prisma } from '@/lib/prisma';
 
 type ChatraceInternalConfig = {
   baseUrl: string;
@@ -26,10 +27,14 @@ function snippet(text: string, max = 220) {
 
 type ChatraceStep = { status: number; ok: boolean; bodySnippet: string; raw?: string; json?: any };
 
-async function postJson(url: string, token: string, body: unknown): Promise<ChatraceStep> {
+async function postJson(url: string, token: string, body: unknown, rid?: string): Promise<ChatraceStep> {
+  const timeoutMs = 8_000;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "X-ACCESS-TOKEN": token,
         Accept: "application/json",
@@ -37,6 +42,7 @@ async function postJson(url: string, token: string, body: unknown): Promise<Chat
       },
       body: JSON.stringify(body),
     });
+    clearTimeout(id);
     const raw = await res.text().catch(() => "");
     let parsed: any = null;
     try {
@@ -44,8 +50,21 @@ async function postJson(url: string, token: string, body: unknown): Promise<Chat
     } catch {
       parsed = null;
     }
+
+    if (!res.ok) {
+      console.error('[chatrace][internal][http] non-2xx', {
+        rid: rid || null,
+        url,
+        status: res.status,
+        bodySnippet: snippet(raw, 500),
+      });
+    }
+
     return { status: res.status, ok: res.ok, bodySnippet: snippet(raw), raw, json: parsed };
-  } catch (e) {
+  } catch (e: any) {
+    clearTimeout(id);
+    const stack = e && e.stack ? e.stack : String(e);
+    console.error('[chatrace][internal][http] exception', { rid: rid || null, url, stack });
     const err = String(e);
     return { status: 0, ok: false, bodySnippet: snippet(err), raw: err, json: null };
   }
@@ -103,9 +122,11 @@ export async function pushInternalReceiptAlert(input: {
 
   // IMPORTANT: prove what's being sent to Chatrace for auditing (fields + tag)
   try {
-    console.info('[internal][adminAlert] outbound_actions', {
+    console.info('[internal][adminAlert] outbound', {
       phone: env.adminPhone,
       fields: actions.filter((a: any) => a.action === 'set_field_value').map((a: any) => a.field_name),
+      hasPdfUrl: Boolean((input as any).receiptPdfUrl),
+      hasLink: Boolean((input as any).receiptLink),
       tag: 'receipt_admin_alert',
     });
   } catch (e) {
@@ -114,10 +135,43 @@ export async function pushInternalReceiptAlert(input: {
 
   const payload = { phone: env.adminPhone, actions };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const step = await postJson(url, env.token, payload);
+  const step = await postJson(url, env.token, payload, rid);
+  try {
+    console.info('[internal][adminAlert] response', {
+      status: step.status,
+      ok: step.ok,
+      snippet: step.bodySnippet,
+      json: step.json ?? null,
+      rawHead: step.raw ? (step.raw.length > 500 ? step.raw.slice(0, 500) : step.raw) : null,
+    });
+  } catch (e) {
+    console.warn('[internal][adminAlert] failed to log response', String(e));
+  }
   debug.steps.createOrUpdate = step;
   debug.ok = step.ok;
+  // persist debug to DB for later inspection
+  try {
+    await persistInternalDebug(input.receiptNumber, rid, debug);
+  } catch (e) {
+    console.error('[internal][adminAlert] persist debug failed', String(e));
+  }
   return { ok: step.ok, debug };
+}
+
+async function persistInternalDebug(receiptNumber: string, rid: string, debug: any) {
+  if (process.env.NODE_ENV === 'test') return;
+  try {
+    const receipt = await prisma.receipt.findFirst({
+      where: { OR: [{ id: receiptNumber }, { order: { orderNumber: receiptNumber } }] },
+    });
+    if (!receipt) return;
+    const baseData = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
+    const existing = typeof baseData.chatrace === 'object' && baseData.chatrace ? { ...(baseData.chatrace as Record<string, unknown>) } : {};
+    const next = { ...baseData, chatrace: { ...existing, internal: { ...(existing.internal || {}), [rid]: debug } } };
+    await prisma.receipt.update({ where: { id: receipt.id }, data: { data: next as any } });
+  } catch (e) {
+    console.error('[chatrace][internal] failed to persist debug', e);
+  }
 }
 
 export async function pushInternalDailySummary(input: {

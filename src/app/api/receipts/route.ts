@@ -950,25 +950,33 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
     );
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
-  if (!receiptUrl) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
-    return;
-  }
+  const rid = requestId || randomUUID();
   if (requestId) {
     console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
   }
-  console.info('[receipts][internal] attempting push', { receiptId });
+  const receiptLinkSafe = (receiptLink && receiptLink.trim()) || `https://ops.betech.co.ke/receipts/${receiptId}`;
+  console.info('[receipts][internal] attempting push', { receiptId, rid });
   const result = await pushInternalReceiptAlert({
-    requestId,
+    requestId: rid,
     receiptNumber,
     amount: String(Math.round(invoiceAmount)),
     paymentMethod,
     createdBy: snapshot.attendantName ?? "(unknown)",
     itemsText: itemsShort,
-    receiptLink,
-    receiptPdfUrl: receiptUrl,
+    receiptLink: receiptLinkSafe,
+    receiptPdfUrl: null,
   });
-  console.info('[receipts][internal] push result', result);
+  console.info('[receipts][internal] push result', {
+    ok: result?.ok,
+    rid: result?.debug?.rid ?? null,
+    enabled: result?.debug?.enabled ?? null,
+    env: result?.debug?.env ?? null,
+    status: result?.debug?.steps?.createOrUpdate?.status ?? null,
+    stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
+    snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
+    json: result?.debug?.steps?.createOrUpdate?.json ?? null,
+    rawHead: result?.debug?.steps?.createOrUpdate?.raw ? (result.debug.steps.createOrUpdate.raw.length > 400 ? result.debug.steps.createOrUpdate.raw.slice(0, 400) : result.debug.steps.createOrUpdate.raw) : null,
+  });
   if (!result?.ok) {
     try {
       console.error('[receipts][internal] push failed', result?.debug ?? result);

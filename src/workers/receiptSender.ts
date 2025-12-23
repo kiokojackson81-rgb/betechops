@@ -625,6 +625,7 @@ export async function sendReceiptChannels(
   const chatracePdfUrl = finalChatracePdfUrl.receiptUrl;
 
   if (normalizedChatracePhone) {
+    console.info('[receiptSender] TRACE', { rid: requestId, receiptId: receipt.id, receiptNumber: receipt.order?.orderNumber ?? receipt.id });
     logStep(requestId, 'CHARTRACE', 'begin', {
       phone: normalizedChatracePhone,
       receiptUrlPresent: !!finalChatracePdfUrl.receiptUrl,
