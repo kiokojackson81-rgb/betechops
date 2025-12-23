@@ -23,12 +23,15 @@ function snippet(text: string, max = 220) {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
-
-type ChatraceStep = { status: number; ok: boolean; bodySnippet: string; raw?: string; json?: any };
-
+    // If a caller passed a receiptPdfUrl, explicitly ignore it for internal alerts
+    if ((input as any).receiptPdfUrl) {
+      console.info('[internal][adminAlert] ignoring receiptPdfUrl for internal alert', { receiptNumber: input.receiptNumber });
+    }
 async function postJson(url: string, token: string, body: unknown): Promise<ChatraceStep> {
   const res = await fetch(url, {
     method: "POST",
+    // IMPORTANT: prove what's being sent to Chatrace for auditing
+    console.info('[internal][adminAlert] outbound_actions', { phone: env.adminPhone, actions });
     headers: {
       "X-ACCESS-TOKEN": token,
       Accept: "application/json",
@@ -115,17 +118,29 @@ export async function pushInternalDailySummary(input: {
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
   if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
-  const payload = {
-    phone: env.adminPhone,
-    actions: [
-      { action: "set_field_value", field_name: "summary_date", value: input.dateLabel },
-      { action: "set_field_value", field_name: "summary_total_receipts", value: input.totalReceipts },
-      { action: "set_field_value", field_name: "summary_total_sales", value: input.totalSales },
-      { action: "set_field_value", field_name: "summary_total_profit", value: input.totalProfit },
-      { action: "set_field_value", field_name: "summary_total_mpesa", value: input.totalMpesa },
-      { action: "set_field_value", field_name: "summary_total_cash", value: input.totalCash },
+    // Log and ignore receiptLink and receiptPdfUrl — admin template uses only the fields below
+    if (input.receiptLink) {
+      console.info('[internal][adminAlert] ignoring receiptLink (static button in WA template)', { receiptNumber: input.receiptNumber });
+    }
+    if ((input as any).receiptPdfUrl) {
+      console.info('[internal][adminAlert] ignoring receiptPdfUrl for internal alert', { receiptNumber: input.receiptNumber });
+    }
       { action: "add_tag", tag_name: "daily_receipt_summary" },
+    const actions = [
+      { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
+      { action: "set_field_value", field_name: "admin_amount", value: input.amount },
+      { action: "set_field_value", field_name: "admin_payment_method", value: input.paymentMethod },
+      { action: "set_field_value", field_name: "admin_created_by", value: input.createdBy },
+      { action: "set_field_value", field_name: "admin_items", value: input.itemsText },
+      { action: "add_tag", tag_name: "receipt_admin_alert" },
+    ];
     ],
+    // IMPORTANT: prove what's being sent to Chatrace for auditing (fields + tag)
+    console.info('[internal][adminAlert] outbound_actions', {
+      phone: env.adminPhone,
+      fields: actions.filter((a: any) => a.action === 'set_field_value').map((a: any) => a.field_name),
+      tag: 'receipt_admin_alert',
+    });
   };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
   const step = await postJson(url, env.token, payload);
