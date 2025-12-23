@@ -6,6 +6,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "./types";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function AdminPayrollPage() {
 
   const period = getTradingPeriodFor(new Date());
   const periodKey = period.key;
+  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+  const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
 
   const attendants = await prisma.user.findMany({
     where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
@@ -57,7 +60,7 @@ export default async function AdminPayrollPage() {
       },
     }),
     prisma.attendantPayrollAdjustment.findMany({
-      where: { periodKey, attendantId: { in: attendantIds } },
+      where: { periodKey: { in: periodFilterKeys }, attendantId: { in: attendantIds } },
       orderBy: { createdAt: "desc" },
     }),
   ]);

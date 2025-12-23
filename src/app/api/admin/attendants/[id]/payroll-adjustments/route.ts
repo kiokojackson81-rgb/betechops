@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, ctx: any) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
-
   const params = (ctx && (ctx.params || ctx)) || {};
   const attendantId = params.id as string;
   const url = new URL(req.url);
@@ -15,7 +15,10 @@ export async function GET(req: Request, ctx: any) {
 
   try {
     const where: any = { attendantId };
-    if (periodKey) where.periodKey = periodKey;
+    if (periodKey) {
+      const variants = getPeriodKeyVariants(periodKey);
+      where.periodKey = { in: variants.length ? variants : [periodKey] };
+    }
     const rows = await prisma.attendantPayrollAdjustment.findMany({ where, orderBy: { createdAt: "desc" } });
     return NextResponse.json({ rows });
   } catch (err: unknown) {
@@ -29,7 +32,6 @@ export async function POST(req: Request, ctx: any) {
   if (!auth.ok) return auth.res;
 
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
   let body: any;
   try {
     body = await req.json();
@@ -37,10 +39,14 @@ export async function POST(req: Request, ctx: any) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const bodyAttendantId = body?.attendantId as string | undefined;
+  const attendantId = (params.id as string | undefined) ?? bodyAttendantId;
+
   const { periodKey, periodLabel, adjustmentType, label, amount, adjustmentKind } = body || {};
   if (!periodKey || typeof adjustmentType !== "string" || !label || typeof amount !== "number") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
+  if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   try {
     const kindCandidate = String(adjustmentKind ?? "DEDUCTION").toUpperCase();
@@ -69,10 +75,24 @@ export async function DELETE(req: Request, ctx: any) {
   if (!auth.ok) return auth.res;
 
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
   const url = new URL(req.url);
+  const paramsId = params.id as string | undefined;
+
+  // read optional body (may be empty for DELETE)
+  let body: any = null;
+  try {
+    body = await req.json();
+  } catch {
+    body = null;
+  }
+
+  const queryAttendantId = url.searchParams.get("attendantId") || undefined;
+  const bodyAttendantId = body?.attendantId as string | undefined;
+  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId;
+
   const adjustmentId = url.searchParams.get("adjustmentId");
   if (!adjustmentId) return NextResponse.json({ error: "adjustmentId required" }, { status: 400 });
+  if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   try {
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });

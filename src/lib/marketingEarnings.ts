@@ -3,6 +3,7 @@ import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/
 import { getMarketingReport } from "./marketingReport";
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
+import { getPeriodKeyVariants } from "./payrollPeriodKey";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -68,7 +69,11 @@ export async function getEarningsSummaryForAttendant(opts: {
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
   // 4) All adjustments for this period
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({ where: { attendantId, periodKey } });
+  const variants = getPeriodKeyVariants(periodKey);
+  const adjustmentFilterKeys = variants.length ? variants : [periodKey];
+  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
+    where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
+  });
 
   const sum = (filterFn: (a: any) => boolean) =>
     adjustments.filter(filterFn).reduce((acc, a) => acc + (a.amount ?? 0), 0);

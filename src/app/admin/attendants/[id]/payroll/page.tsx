@@ -7,6 +7,7 @@ import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,12 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({ where: { attendantId, periodKey }, orderBy: { createdAt: "desc" } });
+  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+  const adjustmentKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
+  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
+    where: { attendantId, periodKey: { in: adjustmentKeys } },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">

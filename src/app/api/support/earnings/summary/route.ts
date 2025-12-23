@@ -4,6 +4,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,10 @@ export async function GET(req: Request) {
     getSupportPeriodAggregates({ userId: auth.user.id, period }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId: auth.user.id } }),
     prisma.attendantPayrollAdjustment.findMany({
-      where: { attendantId: auth.user.id, periodKey },
+      where: {
+        attendantId: auth.user.id,
+        periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) },
+      },
     }),
     prisma.commissionLedger.findUnique({
       where: {

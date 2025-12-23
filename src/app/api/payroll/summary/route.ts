@@ -6,6 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 // Compatibility route for older clients that call /api/payroll/summary
 // Behaviour:
@@ -61,10 +62,17 @@ export async function GET(req: Request) {
 
     const attendantIds = attendants.map((a) => a.id);
 
+    const periodKeyIso = `${period.start.toISOString()}_${period.end.toISOString()}`;
+    const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+    const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKeyIso];
+
     const [plans, ledgers, adjustments] = await Promise.all([
       prisma.attendantCompPlan.findMany({ where: { attendantId: { in: attendantIds } } }),
       prisma.commissionLedger.findMany({ where: { periodStart: period.start, periodEnd: period.end, userId: { in: attendantIds } } }),
-      prisma.attendantPayrollAdjustment.findMany({ where: { periodKey: `${period.start.toISOString()}_${period.end.toISOString()}`, attendantId: { in: attendantIds } }, orderBy: { createdAt: "desc" } }),
+      prisma.attendantPayrollAdjustment.findMany({
+        where: { periodKey: { in: periodFilterKeys }, attendantId: { in: attendantIds } },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
     const planMap = new Map(plans.map((p) => [p.attendantId, p]));
