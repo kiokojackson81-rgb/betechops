@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       });
       if (user) {
         const { categoryAssignments, ...rest } = user;
-        return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) } });
+        return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) }, impersonated: true, impersonatedBy: role });
       }
     }
   } catch (e) {
@@ -79,7 +79,7 @@ export async function GET(req: Request) {
               });
               if (user) {
                 const { categoryAssignments, ...rest } = user;
-                return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) } });
+                return NextResponse.json({ user: { ...rest, categories: categoryAssignments.map((c) => c.category) }, impersonated: true, impersonatedBy: admin.id });
               }
             }
           }

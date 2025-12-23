@@ -104,6 +104,8 @@ export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [impersonated, setImpersonated] = useState<boolean>(false);
+  const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
 
   const appendImpersonateParam = useCallback(
@@ -169,6 +171,14 @@ export default function AttendantOnlineClient() {
       const data = await res.json();
       if (data?.user?.id) setUserId(data.user.id);
       if (data?.user?.role) setUserRole(data.user.role);
+      // capture impersonation metadata when present so UI can surface it
+      if (data?.impersonated) {
+        setImpersonated(true);
+        setImpersonatedBy(data?.impersonatedBy ?? null);
+      } else {
+        setImpersonated(false);
+        setImpersonatedBy(null);
+      }
     } catch (err) {
       console.warn("[attendant/online] failed to load user", err);
     }
@@ -412,6 +422,16 @@ export default function AttendantOnlineClient() {
     const defaultKey = tradingWeeks[defaultIdx]?.key ?? tradingWeeks[0]?.key ?? "period";
     setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
   }, [fetchUser, tradingWeeks]);
+
+  // show a small banner when viewing as another attendant
+  const ImpersonationBanner = () => {
+    if (!impersonated) return null;
+    return (
+      <div className="rounded-md border border-amber-600 bg-amber-900/30 px-3 py-2 text-sm text-amber-100">
+        Viewing as another attendant{impersonatedBy ? ` (impersonated by ${impersonatedBy})` : ""} — some data may not match your account.
+      </div>
+    );
+  };
 
   const loadCommissionPreview = useCallback(async () => {
     if (!userId) return;
