@@ -402,16 +402,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
     setSaving(true);
     try {
-      const payload = {
-        docType: docType.toLowerCase(),
-        serial,
-        date: new Date().toISOString(),
-        customerName,
-        customerPhone,
-        deliveryAddress: deliveryAddress || undefined,
-        attendantId: staffId,
-        issuedById: staffId,
-        taxRate: normalizedTaxRate,
+        const payload = {
+          docType: docType.toLowerCase(),
+          serial,
+          date: new Date().toISOString(),
+          customerName,
+          customerPhone,
+          deliveryAddress: deliveryAddress || undefined,
+          attendantId: staffId,
+          issuedById: staffId,
+          attendantName: selectedStaff?.name || "",
+          taxRate: normalizedTaxRate,
         showTax,
         discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
