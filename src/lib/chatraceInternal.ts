@@ -24,7 +24,7 @@ function snippet(text: string, max = 220) {
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
 
-type ChatraceStep = { status: number; ok: boolean; bodySnippet: string };
+type ChatraceStep = { status: number; ok: boolean; bodySnippet: string; raw?: string; json?: any };
 
 async function postJson(url: string, token: string, body: unknown): Promise<ChatraceStep> {
   const res = await fetch(url, {
@@ -37,7 +37,13 @@ async function postJson(url: string, token: string, body: unknown): Promise<Chat
     body: JSON.stringify(body),
   });
   const raw = await res.text().catch(() => "");
-  return { status: res.status, ok: res.ok, bodySnippet: snippet(raw) };
+  let parsed: any = null;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  return { status: res.status, ok: res.ok, bodySnippet: snippet(raw), raw, json: parsed };
 }
 
 function makeDebug(rid: string, env: ReturnType<typeof getEnv>) {
@@ -73,6 +79,7 @@ export async function pushInternalReceiptAlert(input: {
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
   if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
+  const sendAdminPdf = process.env.CHATRACE_SEND_ADMIN_PDF === "1";
   const actions = [
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "admin_amount", value: input.amount },
@@ -80,7 +87,7 @@ export async function pushInternalReceiptAlert(input: {
     { action: "set_field_value", field_name: "admin_created_by", value: input.createdBy },
     { action: "set_field_value", field_name: "admin_items", value: input.itemsText },
     { action: "set_field_value", field_name: "admin_receipt_link", value: input.receiptLink },
-    ...(input.receiptPdfUrl
+    ...(sendAdminPdf && input.receiptPdfUrl
       ? [{ action: "set_field_value", field_name: "admin_receipt_pdf", value: input.receiptPdfUrl }]
       : []),
     { action: "add_tag", tag_name: "receipt_admin_alert" },
