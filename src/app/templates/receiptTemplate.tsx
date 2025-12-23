@@ -25,7 +25,7 @@ export default function renderReceiptTemplate(
   const items = snapshot.items || order.items || [];
   const totals = snapshot.totals || order.totals || {};
   const notes = snapshot.notes || '';
-  const attendant = order?.attendant?.name || snapshot.attendantName || snapshot.issuedByName || '';
+  const attendant = (snapshot.attendantName && String(snapshot.attendantName).trim()) || (order?.attendant?.name && String(order.attendant.name).trim()) || (snapshot.issuedByName && String(snapshot.issuedByName).trim()) || '';
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
   const formatWarrantyValue = (value: any) => {

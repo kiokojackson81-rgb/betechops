@@ -45,6 +45,7 @@ export function buildReceiptSnapshot(receipt: any) {
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || '',
     attendantName: receipt.issuedBy?.name || order?.attendant?.name || '',
+    issuedByName: receipt.issuedBy?.name || '',
     paymentMethod:
       (dataIsObject ? (dataAny?.paymentMethod as string | undefined) : undefined) ||
       (receipt as any).paymentMethod ||
