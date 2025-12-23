@@ -229,7 +229,11 @@ export async function GET(req: NextRequest) {
   if (q) {
     supportFilter.OR = [
       { receiptNumber: { contains: q, mode: "insensitive" } },
-      { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
+      {
+        dailyEntry: {
+          submittedBy: { name: { contains: q, mode: "insensitive" } },
+        },
+      },
       { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
     ];
   }
