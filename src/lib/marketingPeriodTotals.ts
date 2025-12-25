@@ -130,6 +130,14 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   }
 
   const totals = emptyTotals();
+  const seenReceiptKeys = new Set<string>();
+  const addUniqueReceipt = (key: string) => {
+    const normalized = key.trim();
+    if (!normalized) return false;
+    if (seenReceiptKeys.has(normalized)) return false;
+    seenReceiptKeys.add(normalized);
+    return true;
+  };
 
   marketingEntries.forEach((entry) => {
     const receipts = entry.receipts ?? [];
@@ -147,22 +155,29 @@ export async function summarizeMarketingReportsForPeriod(opts: {
           totals.totalProfit += selling - costToUse;
         }
         totals.totalItems += items.length;
-        totals.totalReceipts += 1;
         const method = normalizeMethod(receipt.paymentMethod);
+        const receiptIdentifier = String(receipt.receiptNumber ?? receipt.id ?? "");
+        const receiptKey = `${receiptIdentifier.trim()}|${method}`;
+        if (addUniqueReceipt(receiptKey)) {
+          totals.totalReceipts += 1;
+          if (method === "CASH") {
+            totals.paymentStats.countCashReceipts += 1;
+          } else {
+            totals.paymentStats.countMpesaReceipts += 1;
+          }
+        }
         if (method === "CASH") {
           totals.paymentStats.totalSalesCash += selling;
-          totals.paymentStats.countCashReceipts += 1;
         } else {
           totals.paymentStats.totalSalesMpesa += selling;
-          totals.paymentStats.countMpesaReceipts += 1;
         }
       });
       return;
     }
 
     const sales = entry.sales ?? [];
-      if (sales.length > 0) {
-      const receiptTracker = new Set<string>();
+    if (sales.length > 0) {
+      const entryReceiptKeys = new Set<string>();
       sales.forEach((sale, index) => {
         const selling = toNumber((sale as any).sellingPrice);
         const buying = toNumber((sale as any).buyingPrice);
@@ -179,12 +194,12 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         } else {
           totals.paymentStats.totalSalesMpesa += selling;
         }
-        const receiptKey =
-          (sale as any).receiptNumber && (sale as any).receiptNumber.trim().length > 0
-            ? `${(sale as any).receiptNumber.trim()}|${method}`
-            : `${entry.id}-${index}|${method}`;
-        if (!receiptTracker.has(receiptKey)) {
-          receiptTracker.add(receiptKey);
+        const receiptBase = (sale as any).receiptNumber?.trim() || `${entry.id}-${index}`;
+        const receiptKey = `${receiptBase}|${method}`;
+        if (entryReceiptKeys.has(receiptKey)) return;
+        entryReceiptKeys.add(receiptKey);
+        if (addUniqueReceipt(receiptKey)) {
+          totals.totalReceipts += 1;
           if (method === "CASH") {
             totals.paymentStats.countCashReceipts += 1;
           } else {
@@ -192,14 +207,16 @@ export async function summarizeMarketingReportsForPeriod(opts: {
           }
         }
       });
-      totals.totalReceipts += receiptTracker.size || sales.length;
       return;
     }
 
     const fallbackSales = toNumber(entry.totalSales);
     totals.totalSales += fallbackSales;
     totals.totalProfit += toNumber(entry.totalProfit);
-    totals.totalReceipts += 1;
+    const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
+    if (addUniqueReceipt(fallbackKey)) {
+      totals.totalReceipts += 1;
+    }
   });
 
   reports.forEach((report) => {
@@ -209,25 +226,15 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     const profitFromMetrics =
       toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
-    // Do not treat selling total as profit when no profit metric is provided.
     const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : 0;
 
     const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
-    const derivedReceipts = deriveReceiptsFromSales(report.sales);
-    const receiptCount = receiptsFromMetrics > 0 ? receiptsFromMetrics : derivedReceipts;
+    const sales = Array.isArray(report.sales) ? report.sales : [];
 
-    totals.totalSales += toNumber(report.totalSales);
-    totals.totalProfit += entryProfit;
-    totals.totalReceipts += receiptCount;
-    totals.totalItems += report.sales.length;
-    totals.totalNewProducts += report.newProducts ?? 0;
-    totals.totalEditedProducts += report.productsEdited ?? 0;
-    totals.totalCopiedProducts += report.copiesUploaded ?? 0;
-    totals.walkInsServed += report.walkInServed ?? 0;
-    totals.walkInsPurchased += report.purchasesMade ?? 0;
+    const entrySalesReceiptKeys = new Set<string>();
+    let newReceiptCount = 0;
 
-    const receiptTracker = new Set<string>();
-    report.sales.forEach((sale, index) => {
+    sales.forEach((sale, index) => {
       const method = normalizeMethod(sale.paymentMethod);
       const price = toNumber(sale.price);
       if (method === "CASH") {
@@ -235,12 +242,15 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       } else {
         totals.paymentStats.totalSalesMpesa += price;
       }
-      const receiptKey =
+      const receiptBase =
         sale.receiptNumber && sale.receiptNumber.trim().length > 0
-          ? `${sale.receiptNumber.trim()}|${method}`
-          : `${report.id}-${index}|${method}`;
-      if (!receiptTracker.has(receiptKey)) {
-        receiptTracker.add(receiptKey);
+          ? sale.receiptNumber.trim()
+          : `${report.id}-${index}`;
+      const receiptKey = `${receiptBase}|${method}`;
+      if (entrySalesReceiptKeys.has(receiptKey)) return;
+      entrySalesReceiptKeys.add(receiptKey);
+      if (addUniqueReceipt(receiptKey)) {
+        newReceiptCount += 1;
         if (method === "CASH") {
           totals.paymentStats.countCashReceipts += 1;
         } else {
@@ -248,6 +258,24 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         }
       }
     });
+
+    totals.totalSales += toNumber(report.totalSales);
+    totals.totalProfit += entryProfit;
+    totals.totalItems += sales.length;
+    totals.totalNewProducts += report.newProducts ?? 0;
+    totals.totalEditedProducts += report.productsEdited ?? 0;
+    totals.totalCopiedProducts += report.copiesUploaded ?? 0;
+    totals.walkInsServed += report.walkInServed ?? 0;
+    totals.walkInsPurchased += report.purchasesMade ?? 0;
+
+    if (sales.length > 0) {
+      totals.totalReceipts += newReceiptCount;
+    } else if (receiptsFromMetrics > 0) {
+      const fallbackKey = `daily-report-${report.id ?? ""}`;
+      if (addUniqueReceipt(fallbackKey)) {
+        totals.totalReceipts += receiptsFromMetrics;
+      }
+    }
   });
 
   return { totals, entryCount: marketingEntries.length + reports.length };
