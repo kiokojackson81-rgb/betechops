@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export type TradingPeriod = {
   key: string;
@@ -26,9 +27,25 @@ export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
   });
 
   if (!period) {
+    const tradingPeriod = getTradingPeriodFor(today);
+    const periodLabel = `${formatLabel(tradingPeriod.start)} – ${formatLabel(tradingPeriod.end, {
+      year: "numeric",
+    })}`;
     period = await prisma.commissionPeriod.findFirst({
-      orderBy: { endDate: "desc" },
+      where: {
+        startDate: tradingPeriod.start,
+        endDate: tradingPeriod.end,
+      },
     });
+    if (!period) {
+      period = await prisma.commissionPeriod.create({
+        data: {
+          name: periodLabel,
+          startDate: tradingPeriod.start,
+          endDate: tradingPeriod.end,
+        },
+      });
+    }
   }
 
   if (!period) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export async function GET(req: Request) {
   const defaultPeriod = getTradingPeriodFor(new Date());
   const fromDate = fromParam ? new Date(fromParam) : defaultPeriod.start;
   const toDate = toParam ? new Date(toParam) : defaultPeriod.end;
+  await getOrCreateCommissionPeriod(fromDate);
 
   const where: Record<string, unknown> = {
     date: {

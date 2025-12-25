@@ -4,6 +4,7 @@ import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ export async function GET(req: Request) {
   const startParam = parseDateParam(url.searchParams.get("start"));
   const endParam = parseDateParam(url.searchParams.get("end"));
   const period = getTradingPeriodFor(new Date());
+  const targetDate = startParam ? new Date(startParam) : period.start;
+  await getOrCreateCommissionPeriod(targetDate);
   const start = startParam ?? period.start;
   const end = endParam ?? period.end;
   const periodLabel = `${start.toLocaleDateString("en-KE", {

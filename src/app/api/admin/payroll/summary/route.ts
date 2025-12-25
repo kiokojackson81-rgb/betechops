@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export async function GET(req: Request) {
   } else {
     period = getTradingPeriodFor(new Date());
   }
+
+  await getOrCreateCommissionPeriod(period.start);
 
   const periodKey = `${period.start.toISOString()}_${period.end.toISOString()}`;
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);

@@ -9,6 +9,7 @@ import {
 } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const now = new Date();
+  await getOrCreateCommissionPeriod(now);
   const period = getTradingPeriodFor(now);
 
   const [summary, marketingSummary, supportSummary] = await Promise.all([

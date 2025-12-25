@@ -6,6 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
   }
 
   const now = new Date();
+  await getOrCreateCommissionPeriod(now);
   const period = getTradingPeriodFor(now);
 
   const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([

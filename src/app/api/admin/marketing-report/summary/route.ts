@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { startOfDay, endOfDay } from "date-fns";
 import { getMarketingSummary } from "@/lib/marketingReport";
 import { requireRole } from "@/lib/api";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export async function GET(request: NextRequest) {
   const auth = await requireRole("ADMIN");
@@ -17,6 +18,8 @@ export async function GET(request: NextRequest) {
 
   const fromDate = startOfDay(new Date(fromParam));
   const toDate = endOfDay(new Date(toParam));
+
+  await getOrCreateCommissionPeriod(fromDate);
 
   try {
     const summary = await getMarketingSummary({ from: fromDate, to: toDate });

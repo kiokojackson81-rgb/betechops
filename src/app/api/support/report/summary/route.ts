@@ -3,6 +3,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
     // ignore malformed URLs and fall back to current date
   }
 
+  await getOrCreateCommissionPeriod(basisDate);
   const period = getTradingPeriodFor(basisDate);
   const summary = await getSupportPeriodAggregates({ userId: auth.user.id, period });
   const aggregates = summary.aggregates;

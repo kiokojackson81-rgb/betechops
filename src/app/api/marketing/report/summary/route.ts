@@ -6,6 +6,7 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export async function GET(req: Request) {
   }
 
   const basisDate = dateStr ? new Date(dateStr) : null;
+  const targetDate = basisDate ?? new Date();
+  await getOrCreateCommissionPeriod(targetDate);
   const period = basisDate ? getTradingPeriodFor(basisDate) : await getCurrentTradingPeriod();
 
   // Normalize period for downstream libs when the shape may vary between
