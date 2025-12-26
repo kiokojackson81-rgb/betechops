@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentTradingPeriod } from "./marketingPeriod";
+import { getCurrentTradingPeriodFor } from "./marketingPeriod";
+import { nowInNairobi } from "@/lib/timezone";
 
 export type PendingReceiptItem = {
   id: string;
@@ -25,7 +26,7 @@ export type UnpricedSale = {
 };
 
 export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedSale[]> {
-  const { startDate, endDate } = await getCurrentTradingPeriod();
+  const { startDate, endDate } = await getCurrentTradingPeriodFor(nowInNairobi());
   const [dailyReportSales, supportReceipts] = await Promise.all([
     prisma.dailySale.findMany({
       where: {

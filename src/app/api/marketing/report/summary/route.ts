@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireRole, getActorId } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getCurrentTradingPeriod } from "@/lib/marketingPeriod";
+import { getCurrentTradingPeriodFor } from "@/lib/marketingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { prisma } from "@/lib/prisma";
+import { nowInNairobi } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,6 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.res;
 
   const url = new URL(req.url);
-  const dateStr = url.searchParams.get("date");
   const impersonateId = url.searchParams.get("impersonateId");
   const actorId = await getActorId();
   const targetUserId = impersonateId && auth.role === "ADMIN" ? impersonateId : actorId;
@@ -24,15 +24,28 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const basisDate = dateStr ? new Date(dateStr) : null;
-  const targetDate = basisDate ?? new Date();
-  await getOrCreateCommissionPeriod(targetDate);
-  const period = basisDate ? getTradingPeriodFor(basisDate) : await getCurrentTradingPeriod();
+  const today = nowInNairobi();
+  await getOrCreateCommissionPeriod(today);
+  const current = await getCurrentTradingPeriodFor(today);
 
-  // Normalize period for downstream libs when the shape may vary between
-  // `tradingPeriod.ts` and `marketingPeriod.ts`. Use `any` to satisfy callers
-  // that expect slightly different period types.
-  const argPeriod: any = period as any;
+  const argPeriod: any = {
+    start: current.startDate,
+    end: current.endDate,
+    key: current.key,
+    label: current.label,
+  };
+
+  if (!(today >= argPeriod.start && today <= argPeriod.end)) {
+    const fallback = getTradingPeriodFor(today);
+    argPeriod.start = fallback.start;
+    argPeriod.end = fallback.end;
+    argPeriod.key = fallback.key;
+    argPeriod.label = fallback.label;
+  }
+
+  // Period data for the response (current-only).
+  const startDate: Date = argPeriod.start;
+  const endDate: Date = argPeriod.end;
 
   const [{ totals: marketingTotals }, supportSummary] = await Promise.all([
     summarizeMarketingReportsForPeriod({ userId: targetUserId, period: argPeriod }),
@@ -78,21 +91,9 @@ export async function GET(req: Request) {
     // silently ignore and return the computed value.
   }
 
-  // `period` can be the TradingPeriod from `tradingPeriod.ts` (has `start`/`end`)
-  // or the one from `marketingPeriod.ts` (has `startDate`/`endDate`). Normalize here.
-  let startDate: Date;
-  let endDate: Date;
-  if ("start" in period && "end" in period) {
-    startDate = (period as any).start;
-    endDate = (period as any).end;
-  } else {
-    startDate = (period as any).startDate;
-    endDate = (period as any).endDate;
-  }
-
   const normalizedPeriod = {
-    key: String((period as any).key ?? ""),
-    label: String((period as any).label ?? ""),
+    key: String(argPeriod.key ?? ""),
+    label: String(argPeriod.label ?? ""),
     start: startDate.toISOString(),
     end: endDate.toISOString(),
   };

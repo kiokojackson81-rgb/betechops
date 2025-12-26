@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { nowInNairobi } from "@/lib/timezone";
 
 export type TradingPeriod = {
   key: string;
@@ -15,9 +16,7 @@ const formatLabel = (date: Date, opts?: Intl.DateTimeFormatOptions) =>
     ...(opts ?? {}),
   });
 
-export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
-  const today = new Date();
-
+export async function getCurrentTradingPeriodFor(today: Date): Promise<TradingPeriod> {
   let period = await prisma.commissionPeriod.findFirst({
     where: {
       startDate: { lte: today },
@@ -28,7 +27,7 @@ export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
 
   if (!period) {
     const tradingPeriod = getTradingPeriodFor(today);
-    const periodLabel = `${formatLabel(tradingPeriod.start)} – ${formatLabel(tradingPeriod.end, {
+    const periodLabel = `${formatLabel(tradingPeriod.start)} - ${formatLabel(tradingPeriod.end, {
       year: "numeric",
     })}`;
     period = await prisma.commissionPeriod.findFirst({
@@ -53,7 +52,7 @@ export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
     start.setHours(0, 0, 0, 0);
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     end.setHours(23, 59, 59, 999);
-    const label = `${formatLabel(start)} – ${formatLabel(end, {
+    const label = `${formatLabel(start)} - ${formatLabel(end, {
       year: "numeric",
     })}`;
     return {
@@ -66,11 +65,15 @@ export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
 
   const start = period.startDate;
   const end = period.endDate;
-  const label = `${formatLabel(start)} – ${formatLabel(end, { year: "numeric" })}`;
+  const label = `${formatLabel(start)} - ${formatLabel(end, { year: "numeric" })}`;
   return {
     key: `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`,
     label,
     startDate: start,
     endDate: end,
   };
+}
+
+export async function getCurrentTradingPeriod(): Promise<TradingPeriod> {
+  return getCurrentTradingPeriodFor(nowInNairobi());
 }
