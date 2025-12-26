@@ -5,6 +5,7 @@ import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { requireAttendant, auth } from "@/lib/auth";
 import { canonicalReceiptNumber, parsePaymentMethod, buildReceiptKey } from "@/lib/receipts/utils";
+import { findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
