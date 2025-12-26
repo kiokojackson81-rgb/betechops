@@ -1053,7 +1053,11 @@ export default function MarketingTrackerPage() {
         const url = imp
           ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(imp)}`
           : "/api/marketing/report/summary";
-        const res = await fetch(url, { credentials: "same-origin", signal: controller.signal });
+        const res = await fetch(url, {
+          credentials: "same-origin",
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data) return;
@@ -1266,7 +1270,8 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   // so the Quick stats panel matches the detailed Earnings card exactly.
   const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
-  const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 - Dec 24, 2025";
+  const periodLabel =
+    periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Loading current period\u2026";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;

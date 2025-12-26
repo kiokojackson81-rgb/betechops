@@ -136,7 +136,7 @@ export async function GET(req: Request) {
     // If ledger lookup fails, continue with the computed commission above.
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     period: normalizedPeriod,
     aggregates: {
       totalSales,
@@ -147,4 +147,6 @@ export async function GET(req: Request) {
       commission: { commission },
     },
   });
+  response.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return response;
 }
