@@ -19,7 +19,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const impersonateId = url.searchParams.get("impersonateId");
   const actorId = await getActorId();
-  const targetUserId = impersonateId && auth.role === "ADMIN" ? impersonateId : actorId;
+  const targetUserId =
+    impersonateId && auth.role === "ADMIN" ? impersonateId : actorId;
   if (!targetUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -28,7 +29,12 @@ export async function GET(req: Request) {
   await getOrCreateCommissionPeriod(today);
   const current = await getCurrentTradingPeriodFor(today);
 
-  const argPeriod: any = {
+  let argPeriod: {
+    start: Date;
+    end: Date;
+    key: string;
+    label: string;
+  } = {
     start: current.startDate,
     end: current.endDate,
     key: current.key,
@@ -37,15 +43,13 @@ export async function GET(req: Request) {
 
   if (!(today >= argPeriod.start && today <= argPeriod.end)) {
     const fallback = getTradingPeriodFor(today);
-    argPeriod.start = fallback.start;
-    argPeriod.end = fallback.end;
-    argPeriod.key = fallback.key;
-    argPeriod.label = fallback.label;
+    argPeriod = {
+      start: fallback.start,
+      end: fallback.end,
+      key: fallback.key,
+      label: fallback.label,
+    };
   }
-
-  // Period data for the response (current-only).
-  const startDate: Date = argPeriod.start;
-  const endDate: Date = argPeriod.end;
 
   const [{ totals: marketingTotals }, supportSummary] = await Promise.all([
     summarizeMarketingReportsForPeriod({ userId: targetUserId, period: argPeriod }),
@@ -62,7 +66,6 @@ export async function GET(req: Request) {
   const totalSales = marketingTotals.totalSales + supportTotals.totalSales;
   const totalProfit = marketingTotals.totalProfit + supportTotals.totalProfit;
   const totalItems = marketingTotals.totalItems + supportTotals.totalItems;
-  const totalReceipts = marketingTotals.totalReceipts + supportTotals.totalReceipts;
 
   let commission = 0;
   if (totalProfit > 0) {
@@ -73,43 +76,32 @@ export async function GET(req: Request) {
     }
   }
 
-  // If there are any unpriced sales for this attendant in the current
-  // period, zero out commission until pricing is completed. This prevents
-  // attendants from receiving commission computed from unpriced receipts.
   try {
-    const user = await prisma.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { email: true },
+    });
     const userEmail = user?.email?.toLowerCase() ?? null;
     if (userEmail) {
       const unpriced = await getUnpricedDailySalesForCurrentPeriod();
-      const hasUnpricedForUser = unpriced.some((s) => (s.attendantEmail ?? "").toLowerCase() === userEmail);
+      const hasUnpricedForUser = unpriced.some(
+        (s) => (s.attendantEmail ?? "").toLowerCase() === userEmail,
+      );
       if (hasUnpricedForUser) {
         commission = 0;
       }
     }
-  } catch (e) {
-    // If pricing check fails, do not block returning computed commission —
-    // silently ignore and return the computed value.
+  } catch {
+    // ignore
   }
 
-  const normalizedPeriod = {
-    key: String(argPeriod.key ?? ""),
-    label: String(argPeriod.label ?? ""),
-    start: startDate.toISOString(),
-    end: endDate.toISOString(),
-  };
-
-  // Prefer an existing CommissionLedger row as the authoritative source
-  // for displayed commission. If a ledger exists for the target user+period
-  // use its detail (marketing/support) commission values or the stored
-  // netCommission/grossCommission. This ensures the UI shows explicit zero
-  // when the ledger has been zeroed (e.g., pending pricing).
   try {
     const ledger = await prisma.commissionLedger.findUnique({
       where: {
         userId_periodStart_periodEnd: {
           userId: targetUserId,
-          periodStart: startDate,
-          periodEnd: endDate,
+          periodStart: argPeriod.start,
+          periodEnd: argPeriod.end,
         },
       },
     });
@@ -120,33 +112,34 @@ export async function GET(req: Request) {
       const supportCommission = Number(detail.support?.commission ?? 0);
       const combinedDetailCommission = marketingCommission + supportCommission;
 
-      // If the ledger stores explicit detail commissions, use those. Otherwise
-      // fall back to the ledger's netCommission (or grossCommission). This
-      // guarantees that a zeroed ledger results in a displayed zero.
       if (combinedDetailCommission > 0) {
         commission = combinedDetailCommission;
       } else {
-        // Prefer netCommission; if absent, use grossCommission; otherwise keep
-        // the previously computed value.
-        const ledgerNet = Number(ledger.netCommission ?? ledger.grossCommission ?? commission);
+        const ledgerNet = Number(
+          ledger.netCommission ?? ledger.grossCommission ?? commission,
+        );
         commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
       }
     }
-  } catch (e) {
-    // If ledger lookup fails, continue with the computed commission above.
+  } catch {
+    // ignore
   }
 
-  const response = NextResponse.json({
-    period: normalizedPeriod,
+  const res = NextResponse.json({
+    period: {
+      key: String(argPeriod.key ?? ""),
+      label: String(argPeriod.label ?? ""),
+      start: argPeriod.start.toISOString(),
+      end: argPeriod.end.toISOString(),
+    },
     aggregates: {
       totalSales,
-      totalProfit,
       totalItems,
-      totalReceipts,
       paymentStats: marketingTotals.paymentStats,
       commission: { commission },
     },
   });
-  response.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
-  return response;
+
+  res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return res;
 }
