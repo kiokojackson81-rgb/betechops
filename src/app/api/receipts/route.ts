@@ -4,8 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { requireAttendant, auth } from "@/lib/auth";
-import { findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
-import { canonicalReceiptNumber, parsePaymentMethod } from "@/lib/receipts/utils";
+import { canonicalReceiptNumber, parsePaymentMethod, buildReceiptKey } from "@/lib/receipts/utils";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
@@ -605,50 +604,52 @@ export async function POST(req: NextRequest) {
             const supportSellingTotal = Math.round(Number(total) || 0);
 
             const normalizedSerial = canonicalReceiptNumber(serial);
+            const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
             const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
-            // Ensure entry exists
-            const entryId = existingEntry?.id ?? (await tx.supportDailyEntry.create({
-              data: {
-                date: entryDate,
-                dayOfWeek,
-                totalSales: 0,
-                totalProfit: 0,
-                newBatteries: 0,
-                changedBatteries: 0,
-                submittedById: attendantId,
-              },
-              select: { id: true },
-            })).id;
+            const entryId = existingEntry?.id ?? (
+              await tx.supportDailyEntry.create({
+                data: {
+                  date: entryDate,
+                  dayOfWeek,
+                  totalSales: 0,
+                  totalProfit: 0,
+                  newBatteries: 0,
+                  changedBatteries: 0,
+                  submittedById: attendantId,
+                },
+                select: { id: true },
+              })
+            ).id;
 
-            // Default delta = full values (first insert)
             let deltaSales = supportSellingTotal;
             let deltaProfit = supportSellingTotal - supportReceiptBuyingTotal;
 
-            if (normalizedSerial) {
-              const key = { dailyEntryId: entryId, receiptNumber: normalizedSerial, paymentMethod } as any;
-
+            if (receiptKey) {
               const prev = await tx.supportReceipt.findUnique({
-                where: { uniq_support_receipt_in_entry: key },
-                select: { id: true, sellingTotal: true, buyingTotal: true },
+                where: { receiptKey },
+                select: { sellingTotal: true, buyingTotal: true },
               });
 
               const prevSelling = Number(prev?.sellingTotal ?? 0);
               const prevBuying = Number(prev?.buyingTotal ?? 0);
+
               deltaSales = supportSellingTotal - prevSelling;
               deltaProfit = (supportSellingTotal - supportReceiptBuyingTotal) - (prevSelling - prevBuying);
 
               await tx.supportReceipt.upsert({
-                where: { uniq_support_receipt_in_entry: key },
+                where: { receiptKey },
                 create: {
                   dailyEntryId: entryId,
-                  receiptNumber: normalizedSerial,
+                  receiptNumber: normalizedSerial || undefined,
+                  receiptKey,
                   paymentMethod,
                   sellingTotal: supportSellingTotal,
                   buyingTotal: supportReceiptBuyingTotal,
                   items: supportReceiptItems.length ? { create: supportReceiptItems } : undefined,
                 },
                 update: {
+                  paymentMethod,
                   sellingTotal: supportSellingTotal,
                   buyingTotal: supportReceiptBuyingTotal,
                   items: {
@@ -658,11 +659,11 @@ export async function POST(req: NextRequest) {
                 },
               });
             } else {
-              // No serial: create a new one-shot receipt
               await tx.supportReceipt.create({
                 data: {
                   dailyEntryId: entryId,
                   receiptNumber: null,
+                  receiptKey: null,
                   paymentMethod,
                   sellingTotal: supportSellingTotal,
                   buyingTotal: supportReceiptBuyingTotal,
@@ -697,24 +698,38 @@ export async function POST(req: NextRequest) {
             buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
           }));
           const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
+          const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
           const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
-          let entry = await tx.marketingDailyEntry.findFirst({ where: { submittedById: attendantId, date: { gte: marketingStart, lte: marketingEnd } } });
+          let entry = await tx.marketingDailyEntry.findFirst({
+            where: { submittedById: attendantId, date: { gte: marketingStart, lte: marketingEnd } },
+          });
 
           const actorName = guard.user?.name ?? guard.user?.email ?? null;
           const actorEmail = guard.user?.email ?? null;
 
           if (!entry) {
-            entry = await tx.marketingDailyEntry.create({ data: { date: entryDate, dayOfWeek, submittedById: attendantId, submittedByName: actorName, submittedByEmail: actorEmail } });
+            entry = await tx.marketingDailyEntry.create({
+              data: {
+                date: entryDate,
+                dayOfWeek,
+                submittedById: attendantId,
+                submittedByName: actorName,
+                submittedByEmail: actorEmail,
+                totalSales: 0,
+                totalProfit: 0,
+              },
+            });
           }
 
           let deltaSales = receiptSellingTotal;
           let deltaProfit = receiptSellingTotal - receiptBuyingTotal;
 
-          if (normalizedSerial) {
-            const key = { dailyEntryId: entry.id, receiptNumber: normalizedSerial, paymentMethod } as any;
-
-            const prev = await tx.marketingReceipt.findUnique({ where: { uniq_marketing_receipt_in_entry: key }, select: { id: true, sellingTotal: true, buyingTotal: true } });
+          if (receiptKey) {
+            const prev = await tx.marketingReceipt.findUnique({
+              where: { receiptKey },
+              select: { sellingTotal: true, buyingTotal: true },
+            });
 
             const prevSelling = Number(prev?.sellingTotal ?? 0);
             const prevBuying = Number(prev?.buyingTotal ?? 0);
@@ -723,20 +738,24 @@ export async function POST(req: NextRequest) {
             deltaProfit = (receiptSellingTotal - receiptBuyingTotal) - (prevSelling - prevBuying);
 
             await tx.marketingReceipt.upsert({
-              where: { uniq_marketing_receipt_in_entry: key },
+              where: { receiptKey },
               create: {
                 dailyEntryId: entry.id,
-                receiptNumber: normalizedSerial,
+                receiptNumber: normalizedSerial || undefined,
+                receiptKey,
                 paymentMethod,
                 sellingTotal: receiptSellingTotal,
                 buyingTotal: receiptBuyingTotal,
                 items: receiptItemsPayload.length ? { create: receiptItemsPayload } : undefined,
               },
               update: {
+                paymentMethod,
                 sellingTotal: receiptSellingTotal,
                 buyingTotal: receiptBuyingTotal,
-                paymentMethod,
-                items: { deleteMany: {}, ...(receiptItemsPayload.length ? { create: receiptItemsPayload } : {}) },
+                items: {
+                  deleteMany: {},
+                  ...(receiptItemsPayload.length ? { create: receiptItemsPayload } : {}),
+                },
               },
             });
           } else {
@@ -744,6 +763,7 @@ export async function POST(req: NextRequest) {
               data: {
                 dailyEntryId: entry.id,
                 receiptNumber: null,
+                receiptKey: null,
                 sellingTotal: receiptSellingTotal,
                 buyingTotal: receiptBuyingTotal,
                 paymentMethod,
@@ -753,7 +773,10 @@ export async function POST(req: NextRequest) {
           }
 
           if ((deltaSales || deltaProfit) && entry.id) {
-            await tx.marketingDailyEntry.update({ where: { id: entry.id }, data: { totalSales: { increment: deltaSales }, totalProfit: { increment: deltaProfit } } });
+            await tx.marketingDailyEntry.update({
+              where: { id: entry.id },
+              data: { totalSales: { increment: deltaSales }, totalProfit: { increment: deltaProfit } },
+            });
           }
         } catch (e) {
           console.error("[receipts] failed to update marketing entry", e);
