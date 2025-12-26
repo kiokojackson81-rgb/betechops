@@ -259,7 +259,9 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       }
     });
 
-    totals.totalSales += toNumber(report.totalSales);
+    if (sales.length === 0) {
+      totals.totalSales += toNumber(report.totalSales);
+    }
     totals.totalProfit += entryProfit;
     totals.totalItems += sales.length;
     totals.totalNewProducts += report.newProducts ?? 0;
