@@ -222,6 +222,7 @@ model MarketingReceipt {
   items         MarketingReceiptItem[]
 
   @@index([dailyEntryId])
+  @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_marketing_receipt_in_entry")
 }
 
 model MarketingReceiptItem {
@@ -283,6 +284,7 @@ model SupportReceipt {
   items         SupportReceiptItem[] @relation("SupportReceiptItems")
 
   @@index([dailyEntryId])
+  @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_support_receipt_in_entry")
 }
 
 model SupportReceiptItem {
