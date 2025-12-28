@@ -445,7 +445,23 @@ export default function AttendantOnlineClient() {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   }, [receiptRows]);
 
-  const receiptsCount = receiptRows.length;
+  const receiptsCount = useMemo(() => {
+    const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? [];
+    const localKeys = (receiptRows ?? []).map((r: any) => {
+      const createdAt = r.createdAt ?? r.generatedAt ?? new Date().toISOString();
+      const d = new Date(createdAt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const businessDate = `${y}-${m}-${day}`;
+      const raw = (r.receiptNumber ?? r.orderRef ?? r.receiptRef ?? r.id ?? "") as string;
+      const serial = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (serial && serial.length > 0) return `${businessDate}:${serial}`;
+      return `ID:${String(r.id ?? raw ?? "")}`;
+    });
+    const union = new Set<string>([...serverKeys, ...localKeys]);
+    return union.size;
+  }, [receiptRows, payrollSummary]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 

@@ -90,6 +90,8 @@ export async function GET(req: Request) {
   const netPay = totalEarnings - totalDeductions;
 
   const payload = {
+    // expose canonical per-receipt keys for clients to dedupe local receipts
+    perReceiptCanonicalKeys: Array.from(merged.keys()),
     ...summary,
     totalSales: combinedSales,
     totalProfit: combinedProfit,

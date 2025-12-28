@@ -335,6 +335,23 @@ export async function GET(req: Request) {
   const netPay = totalEarnings - totalDeductions;
 
   const baseResponse = {
+    // canonical/per-receipt helpers for clients to dedupe local receipts
+    perReceiptIds: Array.from(dedupedMap.keys()),
+    perReceiptCanonicalKeys: Array.from(dedupedMap.values()).map((c) => {
+      try {
+        const date = c.createdAt ? new Date(c.createdAt) : new Date();
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        const businessDate = `${y}-${m}-${d}`;
+        const serial = String(c.rawId ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (serial && serial.length > 0) return `${businessDate}:${serial}`;
+        return `ID:${String(c.rawId ?? c.receiptId ?? "")}`;
+      } catch (e) {
+        return String(c.receiptId ?? c.rawId ?? "");
+      }
+    }),
+    
     ...summary,
     totalSales: combinedSales,
     totalProfit: combinedProfit,
