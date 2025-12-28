@@ -334,12 +334,19 @@ export async function POST(req: NextRequest) {
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
 
   try {
+    // allow linking when caller opts-in via ?link=1 or payload.link = true
+    const url = new URL(req.url);
+    const allowLink = url.searchParams.get("link") === "1" || url.searchParams.get("link") === "true" || Boolean(payload?.link);
+
     // Early duplicate guard: check across POS, marketing, support
     const existing = await findReceiptOwner(String(serial));
-    if (existing) {
+    if (existing && !allowLink) {
       const msg = buildDuplicateMessage(serial, existing);
       return NextResponse.json({ ok: false, code: "DUPLICATE_RECEIPT", message: msg, owner: existing }, { status: 409 });
     }
+
+    // If linking is allowed and an existing owner is found, we'll link to it inside the transaction.
+    const ownerToLink = existing ?? null;
 
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
@@ -559,13 +566,40 @@ export async function POST(req: NextRequest) {
         },
       } as any;
 
-      // upsert receipt by orderId
-      const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+      // upsert receipt by orderId, or link to existing owner when requested
       let receipt;
-      if (existingReceipt) {
-        receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+      if (ownerToLink && ownerToLink.type === "pos" && ownerToLink.id) {
+        // Link: update the existing POS receipt record with merged data and any linking metadata
+        try {
+          const existingPos = await tx.receipt.findUnique({ where: { id: ownerToLink.id } });
+          if (existingPos) {
+            const mergedData = { ...(existingPos.data ?? {}), ...(receiptData.data ?? {}) };
+            // attach linking hints if provided
+            if (payload?.marketingEntryId) mergedData.marketingEntryId = payload.marketingEntryId;
+            if (payload?.marketingReceiptId) mergedData.marketingReceiptId = payload.marketingReceiptId;
+            if (payload?.supportEntryId) mergedData.supportEntryId = payload.supportEntryId;
+            if (payload?.supportReceiptId) mergedData.supportReceiptId = payload.supportReceiptId;
+            receipt = await tx.receipt.update({ where: { id: ownerToLink.id }, data: { ...receiptData, data: mergedData } });
+          } else {
+            receipt = await tx.receipt.create({ data: receiptData });
+          }
+        } catch (e) {
+          // fallback to normal upsert behavior
+          const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+          if (existingReceipt) {
+            receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+          } else {
+            receipt = await tx.receipt.create({ data: receiptData });
+          }
+        }
       } else {
-        receipt = await tx.receipt.create({ data: receiptData });
+        // normal upsert by orderId
+        const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+        if (existingReceipt) {
+          receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+        } else {
+          receipt = await tx.receipt.create({ data: receiptData });
+        }
       }
 
       // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
