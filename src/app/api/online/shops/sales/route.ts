@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
 
@@ -29,33 +30,21 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const startParam = url.searchParams.get("start");
-  const endParam = url.searchParams.get("end");
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+  }
+  const { start: periodStart, end: periodEnd } = getTradingPeriodFor(new Date());
+  let startDate: Date | undefined = periodStart;
+  let endDate: Date | undefined = periodEnd;
 
   const baseWhere: Prisma.WeeklySaleWhereInput = {
     userId: targetUserId,
   };
   const rangeWhere: Prisma.WeeklySaleWhereInput = { ...baseWhere };
 
-  let startDate: Date | undefined;
-  let endDate: Date | undefined;
-
-    if (startParam) {
-      const parsed = new Date(startParam);
-      if (!Number.isNaN(parsed.valueOf())) {
-        startDate = parsed;
-        const current = rangeWhere.weekStart as Prisma.DateTimeFilter | undefined;
-        rangeWhere.weekStart = { ...(current ?? {}), gte: startDate };
-      }
-    }
-    if (endParam) {
-      const parsed = new Date(endParam);
-      if (!Number.isNaN(parsed.valueOf())) {
-        endDate = parsed;
-        const current = rangeWhere.weekStart as Prisma.DateTimeFilter | undefined;
-        rangeWhere.weekStart = { ...(current ?? {}), lte: endDate };
-      }
-    }
+  // Apply server-resolved week range to the query filters
+  const current = rangeWhere.weekStart as Prisma.DateTimeFilter | undefined;
+  rangeWhere.weekStart = { ...(current ?? {}), gte: startDate, lte: endDate };
 
   const [entries, periodAggregate, totalAggregate] = await Promise.all([
     prisma.weeklySale.findMany({

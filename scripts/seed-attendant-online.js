@@ -29,77 +29,96 @@ async function main() {
     update: { name: 'Seed Attendant 3' },
   });
 
-  const order = await prisma.order.create({
-    data: {
-      orderNumber: 'SEED-001',
-      customerName: 'Test Customer',
-      customerPhone: '0712345678',
-      attendantId: user.id,
-      shopId: shop.id,
-      status: 'COMPLETED',
-      paymentStatus: 'PAID',
-      totalAmount: 1000,
-    },
-  });
+  // create or get order/receipt for primary attendant
+  let order = await prisma.order.findUnique({ where: { orderNumber: 'SEED-001' } });
+  if (!order) {
+    order = await prisma.order.create({
+      data: {
+        orderNumber: 'SEED-001',
+        customerName: 'Test Customer',
+        customerPhone: '0712345678',
+        attendantId: user.id,
+        shopId: shop.id,
+        status: 'COMPLETED',
+        paymentStatus: 'PAID',
+        totalAmount: 1000,
+      },
+    });
+  }
 
-  const receipt = await prisma.receipt.create({
-    data: {
-      orderId: order.id,
-      docType: 'RECEIPT',
-      issuedById: user.id,
-      generatedAt: new Date(),
-      totals: { subtotal: 1000, tax: 0, total: 1000 },
-      data: { paymentMethod: 'CASH', attendantId: user.id },
-    },
-  });
+  let receipt = await prisma.receipt.findFirst({ where: { orderId: order.id } });
+  if (!receipt) {
+    receipt = await prisma.receipt.create({
+      data: {
+        orderId: order.id,
+        docType: 'RECEIPT',
+        issuedById: user.id,
+        generatedAt: new Date(),
+        totals: { subtotal: 1000, tax: 0, total: 1000 },
+        data: { paymentMethod: 'CASH', attendantId: user.id },
+      },
+    });
+  }
 
   // Create simple orders/receipts for the other attendants
   try {
-    const order2 = await prisma.order.create({
-      data: {
-        orderNumber: 'SEED-002',
-        customerName: 'Customer 2',
-        customerPhone: '0722222222',
-        attendantId: user2.id,
-        shopId: shop.id,
-        status: 'COMPLETED',
-        paymentStatus: 'PAID',
-        totalAmount: 1500,
-      },
-    });
-    await prisma.receipt.create({
-      data: {
-        orderId: order2.id,
-        docType: 'RECEIPT',
-        issuedById: user2.id,
-        generatedAt: new Date(),
-        totals: { subtotal: 1500, tax: 0, total: 1500 },
-        data: { paymentMethod: 'MPESA', attendantId: user2.id },
-      },
-    });
+    let order2 = await prisma.order.findUnique({ where: { orderNumber: 'SEED-002' } });
+    if (!order2) {
+      order2 = await prisma.order.create({
+        data: {
+          orderNumber: 'SEED-002',
+          customerName: 'Customer 2',
+          customerPhone: '0722222222',
+          attendantId: user2.id,
+          shopId: shop.id,
+          status: 'COMPLETED',
+          paymentStatus: 'PAID',
+          totalAmount: 1500,
+        },
+      });
+    }
+    let r2 = await prisma.receipt.findFirst({ where: { orderId: order2.id } });
+    if (!r2) {
+      await prisma.receipt.create({
+        data: {
+          orderId: order2.id,
+          docType: 'RECEIPT',
+          issuedById: user2.id,
+          generatedAt: new Date(),
+          totals: { subtotal: 1500, tax: 0, total: 1500 },
+          data: { paymentMethod: 'MPESA', attendantId: user2.id },
+        },
+      });
+    }
 
-    const order3 = await prisma.order.create({
-      data: {
-        orderNumber: 'SEED-003',
-        customerName: 'Customer 3',
-        customerPhone: '0733333333',
-        attendantId: user3.id,
-        shopId: shop.id,
-        status: 'COMPLETED',
-        paymentStatus: 'PAID',
-        totalAmount: 2000,
-      },
-    });
-    await prisma.receipt.create({
-      data: {
-        orderId: order3.id,
-        docType: 'RECEIPT',
-        issuedById: user3.id,
-        generatedAt: new Date(),
-        totals: { subtotal: 2000, tax: 0, total: 2000 },
-        data: { paymentMethod: 'CASH', attendantId: user3.id },
-      },
-    });
+    let order3 = await prisma.order.findUnique({ where: { orderNumber: 'SEED-003' } });
+    if (!order3) {
+      order3 = await prisma.order.create({
+        data: {
+          orderNumber: 'SEED-003',
+          customerName: 'Customer 3',
+          customerPhone: '0733333333',
+          attendantId: user3.id,
+          shopId: shop.id,
+          status: 'COMPLETED',
+          paymentStatus: 'PAID',
+          totalAmount: 2000,
+        },
+      });
+    }
+    let r3 = await prisma.receipt.findFirst({ where: { orderId: order3.id } });
+    if (!r3) {
+      await prisma.receipt.create({
+        data: {
+          orderId: order3.id,
+          docType: 'RECEIPT',
+          issuedById: user3.id,
+          generatedAt: new Date(),
+          totals: { subtotal: 2000, tax: 0, total: 2000 },
+          data: { paymentMethod: 'CASH', attendantId: user3.id },
+        },
+      });
+    }
   } catch (e) {
     console.warn('Failed to create additional POS receipts (schema may differ):', e.message || e);
   }

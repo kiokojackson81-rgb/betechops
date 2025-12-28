@@ -27,13 +27,13 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const startParam = parseDateParam(url.searchParams.get("start"));
-  const endParam = parseDateParam(url.searchParams.get("end"));
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+  }
   const period = getTradingPeriodFor(new Date());
-  const targetDate = startParam ? new Date(startParam) : period.start;
-  await getOrCreateCommissionPeriod(targetDate);
-  const start = startParam ?? period.start;
-  const end = endParam ?? period.end;
+  await getOrCreateCommissionPeriod(period.start);
+  const start = period.start;
+  const end = period.end;
   const periodLabel = `${start.toLocaleDateString("en-KE", {
     day: "2-digit",
     month: "short",

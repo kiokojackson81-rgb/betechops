@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeAdminReceiptSummary, normalizePaymentMethod } from "@/lib/adminReceiptsSummary";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 const startOfDay = (value: Date) => {
   const clone = new Date(value);
@@ -39,15 +40,13 @@ const parseDateParam = (value: string | null, fallback: Date, toEnd = false) => 
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const startParam = url.searchParams.get("start");
-  const endParam = url.searchParams.get("end");
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return new Response(JSON.stringify({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }), { status: 400, headers: { "Content-Type": "application/json" } });
+  }
   const attendantId = url.searchParams.get("attendantId") || undefined;
-
-  const today = new Date();
-  const defaultStart = startOfDay(today);
-  const defaultEnd = endOfDay(today);
-  const start = parseDateParam(startParam, defaultStart);
-  const end = parseDateParam(endParam, defaultEnd, true);
+  const period = getTradingPeriodFor(new Date());
+  const start = startOfDay(period.start);
+  const end = endOfDay(period.end);
   const paymentMethod = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
 
   try {

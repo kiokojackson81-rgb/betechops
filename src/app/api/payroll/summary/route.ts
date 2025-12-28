@@ -17,25 +17,11 @@ import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 export const dynamic = "force-dynamic";
 
 function parsePeriod(url: URL) {
-  const startParam = url.searchParams.get("start");
-  const endParam = url.searchParams.get("end");
-  const periodKeyParam = url.searchParams.get("periodKey");
-
-  if (periodKeyParam) {
-    const parts = String(periodKeyParam).split("_");
-    if (parts.length === 2) {
-      const s = new Date(parts[0]);
-      const e = new Date(parts[1]);
-      return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}`, key: `${s.toISOString()}_${e.toISOString()}` };
-    }
+  // Enforce server-resolved trading period for payroll/dashboard totals.
+  // Do NOT accept arbitrary `start`, `end` or `periodKey` from clients.
+  if (url.searchParams.has("start") || url.searchParams.has("end") || url.searchParams.has("periodKey")) {
+    throw new Error("This endpoint requires a server-resolved trading period; do not supply start/end/periodKey.");
   }
-
-  if (startParam && endParam) {
-    const s = new Date(startParam);
-    const e = new Date(endParam);
-    return { start: s, end: e, label: `${s.toLocaleDateString("en-GB")} - ${e.toLocaleDateString("en-GB")}`, key: `${s.toISOString()}_${e.toISOString()}` };
-  }
-
   return getTradingPeriodFor(new Date());
 }
 
@@ -48,7 +34,12 @@ export async function GET(req: Request) {
   // allow query param `attendantId` for compatibility (admins may request others)
   const attendantIdParam = url.searchParams.get("attendantId");
 
-  const period = parsePeriod(url);
+  let period;
+  try {
+    period = parsePeriod(url);
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message ?? e) }, { status: 400 });
+  }
 
   // If admin requested and provided attendantId, return admin-style single attendant row
   if (role === "ADMIN" || role === "SUPERVISOR") {

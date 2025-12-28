@@ -50,11 +50,10 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const startParam = parseDateParam(url.searchParams.get("start"));
-  const endParam = parseDateParam(url.searchParams.get("end"));
-  const { start: defaultStart, end: defaultEnd } = weekRangeForDate(new Date());
-  const start = startParam ?? defaultStart;
-  const end = endParam ?? defaultEnd;
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+  }
+  const { start, end } = weekRangeForDate(new Date());
 
   const rangeLabel = formatRangeLabel(start, end);
   const weekLabel = `${start.toLocaleDateString("en-KE", {
