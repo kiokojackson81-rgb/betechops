@@ -74,8 +74,8 @@ export default function AdminDailyReportPage() {
   const [shopFilter, setShopFilter] = useState<string>("");
   const [minComplete, setMinComplete] = useState<number>(0);
   const [sortByCompleteness, setSortByCompleteness] = useState<boolean>(false);
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
+  const [from, setFrom] = useState<string>(() => getTradingRange().start);
+  const [to, setTo] = useState<string>(() => getTradingRange().end);
   const [day, setDay] = useState<string>("");
   const [submittedBy, setSubmittedBy] = useState<string>("");
   const [reports, setReports] = useState<Report[]>([]);
@@ -238,6 +238,10 @@ export default function AdminDailyReportPage() {
   async function fetchReports(opts?: { silent?: boolean }) {
     setError("");
     const params = new URLSearchParams();
+    if (typeof window !== "undefined") {
+      const imp = new URLSearchParams(window.location.search).get("impersonateId");
+      if (imp) params.append("impersonateId", imp);
+    }
     if (from) params.append("from", from);
     if (to) params.append("to", to);
     if (day) params.append("day", day);
