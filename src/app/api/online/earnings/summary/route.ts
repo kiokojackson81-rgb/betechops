@@ -10,12 +10,127 @@ import {
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { normalizeReceiptId } from "@/lib/receiptKey";
 
 export const dynamic = "force-dynamic";
+
+type ContributionSource = "marketing" | "support";
+
+type ReceiptContribution = {
+  receiptId: string;
+  rawId: string;
+  source: ContributionSource;
+  sales: number;
+  profit: number;
+  items: number;
+  paymentMethod: "CASH" | "MPESA" | null;
+  attribution: {
+    submittedById?: string | null;
+  };
+  createdAt: Date;
+};
+
+type ReceiptDebugSample = {
+  receiptId: string;
+  rawId: string;
+  source: ContributionSource;
+  sales: number;
+  profit: number;
+  items: number;
+  paymentMethod: "CASH" | "MPESA" | null;
+  attribution: {
+    submittedById?: string | null;
+  };
+};
+
+async function fetchMarketingContributions(userId: string, period: { start: Date; end: Date }) {
+  const rows = await prisma.marketingReceipt.findMany({
+    where: {
+      dailyEntry: {
+        submittedById: userId,
+        date: { gte: period.start, lte: period.end },
+      },
+    },
+    select: {
+      id: true,
+      receiptNumber: true,
+      sellingTotal: true,
+      buyingTotal: true,
+      paymentMethod: true,
+      createdAt: true,
+      _count: { select: { items: true } },
+      dailyEntry: { select: { submittedById: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows
+    .map((row) => {
+      const receiptId = normalizeReceiptId(row.receiptNumber) || normalizeReceiptId(row.id);
+      if (!receiptId) return null;
+      const sales = Number(row.sellingTotal ?? 0);
+      const profit = Math.max(0, sales - Number(row.buyingTotal ?? 0));
+      const items = Number(row._count?.items ?? 0);
+      return {
+        receiptId,
+        rawId: row.receiptNumber ?? row.id,
+        source: "marketing" as const,
+        sales,
+        profit,
+        items,
+        paymentMethod: row.paymentMethod ?? null,
+        attribution: { submittedById: row.dailyEntry?.submittedById ?? null },
+        createdAt: row.createdAt,
+      };
+    })
+    .filter((it): it is ReceiptContribution => Boolean(it));
+}
+
+async function fetchSupportContributions(userId: string, period: { start: Date; end: Date }) {
+  const rows = await prisma.supportReceipt.findMany({
+    where: {
+      dailyEntry: {
+        submittedById: userId,
+        date: { gte: period.start, lte: period.end },
+      },
+    },
+    select: {
+      id: true,
+      receiptNumber: true,
+      sellingTotal: true,
+      buyingTotal: true,
+      paymentMethod: true,
+      createdAt: true,
+      _count: { select: { items: true } },
+      dailyEntry: { select: { submittedById: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows
+    .map((row) => {
+      const receiptId = normalizeReceiptId(row.receiptNumber) || normalizeReceiptId(row.id);
+      if (!receiptId) return null;
+      const sales = Number(row.sellingTotal ?? 0);
+      const profit = Math.max(0, sales - Number(row.buyingTotal ?? 0));
+      const items = Number(row._count?.items ?? 0);
+      return {
+        receiptId,
+        rawId: row.receiptNumber ?? row.id,
+        source: "support" as const,
+        sales,
+        profit,
+        items,
+        paymentMethod: row.paymentMethod ?? null,
+        attribution: { submittedById: row.dailyEntry?.submittedById ?? null },
+        createdAt: row.createdAt,
+      };
+    })
+    .filter((it): it is ReceiptContribution => Boolean(it));
+}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const impersonateId = url.searchParams.get("impersonateId");
+  const isDebug = url.searchParams.get("debug") === "1";
 
   const session: any = await getServerSession(authOptions as any);
   const actorId = session?.user?.id;
@@ -41,6 +156,11 @@ export async function GET(req: Request) {
     getSupportPeriodAggregates({ userId, period }),
   ]);
 
+  const [marketingContributions, supportContributions] = await Promise.all([
+    fetchMarketingContributions(userId, period),
+    fetchSupportContributions(userId, period),
+  ]);
+
   await recomputeMarketingCommissionLedger({ userId, period, client: prisma });
 
   const ledger = await prisma.commissionLedger.findUnique({
@@ -60,10 +180,130 @@ export async function GET(req: Request) {
     totalItems: 0,
   };
 
-  const combinedSales = marketingSummary.totals.totalSales + supportTotals.totalSales;
-  const combinedProfit = marketingSummary.totals.totalProfit + supportTotals.totalProfit;
-  const combinedItems = marketingSummary.totals.totalItems + supportTotals.totalItems;
-  const combinedReceipts = marketingSummary.totals.totalReceipts + supportTotals.totalReceipts;
+  const contributions = [...marketingContributions, ...supportContributions];
+  const priority: Record<ContributionSource, number> = {
+    marketing: 2,
+    support: 1,
+  };
+  const orderedContributions = [...contributions].sort((a, b) => {
+    if (priority[b.source] !== priority[a.source]) {
+      return priority[b.source] - priority[a.source];
+    }
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
+  const dedupedMap = new Map<string, ReceiptContribution>();
+  const intersectionMap = new Map<string, Set<ContributionSource>>();
+  const mismatches: ReceiptContribution[] = [];
+  for (const contribution of orderedContributions) {
+    if (!dedupedMap.has(contribution.receiptId)) {
+      dedupedMap.set(contribution.receiptId, contribution);
+    }
+    const sources = intersectionMap.get(contribution.receiptId) ?? new Set();
+    sources.add(contribution.source);
+    intersectionMap.set(contribution.receiptId, sources);
+    if (contribution.attribution.submittedById && contribution.attribution.submittedById !== userId) {
+      mismatches.push(contribution);
+    }
+  }
+
+  let dedupedSales = 0;
+  let dedupedProfit = 0;
+  let dedupedItems = 0;
+  const dedupedPaymentStats = {
+    totalSalesCash: 0,
+    totalSalesMpesa: 0,
+    countCashReceipts: 0,
+    countMpesaReceipts: 0,
+  };
+  dedupedMap.forEach((contribution) => {
+    dedupedSales += contribution.sales;
+    dedupedProfit += contribution.profit;
+    dedupedItems += contribution.items;
+    const method = contribution.paymentMethod;
+    if (method === "CASH") {
+      dedupedPaymentStats.totalSalesCash += contribution.sales;
+      dedupedPaymentStats.countCashReceipts += 1;
+    } else if (method === "MPESA") {
+      dedupedPaymentStats.totalSalesMpesa += contribution.sales;
+      dedupedPaymentStats.countMpesaReceipts += 1;
+    }
+  });
+
+  const dedupedTotals = {
+    totalSales: dedupedSales,
+    totalProfit: dedupedProfit,
+    totalItems: dedupedItems,
+    totalReceipts: dedupedMap.size,
+    paymentStats: dedupedPaymentStats,
+  };
+
+  const marketingSamples = marketingContributions
+    .slice(0, 50)
+    .map<ReceiptDebugSample>((c) => ({
+      receiptId: c.receiptId,
+      rawId: c.rawId,
+      source: c.source,
+      sales: c.sales,
+      profit: c.profit,
+      items: c.items,
+      paymentMethod: c.paymentMethod,
+      attribution: c.attribution,
+    }));
+  const supportSamples = supportContributions
+    .slice(0, 50)
+    .map<ReceiptDebugSample>((c) => ({
+      receiptId: c.receiptId,
+      rawId: c.rawId,
+      source: c.source,
+      sales: c.sales,
+      profit: c.profit,
+      items: c.items,
+      paymentMethod: c.paymentMethod,
+      attribution: c.attribution,
+    }));
+
+  const intersections = Array.from(intersectionMap.entries())
+    .filter(([, sources]) => sources.size > 1)
+    .map(([receiptId, sources]) => ({
+      receiptId,
+      sources: Array.from(sources),
+    }));
+
+  const debugInfo = isDebug
+    ? {
+        totals: {
+          earnings: {
+            totalSales: summary.totalSales,
+            totalProfit: summary.totalProfit,
+            totalReceipts: summary.totalReceipts ?? 0,
+          },
+          marketing: marketingSummary.totals,
+          support: supportTotals,
+          deduped: dedupedTotals,
+        },
+        samples: {
+          marketing: marketingSamples,
+          support: supportSamples,
+        },
+        intersections,
+        mismatches: mismatches.slice(0, 50).map((c) => ({
+          receiptId: c.receiptId,
+          rawId: c.rawId,
+          source: c.source,
+          sales: c.sales,
+          profit: c.profit,
+          items: c.items,
+          paymentMethod: c.paymentMethod,
+          attribution: c.attribution,
+        })),
+      }
+    : undefined;
+
+  const combinedSales = dedupedTotals.totalSales;
+  const combinedProfit = dedupedTotals.totalProfit;
+  const combinedItems = dedupedTotals.totalItems;
+  const combinedReceipts = dedupedTotals.totalReceipts;
 
   const detail = ledger?.detail as Record<string, any> | undefined;
   const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
@@ -94,7 +334,7 @@ export async function GET(req: Request) {
     summary.chamaTotal + summary.latenessTotal + summary.disciplineTotal + summary.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
-  return NextResponse.json({
+  const baseResponse = {
     ...summary,
     totalSales: combinedSales,
     totalProfit: combinedProfit,
@@ -119,5 +359,9 @@ export async function GET(req: Request) {
           detail: ledger.detail,
         }
       : null,
-  });
+  };
+  if (debugInfo) {
+    return NextResponse.json({ ...baseResponse, debug: debugInfo });
+  }
+  return NextResponse.json(baseResponse);
 }
