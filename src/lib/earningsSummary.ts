@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
+import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -101,9 +102,30 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     period: tradingPeriod,
   });
   const marketingTotals = marketingSummary.totals;
-  if (marketingTotals.totalSales > totalSales) {
-    totalSales = marketingTotals.totalSales;
-    totalProfit = marketingTotals.totalProfit;
+
+  // Also include support aggregates and dedupe per-receipt to avoid double-counting
+  const supportSummary = await getSupportPeriodAggregates({ userId: opts.userId, period: tradingPeriod });
+  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+  const supportPer = (supportSummary as any)?.perReceipts ?? {};
+  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    if (merged.has(k)) continue;
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+  let mergedSales = 0;
+  let mergedProfit = 0;
+  for (const [, v] of merged) {
+    mergedSales += v.sales;
+    mergedProfit += v.profit;
+  }
+
+  // Prefer the larger of snapshot-derived totals and marketing+support merged totals
+  if (mergedSales > totalSales) {
+    totalSales = mergedSales;
+    totalProfit = mergedProfit;
   }
 
   const plan = await prisma.attendantCompPlan.findUnique({ where: { attendantId: opts.userId } });

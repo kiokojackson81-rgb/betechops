@@ -1,0 +1,1352 @@
+[
+  {
+    "id": "cmjpj7b39000yjv04uxc642yx",
+    "receiptKey": "2025-12-28:BETECH2025122892696",
+    "receiptNumber": "BETECH2025122892696",
+    "sellingTotal": 5000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T09:33:02.566Z",
+    "dailyEntryId": "cmjpcviml000xl8041jubx38r"
+  },
+  {
+    "id": "cmjpj4uxw0008jv0464aj7gc6",
+    "receiptKey": "2025-12-28:BETECH2025122898477",
+    "receiptNumber": "BETECH2025122898477",
+    "sellingTotal": 2000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T09:31:08.324Z",
+    "dailyEntryId": "cmjpb4uc20009jv04m2qsos4j"
+  },
+  {
+    "id": "cmjpj380s0009l604cern9bi6",
+    "receiptKey": "2025-12-28:BETECH2025122853677",
+    "receiptNumber": "BETECH2025122853677",
+    "sellingTotal": 1000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T09:29:51.964Z",
+    "dailyEntryId": "cmjpb4uc20009jv04m2qsos4j"
+  },
+  {
+    "id": "cmjphd2s10009l104z718skub",
+    "receiptKey": "2025-12-28:BETECH2025122880219",
+    "receiptNumber": "BETECH2025122880219",
+    "sellingTotal": 5000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T08:41:32.498Z",
+    "dailyEntryId": "cmjpb4uc20009jv04m2qsos4j"
+  },
+  {
+    "id": "cmjpfzbtm0009l304ikj0wwpk",
+    "receiptKey": "2025-12-28:BETECH2025122825252",
+    "receiptNumber": "BETECH2025122825252",
+    "sellingTotal": 1000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T08:02:51.418Z",
+    "dailyEntryId": "cmjpb4uc20009jv04m2qsos4j"
+  },
+  {
+    "id": "cmjpcvimx000zl804fqjc45ys",
+    "receiptKey": "2025-12-28:BETECH2025122830719",
+    "receiptNumber": "BETECH2025122830719",
+    "sellingTotal": 1500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-28T06:35:54.777Z",
+    "dailyEntryId": "cmjpcviml000xl8041jubx38r"
+  },
+  {
+    "id": "cmjk413uj0009lb04f65jbsus",
+    "receiptKey": "2025-12-24_BETECH2025122453262_MPESA",
+    "receiptNumber": "Betech-20251224-53262",
+    "sellingTotal": 4450,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T14:29:28.123Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjk1ugi8002sic043xi5tw96",
+    "receiptKey": "2025-12-24_BETECH2025122425871_MPESA",
+    "receiptNumber": "Betech-20251224-25871",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T13:28:18.704Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjk07gf00024ic04vg6rts41",
+    "receiptKey": "2025-12-24_BETECH2025122410598_MPESA",
+    "receiptNumber": "Betech-20251224-10598",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T12:42:25.884Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjzsjme001bic04n15z7wrb",
+    "receiptKey": "2025-12-24_BETECH2025122479153_MPESA",
+    "receiptNumber": "Betech-20251224-79153",
+    "sellingTotal": 87600,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T12:30:50.198Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjzan8v000cic048i9vz8dz",
+    "receiptKey": "2025-12-24_BETECH2025122421333_MPESA",
+    "receiptNumber": "Betech-20251224-21333",
+    "sellingTotal": 10500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T12:16:55.087Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjxj2v80046lb04ikr7jd8i",
+    "receiptKey": "2025-12-24_BETECH2025122462899_MPESA",
+    "receiptNumber": "Betech-20251224-62899",
+    "sellingTotal": 12000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T11:27:29.348Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjwamku003ilb04kwcg7xki",
+    "receiptKey": "2025-12-24_BETECH2025122459380_MPESA",
+    "receiptNumber": "Betech-20251224-59380",
+    "sellingTotal": 19999,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T10:52:55.375Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjw9l53002rlb04vj6hd8dc",
+    "receiptKey": "2025-12-24_BETECH2025122400783_MPESA",
+    "receiptNumber": "Betech-20251224-00783",
+    "sellingTotal": 89400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T10:52:06.856Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjw31xe001zlb04iy91jmmp",
+    "receiptKey": "2025-12-24_BETECH2025122418781_MPESA",
+    "receiptNumber": "Betech-20251224-18781",
+    "sellingTotal": 1850,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T10:47:02.018Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjvy7sr001blb04cmxtdv05",
+    "receiptKey": "2025-12-24_BETECH2025122429417_MPESA",
+    "receiptNumber": "Betech-20251224-29417",
+    "sellingTotal": 10000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T10:43:16.347Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjtkv66000hlb04e3o8bfop",
+    "receiptKey": "2025-12-24_BETECH2025122408620_MPESA",
+    "receiptNumber": "Betech-20251224-08620",
+    "sellingTotal": 46000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T09:36:54.222Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjryka6001yl804qmprtrpa",
+    "receiptKey": "2025-12-24_BETECH2025122456938_MPESA",
+    "receiptNumber": "Betech-20251224-56938",
+    "sellingTotal": 4500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T08:51:34.062Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjrhpdn0014l804f6ciprvc",
+    "receiptKey": "2025-12-24_BETECH2025122406418_MPESA",
+    "receiptNumber": "Betech-20251224-06418",
+    "sellingTotal": 23230,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T08:38:27.516Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjqkbsm0009l8045f9nesck",
+    "receiptKey": "2025-12-24_BETECH2025122467320_MPESA",
+    "receiptNumber": "Betech-20251224-67320",
+    "sellingTotal": 13700,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T08:12:30.262Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjqaa3i000ilb046sv7okjh",
+    "receiptKey": "2025-12-24_BETECH2025122427608_MPESA",
+    "receiptNumber": "Betech-20251224-27608",
+    "sellingTotal": 25850,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T08:04:41.502Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjq4dl2000clb049olfx7gb",
+    "receiptKey": "2025-12-24_BETECH2025122486521_MPESA",
+    "receiptNumber": "Betech-20251224-86521",
+    "sellingTotal": 13500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T08:00:06.087Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjphhcx003yl204f6b6nowr",
+    "receiptKey": "2025-12-24_BETECH2025122418770_MPESA",
+    "receiptNumber": "Betech-20251224-18770",
+    "sellingTotal": 33000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T07:42:17.889Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjnzr9k0035l20499gwl02g",
+    "receiptKey": "2025-12-24_BETECH2025122429444_MPESA",
+    "receiptNumber": "Betech-20251224-29444",
+    "sellingTotal": 19750,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T07:00:31.305Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjlhr5s001fl204hopeth8c",
+    "receiptKey": "2025-12-24_BETECH2025122484101_MPESA",
+    "receiptNumber": "Betech-20251224-84101",
+    "sellingTotal": 21000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T05:50:32.129Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjjkyhsu000el2040er375ne",
+    "receiptKey": "2025-12-24_BETECH2025122482780_MPESA",
+    "receiptNumber": "Betech-20251224-82780",
+    "sellingTotal": 14100,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-24T05:35:33.534Z",
+    "dailyEntryId": "cmjjkyhsu000dl2046xg6ieop"
+  },
+  {
+    "id": "cmjirhl0l000vjt04cbtk5299",
+    "receiptKey": "2025-12-23_BETECH2025122331102_MPESA",
+    "receiptNumber": "Betech-20251223-31102",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T15:50:35.685Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjiqot980008jt04jlphgi0y",
+    "receiptKey": "2025-12-23_BETECH2025122343944_MPESA",
+    "receiptNumber": "Betech-20251223-43944",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T15:28:13.341Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjinyua6000xjr04tcpqh6qp",
+    "receiptKey": "2025-12-23_BETECH2025122362547_MPESA",
+    "receiptNumber": "Betech-20251223-62547",
+    "sellingTotal": 2200,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T14:12:02.382Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjinnspf0009jr04qdqluisn",
+    "receiptKey": "2025-12-23_BETECH2025122379733_MPESA",
+    "receiptNumber": "Betech-20251223-79733",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T14:03:27.123Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjilupe00013ky04b1f7b76l",
+    "receiptKey": "2025-12-23_BETECH2025122337004_MPESA",
+    "receiptNumber": "Betech-20251223-37004",
+    "sellingTotal": 1699,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T13:12:50.184Z",
+    "dailyEntryId": "cmjhw6wb80008jf046tmw75tg"
+  },
+  {
+    "id": "cmjilsz0x000dky04w5551uqm",
+    "receiptKey": "2025-12-23_BETECH2025122366246_MPESA",
+    "receiptNumber": "Betech-20251223-66246",
+    "sellingTotal": 6000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T13:11:29.362Z",
+    "dailyEntryId": "cmjhw6wb80008jf046tmw75tg"
+  },
+  {
+    "id": "cmjifbdyb0014jw040m8r6u06",
+    "receiptKey": "2025-12-23_BETECH2025122391574_MPESA",
+    "receiptNumber": "Betech-20251223-91574",
+    "sellingTotal": 39000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T10:09:51.204Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjif1s0v000djw04ty1tgcmu",
+    "receiptKey": "2025-12-23_BETECH2025122366118_MPESA",
+    "receiptNumber": "Betech-20251223-66118",
+    "sellingTotal": 39350,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T10:02:22.880Z",
+    "dailyEntryId": "cmjhw6wb80008jf046tmw75tg"
+  },
+  {
+    "id": "cmjid22d8000ni204ypv2q3om",
+    "receiptKey": "2025-12-23_BETECH2025122351471_MPESA",
+    "receiptNumber": "Betech-20251223-51471",
+    "sellingTotal": 15050,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T09:06:37.053Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjicv41a000cld04786vq0u0",
+    "receiptKey": "2025-12-23_BETECH2025122320357_MPESA",
+    "receiptNumber": "Betech-20251223-20357",
+    "sellingTotal": 13210,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T09:01:12.622Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjiakple0014ju04xh8npaxs",
+    "receiptKey": "2025-12-23_BETECH2025122303968_MPESA",
+    "receiptNumber": "Betech-20251223-03968",
+    "sellingTotal": 14000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T07:57:08.114Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmjiag216000bju042cjt790n",
+    "receiptKey": "2025-12-23_BETECH2025122388028_MPESA",
+    "receiptNumber": "Betech-20251223-88028",
+    "sellingTotal": 14000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T07:53:30.955Z",
+    "dailyEntryId": "cmjhx3oq50008ie049xp7lt6z"
+  },
+  {
+    "id": "cmji8n2k9000ckw046zltut3x",
+    "receiptKey": "2025-12-23_BETECH2025122311887_MPESA",
+    "receiptNumber": "Betech-20251223-11887",
+    "sellingTotal": 32500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T07:02:59.002Z",
+    "dailyEntryId": "cmjhw6wb80008jf046tmw75tg"
+  },
+  {
+    "id": "cmji7776p000cl104cglkw65j",
+    "receiptKey": "2025-12-23_BETECH2025122352520_MPESA",
+    "receiptNumber": "Betech-20251223-52520",
+    "sellingTotal": 13500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-23T06:22:38.881Z",
+    "dailyEntryId": "cmjhw6wb80008jf046tmw75tg"
+  },
+  {
+    "id": "cmjhcoulj0009jy04mfxey13h",
+    "receiptKey": "2025-12-22_BETECH2025122249095_MPESA",
+    "receiptNumber": "Betech-20251222-49095",
+    "sellingTotal": 21000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T16:08:34.280Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhcerut000xi804fymbsmsh",
+    "receiptKey": "2025-12-22_BETECH2025122264814_MPESA",
+    "receiptNumber": "Betech-20251222-64814",
+    "sellingTotal": 26799,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T16:00:44.166Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhc9i3r0009i804j3mboff3",
+    "receiptKey": "2025-12-22_BETECH2025122284906_MPESA",
+    "receiptNumber": "Betech-20251222-84906",
+    "sellingTotal": 27500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:56:38.248Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhc7pla001kjp04t0ka0z46",
+    "receiptKey": "2025-12-22_BETECH2025122280796_MPESA",
+    "receiptNumber": "Betech-20251222-80796",
+    "sellingTotal": 2500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:55:14.639Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhc60xj000wjp04mfop0wtu",
+    "receiptKey": "2025-12-22_BETECH2025122255079_MPESA",
+    "receiptNumber": "Betech-20251222-55079",
+    "sellingTotal": 2000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:53:56.023Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhc426h0009jp04uu1wn638",
+    "receiptKey": "2025-12-22_BETECH2025122268845_MPESA",
+    "receiptNumber": "Betech-20251222-68845",
+    "sellingTotal": 37499,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:52:24.329Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbwm6g000xkw04cdqxox9x",
+    "receiptKey": "2025-12-22_BETECH2025122208922_MPESA",
+    "receiptNumber": "Betech-20251222-08922",
+    "sellingTotal": 19999,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:46:37.000Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbuvdz0009kw04fo70tfz2",
+    "receiptKey": "2025-12-22_BETECH2025122206286_MPESA",
+    "receiptNumber": "Betech-20251222-06286",
+    "sellingTotal": 53500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:45:15.624Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbo42b002wji04nxdzhxn2",
+    "receiptKey": "2025-12-22_BETECH2025122295811_MPESA",
+    "receiptNumber": "Betech-20251222-95811",
+    "sellingTotal": 2080,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:40:00.276Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbl82b0028ji04b9uicj04",
+    "receiptKey": "2025-12-22_BETECH2025122293355_MPESA",
+    "receiptNumber": "Betech-20251222-93355",
+    "sellingTotal": 7850,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:37:45.491Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbisx9001kji04yvgnes96",
+    "receiptKey": "2025-12-22_BETECH2025122209139_MPESA",
+    "receiptNumber": "Betech-20251222-09139",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:35:52.557Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbgxny000xji04cnn2ijk0",
+    "receiptKey": "2025-12-22_BETECH2025122213904_MPESA",
+    "receiptNumber": "Betech-20251222-13904",
+    "sellingTotal": 19500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:34:25.390Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhbeid40009ji0466b6c4dp",
+    "receiptKey": "2025-12-22_BETECH2025122281271_MPESA",
+    "receiptNumber": "Betech-20251222-81271",
+    "sellingTotal": 13709,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:32:32.248Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhb5ema0028k104x0bhribz",
+    "receiptKey": "2025-12-22_BETECH2025122237866_MPESA",
+    "receiptNumber": "Betech-20251222-37866",
+    "sellingTotal": 10000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:25:27.490Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhb2vs1001kk104z3m7ls4x",
+    "receiptKey": "2025-12-22_BETECH2025122223860_MPESA",
+    "receiptNumber": "Betech-20251222-23860",
+    "sellingTotal": 44400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:23:29.761Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjhayhfz000wk104hqyibapi",
+    "receiptKey": "2025-12-22_BETECH2025122284038_MPESA",
+    "receiptNumber": "Betech-20251222-84038",
+    "sellingTotal": 9500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T15:20:04.560Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjh9z82m0009k104b8lzsvgo",
+    "receiptKey": "2025-12-22_BETECH2025122263108_MPESA",
+    "receiptNumber": "Betech-20251222-63108",
+    "sellingTotal": 20000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T14:52:39.454Z",
+    "dailyEntryId": "cmjh4u52c001fjz04kjb8jpor"
+  },
+  {
+    "id": "cmjh7v79k001ajp04c6hczytx",
+    "receiptKey": "2025-12-22_BETECH2025122234519_MPESA",
+    "receiptNumber": "Betech-20251222-34519",
+    "sellingTotal": 20000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T13:53:32.553Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjh76ij8000gjp04zlm2fhcc",
+    "receiptKey": "2025-12-22_BETECH2025122286232_MPESA",
+    "receiptNumber": "Betech-20251222-86232",
+    "sellingTotal": 1700,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T13:34:20.757Z",
+    "dailyEntryId": "cmjh4u52c001fjz04kjb8jpor"
+  },
+  {
+    "id": "cmjh4u52c001gjz043x0khaq7",
+    "receiptKey": "2025-12-22_BETECH2025122285219_MPESA",
+    "receiptNumber": "Betech-20251222-85219",
+    "sellingTotal": 44800,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T12:28:44.197Z",
+    "dailyEntryId": "cmjh4u52c001fjz04kjb8jpor"
+  },
+  {
+    "id": "cmjh0y4dj000djz048fjx2g7x",
+    "receiptKey": "2025-12-22_BETECH2025122240029_MPESA",
+    "receiptNumber": "Betech-20251222-40029",
+    "sellingTotal": 60600,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T10:39:51.464Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjgymwg60009kz04ekxkg61r",
+    "receiptKey": "2025-12-22_BETECH2025122211282_MPESA",
+    "receiptNumber": "Betech-20251222-11282",
+    "sellingTotal": 4500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-22T09:35:08.742Z",
+    "dailyEntryId": "cmjgn6azm000gjm04on6wgeg6"
+  },
+  {
+    "id": "cmjepd2n70009js04sads9j08",
+    "receiptKey": "2025-12-20_BETECH2025122008725_MPESA",
+    "receiptNumber": "Betech-20251220-08725",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T19:40:01.316Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjee21oa0009jr04srx59t0q",
+    "receiptKey": "2025-12-20_BETECH2025122005653_MPESA",
+    "receiptNumber": "Betech-20251220-05653",
+    "sellingTotal": 20500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T14:23:31.066Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjed95nt0013ic04018zqcz2",
+    "receiptKey": "2025-12-20_BETECH2025122009729_MPESA",
+    "receiptNumber": "Betech-20251220-09729",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T14:01:03.209Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjed7tax000cic04214ddjmh",
+    "receiptKey": "2025-12-20_BETECH2025122061728_MPESA",
+    "receiptNumber": "Betech-20251220-61728",
+    "sellingTotal": 39499,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T14:00:00.538Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjecxvmi0009ld0447d5spo6",
+    "receiptKey": "2025-12-20_BETECH2025122033816_MPESA",
+    "receiptNumber": "Betech-20251220-33816",
+    "sellingTotal": 19999,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:52:16.986Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjecqleu006dl804qriulbxd",
+    "receiptKey": "2025-12-20_BETECH2025122099450_MPESA",
+    "receiptNumber": "Betech-20251220-99450",
+    "sellingTotal": 94700,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:46:37.158Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjecnmba005al804hyz1ah43",
+    "receiptKey": "2025-12-20_BETECH2025122059049_MPESA",
+    "receiptNumber": "Betech-20251220-59049",
+    "sellingTotal": 35000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:44:18.358Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjecl99q004il804bljkfrva",
+    "receiptKey": "2025-12-20_BETECH2025122010095_MPESA",
+    "receiptNumber": "Betech-20251220-10095",
+    "sellingTotal": 8000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:42:28.142Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjeci2yw003ul8048olj6zmy",
+    "receiptKey": "2025-12-20_BETECH2025122047841_MPESA",
+    "receiptNumber": "Betech-20251220-47841",
+    "sellingTotal": 9000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:40:00.008Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjeca1b80024l804yvbj0dnr",
+    "receiptKey": "2025-12-20_BETECH2025122066611_MPESA",
+    "receiptNumber": "Betech-20251220-66611",
+    "sellingTotal": 28050,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:33:44.612Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjec4uxt0014l8041mb6duht",
+    "receiptKey": "2025-12-20_BETECH2025122026227_MPESA",
+    "receiptNumber": "Betech-20251220-26227",
+    "sellingTotal": 46400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T13:29:43.073Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmje9qf8d0009kz04m2d4vdjn",
+    "receiptKey": "2025-12-20_BETECH2025122089161_MPESA",
+    "receiptNumber": "Betech-20251220-89161",
+    "sellingTotal": 13500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T12:22:30.301Z",
+    "dailyEntryId": "cmjdwtu2s000vjm046jdgnepn"
+  },
+  {
+    "id": "cmje7s8wj0009l2045u1a0yhq",
+    "receiptKey": "2025-12-20_BETECH2025122049566_MPESA",
+    "receiptNumber": "Betech-20251220-49566",
+    "sellingTotal": 250,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T11:27:56.179Z",
+    "dailyEntryId": "cmjdwtu2s000vjm046jdgnepn"
+  },
+  {
+    "id": "cmje7fs1u0009l204bvxanpd0",
+    "receiptKey": "2025-12-20_BETECH2025122039642_MPESA",
+    "receiptNumber": "Betech-20251220-39642",
+    "sellingTotal": 18500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T11:18:14.466Z",
+    "dailyEntryId": "cmjdwtu2s000vjm046jdgnepn"
+  },
+  {
+    "id": "cmje2rsc80009lg04yuswfmcg",
+    "receiptKey": "2025-12-20_BETECH2025122013249_MPESA",
+    "receiptNumber": "Betech-20251220-13249",
+    "sellingTotal": 11500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T09:07:36.633Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmje232ou0009la04fjt5x9ey",
+    "receiptKey": "2025-12-20_BETECH2025122012236_MPESA",
+    "receiptNumber": "Betech-20251220-12236",
+    "sellingTotal": 4000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T08:48:23.646Z",
+    "dailyEntryId": "cmjdwtu2s000vjm046jdgnepn"
+  },
+  {
+    "id": "cmje1cc2f0017ju0456xo2uxy",
+    "receiptKey": "2025-12-20_BETECH2025122032645_MPESA",
+    "receiptNumber": "Betech-20251220-32645",
+    "sellingTotal": 14500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T08:27:36.087Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjdyccue000fl704g8bcr3ri",
+    "receiptKey": "2025-12-20_BETECH2025122093685_MPESA",
+    "receiptNumber": "Betech-20251220-93685",
+    "sellingTotal": 30000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T07:03:38.246Z",
+    "dailyEntryId": "cmjdnmruk0009l504haoatwgi"
+  },
+  {
+    "id": "cmjdwtu2s000wjm04dvc2dx6i",
+    "receiptKey": "2025-12-20_BETECH2025122016389_MPESA",
+    "receiptNumber": "Betech-20251220-16389",
+    "sellingTotal": 42400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-20T06:21:14.500Z",
+    "dailyEntryId": "cmjdwtu2s000vjm046jdgnepn"
+  },
+  {
+    "id": "cmjd05rk80008ld04nkq2mt98",
+    "receiptKey": "2025-12-19_BETECH2025121996997_MPESA",
+    "receiptNumber": "Betech-20251219-96997",
+    "sellingTotal": 280,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T15:06:43.784Z",
+    "dailyEntryId": "cmjch9hxy0009lg04gyr602in"
+  },
+  {
+    "id": "cmjczkytv000ojo04cyyroxeh",
+    "receiptKey": "2025-12-19_BETECH2025121914461_MPESA",
+    "receiptNumber": "Betech-20251219-14461",
+    "sellingTotal": 44750,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T14:50:33.428Z",
+    "dailyEntryId": "cmjch9hxy0009lg04gyr602in"
+  },
+  {
+    "id": "cmjcyxcej002gky04b77b7vqa",
+    "receiptKey": "2025-12-19_BETECH2025121999660_MPESA",
+    "receiptNumber": "Betech-20251219-99660",
+    "sellingTotal": 280,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T14:32:11.275Z",
+    "dailyEntryId": "cmjcdodrd0008l704gqjorp8y"
+  },
+  {
+    "id": "cmjcysugm001kky04xlqmvzmh",
+    "receiptKey": "2025-12-19_BETECH2025121958264_MPESA",
+    "receiptNumber": "Betech-20251219-58264",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T14:28:41.399Z",
+    "dailyEntryId": "cmjcdodrd0008l704gqjorp8y"
+  },
+  {
+    "id": "cmjcriqjx0009jo04zp8oqa3n",
+    "receiptKey": "2025-12-19_BETECH2025121977462_MPESA",
+    "receiptNumber": "Betech-20251219-77462",
+    "sellingTotal": 29999,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T11:04:52.461Z",
+    "dailyEntryId": "cmjcdodrd0008l704gqjorp8y"
+  },
+  {
+    "id": "cmjcj7gsm0009l104cslq4kt5",
+    "receiptKey": "2025-12-19_BETECH2025121961321_MPESA",
+    "receiptNumber": "Betech-20251219-61321",
+    "sellingTotal": 7500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T07:12:09.670Z",
+    "dailyEntryId": "cmjcdodrd0008l704gqjorp8y"
+  },
+  {
+    "id": "cmjcht3x0000ejv043kgpbanq",
+    "receiptKey": "2025-12-19_BETECH2025121983066_MPESA",
+    "receiptNumber": "Betech-20251219-83066",
+    "sellingTotal": 42400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T06:33:00.180Z",
+    "dailyEntryId": "cmjcdodrd0008l704gqjorp8y"
+  },
+  {
+    "id": "cmjch9hxy000alg04xe9sw1b5",
+    "receiptKey": "2025-12-19_BETECH2025121995975_MPESA",
+    "receiptNumber": "Betech-20251219-95975",
+    "sellingTotal": 30000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-19T06:17:45.238Z",
+    "dailyEntryId": "cmjch9hxy0009lg04gyr602in"
+  },
+  {
+    "id": "cmjblwx1t0008jy04hjjmp5ie",
+    "receiptKey": "2025-12-18_BETECH2025121841091_MPESA",
+    "receiptNumber": "Betech-20251218-41091",
+    "sellingTotal": 7000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T15:40:10.194Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjblufzo000ri904dirqtziu",
+    "receiptKey": "2025-12-18_BETECH2025121840951_MPESA",
+    "receiptNumber": "Betech-20251218-40951",
+    "sellingTotal": 43000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T15:38:14.773Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjbls6ap0009i904usr9o7r1",
+    "receiptKey": "2025-12-18_BETECH2025121899342_MPESA",
+    "receiptNumber": "Betech-20251218-99342",
+    "sellingTotal": 21000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T15:36:28.897Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjblkd180009k0040f8e48rn",
+    "receiptKey": "2025-12-18_BETECH2025121802597_MPESA",
+    "receiptNumber": "Betech-20251218-02597",
+    "sellingTotal": 4499,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T15:30:24.381Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjblhgao0009ih04m2320fns",
+    "receiptKey": "2025-12-18_BETECH2025121897289_MPESA",
+    "receiptNumber": "Betech-20251218-97289",
+    "sellingTotal": 20150,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T15:28:08.640Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjbjrca2000dk1046gmdwumt",
+    "receiptKey": "2025-12-18_BETECH2025121856944_MPESA",
+    "receiptNumber": "Betech-20251218-56944",
+    "sellingTotal": 350,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T14:39:50.763Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjbjllwo0009l104z5adh711",
+    "receiptKey": "2025-12-18_BETECH2025121851500_MPESA",
+    "receiptNumber": "Betech-20251218-51500",
+    "sellingTotal": 21400,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T14:35:23.304Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjbjc41d000ujx04afphkiuo",
+    "receiptKey": "2025-12-18_BETECH2025121822411_MPESA",
+    "receiptNumber": "Betech-20251218-22411",
+    "sellingTotal": 10100,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T14:28:00.242Z",
+    "dailyEntryId": "cmjb8gs0l0013l204w78tqjs7"
+  },
+  {
+    "id": "cmjbj08ha000plg04pxh96jea",
+    "receiptKey": "2025-12-18_BETECH2025121838362_MPESA",
+    "receiptNumber": "Betech-20251218-38362",
+    "sellingTotal": 40560,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T14:18:46.127Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjbbu4fo0009la045ole3jem",
+    "receiptKey": "2025-12-18_BETECH2025121828103_MPESA",
+    "receiptNumber": "Betech-20251218-28103",
+    "sellingTotal": 22000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T10:58:03.637Z",
+    "dailyEntryId": "cmjb8gs0l0013l204w78tqjs7"
+  },
+  {
+    "id": "cmjbb88u80009l704grqmnc9u",
+    "receiptKey": "2025-12-18_BETECH2025121819237_MPESA",
+    "receiptNumber": "Betech-20251218-19237",
+    "sellingTotal": 11200,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T10:41:02.912Z",
+    "dailyEntryId": "cmjb885pm000il204hqh37quh"
+  },
+  {
+    "id": "cmjba0w0i000hjs04gygm1goi",
+    "receiptKey": "2025-12-18_BETECH2025121826971_MPESA",
+    "receiptNumber": "Betech-20251218-26971",
+    "sellingTotal": 38000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T10:07:20.082Z",
+    "dailyEntryId": "cmjb8gs0l0013l204w78tqjs7"
+  },
+  {
+    "id": "cmjb9v40z000ci30470kc30p2",
+    "receiptKey": "2025-12-18_BETECH2025121818485_MPESA",
+    "receiptNumber": "Betech-20251218-18485",
+    "sellingTotal": 30300,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-18T10:02:50.531Z",
+    "dailyEntryId": "cmjb8gs0l0013l204w78tqjs7"
+  },
+  {
+    "id": "cmja3g9qh000rlb04oz62bmqe",
+    "receiptKey": "2025-12-17_BETECH2025121743974_MPESA",
+    "receiptNumber": "Betech-20251217-43974",
+    "sellingTotal": 12000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T14:15:34.218Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmja38i8x0009lb04ccbg3l2g",
+    "receiptKey": "2025-12-17_BETECH2025121776652_MPESA",
+    "receiptNumber": "Betech-20251217-76652",
+    "sellingTotal": 20000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T14:09:32.001Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmja356kx0009l404d5jake2p",
+    "receiptKey": "2025-12-17_BETECH2025121790317_MPESA",
+    "receiptNumber": "Betech-20251217-90317",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T14:06:56.914Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmja2h6ra0008js04kpwrob3d",
+    "receiptKey": "2025-12-17_BETECH2025121771360_MPESA",
+    "receiptNumber": "Betech-20251217-71360",
+    "sellingTotal": 9000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T13:48:17.398Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmja14zbf000djm04vfvjm1wy",
+    "receiptKey": "2025-12-17_BETECH2025121701849_MPESA",
+    "receiptNumber": "Betech-20251217-01849",
+    "sellingTotal": 20439,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T13:10:48.268Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmja0htdm0009k404sqy0hcq6",
+    "receiptKey": "2025-12-17_BETECH2025121732193_MPESA",
+    "receiptNumber": "Betech-20251217-32193",
+    "sellingTotal": 5500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-17T12:52:47.482Z",
+    "dailyEntryId": "cmja05gil0009l604ip7ccssf"
+  },
+  {
+    "id": "cmj8lsa1w0009jx043un0f7c0",
+    "receiptKey": "2025-12-16_BETECH2025121670330_MPESA",
+    "receiptNumber": "Betech-20251216-70330",
+    "sellingTotal": 9000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T13:13:15.236Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj8kwg5s000hkz0418zmgng1",
+    "receiptKey": "2025-12-16_BETECH2025121684400_MPESA",
+    "receiptNumber": "Betech-20251216-84400",
+    "sellingTotal": 48000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T12:48:30.161Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj8k5gmq0009jp045imndnzs",
+    "receiptKey": "2025-12-16_BETECH2025121684019_MPESA",
+    "receiptNumber": "Betech-20251216-84019",
+    "sellingTotal": 114599,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T12:27:31.059Z",
+    "dailyEntryId": "cmj8gz2a7000cjy048ll9on8m"
+  },
+  {
+    "id": "cmj8jtmti000hjy048dydg9k1",
+    "receiptKey": "2025-12-16_BETECH2025121645101_MPESA",
+    "receiptNumber": "Betech-20251216-45101",
+    "sellingTotal": 23000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T12:18:19.206Z",
+    "dailyEntryId": "cmj8gz2a7000cjy048ll9on8m"
+  },
+  {
+    "id": "cmj8ibfda000dl404sp403ua6",
+    "receiptKey": "2025-12-16_BETECH2025121697185_MPESA",
+    "receiptNumber": "Betech-20251216-97185",
+    "sellingTotal": 27300,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T11:36:10.126Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj8gz2a7000djy04yowlzqgg",
+    "receiptKey": "2025-12-16_BETECH2025121662667_MPESA",
+    "receiptNumber": "Betech-20251216-62667",
+    "sellingTotal": 5000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T10:58:33.679Z",
+    "dailyEntryId": "cmj8gz2a7000cjy048ll9on8m"
+  },
+  {
+    "id": "cmj8gbyyu0009jv04re0i7hk5",
+    "receiptKey": "2025-12-16_BETECH2025121657277_MPESA",
+    "receiptNumber": "Betech-20251216-57277",
+    "sellingTotal": 30000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T10:40:36.295Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj8akpw2000dl8048mscman6",
+    "receiptKey": "2025-12-16_BETECH2025121651975_MPESA",
+    "receiptNumber": "Betech-20251216-51975",
+    "sellingTotal": 20500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T07:59:26.738Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj88jaxs0009l504o3sb25ng",
+    "receiptKey": "2025-12-16_BETECH2025121639724_MPESA",
+    "receiptNumber": "Betech-20251216-39724",
+    "sellingTotal": 21000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T07:02:21.472Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj86xh7o000el404eb07kpsk",
+    "receiptKey": "2025-12-16_BETECH2025121687551_MPESA",
+    "receiptNumber": "Betech-20251216-87551",
+    "sellingTotal": 54000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-16T06:17:23.556Z",
+    "dailyEntryId": "cmj86xh7o000dl404nb8z49et"
+  },
+  {
+    "id": "cmj7aao9u0010jr04lxy2gfg0",
+    "receiptKey": "2025-12-15_BETECH2025121554784_MPESA",
+    "receiptNumber": "Betech-20251215-54784",
+    "sellingTotal": 29999,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T15:03:51.906Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj7a6oav000djr04b8bolmax",
+    "receiptKey": "2025-12-15_BETECH2025121504659_MPESA",
+    "receiptNumber": "Betech-20251215-04659",
+    "sellingTotal": 6800,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T15:00:45.319Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj7a0qxj000hjl04faqhukxw",
+    "receiptKey": "2025-12-15_BETECH2025121514005_MPESA",
+    "receiptNumber": "Betech-20251215-14005",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:56:08.792Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj79uxgn000rjl04mn41mli9",
+    "receiptKey": "2025-12-15_BETECH2025121517290_MPESA",
+    "receiptNumber": "Betech-20251215-17290",
+    "sellingTotal": 14000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:51:37.319Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj79nvow0009jl04mn3koe1x",
+    "receiptKey": "2025-12-15_BETECH2025121580890_MPESA",
+    "receiptNumber": "Betech-20251215-80890",
+    "sellingTotal": 8000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:46:08.433Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj79au2z002xjv04n7b3hxct",
+    "receiptKey": "2025-12-15_BETECH2025121542979_MPESA",
+    "receiptNumber": "Betech-20251215-42979",
+    "sellingTotal": 14000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:35:59.819Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj793h92002bjv04rcotzvbd",
+    "receiptKey": "2025-12-15_BETECH2025121560366_MPESA",
+    "receiptNumber": "Betech-20251215-60366",
+    "sellingTotal": 39000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:30:16.598Z",
+    "dailyEntryId": "cmj790vln000qjv04tm0szwx0"
+  },
+  {
+    "id": "cmj792ymt001tjv044sb63s39",
+    "receiptKey": "2025-12-15_BETECH2025121545939_MPESA",
+    "receiptNumber": "Betech-20251215-45939",
+    "sellingTotal": 2000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:29:52.470Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj7911xu001bjv041ddufess",
+    "receiptKey": "2025-12-15_BETECH2025121577059_MPESA",
+    "receiptNumber": "Betech-20251215-77059",
+    "sellingTotal": 6000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:28:23.443Z",
+    "dailyEntryId": "cmj6tkwe6000djm04q9bvq39p"
+  },
+  {
+    "id": "cmj790vln000rjv0491unv3ip",
+    "receiptKey": "2025-12-15_BETECH2025121502310_MPESA",
+    "receiptNumber": "Betech-20251215-02310",
+    "sellingTotal": 12000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-15T14:28:15.227Z",
+    "dailyEntryId": "cmj790vln000qjv04tm0szwx0"
+  },
+  {
+    "id": "cmj4bb12t0009l704zgtzcaqr",
+    "receiptKey": "2025-12-13_BETECH2025121383645_MPESA",
+    "receiptNumber": "Betech-20251213-83645",
+    "sellingTotal": 1040,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T13:08:49.589Z",
+    "dailyEntryId": "cmj412pxc0009lb04nxauhdqz"
+  },
+  {
+    "id": "cmj4b8asf000rlc04lc28fvxz",
+    "receiptKey": "2025-12-13_BETECH2025121384410_MPESA",
+    "receiptNumber": "Betech-20251213-84410",
+    "sellingTotal": 71500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T13:06:42.207Z",
+    "dailyEntryId": "cmj412pxc0009lb04nxauhdqz"
+  },
+  {
+    "id": "cmj4b3h1g0009lc047y8xyv0f",
+    "receiptKey": "2025-12-13_BETECH2025121305884_MPESA",
+    "receiptNumber": "Betech-20251213-05884",
+    "sellingTotal": 20000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T13:02:57.028Z",
+    "dailyEntryId": "cmj412pxc0009lb04nxauhdqz"
+  },
+  {
+    "id": "cmj4aqxlv0009ju04xodffq17",
+    "receiptKey": "2025-12-13_BETECH2025121341284_MPESA",
+    "receiptNumber": "Betech-20251213-41284",
+    "sellingTotal": 12500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T12:53:11.971Z",
+    "dailyEntryId": "cmj412pxc0009lb04nxauhdqz"
+  },
+  {
+    "id": "cmj49hfyf000dl804ni4lf38x",
+    "receiptKey": "2025-12-13_BETECH2025121341624_MPESA",
+    "receiptNumber": "Betech-20251213-41624",
+    "sellingTotal": 25800,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T12:17:49.576Z",
+    "dailyEntryId": "cmj49f5000009l4043gypw3tb"
+  },
+  {
+    "id": "cmj49f500000al404ckip6z0s",
+    "receiptKey": "2025-12-13_BETECH2025121310561_MPESA",
+    "receiptNumber": "Betech-20251213-10561",
+    "sellingTotal": 24348,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T12:16:02.064Z",
+    "dailyEntryId": "cmj49f5000009l4043gypw3tb"
+  },
+  {
+    "id": "cmj412pxc000alb04v9hm8qbf",
+    "receiptKey": "2025-12-13_BETECH2025121306734_MPESA",
+    "receiptNumber": "Betech-20251213-06734",
+    "sellingTotal": 8300,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-13T08:22:25.728Z",
+    "dailyEntryId": "cmj412pxc0009lb04nxauhdqz"
+  },
+  {
+    "id": "cmj2wt0lj0009kz0468wkauo6",
+    "receiptKey": "2025-12-12_BETECH2025121228949_MPESA",
+    "receiptNumber": "Betech-20251212-28949",
+    "sellingTotal": 20500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T13:35:08.360Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2vlgmo0009ld04qs72ou4y",
+    "receiptKey": "2025-12-12_BETECH2025121224736_MPESA",
+    "receiptNumber": "Betech-20251212-24736",
+    "sellingTotal": 9000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T13:01:16.273Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2u6u8f000ql504zgl81q3g",
+    "receiptKey": "2025-12-12_BETECH2025121220927_MPESA",
+    "receiptNumber": "Betech-20251212-20927",
+    "sellingTotal": 11000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T12:21:54.447Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2u43fj0009l704omtoy7zk",
+    "receiptKey": "2025-12-12_BETECH2025121252543_MPESA",
+    "receiptNumber": "Betech-20251212-52543",
+    "sellingTotal": 23000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T12:19:46.400Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2p0nmd0009lh04aexjljht",
+    "receiptKey": "2025-12-12_BETECH2025121229361_MPESA",
+    "receiptNumber": "Betech-20251212-29361",
+    "sellingTotal": 5000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T09:57:07.861Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2ov0m30009jy046vq1bkuc",
+    "receiptKey": "2025-12-12_BETECH2025121274220_MPESA",
+    "receiptNumber": "Betech-20251212-74220",
+    "sellingTotal": 104000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T09:52:44.763Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2oq4f00009l404u50o2fco",
+    "receiptKey": "2025-12-12_BETECH2025121203851_MPESA",
+    "receiptNumber": "Betech-20251212-03851",
+    "sellingTotal": 48000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T09:48:56.412Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2m4fde0009jm04h5nc8kzs",
+    "receiptKey": "2025-12-12_BETECH2025121213151_MPESA",
+    "receiptNumber": "Betech-20251212-13151",
+    "sellingTotal": 15500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T08:36:04.947Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj2llbwp000al4044d7y9ulj",
+    "receiptKey": "2025-12-12_BETECH2025121241899_MPESA",
+    "receiptNumber": "Betech-20251212-41899",
+    "sellingTotal": 8500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-12T08:21:13.993Z",
+    "dailyEntryId": "cmj2llbwp0009l404rilbqfi2"
+  },
+  {
+    "id": "cmj1jzh0l000al704f8m8gr5o",
+    "receiptKey": "2025-12-11_BETECH2025121130700_MPESA",
+    "receiptNumber": "Betech-20251211-30700",
+    "sellingTotal": 33500,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T14:48:28.389Z",
+    "dailyEntryId": "cmj1jzh0l0009l7044xqw5z17"
+  },
+  {
+    "id": "cmj1da93g0009jv04ioqiv98l",
+    "receiptKey": "2025-12-11_BETECH2025121171754_MPESA",
+    "receiptNumber": "Betech-20251211-71754",
+    "sellingTotal": 650,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T11:40:54.029Z",
+    "dailyEntryId": "cmj0sqcul0009l704bhxd0v1y"
+  },
+  {
+    "id": "cmj1d220z0009i6041gvq6fzr",
+    "receiptKey": "2025-12-11_BETECH2025121119272_MPESA",
+    "receiptNumber": "Betech-20251211-19272",
+    "sellingTotal": 13000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T11:34:31.619Z",
+    "dailyEntryId": "cmj0sqcul0009l704bhxd0v1y"
+  },
+  {
+    "id": "cmj1bqr5z0009l404mty9pewt",
+    "receiptKey": "2025-12-11_BETECH2025121128964_MPESA",
+    "receiptNumber": "Betech-20251211-28964",
+    "sellingTotal": 20000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T10:57:44.711Z",
+    "dailyEntryId": "cmj0sqcul0009l704bhxd0v1y"
+  },
+  {
+    "id": "cmj163zuk0009la04fyx127ng",
+    "receiptKey": "2025-12-11_BETECH2025121183994_MPESA",
+    "receiptNumber": "Betech-20251211-83994",
+    "sellingTotal": 10000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T08:20:04.797Z",
+    "dailyEntryId": "cmj0sqcul0009l704bhxd0v1y"
+  },
+  {
+    "id": "cmj14xrek0009l204fl8w91mu",
+    "receiptKey": "2025-12-11_BETECH2025121136544_MPESA",
+    "receiptNumber": "Betech-20251211-36544",
+    "sellingTotal": 22000,
+    "paymentMethod": "MPESA",
+    "createdAt": "2025-12-11T07:47:14.300Z",
+    "dailyEntryId": "cmj0sqcul0009l704bhxd0v1y"
+  }
+]

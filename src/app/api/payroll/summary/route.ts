@@ -186,10 +186,29 @@ export async function GET(req: Request) {
     totalItems: 0,
   };
 
-  const combinedSales = marketingSummary.totals.totalSales + supportTotals.totalSales;
-  const combinedProfit = marketingSummary.totals.totalProfit + supportTotals.totalProfit;
-  const combinedItems = marketingSummary.totals.totalItems + supportTotals.totalItems;
-  const combinedReceipts = marketingSummary.totals.totalReceipts + supportTotals.totalReceipts;
+  // Merge per-receipt maps from marketing and support to avoid double-counting
+  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+  const supportPer = (supportSummary as any)?.perReceipts ?? {};
+  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    if (merged.has(k)) continue; // marketing wins
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+
+  let combinedSales = 0;
+  let combinedProfit = 0;
+  let combinedItems = 0;
+  let combinedReceipts = 0;
+  for (const [, v] of merged) {
+    combinedSales += v.sales;
+    combinedProfit += v.profit;
+    combinedItems += v.items;
+  }
+  combinedReceipts = merged.size;
 
   const detail = ledger?.detail as Record<string, any> | undefined;
   const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;

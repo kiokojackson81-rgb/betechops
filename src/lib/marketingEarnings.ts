@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getMarketingReport } from "./marketingReport";
+import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
 import { getPeriodKeyVariants } from "./payrollPeriodKey";
@@ -32,9 +33,10 @@ export async function getEarningsSummaryForAttendant(opts: {
 }): Promise<EarningsSummary> {
   const { attendantId, periodKey, periodLabel } = opts;
 
-  // 1) Fetch total sales for this attendant + period via existing report helper
-  const report = await getMarketingReport({ tradingPeriodKey: periodKey, submittedById: attendantId });
-  const marketingSales = report?.aggregates?.totalSales ?? 0;
+  // 1) Fetch total sales for this attendant + period via existing summary helper
+  const tradingPeriod = period;
+  const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period: tradingPeriod });
+  const marketingSales = marketingSummary?.totals?.totalSales ?? 0;
 
   // 1b) Include support sales for this attendant in the same period so commission
   // reflects both marketing and support priced items. Prefer the periodKey
@@ -47,17 +49,31 @@ export async function getEarningsSummaryForAttendant(opts: {
   }
 
   const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
-  const supportSales = supportSummary?.aggregates?.totalSales ?? 0;
-
-  const sales = marketingSales + supportSales;
+  // Merge per-receipt maps to avoid double-counting
+  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+  const supportPer = (supportSummary as any)?.perReceipts ?? {};
+  const merged = new Map<string, { sales: number; profit: number }>();
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
+  }
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    if (merged.has(k)) continue;
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
+  }
+  let sales = 0;
+  for (const [, v] of merged) sales += v.sales;
 
   // 2) Commission: only award commission once the attendant crosses the
   //    minimum ladder target (KES 1,000,000). Before that no commission
   //    should appear in any earnings summary.
   const { tiers } = (await getOrCreateCommissionPeriod(new Date()));
-  const marketingProfit = report?.aggregates?.totalProfit ?? 0;
+  const marketingProfit = marketingSummary?.totals?.totalProfit ?? 0;
   const supportProfit = supportSummary?.aggregates?.totalProfit ?? 0;
-  const periodProfit = marketingProfit + supportProfit;
+  let periodProfit = marketingProfit + supportProfit;
+  // if merged has per-receipt profit, prefer merged profit
+  let mergedProfit = 0;
+  for (const [, v] of merged) mergedProfit += v.profit;
+  if (mergedProfit > 0) periodProfit = mergedProfit;
   const MIN_SALES_FOR_COMMISSION = 1_000_000;
   const rawCommission = computeSalesCommissionFromTiers(sales, periodProfit, tiers);
   const commission = sales >= MIN_SALES_FOR_COMMISSION ? rawCommission : 0;
