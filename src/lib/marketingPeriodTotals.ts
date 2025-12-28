@@ -130,12 +130,13 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   }
 
   const totals = emptyTotals();
-  const seenReceiptKeys = new Set<string>();
-  const addUniqueReceipt = (key: string) => {
-    const normalized = key.trim();
+  const seenReceipts = new Set<string>();
+  const recKey = (s?: string | null) => (s ?? "").trim();
+  const markIfNew = (key: string) => {
+    const normalized = recKey(key);
     if (!normalized) return false;
-    if (seenReceiptKeys.has(normalized)) return false;
-    seenReceiptKeys.add(normalized);
+    if (seenReceipts.has(normalized)) return false;
+    seenReceipts.add(normalized);
     return true;
   };
 
@@ -143,6 +144,13 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     const receipts = entry.receipts ?? [];
     if (receipts.length > 0) {
       receipts.forEach((receipt) => {
+        const method = normalizeMethod(receipt.paymentMethod);
+        const receiptIdBase = recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+
+        if (!markIfNew(receiptIdBase)) {
+          return;
+        }
+
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
         const items = receipt.items ?? [];
@@ -154,21 +162,14 @@ export async function summarizeMarketingReportsForPeriod(opts: {
           const costToUse = hasAggregateCost ? aggregateCost : fallbackCost;
           totals.totalProfit += selling - costToUse;
         }
+
         totals.totalItems += items.length;
-        const method = normalizeMethod(receipt.paymentMethod);
-        const receiptIdentifier = String(receipt.receiptNumber ?? receipt.id ?? "");
-        const receiptKey = `${receiptIdentifier.trim()}|${method}`;
-        if (addUniqueReceipt(receiptKey)) {
-          totals.totalReceipts += 1;
-          if (method === "CASH") {
-            totals.paymentStats.countCashReceipts += 1;
-          } else {
-            totals.paymentStats.countMpesaReceipts += 1;
-          }
-        }
+        totals.totalReceipts += 1;
         if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
           totals.paymentStats.totalSalesCash += selling;
         } else {
+          totals.paymentStats.countMpesaReceipts += 1;
           totals.paymentStats.totalSalesMpesa += selling;
         }
       });
@@ -177,34 +178,33 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     const sales = entry.sales ?? [];
     if (sales.length > 0) {
-      const entryReceiptKeys = new Set<string>();
+      const entrySeen = new Set<string>();
       sales.forEach((sale, index) => {
+        const method = normalizeMethod((sale as any).paymentMethod);
+        const receiptIdBase = recKey((sale as any).receiptNumber) || `${entry.id}-${index}`;
+
+        if (entrySeen.has(receiptIdBase)) return;
+        entrySeen.add(receiptIdBase);
+
+        if (!markIfNew(receiptIdBase)) return;
+
         const selling = toNumber((sale as any).sellingPrice);
         const buying = toNumber((sale as any).buyingPrice);
         const itemsCount = Number((sale as any).itemsCount ?? 1);
+
         totals.totalSales += selling;
-        // Only add profit if buying price is present
         if (buying > 0) {
           totals.totalProfit += selling - buying;
         }
         totals.totalItems += itemsCount;
-        const method = normalizeMethod((sale as any).paymentMethod);
+        totals.totalReceipts += 1;
+
         if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
           totals.paymentStats.totalSalesCash += selling;
         } else {
+          totals.paymentStats.countMpesaReceipts += 1;
           totals.paymentStats.totalSalesMpesa += selling;
-        }
-        const receiptBase = (sale as any).receiptNumber?.trim() || `${entry.id}-${index}`;
-        const receiptKey = `${receiptBase}|${method}`;
-        if (entryReceiptKeys.has(receiptKey)) return;
-        entryReceiptKeys.add(receiptKey);
-        if (addUniqueReceipt(receiptKey)) {
-          totals.totalReceipts += 1;
-          if (method === "CASH") {
-            totals.paymentStats.countCashReceipts += 1;
-          } else {
-            totals.paymentStats.countMpesaReceipts += 1;
-          }
         }
       });
       return;
@@ -214,7 +214,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     totals.totalSales += fallbackSales;
     totals.totalProfit += toNumber(entry.totalProfit);
     const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
-    if (addUniqueReceipt(fallbackKey)) {
+    if (markIfNew(fallbackKey)) {
       totals.totalReceipts += 1;
     }
   });
@@ -236,32 +236,39 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     sales.forEach((sale, index) => {
       const method = normalizeMethod(sale.paymentMethod);
-      const price = toNumber(sale.price);
-      if (method === "CASH") {
-        totals.paymentStats.totalSalesCash += price;
-      } else {
-        totals.paymentStats.totalSalesMpesa += price;
-      }
-      const receiptBase =
+      const receiptIdBase =
         sale.receiptNumber && sale.receiptNumber.trim().length > 0
           ? sale.receiptNumber.trim()
           : `${report.id}-${index}`;
-      const receiptKey = `${receiptBase}|${method}`;
-      if (entrySalesReceiptKeys.has(receiptKey)) return;
-      entrySalesReceiptKeys.add(receiptKey);
-      if (addUniqueReceipt(receiptKey)) {
-        newReceiptCount += 1;
-        if (method === "CASH") {
-          totals.paymentStats.countCashReceipts += 1;
-        } else {
-          totals.paymentStats.countMpesaReceipts += 1;
-        }
+
+      if (entrySalesReceiptKeys.has(receiptIdBase)) return;
+      entrySalesReceiptKeys.add(receiptIdBase);
+
+      if (!markIfNew(receiptIdBase)) return;
+
+      const price = toNumber(sale.price);
+      totals.totalSales += price;
+      newReceiptCount += 1;
+
+      if (method === "CASH") {
+        totals.paymentStats.countCashReceipts += 1;
+        totals.paymentStats.totalSalesCash += price;
+      } else {
+        totals.paymentStats.countMpesaReceipts += 1;
+        totals.paymentStats.totalSalesMpesa += price;
       }
     });
 
-    if (sales.length === 0) {
-      totals.totalSales += toNumber(report.totalSales);
+    if (sales.length > 0) {
+      totals.totalReceipts += newReceiptCount;
+    } else if (receiptsFromMetrics > 0) {
+      const fallbackKey = `daily-report-${report.id ?? ""}`;
+      if (markIfNew(fallbackKey)) {
+        totals.totalReceipts += receiptsFromMetrics;
+        totals.totalSales += toNumber(report.totalSales);
+      }
     }
+
     totals.totalProfit += entryProfit;
     totals.totalItems += sales.length;
     totals.totalNewProducts += report.newProducts ?? 0;
@@ -269,15 +276,6 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     totals.totalCopiedProducts += report.copiesUploaded ?? 0;
     totals.walkInsServed += report.walkInServed ?? 0;
     totals.walkInsPurchased += report.purchasesMade ?? 0;
-
-    if (sales.length > 0) {
-      totals.totalReceipts += newReceiptCount;
-    } else if (receiptsFromMetrics > 0) {
-      const fallbackKey = `daily-report-${report.id ?? ""}`;
-      if (addUniqueReceipt(fallbackKey)) {
-        totals.totalReceipts += receiptsFromMetrics;
-      }
-    }
   });
 
   return { totals, entryCount: marketingEntries.length + reports.length };
