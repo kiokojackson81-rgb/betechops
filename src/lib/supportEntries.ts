@@ -33,7 +33,6 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
           items: { select: { id: true, buyingPrice: true } },
         },
       },
-      submittedById: true,
     },
   });
 
@@ -97,5 +96,5 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     if (v.cash > 0) aggregates.paymentStats.countCashReceipts += 1;
   }
 
-  return { entryCount: entries.length, aggregates };
+  return { entryCount: entries.length, aggregates, perReceipts: Object.fromEntries(Array.from(seen.entries())) };
 }

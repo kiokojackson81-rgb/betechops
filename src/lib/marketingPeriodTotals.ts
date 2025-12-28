@@ -26,6 +26,8 @@ export type MarketingPeriodTotals = {
 type SummarizeResult = {
   totals: MarketingPeriodTotals;
   entryCount: number;
+  // per-receipt breakdown keyed by canonical receipt id used by this summarizer
+  perReceipts?: Record<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>;
 };
 
 const emptyTotals = (): MarketingPeriodTotals => ({
@@ -131,12 +133,14 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
   const totals = emptyTotals();
   const seenReceipts = new Set<string>();
+  const perReceipts: Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }> = new Map();
   const recKey = (s?: string | null) => (s ?? "").trim();
   const markIfNew = (key: string) => {
     const normalized = recKey(key);
     if (!normalized) return false;
     if (seenReceipts.has(normalized)) return false;
     seenReceipts.add(normalized);
+    perReceipts.set(normalized, { sales: 0, profit: 0, items: 0, mpesa: 0, cash: 0 });
     return true;
   };
 
@@ -153,6 +157,8 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += selling;
         const items = receipt.items ?? [];
         const fallbackCost = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
         const aggregateCost = toNumber(receipt.buyingTotal);
@@ -160,17 +166,22 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         const allItemsPriced = items.length > 0 && items.every((it) => toNumber((it as any).buyingPrice) > 0);
         if (hasAggregateCost || allItemsPriced) {
           const costToUse = hasAggregateCost ? aggregateCost : fallbackCost;
-          totals.totalProfit += selling - costToUse;
+          const profitForReceipt = selling - costToUse;
+          totals.totalProfit += profitForReceipt;
+          stats.profit += profitForReceipt;
         }
 
         totals.totalItems += items.length;
+        stats.items += items.length;
         totals.totalReceipts += 1;
         if (method === "CASH") {
           totals.paymentStats.countCashReceipts += 1;
           totals.paymentStats.totalSalesCash += selling;
+          stats.cash += selling;
         } else {
           totals.paymentStats.countMpesaReceipts += 1;
           totals.paymentStats.totalSalesMpesa += selling;
+          stats.mpesa += selling;
         }
       });
       return;
@@ -199,12 +210,19 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         totals.totalItems += itemsCount;
         totals.totalReceipts += 1;
 
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += selling;
+        if (buying > 0) stats.profit += selling - buying;
+        stats.items += itemsCount;
+
         if (method === "CASH") {
           totals.paymentStats.countCashReceipts += 1;
           totals.paymentStats.totalSalesCash += selling;
+          stats.cash += selling;
         } else {
           totals.paymentStats.countMpesaReceipts += 1;
           totals.paymentStats.totalSalesMpesa += selling;
+          stats.mpesa += selling;
         }
       });
       return;
@@ -246,17 +264,23 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
       if (!markIfNew(receiptIdBase)) return;
 
-      const price = toNumber(sale.price);
-      totals.totalSales += price;
-      newReceiptCount += 1;
+        const price = toNumber(sale.price);
+        totals.totalSales += price;
+        newReceiptCount += 1;
 
-      if (method === "CASH") {
-        totals.paymentStats.countCashReceipts += 1;
-        totals.paymentStats.totalSalesCash += price;
-      } else {
-        totals.paymentStats.countMpesaReceipts += 1;
-        totals.paymentStats.totalSalesMpesa += price;
-      }
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += price;
+        stats.items += 1;
+
+        if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
+          totals.paymentStats.totalSalesCash += price;
+          stats.cash += price;
+        } else {
+          totals.paymentStats.countMpesaReceipts += 1;
+          totals.paymentStats.totalSalesMpesa += price;
+          stats.mpesa += price;
+        }
     });
 
     if (sales.length > 0) {
@@ -278,7 +302,11 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     totals.walkInsPurchased += report.purchasesMade ?? 0;
   });
 
-  return { totals, entryCount: marketingEntries.length + reports.length };
+  return {
+    totals,
+    entryCount: marketingEntries.length + reports.length,
+    perReceipts: Object.fromEntries(Array.from(perReceipts.entries())),
+  };
 }
 
 type LedgerResult = {

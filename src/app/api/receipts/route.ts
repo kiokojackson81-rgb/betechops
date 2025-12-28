@@ -573,7 +573,13 @@ export async function POST(req: NextRequest) {
         try {
           const existingPos = await tx.receipt.findUnique({ where: { id: ownerToLink.id } });
           if (existingPos) {
-            const mergedData = { ...(existingPos.data ?? {}), ...(receiptData.data ?? {}) };
+            const leftData = existingPos.data && typeof existingPos.data === "object" && !Array.isArray(existingPos.data)
+              ? (existingPos.data as Record<string, any>)
+              : {};
+            const rightData = receiptData.data && typeof receiptData.data === "object" && !Array.isArray(receiptData.data)
+              ? (receiptData.data as Record<string, any>)
+              : {};
+            const mergedData = { ...leftData, ...rightData };
             // attach linking hints if provided
             if (payload?.marketingEntryId) mergedData.marketingEntryId = payload.marketingEntryId;
             if (payload?.marketingReceiptId) mergedData.marketingReceiptId = payload.marketingReceiptId;

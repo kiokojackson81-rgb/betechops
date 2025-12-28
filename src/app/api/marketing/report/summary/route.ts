@@ -51,21 +51,65 @@ export async function GET(req: Request) {
     };
   }
 
-  const [{ totals: marketingTotals }, supportSummary] = await Promise.all([
+  const [marketingSummary, supportSummary] = await Promise.all([
     summarizeMarketingReportsForPeriod({ userId: targetUserId, period: argPeriod }),
     getSupportPeriodAggregates({ userId: targetUserId, period: argPeriod }),
   ]);
 
-  const supportTotals = supportSummary?.aggregates ?? {
+  const marketingTotals = marketingSummary?.totals ?? {
     totalSales: 0,
     totalProfit: 0,
     totalReceipts: 0,
     totalItems: 0,
+    totalNewProducts: 0,
+    totalEditedProducts: 0,
+    totalCopiedProducts: 0,
+    walkInsServed: 0,
+    walkInsPurchased: 0,
+    paymentStats: { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 },
   };
 
-  const totalSales = marketingTotals.totalSales + supportTotals.totalSales;
-  const totalProfit = marketingTotals.totalProfit + supportTotals.totalProfit;
-  const totalItems = marketingTotals.totalItems + supportTotals.totalItems;
+  const supportAggregates = supportSummary?.aggregates ?? {
+    totalSales: 0,
+    totalProfit: 0,
+    totalReceipts: 0,
+    totalItems: 0,
+    newBatteries: 0,
+    changedBatteries: 0,
+    paymentStats: { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 },
+  };
+
+  // per-receipt maps returned by the summarizers (keyed by canonical receipt id)
+  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+  const supportPer = (supportSummary as any)?.perReceipts ?? {};
+
+  // Merge with precedence: MARKETING > SUPPORT
+  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    if (merged.has(k)) continue; // marketing wins
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+
+  // compute merged totals
+  let totalSales = 0;
+  let totalProfit = 0;
+  let totalItems = 0;
+  const mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
+
+  for (const [, v] of merged) {
+    totalSales += v.sales;
+    totalProfit += v.profit;
+    totalItems += v.items;
+    mergedPaymentStats.totalSalesMpesa += v.mpesa;
+    mergedPaymentStats.totalSalesCash += v.cash;
+    if (v.mpesa > 0) mergedPaymentStats.countMpesaReceipts += 1;
+    if (v.cash > 0) mergedPaymentStats.countCashReceipts += 1;
+  }
 
   let commission = 0;
   if (totalProfit > 0) {
@@ -135,7 +179,7 @@ export async function GET(req: Request) {
     aggregates: {
       totalSales,
       totalItems,
-      paymentStats: marketingTotals.paymentStats,
+      paymentStats: mergedPaymentStats,
       commission: { commission },
     },
   });
