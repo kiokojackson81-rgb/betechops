@@ -47,9 +47,16 @@ export function normalizeReceiptNumber(input: unknown): string {
   return out;
 }
 
-export function buildReceiptKey(receiptNumber: unknown): string | null {
-  const norm = normalizeReceiptNumber(receiptNumber);
-  return norm === "" ? null : norm;
+export function normalizePaymentMethod(value: unknown): "MPESA" | "CASH" {
+  const s = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return s === "CASH" ? "CASH" : "MPESA";
+}
+
+export function buildReceiptKey(rawReceiptNumber: string | null | undefined, fallbackId?: string): string {
+  const n = normalizeReceiptNumber(rawReceiptNumber);
+  if (n && n.length > 0) return n;
+  if (fallbackId) return `ID:${String(fallbackId)}`;
+  return "";
 }
 
 export function mergePaymentStats(acc: PaymentBreakdown, incoming: PaymentBreakdown) {
