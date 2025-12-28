@@ -82,7 +82,7 @@ async function fetchMarketingContributions(userId: string, period: { start: Date
         createdAt: row.createdAt,
       };
     })
-    .filter((it): it is ReceiptContribution => Boolean(it));
+      .filter((it) => Boolean(it)) as ReceiptContribution[];
 }
 
 async function fetchSupportContributions(userId: string, period: { start: Date; end: Date }) {
@@ -124,7 +124,7 @@ async function fetchSupportContributions(userId: string, period: { start: Date; 
         createdAt: row.createdAt,
       };
     })
-    .filter((it): it is ReceiptContribution => Boolean(it));
+    .filter((it) => Boolean(it)) as ReceiptContribution[];
 }
 
 export async function GET(req: Request) {
