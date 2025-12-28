@@ -17,6 +17,8 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.res;
 
   const url = new URL(req.url);
+  // debug gate: add ?debug=1 to get diagnostic info (no change to payload when off)
+  const debug = url.searchParams.get("debug") === "1";
   const impersonateId = url.searchParams.get("impersonateId");
   const actorId = await getActorId();
   const targetUserId =
@@ -169,7 +171,8 @@ export async function GET(req: Request) {
     // ignore
   }
 
-  const res = NextResponse.json({
+  // base response
+  const payload: any = {
     period: {
       key: String(argPeriod.key ?? ""),
       label: String(argPeriod.label ?? ""),
@@ -182,8 +185,226 @@ export async function GET(req: Request) {
       paymentStats: mergedPaymentStats,
       commission: { commission },
     },
-  });
+  };
 
+  // When debug=1, attach identity proof and contribution audits
+  if (debug) {
+    // identity proof (include name/email and server time)
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { email: true, name: true } });
+    const targetUserEmail = targetUser?.email ?? null;
+    const targetUserName = targetUser?.name ?? null;
+    const identity = {
+      authRole: auth.role,
+      actorId,
+      impersonateId,
+      targetUserId,
+      targetUserEmail,
+      impersonationHonored: Boolean(impersonateId && auth.role === "ADMIN"),
+      serverNowISO: new Date().toISOString(),
+    };
+
+    // MARKETING audit
+    const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+    const marketingKeys = Object.keys(marketingPer || {});
+    let marketingReceipts: any[] = [];
+    // count marketing receipts in period for this target (by submittedById/email/name when available)
+    const marketingCount = await prisma.marketingReceipt.count({
+      where: {
+        createdAt: { gte: argPeriod.start, lte: argPeriod.end },
+        OR: [
+          { dailyEntry: { submittedById: targetUserId } },
+          ...(targetUserEmail ? [{ dailyEntry: { submittedByEmail: targetUserEmail } }] : []),
+          ...(targetUserName ? [{ dailyEntry: { submittedByName: targetUserName } }] : []),
+        ],
+      },
+    });
+    if (marketingKeys.length > 0) {
+      marketingReceipts = await prisma.marketingReceipt.findMany({
+        where: { receiptKey: { in: marketingKeys } },
+        select: {
+          id: true,
+          receiptNumber: true,
+          receiptKey: true,
+          createdAt: true,
+          sellingTotal: true,
+          buyingTotal: true,
+          dailyEntry: { select: { submittedById: true, submittedByEmail: true, submittedByName: true } },
+        },
+      });
+    }
+
+    const marketingOwners = new Set<string>();
+    const marketingOwnerEmails = new Set<string>();
+    const marketingRecords = marketingReceipts.map((r) => {
+      const ownerId = r.dailyEntry?.submittedById ?? null;
+      const ownerEmail = r.dailyEntry?.submittedByEmail ?? null;
+      if (ownerId) marketingOwners.add(ownerId);
+      if (ownerEmail) marketingOwnerEmails.add(String(ownerEmail).toLowerCase());
+      return {
+        id: r.id,
+        receiptNumber: r.receiptNumber,
+        receiptKey: r.receiptKey,
+        createdAt: r.createdAt,
+        sellingTotal: r.sellingTotal,
+        buyingTotal: r.buyingTotal,
+        ownerId,
+        ownerEmail,
+      };
+    });
+
+    const marketingForeign = marketingRecords.filter((r) => {
+      if (r.ownerId) return r.ownerId !== targetUserId;
+      if (r.ownerEmail && targetUserEmail) return String(r.ownerEmail).toLowerCase() !== String(targetUserEmail).toLowerCase();
+      return false;
+    });
+
+    const marketingAudit = {
+      countReceiptsInMap: marketingKeys.length,
+      distinctOwnerIds: Array.from(marketingOwners),
+      distinctOwnerEmails: Array.from(marketingOwnerEmails),
+      foreignCount: marketingForeign.length,
+      foreignExamples: marketingForeign.slice(0, 5),
+      topReceipts: marketingRecords.slice(0, 10),
+    };
+
+    // SUPPORT audit
+    const supportPer = (supportSummary as any)?.perReceipts ?? {};
+    const supportKeys = Object.keys(supportPer || {});
+    let supportReceipts: any[] = [];
+    // support receipts count (supportDailyEntry uses submittedById)
+    const supportCount = await prisma.supportReceipt.count({
+      where: {
+        createdAt: { gte: argPeriod.start, lte: argPeriod.end },
+        dailyEntry: { submittedById: targetUserId },
+      },
+    });
+    if (supportKeys.length > 0) {
+      supportReceipts = await prisma.supportReceipt.findMany({
+        where: { receiptKey: { in: supportKeys } },
+        select: {
+          id: true,
+          receiptNumber: true,
+          receiptKey: true,
+          createdAt: true,
+          sellingTotal: true,
+          buyingTotal: true,
+          dailyEntry: { select: { submittedById: true } },
+        },
+      });
+    }
+
+    // count supportDailyEntry rows for this attendant in period
+    const supportEntryCount = await prisma.supportDailyEntry.count({ where: { date: { gte: argPeriod.start, lte: argPeriod.end }, submittedById: targetUserId } });
+
+    // POS receipts count (issuedById)
+    const posCount = await prisma.receipt.count({ where: { createdAt: { gte: argPeriod.start, lte: argPeriod.end }, issuedById: targetUserId } });
+
+    const supportOwners = new Set<string>();
+    const supportOwnerEmails = new Set<string>();
+    const supportRecords = supportReceipts.map((r) => {
+      const ownerId = r.dailyEntry?.submittedById ?? null;
+      const ownerEmail = r.dailyEntry?.submittedByEmail ?? null;
+      if (ownerId) supportOwners.add(ownerId);
+      if (ownerEmail) supportOwnerEmails.add(String(ownerEmail).toLowerCase());
+      return {
+        id: r.id,
+        receiptNumber: r.receiptNumber,
+        receiptKey: r.receiptKey,
+        createdAt: r.createdAt,
+        sellingTotal: r.sellingTotal,
+        buyingTotal: r.buyingTotal,
+        ownerId,
+        ownerEmail,
+      };
+    });
+
+    const supportForeign = supportRecords.filter((r) => {
+      if (r.ownerId) return r.ownerId !== targetUserId;
+      if (r.ownerEmail && targetUserEmail) return String(r.ownerEmail).toLowerCase() !== String(targetUserEmail).toLowerCase();
+      return false;
+    });
+
+    const supportAudit = {
+      countReceiptsInMap: supportKeys.length,
+      distinctOwnerIds: Array.from(supportOwners),
+      distinctOwnerEmails: Array.from(supportOwnerEmails),
+      foreignCount: supportForeign.length,
+      foreignExamples: supportForeign.slice(0, 5),
+      topReceipts: supportRecords.slice(0, 10),
+    };
+    // build db metadata
+    let dbMeta = { dbName: null, schema: null, host: null, urlSuffix: null } as any;
+    try {
+      const meta = await prisma.$queryRaw`select current_database() as db, current_schema() as schema`;
+      if (Array.isArray(meta) && meta[0]) {
+        dbMeta.dbName = meta[0].db ?? null;
+        dbMeta.schema = meta[0].schema ?? null;
+      } else if (meta && (meta as any).db) {
+        dbMeta.dbName = (meta as any).db ?? null;
+        dbMeta.schema = (meta as any).schema ?? null;
+      }
+    } catch (e) {
+      // ignore
+    }
+    try {
+      const rawUrl = process.env.DATABASE_URL ?? null;
+      if (rawUrl) {
+        try {
+          const parsed = new URL(rawUrl);
+          dbMeta.host = parsed.hostname ?? null;
+          const s = String(rawUrl);
+          dbMeta.urlSuffix = s.slice(-4);
+        } catch (e) {
+          // fallback: try to extract host via regex
+          const m = rawUrl.match(/@([^:/?#]+)([:/?#]|$)/);
+          dbMeta.host = m ? m[1] : null;
+          dbMeta.urlSuffix = String(rawUrl).slice(-4);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // source counts and totals
+    const marketingTotalsVal = marketingTotals ?? { totalSales: 0, totalItems: 0 };
+    const supportTotalsVal = supportAggregates ?? { totalSales: 0, totalItems: 0 };
+
+    const sourceCounts = {
+      marketingTotals: { totalSales: Number(marketingTotalsVal.totalSales ?? 0), totalItems: Number(marketingTotalsVal.totalItems ?? 0) },
+      supportTotals: { totalSales: Number(supportTotalsVal.totalSales ?? 0), totalItems: Number(supportTotalsVal.totalItems ?? 0) },
+      supportEntryCount,
+      marketingRowCount: marketingCount,
+      receiptsPerSource: { marketing: marketingKeys.length, support: supportKeys.length, pos: posCount },
+    };
+
+    // final diagnosis
+    const diagnosis = {
+      impersonationHonored: Boolean(impersonateId && auth.role === "ADMIN"),
+      actorEqualsTarget: actorId === targetUserId,
+      marketingHasForeignRows: marketingAudit.foreignCount > 0,
+      supportHasForeignRows: supportAudit.foreignCount > 0,
+      marketingHasMultipleOwners: (marketingAudit.distinctOwnerIds.length > 1),
+      supportHasMultipleOwners: (supportAudit.distinctOwnerIds.length > 1),
+    };
+
+    const sanity = {
+      targetHasAnyRows: (marketingCount + supportCount) > 0,
+      totalsNonZero: totalSales > 0 || totalItems > 0,
+    };
+
+    payload.debug = { identity, db: dbMeta, sourceCounts, marketing: marketingAudit, support: supportAudit, diagnosis, sanity };
+  }
+
+  const res = NextResponse.json(payload);
   res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
   return res;
 }
+
+/*
+Sample curl (admin session cookie required):
+
+curl -s -H "Cookie: <ADMIN_SESSION_COOKIE>" "https://ops.betech.co.ke/api/marketing/report/summary?impersonateId=cmimxqfgo0004v5mc5pn1r486&debug=1"
+
+curl -s -H "Cookie: <ADMIN_SESSION_COOKIE>" "https://ops.betech.co.ke/api/marketing/report/summary?impersonateId=cmimxqfve0006v5mcewkm8waa&debug=1"
+
+*/

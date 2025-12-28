@@ -15,6 +15,7 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
 import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
 import { randomUUID } from "crypto";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -41,12 +42,17 @@ export async function GET(req: NextRequest) {
   const docTypeParam = url.searchParams.get("docType") || undefined;
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
-  const attendantId = url.searchParams.get("attendantId") || undefined;
   const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const attendantId = identity.resolvedUserId;
+  if (!attendantId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const today = new Date();
   const startDefault = new Date(today);
@@ -56,67 +62,76 @@ export async function GET(req: NextRequest) {
   const startDate = start ? new Date(start) : startDefault;
   const endDate = end ? new Date(end) : endDefault;
 
-  const where: any = {};
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
   const includeSupportReceipts = !normalizedDocType || isSupportDocType;
-  if (normalizedDocType && !isMarketingDocType && !isSupportDocType) where.docType = normalizedDocType;
-  where.generatedAt = {
-    gte: startDate,
-    lte: endDate,
-  };
 
+  const and: Prisma.ReceiptWhereInput[] = [];
+  and.push({ generatedAt: { gte: startDate, lte: endDate } });
+
+  if (normalizedDocType && !isMarketingDocType && !isSupportDocType) {
+    and.push({ docType: normalizedDocType as any });
+  }
+
+  if (paymentMethodParam) {
+    and.push({ data: { path: ["paymentMethod"], equals: paymentMethodParam } });
+  }
+
+  const searchOr: Prisma.ReceiptWhereInput[] = [];
   if (q) {
-    where.OR = [
+    searchOr.push(
       { order: { customerName: { contains: q, mode: "insensitive" } } },
       { order: { customerPhone: { contains: q, mode: "insensitive" } } },
       { order: { customerEmail: { contains: q, mode: "insensitive" } } },
       { order: { orderNumber: { contains: q, mode: "insensitive" } } },
       { order: { attendant: { name: { contains: q, mode: "insensitive" } } } },
       { issuedBy: { name: { contains: q, mode: "insensitive" } } },
-    ];
+    );
   }
 
   if (phoneParam) {
     const pRaw = String(phoneParam).replace(/[^+0-9]/g, "");
-    // create a local-style variant (07...) when possible
     let local = pRaw;
     if (pRaw.startsWith("+254")) local = "0" + pRaw.slice(4);
     else if (pRaw.startsWith("254")) local = "0" + pRaw.slice(3);
     else if (/^[7][0-9]{8}$/.test(pRaw)) local = "0" + pRaw;
 
-    where.OR = where.OR || [];
-    where.OR.push({ order: { customerPhone: { contains: pRaw, mode: "insensitive" } } });
-    if (local) {
-      where.OR.push({ order: { customerPhone: { contains: local, mode: "insensitive" } } });
-    }
+    searchOr.push({ order: { customerPhone: { contains: pRaw, mode: "insensitive" } } });
+    if (local) searchOr.push({ order: { customerPhone: { contains: local, mode: "insensitive" } } });
   }
-  if (attendantId) {
+
+  if (searchOr.length) and.push({ OR: searchOr });
+
+  // Scope decision (strict)
+  const role = identity.actorRole;
+  const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
+  const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
+  const wantsGlobal = requestedScope === "global";
+  const wantsMine = requestedScope === "mine" || isImpersonating || issuerOnly === true;
+  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
+  // Rules: impersonating forces mine; otherwise admins/supervisors may request global explicitly
+  const scope = isImpersonating ? "mine" : (wantsGlobal && canGlobal ? "global" : "mine");
+  const metaWithScope = { ...meta, scope };
+
+  if (scope === "mine") {
+    const ownerOr: Prisma.ReceiptWhereInput[] = [];
+    ownerOr.push(
+      { issuedById: attendantId },
+      { order: { attendantId } },
+      { data: { path: ["attendantId"], equals: attendantId } },
+    );
+    // If issuerOnly requested, restrict to issuedById only
     if (issuerOnly) {
-      // Only include receipts the attendant issued/created via the POS UI (issuedById)
-      where.issuedById = attendantId;
+      and.push({ issuedById: attendantId });
     } else {
-      // Allow filtering receipts either by the order.attendantId OR by the receipt issuer (issuedById)
-      // This ensures attendants see receipts they served (order.attendantId) as well as receipts
-      // they issued/created (issuedById). Keep any existing order filters intact.
-      const orderFilter = { ...(where.order || {}), attendantId };
-      where.OR = where.OR || [];
-      // Also include receipts where the attendantId is stored inside the JSON `data` field
-      // (some receipts persist attendant info inside `data.attendantId`). Use a JSON path
-      // filter so attendants still see those receipts.
-      where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
+      and.push({ OR: ownerOr });
     }
   }
 
-  if (paymentMethodParam) {
-    where.data = {
-      path: ["paymentMethod"],
-      equals: paymentMethodParam,
-    };
-  }
+  const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
     ? await prisma.receipt.findMany({
@@ -210,7 +225,7 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId && !issuerOnly) marketingFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -225,7 +240,7 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId && !issuerOnly) supportFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && attendantId) supportFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
@@ -296,7 +311,8 @@ export async function GET(req: NextRequest) {
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
-  return NextResponse.json({ receipts: paged, paging: { page, size, totalCount, totalPages } });
+  const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
+  return NextResponse.json(composeIdentityResponse(metaWithScope, data));
 }
 
 export async function POST(req: NextRequest) {

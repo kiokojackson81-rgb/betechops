@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,19 @@ export async function GET(req: Request) {
   const guard = await requireAttendant(req, ["ATTENDANT", "SUPERVISOR", "ADMIN"]);
   if (!guard.ok) return guard.res;
 
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const targetUserId = identity.resolvedUserId;
+  if (!targetUserId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
 
   const baseWhere: Prisma.WeeklySaleWhereInput = {
-    userId: guard.user.id,
+    userId: targetUserId,
   };
   const rangeWhere: Prisma.WeeklySaleWhereInput = { ...baseWhere };
 
@@ -147,10 +155,12 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json({
+  const data = {
     rows,
     periodLabel: formatPeriodLabel(startDate, endDate),
     periodTotal,
     totalToDate,
-  });
+  };
+
+  return NextResponse.json(composeIdentityResponse(meta, data));
 }

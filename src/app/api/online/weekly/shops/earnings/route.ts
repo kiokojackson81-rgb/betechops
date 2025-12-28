@@ -4,6 +4,7 @@ import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,13 @@ export async function GET(req: Request) {
   ]);
   if (!auth.ok) return auth.res;
 
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const targetUserId = identity.resolvedUserId;
+  if (!targetUserId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const startParam = parseDateParam(url.searchParams.get("start"));
   const endParam = parseDateParam(url.searchParams.get("end"));
@@ -64,16 +72,17 @@ export async function GET(req: Request) {
     });
     accountIds = accounts.map((a) => a.id);
   } else {
-    const assignments = await getMarketplaceAssignmentsForUser(auth.user.id);
+    const assignments = await getMarketplaceAssignmentsForUser(targetUserId);
     accountIds = assignments.accountIds;
   }
 
   if (!accountIds.length) {
-    return NextResponse.json({
+    const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
-    });
+    };
+    return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
   const accounts = await prisma.marketplaceAccount.findMany({
@@ -89,11 +98,12 @@ export async function GET(req: Request) {
   });
 
   if (!accounts.length) {
-    return NextResponse.json({
+    const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
-    });
+    };
+    return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
   const normalizeName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
@@ -289,9 +299,11 @@ export async function GET(req: Request) {
     { sales: 0, commission: 0, orders: 0 },
   );
 
-  return NextResponse.json({
+  const data = {
     rangeLabel,
     totals: { ...totals, shops: finalRows.length },
     rows: finalRows,
-  });
+  };
+
+  return NextResponse.json(composeIdentityResponse(meta, data));
 }

@@ -33,10 +33,7 @@ export async function getEarningsSummaryForAttendant(opts: {
 }): Promise<EarningsSummary> {
   const { attendantId, periodKey, periodLabel } = opts;
 
-  // 1) Fetch total sales for this attendant + period via existing summary helper
-  const tradingPeriod = period;
-  const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period: tradingPeriod });
-  const marketingSales = marketingSummary?.totals?.totalSales ?? 0;
+  // 1) Determine trading period (prefer caller's periodKey) and then fetch total sales
 
   // 1b) Include support sales for this attendant in the same period so commission
   // reflects both marketing and support priced items. Prefer the periodKey
@@ -47,6 +44,10 @@ export async function getEarningsSummaryForAttendant(opts: {
     const found = recent.find((p) => p.key === periodKey);
     if (found) period = found;
   }
+
+  const tradingPeriod = period;
+  const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period: tradingPeriod });
+  const marketingSales = marketingSummary?.totals?.totalSales ?? 0;
 
   const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
   // Merge per-receipt maps to avoid double-counting

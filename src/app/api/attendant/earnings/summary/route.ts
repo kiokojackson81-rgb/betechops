@@ -1,33 +1,19 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/nextAuth";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import type { Role } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const impersonateId = url.searchParams.get("impersonateId");
-  // `getServerSession` can return various session shapes depending on adapters.
-  // Explicitly type as `any` so we can safely access `user` without TypeScript
-  // complaining about missing properties in some environments.
-  const session: any = await getServerSession(authOptions as any);
-  const actorId = session?.user?.id;
-
-  if (!actorId && !impersonateId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (impersonateId && session?.user?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const userId = impersonateId ?? actorId;
+  const identity = await resolveTargetUserId(req, { allowedImpersonationRoles: ["ADMIN" as Role] });
+  const meta = identity;
+  const userId = identity.resolvedUserId;
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -103,7 +89,7 @@ export async function GET(req: Request) {
     summary.chamaTotal + summary.latenessTotal + summary.disciplineTotal + summary.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
-  return NextResponse.json({
+  const payload = {
     ...summary,
     totalSales: combinedSales,
     totalProfit: combinedProfit,
@@ -127,5 +113,7 @@ export async function GET(req: Request) {
           detail: ledger.detail,
         }
       : null,
-  });
+  };
+
+  return NextResponse.json(composeIdentityResponse(meta, payload));
 }

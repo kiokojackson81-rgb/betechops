@@ -399,6 +399,7 @@ export default function AttendantOnlineOpsClient() {
   const [tab, setTab] = useState<"overview" | "shops" | "receipts" | "payroll">("overview");
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
   // receipt totals removed (not used in simplified UI)
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
@@ -422,27 +423,37 @@ export default function AttendantOnlineOpsClient() {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const url = impersonateId ? `/api/attendants/me?impersonateId=${encodeURIComponent(
+        impersonateId,
+      )}` : "/api/attendants/me";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       if (data?.user?.id) setUserId(data.user.id);
+      if (data?.user?.role) setUserRole(data.user.role);
     } catch (err) {
       console.warn("[attendant/online-ops] failed to load user", err);
     }
-  }, []);
+  }, [impersonateId]);
 
   const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
     setReceiptStatsLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
         issuerOnly: "true",
         includeItems: "true",
         size: "200",
       });
+
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else {
+        params.set("attendantId", userId);
+      }
 
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load receipts for payroll period");
@@ -461,10 +472,13 @@ export default function AttendantOnlineOpsClient() {
     setOnlineSummaryLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load online summary for payroll period");
@@ -483,10 +497,13 @@ export default function AttendantOnlineOpsClient() {
     setPayrollLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       setPayrollRows(null);
 
@@ -526,10 +543,13 @@ export default function AttendantOnlineOpsClient() {
     setShopSalesLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(selectedWeek.start, false),
         end: formatNairobiParam(selectedWeek.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/shops/sales?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load assigned shops");
@@ -548,10 +568,11 @@ export default function AttendantOnlineOpsClient() {
     setWeeklyLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(selectedWeek.start, false),
         end: formatNairobiParam(selectedWeek.end, true),
       });
+      if (impersonateId) params.set("impersonateId", impersonateId);
+      else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, {
         cache: "no-store",
@@ -585,8 +606,18 @@ export default function AttendantOnlineOpsClient() {
   }, [receiptsEditorRows]);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    const imp = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null;
+    setImpersonateId(imp);
+  }, []);
+
+  useEffect(() => {
+    // When impersonation toggles, clear potentially stale state and reload the resolved user
+    setReceiptRows([]);
+    setOnlineSummary(null);
+    setUserId(null);
+    setUserRole(null);
+    void fetchUser();
+  }, [impersonateId, fetchUser]);
 
   // receipt totals loader previously triggered here; removed
 

@@ -112,10 +112,13 @@ export default function AttendantOnlineClient() {
     (params: URLSearchParams) => {
       if (impersonateId) {
         params.set("impersonateId", impersonateId);
+        // When impersonating, explicitly request mine scope to avoid global leakage
+        params.set("scope", "mine");
       }
     },
     [impersonateId],
   );
+
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -125,6 +128,31 @@ export default function AttendantOnlineClient() {
       setImpersonateId(imp);
     }
   }, []);
+
+  const identityMatches = useCallback(
+    (meta?: { resolvedUserId?: string | null }) => {
+      if (!impersonateId || !meta?.resolvedUserId) return true;
+      const matches = meta.resolvedUserId === impersonateId;
+      if (!matches) {
+        console.warn(
+          "[attendant/online] dropping response due to identity mismatch",
+          { impersonateId, resolved: meta.resolvedUserId, meta },
+        );
+      }
+      return matches;
+    },
+    [impersonateId],
+  );
+
+  const parseIdentityResponse = useCallback(
+    async <T = any>(res: Response): Promise<T | null> => {
+      const payload = await res.json().catch(() => null);
+      if (!payload) return null;
+      if (!identityMatches(payload.meta)) return null;
+      return payload.data ?? payload;
+    },
+    [identityMatches],
+  );
 
   // receipt totals & quick stats removed from right column
 
@@ -168,13 +196,14 @@ export default function AttendantOnlineClient() {
       const query = params.toString();
       const res = await fetch(`/api/attendants/me${query ? `?${query}` : ""}`, { cache: "no-store" });
       if (!res.ok) return;
-      const data = await res.json();
-      if (data?.user?.id) setUserId(data.user.id);
-      if (data?.user?.role) setUserRole(data.user.role);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) return;
+      if (payload?.user?.id) setUserId(payload.user.id);
+      if (payload?.user?.role) setUserRole(payload.user.role);
       // capture impersonation metadata when present so UI can surface it
-      if (data?.impersonated) {
+      if (payload?.impersonated) {
         setImpersonated(true);
-        setImpersonatedBy(data?.impersonatedBy ?? null);
+        setImpersonatedBy(payload?.impersonatedBy ?? null);
       } else {
         setImpersonated(false);
         setImpersonatedBy(null);
@@ -211,13 +240,17 @@ export default function AttendantOnlineClient() {
           end: formatNairobiParam(end, true),
         });
         appendImpersonateParam(params);
-        const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) {
-          setWeeklyEarnings(null);
-          return;
-        }
-        const data = await res.json();
-        setWeeklyEarnings(data);
+      const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setWeeklyEarnings(null);
+        return;
+      }
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setWeeklyEarnings(null);
+        return;
+      }
+      setWeeklyEarnings(payload);
       } catch (err) {
         setWeeklyEarnings(null);
       } finally {
@@ -236,13 +269,17 @@ export default function AttendantOnlineClient() {
           end: formatNairobiParam(period.end, true),
         });
         appendImpersonateParam(params);
-        const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) {
-          setOnlineSummary(null);
-          return;
-        }
-        const data = await res.json();
-        setOnlineSummary(data);
+      const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setOnlineSummary(null);
+        return;
+      }
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setOnlineSummary(null);
+        return;
+      }
+      setOnlineSummary(payload);
       } catch (err) {
         setOnlineSummary(null);
       } finally {
@@ -266,8 +303,9 @@ export default function AttendantOnlineClient() {
 
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load receipts for payroll period");
-      const data = await res.json();
-      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) throw new Error("Failed to load receipts for payroll period");
+      setReceiptRows(Array.isArray(payload.receipts) ? payload.receipts : []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to load receipt totals";
       showToast(msg, "error");
@@ -292,10 +330,10 @@ export default function AttendantOnlineClient() {
         try {
           const adminRes = await fetch(`/api/admin/payroll/summary?${params.toString()}`, { cache: "no-store" });
           if (adminRes.ok) {
-            const adminData = await adminRes.json();
-            // Admin endpoint returns rows — pick the first row as the summary if available
-            if (Array.isArray(adminData.rows) && adminData.rows.length > 0) {
-              setPayrollSummary(adminData.rows[0]);
+            const adminPayload = await parseIdentityResponse(adminRes);
+            const rows = Array.isArray(adminPayload?.rows) ? adminPayload.rows : [];
+            if (rows.length > 0) {
+              setPayrollSummary(rows[0]);
               return;
             }
           }
@@ -310,8 +348,12 @@ export default function AttendantOnlineClient() {
         setPayrollSummary(null);
         return;
       }
-      const data = await res.json();
-      setPayrollSummary(data);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setPayrollSummary(null);
+        return;
+      }
+      setPayrollSummary(payload);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to load payroll summary";
       showToast(msg, "error");
@@ -340,11 +382,12 @@ export default function AttendantOnlineClient() {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to load shop sales");
-      const data = await res.json();
-      setShopSalesRows(Array.isArray(data.rows) ? data.rows : []);
-      setShopPeriodLabel(data.periodLabel ?? period.label);
-      setShopPeriodTotal(data.periodTotal ?? 0);
-      setShopAllTimeTotal(data.totalToDate ?? 0);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) throw new Error("Failed to load shop sales");
+      setShopSalesRows(Array.isArray(payload.rows) ? payload.rows : []);
+      setShopPeriodLabel(payload.periodLabel ?? period.label);
+      setShopPeriodTotal(payload.periodTotal ?? 0);
+      setShopAllTimeTotal(payload.totalToDate ?? 0);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load shop sales";
@@ -447,8 +490,12 @@ export default function AttendantOnlineClient() {
         setPreviewCommission(null);
         return;
       }
-      const data = await res.json();
-      setPreviewCommission(Number(data.totalCommission ?? data.totalCommission ?? 0));
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setPreviewCommission(null);
+        return;
+      }
+      setPreviewCommission(Number(payload.totalCommission ?? 0));
     } catch (err) {
       setPreviewCommission(null);
     }
