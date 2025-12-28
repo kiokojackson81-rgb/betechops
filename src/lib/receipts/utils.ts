@@ -11,13 +11,42 @@ export function businessDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export function businessDayRangeNairobi(date: Date, padDays = 0) {
+  const base = new Date(date);
+  base.setHours(0, 0, 0, 0);
+  const start = new Date(base);
+  start.setDate(start.getDate() - padDays);
+  const end = new Date(base);
+  end.setDate(end.getDate() + padDays);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 export function buildReceiptKey(entryDate: Date, serial: unknown): string | null {
   const canonical = canonicalReceiptNumber(serial);
   if (!canonical) return null;
   return `${businessDateKey(entryDate)}:${canonical}`;
 }
 
+const locks = new Map<string, Promise<void>>();
+export async function withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = locks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((r) => (release = r));
+  locks.set(key, prev.then(() => next));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (locks.get(key) === next) {
+      locks.delete(key);
+    }
+  }
+}
+
 export function parsePaymentMethod(input: unknown, PaymentMethod: any) {
-  if (typeof input === "string" && input.toUpperCase() === "CASH") return PaymentMethod.CASH;
-  return PaymentMethod.MPESA;
+  return typeof input === "string" && input.toUpperCase() === "CASH"
+    ? PaymentMethod.CASH
+    : PaymentMethod.MPESA;
 }

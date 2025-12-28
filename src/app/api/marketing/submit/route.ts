@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 import { getActorId, requireRole } from "@/lib/api";
 import { marketingDayConfigs, marketingFieldTypes } from "@/lib/marketingDayConfigs";
 
@@ -89,6 +90,21 @@ export async function POST(req: Request) {
   const totalProfit = saleRows.reduce((sum, s) => sum + (toNumber(s.sellingPrice) - toNumber(s.buyingPrice)), 0);
 
   try {
+    // validate receipt uniqueness across system before creating
+    const seen = new Set<string>();
+    for (const s of saleRows) {
+      const normalized = canonicalReceiptNumber(s.receiptNumber || undefined);
+      if (!normalized) continue;
+      if (seen.has(normalized)) {
+        return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+      }
+      seen.add(normalized);
+      const owner = await findReceiptOwner(normalized);
+      if (owner) {
+        return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+      }
+    }
+
     const entry = await prisma.marketingDailyEntry.create({
       data: {
         date: date ? new Date(date) : new Date(),

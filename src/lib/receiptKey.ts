@@ -26,3 +26,42 @@ export function receiptIdFromAny(obj: any): string {
   }
   return "";
 }
+
+// New canonical utilities requested by Quick Stats work
+export type PaymentBreakdown = {
+  mpesa: number;
+  cash: number;
+  countMpesaReceipts?: number;
+  countCashReceipts?: number;
+};
+
+export function normalizeReceiptNumber(input: unknown): string {
+  if (input == null) return "";
+  const s = String(input);
+  const trimmed = s.trim();
+  if (!trimmed) return "";
+  // Uppercase, remove spaces/hyphens/underscores
+  let out = trimmed.toUpperCase().replace(/[\s\-_]+/g, "");
+  // Keep only alphanumerics
+  out = out.replace(/[^A-Z0-9]/g, "");
+  return out;
+}
+
+export function buildReceiptKey(receiptNumber: unknown): string | null {
+  const norm = normalizeReceiptNumber(receiptNumber);
+  return norm === "" ? null : norm;
+}
+
+export function mergePaymentStats(acc: PaymentBreakdown, incoming: PaymentBreakdown) {
+  acc.mpesa = (acc.mpesa || 0) + (incoming.mpesa || 0);
+  acc.cash = (acc.cash || 0) + (incoming.cash || 0);
+
+  if (incoming.mpesa && incoming.mpesa > 0) {
+    acc.countMpesaReceipts = (acc.countMpesaReceipts || 0) + 1;
+  }
+  if (incoming.cash && incoming.cash > 0) {
+    acc.countCashReceipts = (acc.countCashReceipts || 0) + 1;
+  }
+
+  return acc;
+}

@@ -210,16 +210,16 @@ model MarketingSale {
 }
 
 model MarketingReceipt {
-  id            String                 @id @default(cuid())
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  id            String              @id @default(cuid())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   dailyEntryId  String
   receiptNumber String?
-  receiptKey    String?                @unique
+  receiptKey    String?              @unique
   sellingTotal  Int
   paymentMethod PaymentMethod
-  buyingTotal   Int                    @default(0)
-  dailyEntry    MarketingDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  buyingTotal   Int                 @default(0)
+  dailyEntry    MarketingDailyEntry @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         MarketingReceiptItem[]
 
   @@index([dailyEntryId])
@@ -276,7 +276,7 @@ model SupportReceipt {
   id            String               @id @default(cuid())
   dailyEntryId  String
   receiptNumber String?
-  receiptKey    String?               @unique
+  receiptKey    String?              @unique
   sellingTotal  Int
   paymentMethod PaymentMethod
   createdAt     DateTime             @default(now())

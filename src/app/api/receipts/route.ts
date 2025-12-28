@@ -315,8 +315,13 @@ export async function POST(req: NextRequest) {
 
   const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
-  const attendantId = payload?.attendantId ?? payload?.servedBy ?? null;
-  const issuedById = payload?.issuedById ?? (guard.ok ? guard.user.id : null);
+  const resolvedUserId = guard?.user?.id ?? null;
+  // Attendant (who gets credited) should come from the payload (attendantId/servedBy)
+  // and only fall back to the resolved/logged-in user when not provided.
+  const attendantId = payload?.attendantId ?? payload?.servedBy ?? resolvedUserId ?? null;
+  // issuedById MUST be the logged-in user (who clicked Save). Do not trust payload. This prevents
+  // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
+  const issuedById = resolvedUserId;
 
   // compute totals
   const items = Array.isArray(payload?.items) ? payload.items : [];
