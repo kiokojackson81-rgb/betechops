@@ -440,6 +440,10 @@ export default function ReceiptsAdminClient({
     setSummaryLoading(true);
     try {
       const params = new URLSearchParams();
+      const startParam = buildDateParam(appliedFilters.start, false);
+      const endParam = buildDateParam(appliedFilters.end, true);
+      if (startParam) params.set("start", startParam);
+      if (endParam) params.set("end", endParam);
       if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
       if (appliedFilters.attendantId) {
         params.set("attendantId", appliedFilters.attendantId);
@@ -518,6 +522,10 @@ export default function ReceiptsAdminClient({
       const startEventSource = () => {
         sseRetryRef.current = Math.max(0, sseRetryRef.current);
         const params = new URLSearchParams();
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        if (startParam) params.set("start", startParam);
+        if (endParam) params.set("end", endParam);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
         const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
