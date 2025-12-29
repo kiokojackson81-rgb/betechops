@@ -10,7 +10,7 @@ export default async function AdminReceiptsPage() {
     const apiUrl = await absUrl("/api/receipts");
     const incomingHeaders = await headers();
     const cookieHeader = incomingHeaders.get("cookie") ?? undefined;
-    const res = await fetch(withParams(apiUrl, { includeItems: true }), {
+    const res = await fetch(withParams(apiUrl, { includeItems: true, scope: "global" }), {
       cache: "no-store",
       headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     });
@@ -19,7 +19,7 @@ export default async function AdminReceiptsPage() {
     return (
       <div className="mx-auto max-w-5xl p-4">
         <h1 className="mb-4 text-2xl font-semibold">Admin - Receipts</h1>
-        <ReceiptsAdminClient initial={receipts} allowEdit />
+        <ReceiptsAdminClient initial={receipts} allowEdit scope="global" />
       </div>
     );
   } catch (e) {

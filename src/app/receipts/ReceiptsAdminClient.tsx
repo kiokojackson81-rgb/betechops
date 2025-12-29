@@ -108,6 +108,7 @@ type Props = {
   allowEdit?: boolean;
   onSummaryChange?: (summary: ReceiptSummary) => void;
   refreshSignal?: number;
+  scope?: "mine" | "global";
 };
 
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
@@ -261,6 +262,7 @@ export default function ReceiptsAdminClient({
   allowEdit,
   onSummaryChange,
   refreshSignal = 0,
+  scope,
 }: Props) {
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
@@ -315,6 +317,7 @@ export default function ReceiptsAdminClient({
     rangeEnd: "receipts.rangeEnd.v1",
     paymentMethod: "receipts.paymentMethod.v1",
   } as const;
+  const scopeMode = scope ?? "mine";
 
   // load persisted filters (attendant + quick range) on mount
   useEffect(() => {
@@ -400,6 +403,7 @@ export default function ReceiptsAdminClient({
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
+        params.set("scope", scopeMode);
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -416,7 +420,7 @@ export default function ReceiptsAdminClient({
         if (!opts?.silent) setLoading(false);
       }
     },
-    [appliedFilters],
+    [appliedFilters, scopeMode],
   );
 
   useEffect(() => {
