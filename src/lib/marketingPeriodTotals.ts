@@ -376,6 +376,21 @@ export async function recomputeMarketingCommissionLedger(opts: {
     },
   };
 
+  // Remove any overlapping/stale CommissionLedger rows for this user
+  // that reference the same marketing periodKey but have different
+  // period start/end boundaries. This prevents duplicate/overlapping
+  // ledger rows (often caused by timezone-normalization differences).
+  try {
+    await client.$executeRaw`
+      DELETE FROM "CommissionLedger"
+      WHERE "userId" = ${userId}
+        AND (detail->'marketing'->>'periodKey') = ${period.key}
+        AND NOT ("periodStart" = ${period.start} AND "periodEnd" = ${period.end})
+    `;
+  } catch (_) {
+    // ignore; raw delete is best-effort safeguard
+  }
+
   const ledger = await client.commissionLedger.upsert({
     where: {
       userId_periodStart_periodEnd: {
