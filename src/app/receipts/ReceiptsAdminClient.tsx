@@ -1034,17 +1034,17 @@ export default function ReceiptsAdminClient({
     );
 
     const itemsCount = rows.reduce((sum, row) => {
-      const itemList = Array.isArray(row.items) ? row.items : [];
-      return sum + itemList.length;
+      const itemList = Array.isArray(row.items) && row.items.length > 0 ? row.items.length : 1;
+      return sum + itemList;
     }, 0);
 
     const totalSales = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
     return {
       totalSales,
       totalCost: 0,
-      totalProfit: totalSales,
-      totalProfitPriced: totalSales,
-      totalProfitInclusive: totalSales,
+      totalProfit: 0,
+      totalProfitPriced: 0,
+      totalProfitInclusive: 0,
       receiptsCount: rows.length,
       itemsCount,
       hasCompleteCosts: rows.length === 0,
