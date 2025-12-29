@@ -75,6 +75,16 @@ const buildMarketingSupportSearchOr = (q: string): Prisma.MarketingReceiptWhereI
   { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
 ];
 
+const buildSupportSearchOr = (q: string): Prisma.SupportReceiptWhereInput["OR"] => [
+  { receiptNumber: { contains: q, mode: "insensitive" } },
+  {
+    dailyEntry: {
+      submittedBy: { name: { contains: q, mode: "insensitive" } },
+    },
+  },
+  { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
+];
+
 const buildPosScopeCondition = (userId?: string | null): Prisma.ReceiptWhereInput[] => {
   if (!userId) return [];
   return [
