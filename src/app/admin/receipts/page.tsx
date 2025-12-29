@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminReceiptsPage() {
   try {
     const apiUrl = await absUrl("/api/receipts");
-    const incomingHeaders = headers();
+    const incomingHeaders = await headers();
     const cookieHeader = incomingHeaders.get("cookie") ?? undefined;
     const res = await fetch(withParams(apiUrl, { includeItems: true }), {
       cache: "no-store",
