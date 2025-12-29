@@ -127,32 +127,34 @@ export async function computeAdminReceiptSummary({
     posWhere.data.equals = paymentMethod;
   }
 
-  const dailyEntryFilter: any = {
+  const dailyEntryWhere: any = {
     date: { gte: start, lte: end },
   };
   if (scope === "mine") {
-    dailyEntryFilter.submittedById = currentUserId ?? attendantId ?? undefined;
+    dailyEntryWhere.submittedById = currentUserId ?? attendantId ?? undefined;
   } else if (attendantId) {
-    dailyEntryFilter.submittedById = attendantId;
+    dailyEntryWhere.submittedById = attendantId;
   }
-  if (search) {
-    dailyEntryFilter.OR = buildMarketingSupportSearchOr(search);
-  }
-
   if (paymentMethod) {
-    dailyEntryFilter.paymentMethod = paymentMethod;
+    dailyEntryWhere.paymentMethod = paymentMethod;
   }
 
   const [marketingReceipts, supportReceipts, posReceipts] = await Promise.all([
     includeMarketingReceipts
       ? prisma.marketingReceipt.findMany({
-          where: dailyEntryFilter,
+          where: {
+            dailyEntry: dailyEntryWhere,
+            ...(search ? { OR: buildMarketingSupportSearchOr(search) } : {}),
+          },
           include: { items: true },
         })
       : [],
     includeSupportReceipts
       ? prisma.supportReceipt.findMany({
-          where: dailyEntryFilter,
+          where: {
+            dailyEntry: dailyEntryWhere,
+            ...(search ? { OR: buildSupportSearchOr(search) } : {}),
+          },
           include: { items: true },
         })
       : [],
