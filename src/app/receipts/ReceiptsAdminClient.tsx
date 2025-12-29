@@ -298,6 +298,8 @@ export default function ReceiptsAdminClient({
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [triggerSummaryLoading, setTriggerSummaryLoading] = useState(false);
+  const [triggerSummaryResult, setTriggerSummaryResult] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
@@ -487,6 +489,25 @@ export default function ReceiptsAdminClient({
       setSummaryLoading(false);
     }
   }, [appliedFilters, scopeMode]);
+
+  const handleTriggerSummary = useCallback(async () => {
+    if (triggerSummaryLoading) return;
+    setTriggerSummaryLoading(true);
+    setTriggerSummaryResult(null);
+    try {
+      const res = await fetch("/api/admin/daily-summary/trigger", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to trigger summary");
+      setTriggerSummaryResult(`${data.slot2} · ${data.slot3} · ${data.slot4}`);
+      showToast("Admin summary triggered", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to trigger summary";
+      setTriggerSummaryResult(message);
+      showToast(message, "error");
+    } finally {
+      setTriggerSummaryLoading(false);
+    }
+  }, [triggerSummaryLoading]);
 
   // initial fetch and when filters change
   useEffect(() => {
@@ -1076,6 +1097,25 @@ export default function ReceiptsAdminClient({
   };
   return (
     <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleTriggerSummary}
+            disabled={triggerSummaryLoading}
+            className={`rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+              triggerSummaryLoading
+                ? "border-white/20 bg-slate-900 text-slate-400 cursor-wait"
+                : "border-emerald-500 text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/10"
+            }`}
+          >
+            {triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now"}
+          </button>
+          {triggerSummaryResult && (
+            <p className="text-xs text-slate-400">
+              {triggerSummaryResult}
+            </p>
+          )}
+        </div>
         <ReceiptsSummary
           summary={summaryForDisplay ?? null}
           loading={summaryLoading}
