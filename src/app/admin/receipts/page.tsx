@@ -1,4 +1,5 @@
 import React from "react";
+import { headers } from "next/headers";
 import ReceiptsAdminClient from "@/app/receipts/ReceiptsAdminClient";
 import { absUrl, withParams } from "@/lib/abs-url";
 
@@ -7,7 +8,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminReceiptsPage() {
   try {
     const apiUrl = await absUrl("/api/receipts");
-    const res = await fetch(withParams(apiUrl, { includeItems: true }), { cache: "no-store" });
+    const incomingHeaders = headers();
+    const cookieHeader = incomingHeaders.get("cookie") ?? undefined;
+    const res = await fetch(withParams(apiUrl, { includeItems: true }), {
+      cache: "no-store",
+      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+    });
     const j = await res.json();
     const receipts = j.receipts || [];
     return (
