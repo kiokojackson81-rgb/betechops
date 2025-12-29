@@ -1035,7 +1035,7 @@ export default function ReceiptsAdminClient({
 
     const itemsCount = rows.reduce((sum, row) => {
       const itemList = Array.isArray(row.items) ? row.items : [];
-      return sum + itemList.reduce((sub, item) => sub + (Number(item?.quantity ?? 1) || 0), 0);
+      return sum + itemList.length;
     }, 0);
 
     const totalSales = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
