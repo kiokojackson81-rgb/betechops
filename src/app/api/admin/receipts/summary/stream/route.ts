@@ -3,14 +3,25 @@ import { computeAdminReceiptSummary, normalizePaymentMethod } from "@/lib/adminR
 import { subscribeSummary } from "@/lib/receiptSseBroker";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { parseDateParam } from "@/lib/dateRange";
+import { resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const attendantId = url.searchParams.get("attendantId") || undefined;
   const paymentMethod = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
+  const docType = url.searchParams.get("docType") || undefined;
+  const search = url.searchParams.get("q") || undefined;
+  const scopeParam = url.searchParams.get("scope");
+  const scope = scopeParam === "global" ? "global" : "mine";
   const period = getTradingPeriodFor(new Date());
   const start = parseDateParam(url.searchParams.get("start"), period.start);
   const end = parseDateParam(url.searchParams.get("end"), period.end, true);
+  const identity = await resolveTargetUserId(request);
+  const userId = identity.resolvedUserId;
+
+  if (scope === "mine" && !userId) {
+    return new Response(null, { status: 401 });
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -18,27 +29,34 @@ export async function GET(request: NextRequest) {
 
       const sendSnapshot = async () => {
         try {
-          const snapshot = await computeAdminReceiptSummary({ start, end, attendantId, paymentMethod });
+          const snapshot = await computeAdminReceiptSummary({
+            start,
+            end,
+            attendantId,
+            paymentMethod,
+            docType,
+            search,
+            scope,
+            currentUserId: userId,
+          });
           const payload = JSON.stringify(snapshot);
           controller.enqueue(`data: ${payload}\n\n`);
         } catch (err) {
           console.error("[admin/receipts/summary/stream] compute error", err);
           try {
-            controller.enqueue(`event: error\ndata: ${JSON.stringify({ error: 'compute_failed' })}\n\n`);
+            controller.enqueue(`event: error\ndata: ${JSON.stringify({ error: "compute_failed" })}\n\n`);
           } catch {}
         }
       };
 
       await sendSnapshot();
 
-      // subscribe to broker so we can push updates immediately when receipts are created
       const onPublish = () => {
         if (closed) return;
         void sendSnapshot();
       };
       const unsubscribe = subscribeSummary(onPublish);
 
-      // fallback periodic poll every 10s
       const iv = setInterval(() => {
         if (closed) return;
         void sendSnapshot();

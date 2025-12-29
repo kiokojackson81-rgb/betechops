@@ -448,6 +448,13 @@ export default function ReceiptsAdminClient({
       if (appliedFilters.attendantId) {
         params.set("attendantId", appliedFilters.attendantId);
       }
+      if (appliedFilters.docType) {
+        params.set("docType", appliedFilters.docType);
+      }
+      if (appliedFilters.q.trim()) {
+        params.set("q", appliedFilters.q.trim());
+      }
+      params.set("scope", scopeMode);
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -479,7 +486,7 @@ export default function ReceiptsAdminClient({
     } finally {
       setSummaryLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, scopeMode]);
 
   // initial fetch and when filters change
   useEffect(() => {
@@ -528,6 +535,9 @@ export default function ReceiptsAdminClient({
         if (endParam) params.set("end", endParam);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
+        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
+        params.set("scope", scopeMode);
         const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
 
       try {
@@ -601,7 +611,7 @@ export default function ReceiptsAdminClient({
       } catch {}
       sseEsRef.current = null;
     };
-  }, [sseEnabled, sseOn, appliedFilters]);
+  }, [sseEnabled, sseOn, appliedFilters, scopeMode]);
 
   const persistFilterValues = (nextFilters: FilterState) => {
     try {

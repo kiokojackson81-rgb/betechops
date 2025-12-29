@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { Prisma } from "@prisma/client";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -23,6 +24,8 @@ export type AdminReceiptSummary = {
   totalSales: number;
   totalCost: number;
   totalProfit: number;
+  totalProfitPriced: number;
+  totalProfitInclusive: number;
   receiptsCount: number;
   itemsCount: number;
   hasCompleteCosts: boolean;
@@ -40,18 +43,6 @@ export const normalizePaymentMethod = (value: string | null | undefined): "MPESA
 const sumItemQuantities = (items: Array<{ quantity?: number } | null>): number =>
   items.reduce((sum, item) => sum + (Number(item?.quantity ?? 1) || 0), 0);
 
-const buildPosReceiptFilter = (attendantId?: string) => {
-  const base: any = {};
-  if (attendantId) {
-    base.OR = [
-      { order: { attendantId } },
-      { issuedById: attendantId },
-      { data: { path: ["attendantId"], equals: attendantId } },
-    ];
-  }
-  return base;
-};
-
 const buildReceiptKey = (source: Source, receiptNumber: string | null | undefined, fallbackId: string) => {
   const normalized = receiptNumber ? canonicalReceiptNumber(receiptNumber) : null;
   if (normalized) return `num:${normalized}`;
@@ -63,36 +54,122 @@ type SummaryOptions = {
   end: Date;
   attendantId?: string;
   paymentMethod?: "MPESA" | "CASH" | null;
+  search?: string;
+  docType?: string;
+  scope?: "mine" | "global";
+  currentUserId?: string | null;
 };
 
-export async function computeAdminReceiptSummary({ start, end, attendantId, paymentMethod }: SummaryOptions) {
-  const dailyEntryFilter: any = {
-    date: { gte: start, lte: end },
-  };
-  if (attendantId) {
-    dailyEntryFilter.submittedById = attendantId;
-  }
+const buildPosSearchOr = (q: string): Prisma.ReceiptWhereInput[] => [
+  { order: { customerName: { contains: q, mode: "insensitive" } } },
+  { order: { customerPhone: { contains: q, mode: "insensitive" } } },
+  { order: { customerEmail: { contains: q, mode: "insensitive" } } },
+  { order: { orderNumber: { contains: q, mode: "insensitive" } } },
+  { order: { attendant: { name: { contains: q, mode: "insensitive" } } } },
+  { issuedBy: { name: { contains: q, mode: "insensitive" } } },
+];
+
+const buildMarketingSupportSearchOr = (q: string): Prisma.MarketingReceiptWhereInput["OR"] => [
+  { receiptNumber: { contains: q, mode: "insensitive" } },
+  { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
+  { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
+];
+
+const buildPosScopeCondition = (userId?: string): Prisma.ReceiptWhereInput[] => {
+  if (!userId) return [];
+  return [
+    { issuedById: userId },
+    { order: { attendantId: userId } },
+    { data: { path: ["attendantId"], equals: userId } },
+  ];
+};
+
+export async function computeAdminReceiptSummary({
+  start,
+  end,
+  attendantId,
+  paymentMethod,
+  search,
+  docType,
+  scope = "global",
+  currentUserId,
+}: SummaryOptions) {
+  const normalizedDocType = docType ? docType.toUpperCase() : undefined;
+  const isMarketingDocType = normalizedDocType === "MARKETING";
+  const isSupportDocType = normalizedDocType === "SUPPORT";
+  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
+  const includeSupportReceipts = !normalizedDocType || isSupportDocType;
 
   const posWhere: any = {
     generatedAt: { gte: start, lte: end },
-    ...buildPosReceiptFilter(attendantId),
   };
+  if (normalizedDocType && includePosReceipts) {
+    posWhere.docType = normalizedDocType;
+  }
+  if (search) {
+    posWhere.OR = [...(posWhere.OR ?? []), ...buildPosSearchOr(search)];
+  }
+  if (scope === "mine") {
+    const ownerOr = buildPosScopeCondition(currentUserId);
+    if (ownerOr.length) {
+      posWhere.AND = [...(posWhere.AND ?? []), { OR: ownerOr }];
+    }
+  } else if (attendantId) {
+    const ownerOr = buildPosScopeCondition(attendantId);
+    if (ownerOr.length) {
+      posWhere.AND = [...(posWhere.AND ?? []), { OR: ownerOr }];
+    }
+  }
+  if (paymentMethod) {
+    posWhere.data ??= {};
+    posWhere.data.path = ["paymentMethod"];
+    posWhere.data.equals = paymentMethod;
+  }
+
+  const dailyEntryFilter: any = {
+    date: { gte: start, lte: end },
+  };
+  if (scope === "mine") {
+    dailyEntryFilter.submittedById = currentUserId ?? attendantId ?? undefined;
+  } else if (attendantId) {
+    dailyEntryFilter.submittedById = attendantId;
+  }
+  if (search) {
+    dailyEntryFilter.OR = buildMarketingSupportSearchOr(search);
+  }
+
+  if (paymentMethod) {
+    dailyEntryFilter.paymentMethod = paymentMethod;
+  }
 
   const [marketingReceipts, supportReceipts, posReceipts] = await Promise.all([
-    prisma.marketingReceipt.findMany({ where: { dailyEntry: dailyEntryFilter }, include: { items: true } }),
-    prisma.supportReceipt.findMany({ where: { dailyEntry: dailyEntryFilter }, include: { items: true } }),
-    prisma.receipt.findMany({
-      where: posWhere,
-      include: {
-        order: {
+    includeMarketingReceipts
+      ? prisma.marketingReceipt.findMany({
+          where: dailyEntryFilter,
+          include: { items: true },
+        })
+      : [],
+    includeSupportReceipts
+      ? prisma.supportReceipt.findMany({
+          where: dailyEntryFilter,
+          include: { items: true },
+        })
+      : [],
+    includePosReceipts
+      ? prisma.receipt.findMany({
+          where: posWhere,
           include: {
-            items: {
-              select: { quantity: true },
+            order: {
+              include: {
+                items: {
+                  select: { quantity: true },
+                },
+              },
             },
           },
-        },
-      },
-    }),
+        })
+      : [],
   ]);
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
@@ -199,8 +276,6 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
   const receiptsCount = filteredRecords.length;
 
   let totalCost = 0;
-  // totalProfitPriced: sum of profits for receipts that have cost data
-  // totalProfitInclusive: sum of per-receipt profits where missing-cost receipts contribute 0
   let totalProfitPriced = 0;
   let totalProfitInclusive = 0;
   let awaitingPricingCount = 0;
@@ -234,9 +309,7 @@ export async function computeAdminReceiptSummary({ start, end, attendantId, paym
   return {
     totalSales,
     totalCost,
-    // backward-compatible: keep `totalProfit` as inclusive sum
     totalProfit: totalProfitInclusive,
-    // explicit fields for clarity
     totalProfitPriced,
     totalProfitInclusive,
     receiptsCount,
