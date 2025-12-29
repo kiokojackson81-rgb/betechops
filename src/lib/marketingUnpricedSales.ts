@@ -113,5 +113,8 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
     })
     .filter(Boolean) as UnpricedSale[];
 
-  return [...marketingSales, ...supportSales];
+  // Exclude support receipts with zero sellingTotal from the unpriced list
+  const filteredSupportSales = supportSales.filter((s) => (s.receiptTotal ?? 0) > 0);
+
+  return [...marketingSales, ...filteredSupportSales];
 }
