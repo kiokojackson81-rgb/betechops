@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { prisma } from "../src/lib/prisma";
+import { prisma } from "../src/lib/prisma.ts";
 
 async function main() {
   const arg = process.argv[2];
