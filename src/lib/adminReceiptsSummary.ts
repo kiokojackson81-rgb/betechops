@@ -173,7 +173,7 @@ export async function computeAdminReceiptSummary({
   ]);
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
-    source: "marketing",
+    source: "marketing" as const,
     key: buildReceiptKey("marketing", receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
@@ -182,7 +182,7 @@ export async function computeAdminReceiptSummary({
   }));
 
   const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
-    source: "support",
+    source: "support" as const,
     key: buildReceiptKey("support", receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
@@ -193,7 +193,7 @@ export async function computeAdminReceiptSummary({
   const posRecords: ReceiptSummaryRecord[] = posReceipts.map((receipt) => {
     const orderRef = receipt.order?.orderNumber ?? null;
     return {
-      source: "pos",
+      source: "pos" as const,
       key: buildReceiptKey("pos", orderRef, receipt.id),
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
