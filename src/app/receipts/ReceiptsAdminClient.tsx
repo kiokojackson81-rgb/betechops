@@ -1002,22 +1002,6 @@ export default function ReceiptsAdminClient({
       : quickRange === "this-week"
       ? "This week"
       : "Custom range";
-  const profitColorClass =
-    (summaryTotals?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
-  const summarySalesLabel = summaryLoading
-    ? "Loading..."
-    : formatCurrency(summaryTotals?.totalSales ?? 0);
-  const summaryProfitLabel = summaryLoading
-    ? "Loading..."
-    : formatCurrency(summaryTotals?.totalProfit ?? 0);
-  const formattedRangeStart = formatRangeLabel(appliedFilters.start);
-  const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
-  const rangeDisplay =
-    formattedRangeStart && formattedRangeEnd
-      ? formattedRangeStart === formattedRangeEnd
-        ? formattedRangeStart
-        : `${formattedRangeStart} - ${formattedRangeEnd}`
-      : rangeLabelText;
   const partialTotals = useMemo(() => {
     const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
     rows.forEach((row) => {
@@ -1029,24 +1013,81 @@ export default function ReceiptsAdminClient({
     });
     return totals;
   }, [rows]);
+  const derivedSummary = useMemo(() => {
+    const paymentTotals = rows.reduce(
+      (acc, row) => {
+        const method = row.paymentMethod ?? "";
+        const amount = Number(row.total ?? 0);
+        if (method === "MPESA") {
+          acc.mpesa.totalSales += amount;
+          acc.mpesa.count += 1;
+        } else if (method === "CASH") {
+          acc.cash.totalSales += amount;
+          acc.cash.count += 1;
+        }
+        return acc;
+      },
+      {
+        mpesa: { totalSales: 0, count: 0 },
+        cash: { totalSales: 0, count: 0 },
+      } as PaymentTotals,
+    );
+
+    const itemsCount = rows.reduce((sum, row) => {
+      const itemList = Array.isArray(row.items) ? row.items : [];
+      return sum + itemList.reduce((sub, item) => sub + (Number(item?.quantity ?? 1) || 0), 0);
+    }, 0);
+
+    const totalSales = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    return {
+      totalSales,
+      totalCost: 0,
+      totalProfit: totalSales,
+      totalProfitPriced: totalSales,
+      totalProfitInclusive: totalSales,
+      receiptsCount: rows.length,
+      itemsCount,
+      hasCompleteCosts: rows.length === 0,
+      awaitingPricingCount: 0,
+      paymentTotals,
+    };
+  }, [rows]);
+  const shouldUseDerivedSummary = rows.length > 0 && (!summaryTotals || summaryTotals.totalSales === 0);
+  const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
+  const summarySalesLabel = summaryLoading
+    ? "Loading..."
+    : formatCurrency(summaryForDisplay?.totalSales ?? 0);
+  const summaryProfitLabel = summaryLoading
+    ? "Loading..."
+    : formatCurrency(summaryForDisplay?.totalProfit ?? 0);
+  const profitColorClass =
+    (summaryForDisplay?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
+  const formattedRangeStart = formatRangeLabel(appliedFilters.start);
+  const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
+  const rangeDisplay =
+    formattedRangeStart && formattedRangeEnd
+      ? formattedRangeStart === formattedRangeEnd
+        ? formattedRangeStart
+        : `${formattedRangeStart} - ${formattedRangeEnd}`
+      : rangeLabelText;
   const handlePaymentMethodSelect = (method: "" | "MPESA" | "CASH") => {
     const next = appliedFilters.paymentMethod === method ? "" : method;
     applyFilters({ paymentMethod: next });
   };
   return (
     <div className="space-y-6">
-      <ReceiptsSummary
-        summary={summaryTotals ?? null}
-        loading={summaryLoading}
-        quickRange={quickRange}
-        onApplyQuickRange={(k) => applyQuickRange(k)}
-        sseOn={sseOn && sseEnabled}
-        sseStatus={sseStatus}
-        onToggleSse={(v: boolean) => setSseOn(v)}
-        rangeLabel={rangeDisplay}
-      />
-      <PaymentMethodFilterCard
-        totals={summaryTotals?.paymentTotals ?? null}
+        <ReceiptsSummary
+          summary={summaryForDisplay ?? null}
+          loading={summaryLoading}
+          quickRange={quickRange}
+          onApplyQuickRange={(k) => applyQuickRange(k)}
+          sseOn={sseOn && sseEnabled}
+          sseStatus={sseStatus}
+          onToggleSse={(v: boolean) => setSseOn(v)}
+          rangeLabel={rangeDisplay}
+        />
+        <PaymentMethodFilterCard
+          totals={summaryForDisplay?.paymentTotals ?? null}
         partialTotals={partialTotals}
         activeMethod={appliedFilters.paymentMethod}
         loading={summaryLoading}
