@@ -6,6 +6,7 @@ import Button from "@/app/_components/Button";
 import Modal from "@/app/_components/Modal";
 import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import { computeRowStatus } from "@/lib/dailyReportHelpers";
+import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 
@@ -85,6 +86,14 @@ export default function AdminDailyReportPage() {
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const [showReceiptsPanel, setShowReceiptsPanel] = useState(false);
+  const [impersonateReceiptsSummary, setImpersonateReceiptsSummary] = useState<{
+    totalSales: number;
+    totalProfit: number;
+    totalReceipts: number;
+    totalItems: number;
+  } | null>(null);
   const [exportScope, setExportScope] = useState<"page" | "all" | "json">("all");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string>("");
@@ -181,6 +190,32 @@ export default function AdminDailyReportPage() {
     { label: "Customers purchased", value: agg.totalPurchasesMade.toLocaleString() },
   ];
 
+  // If impersonating an attendant, show quick receipts summary and allow viewing receipts
+  const impersonatePanel = impersonateId ? (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-400">Impersonated attendant receipts</p>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Total sales (KES)</p>
+          <p className="text-lg font-semibold text-emerald-300">KES {(impersonateReceiptsSummary?.totalSales ?? 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Total receipts</p>
+          <p className="text-lg font-semibold text-emerald-300">{impersonateReceiptsSummary?.totalReceipts ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Products sold</p>
+          <p className="text-lg font-semibold text-emerald-300">{impersonateReceiptsSummary?.totalItems ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 flex items-center justify-center">
+          <button className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black" onClick={() => setShowReceiptsPanel((s) => !s)}>
+            {showReceiptsPanel ? "Hide receipts" : "View receipts"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const scopeOptions: { label: string; value: "page" | "all" | "json" }[] = [
     { label: "Current page", value: "page" },
     { label: "All filtered", value: "all" },
@@ -200,6 +235,30 @@ export default function AdminDailyReportPage() {
   useEffect(() => {
     void fetchReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const imp = params.get("impersonateId");
+    if (!imp) return;
+    setImpersonateId(imp);
+    (async () => {
+      try {
+        const res = await fetch(`/api/attendant/earnings/summary?impersonateId=${encodeURIComponent(imp)}`, { cache: "no-store", credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data) return;
+        setImpersonateReceiptsSummary({
+          totalSales: Number(data.totalSales ?? 0),
+          totalProfit: Number(data.totalProfit ?? 0),
+          totalReceipts: Number(data.totalReceipts ?? 0),
+          totalItems: Number(data.totalItems ?? 0),
+        });
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
   // If the admin is impersonating a user via query param, fetch the
@@ -666,6 +725,42 @@ export default function AdminDailyReportPage() {
             </div>
           </div>
         </section>
+
+        {/* Impersonation receipts summary + receipts panel */}
+        {impersonateId && (
+          <section className={`${shellCard} p-4`}>            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Impersonated attendant receipts</p>
+                <p className="text-sm text-slate-300">Showing receipts summary for the impersonated user for this trading period.</p>
+              </div>
+              <div>
+                <button className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black" onClick={() => setShowReceiptsPanel((s) => !s)}>
+                  {showReceiptsPanel ? "Hide receipts" : "View receipts"}
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Total sales (KES)</div>
+                <div className="mt-1 text-lg font-semibold text-emerald-300">KES {(impersonateReceiptsSummary?.totalSales ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Total receipts</div>
+                <div className="mt-1 text-lg font-semibold text-emerald-300">{impersonateReceiptsSummary?.totalReceipts ?? 0}</div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Products sold</div>
+                <div className="mt-1 text-lg font-semibold text-emerald-300">{impersonateReceiptsSummary?.totalItems ?? 0}</div>
+              </div>
+            </div>
+            {showReceiptsPanel && (
+              <div className="mt-4">
+                <DailyReportReceiptsPanel start={from} end={to} attendantId={impersonateId} />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* KPI grid */}
         <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">

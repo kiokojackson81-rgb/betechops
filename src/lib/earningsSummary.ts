@@ -117,9 +117,11 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   }
   let mergedSales = 0;
   let mergedProfit = 0;
+  let mergedItems = 0;
   for (const [, v] of merged) {
     mergedSales += v.sales;
     mergedProfit += v.profit;
+    mergedItems += v.items ?? 0;
   }
 
   // Prefer the larger of snapshot-derived totals and marketing+support merged totals
@@ -218,8 +220,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalNewProducts: newProducts,
     totalEditedProducts: editedProducts,
     totalCopiedProducts: copiedProducts,
-    totalItems: 0,
-    totalReceipts: 0,
+    totalItems: mergedItems || 0,
+    totalReceipts: merged.size || 0,
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
