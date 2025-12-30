@@ -8,7 +8,12 @@ export async function GET() {
   const { summary, start, payload } = result;
   const summaryDate = start.toISOString().slice(0, 10);
 
-  const chatrace = await pushInternalDailySummary({
+  console.log('[adminSummary][cron] summaryDate=', summaryDate);
+  console.log('[adminSummary][cron] payloadText=', payload.summaryText);
+
+  let chatrace: any = null;
+  try {
+    chatrace = await pushInternalDailySummary({
     requestId: `daily-${summaryDate}`,
     dateLabel: summaryDate,
     totalReceipts: String(summary.receiptsCount),
@@ -17,6 +22,11 @@ export async function GET() {
     totalMpesa: String(summary.paymentTotals.mpesa.totalSales),
     totalCash: String(summary.paymentTotals.cash.totalSales),
   });
+  } catch (e) {
+    console.error('[adminSummary][cron] pushInternalDailySummary failed', e instanceof Error ? e.message : e);
+  }
+
+  console.log('[adminSummary][cron] chatrace result=', chatrace && chatrace.debug ? chatrace.debug : chatrace);
 
   return NextResponse.json({
     ok: true,
