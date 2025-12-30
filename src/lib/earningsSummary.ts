@@ -195,6 +195,50 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     }
   }
 
+  // Attempt to load any existing CommissionLedger for this attendant/period.
+  // Some ledgers were created with period boundaries normalized to local
+  // midnight (YYYY-MM-DD 00:00:00) while others use TZ-normalized bounds
+  // (e.g., 21:00:00Z). Try both exact periodStart/periodEnd and also look
+  // for a matching `detail.marketing.periodKey` to find overlapping ledgers.
+  let ledger: { grossCommission: number; netCommission: number; penalties: number; detail: unknown } | null = null;
+  try {
+    const exact = await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: opts.userId,
+          periodStart: tradingPeriod.start,
+          periodEnd: tradingPeriod.end,
+        },
+      },
+    });
+    let found: any = exact ?? null;
+    if (!found) {
+      const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
+      const res: any = await prisma.$queryRaw`
+        SELECT id, "grossCommission", "netCommission", "penalties", detail
+        FROM "CommissionLedger"
+        WHERE "userId" = ${opts.userId}
+          AND (
+            (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
+            OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
+          )
+        LIMIT 1
+      `;
+      if (Array.isArray(res) && res.length > 0) found = res[0];
+    }
+    if (found) {
+      ledger = {
+        grossCommission: Number(found.grossCommission ?? 0),
+        netCommission: Number(found.netCommission ?? 0),
+        penalties: Number(found.penalties ?? 0),
+        detail: found.detail ?? null,
+      };
+    }
+  } catch (err) {
+    // best-effort: if ledger lookup fails, proceed with computed values
+    ledger = null;
+  }
+
   // For the attendant-facing earnings summary we use the default behaviour
   // (which applies the configured profit-fallback percent) so this endpoint
   // mirrors previous commission calculations.
@@ -206,10 +250,15 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     editedProducts,
   });
 
-  const grossCommission =
+  const computedGrossCommission =
     salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
 
-  const totalEarnings = baseSalary + transportAllowance + grossCommission + bonusTotal;
+  // If a persisted ledger exists, prefer its grossCommission as the authoritative
+  // commission total and use it to compute earnings/net pay so the payroll UI
+  // mirrors the ledger-backed numbers shown in the front-end dashboard.
+  const finalGrossCommission = ledger ? ledger.grossCommission : computedGrossCommission;
+
+  const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
@@ -231,8 +280,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     newProductCommission,
     copiedCommission,
     editedCommission,
-    grossCommission,
-    commission: grossCommission,
+    grossCommission: finalGrossCommission,
+    commission: finalGrossCommission,
     batteryEarnings: 0,
     bonusTotal,
     commissionTopUpTotal,
@@ -243,7 +292,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalEarnings,
     totalDeductions,
     netPay,
-    ledger: null,
+    ledger: ledger ? ledger : null,
     adjustmentEntries,
   };
 }

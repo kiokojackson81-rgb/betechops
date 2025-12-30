@@ -84,8 +84,60 @@ function calculateTierCommission(totalSales) {
     const tierCommission = calculateTierCommission(totalSales);
     const supportCommission = fallbackCommission + tierCommission;
 
+    // Guard: compute marketing profit for the same period and avoid creating
+    // support-ledger when support profit is implausibly larger than marketing
+    // profit (e.g., > 2x). This mirrors the server-side guard and prevents
+    // accidental fallback ledger creation from this script.
+    try {
+      const marketingEntries = await prisma.marketingDailyEntry.findMany({
+        where: { submittedById: userId, date: { gte: period.start, lte: period.end } },
+        include: { receipts: { include: { items: true } }, sales: true },
+      });
+
+      let marketingProfit = 0;
+      if (Array.isArray(marketingEntries) && marketingEntries.length > 0) {
+        for (const me of marketingEntries) {
+          if (Array.isArray(me.receipts) && me.receipts.length > 0) {
+            for (const r of me.receipts) {
+              const selling = Number(r.sellingTotal ?? 0);
+              const aggregateCost = Number(r.buyingTotal ?? 0);
+              if (aggregateCost > 0) {
+                marketingProfit += selling - aggregateCost;
+              } else if (Array.isArray(r.items) && r.items.length > 0) {
+                const itemCost = r.items.reduce((s, it) => s + Number(it.buyingPrice ?? 0), 0);
+                marketingProfit += selling - itemCost;
+              }
+            }
+          } else if (Array.isArray(me.sales) && me.sales.length > 0) {
+            for (const s of me.sales) {
+              const selling = Number(s.sellingPrice ?? 0);
+              const buying = Number(s.buyingPrice ?? 0);
+              if (buying > 0) marketingProfit += selling - buying;
+            }
+          } else {
+            marketingProfit += Number(me.totalProfit ?? 0);
+          }
+        }
+      }
+
+      if (marketingProfit > 0 && totalProfit > marketingProfit * 2) {
+        console.log('Support profit implausibly large compared to marketing profit; aborting ledger upsert');
+        return;
+      }
+    } catch (err) {
+      // best-effort guard; continue if check fails
+    }
+
     // upsert ledger support values
     const existingLedger = await prisma.commissionLedger.findUnique({ where: { userId_periodStart_periodEnd: { userId, periodStart: period.start, periodEnd: period.end } } });
+    // If an existing ledger already has marketing-derived commission, avoid
+    // letting support recompute overwrite it.
+    const detailValueCheck = existingLedger?.detail ?? {};
+    const existingMarketingComm = detailValueCheck && detailValueCheck.marketing ? Number(detailValueCheck.marketing.commission ?? 0) : 0;
+    if (existingMarketingComm > 0) {
+      console.log('Existing marketing commission present; skipping support-ledger upsert');
+      return;
+    }
     const detailValue = existingLedger?.detail ?? {};
     const previousSupportCommission = (detailValue && detailValue.support && typeof detailValue.support.commission === 'number') ? detailValue.support.commission : Number(detailValue.supportCommission ?? 0);
 
