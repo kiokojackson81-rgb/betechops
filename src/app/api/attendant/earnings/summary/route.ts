@@ -107,6 +107,7 @@ export async function GET(req: Request) {
     totalReceipts: combinedReceipts,
     walkInsServed: marketingSummary.totals.walkInsServed,
     walkInsPurchased: marketingSummary.totals.walkInsPurchased,
+    commission: grossCommission,
     ledger: ledger
       ? {
           grossCommission: Number(ledger.grossCommission),

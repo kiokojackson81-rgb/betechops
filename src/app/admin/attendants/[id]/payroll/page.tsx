@@ -34,13 +34,63 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
   const periodKey = period.key;
   const periodLabel = period.label;
 
+  const currentLedgerRaw =
+    (await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: attendantId,
+          periodStart: period.start,
+          periodEnd: period.end,
+        },
+      },
+    })) ?? null;
+
   // Prefer the more robust earnings summary implementation which tolerates
   // multiple periodKey formats and honours payroll adjustment kinds. Fall
   // back to the older marketing earnings helper if needed.
   let summary: any = null;
   try {
     const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: new Date() });
-    summary = { sales: userSummary.totalSales, netPay: userSummary.netPay, _raw: userSummary };
+    const ledgerDetail = currentLedgerRaw?.detail as Record<string, any> | undefined;
+    const marketingCommissionValue =
+      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
+    const supportCommissionValue =
+      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
+    let ledgerSalesCommission = marketingCommissionValue + supportCommissionValue;
+    if (ledgerSalesCommission === 0 && currentLedgerRaw) {
+      ledgerSalesCommission = Number(currentLedgerRaw.grossCommission ?? 0);
+    }
+    if (ledgerSalesCommission === 0) {
+      ledgerSalesCommission = userSummary.salesCommission;
+    }
+
+    const grossCommission =
+      ledgerSalesCommission +
+      userSummary.newProductCommission +
+      userSummary.copiedCommission +
+      userSummary.editedCommission +
+      userSummary.commissionTopUpTotal;
+
+    const bonusTotal = userSummary.bonusTotal ?? 0;
+    const totalDeductions =
+      userSummary.chamaTotal +
+      userSummary.latenessTotal +
+      userSummary.disciplineTotal +
+      userSummary.otherDeductionsTotal;
+    const totalEarnings =
+      userSummary.baseSalary + userSummary.transportAllowance + grossCommission + bonusTotal;
+    const netPay = totalEarnings - totalDeductions;
+
+    summary = {
+      ...userSummary,
+      salesCommission: ledgerSalesCommission,
+      grossCommission,
+      totalEarnings,
+      totalDeductions,
+      netPay,
+      commission: grossCommission,
+      sales: userSummary.totalSales,
+    };
   } catch (e) {
     // fallback to existing implementation if the new helper fails for any reason
     try {
@@ -57,16 +107,6 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
     where: { attendantId, periodKey: { in: adjustmentKeys } },
     orderBy: { createdAt: "desc" },
   });
-  const currentLedgerRaw =
-    (await prisma.commissionLedger.findUnique({
-      where: {
-        userId_periodStart_periodEnd: {
-          userId: attendantId,
-          periodStart: period.start,
-          periodEnd: period.end,
-        },
-      },
-    })) ?? null;
   const currentLedger =
     currentLedgerRaw === null
       ? null

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireRole, getActorId } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
+import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,62 @@ export async function GET(req: Request) {
   const periodLabel = period.label;
 
   try {
-    const summary = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });
+    const userSummary = await getEarningsSummaryForUser({ userId: attendantId });
+    const ledger = await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: attendantId,
+          periodStart: period.start,
+          periodEnd: period.end,
+        },
+      },
+    });
+
+    const detail = ledger?.detail as Record<string, any> | undefined;
+    const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
+    const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
+
+    let salesCommission = marketingCommission + supportCommission;
+    if (salesCommission === 0 && ledger) {
+      salesCommission = Number(ledger.grossCommission ?? 0);
+    }
+    if (salesCommission === 0) {
+      salesCommission = userSummary.salesCommission;
+    }
+
+    const grossCommission =
+      salesCommission +
+      userSummary.newProductCommission +
+      userSummary.copiedCommission +
+      userSummary.editedCommission +
+      userSummary.commissionTopUpTotal;
+
+    const totalEarnings =
+      userSummary.baseSalary + userSummary.transportAllowance + grossCommission + userSummary.bonusTotal;
+    const totalDeductions =
+      userSummary.chamaTotal +
+      userSummary.latenessTotal +
+      userSummary.disciplineTotal +
+      userSummary.otherDeductionsTotal;
+    const netPay = totalEarnings - totalDeductions;
+
+    const summary = {
+      periodKey,
+      periodLabel,
+      sales: userSummary.totalSales,
+      baseSalary: userSummary.baseSalary,
+      transportAllowance: userSummary.transportAllowance,
+      commission: grossCommission,
+      bonusTotal: userSummary.bonusTotal,
+      chamaTotal: userSummary.chamaTotal,
+      latenessTotal: userSummary.latenessTotal,
+      disciplineTotal: userSummary.disciplineTotal,
+      otherDeductionsTotal: userSummary.otherDeductionsTotal,
+      totalEarnings,
+      totalDeductions,
+      netPay,
+    };
+
     return NextResponse.json({ periodKey, periodLabel, summary });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to compute earnings";
