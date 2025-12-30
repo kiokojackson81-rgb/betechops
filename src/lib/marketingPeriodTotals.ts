@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { COMMISSION_LADDER } from "@/lib/commissionCommon";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -328,15 +329,70 @@ export async function recomputeMarketingCommissionLedger(opts: {
   const period = opts.period ?? getTradingPeriodFor(opts.date ?? new Date());
 
   const { totals } = await summarizeMarketingReportsForPeriod({ userId, period, client });
+  // Direct sales commission rule (new):
+  // Part A: For the first KES 500,000 in sales, commission = 5% * profitWithinFirst500k
+  // Part B: For sales above 500k, commission accrues toward the next ladder target
+  // (prorated portion of that tier reward). Completed tier rewards are fully applied.
   let marketingCommission = 0;
-  if (totals.totalProfit > 0) {
-    const commissionInfo = getCommissionSummaryForSales(totals.totalSales);
-    const baseCommission = commissionInfo.commission ?? 0;
-    const fallbackCommission =
-      baseCommission === 0 && totals.totalSales > 0 && totals.totalSales < 500_000
-        ? Math.round(Math.max(totals.totalProfit, 0) * 0.05)
-        : 0;
-    marketingCommission = baseCommission > 0 ? baseCommission : fallbackCommission;
+  const totalSales = totals.totalSales ?? 0;
+  const totalProfit = totals.totalProfit ?? 0;
+
+  if (totalSales <= 0) {
+    marketingCommission = 0;
+  } else if (totalSales <= 500_000) {
+    // All sales are within the base band — commission is 5% of profit (profit may be 0 if unpriced)
+    marketingCommission = Math.round((Math.max(totalProfit, 0) || 0) * 0.05);
+  } else {
+    // Sales above 500k: compute base = 5% of profit attributable to the first 500k.
+    // Estimate profit portion proportionally when per-receipt profit is not available.
+    const profitPortion = totalProfit > 0 ? Math.min((500_000 / totalSales) * totalProfit, totalProfit) : 0;
+    const baseCommission = Math.round(profitPortion * 0.05);
+
+    // Now compute completed tier rewards + prorated reward for current band.
+    let additional = 0;
+    const ladder = [...COMMISSION_LADDER].sort((a, b) => a.min - b.min);
+
+    if (ladder.length === 0) {
+      marketingCommission = baseCommission;
+    } else {
+      // First band: 500k -> first ladder min (e.g., 1,000,000)
+      const firstMin = ladder[0].min;
+      if (totalSales <= firstMin) {
+        const bandSize = firstMin - 500_000;
+        const progress = Math.max(0, Math.min(totalSales - 500_000, bandSize));
+        const progressPercent = bandSize > 0 ? progress / bandSize : 0;
+        additional += Math.round((ladder[0].reward || 0) * progressPercent);
+      } else {
+        // fully reached first tier reward
+        additional += ladder[0].reward || 0;
+
+        // subsequent bands between ladder tiers
+        for (let i = 0; i < ladder.length - 1; i++) {
+          const start = ladder[i].min;
+          const end = ladder[i + 1].min;
+          const reward = ladder[i + 1].reward || 0;
+          if (totalSales >= end) {
+            // fully reached this next tier
+            additional += reward;
+            continue;
+          }
+          if (totalSales > start) {
+            const bandSize = end - start;
+            const progress = Math.max(0, Math.min(totalSales - start, bandSize));
+            const progressPercent = bandSize > 0 ? progress / bandSize : 0;
+            additional += Math.round(reward * progressPercent);
+          }
+          break;
+        }
+
+        // If beyond the last ladder entry, ensure last reward included
+        if (totalSales >= ladder[ladder.length - 1].min) {
+          additional += ladder[ladder.length - 1].reward || 0;
+        }
+      }
+
+      marketingCommission = baseCommission + additional;
+    }
   }
 
   if (marketingCommission === 0 && totals.totalSales === 0) {
