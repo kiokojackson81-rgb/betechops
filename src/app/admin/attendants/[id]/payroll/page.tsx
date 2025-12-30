@@ -57,7 +57,7 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
     where: { attendantId, periodKey: { in: adjustmentKeys } },
     orderBy: { createdAt: "desc" },
   });
-  const currentLedger =
+  const currentLedgerRaw =
     (await prisma.commissionLedger.findUnique({
       where: {
         userId_periodStart_periodEnd: {
@@ -67,10 +67,30 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
         },
       },
     })) ?? null;
+  const currentLedger =
+    currentLedgerRaw === null
+      ? null
+      : {
+          commissionDirect: Number(currentLedgerRaw.commissionDirect ?? 0),
+          commissionMarketplaceJumia: Number(currentLedgerRaw.commissionMarketplaceJumia ?? 0),
+          commissionMarketplaceKilimall: Number(currentLedgerRaw.commissionMarketplaceKilimall ?? 0),
+          netCommission: Number(currentLedgerRaw.netCommission ?? 0),
+          commissionBreakdown:
+            typeof currentLedgerRaw.commissionBreakdown === "object" && currentLedgerRaw.commissionBreakdown !== null
+              ? (Object.fromEntries(
+                  Object.entries(currentLedgerRaw.commissionBreakdown as Record<string, unknown>).map(([key, value]) => [
+                    key,
+                    typeof value === "object" && value !== null && "toNumber" in (value as any)
+                      ? Number((value as any).toNumber())
+                      : Number(value ?? 0),
+                  ]),
+                ) as Record<string, number>)
+              : {},
+        };
 
   const recentPeriods = getRecentTradingPeriods(2);
   const previousPeriod = recentPeriods.length > 1 ? recentPeriods[1] : null;
-  const previousLedger =
+  const previousLedgerRaw =
     previousPeriod &&
     (await prisma.commissionLedger.findUnique({
       where: {
@@ -81,6 +101,9 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
         },
       },
     }));
+  const previousLedger = previousLedgerRaw
+    ? { netCommission: Number(previousLedgerRaw.netCommission ?? 0) }
+    : null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
