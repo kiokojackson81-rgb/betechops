@@ -50,21 +50,31 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
   try {
     if (receipt?.order?.orderNumber) {
-      const supportReceipts = await prisma.supportReceipt.findMany({
-        where: { receiptNumber: receipt.order.orderNumber },
-        include: { items: true },
-      });
-      if (supportReceipts.length > 0) {
-        supportItems = supportReceipts.flatMap((sr) =>
-          sr.items.map((it) => ({
-            id: it.id,
-            buyingPrice: Number.isFinite(Number(it.buyingPrice ?? 0)) ? Number(it.buyingPrice ?? 0) : null,
-            productName: it.productName ?? null,
-          })),
-        );
-        // Prefer the first support receipt summary (there should normally be one)
-        const sr = supportReceipts[0];
-        supportReceiptSummary = { id: sr.id, buyingTotal: Number(sr.buyingTotal ?? 0) };
+      const candidates = new Set<string>();
+      candidates.add(receipt.order.orderNumber);
+      const normalizedOrderNumber = canonicalReceiptNumber(receipt.order.orderNumber);
+      if (normalizedOrderNumber) {
+        candidates.add(normalizedOrderNumber);
+      }
+      if (candidates.size > 0) {
+        const supportReceipts = await prisma.supportReceipt.findMany({
+          where: {
+            OR: Array.from(candidates).map((value) => ({ receiptNumber: value })),
+          },
+          include: { items: true },
+        });
+        if (supportReceipts.length > 0) {
+          supportItems = supportReceipts.flatMap((sr) =>
+            sr.items.map((it) => ({
+              id: it.id,
+              buyingPrice: Number.isFinite(Number(it.buyingPrice ?? 0)) ? Number(it.buyingPrice ?? 0) : null,
+              productName: it.productName ?? null,
+            })),
+          );
+          // Prefer the first support receipt summary (there should normally be one)
+          const sr = supportReceipts[0];
+          supportReceiptSummary = { id: sr.id, buyingTotal: Number(sr.buyingTotal ?? 0) };
+        }
       }
     }
   } catch (e) {
