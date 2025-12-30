@@ -100,12 +100,16 @@ export function computeSalesCommissionFromTiers(
   const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
 
   const firstTierMin = sorted[0].minSales;
-  if (totalSales < firstTierMin) {
-    if (!fallbackPercent || fallbackPercent <= 0) return 0;
-    return fallbackPercent * totalProfit;
-  }
+  const baseSalesCap = firstTierMin;
+  const profitWithinFirstBand =
+    totalSales > 0 ? (Math.min(totalSales, baseSalesCap) / totalSales) * totalProfit : 0;
+  const baseCommission =
+    fallbackPercent && fallbackPercent > 0 ? fallbackPercent * profitWithinFirstBand : 0;
 
-  let commission = 0;
+  let commission = baseCommission;
+  if (totalSales <= firstTierMin) {
+    return commission;
+  }
 
   // We treat each tier as a band. For band i we consider the range from
   // bandStart (previous band end or this tier.min for the first) up to bandEnd.
