@@ -24,7 +24,7 @@ export const parseDateParam = (value: string | null, fallback: Date, toEnd = fal
 
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return toEnd ? endOfDay(fallback) : startOfDay(fallback);
-    return toEnd ? endOfDay(parsed) : startOfDay(parsed);
+    return parsed;
   } catch (err) {
     return toEnd ? endOfDay(fallback) : startOfDay(fallback);
   }
