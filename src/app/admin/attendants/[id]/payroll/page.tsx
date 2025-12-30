@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import PayrollClient from "./PayrollClient";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, getRecentTradingPeriods } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
@@ -57,6 +57,30 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
     where: { attendantId, periodKey: { in: adjustmentKeys } },
     orderBy: { createdAt: "desc" },
   });
+  const currentLedger =
+    (await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: attendantId,
+          periodStart: period.start,
+          periodEnd: period.end,
+        },
+      },
+    })) ?? null;
+
+  const recentPeriods = getRecentTradingPeriods(2);
+  const previousPeriod = recentPeriods.length > 1 ? recentPeriods[1] : null;
+  const previousLedger =
+    previousPeriod &&
+    (await prisma.commissionLedger.findUnique({
+      where: {
+        userId_periodStart_periodEnd: {
+          userId: attendantId,
+          periodStart: previousPeriod.start,
+          periodEnd: previousPeriod.end,
+        },
+      },
+    }));
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -71,6 +95,8 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
         periodLabel={periodLabel}
         initialAdjustments={adjustments as any}
         initialSummary={summary}
+        ledger={currentLedger}
+        previousLedger={previousLedger ?? null}
       />
     </div>
   );

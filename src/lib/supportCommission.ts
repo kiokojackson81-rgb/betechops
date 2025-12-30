@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { summarizeMarketingReportsForPeriod } from "./marketingPeriodTotals";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -110,6 +111,28 @@ export async function recomputeSupportCommissionLedger(opts: {
   const tierInfo = getCommissionSummaryForSales(totals.totalSales ?? 0);
   const tierCommission = tierInfo.commission ?? 0;
   const supportCommission = fallbackCommission + tierCommission;
+
+  // Guard: if support-reported profit is implausibly larger than marketing
+  // profit for the same period, skip creating/upserting a support-derived
+  // ledger. This prevents support fallback ledgers (often from manual
+  // entries) from overriding authoritative marketing-based ledgers.
+  try {
+    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId, period });
+    const marketingProfit = Number((marketingSummary as any)?.totals?.totalProfit ?? 0);
+    // If marketing has non-zero profit and support profit is > 2x marketing profit,
+    // consider it implausible and abort ledger creation.
+    if (marketingProfit > 0 && totals.totalProfit > marketingProfit * 2) {
+      return {
+        updated: false,
+        supportCommission: 0,
+        totals,
+        period,
+        ledgerId: null,
+      };
+    }
+  } catch (err) {
+    // If the marketing summary check fails for any reason, continue with existing flow.
+  }
   if (dryRun) {
     return {
       updated: false,
@@ -134,6 +157,21 @@ export async function recomputeSupportCommissionLedger(opts: {
   const existingDetail: Record<string, any> = isRecord(detailValue)
     ? { ...(detailValue as Record<string, any>) }
     : {};
+  // If an existing ledger already contains a marketing-derived commission,
+  // do not allow support recompute to overwrite it. This avoids support
+  // fallbacks creating larger commissions that conflict with marketing data.
+  const existingMarketingCommission = isRecord(existingDetail.marketing)
+    ? Number(existingDetail.marketing?.commission ?? 0)
+    : 0;
+  if (existingMarketingCommission > 0) {
+    return {
+      updated: false,
+      supportCommission: 0,
+      totals,
+      period,
+      ledgerId: existingLedger?.id ?? null,
+    };
+  }
   const previousSupport = isRecord(existingDetail.support) ? existingDetail.support : null;
   const previousSupportCommission =
     typeof previousSupport?.commission === "number"

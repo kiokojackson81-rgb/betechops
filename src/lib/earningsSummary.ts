@@ -26,6 +26,7 @@ export type EarningsSummary = {
   copiedCommission: number;
   editedCommission: number;
   grossCommission: number;
+  commission?: number;
   batteryEarnings: number;
 
   bonusTotal: number;
@@ -231,6 +232,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     copiedCommission,
     editedCommission,
     grossCommission,
+    commission: grossCommission,
     batteryEarnings: 0,
     bonusTotal,
     commissionTopUpTotal,
