@@ -1,3 +1,7 @@
+process.env.TS_NODE_PROJECT = process.env.TS_NODE_PROJECT || "tsconfig.node.json";
+require("ts-node/register/transpile-only");
+require("tsconfig-paths/register");
+
 const { runAdminSummaryJob } = require("../src/lib/adminSummaryJob");
 
 async function main() {
