@@ -341,24 +341,39 @@ export default function PayrollClient({
           <div>
             <h3 className="text-sm font-semibold text-slate-200">Adjustments</h3>
             <div className="mt-2 space-y-2">
-              {adjustments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
-                  <div>
-                    <div className="text-sm">{a.label}</div>
-                    <div className="text-xs text-slate-400">{a.adjustmentType}</div>
+              {adjustments.map((a) => {
+                const kind = (a.adjustmentKind || a.kind || "DEDUCTION").toUpperCase();
+                const isAddition = kind === "ADDITION";
+                return (
+                  <div key={a.id} className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm">{a.label}</div>
+                        <div
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                            isAddition ? "bg-emerald-700 text-emerald-100" : "bg-rose-800 text-rose-100"
+                          }`}
+                        >
+                          {isAddition ? "Addition" : "Deduction"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-400">{a.adjustmentType}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`text-sm font-semibold ${isAddition ? "text-emerald-300" : "text-rose-300"}`}>
+                        {isAddition ? "KES " : "KES -"}{Math.abs(Number(a.amount || 0)).toLocaleString()}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteAdjustment(a.id)}
+                        className="text-xs rounded-full border border-red-600 px-2 py-1 text-rose-400 hover:bg-red-800/20"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-semibold text-slate-100">KES {a.amount.toLocaleString()}</div>
-                    <button
-                      type="button"
-                      onClick={() => deleteAdjustment(a.id)}
-                      className="text-xs rounded-full border border-red-600 px-2 py-1 text-rose-400 hover:bg-red-800/20"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {adjustments.length === 0 && <div className="text-xs text-slate-400">No adjustments for this period.</div>}
 
               <div className="mt-3 rounded-xl border border-white/5 bg-slate-900/50 p-3">
