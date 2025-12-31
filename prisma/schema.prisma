@@ -210,20 +210,20 @@ model MarketingSale {
 }
 
 model MarketingReceipt {
-  id            String              @id @default(cuid())
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id            String                 @id @default(cuid())
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
   dailyEntryId  String
   receiptNumber String?
-  receiptKey    String?              @unique
+  receiptKey    String?                @unique
   sellingTotal  Int
   paymentMethod PaymentMethod
-  buyingTotal   Int                 @default(0)
-  dailyEntry    MarketingDailyEntry @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  buyingTotal   Int                    @default(0)
+  dailyEntry    MarketingDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         MarketingReceiptItem[]
 
-  @@index([dailyEntryId])
   @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_marketing_receipt_in_entry")
+  @@index([dailyEntryId])
 }
 
 model MarketingReceiptItem {
@@ -285,8 +285,8 @@ model SupportReceipt {
   dailyEntry    SupportDailyEntry    @relation("SupportEntryReceipts", fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         SupportReceiptItem[] @relation("SupportReceiptItems")
 
-  @@index([dailyEntryId])
   @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_support_receipt_in_entry")
+  @@index([dailyEntryId])
 }
 
 model SupportReceiptItem {
@@ -861,7 +861,7 @@ model CommissionRecord {
 model Receipt {
   id                  String        @id @default(cuid())
   orderId             String        @unique
-  receiptNumber       String?       @unique
+  receiptNumber       String?       @unique @map("receipt_number")
   docType             DocType
   generatedAt         DateTime      @default(now())
   issuedById          String?
