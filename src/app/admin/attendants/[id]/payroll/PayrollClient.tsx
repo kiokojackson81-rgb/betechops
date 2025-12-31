@@ -67,8 +67,8 @@ export default function PayrollClient({
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
 
-  const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | "" }>(
-    { adjustmentType: "BONUS", label: "", amount: "" }
+  const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
+    { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
   );
   const commissionValue =
     initialSummary?.commission ??
@@ -189,6 +189,7 @@ export default function PayrollClient({
         adjustmentType: newAdjustment.adjustmentType,
         label: newAdjustment.label,
         amount: Number(newAdjustment.amount || 0),
+        adjustmentKind: newAdjustment.adjustmentKind ?? "DEDUCTION",
       };
       const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-adjustments`, {
         method: "POST",
@@ -366,7 +367,12 @@ export default function PayrollClient({
                     <label className="text-xs text-slate-400">Type</label>
                     <select
                       value={newAdjustment.adjustmentType}
-                      onChange={(e) => setNewAdjustment((s) => ({ ...s, adjustmentType: e.target.value }))}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        // default kind: bonuses and top-ups are additions, others are deductions
+                        const kind = t === "BONUS" || t === "COMMISSION_TOPUP" ? "ADDITION" : "DEDUCTION";
+                        setNewAdjustment((s) => ({ ...s, adjustmentType: t, adjustmentKind: kind }));
+                      }}
                       className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
                     >
                       <option value="CHAMA">Chama</option>
@@ -375,6 +381,17 @@ export default function PayrollClient({
                       <option value="BONUS">Bonus</option>
                       <option value="COMMISSION_TOPUP">Commission top-up</option>
                       <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">Kind</label>
+                    <select
+                      value={newAdjustment.adjustmentKind}
+                      onChange={(e) => setNewAdjustment((s) => ({ ...s, adjustmentKind: (e.target.value as any) }))}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
+                    >
+                      <option value="ADDITION">Addition</option>
+                      <option value="DEDUCTION">Deduction</option>
                     </select>
                   </div>
                   <div>
