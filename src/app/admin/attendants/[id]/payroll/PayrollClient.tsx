@@ -23,6 +23,7 @@ type Adjustment = {
   label: string;
   amount: number;
   adjustmentKind?: string | null;
+  kind?: string | null;
 };
 
 export default function PayrollClient({
