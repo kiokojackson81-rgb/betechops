@@ -55,6 +55,7 @@ type SupportEarningsSummary = {
   disciplineTotal: number;
   otherDeductionsTotal: number;
   netPay: number;
+  adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
 };
 
 const inputClasses =
