@@ -1,3 +1,47 @@
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const prisma = new PrismaClient();
+
+function normalize(v) {
+  if (!v) return null;
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (!t) return null;
+  return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+(async () => {
+  try {
+    console.log('Scanning receipts for duplicate canonical keys...');
+    const rows = await prisma.receipt.findMany({ select: { id: true, receiptNumber: true, createdAt: true, order: { select: { orderNumber: true } } } });
+    const map = new Map();
+    for (const r of rows) {
+      const key = normalize(r.receiptNumber) || normalize(r.order?.orderNumber) || r.id;
+      const arr = map.get(key) || [];
+      arr.push({ id: r.id, receiptNumber: r.receiptNumber, orderNumber: r.order?.orderNumber, createdAt: r.createdAt });
+      map.set(key, arr);
+    }
+
+    const duplicates = [];
+    for (const [key, items] of map.entries()) {
+      if (items.length > 1) {
+        duplicates.push({ key, count: items.length, items });
+      }
+    }
+
+    console.log(`Found ${duplicates.length} duplicate keys`);
+    const out = { generatedAt: new Date().toISOString(), duplicates };
+    fs.writeFileSync('duplicate-receipts-report.json', JSON.stringify(out, null, 2));
+    console.log('Wrote duplicate-receipts-report.json');
+    if (duplicates.length > 0) {
+      console.warn('Duplicates detected — please inspect duplicate-receipts-report.json');
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    await prisma.$disconnect();
+  }
+})();
 #!/usr/bin/env node
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
