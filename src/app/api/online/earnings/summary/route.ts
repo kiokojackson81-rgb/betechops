@@ -9,8 +9,12 @@ import {
 } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import {
+  computeSalesCommissionFromTiers,
+  getOrCreateCommissionPeriod,
+} from "@/lib/commission";
 import { normalizeReceiptId } from "@/lib/receiptKey";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -146,9 +150,16 @@ export async function GET(req: Request) {
   const userId = impersonateId ?? actorId;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  const isJeniffer = (user?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
+
   const now = new Date();
-  await getOrCreateCommissionPeriod(now);
+  const { tiers } = await getOrCreateCommissionPeriod(now);
   const period = getTradingPeriodFor(now);
+  const jenifferPosSummary = isJeniffer ? await summarizePosReceiptsForPeriod(period) : null;
 
   const [summary, marketingSummary, supportSummary] = await Promise.all([
     getEarningsSummaryForUser({ userId }),
@@ -300,10 +311,10 @@ export async function GET(req: Request) {
       }
     : undefined;
 
-  const combinedSales = dedupedTotals.totalSales;
-  const combinedProfit = dedupedTotals.totalProfit;
-  const combinedItems = dedupedTotals.totalItems;
-  const combinedReceipts = dedupedTotals.totalReceipts;
+  const combinedSales = jenifferPosSummary?.totalSales ?? dedupedTotals.totalSales;
+  const combinedProfit = jenifferPosSummary?.totalProfit ?? dedupedTotals.totalProfit;
+  const combinedItems = jenifferPosSummary?.totalItems ?? dedupedTotals.totalItems;
+  const combinedReceipts = jenifferPosSummary?.totalReceipts ?? dedupedTotals.totalReceipts;
 
   const detail = ledger?.detail as Record<string, any> | undefined;
   const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
@@ -320,6 +331,15 @@ export async function GET(req: Request) {
     if (salesCommission === 0) {
       salesCommission = summary.salesCommission;
     }
+  }
+
+  if (isJeniffer && jenifferPosSummary) {
+    salesCommission = computeSalesCommissionFromTiers(
+      jenifferPosSummary.totalSales,
+      jenifferPosSummary.totalProfit,
+      tiers,
+      0,
+    );
   }
 
   const grossCommission =

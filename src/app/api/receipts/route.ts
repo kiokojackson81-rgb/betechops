@@ -560,8 +560,14 @@ export async function POST(req: NextRequest) {
       }
 
       // create or update receipt
+      const receiptSerialCanonical =
+        canonicalReceiptNumber(serial) ??
+        canonicalReceiptNumber(orderUpsert.orderNumber) ??
+        `ID:${orderUpsert.id}`;
+
       const receiptData = {
         orderId: orderUpsert.id,
+        receiptNumber: receiptSerialCanonical,
         docType: docType as any,
         issuedById: issuedById ?? null,
         taxRate: payload?.taxRate ? String(payload.taxRate) : undefined,

@@ -861,6 +861,7 @@ model CommissionRecord {
 model Receipt {
   id                  String        @id @default(cuid())
   orderId             String        @unique
+  receiptNumber       String?       @unique
   docType             DocType
   generatedAt         DateTime      @default(now())
   issuedById          String?
