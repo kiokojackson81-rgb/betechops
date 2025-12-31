@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { normalizeReceiptNumber } from "@/lib/receiptKey";
 
 type OrderItemCandidate = {
@@ -23,6 +24,12 @@ export type PosReceiptSummary = {
   totalItems: number;
   totalReceipts: number;
   receiptKeys: string[];
+  paymentStats: {
+    totalSalesMpesa: number;
+    totalSalesCash: number;
+    countMpesaReceipts: number;
+    countCashReceipts: number;
+  };
 };
 
 const toNumber = (value: unknown): number => {
@@ -104,6 +111,12 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
   let totalSales = 0;
   let totalProfit = 0;
   let totalItems = 0;
+  const paymentStats = {
+    totalSalesMpesa: 0,
+    totalSalesCash: 0,
+    countMpesaReceipts: 0,
+    countCashReceipts: 0,
+  };
 
   for (const receipt of receipts) {
     const key = canonicalKeyForRow(receipt);
@@ -121,6 +134,19 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
     totalSales += sales;
     totalProfit += extractProfit(receipt, sales);
     totalItems += countItems(receipt);
+
+    const method = normalizePaymentMethod(
+      (receipt.data?.paymentMethod as unknown) ??
+        (receipt.totals?.paymentMethod as unknown) ??
+        "MPESA",
+    );
+    if (method === "CASH") {
+      paymentStats.totalSalesCash += sales;
+      paymentStats.countCashReceipts += 1;
+    } else {
+      paymentStats.totalSalesMpesa += sales;
+      paymentStats.countMpesaReceipts += 1;
+    }
   }
 
   return {
@@ -129,5 +155,6 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
     totalItems,
     totalReceipts: seen.size,
     receiptKeys: Array.from(seen.keys()),
+    paymentStats,
   };
 }

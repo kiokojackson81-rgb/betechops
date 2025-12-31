@@ -4,11 +4,11 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCurrentTradingPeriodFor } from "@/lib/marketingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
-import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { computeSalesCommissionFromTiers, getCommissionSummaryForSales, getOrCreateCommissionPeriod } from "@/lib/commission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
-import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { prisma } from "@/lib/prisma";
 import { nowInNairobi } from "@/lib/timezone";
+import { summarizePosReceiptsForPeriod, type PosReceiptSummary } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { email: true, name: true },
+  });
+  const targetUserEmail = targetUser?.email?.toLowerCase() ?? null;
+  const targetUserName = targetUser?.name ?? null;
+  const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
+
   const today = nowInNairobi();
-  await getOrCreateCommissionPeriod(today);
+  const { tiers } = await getOrCreateCommissionPeriod(today);
   const current = await getCurrentTradingPeriodFor(today);
 
   let argPeriod: {
@@ -85,53 +93,64 @@ export async function GET(req: Request) {
   const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
   const supportPer = (supportSummary as any)?.perReceipts ?? {};
 
-  // Merge with precedence: MARKETING > SUPPORT
-  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
-
-  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
-  }
-
-  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-    if (merged.has(k)) continue; // marketing wins
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
-  }
-
-  // compute merged totals
   let totalSales = 0;
   let totalProfit = 0;
   let totalItems = 0;
-  const mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
+  let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
+  let posSummary: PosReceiptSummary | null = null;
+  if (isJeniffer) {
+    posSummary = await summarizePosReceiptsForPeriod({ start: argPeriod.start, end: argPeriod.end });
+    totalSales = posSummary.totalSales;
+    totalProfit = posSummary.totalProfit;
+    totalItems = posSummary.totalItems;
+    mergedPaymentStats = posSummary.paymentStats;
+  } else {
+    // Merge with precedence: MARKETING > SUPPORT
+    const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
 
-  for (const [, v] of merged) {
-    totalSales += v.sales;
-    totalProfit += v.profit;
-    totalItems += v.items;
-    mergedPaymentStats.totalSalesMpesa += v.mpesa;
-    mergedPaymentStats.totalSalesCash += v.cash;
-    if (v.mpesa > 0) mergedPaymentStats.countMpesaReceipts += 1;
-    if (v.cash > 0) mergedPaymentStats.countCashReceipts += 1;
+    for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+      merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+    }
+
+    for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+      if (merged.has(k)) continue; // marketing wins
+      merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+    }
+
+    for (const [, v] of merged) {
+      totalSales += v.sales;
+      totalProfit += v.profit;
+      totalItems += v.items;
+      mergedPaymentStats.totalSalesMpesa += v.mpesa;
+      mergedPaymentStats.totalSalesCash += v.cash;
+      if (v.mpesa > 0) mergedPaymentStats.countMpesaReceipts += 1;
+      if (v.cash > 0) mergedPaymentStats.countCashReceipts += 1;
+    }
   }
 
   let commission = 0;
-  if (totalProfit > 0) {
-    const commissionInfo = getCommissionSummaryForSales(totalSales);
-    commission = commissionInfo.commission ?? 0;
-    if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
-      commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+  if (isJeniffer && posSummary) {
+    commission = computeSalesCommissionFromTiers(
+      posSummary.totalSales,
+      posSummary.totalProfit,
+      tiers,
+      0,
+    );
+  } else {
+    if (totalProfit > 0) {
+      const commissionInfo = getCommissionSummaryForSales(totalSales);
+      commission = commissionInfo.commission ?? 0;
+      if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
+        commission = Math.round(Math.max(totalProfit, 0) * 0.05);
+      }
     }
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { email: true },
-    });
-    const userEmail = user?.email?.toLowerCase() ?? null;
-    if (userEmail) {
+    if (targetUserEmail) {
       const unpriced = await getUnpricedDailySalesForCurrentPeriod();
       const hasUnpricedForUser = unpriced.some(
-        (s) => (s.attendantEmail ?? "").toLowerCase() === userEmail,
+        (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
       );
       if (hasUnpricedForUser) {
         commission = 0;
@@ -190,9 +209,6 @@ export async function GET(req: Request) {
   // When debug=1, attach identity proof and contribution audits
   if (debug) {
     // identity proof (include name/email and server time)
-    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { email: true, name: true } });
-    const targetUserEmail = targetUser?.email ?? null;
-    const targetUserName = targetUser?.name ?? null;
     const identity = {
       authRole: auth.role,
       actorId,
