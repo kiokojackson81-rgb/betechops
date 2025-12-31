@@ -314,7 +314,7 @@ export default function PayrollClient({
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.discipline.toLocaleString()}</span>
             </div>
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
-              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Other</span>
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Others</span>
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.other.toLocaleString()}</span>
             </div>
           </div>
@@ -396,8 +396,8 @@ export default function PayrollClient({
                       <option value="LATENESS">Lateness</option>
                       <option value="DISCIPLINE">Disciplinary</option>
                       <option value="BONUS">Bonus</option>
-                      <option value="COMMISSION_TOPUP">Commission top-up</option>
-                      <option value="OTHER">Other</option>
+                      <option value="COMMISSION_TOPUP">Top up</option>
+                      <option value="OTHER">Others</option>
                     </select>
                   </div>
                   <div>

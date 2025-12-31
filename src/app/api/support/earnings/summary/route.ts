@@ -81,6 +81,13 @@ export async function GET(req: Request) {
     commissionTopUpTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
+  const adjustmentEntries = adjustments.map((a) => ({
+    id: a.id,
+    label: a.label,
+    amount: a.amount ?? 0,
+    adjustmentType: a.adjustmentType,
+    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+  }));
 
   return NextResponse.json({
     periodKey,
@@ -107,5 +114,6 @@ export async function GET(req: Request) {
     totalDeductions,
     netPay,
     batteryEarnings,
+    adjustmentEntries,
   });
 }

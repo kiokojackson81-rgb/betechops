@@ -89,6 +89,7 @@ export async function GET(req: Request) {
       latenessTotal: userSummary.latenessTotal,
       disciplineTotal: userSummary.disciplineTotal,
       otherDeductionsTotal: userSummary.otherDeductionsTotal,
+      adjustmentEntries: userSummary.adjustmentEntries ?? [],
       totalEarnings,
       totalDeductions,
       netPay,

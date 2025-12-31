@@ -60,6 +60,24 @@ export default function EarningsCard({
             <span>{mask(row.formatted)}</span>
           </div>
         ))}
+        {summary.adjustmentEntries && summary.adjustmentEntries.length > 0 ? (
+          <div className="pt-2">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Adjustments</p>
+            <div className="mt-2 space-y-2">
+              {summary.adjustmentEntries.map((e) => {
+                const isAddition = (String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION");
+                const val = isAddition ? e.amount : -Math.abs(e.amount);
+                const formatted = val < 0 ? `- ${formatCurrency(Math.abs(val))}` : formatCurrency(val);
+                return (
+                  <div key={e.id} className="flex items-center justify-between">
+                    <span className="text-slate-400">{e.label}</span>
+                    <span>{mask(formatted)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

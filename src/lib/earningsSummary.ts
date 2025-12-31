@@ -46,6 +46,7 @@ export type EarningsSummary = {
     penalties: number;
     detail: unknown;
   } | null;
+  adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
 };
 
 export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: Date }) {
