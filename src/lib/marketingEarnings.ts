@@ -24,6 +24,7 @@ export type EarningsSummary = {
   totalEarnings: number;   // base + transport + commission + bonus
   totalDeductions: number; // chama + lateness + discipline + other
   netPay: number;          // totalEarnings - totalDeductions;
+  adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
 };
 
 export async function getEarningsSummaryForAttendant(opts: {
@@ -108,6 +109,14 @@ export async function getEarningsSummaryForAttendant(opts: {
 
   const netPay = totalEarnings - totalDeductions;
 
+  const adjustmentEntries = adjustments.map((a) => ({
+    id: a.id,
+    label: a.label,
+    amount: a.amount ?? 0,
+    adjustmentType: a.adjustmentType,
+    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+  }));
+
   return {
     periodKey,
     periodLabel,
@@ -126,5 +135,6 @@ export async function getEarningsSummaryForAttendant(opts: {
     totalEarnings,
     totalDeductions,
     netPay,
+    adjustmentEntries,
   };
 }
