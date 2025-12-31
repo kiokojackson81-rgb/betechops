@@ -234,6 +234,30 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
         detail: found.detail ?? null,
       };
     }
+    // If still not found, try a tolerant lookup: find any ledger for the user
+    // whose periodStart is within +/- 24 hours of the expected period start.
+    if (!ledger) {
+      try {
+        const windowMs = 24 * 60 * 60 * 1000;
+        const near = await prisma.commissionLedger.findFirst({
+          where: {
+            userId: opts.userId,
+            periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (near) {
+          ledger = {
+            grossCommission: Number(near.grossCommission ?? 0),
+            netCommission: Number(near.netCommission ?? 0),
+            penalties: Number(near.penalties ?? 0),
+            detail: near.detail ?? null,
+          };
+        }
+      } catch (e) {
+        // ignore tolerant lookup failures
+      }
+    }
   } catch (err) {
     // best-effort: if ledger lookup fails, proceed with computed values
     ledger = null;
