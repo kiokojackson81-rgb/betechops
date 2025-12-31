@@ -71,13 +71,16 @@ export default function PayrollClient({
     { adjustmentType: "BONUS", label: "", amount: "" }
   );
   const commissionValue =
+    initialSummary?.commission ??
+    initialSummary?.grossCommission ??
+    initialSummary?.salesCommission ??
     initialSummary?._raw?.commission ??
     initialSummary?._raw?.grossCommission ??
     initialSummary?._raw?.salesCommission ??
     0;
-  const periodProfit = Number(initialSummary?._raw?.totalProfit ?? 0);
-  const periodReceipts = Number(initialSummary?._raw?.totalReceipts ?? 0);
-  const periodItems = Number(initialSummary?._raw?.totalItems ?? 0);
+  const periodProfit = Number(initialSummary?.totalProfit ?? initialSummary?._raw?.totalProfit ?? 0);
+  const periodReceipts = Number(initialSummary?.totalReceipts ?? initialSummary?._raw?.totalReceipts ?? 0);
+  const periodItems = Number(initialSummary?.totalItems ?? initialSummary?._raw?.totalItems ?? 0);
   const ledgerTotals = useMemo(() => {
     const breakdown = ledger?.commissionBreakdown ?? {};
     return {
