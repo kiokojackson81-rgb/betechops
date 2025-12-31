@@ -13,6 +13,7 @@ import {
   computeSalesCommissionFromTiers,
   getOrCreateCommissionPeriod,
 } from "@/lib/commission";
+import { recomputeDirectSalesLedger } from "@/lib/directSalesLedger";
 import { normalizeReceiptId } from "@/lib/receiptKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
@@ -173,6 +174,13 @@ export async function GET(req: Request) {
   ]);
 
   await recomputeMarketingCommissionLedger({ userId, period, client: prisma });
+  if (isJeniffer) {
+    try {
+      await recomputeDirectSalesLedger({ userId, period, client: prisma });
+    } catch (e) {
+      console.error('Failed to recompute direct sales ledger for Jeniffer', e);
+    }
+  }
 
   const ledger = await prisma.commissionLedger.findUnique({
     where: {
