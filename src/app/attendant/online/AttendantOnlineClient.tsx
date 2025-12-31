@@ -775,15 +775,16 @@ function PayrollEarningsCard({
   if (adjEntries && adjEntries.length > 0) {
     deductionBreakdown = adjEntries
       .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
-      .map((e) => [e.label || e.adjustmentType, Number(e.amount ?? 0)]);
+      .map((e) => [String(e.label || e.adjustmentType), Number(e.amount ?? 0)]) as [string, number][];
   } else {
-    deductionBreakdown = [
+    const fallback: [string, number][] = [
       ["Chama", chamaValue],
       ["Lateness", Number(summary?.latenessTotal ?? 0)],
       ["Discipline", Number(summary?.disciplineTotal ?? 0)],
       ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
       ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
-    ].filter(([, amount]) => Number(amount) > 0);
+    ];
+    deductionBreakdown = fallback.filter(([, amount]) => Number(amount) > 0) as [string, number][];
   }
 
   const rows = [
