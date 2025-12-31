@@ -57,9 +57,19 @@ export async function GET(req: Request) {
     const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
     const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKeyIso];
 
+    const windowMs = 24 * 60 * 60 * 1000;
     const [plans, ledgers, adjustments] = await Promise.all([
       prisma.attendantCompPlan.findMany({ where: { attendantId: { in: attendantIds } } }),
-      prisma.commissionLedger.findMany({ where: { periodStart: period.start, periodEnd: period.end, userId: { in: attendantIds } } }),
+      // Tolerant ledger fetch: match exact period or nearby periodStart/periodEnd
+      prisma.commissionLedger.findMany({
+        where: {
+          userId: { in: attendantIds },
+          OR: [
+            { AND: [{ periodStart: { gte: new Date(period.start.getTime() - windowMs) } }, { periodStart: { lte: new Date(period.start.getTime() + windowMs) } }] },
+            { AND: [{ periodEnd: { gte: new Date(period.end.getTime() - windowMs) } }, { periodEnd: { lte: new Date(period.end.getTime() + windowMs) } }] },
+          ],
+        },
+      }),
       prisma.attendantPayrollAdjustment.findMany({
         where: { periodKey: { in: periodFilterKeys }, attendantId: { in: attendantIds } },
         orderBy: { createdAt: "desc" },
