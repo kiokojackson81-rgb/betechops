@@ -281,15 +281,25 @@ function EarningsCard({ summary }: EarningsCardProps) {
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
 
+  // Prefer explicit adjustment entries (admin-provided labels) when available.
+  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
+    (summary?.adjustmentEntries ?? []);
+
+  const deductionEntries = adjEntries && adjEntries.length > 0
+    ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, type: 'deduction' as const, amount: e.amount }))
+    : [
+        { label: "Chama", type: "deduction", amount: summary.chamaTotal },
+        { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
+        { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
+        { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
+      ];
+
   const rows = [
     { label: "Base salary", type: "earning", amount: summary.baseSalary },
     { label: "Commission", type: "earning", amount: summary.commission },
     { label: "Transport allowance", type: "earning", amount: summary.transportAllowance },
     { label: "Bonuses / extras", type: "earning", amount: summary.bonusTotal },
-    { label: "Chama", type: "deduction", amount: summary.chamaTotal },
-    { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
-    { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
-    { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
+    ...deductionEntries,
   ].filter((row) => row.amount && row.amount !== 0);
 
   return (

@@ -560,12 +560,16 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
     { label: "Commission", amount: summary.salesCommission },
     { label: "Bonuses", amount: summary.bonusTotal },
   ].filter((row) => row.amount !== 0);
-  const debits = [
-    { label: "Chama", amount: summary.chamaTotal },
-    { label: "Lateness", amount: summary.latenessTotal },
-    { label: "Discipline", amount: summary.disciplineTotal },
-    { label: "Other deductions", amount: summary.otherDeductionsTotal },
-  ].filter((row) => row.amount !== 0);
+  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
+    (summary?.adjustmentEntries ?? []);
+  const debits = adjEntries && adjEntries.length > 0
+    ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, amount: e.amount }))
+    : [
+        { label: "Chama", amount: summary.chamaTotal },
+        { label: "Lateness", amount: summary.latenessTotal },
+        { label: "Discipline", amount: summary.disciplineTotal },
+        { label: "Other deductions", amount: summary.otherDeductionsTotal },
+      ].filter((row) => row.amount !== 0);
 
   const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
 

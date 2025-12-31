@@ -769,13 +769,22 @@ function PayrollEarningsCard({
   );
   const bonusValue = Number(summary?.bonusTotal ?? 0);
   const totalDeductions = Number(summary?.totalDeductions ?? 0);
-  const deductionBreakdown = [
-    ["Chama", chamaValue],
-    ["Lateness", Number(summary?.latenessTotal ?? 0)],
-    ["Discipline", Number(summary?.disciplineTotal ?? 0)],
-    ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
-    ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
-  ].filter(([, amount]) => Number(amount) > 0);
+  let deductionBreakdown: [string, number][] = [];
+  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
+    (summary?.adjustmentEntries ?? []);
+  if (adjEntries && adjEntries.length > 0) {
+    deductionBreakdown = adjEntries
+      .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
+      .map((e) => [e.label || e.adjustmentType, Number(e.amount ?? 0)]);
+  } else {
+    deductionBreakdown = [
+      ["Chama", chamaValue],
+      ["Lateness", Number(summary?.latenessTotal ?? 0)],
+      ["Discipline", Number(summary?.disciplineTotal ?? 0)],
+      ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
+      ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
+    ].filter(([, amount]) => Number(amount) > 0);
+  }
 
   const rows = [
     { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
