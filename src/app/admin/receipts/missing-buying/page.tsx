@@ -34,8 +34,17 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
       id: true,
       orderNumber: true,
       createdAt: true,
-      sellingTotal: true,
-      orderItems: { select: { id: true, productId: true, productName: true, qty: true, sellingPrice: true, buyingPrice: true } },
+      totalAmount: true,
+      items: {
+        select: {
+          id: true,
+          productId: true,
+          quantity: true,
+          sellingPrice: true,
+          orderCosts: { select: { unitCost: true } },
+          profitSnapshots: { select: { unitCost: true } },
+        },
+      },
       source: true,
     },
     orderBy: { createdAt: "desc" },
@@ -46,9 +55,12 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
       id: r.id,
       orderNumber: r.orderNumber,
       createdAt: r.createdAt,
-      sellingTotal: r.sellingTotal,
+      sellingTotal: r.totalAmount,
       source: r.source,
-      items: r.orderItems.filter((it) => it.buyingPrice == null || Number(it.buyingPrice) === 0),
+      items: r.items.filter((it) => {
+        const hasCost = (it.orderCosts && it.orderCosts.length > 0) || (it.profitSnapshots && it.profitSnapshots.length > 0);
+        return !hasCost;
+      }),
     }))
     .filter((r) => (r.items?.length ?? 0) > 0);
 
