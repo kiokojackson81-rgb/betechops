@@ -39,6 +39,13 @@ export async function GET(req: Request) {
 
   try {
     const userSummary = await getEarningsSummaryForUser({ userId: attendantId });
+
+    // Load user email to detect Jeniffer special-case so we don't let persisted
+    // CommissionLedger values overwrite her computed sales commission.
+    const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+    const attendantEmail = (attendant?.email ?? "").toLowerCase();
+    const isJeniffer = attendantEmail === "jeniffer@betech.co.ke";
+
     const ledger = await prisma.commissionLedger.findUnique({
       where: {
         userId_periodStart_periodEnd: {
@@ -49,14 +56,21 @@ export async function GET(req: Request) {
       },
     });
 
-    const detail = ledger?.detail as Record<string, any> | undefined;
-    const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
-    const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
+    // If Jeniffer, prefer the computed `userSummary.salesCommission` and
+    // do not apply the CommissionLedger override. For everyone else, prefer
+    // persisted ledger values when present.
+    let salesCommission = 0;
+    if (!isJeniffer) {
+      const detail = ledger?.detail as Record<string, any> | undefined;
+      const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
+      const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
 
-    let salesCommission = marketingCommission + supportCommission;
-    if (salesCommission === 0 && ledger) {
-      salesCommission = Number(ledger.grossCommission ?? 0);
+      salesCommission = marketingCommission + supportCommission;
+      if (salesCommission === 0 && ledger) {
+        salesCommission = Number(ledger.grossCommission ?? 0);
+      }
     }
+
     if (salesCommission === 0) {
       salesCommission = userSummary.salesCommission;
     }
