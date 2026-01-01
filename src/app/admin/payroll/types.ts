@@ -40,6 +40,11 @@ export type PayrollRow = {
   netPay: number;
   totalSales: number;
   totalProfit: number;
+  totalReceipts: number;
+  totalItems: number;
+  newProducts: number;
+  editedProducts: number;
+  copiedProducts: number;
   adjustmentBreakdown: AdjustmentBreakdown;
   adjustmentEntries: AdjustmentEntry[];
 };

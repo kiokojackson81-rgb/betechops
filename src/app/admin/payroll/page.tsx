@@ -132,6 +132,8 @@ export default async function AdminPayrollPage() {
     }
     const grossCommission = Number(ledger?.grossCommission ?? 0);
     const penalties = Number(ledger?.penalties ?? 0);
+    const summarySales = Number(earningsSummary?.totalSales ?? 0);
+    const summaryProfit = Number(earningsSummary?.totalProfit ?? 0);
     const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
 
     const baseSalary = plan?.baseSalary ?? 0;
@@ -158,15 +160,20 @@ export default async function AdminPayrollPage() {
         totalEarnings,
         totalDeductions,
         netPay,
-        totalSales: Number(detail?.totalSales ?? 0),
-        totalProfit: Number(detail?.totalProfit ?? 0),
+        totalSales: Number(detail?.totalSales ?? summarySales),
+        totalProfit: Number(detail?.totalProfit ?? summaryProfit),
+        totalReceipts: Number(earningsSummary?.totalReceipts ?? 0),
+        totalItems: Number(earningsSummary?.totalItems ?? 0),
+        newProducts: Number(earningsSummary?.totalNewProducts ?? 0),
+        editedProducts: Number(earningsSummary?.totalEditedProducts ?? 0),
+        copiedProducts: Number(earningsSummary?.totalCopiedProducts ?? 0),
         adjustmentBreakdown: summary.breakdown as AdjustmentBreakdown,
         adjustmentEntries: summary.entries,
         commissionDirect,
         commissionMarketplaceJumia,
-      commissionMarketplaceKilimall,
-      commissionTotal,
-      commissionBreakdown: ledger?.commissionBreakdown ?? null,
+        commissionMarketplaceKilimall,
+        commissionTotal,
+        commissionBreakdown: ledger?.commissionBreakdown ?? null,
     };
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import { getCategoryLabel } from "@/lib/getLandingPage";
@@ -16,6 +16,36 @@ const categoryOrder = [
 ];
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
+
+const getDisplayName = (row?: PayrollRow | null) => {
+  if (!row) return "—";
+  return row.name ?? row.email ?? "Unassigned";
+};
+
+type PerformanceSummary = {
+  bestSales: PayrollRow;
+  bestProfit: PayrollRow;
+  bestReceipts: PayrollRow;
+  bestItems: PayrollRow;
+  bestProductWork: PayrollRow;
+  productWorkCount: number;
+};
+
+type PerformanceTileProps = {
+  label: string;
+  value: ReactNode;
+  meta: ReactNode;
+};
+
+function PerformanceTile({ label, value, meta }: PerformanceTileProps) {
+  return (
+    <div className="rounded-2xl border border-white/5 bg-slate-950/30 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-slate-100">{value}</p>
+      <p className="text-[11px] text-slate-500">{meta}</p>
+    </div>
+  );
+}
 
 export default function PayrollTableClient({
   rows,
@@ -67,6 +97,28 @@ export default function PayrollTableClient({
     );
   }, [filteredRows]);
 
+  const performanceSummary = useMemo<PerformanceSummary | null>(() => {
+    if (!filteredRows.length) return null;
+    const getProductActivity = (row: PayrollRow) => row.newProducts + row.editedProducts + row.copiedProducts;
+    const bestBy = (selector: (row: PayrollRow) => number) =>
+      filteredRows.reduce((best, current) => (selector(current) > selector(best) ? current : best), filteredRows[0]);
+
+    const bestSales = bestBy((row) => row.totalSales);
+    const bestProfit = bestBy((row) => row.totalProfit);
+    const bestReceipts = bestBy((row) => row.totalReceipts);
+    const bestItems = bestBy((row) => row.totalItems);
+    const bestProductWork = bestBy(getProductActivity);
+
+    return {
+      bestSales,
+      bestProfit,
+      bestReceipts,
+      bestItems,
+      bestProductWork,
+      productWorkCount: getProductActivity(bestProductWork),
+    };
+  }, [filteredRows]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -80,6 +132,7 @@ export default function PayrollTableClient({
         <div className="flex flex-wrap gap-2 text-xs">
           <div className="rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-slate-200">Marketing Ops highlight</div>
           <div className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-rose-200">Brendah focus</div>
+          <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">Performances</div>
         </div>
       </div>
 
@@ -147,6 +200,50 @@ export default function PayrollTableClient({
         </div>
       </Card>
 
+      {performanceSummary && (
+        <Card className="bg-slate-900/70 border border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Performances</p>
+              <h2 className="text-lg font-semibold text-slate-100">AI-curated performance menu</h2>
+              <p className="text-xs text-slate-400">
+                Compares receipts, direct sales, Kilimall uploads/edits, and product actions to spotlight who is driving value.
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200 uppercase tracking-wide">
+              Compare
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <PerformanceTile
+              label="Top sales"
+              value={formatCurrency(performanceSummary.bestSales.totalSales)}
+              meta={getDisplayName(performanceSummary.bestSales)}
+            />
+            <PerformanceTile
+              label="Highest profit"
+              value={formatCurrency(performanceSummary.bestProfit.totalProfit)}
+              meta={getDisplayName(performanceSummary.bestProfit)}
+            />
+            <PerformanceTile
+              label="Most receipts"
+              value={performanceSummary.bestReceipts.totalReceipts.toLocaleString("en-US")}
+              meta={getDisplayName(performanceSummary.bestReceipts)}
+            />
+            <PerformanceTile
+              label="Items sold"
+              value={performanceSummary.bestItems.totalItems.toLocaleString("en-US")}
+              meta={getDisplayName(performanceSummary.bestItems)}
+            />
+            <PerformanceTile
+              label="Product uploads/edits"
+              value={performanceSummary.productWorkCount.toLocaleString("en-US")}
+              meta={`${getDisplayName(performanceSummary.bestProductWork)} · new/edited/copied`}
+            />
+          </div>
+        </Card>
+      )}
+
       <Card className="bg-slate-900/60 border-slate-800">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -206,9 +303,14 @@ export default function PayrollTableClient({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right space-y-1">
                       <div className="font-semibold text-slate-100">{row.totalSales.toLocaleString("en-US")}</div>
-                      <div className="text-[11px] text-slate-500">Profit {row.totalProfit.toLocaleString("en-US")}</div>
+                      <div className="text-[11px] text-slate-500">
+                        Profit {row.totalProfit.toLocaleString("en-US")}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {row.totalReceipts.toLocaleString("en-US")} receipts · {row.totalItems.toLocaleString("en-US")} items
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="font-semibold text-slate-100">{formatCurrency(row.baseSalary)}</div>

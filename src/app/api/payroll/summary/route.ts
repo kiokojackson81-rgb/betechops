@@ -78,6 +78,17 @@ export async function GET(req: Request) {
 
     const planMap = new Map(plans.map((p) => [p.attendantId, p]));
     const ledgerMap = new Map(ledgers.map((l) => [l.userId, l]));
+    const earningsSummaries = await Promise.all(
+      attendantIds.map(async (attendantId) => {
+        try {
+          return await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
+        } catch (err) {
+          console.warn("[api/payroll/summary] failed to compute earnings summary for", attendantId, err);
+          return null;
+        }
+      }),
+    );
+    const earningsSummaryMap = new Map(attendantIds.map((id, index) => [id, earningsSummaries[index]]));
 
     const baseSummary = () => ({ totalBonus: 0, totalDeduction: 0, breakdown: { chama: 0, lateness: 0, discipline: 0, other: 0, bonus: 0, commissionTopUp: 0, penalties: 0 } });
 
@@ -117,6 +128,9 @@ export async function GET(req: Request) {
       );
       const grossCommission = Number(ledger?.grossCommission ?? 0);
       const penalties = Number(ledger?.penalties ?? 0);
+      const earningsSummary = earningsSummaryMap.get(attendant.id) ?? null;
+      const summarySales = Number(earningsSummary?.totalSales ?? 0);
+      const summaryProfit = Number(earningsSummary?.totalProfit ?? 0);
       const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
 
       const baseSalary = plan?.baseSalary ?? 0;
@@ -143,9 +157,20 @@ export async function GET(req: Request) {
         totalEarnings,
         totalDeductions,
         netPay,
-        totalSales: Number(detail?.totalSales ?? 0),
-        totalProfit: Number(detail?.totalProfit ?? 0),
+        totalSales: Number(detail?.totalSales ?? summarySales),
+        totalProfit: Number(detail?.totalProfit ?? summaryProfit),
+        totalReceipts: Number(earningsSummary?.totalReceipts ?? 0),
+        totalItems: Number(earningsSummary?.totalItems ?? 0),
+        newProducts: Number(earningsSummary?.totalNewProducts ?? 0),
+        editedProducts: Number(earningsSummary?.totalEditedProducts ?? 0),
+        copiedProducts: Number(earningsSummary?.totalCopiedProducts ?? 0),
         adjustmentBreakdown: summary.breakdown,
+        adjustmentEntries: summary.entries,
+        commissionDirect: Number(ledger?.commissionDirect ?? 0),
+        commissionMarketplaceJumia: Number(ledger?.commissionMarketplaceJumia ?? 0),
+        commissionMarketplaceKilimall: Number(ledger?.commissionMarketplaceKilimall ?? 0),
+        commissionTotal: commissions,
+        commissionBreakdown: ledger?.commissionBreakdown ?? null,
       };
     });
 
