@@ -97,6 +97,7 @@ export async function GET(req: Request) {
   let totalSales = 0;
   let totalProfit = 0;
   let totalItems = 0;
+  let totalReceipts = 0;
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
   if (isJeniffer) {
@@ -104,6 +105,7 @@ export async function GET(req: Request) {
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
     totalItems = posSummary.totalItems;
+    totalReceipts = posSummary.totalReceipts;
     mergedPaymentStats = posSummary.paymentStats;
   } else {
     // Merge with precedence: MARKETING > SUPPORT
@@ -127,6 +129,7 @@ export async function GET(req: Request) {
       if (v.mpesa > 0) mergedPaymentStats.countMpesaReceipts += 1;
       if (v.cash > 0) mergedPaymentStats.countCashReceipts += 1;
     }
+    totalReceipts = merged.size;
   }
 
   let commission = 0;
@@ -155,34 +158,36 @@ export async function GET(req: Request) {
     // ignore
   }
 
-  try {
-    const ledger = await prisma.commissionLedger.findUnique({
-      where: {
-        userId_periodStart_periodEnd: {
-          userId: targetUserId,
-          periodStart: argPeriod.start,
-          periodEnd: argPeriod.end,
+  if (!isJeniffer) {
+    try {
+      const ledger = await prisma.commissionLedger.findUnique({
+        where: {
+          userId_periodStart_periodEnd: {
+            userId: targetUserId,
+            periodStart: argPeriod.start,
+            periodEnd: argPeriod.end,
+          },
         },
-      },
-    });
+      });
 
-    if (ledger) {
-      const detail: any = ledger.detail ?? {};
-      const marketingCommission = Number(detail.marketing?.commission ?? 0);
-      const supportCommission = Number(detail.support?.commission ?? 0);
-      const combinedDetailCommission = marketingCommission + supportCommission;
+      if (ledger) {
+        const detail: any = ledger.detail ?? {};
+        const marketingCommission = Number(detail.marketing?.commission ?? 0);
+        const supportCommission = Number(detail.support?.commission ?? 0);
+        const combinedDetailCommission = marketingCommission + supportCommission;
 
-      if (combinedDetailCommission > 0) {
-        commission = combinedDetailCommission;
-      } else {
-        const ledgerNet = Number(
-          ledger.netCommission ?? ledger.grossCommission ?? commission,
-        );
-        commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+        if (combinedDetailCommission > 0) {
+          commission = combinedDetailCommission;
+        } else {
+          const ledgerNet = Number(
+            ledger.netCommission ?? ledger.grossCommission ?? commission,
+          );
+          commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+        }
       }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
 
   // base response
@@ -195,6 +200,7 @@ export async function GET(req: Request) {
     },
     aggregates: {
       totalSales,
+      totalReceipts,
       totalItems,
       paymentStats: mergedPaymentStats,
       commission: { commission },
