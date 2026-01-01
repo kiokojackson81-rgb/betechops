@@ -32,7 +32,7 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
     where: { attendantId, createdAt: { gte: start, lte: end } },
     select: {
       id: true,
-      externalId: true,
+      orderNumber: true,
       createdAt: true,
       sellingTotal: true,
       orderItems: { select: { id: true, productId: true, productName: true, qty: true, sellingPrice: true, buyingPrice: true } },
@@ -44,7 +44,7 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
   const missing = receipts
     .map((r) => ({
       id: r.id,
-      externalId: r.externalId,
+      orderNumber: r.orderNumber,
       createdAt: r.createdAt,
       sellingTotal: r.sellingTotal,
       source: r.source,
@@ -75,7 +75,7 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
               <tr key={r.id} className="border-t border-slate-800">
                 <td className="py-2">
                   <Link href={`/receipts/${r.id}`} className="underline text-slate-100">
-                    {r.externalId ?? r.id}
+                    {r.orderNumber ?? r.id}
                   </Link>
                 </td>
                 <td className="py-2 text-slate-400">{new Date(r.createdAt).toLocaleString()}</td>
