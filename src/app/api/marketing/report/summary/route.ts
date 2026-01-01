@@ -145,7 +145,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    if (targetUserEmail) {
+    if (!isJeniffer && targetUserEmail) {
       const unpriced = await getUnpricedDailySalesForCurrentPeriod();
       const hasUnpricedForUser = unpriced.some(
         (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
