@@ -45,7 +45,7 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
           profitSnapshots: { select: { unitCost: true } },
         },
       },
-      source: true,
+      
     },
     orderBy: { createdAt: "desc" },
   });
