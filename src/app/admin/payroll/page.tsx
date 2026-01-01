@@ -134,10 +134,10 @@ export default async function AdminPayrollPage() {
     const penalties = Number(ledger?.penalties ?? 0);
     const summarySales = Number(earningsSummary?.totalSales ?? 0);
     const summaryProfit = Number(earningsSummary?.totalProfit ?? 0);
+    const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
     const detailProfitValue = Number(detail?.totalProfit ?? NaN);
     const resolvedProfit =
       !Number.isNaN(detailProfitValue) && detailProfitValue !== 0 ? detailProfitValue : summaryProfit;
-    const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
 
     const baseSalary = plan?.baseSalary ?? 0;
     const transportAllowance = plan?.defaultTransportAllowance ?? 0;
