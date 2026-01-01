@@ -206,7 +206,8 @@ export default function PayrollTableClient({
       </Card>
 
       {performanceSummary && (
-        <Card id="performances" className="bg-slate-900/70 border border-slate-800">
+        <div id="performances">
+          <Card className="bg-slate-900/70 border border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Performances</p>
