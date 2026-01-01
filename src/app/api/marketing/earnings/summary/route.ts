@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { requireRole, getActorId } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { prisma } from "@/lib/prisma";
+import { nowInNairobi } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +48,19 @@ export async function GET(req: Request) {
     const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
     const attendantEmail = (attendant?.email ?? "").toLowerCase();
     const isJeniffer = attendantEmail === "jeniffer@betech.co.ke";
+    const today = nowInNairobi();
+    const { tiers } = await getOrCreateCommissionPeriod(today);
+    let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
+    if (isJeniffer) {
+      posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end });
+      userSummary.totalSales = posSummary.totalSales;
+      userSummary.salesCommission = computeSalesCommissionFromTiers(
+        posSummary.totalSales,
+        posSummary.totalProfit,
+        tiers,
+        0,
+      );
+    }
 
     const ledger = await prisma.commissionLedger.findUnique({
       where: {

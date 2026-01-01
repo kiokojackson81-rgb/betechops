@@ -3,6 +3,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -126,8 +127,14 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     mergedItems += v.items ?? 0;
   }
 
-  // Prefer the larger of snapshot-derived totals and marketing+support merged totals
-  if (mergedSales > totalSales) {
+  const user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
+  const isJeniffer = (user?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
+  let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
+  if (isJeniffer) {
+    posSummary = await summarizePosReceiptsForPeriod({ start, end });
+    totalSales = posSummary.totalSales;
+    totalProfit = posSummary.totalProfit;
+  } else if (mergedSales > totalSales) {
     totalSales = mergedSales;
     totalProfit = mergedProfit;
   }
@@ -267,7 +274,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // For the attendant-facing earnings summary we use the default behaviour
   // (which applies the configured profit-fallback percent) so this endpoint
   // mirrors previous commission calculations.
-  const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
+  const fallbackPercent = isJeniffer ? 0 : (totalProfit > 0 ? 0.05 : 0);
   const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
@@ -281,7 +288,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // If a persisted ledger exists, prefer its grossCommission as the authoritative
   // commission total and use it to compute earnings/net pay so the payroll UI
   // mirrors the ledger-backed numbers shown in the front-end dashboard.
-  const finalGrossCommission = ledger ? ledger.grossCommission : computedGrossCommission;
+  const finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
 
   const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
@@ -295,8 +302,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalNewProducts: newProducts,
     totalEditedProducts: editedProducts,
     totalCopiedProducts: copiedProducts,
-    totalItems: mergedItems || 0,
-    totalReceipts: merged.size || 0,
+    totalItems: isJeniffer ? posSummary?.totalItems ?? 0 : mergedItems || 0,
+    totalReceipts: isJeniffer ? posSummary?.totalReceipts ?? 0 : merged.size || 0,
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
