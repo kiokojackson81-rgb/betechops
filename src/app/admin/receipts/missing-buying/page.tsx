@@ -56,7 +56,6 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
       orderNumber: r.orderNumber,
       createdAt: r.createdAt,
       sellingTotal: r.totalAmount,
-      source: r.source,
       items: r.items.filter((it) => {
         const hasCost = (it.orderCosts && it.orderCosts.length > 0) || (it.profitSnapshots && it.profitSnapshots.length > 0);
         return !hasCost;
