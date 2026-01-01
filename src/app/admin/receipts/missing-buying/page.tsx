@@ -94,8 +94,8 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
                 <td className="py-2 text-sm text-slate-200">
                   {r.items.map((it) => (
                     <div key={it.id} className="flex items-center gap-3">
-                      <div>{it.productName ?? it.productId ?? it.id}</div>
-                      <div className="text-xs text-slate-400">qty {it.qty ?? 1}</div>
+                      <div>{it.productId ?? it.id}</div>
+                      <div className="text-xs text-slate-400">qty {it.quantity ?? 1}</div>
                     </div>
                   ))}
                 </td>
