@@ -313,8 +313,11 @@ export async function GET(req: Request) {
     // count supportDailyEntry rows for this attendant in period
     const supportEntryCount = await prisma.supportDailyEntry.count({ where: { date: { gte: argPeriod.start, lte: argPeriod.end }, submittedById: targetUserId } });
 
-    // POS receipts count (issuedById)
-    const posCount = await prisma.receipt.count({ where: { createdAt: { gte: argPeriod.start, lte: argPeriod.end }, issuedById: targetUserId } });
+    // POS receipts counts:
+    // - total POS receipts in the period (uses `generatedAt`, same as POS summary)
+    // - POS receipts issued by this user (also uses `generatedAt` + issuedById)
+    const posCountAll = await prisma.receipt.count({ where: { generatedAt: { gte: argPeriod.start, lte: argPeriod.end } } });
+    const posCountIssuedByUser = await prisma.receipt.count({ where: { generatedAt: { gte: argPeriod.start, lte: argPeriod.end }, issuedById: targetUserId } });
 
     const supportOwners = new Set<string>();
     const supportOwnerEmails = new Set<string>();
@@ -391,7 +394,7 @@ export async function GET(req: Request) {
       supportTotals: { totalSales: Number(supportTotalsVal.totalSales ?? 0), totalItems: Number(supportTotalsVal.totalItems ?? 0) },
       supportEntryCount,
       marketingRowCount: marketingCount,
-      receiptsPerSource: { marketing: marketingKeys.length, support: supportKeys.length, pos: posCount },
+      receiptsPerSource: { marketing: marketingKeys.length, support: supportKeys.length, pos: posCountAll, posIssuedBy: posCountIssuedByUser },
     };
 
     // final diagnosis
