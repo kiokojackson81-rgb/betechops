@@ -36,16 +36,17 @@ export async function GET(req: Request) {
     },
     select: {
       id: true,
-      externalId: true,
+      orderNumber: true,
       createdAt: true,
-      sellingTotal: true,
-      orderItems: {
+      totalAmount: true,
+      items: {
         select: {
           id: true,
           productId: true,
-          qty: true,
+          quantity: true,
           sellingPrice: true,
-          buyingPrice: true,
+          orderCosts: { select: { unitCost: true } },
+          profitSnapshots: { select: { unitCost: true } },
         },
       },
     },
@@ -55,10 +56,13 @@ export async function GET(req: Request) {
   const missing = receipts
     .map((r) => ({
       id: r.id,
-      externalId: r.externalId,
+      orderNumber: r.orderNumber,
       createdAt: r.createdAt,
-      sellingTotal: r.sellingTotal,
-      items: r.orderItems.filter((it) => it.buyingPrice == null || Number(it.buyingPrice) === 0),
+      sellingTotal: r.totalAmount,
+      items: r.items.filter((it) => {
+        const hasCost = (it.orderCosts && it.orderCosts.length > 0) || (it.profitSnapshots && it.profitSnapshots.length > 0);
+        return !hasCost;
+      }),
     }))
     .filter((r) => (r.items?.length ?? 0) > 0);
 
