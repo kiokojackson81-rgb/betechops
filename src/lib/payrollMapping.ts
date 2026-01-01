@@ -117,6 +117,11 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     netPay: p?.netPay ?? 0,
     totalSales: 0,
     totalProfit: 0,
+    totalReceipts: 0,
+    totalItems: 0,
+    newProducts: 0,
+    editedProducts: 0,
+    copiedProducts: 0,
     adjustmentBreakdown: {
       chama,
       lateness,
