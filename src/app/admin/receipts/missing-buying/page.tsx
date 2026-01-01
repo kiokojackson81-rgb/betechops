@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
@@ -7,7 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function Page({ searchParams }: { searchParams?: Record<string, string> }) {
   const auth = await requireRole("ADMIN");
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    // Server-side redirect for unauthorized users to match other admin pages
+    redirect("/admin/login");
+  }
 
   const attendantId = searchParams?.attendantId ?? null;
 
