@@ -132,7 +132,12 @@ export default function PayrollTableClient({
         <div className="flex flex-wrap gap-2 text-xs">
           <div className="rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-slate-200">Marketing Ops highlight</div>
           <div className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-rose-200">Brendah focus</div>
-          <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">Performances</div>
+          <a
+            href="#performances"
+            className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200 transition hover:border-emerald-400 hover:text-emerald-100"
+          >
+            Performances
+          </a>
         </div>
       </div>
 
@@ -201,7 +206,7 @@ export default function PayrollTableClient({
       </Card>
 
       {performanceSummary && (
-        <Card className="bg-slate-900/70 border border-slate-800">
+        <Card id="performances" className="bg-slate-900/70 border border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Performances</p>
