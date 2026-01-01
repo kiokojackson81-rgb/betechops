@@ -286,6 +286,18 @@ export default function PayrollTableClient({
                 const additionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "ADDITION");
                 const deductionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "DEDUCTION");
 
+                const profitText =
+                  row.totalProfit !== 0
+                    ? row.totalProfit.toLocaleString("en-US")
+                    : row.totalSales > 0 && row.totalReceipts > 0
+                    ? "— (no profit data)"
+                    : "0";
+
+                const profitTitle =
+                  row.totalProfit === 0 && row.totalSales > 0 && row.totalReceipts > 0
+                    ? "No per-receipt profit snapshots (check pricing)"
+                    : "";
+
                 return (
                   <tr
                     key={row.attendantId}
@@ -312,8 +324,18 @@ export default function PayrollTableClient({
                     </td>
                     <td className="px-4 py-3 text-right space-y-1">
                       <div className="font-semibold text-slate-100">{row.totalSales.toLocaleString("en-US")}</div>
-                      <div className="text-[11px] text-slate-500">
-                        Profit {row.totalProfit.toLocaleString("en-US")}
+                      <div className="text-[11px] text-slate-500" title={profitTitle}>
+                        Profit{' '}
+                        {row.totalProfit === 0 && row.totalSales > 0 && row.totalReceipts > 0 ? (
+                          <a
+                            className="underline text-slate-300"
+                            href={`/admin/receipts/missing-buying?attendantId=${row.attendantId}`}
+                          >
+                            {profitText}
+                          </a>
+                        ) : (
+                          profitText
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500">
                         {row.totalReceipts.toLocaleString("en-US")} receipts · {row.totalItems.toLocaleString("en-US")} items
