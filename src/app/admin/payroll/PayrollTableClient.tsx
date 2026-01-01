@@ -208,7 +208,7 @@ export default function PayrollTableClient({
       {performanceSummary && (
         <div id="performances">
           <Card className="bg-slate-900/70 border border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Performances</p>
               <h2 className="text-lg font-semibold text-slate-100">AI-curated performance menu</h2>
@@ -248,6 +248,7 @@ export default function PayrollTableClient({
             />
           </div>
         </Card>
+        </div>
       )}
 
       <Card className="bg-slate-900/60 border-slate-800">
