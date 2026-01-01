@@ -7,6 +7,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import type { AdjustmentEntry, AdjustmentKind } from "@/app/admin/payroll/types";
 
 // Compatibility route for older clients that call /api/payroll/summary
 // Behaviour:
@@ -90,7 +91,12 @@ export async function GET(req: Request) {
     );
     const earningsSummaryMap = new Map(attendantIds.map((id, index) => [id, earningsSummaries[index]]));
 
-    const baseSummary = () => ({ totalBonus: 0, totalDeduction: 0, breakdown: { chama: 0, lateness: 0, discipline: 0, other: 0, bonus: 0, commissionTopUp: 0, penalties: 0 } });
+    const baseSummary = () => ({
+      totalBonus: 0,
+      totalDeduction: 0,
+      breakdown: { chama: 0, lateness: 0, discipline: 0, other: 0, bonus: 0, commissionTopUp: 0, penalties: 0 },
+      entries: [] as AdjustmentEntry[],
+    });
 
     const adjustmentsByAttendant = new Map<string, ReturnType<typeof baseSummary>>();
     for (const adjustment of adjustments) {
@@ -98,13 +104,23 @@ export async function GET(req: Request) {
       const amount = adjustment.amount ?? 0;
       const bonusType = adjustment.adjustmentType === "BONUS";
       const topUpType = adjustment.adjustmentType === "COMMISSION_TOPUP";
+      const kind: AdjustmentKind =
+        (adjustment.adjustmentKind as AdjustmentKind | undefined) ??
+        (bonusType || topUpType ? "ADDITION" : "DEDUCTION");
 
-      if (bonusType) {
+      const entry: AdjustmentEntry = {
+        id: adjustment.id,
+        label: adjustment.label,
+        amount,
+        adjustmentType: adjustment.adjustmentType,
+        kind,
+      };
+      existing.entries.push(entry);
+
+      if (kind === "ADDITION") {
         existing.totalBonus += amount;
-        existing.breakdown.bonus += amount;
-      } else if (topUpType) {
-        existing.totalBonus += amount;
-        existing.breakdown.commissionTopUp += amount;
+        if (bonusType) existing.breakdown.bonus += amount;
+        if (topUpType) existing.breakdown.commissionTopUp += amount;
       } else {
         existing.totalDeduction += amount;
         if (adjustment.adjustmentType === "CHAMA") existing.breakdown.chama += amount;
