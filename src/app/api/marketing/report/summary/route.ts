@@ -137,14 +137,8 @@ export async function GET(req: Request) {
       tiers,
       0,
     );
-  } else {
-    if (totalProfit > 0) {
-      const commissionInfo = getCommissionSummaryForSales(totalSales);
-      commission = commissionInfo.commission ?? 0;
-      if (commission === 0 && totalSales > 0 && totalSales < 500_000) {
-        commission = Math.round(Math.max(totalProfit, 0) * 0.05);
-      }
-    }
+  } else if (totalSales > 0) {
+    commission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
   }
 
   try {
