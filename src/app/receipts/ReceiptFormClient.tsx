@@ -590,64 +590,70 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
           <div className="space-y-2">
             {items.map((it) => (
-              <div key={it.id} className="w-full flex items-center gap-3 border-b border-slate-800 pb-2">
-                <textarea
-                  className="w-1/2 min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
-                  value={it.title}
-                  onChange={(e) => updateRow(it.id, { title: e.target.value })}
-                  placeholder="Item description"
-                  rows={2}
-                />
-                <button
-                  type="button"
-                  className="h-12 px-4 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 flex items-center justify-center"
-                  onClick={() => aiDescription(it)}
-                  disabled={descLoadingId === it.id}
-                >
-                  {descLoadingId === it.id ? "…" : "✨ AI"}
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-20 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                  value={it.quantity}
-                  onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
-                />
-                <input
-                  type="number"
-                  min={0}
-                  className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                  value={it.unitPrice === "" ? "" : it.unitPrice}
-                  onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
-                  placeholder="Unit price"
-                />
-                {showSerials && (
-                  <input
-                    className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                    value={it.serial}
-                    onChange={(e) => updateRow(it.id, { serial: e.target.value })}
-                    placeholder="Serial / IMEI (optional)"
-                  />
-                )}
-                {showWarranty && (
-                  <select
-                    className="w-32 h-12 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                    value={it.warranty}
-                    onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
-                  >
-                    <option value="">No warranty</option>
-                    {warrantyOptions.map((w) => (
-                      <option key={w} value={w}>{w}</option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  type="button"
-                  className="h-12 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
-                  onClick={() => removeRow(it.id)}
-                >
-                  Remove
-                </button>
+              <div key={it.id} className="w-full border-b border-slate-800 pb-3 last:border-none last:pb-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <textarea
+                      className="w-full min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
+                      value={it.title}
+                      onChange={(e) => updateRow(it.id, { title: e.target.value })}
+                      placeholder="Item description"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="flex-shrink-0 h-12 px-4 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 flex items-center justify-center"
+                      onClick={() => aiDescription(it)}
+                      disabled={descLoadingId === it.id}
+                    >
+                      {descLoadingId === it.id ? "…" : "✨ AI"}
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      className="flex-shrink-0 h-12 min-w-[68px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                      value={it.quantity}
+                      onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      className="flex-shrink-0 h-12 min-w-[92px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                      value={it.unitPrice === "" ? "" : it.unitPrice}
+                      onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
+                      placeholder="Unit price"
+                    />
+                    {showSerials && (
+                      <input
+                        className="h-12 min-w-[92px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 w-full sm:w-auto"
+                        value={it.serial}
+                        onChange={(e) => updateRow(it.id, { serial: e.target.value })}
+                        placeholder="Serial / IMEI (optional)"
+                      />
+                    )}
+                    {showWarranty && (
+                      <select
+                        className="h-12 min-w-[120px] rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 w-full sm:w-auto"
+                        value={it.warranty}
+                        onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
+                      >
+                        <option value="">No warranty</option>
+                        {warrantyOptions.map((w) => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      className="flex-shrink-0 h-12 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => removeRow(it.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
