@@ -300,27 +300,27 @@ export default function Home() {
     >
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/20 backdrop-blur">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div>
+        <nav className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-0">
             <div className="text-lg font-semibold leading-none">BetechOps</div>
             <div className="text-xs text-slate-400">Operations Dashboard</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap justify-end gap-2 sm:gap-3">
             <Link
               href="/attendant/login"
-              className="rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+              className="w-full rounded-xl px-3 py-2 text-center text-sm text-slate-200 hover:bg-white/10 sm:w-auto"
             >
               Attendant Login
             </Link>
             <Link
               href="/admin/login"
-              className="rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+              className="w-full rounded-xl px-3 py-2 text-center text-sm text-slate-200 hover:bg-white/10 sm:w-auto"
             >
               Admin Login
             </Link>
             <Link
               href="/docs"
-              className="rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+              className="w-full rounded-xl px-3 py-2 text-center text-sm text-slate-200 hover:bg-white/10 sm:w-auto"
             >
               Documentation
             </Link>
@@ -328,38 +328,36 @@ export default function Home() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4">
+      <main className="page-shell">
         {/* Hero */}
         <section className="pt-14 pb-10 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight leading-tight sm:text-4xl md:text-5xl">
             BetechOps Operations Dashboard
           </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-slate-300">
+          <p className="mx-auto mt-3 max-w-2xl text-base text-slate-300 sm:text-lg">
             Live visibility into pickups, pricing, and sales. Quick access to admin
             and attendant portals.
           </p>
-          <div className="mt-7 flex items-center justify-center">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/admin/login"
-                className="rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold hover:bg-white/10"
-              >
-                Admin Portal
-              </Link>
+          <div className="mt-7 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+            <Link
+              href="/admin/login"
+              className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold text-center hover:bg-white/10 sm:w-auto"
+            >
+              Admin Portal
+            </Link>
 
-              <Link
-                href="/attendant/login"
-                className="rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold hover:bg-white/10"
-              >
-                Attendant Portal
-              </Link>
-            </div>
+            <Link
+              href="/attendant/login"
+              className="w-full rounded-2xl bg-slate-900/50 border border-white/10 px-6 py-3 font-semibold text-center hover:bg-white/10 sm:w-auto"
+            >
+              Attendant Portal
+            </Link>
           </div>
         </section>
 
         {/* Live Stats Grid */}
         <section className="pb-8">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
             <Stat
               title="Orders Waiting Pickup"
               value={pickupCnt}

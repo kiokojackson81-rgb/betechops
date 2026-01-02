@@ -22,7 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* Page body */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="page-shell py-6 space-y-6">
         <main>{children}</main>
         <AdminTips />
       </div>

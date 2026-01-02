@@ -166,8 +166,9 @@ export default function AttendantDashboard() {
   }, [definitions, shopId]);
 
   return (
-    <div className="mx-auto max-w-7xl p-6 text-slate-100">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="page-shell py-6 text-slate-100">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Attendant Dashboard</h1>
           <div className="mt-2 flex flex-wrap gap-2 text-xs uppercase tracking-widest text-slate-300">
@@ -183,7 +184,7 @@ export default function AttendantDashboard() {
         <div className="flex items-center gap-2 text-sm">
           <span className="text-slate-400">Shop:</span>
           <select
-            className="rounded-lg border border-white/10 bg-transparent px-2 py-1 outline-none"
+            className="w-full max-w-xs rounded-lg border border-white/10 bg-transparent px-2 py-1 text-sm outline-none"
             value={shopId || ""}
             onChange={(e) => {
               const val = e.target.value || undefined;
@@ -204,21 +205,27 @@ export default function AttendantDashboard() {
       </div>
 
       {/* KPI header */}
-      <div className="mb-6 flex items-center gap-4">
-        <div className="kpi-card">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="kpi-card flex-1 min-w-[140px]">
           <div className="kpi-title">Total products (recent)</div>
-          <div className="kpi-value">{summary ? summary.totalProducts : "—"}</div>
+          <div className="kpi-value">{summary ? summary.totalProducts : "-"}</div>
         </div>
-        <div className="kpi-card">
+        <div className="kpi-card flex-1 min-w-[140px]">
           <div className="kpi-title">Total sales (KES)</div>
-          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "—"}</div>
+          <div className="kpi-value">{summary ? Number(summary.totalSales).toLocaleString() : "-"}</div>
         </div>
-        <div className="ml-4 text-sm opacity-70">Recent uploads</div>
+        <div className="text-sm opacity-70">Recent uploads</div>
         <div className="sparkline">
           <Sparkline values={recentReports.map((r) => r.productsCount)} color="var(--primary)" />
         </div>
-        <div className="ml-auto">
-          <Button onClick={() => (window.location.href = "/attendant/daily-report")} variant="primary">Open daily report</Button>
+        <div className="w-full sm:w-auto sm:ml-auto">
+          <Button
+            onClick={() => (window.location.href = "/attendant/daily-report")}
+            variant="primary"
+            className="w-full text-center sm:w-auto"
+          >
+            Open daily report
+          </Button>
         </div>
       </div>
 
@@ -247,6 +254,7 @@ export default function AttendantDashboard() {
         </div>
       )}
     </div>
+  </div>
   );
 }
 

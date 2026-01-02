@@ -56,10 +56,20 @@ export default async function PayrollPage({ params }: { params: Promise<{ id: st
       ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
     const supportCommissionValue =
       ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
-    let ledgerSalesCommission = marketingCommissionValue + supportCommissionValue;
-    if (ledgerSalesCommission === 0 && currentLedgerRaw) {
-      ledgerSalesCommission = Number(currentLedgerRaw.grossCommission ?? 0);
+
+    const isJeniffer = (attendant?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
+
+    // For Jeniffer we must prefer the computed `userSummary.salesCommission`
+    // and not allow persisted ledger values to overwrite it. For other
+    // attendants prefer ledger-derived values when present.
+    let ledgerSalesCommission = 0;
+    if (!isJeniffer) {
+      ledgerSalesCommission = marketingCommissionValue + supportCommissionValue;
+      if (ledgerSalesCommission === 0 && currentLedgerRaw) {
+        ledgerSalesCommission = Number(currentLedgerRaw.grossCommission ?? 0);
+      }
     }
+
     if (ledgerSalesCommission === 0) {
       ledgerSalesCommission = userSummary.salesCommission;
     }
