@@ -234,7 +234,7 @@ export default function AttendantDashboard() {
           Loading your workspace…
         </div>
       ) : shops.length || !loadingShops ? (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1.2fr_.8fr]">
           <div className="space-y-6">
             {widgets.primary.length ? (
               widgets.primary.map((w) => <div key={w.id}>{w.node}</div>)
@@ -247,6 +247,9 @@ export default function AttendantDashboard() {
           <div className="space-y-6">
             {widgets.secondary.length ? widgets.secondary.map((w) => <div key={w.id}>{w.node}</div>) : null}
           </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
+          Tap any widget card to surface actions, and use the select box above if you need to focus on a single shop.
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">

@@ -177,6 +177,21 @@ function Stat({
   );
 }
 
+const MOBILE_FEATURES = [
+  {
+    title: "Compact nav",
+    detail: "Header links wrap and stretch to full width on phones so every CTA stays reachable.",
+  },
+  {
+    title: "Stacked stats",
+    detail: "KPI cards become full width under 640px and keep their glow for instant scanning.",
+  },
+  {
+    title: "Adaptive grids",
+    detail: "Grids and strips flow from one column to three without introducing horizontal scroll.",
+  },
+];
+
 /** =========================
  * Page
  * ======================= */
@@ -380,6 +395,28 @@ export default function Home() {
           )}
         >
           Every order moved today keeps customers happy tomorrow.
+        </section>
+
+        <section className="mb-12">
+          <div className="responsive-panel">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Mobile ready</p>
+                <h2 className="text-lg font-semibold text-white">Every surface stays legible on the smallest screens.</h2>
+              </div>
+              <p className="text-sm text-slate-300">
+                Built for pocket-sized attention spans without hiding any critical info.
+              </p>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              {MOBILE_FEATURES.map(({ title, detail }) => (
+                <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">{title}</p>
+                  <p className="mt-2 leading-relaxed text-xs text-slate-300">{detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
       </main>
 

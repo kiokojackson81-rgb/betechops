@@ -23,7 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Page body */}
       <div className="page-shell py-6 space-y-6">
-        <main>{children}</main>
+        <main role="main" className="space-y-8">{children}</main>
         <AdminTips />
       </div>
     </div>
