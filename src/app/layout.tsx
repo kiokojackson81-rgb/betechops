@@ -20,16 +20,17 @@ export const metadata: Metadata = {
     template: "%s · BetechOps",
   },
   description: "Real-time operations dashboards, support portals, and workflows for the BetechOps team.",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-  },
   openGraph: {
     type: "website",
     title: "BetechOps Operations",
     description: "Real-time operations dashboards, support portals, and workflows for the BetechOps team.",
     url: "https://betech.co.ke",
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
