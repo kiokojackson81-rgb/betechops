@@ -14,6 +14,10 @@ type UpsertPayload = {
   jumiaShopSid?: string;
   kilimallShopCode?: string;
   isActive?: boolean;
+  // Optional Jumia credential fields (server will create/link JumiaAccount when present)
+  clientId?: string;
+  refreshToken?: string;
+  jumiaLabel?: string;
 };
 
 export async function GET() {
@@ -64,6 +68,37 @@ export async function POST(req: Request) {
   const record = payload.id
     ? await prisma.marketplaceAccount.update({ where: { id: payload.id }, data })
     : await prisma.marketplaceAccount.create({ data });
+
+  // If this is a JUMIA account and credentials were provided, ensure a JumiaAccount and JumiaShop exist
+  if (payload.platform === Platform.JUMIA && payload.clientId && payload.refreshToken && (payload.jumiaShopSid || record.jumiaShopSid)) {
+    const jumiaSid = payload.jumiaShopSid?.trim() || record.jumiaShopSid!;
+
+    // Reuse existing JumiaAccount by clientId if present, otherwise create
+    let jumiaAcct = await prisma.jumiaAccount.findFirst({ where: { clientId: payload.clientId } });
+    if (!jumiaAcct) {
+      jumiaAcct = await prisma.jumiaAccount.create({
+        data: {
+          label: payload.jumiaLabel?.trim() || payload.displayName.trim(),
+          clientId: payload.clientId.trim(),
+          refreshToken: payload.refreshToken.trim(),
+        },
+      });
+    }
+
+    // Upsert the JumiaShop to point at the JumiaAccount
+    if (jumiaSid) {
+      await prisma.jumiaShop.upsert({
+        where: { id: jumiaSid },
+        create: { id: jumiaSid, name: payload.displayName.trim(), accountId: jumiaAcct.id },
+        update: { name: payload.displayName.trim(), accountId: jumiaAcct.id },
+      });
+
+      // ensure marketplaceAccount has the jumiaShopSid set
+      if (!record.jumiaShopSid) {
+        await prisma.marketplaceAccount.update({ where: { id: record.id }, data: { jumiaShopSid: jumiaSid } });
+      }
+    }
+  }
 
   return NextResponse.json({ account: record });
 }

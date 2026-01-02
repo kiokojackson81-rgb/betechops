@@ -131,7 +131,12 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     const items = await fetchOrderItems(apiBase, authHeader, order.id);
     for (const item of items) {
       const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
-      await prisma.marketplaceOrder.upsert({
+      const statusStr = typeof item.status === 'string' ? item.status : String(item.status ?? '');
+      const isReturnedFlag = statusStr.startsWith('RETURN') || statusStr === 'FAILED';
+      // load existing order (if any) so we can emit reversal events when needed
+      const existing = await prisma.marketplaceOrder.findUnique({ where: { id: item.id } });
+
+      const upsertResult = await prisma.marketplaceOrder.upsert({
         where: {
           id: item.id,
         },
@@ -149,15 +154,35 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
             : undefined,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
+          isReturned: isReturnedFlag,
           rawPayload: item as unknown as Prisma.InputJsonValue,
         },
         update: {
           status: item.status,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
+          isReturned: isReturnedFlag,
+          // If item is returned/failed, ensure previously recognised profit is cleared
+          profit: isReturnedFlag ? 0 : undefined,
           rawPayload: item as unknown as Prisma.InputJsonValue,
         },
       });
+
+      // If this item was previously recognised with profit and is now returned,
+      // create a reversal ProfitEvent to mirror the change.
+      try {
+        if (isReturnedFlag && existing && existing.profit && Number(existing.profit) > 0) {
+          await prisma.profitEvent.create({
+            data: {
+              marketplaceOrderId: existing.id,
+              type: "REVERSE",
+              amount: -Number(existing.profit),
+            },
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to create ProfitEvent reversal for returned order", err);
+      }
     }
   }
 }

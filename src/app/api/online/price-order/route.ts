@@ -49,7 +49,10 @@ export async function POST(req: Request) {
 
   const rounded = Math.round(buyingPrice);
   const sellingPrice = Number(order.sellingPrice ?? 0);
-  const profit = sellingPrice - rounded;
+  const raw = order.rawPayload as any;
+  const fee = Number((raw?.seller_fee?.amount ?? raw?.seller_fee_amount ?? 0) || 0);
+  const shipping = Number((raw?.shipping_fee?.amount ?? raw?.shipping_fee_amount ?? 0) || 0);
+  const profit = sellingPrice - fee - shipping - rounded;
 
   await prisma.marketplaceOrder.update({
     where: { id: order.id },
@@ -60,6 +63,19 @@ export async function POST(req: Request) {
       pricedAt: new Date(),
     },
   });
+
+  // Record a profit recognition event
+  try {
+    await prisma.profitEvent.create({
+      data: {
+        marketplaceOrderId: order.id,
+        type: "RECOGNISE",
+        amount: profit,
+      },
+    });
+  } catch (err) {
+    console.warn("Failed to create ProfitEvent for priced order", err);
+  }
 
   const normalizedName = normalizeName(order.productName);
   await prisma.marketplacePricingTemplate.upsert({

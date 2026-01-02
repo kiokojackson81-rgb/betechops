@@ -78,6 +78,9 @@ export async function GET(req: Request) {
         sellingPrice: Number(order.sellingPrice ?? 0),
         currency: order.currency,
         suggestedBuyingPrice: templateMap.get(key) ?? null,
+        // Extract fees from stored raw payload when available to show in UI
+        sellerFee: Number(((order.rawPayload as any)?.seller_fee?.amount ?? (order.rawPayload as any)?.seller_fee_amount) ?? 0),
+        shippingFee: Number(((order.rawPayload as any)?.shipping_fee?.amount ?? (order.rawPayload as any)?.shipping_fee_amount) ?? 0),
       };
     }),
   });

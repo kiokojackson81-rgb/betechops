@@ -463,45 +463,53 @@ export async function jumiaFetch(
       // Heuristic retry: if shop-scoped token produced a 422, try once with global/env token
       // This helps distinguish "order not found" vs "token not authorized for this shop".
       if (r.status === 422 && tokenMeta?.source === 'SHOP') {
-        try {
-          const globalToken = await getAccessToken();
-          const retryHeaders = new Headers(requestInit.headers as HeadersInit);
-          retryHeaders.set('Authorization', `Bearer ${globalToken}`);
-          // mark that this attempt used ENV token for observability
-          retryHeaders.set('X-Auth-Source', 'ENV');
-          const retryInit = { ...requestInit, headers: retryHeaders } as RequestInit;
-          const r2 = await fetch(url, retryInit);
-          const msg2 = await r2.text().catch(() => r2.statusText);
-          console.error('[jumiaFetch] retry-with-global-token', {
-            url,
-            status: r2.status,
-            body: String(msg2).slice(0, 400),
-          });
-          if (r2.ok) {
-            // Parse success response similarly to normal success path
-            const contentType2 = (typeof r2.headers?.get === 'function' ? r2.headers.get('content-type') : '') || '';
-            if (contentType2.includes('application/pdf') || contentType2.includes('octet-stream')) {
-              const b = await r2.arrayBuffer();
-              return { _binary: Buffer.from(b).toString('base64'), contentType: contentType2 } as any;
-            }
-            try {
-              if (typeof r2.clone === 'function' && typeof r2.json === 'function') return await r2.clone().json();
-            } catch {}
-            try {
-              if (typeof r2.json === 'function') return await r2.json();
-            } catch {}
-            try {
-              if (typeof r2.text === 'function') {
-                const t = await r2.text();
-                try { return JSON.parse(t); } catch { return t; }
+        // Avoid noisy retry attempt when no global credentials are configured
+        const hasGlobalCreds = Boolean(
+          process.env.JUMIA_CLIENT_ID || process.env.OIDC_CLIENT_ID || process.env.JUMIA_REFRESH_TOKEN || process.env.OIDC_REFRESH_TOKEN
+        );
+        if (!hasGlobalCreds) {
+          console.warn('[jumiaFetch] skipping retry-with-global-token: no global clientId/refreshToken configured');
+        } else {
+          try {
+            const globalToken = await getAccessToken();
+            const retryHeaders = new Headers(requestInit.headers as HeadersInit);
+            retryHeaders.set('Authorization', `Bearer ${globalToken}`);
+            // mark that this attempt used ENV token for observability
+            retryHeaders.set('X-Auth-Source', 'ENV');
+            const retryInit = { ...requestInit, headers: retryHeaders } as RequestInit;
+            const r2 = await fetch(url, retryInit);
+            const msg2 = await r2.text().catch(() => r2.statusText);
+            console.error('[jumiaFetch] retry-with-global-token', {
+              url,
+              status: r2.status,
+              body: String(msg2).slice(0, 400),
+            });
+            if (r2.ok) {
+              // Parse success response similarly to normal success path
+              const contentType2 = (typeof r2.headers?.get === 'function' ? r2.headers.get('content-type') : '') || '';
+              if (contentType2.includes('application/pdf') || contentType2.includes('octet-stream')) {
+                const b = await r2.arrayBuffer();
+                return { _binary: Buffer.from(b).toString('base64'), contentType: contentType2 } as any;
               }
-            } catch {}
-            return {} as any;
+              try {
+                if (typeof r2.clone === 'function' && typeof r2.json === 'function') return await r2.clone().json();
+              } catch {}
+              try {
+                if (typeof r2.json === 'function') return await r2.json();
+              } catch {}
+              try {
+                if (typeof r2.text === 'function') {
+                  const t = await r2.text();
+                  try { return JSON.parse(t); } catch { return t; }
+                }
+              } catch {}
+              return {} as any;
+            }
+            // include retry response in original error body for diagnostics
+            err.body = `${String(msg).slice(0, 400)}\n--- retry (${r2.status}) ---\n${String(msg2).slice(0, 400)}`;
+          } catch (e) {
+            console.error('[jumiaFetch] retry-with-global-token failed', e instanceof Error ? e.message : String(e));
           }
-          // include retry response in original error body for diagnostics
-          err.body = `${String(msg).slice(0, 400)}\n--- retry (${r2.status}) ---\n${String(msg2).slice(0, 400)}`;
-        } catch (e) {
-          console.error('[jumiaFetch] retry-with-global-token failed', e instanceof Error ? e.message : String(e));
         }
       }
       throw err;

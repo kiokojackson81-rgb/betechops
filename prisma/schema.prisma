@@ -994,10 +994,13 @@ model MarketplaceOrder {
   sellingPrice Decimal             @db.Decimal(14, 2)
   currency     String              @default("KES")
   buyingPrice  Decimal?            @db.Decimal(14, 2)
+  sellerFee    Decimal?            @db.Decimal(14, 2)
+  shippingFee  Decimal?            @db.Decimal(14, 2)
   profit       Decimal?            @db.Decimal(14, 2)
   pricedById   String?
   pricedAt     DateTime?
   isReturned   Boolean             @default(false)
+  profitEvents  ProfitEvent[]
   rawPayload   Json
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -1008,6 +1011,17 @@ model MarketplaceOrder {
   @@unique([platform, orderItemId])
   @@index([accountId, orderedAt])
   @@index([pricedById])
+}
+
+model ProfitEvent {
+  id               String          @id @default(cuid())
+  marketplaceOrderId String
+  type             ProfitEventType
+  amount           Decimal         @db.Decimal(14, 2)
+  createdAt        DateTime        @default(now())
+  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
+
+  @@index([marketplaceOrderId])
 }
 
 model MarketplacePricingTemplate {
@@ -1194,4 +1208,9 @@ enum DocType {
 enum CommissionRecordStatus {
   PENDING
   RELEASED
+}
+
+enum ProfitEventType {
+  RECOGNISE
+  REVERSE
 }

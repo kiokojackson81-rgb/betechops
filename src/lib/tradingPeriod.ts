@@ -1,9 +1,39 @@
 export type TradingPeriod = {
-  start: Date; // inclusive
-  end: Date; // inclusive
+  start: Date;
+  end: Date;
   label: string;
-  key: string;
+  key: string; // ISO start_end
 };
+
+export function getJumiaWeeklyPeriodFor(date: Date): TradingPeriod {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  // getDay(): Sunday=0…Saturday=6. Jumia weeks start on Monday.
+  const dayOfWeek = d.getDay();
+  const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+  const start = new Date(d);
+  start.setDate(d.getDate() + diffToMonday);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  const label = `${start.toISOString().split('T')[0]} – ${end.toISOString().split('T')[0]}`;
+  const key = `${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}`;
+  return { start, end, label, key };
+}
+
+export function getRecentJumiaWeeks(n: number): TradingPeriod[] {
+  const out: TradingPeriod[] = [];
+  const today = new Date();
+  for (let i = 0; i < n; i += 1) {
+    const ref = new Date(today);
+    ref.setDate(ref.getDate() - i * 7);
+    out.push(getJumiaWeeklyPeriodFor(ref));
+  }
+  return out;
+}
+
+export default getJumiaWeeklyPeriodFor;
 
 const formatLabel = (date: Date) =>
   date.toLocaleDateString("en-US", {
