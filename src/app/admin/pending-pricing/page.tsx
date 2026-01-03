@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveShopScopeForServer } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
+import WeeklySummary from "./WeeklySummary";
 import UnpricedOrdersClient from "./UnpricedOrdersClient";
 import { AlertTriangle } from "lucide-react";
 
@@ -86,6 +87,10 @@ export default async function PendingPricingPage({
 
   return (
     <div className="mx-auto max-w-7xl p-6">
+      {/* Marketplace weekly summary */}
+      <div className="mb-6">
+        <WeeklySummary />
+      </div>
       {/* Marketplace unpriced orders */}
       <div className="mb-6">
         <UnpricedOrdersClient />
