@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { resolveShopScopeForServer } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+// client component that fetches marketplace unpriced orders and allows pricing
+const UnpricedOrdersCard = dynamic(() => import("@/app/attendant/jumia-ops/UnpricedOrdersCard"), { ssr: false });
 import { AlertTriangle } from "lucide-react";
 
 const PAGE_SIZE_DEFAULT = 10;
@@ -85,6 +89,10 @@ export default async function PendingPricingPage({
 
   return (
     <div className="mx-auto max-w-7xl p-6">
+      {/* Marketplace unpriced orders */}
+      <div className="mb-6">
+        <UnpricedOrdersCard />
+      </div>
       <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Pending Pricing</h1>
