@@ -204,6 +204,54 @@ const csvEscape = (value: string | number | null | undefined) => {
   return str;
 };
 
+const badgeBaseClass =
+  "inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em]";
+
+const DOC_BADGE_VARIANTS: Record<string, string> = {
+  RECEIPT: "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+  INVOICE: "border border-amber-500/30 bg-amber-500/10 text-amber-200",
+  QUOTATION: "border border-sky-500/30 bg-sky-500/10 text-sky-200",
+  LAYAWAY: "border border-violet-500/30 bg-violet-500/10 text-violet-200",
+};
+
+const STATUS_BADGE_VARIANTS: Record<string, string> = {
+  COMPLETED: "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+  PENDING: "border border-amber-500/40 bg-amber-500/10 text-amber-200",
+  PROCESSING: "border border-sky-500/30 bg-sky-500/10 text-sky-200",
+  FAILED: "border border-rose-500/30 bg-rose-500/10 text-rose-200",
+  CANCELED: "border border-rose-500/30 bg-rose-500/10 text-rose-200",
+  REVERSED: "border border-rose-500/30 bg-rose-500/10 text-rose-200",
+};
+
+const PAYMENT_BADGE_VARIANTS: Record<string, string> = {
+  MPESA: "border border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+  CASH: "border border-white/15 bg-white/5 text-slate-100",
+};
+
+const formatBadgeLabel = (value?: string | null) =>
+  value
+    ? value
+        .trim()
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/\b\w/g, (match) => match.toUpperCase())
+    : "-";
+
+const getDocBadgeClass = (docType?: string | null) => {
+  if (!docType) return "border border-white/10 bg-white/5 text-white";
+  return DOC_BADGE_VARIANTS[docType.toUpperCase()] ?? "border border-white/10 bg-white/5 text-white";
+};
+
+const getStatusBadgeClass = (status?: string | null) => {
+  if (!status) return "border border-white/10 bg-white/5 text-white";
+  return STATUS_BADGE_VARIANTS[status.toUpperCase().trim()] ?? "border border-white/10 bg-white/5 text-white";
+};
+
+const getPaymentBadgeClass = (method?: string | null) => {
+  if (!method) return "border border-white/10 bg-white/5 text-white";
+  return PAYMENT_BADGE_VARIANTS[method.toUpperCase()] ?? "border border-white/10 bg-white/5 text-white";
+};
+
 const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
   const receipt = detail.receipt;
   const order = receipt?.order ?? {};
@@ -1128,11 +1176,11 @@ export default function ReceiptsAdminClient({
         />
         <PaymentMethodFilterCard
           totals={summaryForDisplay?.paymentTotals ?? null}
-        partialTotals={partialTotals}
-        activeMethod={appliedFilters.paymentMethod}
-        loading={summaryLoading}
-        onSelect={handlePaymentMethodSelect}
-      />
+          partialTotals={partialTotals}
+          activeMethod={appliedFilters.paymentMethod}
+          loading={summaryLoading}
+          onSelect={handlePaymentMethodSelect}
+        />
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -1280,8 +1328,8 @@ export default function ReceiptsAdminClient({
                     <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
                   </td>
                   <td className="px-3 py-3">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs uppercase text-slate-100">
-                      {row.docType}
+                    <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
+                      {formatBadgeLabel(row.docType)}
                     </span>
                   </td>
                   <td className="px-3 py-3">
@@ -1289,9 +1337,15 @@ export default function ReceiptsAdminClient({
                   </td>
                   <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
                   <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
-                  <td className="px-3 py-3 text-slate-300">{row.paymentMethod ?? "Unknown"}</td>
                   <td className="px-3 py-3">
-                    <span className="text-xs uppercase tracking-wide text-slate-400">{row.status || "-"}</span>
+                    <span className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}>
+                      {formatBadgeLabel(row.paymentMethod)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
+                      {formatBadgeLabel(row.status)}
+                    </span>
                   </td>
                   <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
                   <td className="px-3 py-3 text-right">
