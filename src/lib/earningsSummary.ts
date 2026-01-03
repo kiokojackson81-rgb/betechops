@@ -116,8 +116,18 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
   }
   for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-    if (merged.has(k)) continue;
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+    const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
+    if (merged.has(k)) {
+      // If marketing provided an entry but it lacks profit information while
+      // the support entry has profit, prefer the support entry so we don't
+      // lose buying-price-derived profit (handles unpriced marketing rows).
+      const existing = merged.get(k)!;
+      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+        merged.set(k, supportObj);
+      }
+      continue;
+    }
+    merged.set(k, supportObj);
   }
   let mergedSales = 0;
   let mergedProfit = 0;
