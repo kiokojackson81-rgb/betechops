@@ -18,12 +18,20 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const take = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
+  const statusFilter = url.searchParams.get("status") ?? "all";
+
+  const whereBase: any = {
+    accountId: { in: accountIds },
+    buyingPrice: null,
+  };
+
+  if (statusFilter && statusFilter !== "all") {
+    const sf = String(statusFilter).toUpperCase();
+    whereBase.status = sf;
+  }
 
   const orders = await prisma.marketplaceOrder.findMany({
-    where: {
-      accountId: { in: accountIds },
-      buyingPrice: null,
-    },
+    where: whereBase,
     include: { account: true },
     orderBy: { orderedAt: "desc" },
     take,
