@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
+import { computeDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
@@ -129,12 +130,23 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
 
   const user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
   const isJeniffer = (user?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
+  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (isJeniffer) {
     posSummary = await summarizePosReceiptsForPeriod({ start, end });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   } else if (mergedSales > totalSales) {
+    totalSales = mergedSales;
+    totalProfit = mergedProfit;
+  }
+
+  // If Brendah, always prefer the deduped merged totals (marketing + support)
+  // and ensure unpriced receipts (which produce zero profit) are excluded by
+  // the upstream summarizers. We'll compute her commission using the
+  // direct-sales formula + product commissions and ignore persisted ledger
+  // overrides.
+  if (isBrendah) {
     totalSales = mergedSales;
     totalProfit = mergedProfit;
   }
@@ -271,24 +283,29 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     ledger = null;
   }
 
-  // For the attendant-facing earnings summary we use the default behaviour
-  // (which applies the configured profit-fallback percent) so this endpoint
-  // mirrors previous commission calculations.
+  // Compute commission. For Brendah we use the direct-sales formula from
+  // `computeDirectCommission` and add product commissions. For others we
+  // continue to use the tiered calculation with an optional fallback percent.
   const fallbackPercent = isJeniffer ? 0 : (totalProfit > 0 ? 0.05 : 0);
-  const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
+
+  let salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
     copiedProducts,
     editedProducts,
   });
 
-  const computedGrossCommission =
-    salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
+  let computedGrossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
 
-  // If a persisted ledger exists, prefer its grossCommission as the authoritative
-  // commission total and use it to compute earnings/net pay so the payroll UI
-  // mirrors the ledger-backed numbers shown in the front-end dashboard.
-  const finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
+  if (isBrendah) {
+    const direct = computeDirectCommission(totalSales, totalProfit);
+    salesCommission = direct.amount;
+    computedGrossCommission = direct.amount + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
+  }
+
+  // Persisted ledger overrides should be ignored for Brendah so her computed
+  // commission above is authoritative. For others we prefer ledger when present.
+  const finalGrossCommission = isBrendah ? computedGrossCommission : (ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission);
 
   const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
