@@ -59,8 +59,15 @@ export async function getEarningsSummaryForAttendant(opts: {
     merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
   }
   for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-    if (merged.has(k)) continue;
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
+    const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0 };
+    if (merged.has(k)) {
+      const existing = merged.get(k)!;
+      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+        merged.set(k, supportObj);
+      }
+      continue;
+    }
+    merged.set(k, supportObj);
   }
   let sales = 0;
   for (const [, v] of merged) sales += v.sales;

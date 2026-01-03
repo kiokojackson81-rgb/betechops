@@ -245,15 +245,15 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     if (!found) {
       const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
       const res: any = await prisma.$queryRaw`
-        SELECT id, "grossCommission", "netCommission", "penalties", detail
-        FROM "CommissionLedger"
-        WHERE "userId" = ${opts.userId}
-          AND (
-            (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
-            OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
-          )
-        LIMIT 1
-      `;
+          SELECT id, "grossCommission", "netCommission", "penalties", "commissionTotal", detail
+          FROM "CommissionLedger"
+          WHERE "userId" = ${opts.userId}
+            AND (
+              (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
+              OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
+            )
+          LIMIT 1
+        `;
       if (Array.isArray(res) && res.length > 0) found = res[0];
     }
     if (found) {
@@ -261,8 +261,10 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
         grossCommission: Number(found.grossCommission ?? 0),
         netCommission: Number(found.netCommission ?? 0),
         penalties: Number(found.penalties ?? 0),
+        // include persisted commissionTotal when available
+        commissionTotal: Number(found.commissionTotal ?? found.commission_total ?? 0),
         detail: found.detail ?? null,
-      };
+      } as any;
     }
     // If still not found, try a tolerant lookup: find any ledger for the user
     // whose periodStart is within +/- 24 hours of the expected period start.
@@ -281,8 +283,9 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
             grossCommission: Number(near.grossCommission ?? 0),
             netCommission: Number(near.netCommission ?? 0),
             penalties: Number(near.penalties ?? 0),
+            commissionTotal: Number((near as any).commissionTotal ?? (near as any).commission_total ?? 0),
             detail: near.detail ?? null,
-          };
+          } as any;
         }
       } catch (e) {
         // ignore tolerant lookup failures
@@ -313,9 +316,19 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     computedGrossCommission = direct.amount + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
   }
 
-  // Persisted ledger overrides should be ignored for Brendah so her computed
-  // commission above is authoritative. For others we prefer ledger when present.
-  const finalGrossCommission = isBrendah ? computedGrossCommission : (ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission);
+  // Prefer a persisted `commissionTotal` when present (authoritative),
+  // otherwise fall back to computed values. This ensures the UI quick-stats
+  // reflect the ledger-upserted commission when admins have run a recompute.
+  let finalGrossCommission: number;
+  const ledgerPersistedCommission = ledger && (ledger as any).commissionTotal ? Number((ledger as any).commissionTotal) : 0;
+  if (ledgerPersistedCommission > 0) {
+    finalGrossCommission = ledgerPersistedCommission;
+  } else if (isBrendah) {
+    // If no persisted commission, use computed for Brendah
+    finalGrossCommission = computedGrossCommission;
+  } else {
+    finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
+  }
 
   const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;

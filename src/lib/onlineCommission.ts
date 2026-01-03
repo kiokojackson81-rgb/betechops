@@ -91,7 +91,11 @@ export function computeDirectCommission(totalSales: Money, totalProfit: Money): 
     const amount = Math.round(profit * 0.05);
     return { amount, mode: amount > 0 ? "direct_fallback" : "none" };
   }
-  return { amount: progressiveAmount(totalSales), mode: "direct_progressive" };
+  const progressive = progressiveAmount(totalSales);
+  const profitPart = Math.round(Math.max(totalProfit ?? 0, 0) * 0.05);
+  const amount = progressive + profitPart;
+  const reason = profitPart > 0 ? `progressive + 5% profit (${profitPart})` : undefined;
+  return { amount, mode: "direct_progressive", reason };
 }
 
 export function computeMarketplaceCommission(

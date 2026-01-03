@@ -116,8 +116,15 @@ export async function GET(req: Request) {
     }
 
     for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-      if (merged.has(k)) continue; // marketing wins
-      merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+      const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
+      if (merged.has(k)) {
+        const existing = merged.get(k)!;
+        if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+          merged.set(k, supportObj);
+        }
+        continue; // marketing wins otherwise
+      }
+      merged.set(k, supportObj);
     }
 
     for (const [, v] of merged) {
@@ -171,18 +178,23 @@ export async function GET(req: Request) {
       });
 
       if (ledger) {
-        const detail: any = ledger.detail ?? {};
-        const marketingCommission = Number(detail.marketing?.commission ?? 0);
-        const supportCommission = Number(detail.support?.commission ?? 0);
-        const combinedDetailCommission = marketingCommission + supportCommission;
-
-        if (combinedDetailCommission > 0) {
-          commission = combinedDetailCommission;
+        const persistedTotal = Number((ledger as any).commissionTotal ?? (ledger as any).commission_total ?? 0);
+        if (persistedTotal > 0) {
+          commission = persistedTotal;
         } else {
-          const ledgerNet = Number(
-            ledger.netCommission ?? ledger.grossCommission ?? commission,
-          );
-          commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+          const detail: any = ledger.detail ?? {};
+          const marketingCommission = Number(detail.marketing?.commission ?? 0);
+          const supportCommission = Number(detail.support?.commission ?? 0);
+          const combinedDetailCommission = marketingCommission + supportCommission;
+
+          if (combinedDetailCommission > 0) {
+            commission = combinedDetailCommission;
+          } else {
+            const ledgerNet = Number(
+              ledger.netCommission ?? ledger.grossCommission ?? commission,
+            );
+            commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+          }
         }
       }
     } catch {

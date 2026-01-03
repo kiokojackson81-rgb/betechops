@@ -19,9 +19,29 @@ async function recomputeMarketing(apply) {
   const entries = await prisma.marketingDailyEntry.findMany({ select: { id: true, totalSales: true, totalProfit: true } });
   let changed = 0;
   for (const e of entries) {
-    const agg = await prisma.marketingReceipt.aggregate({ where: { dailyEntryId: e.id }, _sum: { sellingTotal: true, buyingTotal: true } });
-    const sumSelling = Number(agg._sum.sellingTotal ?? 0);
-    const sumBuying = Number(agg._sum.buyingTotal ?? 0);
+    // compute totals only from receipts that have pricing information
+    const receipts = await prisma.marketingReceipt.findMany({ where: { dailyEntryId: e.id }, include: { items: true } });
+    let sumSelling = 0;
+    let sumBuying = 0;
+    for (const r of receipts) {
+      const selling = Number(r.sellingTotal ?? 0);
+      const items = r.items || [];
+      if (items.length > 0) {
+        const allItemsPriced = items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+        if (!allItemsPriced) continue; // skip unpriced receipt
+        const buyingSum = items.reduce((s, it) => s + Number(it.buyingPrice ?? 0), 0);
+        sumSelling += selling;
+        sumBuying += buyingSum;
+      } else {
+        // if receipt has an explicit buyingTotal recorded, use it; otherwise skip
+        if (Number(r.buyingTotal ?? 0) > 0) {
+          sumSelling += selling;
+          sumBuying += Number(r.buyingTotal ?? 0);
+        } else {
+          continue; // skip unpriced receipt
+        }
+      }
+    }
     const profit = sumSelling - sumBuying;
     if (e.totalSales !== sumSelling || e.totalProfit !== profit) {
       changed++;
@@ -39,9 +59,27 @@ async function recomputeSupport(apply) {
   const entries = await prisma.supportDailyEntry.findMany({ select: { id: true, totalSales: true, totalProfit: true } });
   let changed = 0;
   for (const e of entries) {
-    const agg = await prisma.supportReceipt.aggregate({ where: { dailyEntryId: e.id }, _sum: { sellingTotal: true, buyingTotal: true } });
-    const sumSelling = Number(agg._sum.sellingTotal ?? 0);
-    const sumBuying = Number(agg._sum.buyingTotal ?? 0);
+    const receipts = await prisma.supportReceipt.findMany({ where: { dailyEntryId: e.id }, include: { items: true } });
+    let sumSelling = 0;
+    let sumBuying = 0;
+    for (const r of receipts) {
+      const selling = Number(r.sellingTotal ?? 0);
+      const items = r.items || [];
+      if (items.length > 0) {
+        const allItemsPriced = items.every((it) => Number(it.buyingPrice ?? 0) > 0);
+        if (!allItemsPriced) continue; // skip unpriced receipt
+        const buyingSum = items.reduce((s, it) => s + Number(it.buyingPrice ?? 0), 0);
+        sumSelling += selling;
+        sumBuying += buyingSum;
+      } else {
+        if (Number(r.buyingTotal ?? 0) > 0) {
+          sumSelling += selling;
+          sumBuying += Number(r.buyingTotal ?? 0);
+        } else {
+          continue; // skip unpriced receipt
+        }
+      }
+    }
     const profit = sumSelling - sumBuying;
     if (e.totalSales !== sumSelling || e.totalProfit !== profit) {
       changed++;

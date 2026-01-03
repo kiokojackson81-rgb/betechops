@@ -45,8 +45,15 @@ export async function GET(req: Request) {
     merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
   }
   for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-    if (merged.has(k)) continue; // marketing wins
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+    const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
+    if (merged.has(k)) {
+      const existing = merged.get(k)!;
+      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+        merged.set(k, supportObj);
+      }
+      continue; // marketing wins otherwise
+    }
+    merged.set(k, supportObj);
   }
 
   let combinedSales = 0;
@@ -70,19 +77,21 @@ export async function GET(req: Request) {
   const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
 
   let salesCommission = marketingCommission + supportCommission;
-  if (salesCommission === 0 && ledger) {
-    salesCommission = Number(ledger.grossCommission ?? 0);
-  }
-  if (salesCommission === 0) {
-    salesCommission = summary.salesCommission;
+  const ledgerPersisted = Number((ledger as any)?.commissionTotal ?? (ledger as any)?.commission_total ?? 0);
+  if (ledgerPersisted > 0) {
+    salesCommission = ledgerPersisted;
+  } else {
+    if (salesCommission === 0 && ledger) {
+      salesCommission = Number(ledger.grossCommission ?? 0);
+    }
+    if (salesCommission === 0) {
+      salesCommission = summary.salesCommission;
+    }
   }
 
-  const grossCommission =
-    salesCommission +
-    summary.newProductCommission +
-    summary.copiedCommission +
-    summary.editedCommission +
-    summary.commissionTopUpTotal;
+  const grossCommission = ledgerPersisted > 0
+    ? ledgerPersisted
+    : salesCommission + summary.newProductCommission + summary.copiedCommission + summary.editedCommission + summary.commissionTopUpTotal;
 
   const totalEarnings = summary.baseSalary + summary.transportAllowance + grossCommission + summary.bonusTotal;
   const totalDeductions =

@@ -58,7 +58,14 @@ async function main() {
   const merged = new Map();
   for (const [k, v] of m.per.entries()) merged.set(k, { ...v });
   for (const [k, v] of s.per.entries()) {
-    if (merged.has(k)) continue; // marketing wins
+    const supportObj = { ...v };
+    if (merged.has(k)) {
+      const existing = merged.get(k);
+      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+        merged.set(k, supportObj);
+      }
+      continue; // marketing wins otherwise
+    }
     merged.set(k, { ...v });
   }
 

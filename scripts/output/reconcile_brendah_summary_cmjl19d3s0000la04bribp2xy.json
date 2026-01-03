@@ -1,0 +1,82 @@
+{
+  "user": {
+    "id": "cmimxqfnr0005v5mc05nwhg9o",
+    "email": "brendah@betech.co.ke"
+  },
+  "period": {
+    "id": "cmjl19d3s0000la04bribp2xy",
+    "start": "2025-12-25T00:00:00.000Z",
+    "end": "2026-01-24T23:59:59.999Z"
+  },
+  "supportReceiptsCount": 24,
+  "marketingReceiptsCount": 24,
+  "supportTotals": {
+    "sales": 681198,
+    "profit": 209848
+  },
+  "supportEntryTotals": {
+    "sales": 687698,
+    "profit": 216348
+  },
+  "marketingTotals": {
+    "sales": 681198,
+    "profit": 618798
+  },
+  "computed": {
+    "support": {
+      "amount": 3754,
+      "mode": "direct_progressive"
+    },
+    "marketing": {
+      "amount": 3624,
+      "mode": "marketplace_progressive"
+    },
+    "combined": 7378
+  },
+  "ledger": {
+    "id": "cmjspoyk60000ib04ateif12d",
+    "grossCommission": "17743",
+    "netCommission": "17743",
+    "detail": {
+      "support": {
+        "totals": {
+          "totalItems": 0,
+          "totalSales": 409298,
+          "totalProfit": 111938,
+          "newBatteries": 0,
+          "totalReceipts": 12,
+          "changedBatteries": 0
+        },
+        "periodKey": "2025-12-25_2026-01-24",
+        "commission": 5597,
+        "computedAt": "2025-12-30T15:01:26.011Z",
+        "tierCommission": 0,
+        "fallbackCommission": 5597
+      },
+      "marketing": {
+        "totals": {
+          "totalItems": 36,
+          "totalSales": 646498,
+          "totalProfit": 17600,
+          "paymentStats": {
+            "totalSalesCash": 55500,
+            "totalSalesMpesa": 590998,
+            "countCashReceipts": 2,
+            "countMpesaReceipts": 20
+          },
+          "totalReceipts": 25,
+          "walkInsServed": 5,
+          "totalNewProducts": 400,
+          "walkInsPurchased": 0,
+          "totalCopiedProducts": 21,
+          "totalEditedProducts": 0
+        },
+        "periodKey": "2025-12-25_2026-01-24",
+        "commission": 12146,
+        "computedAt": "2026-01-02T14:35:19.200Z"
+      },
+      "supportCommission": 5597
+    }
+  },
+  "csvPath": "C:\\Projects\\betechops\\scripts\\output\\reconcile_brendah_receipts_cmjl19d3s0000la04bribp2xy.csv"
+}

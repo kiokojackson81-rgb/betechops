@@ -202,14 +202,15 @@ async function recompute(emailArg, dateArg) {
     const period = cliDate ? getTradingPeriodFor(new Date(cliDate)) : getTradingPeriodFor(new Date());
     const { totals } = await summarize(prisma, user.id, period);
     const commissionInfo = calculateCumulativeCommission(totals.totalSales || 0);
+    const baseCommission = commissionInfo.commission || 0;
+    const profitPart = Math.round(Math.max(totals.totalProfit ?? 0, 0) * 0.05);
     let marketingCommission = 0;
-    if (totals.totalProfit > 0) {
-      const baseCommission = commissionInfo.commission || 0;
-      const fallbackCommission =
-        baseCommission === 0 && totals.totalSales > 0 && totals.totalSales < 500000
-          ? Math.round(Math.max(totals.totalProfit, 0) * 0.05)
-          : 0;
-      marketingCommission = baseCommission > 0 ? baseCommission : fallbackCommission;
+    if (baseCommission > 0) {
+      // Ladder reached: add 5% of profit on top of ladder commission
+      marketingCommission = baseCommission + (totals.totalSales >= 500000 ? profitPart : 0);
+    } else {
+      // No ladder reached: fallback 5% when sales in (0, 500k)
+      marketingCommission = totals.totalSales > 0 && totals.totalSales < 500000 ? profitPart : 0;
     }
 
     if (marketingCommission === 0 && totals.totalSales === 0) {
@@ -224,15 +225,49 @@ async function recompute(emailArg, dateArg) {
     const penalties = toNumber(existingLedger ? existingLedger.penalties : 0);
     const netCommission = grossCommission - penalties;
 
-    const nextDetail = Object.assign({}, existingLedger && existingLedger.detail ? existingLedger.detail : {}, { marketing: { periodKey: period.key, totals, commission: marketingCommission, computedAt: new Date().toISOString() } });
+    const prevSupportCommission = existingLedger && existingLedger.detail && existingLedger.detail.support ? Number(existingLedger.detail.support.commission || 0) : 0;
+    const prevProductCommission = existingLedger && existingLedger.detail && existingLedger.detail.products ? Number(existingLedger.detail.products.commission || 0) : 0;
+
+    const nextDetail = Object.assign({}, existingLedger && existingLedger.detail ? existingLedger.detail : {}, {
+      marketing: { periodKey: period.key, totals, commission: marketingCommission, computedAt: new Date().toISOString() },
+    });
+
+    // Commission totals: adjust existing commissionTotal by replacing previous marketing commission
+    const previousCommissionTotal = Number(existingLedger ? existingLedger.commissionTotal ?? 0 : 0);
+    const commissionTotal = (previousCommissionTotal - previousMarketingCommission) + marketingCommission;
+
+    const commissionBreakdown = Object.assign({}, existingLedger && existingLedger.commissionBreakdown ? existingLedger.commissionBreakdown : {}, {
+      marketing: marketingCommission,
+      support: prevSupportCommission,
+      products: prevProductCommission,
+    });
 
     const ledger = await prisma.commissionLedger.upsert({
       where: { userId_periodStart_periodEnd: { userId: user.id, periodStart: period.start, periodEnd: period.end } },
-      update: { grossCommission: grossCommission.toFixed(2), netCommission: netCommission.toFixed(2), detail: nextDetail },
-      create: { userId: user.id, periodStart: period.start, periodEnd: period.end, grossCommission: grossCommission.toFixed(2), netCommission: netCommission.toFixed(2), detail: nextDetail },
+      update: {
+        grossCommission: grossCommission.toFixed(2),
+        netCommission: netCommission.toFixed(2),
+        commissionTotal: commissionTotal.toFixed(2),
+        commissionMarketplaceJumia: marketingCommission.toFixed(2),
+        commissionDirect: prevSupportCommission.toFixed(2),
+        commissionBreakdown,
+        detail: nextDetail,
+      },
+      create: {
+        userId: user.id,
+        periodStart: period.start,
+        periodEnd: period.end,
+        grossCommission: grossCommission.toFixed(2),
+        netCommission: netCommission.toFixed(2),
+        commissionTotal: commissionTotal.toFixed(2),
+        commissionMarketplaceJumia: marketingCommission.toFixed(2),
+        commissionDirect: prevSupportCommission.toFixed(2),
+        commissionBreakdown,
+        detail: nextDetail,
+      },
     });
 
-    console.log('Updated ledger id=', ledger.id, 'commission=', marketingCommission, 'totals=', totals);
+    console.log('Updated ledger id=', ledger.id, 'marketingCommission=', marketingCommission, 'supportCommission=', prevSupportCommission, 'commissionTotal=', commissionTotal.toFixed(2), 'totals=', totals);
   } catch (e) {
     console.error('Recompute failed:', e);
     process.exitCode = 1;
