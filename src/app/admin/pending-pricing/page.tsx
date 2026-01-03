@@ -7,83 +7,18 @@ import WeeklySummary from "./WeeklySummary";
 import UnpricedOrdersClient from "./UnpricedOrdersClient";
 import { AlertTriangle } from "lucide-react";
 
-const PAGE_SIZE_DEFAULT = 10;
-
-function fmtKsh(n: number) {
-  return `Ksh ${n.toLocaleString()}`;
+export default async function PendingPricingPage() {
+  return (
+    <div className="mx-auto max-w-7xl p-6">
+      <div className="mb-6">
+        <WeeklySummary />
+      </div>
+      <div className="mb-6">
+        <UnpricedOrdersClient />
+      </div>
+    </div>
+  );
 }
-function fmtDate(d: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric", month: "short", day: "2-digit",
-    hour: "2-digit", minute: "2-digit",
-  }).format(d);
-}
-function buildWhere(q?: string): Prisma.OrderWhereInput {
-  const base: Prisma.OrderWhereInput = { status: "PENDING" };
-  if (!q) return base;
-  return {
-    ...base,
-    OR: [
-      { orderNumber: { contains: q } },
-      { customerName: { contains: q } },
-      { shop: { is: { name: { contains: q } } } },
-    ],
-  } satisfies Prisma.OrderWhereInput;
-}
-
-export default async function PendingPricingPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ page?: string; q?: string; size?: string }>;
-}) {
-  const params = await searchParams;
-  const scope = await resolveShopScopeForServer();
-  const page = Math.max(1, Number(params?.page || 1));
-  const size = Math.min(50, Math.max(1, Number(params?.size || PAGE_SIZE_DEFAULT)));
-  const q = (params?.q || "").trim() || undefined;
-
-  const whereBase = buildWhere(q);
-  const where = (scope.shopIds && scope.shopIds.length > 0)
-    ? ({ ...whereBase, shopId: { in: scope.shopIds } })
-    : whereBase;
-
-  let degraded = false;
-  let total = 0;
-  let rows: unknown[] = [];
-  try {
-    [total, rows] = await Promise.all([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * size,
-        take: size,
-        include: {
-          shop: { select: { name: true } },
-          items: {
-            select: { quantity: true, sellingPrice: true, product: { select: { name: true, sku: true, sellingPrice: true } } },
-          },
-        },
-      }),
-    ]);
-  } catch (e) {
-    console.error("PendingPricingPage DB error:", e);
-    degraded = true;
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / size));
-
-  // Compute derived totals
-  const calcTotals = (items: unknown[]) => {
-    const qty = items.reduce((n: number, it: unknown) => n + (it as { quantity: number }).quantity, 0);
-    // Compute subtotal from sellingPrice (item.sellingPrice || product.sellingPrice)
-    const subtotal = items.reduce((sum: number, it: unknown) => {
-      const item = it as { quantity: number; sellingPrice?: number; product?: { sellingPrice?: number } };
-      const unit = (item.sellingPrice ?? item.product?.sellingPrice ?? 0);
-      return sum + unit * item.quantity;
-    }, 0);
-    return { qty, subtotal };
-  };
 
   return (
     <div className="mx-auto max-w-7xl p-6">
