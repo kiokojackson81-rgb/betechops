@@ -281,15 +281,25 @@ function EarningsCard({ summary }: EarningsCardProps) {
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
 
+  // Prefer explicit adjustment entries (admin-provided labels) when available.
+  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
+    (summary?.adjustmentEntries ?? []);
+
+  const deductionEntries = adjEntries && adjEntries.length > 0
+    ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, type: 'deduction' as const, amount: e.amount }))
+    : [
+        { label: "Chama", type: "deduction", amount: summary.chamaTotal },
+        { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
+        { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
+        { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
+      ];
+
   const rows = [
     { label: "Base salary", type: "earning", amount: summary.baseSalary },
     { label: "Commission", type: "earning", amount: summary.commission },
     { label: "Transport allowance", type: "earning", amount: summary.transportAllowance },
     { label: "Bonuses / extras", type: "earning", amount: summary.bonusTotal },
-    { label: "Chama", type: "deduction", amount: summary.chamaTotal },
-    { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
-    { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
-    { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
+    ...deductionEntries,
   ].filter((row) => row.amount && row.amount !== 0);
 
   return (
@@ -1053,7 +1063,11 @@ export default function MarketingTrackerPage() {
         const url = imp
           ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(imp)}`
           : "/api/marketing/report/summary";
-        const res = await fetch(url, { credentials: "same-origin", signal: controller.signal });
+        const res = await fetch(url, {
+          credentials: "same-origin",
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data) return;
@@ -1266,7 +1280,8 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   // so the Quick stats panel matches the detailed Earnings card exactly.
   const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
-  const periodLabel = periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Nov 25, 2025 - Dec 24, 2025";
+  const periodLabel =
+    periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Loading current period\u2026";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;

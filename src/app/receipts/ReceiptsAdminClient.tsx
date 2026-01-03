@@ -108,6 +108,7 @@ type Props = {
   allowEdit?: boolean;
   onSummaryChange?: (summary: ReceiptSummary) => void;
   refreshSignal?: number;
+  scope?: "mine" | "global";
 };
 
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
@@ -261,6 +262,7 @@ export default function ReceiptsAdminClient({
   allowEdit,
   onSummaryChange,
   refreshSignal = 0,
+  scope,
 }: Props) {
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
@@ -296,6 +298,8 @@ export default function ReceiptsAdminClient({
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [triggerSummaryLoading, setTriggerSummaryLoading] = useState(false);
+  const [triggerSummaryResult, setTriggerSummaryResult] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
@@ -315,6 +319,7 @@ export default function ReceiptsAdminClient({
     rangeEnd: "receipts.rangeEnd.v1",
     paymentMethod: "receipts.paymentMethod.v1",
   } as const;
+  const scopeMode = scope ?? "mine";
 
   // load persisted filters (attendant + quick range) on mount
   useEffect(() => {
@@ -400,6 +405,7 @@ export default function ReceiptsAdminClient({
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
+        params.set("scope", scopeMode);
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -416,7 +422,7 @@ export default function ReceiptsAdminClient({
         if (!opts?.silent) setLoading(false);
       }
     },
-    [appliedFilters],
+    [appliedFilters, scopeMode],
   );
 
   useEffect(() => {
@@ -444,6 +450,13 @@ export default function ReceiptsAdminClient({
       if (appliedFilters.attendantId) {
         params.set("attendantId", appliedFilters.attendantId);
       }
+      if (appliedFilters.docType) {
+        params.set("docType", appliedFilters.docType);
+      }
+      if (appliedFilters.q.trim()) {
+        params.set("q", appliedFilters.q.trim());
+      }
+      params.set("scope", scopeMode);
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -475,7 +488,26 @@ export default function ReceiptsAdminClient({
     } finally {
       setSummaryLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, scopeMode]);
+
+  const handleTriggerSummary = useCallback(async () => {
+    if (triggerSummaryLoading) return;
+    setTriggerSummaryLoading(true);
+    setTriggerSummaryResult(null);
+    try {
+      const res = await fetch("/api/admin/daily-summary/trigger", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to trigger summary");
+      setTriggerSummaryResult(`${data.slot2} · ${data.slot3} · ${data.slot4}`);
+      showToast("Admin summary triggered", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to trigger summary";
+      setTriggerSummaryResult(message);
+      showToast(message, "error");
+    } finally {
+      setTriggerSummaryLoading(false);
+    }
+  }, [triggerSummaryLoading]);
 
   // initial fetch and when filters change
   useEffect(() => {
@@ -524,6 +556,9 @@ export default function ReceiptsAdminClient({
         if (endParam) params.set("end", endParam);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
+        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
+        params.set("scope", scopeMode);
         const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
 
       try {
@@ -597,7 +632,7 @@ export default function ReceiptsAdminClient({
       } catch {}
       sseEsRef.current = null;
     };
-  }, [sseEnabled, sseOn, appliedFilters]);
+  }, [sseEnabled, sseOn, appliedFilters, scopeMode]);
 
   const persistFilterValues = (nextFilters: FilterState) => {
     try {
@@ -988,22 +1023,6 @@ export default function ReceiptsAdminClient({
       : quickRange === "this-week"
       ? "This week"
       : "Custom range";
-  const profitColorClass =
-    (summaryTotals?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
-  const summarySalesLabel = summaryLoading
-    ? "Loading..."
-    : formatCurrency(summaryTotals?.totalSales ?? 0);
-  const summaryProfitLabel = summaryLoading
-    ? "Loading..."
-    : formatCurrency(summaryTotals?.totalProfit ?? 0);
-  const formattedRangeStart = formatRangeLabel(appliedFilters.start);
-  const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
-  const rangeDisplay =
-    formattedRangeStart && formattedRangeEnd
-      ? formattedRangeStart === formattedRangeEnd
-        ? formattedRangeStart
-        : `${formattedRangeStart} - ${formattedRangeEnd}`
-      : rangeLabelText;
   const partialTotals = useMemo(() => {
     const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
     rows.forEach((row) => {
@@ -1015,24 +1034,100 @@ export default function ReceiptsAdminClient({
     });
     return totals;
   }, [rows]);
+  const derivedSummary = useMemo(() => {
+    const paymentTotals = rows.reduce(
+      (acc, row) => {
+        const method = row.paymentMethod ?? "";
+        const amount = Number(row.total ?? 0);
+        if (method === "MPESA") {
+          acc.mpesa.totalSales += amount;
+          acc.mpesa.count += 1;
+        } else if (method === "CASH") {
+          acc.cash.totalSales += amount;
+          acc.cash.count += 1;
+        }
+        return acc;
+      },
+      {
+        mpesa: { totalSales: 0, count: 0 },
+        cash: { totalSales: 0, count: 0 },
+      } as PaymentTotals,
+    );
+
+    const itemsCount = rows.reduce((sum, row) => {
+      const itemList = Array.isArray(row.items) && row.items.length > 0 ? row.items.length : 1;
+      return sum + itemList;
+    }, 0);
+
+    const totalSales = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    return {
+      totalSales,
+      totalCost: 0,
+      totalProfit: 0,
+      totalProfitPriced: 0,
+      totalProfitInclusive: 0,
+      receiptsCount: rows.length,
+      itemsCount,
+      hasCompleteCosts: rows.length === 0,
+      awaitingPricingCount: 0,
+      paymentTotals,
+    };
+  }, [rows]);
+  const shouldUseDerivedSummary = rows.length > 0 && (!summaryTotals || summaryTotals.totalSales === 0);
+  const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
+  const summarySalesLabel = summaryLoading
+    ? "Loading..."
+    : formatCurrency(summaryForDisplay?.totalSales ?? 0);
+  const summaryProfitLabel = summaryLoading
+    ? "Loading..."
+    : formatCurrency(summaryForDisplay?.totalProfit ?? 0);
+  const profitColorClass =
+    (summaryForDisplay?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
+  const formattedRangeStart = formatRangeLabel(appliedFilters.start);
+  const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
+  const rangeDisplay =
+    formattedRangeStart && formattedRangeEnd
+      ? formattedRangeStart === formattedRangeEnd
+        ? formattedRangeStart
+        : `${formattedRangeStart} - ${formattedRangeEnd}`
+      : rangeLabelText;
   const handlePaymentMethodSelect = (method: "" | "MPESA" | "CASH") => {
     const next = appliedFilters.paymentMethod === method ? "" : method;
     applyFilters({ paymentMethod: next });
   };
   return (
     <div className="space-y-6">
-      <ReceiptsSummary
-        summary={summaryTotals ?? null}
-        loading={summaryLoading}
-        quickRange={quickRange}
-        onApplyQuickRange={(k) => applyQuickRange(k)}
-        sseOn={sseOn && sseEnabled}
-        sseStatus={sseStatus}
-        onToggleSse={(v: boolean) => setSseOn(v)}
-        rangeLabel={rangeDisplay}
-      />
-      <PaymentMethodFilterCard
-        totals={summaryTotals?.paymentTotals ?? null}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleTriggerSummary}
+            disabled={triggerSummaryLoading}
+            className={`rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+              triggerSummaryLoading
+                ? "border-white/20 bg-slate-900 text-slate-400 cursor-wait"
+                : "border-emerald-500 text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/10"
+            }`}
+          >
+            {triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now"}
+          </button>
+          {triggerSummaryResult && (
+            <p className="text-xs text-slate-400">
+              {triggerSummaryResult}
+            </p>
+          )}
+        </div>
+        <ReceiptsSummary
+          summary={summaryForDisplay ?? null}
+          loading={summaryLoading}
+          quickRange={quickRange}
+          onApplyQuickRange={(k) => applyQuickRange(k)}
+          sseOn={sseOn && sseEnabled}
+          sseStatus={sseStatus}
+          onToggleSse={(v: boolean) => setSseOn(v)}
+          rangeLabel={rangeDisplay}
+        />
+        <PaymentMethodFilterCard
+          totals={summaryForDisplay?.paymentTotals ?? null}
         partialTotals={partialTotals}
         activeMethod={appliedFilters.paymentMethod}
         loading={summaryLoading}

@@ -168,7 +168,17 @@ export async function GET(req: Request) {
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
     await browser.close();
-    return new NextResponse(pdfBuffer, { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="daily_reports.pdf"' } });
+    const res = new NextResponse(pdfBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="daily_reports.pdf"',
+        'Cache-Control': 'no-store',
+        'X-Receipt-Renderer': 'pdf',
+        'X-Receipt-Commit': process.env.VERCEL_GIT_COMMIT_SHA || 'unknown',
+      },
+    });
+    return res;
   } catch (err: any) {
     if (browser) await browser.close();
     return NextResponse.json({ error: 'Failed to generate PDF', detail: String(err) }, { status: 500 });

@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { COMMISSION_LADDER } from "@/lib/commissionCommon";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -26,6 +27,8 @@ export type MarketingPeriodTotals = {
 type SummarizeResult = {
   totals: MarketingPeriodTotals;
   entryCount: number;
+  // per-receipt breakdown keyed by canonical receipt id used by this summarizer
+  perReceipts?: Record<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>;
 };
 
 const emptyTotals = (): MarketingPeriodTotals => ({
@@ -130,13 +133,33 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   }
 
   const totals = emptyTotals();
+  const seenReceipts = new Set<string>();
+  const perReceipts: Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }> = new Map();
+  const recKey = (s?: string | null) => (s ?? "").trim();
+  const markIfNew = (key: string) => {
+    const normalized = recKey(key);
+    if (!normalized) return false;
+    if (seenReceipts.has(normalized)) return false;
+    seenReceipts.add(normalized);
+    perReceipts.set(normalized, { sales: 0, profit: 0, items: 0, mpesa: 0, cash: 0 });
+    return true;
+  };
 
   marketingEntries.forEach((entry) => {
     const receipts = entry.receipts ?? [];
     if (receipts.length > 0) {
       receipts.forEach((receipt) => {
+        const method = normalizeMethod(receipt.paymentMethod);
+        const receiptIdBase = recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+
+        if (!markIfNew(receiptIdBase)) {
+          return;
+        }
+
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += selling;
         const items = receipt.items ?? [];
         const fallbackCost = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
         const aggregateCost = toNumber(receipt.buyingTotal);
@@ -144,62 +167,75 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         const allItemsPriced = items.length > 0 && items.every((it) => toNumber((it as any).buyingPrice) > 0);
         if (hasAggregateCost || allItemsPriced) {
           const costToUse = hasAggregateCost ? aggregateCost : fallbackCost;
-          totals.totalProfit += selling - costToUse;
+          const profitForReceipt = selling - costToUse;
+          totals.totalProfit += profitForReceipt;
+          stats.profit += profitForReceipt;
         }
+
         totals.totalItems += items.length;
+        stats.items += items.length;
         totals.totalReceipts += 1;
-        const method = normalizeMethod(receipt.paymentMethod);
         if (method === "CASH") {
-          totals.paymentStats.totalSalesCash += selling;
           totals.paymentStats.countCashReceipts += 1;
+          totals.paymentStats.totalSalesCash += selling;
+          stats.cash += selling;
         } else {
-          totals.paymentStats.totalSalesMpesa += selling;
           totals.paymentStats.countMpesaReceipts += 1;
+          totals.paymentStats.totalSalesMpesa += selling;
+          stats.mpesa += selling;
         }
       });
       return;
     }
 
     const sales = entry.sales ?? [];
-      if (sales.length > 0) {
-      const receiptTracker = new Set<string>();
+    if (sales.length > 0) {
+      const entrySeen = new Set<string>();
       sales.forEach((sale, index) => {
+        const method = normalizeMethod((sale as any).paymentMethod);
+        const receiptIdBase = recKey((sale as any).receiptNumber) || `${entry.id}-${index}`;
+
+        if (entrySeen.has(receiptIdBase)) return;
+        entrySeen.add(receiptIdBase);
+
+        if (!markIfNew(receiptIdBase)) return;
+
         const selling = toNumber((sale as any).sellingPrice);
         const buying = toNumber((sale as any).buyingPrice);
         const itemsCount = Number((sale as any).itemsCount ?? 1);
+
         totals.totalSales += selling;
-        // Only add profit if buying price is present
         if (buying > 0) {
           totals.totalProfit += selling - buying;
         }
         totals.totalItems += itemsCount;
-        const method = normalizeMethod((sale as any).paymentMethod);
+        totals.totalReceipts += 1;
+
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += selling;
+        if (buying > 0) stats.profit += selling - buying;
+        stats.items += itemsCount;
+
         if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
           totals.paymentStats.totalSalesCash += selling;
+          stats.cash += selling;
         } else {
+          totals.paymentStats.countMpesaReceipts += 1;
           totals.paymentStats.totalSalesMpesa += selling;
-        }
-        const receiptKey =
-          (sale as any).receiptNumber && (sale as any).receiptNumber.trim().length > 0
-            ? `${(sale as any).receiptNumber.trim()}|${method}`
-            : `${entry.id}-${index}|${method}`;
-        if (!receiptTracker.has(receiptKey)) {
-          receiptTracker.add(receiptKey);
-          if (method === "CASH") {
-            totals.paymentStats.countCashReceipts += 1;
-          } else {
-            totals.paymentStats.countMpesaReceipts += 1;
-          }
+          stats.mpesa += selling;
         }
       });
-      totals.totalReceipts += receiptTracker.size || sales.length;
       return;
     }
 
     const fallbackSales = toNumber(entry.totalSales);
     totals.totalSales += fallbackSales;
     totals.totalProfit += toNumber(entry.totalProfit);
-    totals.totalReceipts += 1;
+    const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
+    if (markIfNew(fallbackKey)) {
+      totals.totalReceipts += 1;
+    }
   });
 
   reports.forEach((report) => {
@@ -209,48 +245,69 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     const profitFromMetrics =
       toNumber(metrics.totalProfit) || toNumber(metrics.profit) || toNumber(totalsJson.profit) || 0;
-    // Do not treat selling total as profit when no profit metric is provided.
     const entryProfit = profitFromMetrics > 0 ? profitFromMetrics : 0;
 
     const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
-    const derivedReceipts = deriveReceiptsFromSales(report.sales);
-    const receiptCount = receiptsFromMetrics > 0 ? receiptsFromMetrics : derivedReceipts;
+    const sales = Array.isArray(report.sales) ? report.sales : [];
 
-    totals.totalSales += toNumber(report.totalSales);
+    const entrySalesReceiptKeys = new Set<string>();
+    let newReceiptCount = 0;
+
+    sales.forEach((sale, index) => {
+      const method = normalizeMethod(sale.paymentMethod);
+      const receiptIdBase =
+        sale.receiptNumber && sale.receiptNumber.trim().length > 0
+          ? sale.receiptNumber.trim()
+          : `${report.id}-${index}`;
+
+      if (entrySalesReceiptKeys.has(receiptIdBase)) return;
+      entrySalesReceiptKeys.add(receiptIdBase);
+
+      if (!markIfNew(receiptIdBase)) return;
+
+        const price = toNumber(sale.price);
+        totals.totalSales += price;
+        newReceiptCount += 1;
+
+        const stats = perReceipts.get(receiptIdBase)!;
+        stats.sales += price;
+        stats.items += 1;
+
+        if (method === "CASH") {
+          totals.paymentStats.countCashReceipts += 1;
+          totals.paymentStats.totalSalesCash += price;
+          stats.cash += price;
+        } else {
+          totals.paymentStats.countMpesaReceipts += 1;
+          totals.paymentStats.totalSalesMpesa += price;
+          stats.mpesa += price;
+        }
+    });
+
+    if (sales.length > 0) {
+      totals.totalReceipts += newReceiptCount;
+    } else if (receiptsFromMetrics > 0) {
+      const fallbackKey = `daily-report-${report.id ?? ""}`;
+      if (markIfNew(fallbackKey)) {
+        totals.totalReceipts += receiptsFromMetrics;
+        totals.totalSales += toNumber(report.totalSales);
+      }
+    }
+
     totals.totalProfit += entryProfit;
-    totals.totalReceipts += receiptCount;
-    totals.totalItems += report.sales.length;
+    totals.totalItems += sales.length;
     totals.totalNewProducts += report.newProducts ?? 0;
     totals.totalEditedProducts += report.productsEdited ?? 0;
     totals.totalCopiedProducts += report.copiesUploaded ?? 0;
     totals.walkInsServed += report.walkInServed ?? 0;
     totals.walkInsPurchased += report.purchasesMade ?? 0;
-
-    const receiptTracker = new Set<string>();
-    report.sales.forEach((sale, index) => {
-      const method = normalizeMethod(sale.paymentMethod);
-      const price = toNumber(sale.price);
-      if (method === "CASH") {
-        totals.paymentStats.totalSalesCash += price;
-      } else {
-        totals.paymentStats.totalSalesMpesa += price;
-      }
-      const receiptKey =
-        sale.receiptNumber && sale.receiptNumber.trim().length > 0
-          ? `${sale.receiptNumber.trim()}|${method}`
-          : `${report.id}-${index}|${method}`;
-      if (!receiptTracker.has(receiptKey)) {
-        receiptTracker.add(receiptKey);
-        if (method === "CASH") {
-          totals.paymentStats.countCashReceipts += 1;
-        } else {
-          totals.paymentStats.countMpesaReceipts += 1;
-        }
-      }
-    });
   });
 
-  return { totals, entryCount: marketingEntries.length + reports.length };
+  return {
+    totals,
+    entryCount: marketingEntries.length + reports.length,
+    perReceipts: Object.fromEntries(Array.from(perReceipts.entries())),
+  };
 }
 
 type LedgerResult = {
@@ -272,15 +329,70 @@ export async function recomputeMarketingCommissionLedger(opts: {
   const period = opts.period ?? getTradingPeriodFor(opts.date ?? new Date());
 
   const { totals } = await summarizeMarketingReportsForPeriod({ userId, period, client });
+  // Direct sales commission rule (new):
+  // Part A: For the first KES 500,000 in sales, commission = 5% * profitWithinFirst500k
+  // Part B: For sales above 500k, commission accrues toward the next ladder target
+  // (prorated portion of that tier reward). Completed tier rewards are fully applied.
   let marketingCommission = 0;
-  if (totals.totalProfit > 0) {
-    const commissionInfo = getCommissionSummaryForSales(totals.totalSales);
-    const baseCommission = commissionInfo.commission ?? 0;
-    const fallbackCommission =
-      baseCommission === 0 && totals.totalSales > 0 && totals.totalSales < 500_000
-        ? Math.round(Math.max(totals.totalProfit, 0) * 0.05)
-        : 0;
-    marketingCommission = baseCommission > 0 ? baseCommission : fallbackCommission;
+  const totalSales = totals.totalSales ?? 0;
+  const totalProfit = totals.totalProfit ?? 0;
+
+  if (totalSales <= 0) {
+    marketingCommission = 0;
+  } else if (totalSales <= 500_000) {
+    // All sales are within the base band — commission is 5% of profit (profit may be 0 if unpriced)
+    marketingCommission = Math.round((Math.max(totalProfit, 0) || 0) * 0.05);
+  } else {
+    // Sales above 500k: compute base = 5% of profit attributable to the first 500k.
+    // Estimate profit portion proportionally when per-receipt profit is not available.
+    const profitPortion = totalProfit > 0 ? Math.min((500_000 / totalSales) * totalProfit, totalProfit) : 0;
+    const baseCommission = Math.round(profitPortion * 0.05);
+
+    // Now compute completed tier rewards + prorated reward for current band.
+    let additional = 0;
+    const ladder = [...COMMISSION_LADDER].sort((a, b) => a.min - b.min);
+
+    if (ladder.length === 0) {
+      marketingCommission = baseCommission;
+    } else {
+      // First band: 500k -> first ladder min (e.g., 1,000,000)
+      const firstMin = ladder[0].min;
+      if (totalSales <= firstMin) {
+        const bandSize = firstMin - 500_000;
+        const progress = Math.max(0, Math.min(totalSales - 500_000, bandSize));
+        const progressPercent = bandSize > 0 ? progress / bandSize : 0;
+        additional += Math.round((ladder[0].reward || 0) * progressPercent);
+      } else {
+        // fully reached first tier reward
+        additional += ladder[0].reward || 0;
+
+        // subsequent bands between ladder tiers
+        for (let i = 0; i < ladder.length - 1; i++) {
+          const start = ladder[i].min;
+          const end = ladder[i + 1].min;
+          const reward = ladder[i + 1].reward || 0;
+          if (totalSales >= end) {
+            // fully reached this next tier
+            additional += reward;
+            continue;
+          }
+          if (totalSales > start) {
+            const bandSize = end - start;
+            const progress = Math.max(0, Math.min(totalSales - start, bandSize));
+            const progressPercent = bandSize > 0 ? progress / bandSize : 0;
+            additional += Math.round(reward * progressPercent);
+          }
+          break;
+        }
+
+        // If beyond the last ladder entry, ensure last reward included
+        if (totalSales >= ladder[ladder.length - 1].min) {
+          additional += ladder[ladder.length - 1].reward || 0;
+        }
+      }
+
+      marketingCommission = baseCommission + additional;
+    }
   }
 
   if (marketingCommission === 0 && totals.totalSales === 0) {
@@ -319,6 +431,21 @@ export async function recomputeMarketingCommissionLedger(opts: {
       computedAt: new Date().toISOString(),
     },
   };
+
+  // Remove any overlapping/stale CommissionLedger rows for this user
+  // that reference the same marketing periodKey but have different
+  // period start/end boundaries. This prevents duplicate/overlapping
+  // ledger rows (often caused by timezone-normalization differences).
+  try {
+    await client.$executeRaw`
+      DELETE FROM "CommissionLedger"
+      WHERE "userId" = ${userId}
+        AND (detail->'marketing'->>'periodKey') = ${period.key}
+        AND NOT ("periodStart" = ${period.start} AND "periodEnd" = ${period.end})
+    `;
+  } catch (_) {
+    // ignore; raw delete is best-effort safeguard
+  }
 
   const ledger = await client.commissionLedger.upsert({
     where: {

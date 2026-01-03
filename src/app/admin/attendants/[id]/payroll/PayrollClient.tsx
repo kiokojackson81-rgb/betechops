@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
@@ -22,6 +22,8 @@ type Adjustment = {
   adjustmentType: string;
   label: string;
   amount: number;
+  adjustmentKind?: string | null;
+  kind?: string | null;
 };
 
 export default function PayrollClient({
@@ -31,6 +33,8 @@ export default function PayrollClient({
   periodLabel,
   initialAdjustments,
   initialSummary,
+  ledger,
+  previousLedger,
 }: {
   attendant: { id: string; name?: string | null; email?: string | null };
   initialPlan: CompPlan | null;
@@ -38,6 +42,14 @@ export default function PayrollClient({
   periodLabel: string;
   initialAdjustments: Adjustment[];
   initialSummary: any;
+  ledger?: {
+    commissionDirect?: number | null;
+    commissionMarketplaceJumia?: number | null;
+    commissionMarketplaceKilimall?: number | null;
+    netCommission?: number | null;
+    commissionBreakdown?: Record<string, number | undefined>;
+  } | null;
+  previousLedger?: { netCommission?: number | null } | null;
 }) {
   const [plan, setPlan] = useState<CompPlan | null>(
     initialPlan
@@ -57,9 +69,59 @@ export default function PayrollClient({
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
 
-  const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | "" }>(
-    { adjustmentType: "BONUS", label: "", amount: "" }
+  const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
+    { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
   );
+  const commissionValue =
+    initialSummary?.commission ??
+    initialSummary?.grossCommission ??
+    initialSummary?.salesCommission ??
+    initialSummary?._raw?.commission ??
+    initialSummary?._raw?.grossCommission ??
+    initialSummary?._raw?.salesCommission ??
+    0;
+  const periodProfit = Number(initialSummary?.totalProfit ?? initialSummary?._raw?.totalProfit ?? 0);
+  const periodReceipts = Number(initialSummary?.totalReceipts ?? initialSummary?._raw?.totalReceipts ?? 0);
+  const periodItems = Number(initialSummary?.totalItems ?? initialSummary?._raw?.totalItems ?? 0);
+  const ledgerTotals = useMemo(() => {
+    const breakdown = ledger?.commissionBreakdown ?? {};
+    return {
+      direct: Number(ledger?.commissionDirect ?? breakdown?.direct ?? 0),
+      jumia: Number(ledger?.commissionMarketplaceJumia ?? breakdown?.jumia ?? breakdown?.["marketplace:jumia"] ?? 0),
+      kilimall: Number(
+        ledger?.commissionMarketplaceKilimall ?? breakdown?.kilimall ?? breakdown?.["marketplace:kilimall"] ?? 0,
+      ),
+      netCommission: Number(ledger?.netCommission ?? initialSummary?._raw?.netCommission ?? 0),
+    };
+  }, [ledger, initialSummary]);
+  const previousNetCommission = Number(previousLedger?.netCommission ?? 0);
+  const netCommissionDelta = ledgerTotals.netCommission - previousNetCommission;
+  const adjustmentTotals = useMemo(() => {
+    const totals = {
+      topUps: 0,
+      deductions: 0,
+      chama: 0,
+      lateness: 0,
+      discipline: 0,
+      other: 0,
+    };
+    for (const adj of adjustments) {
+      const amount = Number(adj.amount ?? 0);
+      const type = adj.adjustmentType;
+      const isAddition = type === "BONUS" || type === "COMMISSION_TOPUP";
+      if (isAddition) {
+        totals.topUps += amount;
+      }
+      if (!isAddition) {
+        totals.deductions += amount;
+      }
+      if (type === "CHAMA") totals.chama += amount;
+      if (type === "LATENESS") totals.lateness += amount;
+      if (type === "DISCIPLINE") totals.discipline += amount;
+      if (type === "OTHER") totals.other += amount;
+    }
+    return totals;
+  }, [adjustments]);
 
   useEffect(() => {
     // fetch fresh adjustments and summary on mount
@@ -129,6 +191,7 @@ export default function PayrollClient({
         adjustmentType: newAdjustment.adjustmentType,
         label: newAdjustment.label,
         amount: Number(newAdjustment.amount || 0),
+        adjustmentKind: newAdjustment.adjustmentKind ?? "DEDUCTION",
       };
       const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-adjustments`, {
         method: "POST",
@@ -205,31 +268,114 @@ export default function PayrollClient({
             <span className="font-semibold text-emerald-400">KES {initialSummary?.sales?.toLocaleString?.() ?? 0}</span>
           </div>
           <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
+            <span className="text-slate-300">Commission</span>
+            <span className="font-semibold text-emerald-400">
+              KES {commissionValue.toLocaleString?.() ?? 0}
+            </span>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
             <span className="text-slate-300">Net pay</span>
             <span className="font-semibold text-emerald-400">KES {initialSummary?.netPay?.toLocaleString?.() ?? 0}</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Profit</span>
+              <span className="font-semibold text-slate-100">KES {periodProfit.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts</span>
+              <span className="font-semibold text-slate-100">{periodReceipts.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Items</span>
+              <span className="font-semibold text-slate-100">{periodItems.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Top-ups</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.topUps.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Deductions</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.deductions.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Lateness</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.lateness.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Chama</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.chama.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Discipline</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.discipline.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Others</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.other.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Direct commission</span>
+              <span className="font-semibold text-slate-100">KES {ledgerTotals.direct.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Marketplace</span>
+              <span className="font-semibold text-slate-100">Jumia KES {ledgerTotals.jumia.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Marketplace</span>
+              <span className="font-semibold text-slate-100">Kilimall KES {ledgerTotals.kilimall.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Net commission vs prev</span>
+              <span className={`font-semibold ${netCommissionDelta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                {netCommissionDelta >= 0 ? "+" : "-"}KES {Math.abs(netCommissionDelta).toLocaleString()}
+              </span>
+            </div>
           </div>
 
           <div>
             <h3 className="text-sm font-semibold text-slate-200">Adjustments</h3>
             <div className="mt-2 space-y-2">
-              {adjustments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
-                  <div>
-                    <div className="text-sm">{a.label}</div>
-                    <div className="text-xs text-slate-400">{a.adjustmentType}</div>
+              {adjustments.map((a) => {
+                const kind = (a.adjustmentKind || a.kind || "DEDUCTION").toUpperCase();
+                const isAddition = kind === "ADDITION";
+                return (
+                  <div key={a.id} className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm">{a.label}</div>
+                        <div
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                            isAddition ? "bg-emerald-700 text-emerald-100" : "bg-rose-800 text-rose-100"
+                          }`}
+                        >
+                          {isAddition ? "Addition" : "Deduction"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-400">{a.adjustmentType}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`text-sm font-semibold ${isAddition ? "text-emerald-300" : "text-rose-300"}`}>
+                        {isAddition ? "KES " : "KES -"}{Math.abs(Number(a.amount || 0)).toLocaleString()}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteAdjustment(a.id)}
+                        className="text-xs rounded-full border border-red-600 px-2 py-1 text-rose-400 hover:bg-red-800/20"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-semibold text-slate-100">KES {a.amount.toLocaleString()}</div>
-                    <button
-                      type="button"
-                      onClick={() => deleteAdjustment(a.id)}
-                      className="text-xs rounded-full border border-red-600 px-2 py-1 text-rose-400 hover:bg-red-800/20"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {adjustments.length === 0 && <div className="text-xs text-slate-400">No adjustments for this period.</div>}
 
               <div className="mt-3 rounded-xl border border-white/5 bg-slate-900/50 p-3">
@@ -238,15 +384,31 @@ export default function PayrollClient({
                     <label className="text-xs text-slate-400">Type</label>
                     <select
                       value={newAdjustment.adjustmentType}
-                      onChange={(e) => setNewAdjustment((s) => ({ ...s, adjustmentType: e.target.value }))}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        // default kind: bonuses and top-ups are additions, others are deductions
+                        const kind = t === "BONUS" || t === "COMMISSION_TOPUP" ? "ADDITION" : "DEDUCTION";
+                        setNewAdjustment((s) => ({ ...s, adjustmentType: t, adjustmentKind: kind }));
+                      }}
                       className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
                     >
                       <option value="CHAMA">Chama</option>
                       <option value="LATENESS">Lateness</option>
                       <option value="DISCIPLINE">Disciplinary</option>
                       <option value="BONUS">Bonus</option>
-                      <option value="COMMISSION_TOPUP">Commission top-up</option>
-                      <option value="OTHER">Other</option>
+                      <option value="COMMISSION_TOPUP">Top up</option>
+                      <option value="OTHER">Others</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">Kind</label>
+                    <select
+                      value={newAdjustment.adjustmentKind}
+                      onChange={(e) => setNewAdjustment((s) => ({ ...s, adjustmentKind: (e.target.value as any) }))}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
+                    >
+                      <option value="ADDITION">Addition</option>
+                      <option value="DEDUCTION">Deduction</option>
                     </select>
                   </div>
                   <div>

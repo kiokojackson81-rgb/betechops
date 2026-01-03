@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { AttendantCategory } from "@prisma/client";
 
 export type Role = "ADMIN" | "SUPERVISOR" | "ATTENDANT";
 
@@ -38,7 +39,16 @@ export async function getActorId(): Promise<string | null> {
     let sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
     if (!sysUser) {
       try {
-        sysUser = await prisma.user.create({ data: { email: sysEmail, name: "System", role: "ADMIN", isActive: true }, select: { id: true } });
+        sysUser = await prisma.user.create({
+          data: {
+            email: sysEmail,
+            name: "System",
+            role: "ADMIN",
+            isActive: true,
+            attendantCategory: (process.env.DEFAULT_SYSTEM_CATEGORY as AttendantCategory) ?? "DIRECT_SALES_OPS",
+          },
+          select: { id: true },
+        });
       } catch (createErr) {
         // If creation fails (race or DB restriction), attempt to read again
         sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });

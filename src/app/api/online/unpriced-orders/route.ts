@@ -18,12 +18,20 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const take = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
+  const statusFilter = url.searchParams.get("status") ?? "all";
+
+  const whereBase: any = {
+    accountId: { in: accountIds },
+    buyingPrice: null,
+  };
+
+  if (statusFilter && statusFilter !== "all") {
+    const sf = String(statusFilter).toUpperCase();
+    whereBase.status = sf;
+  }
 
   const orders = await prisma.marketplaceOrder.findMany({
-    where: {
-      accountId: { in: accountIds },
-      buyingPrice: null,
-    },
+    where: whereBase,
     include: { account: true },
     orderBy: { orderedAt: "desc" },
     take,
@@ -78,6 +86,9 @@ export async function GET(req: Request) {
         sellingPrice: Number(order.sellingPrice ?? 0),
         currency: order.currency,
         suggestedBuyingPrice: templateMap.get(key) ?? null,
+        // Extract fees from stored raw payload when available to show in UI
+        sellerFee: Number(((order.rawPayload as any)?.seller_fee?.amount ?? (order.rawPayload as any)?.seller_fee_amount) ?? 0),
+        shippingFee: Number(((order.rawPayload as any)?.shipping_fee?.amount ?? (order.rawPayload as any)?.shipping_fee_amount) ?? 0),
       };
     }),
   });

@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getMarketingReport } from "./marketingReport";
+import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
+import { getPeriodKeyVariants } from "./payrollPeriodKey";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -22,6 +24,7 @@ export type EarningsSummary = {
   totalEarnings: number;   // base + transport + commission + bonus
   totalDeductions: number; // chama + lateness + discipline + other
   netPay: number;          // totalEarnings - totalDeductions;
+  adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
 };
 
 export async function getEarningsSummaryForAttendant(opts: {
@@ -31,9 +34,7 @@ export async function getEarningsSummaryForAttendant(opts: {
 }): Promise<EarningsSummary> {
   const { attendantId, periodKey, periodLabel } = opts;
 
-  // 1) Fetch total sales for this attendant + period via existing report helper
-  const report = await getMarketingReport({ tradingPeriodKey: periodKey, submittedById: attendantId });
-  const marketingSales = report?.aggregates?.totalSales ?? 0;
+  // 1) Determine trading period (prefer caller's periodKey) and then fetch total sales
 
   // 1b) Include support sales for this attendant in the same period so commission
   // reflects both marketing and support priced items. Prefer the periodKey
@@ -45,18 +46,36 @@ export async function getEarningsSummaryForAttendant(opts: {
     if (found) period = found;
   }
 
-  const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
-  const supportSales = supportSummary?.aggregates?.totalSales ?? 0;
+  const tradingPeriod = period;
+  const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period: tradingPeriod });
+  const marketingSales = marketingSummary?.totals?.totalSales ?? 0;
 
-  const sales = marketingSales + supportSales;
+  const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
+  // Merge per-receipt maps to avoid double-counting
+  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+  const supportPer = (supportSummary as any)?.perReceipts ?? {};
+  const merged = new Map<string, { sales: number; profit: number }>();
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
+  }
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    if (merged.has(k)) continue;
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0 });
+  }
+  let sales = 0;
+  for (const [, v] of merged) sales += v.sales;
 
   // 2) Commission: only award commission once the attendant crosses the
   //    minimum ladder target (KES 1,000,000). Before that no commission
   //    should appear in any earnings summary.
   const { tiers } = (await getOrCreateCommissionPeriod(new Date()));
-  const marketingProfit = report?.aggregates?.totalProfit ?? 0;
+  const marketingProfit = marketingSummary?.totals?.totalProfit ?? 0;
   const supportProfit = supportSummary?.aggregates?.totalProfit ?? 0;
-  const periodProfit = marketingProfit + supportProfit;
+  let periodProfit = marketingProfit + supportProfit;
+  // if merged has per-receipt profit, prefer merged profit
+  let mergedProfit = 0;
+  for (const [, v] of merged) mergedProfit += v.profit;
+  if (mergedProfit > 0) periodProfit = mergedProfit;
   const MIN_SALES_FOR_COMMISSION = 1_000_000;
   const rawCommission = computeSalesCommissionFromTiers(sales, periodProfit, tiers);
   const commission = sales >= MIN_SALES_FOR_COMMISSION ? rawCommission : 0;
@@ -68,7 +87,11 @@ export async function getEarningsSummaryForAttendant(opts: {
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
   // 4) All adjustments for this period
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({ where: { attendantId, periodKey } });
+  const variants = getPeriodKeyVariants(periodKey);
+  const adjustmentFilterKeys = variants.length ? variants : [periodKey];
+  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
+    where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
+  });
 
   const sum = (filterFn: (a: any) => boolean) =>
     adjustments.filter(filterFn).reduce((acc, a) => acc + (a.amount ?? 0), 0);
@@ -85,6 +108,14 @@ export async function getEarningsSummaryForAttendant(opts: {
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
 
   const netPay = totalEarnings - totalDeductions;
+
+  const adjustmentEntries = adjustments.map((a) => ({
+    id: a.id,
+    label: a.label,
+    amount: a.amount ?? 0,
+    adjustmentType: a.adjustmentType,
+    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+  }));
 
   return {
     periodKey,
@@ -104,5 +135,6 @@ export async function getEarningsSummaryForAttendant(opts: {
     totalEarnings,
     totalDeductions,
     netPay,
+    adjustmentEntries,
   };
 }

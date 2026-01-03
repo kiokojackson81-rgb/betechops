@@ -33,6 +33,15 @@ describe("computeSalesCommissionFromTiers - basic cases", () => {
     const res = computeSalesCommissionFromTiers(2_000_000, 0, tiers, 0.05);
     expect(Math.round(res)).toBe(25_000);
   });
+
+  test("adds base commission when profit exists in sales above the first tier", () => {
+    const res = computeSalesCommissionFromTiers(1_500_000, 60_000, tiers, 0.05);
+    const totalSalesLicense = 1_500_000;
+    const baseProfitShare = Math.min(totalSalesLicense, 500_000) / totalSalesLicense;
+    const baseCommission = 0.05 * 60_000 * baseProfitShare;
+    const expectedProgress = 10_000 + 7_500; // full first band + half of 2nd band
+    expect(res).toBeCloseTo(baseCommission + expectedProgress);
+  });
 });
 
 test("commission ladder basic checks", () => {

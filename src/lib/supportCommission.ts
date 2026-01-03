@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { summarizeMarketingReportsForPeriod } from "./marketingPeriodTotals";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -39,6 +40,8 @@ export async function summarizeSupportEntriesForPeriod(opts: {
   const { userId, period } = opts;
   const client = opts.client ?? prisma;
 
+  // Include receipts and sales so we can validate that aggregated totals are backed
+  // by explicit sales/receipts. Ignore rows that have totals but no backing details.
   const entries = await client.supportDailyEntry.findMany({
     where: {
       submittedById: userId,
@@ -47,18 +50,11 @@ export async function summarizeSupportEntriesForPeriod(opts: {
         lte: period.end,
       },
     },
-    select: {
-      totalSales: true,
-      totalProfit: true,
-      newBatteries: true,
-      changedBatteries: true,
-      receipts: {
-        select: {
-          _count: {
-            select: { items: true },
-          },
-        },
-      },
+    include: {
+      receipts: true,
+      sales: true,
+      // keep basic totals
+      // Prisma will still provide totalSales/totalProfit on the root
     },
   });
 
@@ -66,14 +62,22 @@ export async function summarizeSupportEntriesForPeriod(opts: {
     return { totals: { ...emptyTotals }, hasEntries: false };
   }
 
-  const totals = entries.reduce<SupportCommissionTotals>(
+  // Only count entries that have explicit backing: either `receipts` or `sales` rows.
+  const backed = entries.filter((e) => (Array.isArray(e.receipts) && e.receipts.length > 0) || (Array.isArray(e.sales) && e.sales.length > 0));
+
+  if (backed.length === 0) {
+    // No backed entries in the period — treat as no entries to avoid awarding commission
+    return { totals: { ...emptyTotals }, hasEntries: false };
+  }
+
+  const totals = backed.reduce<SupportCommissionTotals>(
     (acc, entry) => {
-      acc.totalSales += entry.totalSales;
-      acc.totalProfit += entry.totalProfit;
-      acc.newBatteries += entry.newBatteries;
-      acc.changedBatteries += entry.changedBatteries;
-      acc.totalReceipts += entry.receipts.length;
-      acc.totalItems += entry.receipts.reduce((sum, receipt) => sum + (receipt._count?.items ?? 0), 0);
+      acc.totalSales += Number(entry.totalSales ?? 0);
+      acc.totalProfit += Number(entry.totalProfit ?? 0);
+      acc.newBatteries += Number((entry.newBatteries as any) ?? 0);
+      acc.changedBatteries += Number((entry.changedBatteries as any) ?? 0);
+      acc.totalReceipts += Array.isArray(entry.receipts) ? entry.receipts.length : 0;
+      acc.totalItems += Array.isArray(entry.receipts) ? entry.receipts.reduce((sum, receipt) => sum + (Array.isArray((receipt as any).items) ? (receipt as any).items.length : 0), 0) : 0;
       return acc;
     },
     { ...emptyTotals },
@@ -107,6 +111,28 @@ export async function recomputeSupportCommissionLedger(opts: {
   const tierInfo = getCommissionSummaryForSales(totals.totalSales ?? 0);
   const tierCommission = tierInfo.commission ?? 0;
   const supportCommission = fallbackCommission + tierCommission;
+
+  // Guard: if support-reported profit is implausibly larger than marketing
+  // profit for the same period, skip creating/upserting a support-derived
+  // ledger. This prevents support fallback ledgers (often from manual
+  // entries) from overriding authoritative marketing-based ledgers.
+  try {
+    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId, period });
+    const marketingProfit = Number((marketingSummary as any)?.totals?.totalProfit ?? 0);
+    // If marketing has non-zero profit and support profit is > 2x marketing profit,
+    // consider it implausible and abort ledger creation.
+    if (marketingProfit > 0 && totals.totalProfit > marketingProfit * 2) {
+      return {
+        updated: false,
+        supportCommission: 0,
+        totals,
+        period,
+        ledgerId: null,
+      };
+    }
+  } catch (err) {
+    // If the marketing summary check fails for any reason, continue with existing flow.
+  }
   if (dryRun) {
     return {
       updated: false,
@@ -131,6 +157,21 @@ export async function recomputeSupportCommissionLedger(opts: {
   const existingDetail: Record<string, any> = isRecord(detailValue)
     ? { ...(detailValue as Record<string, any>) }
     : {};
+  // If an existing ledger already contains a marketing-derived commission,
+  // do not allow support recompute to overwrite it. This avoids support
+  // fallbacks creating larger commissions that conflict with marketing data.
+  const existingMarketingCommission = isRecord(existingDetail.marketing)
+    ? Number(existingDetail.marketing?.commission ?? 0)
+    : 0;
+  if (existingMarketingCommission > 0) {
+    return {
+      updated: false,
+      supportCommission: 0,
+      totals,
+      period,
+      ledgerId: existingLedger?.id ?? null,
+    };
+  }
   const previousSupport = isRecord(existingDetail.support) ? existingDetail.support : null;
   const previousSupportCommission =
     typeof previousSupport?.commission === "number"

@@ -14,7 +14,12 @@ import renderReceiptTemplate from '../src/app/templates/receiptTemplate.tsx';
     deliveryAddress: 'Plot 123, Test Rd, Nairobi'
   };
 
-  const html = renderReceiptTemplate(snapshot, {} as any);
+  const branding = {
+    letterheadUrl: process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL,
+    logoUrl: process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL,
+    brandColor: '#7A2020',
+  };
+  const html = renderReceiptTemplate({ ...snapshot, branding }, {} as any);
   const outdir = path.resolve(process.cwd(), 'tmp');
   if (!fs.existsSync(outdir)) fs.mkdirSync(outdir, { recursive: true });
   const out = path.join(outdir, 'receipt-preview.html');

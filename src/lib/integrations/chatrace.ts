@@ -12,7 +12,7 @@ export type SendReceiptToChatraceInput = {
   amount: string;
   currency: string;
   receiptLink: string;
-  pdfUrl?: string;
+  receiptUrl?: string; // final URL to be written into Chatrace `receipt_url`
   receiptId?: string;
   tagName?: string;
 };
@@ -33,18 +33,18 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     amount,
     currency,
     receiptLink,
-    pdfUrl,
+    receiptUrl,
     receiptId,
     tagName,
   } = input;
-  const pdfUrlTrimmed = pdfUrl?.trim();
+  const receiptUrlTrimmed = receiptUrl?.trim();
   const debug: any = {
     ok: false,
     steps: {},
     contactId: null,
     phoneNormalized: phoneE164,
-    pdfUrlPresent: !!pdfUrlTrimmed,
-    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
+    receiptUrlPresent: !!receiptUrlTrimmed,
+    receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     env: {
       baseUrlPresent: !!BASE_URL,
       accountIdPresent: !!ACCOUNT_ID,
@@ -75,6 +75,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     'X-ACCESS-TOKEN': API_TOKEN || '',
     Accept: 'application/json',
   } as Record<string, string>;
+  if (ACCOUNT_ID) {
+    headers['X-ACCOUNT-ID'] = ACCOUNT_ID;
+  }
   const headerKeys = Object.keys(headers);
   debug.env.headerKeys = headerKeys;
 
@@ -82,26 +85,31 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   async function runRequest(path: string, body: unknown, hdrs: Record<string, string> = headers) {
     const url = pathWithBase(path);
+    const timeoutMs = 8_000;
+    const controller = new AbortController();
     const init: RequestInit = {
       method: 'POST',
+      signal: controller.signal as any,
       headers: {
         ...hdrs,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
     };
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response | null = null;
     let text = '';
     let json: any = null;
     try {
       res = await fetch(url, init as any);
+      clearTimeout(timer);
       text = await res.text().catch(() => '');
       try {
         json = text ? JSON.parse(text) : null;
       } catch {
         json = null;
       }
-      const bodySnippet = (text || '').slice(0, 200);
+      const bodySnippet = (text || '').slice(0, 500);
       const bodyError =
         json && (json.error ?? (Array.isArray(json.errors) ? json.errors[0] : null))
           ? json.error ?? json.errors
@@ -117,11 +125,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
         bodySnippet,
         bodyError,
       });
-      console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet });
+      console.info('[chatrace][http][debug]', { status: res.status, path, bodySnippet, json: json ?? null, rawHead: text ? (text.length > 500 ? text.slice(0, 500) : text) : null });
+      if (!res.ok) {
+        console.error('[chatrace][http] non-2xx response', { path, status: res.status, bodySnippet });
+      }
       return { ok: res.ok, status: res.status, text, json, bodyError };
-    } catch (e) {
+    } catch (e: any) {
+      clearTimeout(timer);
       const errMessage = String(e);
-      console.error('[chatrace][http] failed', { method: 'POST', path, error: errMessage });
+      const stack = e && e.stack ? e.stack : null;
+      console.error('[chatrace][http] failed', { method: 'POST', path, error: errMessage, stack });
       return { ok: false, status: 0, text: errMessage, json: null, bodyError: errMessage };
     }
   }
@@ -132,100 +145,98 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     console.warn('[chatrace] receiptLink does not look public HTTPS', { receiptLink });
   }
 
-  const finalTag = tagName?.trim() || 'receipt_created';
+  const finalTag = (tagName?.trim() || '').toLowerCase();
+  const receiptMode = receiptUrlTrimmed ? 'pdf' : 'link';
 
-  const setField = (fieldName: string, value: any) => ({
-    action: 'set_custom_field',
-    field_id: fieldName,
+  const finalReceiptUrl = (receiptUrlTrimmed || receiptLink || '').trim();
+  if (!finalReceiptUrl) {
+    throw new Error('finalReceiptUrl is empty (receiptUrl + receiptLink both missing)');
+  }
+
+  const setFieldValue = (fieldName: string, value: any) => ({
+    action: 'set_field_value',
+    field_name: fieldName,
     value: value == null ? '' : String(value),
   });
 
-  const USE_SET_FIELD_VALUE = false;
-  const setFieldCompat = (fieldName: string, value: any) =>
-    USE_SET_FIELD_VALUE
-      ? { action: 'set_field_value', field_name: fieldName, value: value == null ? '' : String(value) }
-      : setField(fieldName, value);
-
   const actions: any[] = [];
-  if (pdfUrlTrimmed) {
-    actions.push(setFieldCompat('pdf_url', pdfUrlTrimmed));
-  }
-  actions.push(setFieldCompat('customer_name', customerName || 'Customer'));
-  actions.push(setFieldCompat('order_placed', receiptNumber));
-  actions.push(setFieldCompat('amount', amount));
-  actions.push(setFieldCompat('currency', currency || 'KES'));
-  if (receiptId) {
-    actions.push(setFieldCompat('receipt_id', receiptId));
-  }
-  if (receiptLink) {
-    actions.push(setFieldCompat('receipt_url', receiptLink));
-  }
-  actions.push({ action: 'add_tag', tag_name: finalTag });
+  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
+  actions.push(setFieldValue('media_url', finalReceiptUrl));
+  actions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
+  actions.push(setFieldValue('file_url', finalReceiptUrl));
 
-  const payload = {
-    phone: phoneE164,
-    first_name: customerName || 'Customer',
-    actions,
-  };
+  actions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  actions.push(setFieldValue('order_placed', receiptNumber));
+  actions.push(setFieldValue('amount', amount));
+  actions.push(setFieldValue('currency', currency || 'KES'));
+  if (receiptId) {
+    actions.push(setFieldValue('receipt_id', receiptId));
+  }
+  actions.push(setFieldValue('receipt_channel', 'customer'));
+
+  actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+  actions.push({
+    action: 'add_tag',
+    tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+  });
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
     actionsCount: actions.length,
-    tag: finalTag,
-    hasPdfUrl: !!pdfUrlTrimmed,
+    tag: 'receipt_created',
+    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+    hasReceiptUrl: !!finalReceiptUrl,
+    receiptMode,
+    finalReceiptUrlLength: finalReceiptUrl.length,
   };
 
   console.info('[chatrace] pushReceipt', {
     receiptNumber,
     phoneE164,
-    tagName: finalTag,
     baseUrl: BASE_URL,
     accountId: ACCOUNT_ID,
     headerKeys,
-    pdfUrlLength: pdfUrlTrimmed?.length ?? 0,
-    receiptLinkLength: receiptLink.length,
+    receiptMode,
+    receiptUrlTrimmedLength: receiptUrlTrimmed?.length ?? 0,
+    finalReceiptUrlLength: finalReceiptUrl.length,
+    finalReceiptUrlSnippet: finalReceiptUrl.slice(0, 120),
+    tagToApply: 'receipt_created',
+    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
   });
 
-  const createPath = '/contacts';
-  const createRes = await runRequest(createPath, payload, headers);
+  // summary log for monitoring integrations (phone, final receipt_url, tag, mode)
+  console.info('[chatrace] pushSummary', {
+    phone: phoneE164,
+    receipt_url: finalReceiptUrl,
+    tag: 'receipt_created',
+    receiptMode,
+  });
+
+  const path = '/contacts';
+  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions }, headers);
   debug.steps.create = {
     status: createRes.status,
     bodySnippet: (createRes.text || '').slice(0, 200),
-    path: createPath,
+    path,
     bodyError: createRes.bodyError ?? null,
     ok: createRes.ok,
   };
   if (createRes.bodyError && !debug.error) {
-    debug.error =
-      typeof createRes.bodyError === 'string'
-        ? createRes.bodyError
-        : JSON.stringify(createRes.bodyError);
+    debug.error = typeof createRes.bodyError === 'string' ? createRes.bodyError : JSON.stringify(createRes.bodyError);
   }
 
-  const json = createRes.json ?? {};
-  const success = Boolean(json?.success);
-  const contactCreated = json?.contact_created ?? json?.data?.contact_created ?? false;
-  console.info('[chatrace] create contact response', {
-    receiptNumber,
-    phoneE164,
-    status: createRes.status,
-    success,
-    contactCreated,
-  });
+  const bodyJson = createRes.json ?? {};
+  // capture contact id and full response for debugging
+  debug.contactId = bodyJson?.data?.id ?? bodyJson?.id ?? null;
+  debug.responseJson = bodyJson;
+  debug.steps.create.response = bodyJson;
+  const success = Boolean(bodyJson?.success);
+  console.info('[chatrace] create contact response', { receiptNumber, phoneE164, status: createRes.status, success });
 
-  if (createRes.ok && success) {
-    debug.ok = true;
-    await persistDebug(receiptNumber, debug);
-    return { ok: true, debug };
-  }
-
-  debug.ok = false;
-  if (!debug.error) {
-    debug.error = `Chatrace responded with success=${success} contact_created=${contactCreated}`;
-  }
+  debug.ok = Boolean(createRes.ok && success);
   await persistDebug(receiptNumber, debug);
-  return { ok: false, debug };
+  return { ok: debug.ok, debug };
 }
 
 async function persistDebug(receiptNumber: string, debug: any) {

@@ -1,0 +1,24 @@
+{
+  "marketing": [
+    {
+      "key": "2025-12-09_1049_MPESA",
+      "keeperId": "cmj02ob3y0005l204snda7d4a",
+      "keeperCreatedAt": "2025-12-10T13:56:07.871Z",
+      "ops": [
+        {
+          "srcId": "cmiyriozr0006jm04p5mjqnk5",
+          "keeperId": "cmj02ob3y0005l204snda7d4a",
+          "srcSelling": 32000,
+          "srcBuying": 0,
+          "srcItems": [
+            {
+              "productName": "150w kit +32tv",
+              "buyingPrice": 22880
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "support": []
+}

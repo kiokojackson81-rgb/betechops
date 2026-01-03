@@ -6,6 +6,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "./types";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function AdminPayrollPage() {
 
   const period = getTradingPeriodFor(new Date());
   const periodKey = period.key;
+  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+  const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
 
   const attendants = await prisma.user.findMany({
     where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
@@ -57,7 +60,7 @@ export default async function AdminPayrollPage() {
       },
     }),
     prisma.attendantPayrollAdjustment.findMany({
-      where: { periodKey, attendantId: { in: attendantIds } },
+      where: { periodKey: { in: periodFilterKeys }, attendantId: { in: attendantIds } },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -129,7 +132,12 @@ export default async function AdminPayrollPage() {
     }
     const grossCommission = Number(ledger?.grossCommission ?? 0);
     const penalties = Number(ledger?.penalties ?? 0);
+    const summarySales = Number(earningsSummary?.totalSales ?? 0);
+    const summaryProfit = Number(earningsSummary?.totalProfit ?? 0);
     const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
+    const detailProfitValue = Number(detail?.totalProfit ?? NaN);
+    const resolvedProfit =
+      !Number.isNaN(detailProfitValue) && detailProfitValue !== 0 ? detailProfitValue : summaryProfit;
 
     const baseSalary = plan?.baseSalary ?? 0;
     const transportAllowance = plan?.defaultTransportAllowance ?? 0;
@@ -155,15 +163,20 @@ export default async function AdminPayrollPage() {
         totalEarnings,
         totalDeductions,
         netPay,
-        totalSales: Number(detail?.totalSales ?? 0),
-        totalProfit: Number(detail?.totalProfit ?? 0),
+        totalSales: Number(detail?.totalSales ?? summarySales),
+        totalProfit: resolvedProfit,
+        totalReceipts: Number(earningsSummary?.totalReceipts ?? 0),
+        totalItems: Number(earningsSummary?.totalItems ?? 0),
+        newProducts: Number(earningsSummary?.totalNewProducts ?? 0),
+        editedProducts: Number(earningsSummary?.totalEditedProducts ?? 0),
+        copiedProducts: Number(earningsSummary?.totalCopiedProducts ?? 0),
         adjustmentBreakdown: summary.breakdown as AdjustmentBreakdown,
         adjustmentEntries: summary.entries,
         commissionDirect,
         commissionMarketplaceJumia,
-      commissionMarketplaceKilimall,
-      commissionTotal,
-      commissionBreakdown: ledger?.commissionBreakdown ?? null,
+        commissionMarketplaceKilimall,
+        commissionTotal,
+        commissionBreakdown: ledger?.commissionBreakdown ?? null,
     };
   });
 

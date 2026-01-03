@@ -31,6 +31,8 @@ type OnlineSummaryResponse = {
   period: { key: string; label: string; start: string; end: string };
   totals: { orders: number; sales: number; commission: number; marketplaceSales?: number; remainingToNextTier?: number };
   platforms: OnlinePlatformSummary[];
+  // optional canonical per-receipt keys provided by server to help client dedupe
+  perReceiptCanonicalKeys?: string[];
 };
 
 type ReceiptItem = { id: string; productName: string; buyingPrice: number | "" };
@@ -399,6 +401,7 @@ export default function AttendantOnlineOpsClient() {
   const [tab, setTab] = useState<"overview" | "shops" | "receipts" | "payroll">("overview");
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
   // receipt totals removed (not used in simplified UI)
   const [receiptsEditorRows, setReceiptsEditorRows] = useState<ReceiptRow[]>([createReceipt()]);
   const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
@@ -422,26 +425,37 @@ export default function AttendantOnlineOpsClient() {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const url = impersonateId ? `/api/attendants/me?impersonateId=${encodeURIComponent(
+        impersonateId,
+      )}` : "/api/attendants/me";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       if (data?.user?.id) setUserId(data.user.id);
+      if (data?.user?.role) setUserRole(data.user.role);
     } catch (err) {
       console.warn("[attendant/online-ops] failed to load user", err);
     }
-  }, []);
+  }, [impersonateId]);
 
   const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
     setReceiptStatsLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
+        issuerOnly: "true",
         includeItems: "true",
         size: "200",
       });
+
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else {
+        params.set("attendantId", userId);
+      }
 
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load receipts for payroll period");
@@ -460,10 +474,13 @@ export default function AttendantOnlineOpsClient() {
     setOnlineSummaryLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load online summary for payroll period");
@@ -482,10 +499,13 @@ export default function AttendantOnlineOpsClient() {
     setPayrollLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(receiptsPeriod.start, false),
         end: formatNairobiParam(receiptsPeriod.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       setPayrollRows(null);
 
@@ -525,10 +545,13 @@ export default function AttendantOnlineOpsClient() {
     setShopSalesLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(selectedWeek.start, false),
         end: formatNairobiParam(selectedWeek.end, true),
       });
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      } else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/shops/sales?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load assigned shops");
@@ -547,10 +570,11 @@ export default function AttendantOnlineOpsClient() {
     setWeeklyLoading(true);
     try {
       const params = new URLSearchParams({
-        attendantId: userId,
         start: formatNairobiParam(selectedWeek.start, false),
         end: formatNairobiParam(selectedWeek.end, true),
       });
+      if (impersonateId) params.set("impersonateId", impersonateId);
+      else params.set("attendantId", userId);
 
       const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, {
         cache: "no-store",
@@ -584,8 +608,18 @@ export default function AttendantOnlineOpsClient() {
   }, [receiptsEditorRows]);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    const imp = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("impersonateId") : null;
+    setImpersonateId(imp);
+  }, []);
+
+  useEffect(() => {
+    // When impersonation toggles, clear potentially stale state and reload the resolved user
+    setReceiptRows([]);
+    setOnlineSummary(null);
+    setUserId(null);
+    setUserRole(null);
+    void fetchUser();
+  }, [impersonateId, fetchUser]);
 
   // receipt totals loader previously triggered here; removed
 
@@ -602,7 +636,26 @@ export default function AttendantOnlineOpsClient() {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   }, [receiptRows]);
 
-  const receiptsCount = receiptRows.length;
+  // normalize/compose canonical keys for local POS receipts and merge with server canonical keys
+  const receiptsCount = useMemo(() => {
+    // prefer canonical keys from payroll/attendant earnings summary (authoritative per-receipt map)
+    const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? (onlineSummary?.perReceiptCanonicalKeys ?? []);
+    const localKeys = (receiptRows ?? []).map((r: any) => {
+      // prefer receiptNumber/orderRef, fall back to id
+      const createdAt = r.createdAt ?? r.generatedAt ?? new Date().toISOString();
+      const d = new Date(createdAt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const businessDate = `${y}-${m}-${day}`;
+      const raw = (r.receiptNumber ?? r.orderRef ?? r.receiptRef ?? r.id ?? "") as string;
+      const serial = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (serial && serial.length > 0) return `${businessDate}:${serial}`;
+      return `ID:${String(r.id ?? raw ?? "")}`;
+    });
+    const union = new Set<string>([...serverKeys, ...localKeys]);
+    return union.size;
+  }, [receiptRows, onlineSummary]);
 
   const platformTotals = useMemo(() => {
     const platforms = onlineSummary?.platforms ?? [];

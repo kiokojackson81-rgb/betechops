@@ -4,6 +4,7 @@ import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,18 @@ export async function GET(req: Request) {
   ]);
   if (!auth.ok) return auth.res;
 
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const targetUserId = identity.resolvedUserId;
+  if (!targetUserId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
-  const startParam = parseDateParam(url.searchParams.get("start"));
-  const endParam = parseDateParam(url.searchParams.get("end"));
-  const { start: defaultStart, end: defaultEnd } = weekRangeForDate(new Date());
-  const start = startParam ?? defaultStart;
-  const end = endParam ?? defaultEnd;
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+  }
+  const { start, end } = weekRangeForDate(new Date());
 
   const rangeLabel = formatRangeLabel(start, end);
   const weekLabel = `${start.toLocaleDateString("en-KE", {
@@ -64,16 +71,17 @@ export async function GET(req: Request) {
     });
     accountIds = accounts.map((a) => a.id);
   } else {
-    const assignments = await getMarketplaceAssignmentsForUser(auth.user.id);
+    const assignments = await getMarketplaceAssignmentsForUser(targetUserId);
     accountIds = assignments.accountIds;
   }
 
   if (!accountIds.length) {
-    return NextResponse.json({
+    const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
-    });
+    };
+    return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
   const accounts = await prisma.marketplaceAccount.findMany({
@@ -89,11 +97,12 @@ export async function GET(req: Request) {
   });
 
   if (!accounts.length) {
-    return NextResponse.json({
+    const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
-    });
+    };
+    return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
   const normalizeName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
@@ -140,9 +149,15 @@ export async function GET(req: Request) {
     },
   });
 
+  const unmatchedManualByPlatform = new Map<string, { sales: number; entries: number }>();
+
   const manualSalesByAccount = new Map<string, number>();
   const manualEntriesCountByAccount = new Map<string, number>();
   manualEntries.forEach((entry) => {
+    const manualAmount = Number(entry.amount ?? 0);
+    if (!manualAmount) {
+      return;
+    }
     let matchedAccountId = entry.shopId && accountById.has(entry.shopId) ? entry.shopId : undefined;
     const normalizedShopName = normalizeName(entry.shop?.name);
     const platformKey = (entry.platform ?? entry.shop?.platform ?? "").toUpperCase();
@@ -168,6 +183,11 @@ export async function GET(req: Request) {
     }
 
     if (!matchedAccountId) {
+      const key = platformKey || "UNKNOWN";
+      const current = unmatchedManualByPlatform.get(key) ?? { sales: 0, entries: 0 };
+      current.sales += manualAmount;
+      current.entries += 1;
+      unmatchedManualByPlatform.set(key, current);
       return;
     }
 
@@ -251,7 +271,24 @@ export async function GET(req: Request) {
     })
     .sort((a, b) => b.sales - a.sales);
 
-  const totals = rows.reduce(
+  const manualSummaryRows = Array.from(unmatchedManualByPlatform.entries()).map(([platform, data]) => {
+    const commissionResult = computeMarketplaceCommission(data.sales);
+    return {
+      shopId: `manual-${platform}-${start.toISOString()}`,
+      shopName: `Manual ${platform}`,
+      platform,
+      weekLabel,
+      weekStart: start.toISOString(),
+      weekEnd: end.toISOString(),
+      sales: data.sales,
+      commission: Number(commissionResult.amount || 0),
+      orders: data.entries,
+    };
+  });
+
+  const finalRows = [...rows, ...manualSummaryRows].sort((a, b) => b.sales - a.sales);
+
+  const totals = finalRows.reduce(
     (acc, row) => {
       acc.sales += row.sales;
       acc.commission += row.commission;
@@ -261,9 +298,11 @@ export async function GET(req: Request) {
     { sales: 0, commission: 0, orders: 0 },
   );
 
-  return NextResponse.json({
+  const data = {
     rangeLabel,
-    totals: { ...totals, shops: rows.length },
-    rows,
-  });
+    totals: { ...totals, shops: finalRows.length },
+    rows: finalRows,
+  };
+
+  return NextResponse.json(composeIdentityResponse(meta, data));
 }

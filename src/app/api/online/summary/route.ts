@@ -4,6 +4,8 @@ import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
@@ -17,25 +19,45 @@ export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
 
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const targetUserId = identity.resolvedUserId;
+  if (!targetUserId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
-  const startParam = parseDateParam(url.searchParams.get("start"));
-  const endParam = parseDateParam(url.searchParams.get("end"));
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+  }
   const period = getTradingPeriodFor(new Date());
-  const start = startParam ?? period.start;
-  const end = endParam ?? period.end;
+  await getOrCreateCommissionPeriod(period.start);
+  const start = period.start;
+  const end = period.end;
   const periodLabel = `${start.toLocaleDateString("en-KE", {
     day: "2-digit",
     month: "short",
   })} - ${end.toLocaleDateString("en-KE", { day: "2-digit", month: "short" })}`;
 
-  const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(auth.user.id);
+  const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(targetUserId);
   if (!accountIds.length) {
-    return NextResponse.json({
+    const emptyData = {
       period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
       totals: { orders: 0, sales: 0, commission: 0, marketplaceSales: 0, remainingToNextTier: 2000000 },
       platforms: [],
       assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
-    });
+      marketplace: {
+        jumiaSales: 0,
+        kilimallSales: 0,
+        payoutSales: 0,
+        weeklyManualSales: 0,
+        marketplaceSalesOnly: 0,
+        toNextTier: 0,
+        tierProgress: 0,
+        commissionInfo: {},
+      },
+    };
+    return NextResponse.json(composeIdentityResponse(meta, emptyData));
   }
 
   const accounts = await prisma.marketplaceAccount.findMany({
@@ -97,7 +119,7 @@ export async function GET(req: Request) {
 
   const manualSummary = await prisma.weeklySale.aggregate({
     _sum: { amount: true },
-    where: { userId: auth.user.id, status: "APPROVED", AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }] },
+    where: { userId: targetUserId, status: "APPROVED", AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }] },
   });
   const weeklyManualSales = Number(manualSummary._sum?.amount ?? 0);
 
@@ -112,7 +134,7 @@ export async function GET(req: Request) {
   const toNextTier = nextTarget ? Math.max(0, nextTarget - marketplaceSalesOnly) : 0;
   const tierProgress = nextTarget ? Math.min(1, marketplaceSalesOnly / nextTarget) : 1;
 
-  return NextResponse.json({
+  const data = {
     period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
     totals: { orders: orders.length, sales: totalSales, commission: totalCommission },
     platforms,
@@ -131,5 +153,7 @@ export async function GET(req: Request) {
       tierProgress,
       commissionInfo,
     },
-  });
+  };
+
+  return NextResponse.json(composeIdentityResponse(meta, data));
 }

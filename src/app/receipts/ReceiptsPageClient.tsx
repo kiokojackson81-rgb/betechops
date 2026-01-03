@@ -122,7 +122,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="page-shell space-y-6 py-6">
       {view === "create" && (
         <section
           ref={formRef}

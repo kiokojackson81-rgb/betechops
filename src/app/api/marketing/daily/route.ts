@@ -316,7 +316,7 @@ export async function POST(req: Request) {
           } as any;
 
           const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || `https://${(new URL(req.url)).host}`;
-          const apiUrl = `${site.replace(/\/$/, '')}/api/receipts`;
+          const apiUrl = `${site.replace(/\/$/, '')}/api/receipts?link=1`;
           // Forward the caller's cookies so the receipts endpoint can authenticate this server-to-server call.
           const res = await fetch(apiUrl, {
             method: 'POST',

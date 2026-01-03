@@ -27,6 +27,33 @@ const DEFAULT_TIERS = [
   { minSales: 10_000_000, maxSales: 10_000_000, payoutFlat: 20_000 },
 ];
 
+type TiersLike = { minSales: number; maxSales?: number | null; payoutFlat: number };
+type NormalizedTier = { minSales: number; maxSales: number | null; payoutFlat: number };
+
+function normalizeTiers<T extends TiersLike>(tiers: T[]): NormalizedTier[] {
+  return tiers
+    .map((tier) => ({
+      minSales: Number(tier.minSales),
+      maxSales: tier.maxSales == null ? null : Number(tier.maxSales),
+      payoutFlat: Number(tier.payoutFlat),
+    }))
+    .sort((a, b) => a.minSales - b.minSales);
+}
+
+function tiersAreEqual(a: NormalizedTier[], b: NormalizedTier[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i].minSales !== b[i].minSales ||
+      a[i].maxSales !== b[i].maxSales ||
+      a[i].payoutFlat !== b[i].payoutFlat
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function getOrCreateCommissionPeriod(date: Date) {
   const tradingPeriod = getTradingPeriodFor(date);
   if (!tradingPeriod) throw new Error("No trading period for given date");
@@ -52,9 +79,18 @@ export async function getOrCreateCommissionPeriod(date: Date) {
 
   const existingTiers = await prisma.commissionTier.findMany({
     where: { periodId: period.id },
+    orderBy: { minSales: "asc" },
   });
 
-  if (existingTiers.length === 0) {
+  const normalizedExisting = normalizeTiers(existingTiers);
+  const normalizedDefaults = normalizeTiers(DEFAULT_TIERS);
+
+  let tiers = existingTiers;
+  if (
+    normalizedExisting.length === 0 ||
+    !tiersAreEqual(normalizedExisting, normalizedDefaults)
+  ) {
+    await prisma.commissionTier.deleteMany({ where: { periodId: period.id } });
     await prisma.commissionTier.createMany({
       data: DEFAULT_TIERS.map((tier) => ({
         periodId: period!.id,
@@ -63,12 +99,11 @@ export async function getOrCreateCommissionPeriod(date: Date) {
         payoutFlat: tier.payoutFlat,
       })),
     });
+    tiers = await prisma.commissionTier.findMany({
+      where: { periodId: period.id },
+      orderBy: { minSales: "asc" },
+    });
   }
-
-  const tiers = await prisma.commissionTier.findMany({
-    where: { periodId: period.id },
-    orderBy: { minSales: "asc" },
-  });
 
   return {
     period,
@@ -100,12 +135,16 @@ export function computeSalesCommissionFromTiers(
   const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
 
   const firstTierMin = sorted[0].minSales;
-  if (totalSales < firstTierMin) {
-    if (!fallbackPercent || fallbackPercent <= 0) return 0;
-    return fallbackPercent * totalProfit;
-  }
+  const baseSalesCap = firstTierMin;
+  const profitWithinFirstBand =
+    totalSales > 0 ? (Math.min(totalSales, baseSalesCap) / totalSales) * totalProfit : 0;
+  const baseCommission =
+    fallbackPercent && fallbackPercent > 0 ? fallbackPercent * profitWithinFirstBand : 0;
 
-  let commission = 0;
+  let commission = baseCommission;
+  if (totalSales <= firstTierMin) {
+    return commission;
+  }
 
   // We treat each tier as a band. For band i we consider the range from
   // bandStart (previous band end or this tier.min for the first) up to bandEnd.

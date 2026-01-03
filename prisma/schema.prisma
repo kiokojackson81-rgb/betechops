@@ -215,12 +215,14 @@ model MarketingReceipt {
   updatedAt     DateTime               @updatedAt
   dailyEntryId  String
   receiptNumber String?
+  receiptKey    String?                @unique
   sellingTotal  Int
   paymentMethod PaymentMethod
   buyingTotal   Int                    @default(0)
   dailyEntry    MarketingDailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         MarketingReceiptItem[]
 
+  @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_marketing_receipt_in_entry")
   @@index([dailyEntryId])
 }
 
@@ -274,6 +276,7 @@ model SupportReceipt {
   id            String               @id @default(cuid())
   dailyEntryId  String
   receiptNumber String?
+  receiptKey    String?              @unique
   sellingTotal  Int
   paymentMethod PaymentMethod
   createdAt     DateTime             @default(now())
@@ -282,6 +285,7 @@ model SupportReceipt {
   dailyEntry    SupportDailyEntry    @relation("SupportEntryReceipts", fields: [dailyEntryId], references: [id], onDelete: Cascade)
   items         SupportReceiptItem[] @relation("SupportReceiptItems")
 
+  @@unique([dailyEntryId, receiptNumber, paymentMethod], name: "uniq_support_receipt_in_entry")
   @@index([dailyEntryId])
 }
 
@@ -857,6 +861,7 @@ model CommissionRecord {
 model Receipt {
   id                  String        @id @default(cuid())
   orderId             String        @unique
+  receiptNumber       String?       @unique @map("receipt_number")
   docType             DocType
   generatedAt         DateTime      @default(now())
   issuedById          String?
@@ -989,10 +994,13 @@ model MarketplaceOrder {
   sellingPrice Decimal             @db.Decimal(14, 2)
   currency     String              @default("KES")
   buyingPrice  Decimal?            @db.Decimal(14, 2)
+  sellerFee    Decimal?            @db.Decimal(14, 2)
+  shippingFee  Decimal?            @db.Decimal(14, 2)
   profit       Decimal?            @db.Decimal(14, 2)
   pricedById   String?
   pricedAt     DateTime?
   isReturned   Boolean             @default(false)
+  profitEvents  ProfitEvent[]
   rawPayload   Json
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -1003,6 +1011,17 @@ model MarketplaceOrder {
   @@unique([platform, orderItemId])
   @@index([accountId, orderedAt])
   @@index([pricedById])
+}
+
+model ProfitEvent {
+  id               String          @id @default(cuid())
+  marketplaceOrderId String
+  type             ProfitEventType
+  amount           Decimal         @db.Decimal(14, 2)
+  createdAt        DateTime        @default(now())
+  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
+
+  @@index([marketplaceOrderId])
 }
 
 model MarketplacePricingTemplate {
@@ -1189,4 +1208,9 @@ enum DocType {
 enum CommissionRecordStatus {
   PENDING
   RELEASED
+}
+
+enum ProfitEventType {
+  RECOGNISE
+  REVERSE
 }

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 type AssignmentWithAccount = any;
 
@@ -166,7 +167,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       : Promise.resolve([]),
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
     prisma.attendantPayrollAdjustment.findMany({
-      where: { attendantId, periodKey: period.key },
+      where: { attendantId, periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) } },
     }),
     prisma.marketplaceReturn.findMany({
       where: {

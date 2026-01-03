@@ -18,9 +18,10 @@ async function main() {
   snapshot.generatedAt = new Date().toISOString();
   const branding = await getBranding();
   snapshot.branding = branding;
+  const brandedSnapshot = { ...snapshot, branding };
   if (!snapshot.attendantName) snapshot.attendantName = receipt.order?.attendant?.name ?? receipt.issuedBy?.name;
 
-  const html = renderReceiptTemplate(snapshot, { hideStamp: false } as any);
+  const html = renderReceiptTemplate(brandedSnapshot, { hideStamp: false } as any);
   const outdir = path.resolve(process.cwd(), 'tmp');
   if (!fs.existsSync(outdir)) fs.mkdirSync(outdir, { recursive: true });
   const out = path.join(outdir, `${id}.html`);

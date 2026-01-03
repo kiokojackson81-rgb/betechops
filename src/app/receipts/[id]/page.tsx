@@ -1,8 +1,8 @@
 import React from "react";
-import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { prisma } from "@/lib/prisma";
 import PrintControls from "./PrintControls";
-import ReceiptPrintView from "../_components/ReceiptPrintView";
+import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
+import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,16 @@ export default async function Page({ params }: { params: any }) {
   try {
     receipt = await prisma.receipt.findUnique({
       where: { id },
-      include: { order: { include: { items: true, layawayPlan: { include: { payments: true } }, attendant: { select: { name: true } } } }, issuedBy: true },
+      include: {
+        order: {
+          include: {
+            items: { include: { product: { select: { id: true, name: true } } } },
+            layawayPlan: { include: { payments: true } },
+            attendant: { select: { name: true } },
+          },
+        },
+        issuedBy: true,
+      },
     });
   } catch (err) {
     // Catch and render a friendly message instead of allowing a server exception to surface.
@@ -53,47 +62,13 @@ export default async function Page({ params }: { params: any }) {
   }
   if (!receipt) return <div className="p-4">Receipt not found</div>;
 
-  const data = (receipt.data as any) || {};
-  const totals = (receipt.totals as any) || {};
-  const balance = totals.balance ?? receipt.order?.layawayPlan?.balance ?? 0;
-
-  // Build a lightweight `data` object suitable for the client-side `ReceiptPrintView`.
-  const viewData = {
-    serial: receipt.order?.orderNumber || receipt.serial || "",
-    date: receipt.generatedAt,
-    id: receipt.id,
-    customerName: receipt.order?.customerName || data.customerName,
-    customerPhone: receipt.order?.customerPhone || data.customerPhone,
-    deliveryAddress: data.deliveryAddress || receipt.order?.deliveryAddress || "",
-    attendantName: receipt.order?.attendant?.name || receipt.issuedBy?.name || data.issuedByName,
-    items: (receipt.order?.items || []).map((it: any) => ({
-      title: it.title || it.productName,
-      quantity: it.quantity ?? it.qty ?? 1,
-      unitPrice: it.sellingPrice ?? it.unitPrice ?? it.price ?? 0,
-      serial: it.serial,
-      warranty: it.warranty,
-    })),
-    totals: {
-      subtotal: totals.subtotal ?? receipt.subtotal ?? 0,
-      tax: totals.tax ?? receipt.tax ?? 0,
-      total: totals.total ?? receipt.total ?? 0,
-      balance: balance,
-    },
-    notes: receipt.notes || data.notes || "",
-    paymentMethod: receipt.paymentMethod || data.paymentMethod || receipt.order?.paymentMethod || "",
-    paymentDetailsShown: Boolean(receipt.paymentDetailsShown || data.paymentDetailsShown),
-    showTax: Boolean(data.showTax || receipt.showTax),
-    discount: receipt.discount ?? data.discount ?? 0,
-  };
+  const snapshot = buildReceiptSnapshot(receipt);
+  const html = await renderReceiptHtml(snapshot, { hideStamp: false });
 
   return (
     <div className="mx-auto max-w-3xl bg-white p-6 text-black">
       <PrintControls receiptId={id} />
-      {/* Render the styled printable receipt view for consistency with printed output */}
-      {/* ReceiptPrintView is a client component that handles markdown rendering and print layout */}
-      {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-      {/* @ts-ignore-next-line */}
-      <ReceiptPrintView data={viewData} mode="preview" />
+      <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }

@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
+
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
 
   const url = new URL(req.url);
   const startParam = url.searchParams.get("start");
@@ -35,7 +41,11 @@ export async function GET(req: Request) {
     period = getTradingPeriodFor(new Date());
   }
 
+  await getOrCreateCommissionPeriod(period.start);
+
   const periodKey = `${period.start.toISOString()}_${period.end.toISOString()}`;
+  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+
 
   const attendants = await prisma.user.findMany({
     where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
@@ -45,12 +55,16 @@ export async function GET(req: Request) {
 
   const attendantIds = attendants.map((a) => a.id);
 
+  const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
   const [plans, ledgers, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findMany({ where: { attendantId: { in: attendantIds } } }),
     prisma.commissionLedger.findMany({
       where: { periodStart: period.start, periodEnd: period.end, userId: { in: attendantIds } },
     }),
-    prisma.attendantPayrollAdjustment.findMany({ where: { periodKey, attendantId: { in: attendantIds } }, orderBy: { createdAt: "desc" } }),
+    prisma.attendantPayrollAdjustment.findMany({
+      where: { periodKey: { in: periodFilterKeys }, attendantId: { in: attendantIds } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const planMap = new Map(plans.map((p) => [p.attendantId, p]));
@@ -136,5 +150,6 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json({ periodLabel: (period as any).label ?? "", rows });
+  const data = { periodLabel: (period as any).label ?? "", rows };
+  return NextResponse.json(composeIdentityResponse(meta, data));
 }

@@ -123,7 +123,7 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
   }
 
   const orders = await fetchOrders(apiBase, authHeader, createdAfter);
-  for (const order of orders) {
+    for (const order of orders) {
     const shopSid = order.shopIds?.[0];
     const account = shopSid ? accountsBySid.get(shopSid) : null;
     if (!account) continue;
@@ -131,7 +131,17 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     const items = await fetchOrderItems(apiBase, authHeader, order.id);
     for (const item of items) {
       const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
-      await prisma.marketplaceOrder.upsert({
+      const statusStr = typeof item.status === 'string' ? item.status : String(item.status ?? '');
+      const isReturnedFlag = statusStr.startsWith('RETURN') || statusStr === 'FAILED';
+      // load existing order (if any) so we can emit reversal events when needed
+      const existing = await prisma.marketplaceOrder.findUnique({ where: { id: item.id } });
+
+        // extract fee/shipping from raw payload when available
+        const rawItem: any = item as any;
+        const feeVal = Number((rawItem?.seller_fee?.amount ?? rawItem?.seller_fee_amount ?? 0) || 0);
+        const shippingVal = Number((rawItem?.shipping_fee?.amount ?? rawItem?.shipping_fee_amount ?? 0) || 0);
+
+      const upsertResult = await prisma.marketplaceOrder.upsert({
         where: {
           id: item.id,
         },
@@ -149,15 +159,53 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
             : undefined,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
+          isReturned: isReturnedFlag,
+          sellerFee: feeVal,
+          shippingFee: shippingVal,
           rawPayload: item as unknown as Prisma.InputJsonValue,
         },
         update: {
           status: item.status,
           sellingPrice: sellingPriceLocal,
           currency: item.country?.currencyCode ?? "KES",
+          isReturned: isReturnedFlag,
+          // store fee/shipping and raw payload; clear profit on return
+          sellerFee: feeVal,
+          shippingFee: shippingVal,
+          profit: isReturnedFlag ? 0 : undefined,
           rawPayload: item as unknown as Prisma.InputJsonValue,
         },
       });
+
+      // If this item was previously recognised with profit and is now returned,
+      // create a reversal ProfitEvent to mirror the change.
+      try {
+        if (isReturnedFlag && existing && existing.profit && Number(existing.profit) > 0) {
+          await prisma.profitEvent.create({
+            data: {
+              marketplaceOrderId: existing.id,
+              type: "REVERSE",
+              amount: -Number(existing.profit),
+            },
+          });
+        }
+        // If this item is delivered and already has a buyingPrice set but no profit,
+        // compute profit using stored fee/shipping and record a RECOGNISE event.
+        const statusUpper = String(upsertResult.status ?? "").toUpperCase();
+        const buyingPriceVal = upsertResult.buyingPrice ? Number(upsertResult.buyingPrice) : null;
+        const existingProfitVal = upsertResult.profit ? Number(upsertResult.profit) : 0;
+        if (!isReturnedFlag && (statusUpper.includes("DELIVER") || statusUpper === "DELIVERED") && buyingPriceVal !== null && (existingProfitVal === 0 || existingProfitVal === null)) {
+          const computedProfit = Number(upsertResult.sellingPrice ?? 0) - (Number(upsertResult.sellerFee ?? feeVal) || feeVal) - (Number(upsertResult.shippingFee ?? shippingVal) || shippingVal) - buyingPriceVal;
+          try {
+            await prisma.marketplaceOrder.update({ where: { id: upsertResult.id }, data: { profit: computedProfit } });
+            await prisma.profitEvent.create({ data: { marketplaceOrderId: upsertResult.id, type: "RECOGNISE", amount: computedProfit } });
+          } catch (err) {
+            console.warn("Failed to record computed profit for delivered marketplace order", err);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to create ProfitEvent reversal for returned order", err);
+      }
     }
   }
 }

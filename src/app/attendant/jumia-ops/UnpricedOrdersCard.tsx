@@ -22,13 +22,14 @@ type UnpricedOrder = {
 
 export default function UnpricedOrdersCard() {
   const [orders, setOrders] = useState<UnpricedOrder[]>([]);
+  const [status, setStatus] = useState<string>("all");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/online/unpriced-orders", { cache: "no-store" });
+      const res = await fetch(`/api/online/unpriced-orders?status=${encodeURIComponent(status)}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load unpriced orders");
       const data = await res.json().catch(() => null);
       setOrders(data?.orders ?? []);
@@ -45,6 +46,10 @@ export default function UnpricedOrdersCard() {
     window.addEventListener("onlineOps:refresh", fetchOrders);
     return () => window.removeEventListener("onlineOps:refresh", fetchOrders);
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [status]);
 
   const handleSave = async (order: UnpricedOrder) => {
     const input = drafts[order.id] ?? "";
@@ -78,7 +83,17 @@ export default function UnpricedOrdersCard() {
           <h3 className="text-lg font-semibold">Orders needing buying price</h3>
           <p className="text-sm text-slate-400">Approve costs so profit + commission can be booked.</p>
         </div>
-        <button
+        <div className="flex items-center gap-3">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="rounded-xl bg-white/5 border border-white/10 px-2 py-1 text-sm text-slate-200"
+          >
+            <option value="all">All unpriced</option>
+            <option value="pending">Pending</option>
+            <option value="delivered">Delivered</option>
+          </select>
+          <button
           type="button"
           className="rounded-xl border border-white/10 px-3 py-1 text-xs text-slate-300 hover:bg-white/5"
           onClick={fetchOrders}
@@ -86,6 +101,7 @@ export default function UnpricedOrdersCard() {
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
+        </div>
       </div>
 
       {loading && !orders.length ? (

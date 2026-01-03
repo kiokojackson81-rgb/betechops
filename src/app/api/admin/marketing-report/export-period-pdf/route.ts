@@ -127,13 +127,17 @@ export async function GET(req: Request) {
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
     await browser.close();
 
-    return new Response(pdfBuffer, {
+    const res = new Response(pdfBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="marketing-report-${tradingPeriodKey || "period"}.pdf"`,
+        "Cache-Control": "no-store",
+        "X-Receipt-Renderer": "pdf",
+        "X-Receipt-Commit": process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
       },
     });
+    return res;
   } catch (err: any) {
     console.error("PDF export failed", err);
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });

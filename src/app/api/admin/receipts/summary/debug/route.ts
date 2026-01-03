@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 // Debugging route for admin receipts summary discrepancies.
 // Query params: start=ISO, end=ISO, attendantId (optional)
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const start = url.searchParams.get("start");
-    const end = url.searchParams.get("end");
-    const attendantId = url.searchParams.get("attendantId");
-
-    if (!start || !end) {
-      return NextResponse.json({ error: "start and end query parameters are required" }, { status: 400 });
+    // Debug route: do not allow arbitrary start/end for dashboard totals
+    if (url.searchParams.has("start") || url.searchParams.has("end")) {
+      return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
     }
-
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const period = getTradingPeriodFor(new Date());
+    const startDate = period.start;
+    const endDate = period.end;
+    const attendantId = url.searchParams.get("attendantId");
 
     // receipts captured in main receipts table
     const receipts = await prisma.receipt.findMany({

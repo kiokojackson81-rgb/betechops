@@ -4,16 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 import { requireAttendant, auth } from "@/lib/auth";
-import { canonicalReceiptNumber, findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
+import { canonicalReceiptNumber, parsePaymentMethod, buildReceiptKey } from "@/lib/receipts/utils";
+import { findReceiptOwner, buildDuplicateMessage } from "@/lib/receiptGuard";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { pushInternalReceiptAlert } from "@/lib/chatraceInternal";
+import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
 import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
 import { randomUUID } from "crypto";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -40,11 +42,17 @@ export async function GET(req: NextRequest) {
   const docTypeParam = url.searchParams.get("docType") || undefined;
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
-  const attendantId = url.searchParams.get("attendantId") || undefined;
+  const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const attendantId = identity.resolvedUserId;
+  if (!attendantId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const today = new Date();
   const startDefault = new Date(today);
@@ -54,62 +62,76 @@ export async function GET(req: NextRequest) {
   const startDate = start ? new Date(start) : startDefault;
   const endDate = end ? new Date(end) : endDefault;
 
-  const where: any = {};
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
   const includeSupportReceipts = !normalizedDocType || isSupportDocType;
-  if (normalizedDocType && !isMarketingDocType && !isSupportDocType) where.docType = normalizedDocType;
-  where.generatedAt = {
-    gte: startDate,
-    lte: endDate,
-  };
 
+  const and: Prisma.ReceiptWhereInput[] = [];
+  and.push({ generatedAt: { gte: startDate, lte: endDate } });
+
+  if (normalizedDocType && !isMarketingDocType && !isSupportDocType) {
+    and.push({ docType: normalizedDocType as any });
+  }
+
+  if (paymentMethodParam) {
+    and.push({ data: { path: ["paymentMethod"], equals: paymentMethodParam } });
+  }
+
+  const searchOr: Prisma.ReceiptWhereInput[] = [];
   if (q) {
-    where.OR = [
+    searchOr.push(
       { order: { customerName: { contains: q, mode: "insensitive" } } },
       { order: { customerPhone: { contains: q, mode: "insensitive" } } },
       { order: { customerEmail: { contains: q, mode: "insensitive" } } },
       { order: { orderNumber: { contains: q, mode: "insensitive" } } },
       { order: { attendant: { name: { contains: q, mode: "insensitive" } } } },
       { issuedBy: { name: { contains: q, mode: "insensitive" } } },
-    ];
+    );
   }
 
   if (phoneParam) {
     const pRaw = String(phoneParam).replace(/[^+0-9]/g, "");
-    // create a local-style variant (07...) when possible
     let local = pRaw;
     if (pRaw.startsWith("+254")) local = "0" + pRaw.slice(4);
     else if (pRaw.startsWith("254")) local = "0" + pRaw.slice(3);
     else if (/^[7][0-9]{8}$/.test(pRaw)) local = "0" + pRaw;
 
-    where.OR = where.OR || [];
-    where.OR.push({ order: { customerPhone: { contains: pRaw, mode: "insensitive" } } });
-    if (local) {
-      where.OR.push({ order: { customerPhone: { contains: local, mode: "insensitive" } } });
-    }
-  }
-  if (attendantId) {
-    // Allow filtering receipts either by the order.attendantId OR by the receipt issuer (issuedById)
-    // This ensures attendants see receipts they served (order.attendantId) as well as receipts
-    // they issued/created (issuedById). Keep any existing order filters intact.
-    const orderFilter = { ...(where.order || {}), attendantId };
-    where.OR = where.OR || [];
-    // Also include receipts where the attendantId is stored inside the JSON `data` field
-    // (some receipts persist attendant info inside `data.attendantId`). Use a JSON path
-    // filter so attendants still see those receipts.
-    where.OR.push({ order: orderFilter }, { issuedById: attendantId }, { data: { path: ["attendantId"], equals: attendantId } });
+    searchOr.push({ order: { customerPhone: { contains: pRaw, mode: "insensitive" } } });
+    if (local) searchOr.push({ order: { customerPhone: { contains: local, mode: "insensitive" } } });
   }
 
-  if (paymentMethodParam) {
-    where.data = {
-      path: ["paymentMethod"],
-      equals: paymentMethodParam,
-    };
+  if (searchOr.length) and.push({ OR: searchOr });
+
+  // Scope decision (strict)
+  const role = identity.actorRole;
+  const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
+  const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
+  const wantsGlobal = requestedScope === "global";
+  const wantsMine = requestedScope === "mine" || isImpersonating || issuerOnly === true;
+  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
+  // Rules: impersonating forces mine; otherwise admins/supervisors may request global explicitly
+  const scope = isImpersonating ? "mine" : (wantsGlobal && canGlobal ? "global" : "mine");
+  const metaWithScope = { ...meta, scope };
+
+  if (scope === "mine") {
+    const ownerOr: Prisma.ReceiptWhereInput[] = [];
+    ownerOr.push(
+      { issuedById: attendantId },
+      { order: { attendantId } },
+      { data: { path: ["attendantId"], equals: attendantId } },
+    );
+    // If issuerOnly requested, restrict to issuedById only
+    if (issuerOnly) {
+      and.push({ issuedById: attendantId });
+    } else {
+      and.push({ OR: ownerOr });
+    }
   }
+
+  const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
     ? await prisma.receipt.findMany({
@@ -203,7 +225,7 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -218,12 +240,16 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (attendantId) supportFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && attendantId) supportFilter.dailyEntry.submittedById = attendantId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
       { receiptNumber: { contains: q, mode: "insensitive" } },
-      { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
+      {
+        dailyEntry: {
+          submittedBy: { name: { contains: q, mode: "insensitive" } },
+        },
+      },
       { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
     ];
   }
@@ -285,7 +311,8 @@ export async function GET(req: NextRequest) {
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
-  return NextResponse.json({ receipts: paged, paging: { page, size, totalCount, totalPages } });
+  const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
+  return NextResponse.json(composeIdentityResponse(metaWithScope, data));
 }
 
 export async function POST(req: NextRequest) {
@@ -304,8 +331,13 @@ export async function POST(req: NextRequest) {
 
   const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
-  const attendantId = payload?.attendantId ?? payload?.servedBy ?? null;
-  const issuedById = payload?.issuedById ?? (guard.ok ? guard.user.id : null);
+  const resolvedUserId = guard?.user?.id ?? null;
+  // Attendant (who gets credited) should come from the payload (attendantId/servedBy)
+  // and only fall back to the resolved/logged-in user when not provided.
+  const attendantId = payload?.attendantId ?? payload?.servedBy ?? resolvedUserId ?? null;
+  // issuedById MUST be the logged-in user (who clicked Save). Do not trust payload. This prevents
+  // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
+  const issuedById = resolvedUserId;
 
   // compute totals
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -318,12 +350,19 @@ export async function POST(req: NextRequest) {
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
 
   try {
+    // allow linking when caller opts-in via ?link=1 or payload.link = true
+    const url = new URL(req.url);
+    const allowLink = url.searchParams.get("link") === "1" || url.searchParams.get("link") === "true" || Boolean(payload?.link);
+
     // Early duplicate guard: check across POS, marketing, support
     const existing = await findReceiptOwner(String(serial));
-    if (existing) {
+    if (existing && !allowLink) {
       const msg = buildDuplicateMessage(serial, existing);
       return NextResponse.json({ ok: false, code: "DUPLICATE_RECEIPT", message: msg, owner: existing }, { status: 409 });
     }
+
+    // If linking is allowed and an existing owner is found, we'll link to it inside the transaction.
+    const ownerToLink = existing ?? null;
 
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
@@ -521,8 +560,14 @@ export async function POST(req: NextRequest) {
       }
 
       // create or update receipt
+      const receiptSerialCanonical =
+        canonicalReceiptNumber(serial) ??
+        canonicalReceiptNumber(orderUpsert.orderNumber) ??
+        `ID:${orderUpsert.id}`;
+
       const receiptData = {
         orderId: orderUpsert.id,
+        receiptNumber: receiptSerialCanonical,
         docType: docType as any,
         issuedById: issuedById ?? null,
         taxRate: payload?.taxRate ? String(payload.taxRate) : undefined,
@@ -543,13 +588,46 @@ export async function POST(req: NextRequest) {
         },
       } as any;
 
-      // upsert receipt by orderId
-      const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+      // upsert receipt by orderId, or link to existing owner when requested
       let receipt;
-      if (existingReceipt) {
-        receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+      if (ownerToLink && ownerToLink.type === "pos" && ownerToLink.id) {
+        // Link: update the existing POS receipt record with merged data and any linking metadata
+        try {
+          const existingPos = await tx.receipt.findUnique({ where: { id: ownerToLink.id } });
+          if (existingPos) {
+            const leftData = existingPos.data && typeof existingPos.data === "object" && !Array.isArray(existingPos.data)
+              ? (existingPos.data as Record<string, any>)
+              : {};
+            const rightData = receiptData.data && typeof receiptData.data === "object" && !Array.isArray(receiptData.data)
+              ? (receiptData.data as Record<string, any>)
+              : {};
+            const mergedData = { ...leftData, ...rightData };
+            // attach linking hints if provided
+            if (payload?.marketingEntryId) mergedData.marketingEntryId = payload.marketingEntryId;
+            if (payload?.marketingReceiptId) mergedData.marketingReceiptId = payload.marketingReceiptId;
+            if (payload?.supportEntryId) mergedData.supportEntryId = payload.supportEntryId;
+            if (payload?.supportReceiptId) mergedData.supportReceiptId = payload.supportReceiptId;
+            receipt = await tx.receipt.update({ where: { id: ownerToLink.id }, data: { ...receiptData, data: mergedData } });
+          } else {
+            receipt = await tx.receipt.create({ data: receiptData });
+          }
+        } catch (e) {
+          // fallback to normal upsert behavior
+          const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+          if (existingReceipt) {
+            receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+          } else {
+            receipt = await tx.receipt.create({ data: receiptData });
+          }
+        }
       } else {
-        receipt = await tx.receipt.create({ data: receiptData });
+        // normal upsert by orderId
+        const existingReceipt = await tx.receipt.findUnique({ where: { orderId: orderUpsert.id } });
+        if (existingReceipt) {
+          receipt = await tx.receipt.update({ where: { id: existingReceipt.id }, data: receiptData });
+        } else {
+          receipt = await tx.receipt.create({ data: receiptData });
+        }
       }
 
       // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
@@ -578,49 +656,94 @@ export async function POST(req: NextRequest) {
         const endOfDay = new Date(entryDate);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // Support daily entry + receipts (best-effort; guard for partial tx mocks)
-        if (tx.supportDailyEntry) {
+        // Support daily entry + receipts (idempotent upsert with deltas)
+        if (tx.supportDailyEntry && tx.supportReceipt) {
           try {
-            const existingEntry = await tx.supportDailyEntry.findFirst({ where: { submittedById: attendantId, date: { gte: startOfDay, lte: endOfDay } }, select: { id: true, totalSales: true, totalProfit: true }, });
+            const existingEntry = await tx.supportDailyEntry.findFirst({
+              where: { submittedById: attendantId, date: { gte: startOfDay, lte: endOfDay } },
+              select: { id: true, totalSales: true, totalProfit: true },
+            });
 
             const supportReceiptItems = createdItems.map((it) => ({
-              productName: it.title,
-              buyingPrice: Math.max(0, Number(it.costPrice || 0)),
+              productName: String(it.title || "Item").trim(),
+              buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
             }));
-            const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + Number(item.buyingPrice || 0), 0);
-            const supportReceiptProfit = Math.max(0, Number(total) - supportReceiptBuyingTotal);
+            const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
+            const supportSellingTotal = Math.round(Number(total) || 0);
 
-            const supportReceiptData = {
-              receiptNumber: serial,
-              sellingTotal: total,
-              paymentMethod: PaymentMethod.MPESA,
-              buyingTotal: supportReceiptBuyingTotal,
-              items: { create: supportReceiptItems },
-            };
+            const normalizedSerial = canonicalReceiptNumber(serial);
+            const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
+            const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
-            if (existingEntry) {
-              if (tx.supportReceipt && typeof tx.supportReceipt.create === 'function') {
-                await tx.supportReceipt.create({ data: { dailyEntryId: existingEntry.id, ...supportReceiptData } });
-              }
-              await tx.supportDailyEntry.update({
-                where: { id: existingEntry.id },
-                data: {
-                  totalSales: Number(existingEntry.totalSales || 0) + total,
-                  totalProfit: Number(existingEntry.totalProfit || 0) + supportReceiptProfit,
-                },
-              });
-            } else {
+            const entryId = existingEntry?.id ?? (
               await tx.supportDailyEntry.create({
                 data: {
                   date: entryDate,
                   dayOfWeek,
-                  totalSales: total,
-                  totalProfit: supportReceiptProfit,
+                  totalSales: 0,
+                  totalProfit: 0,
                   newBatteries: 0,
                   changedBatteries: 0,
                   submittedById: attendantId,
-                  receipts: { create: [supportReceiptData] },
                 },
+                select: { id: true },
+              })
+            ).id;
+
+            let deltaSales = supportSellingTotal;
+            let deltaProfit = supportSellingTotal - supportReceiptBuyingTotal;
+
+            if (receiptKey) {
+              const prev = await tx.supportReceipt.findUnique({
+                where: { receiptKey },
+                select: { sellingTotal: true, buyingTotal: true },
+              });
+
+              const prevSelling = Number(prev?.sellingTotal ?? 0);
+              const prevBuying = Number(prev?.buyingTotal ?? 0);
+
+              deltaSales = supportSellingTotal - prevSelling;
+              deltaProfit = (supportSellingTotal - supportReceiptBuyingTotal) - (prevSelling - prevBuying);
+
+              await tx.supportReceipt.upsert({
+                where: { receiptKey },
+                create: {
+                  dailyEntryId: entryId,
+                  receiptNumber: normalizedSerial || undefined,
+                  receiptKey,
+                  paymentMethod,
+                  sellingTotal: supportSellingTotal,
+                  buyingTotal: supportReceiptBuyingTotal,
+                  items: supportReceiptItems.length ? { create: supportReceiptItems } : undefined,
+                },
+                update: {
+                  paymentMethod,
+                  sellingTotal: supportSellingTotal,
+                  buyingTotal: supportReceiptBuyingTotal,
+                  items: {
+                    deleteMany: {},
+                    ...(supportReceiptItems.length ? { create: supportReceiptItems } : {}),
+                  },
+                },
+              });
+            } else {
+              await tx.supportReceipt.create({
+                data: {
+                  dailyEntryId: entryId,
+                  receiptNumber: null,
+                  receiptKey: null,
+                  paymentMethod,
+                  sellingTotal: supportSellingTotal,
+                  buyingTotal: supportReceiptBuyingTotal,
+                  items: supportReceiptItems.length ? { create: supportReceiptItems } : undefined,
+                },
+              });
+            }
+
+            if (deltaSales || deltaProfit) {
+              await tx.supportDailyEntry.update({
+                where: { id: entryId },
+                data: { totalSales: { increment: deltaSales }, totalProfit: { increment: deltaProfit } },
               });
             }
           } catch (e) {
@@ -635,28 +758,24 @@ export async function POST(req: NextRequest) {
           marketingStart.setHours(0, 0, 0, 0);
           const marketingEnd = new Date(entryDate);
           marketingEnd.setHours(23, 59, 59, 999);
+
           const normalizedSerial = canonicalReceiptNumber(serial);
           const receiptSellingTotal = Math.round(Number(total) || 0);
           const receiptItemsPayload = createdItems.map((it) => ({
             productName: String(it.title || "Item").trim(),
             buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
           }));
-          const receiptBuyingTotal = receiptItemsPayload.reduce((sum, item) => sum + item.buyingPrice, 0);
-          const paymentMethod =
-            (typeof payload?.paymentMethod === "string" && payload.paymentMethod.toUpperCase() === "CASH"
-              ? PaymentMethod.CASH
-              : PaymentMethod.MPESA) ?? PaymentMethod.MPESA;
+          const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
+          const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
+          const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
+
           let entry = await tx.marketingDailyEntry.findFirst({
-            where: {
-              submittedById: attendantId,
-              date: {
-                gte: marketingStart,
-                lte: marketingEnd,
-              },
-            },
+            where: { submittedById: attendantId, date: { gte: marketingStart, lte: marketingEnd } },
           });
+
           const actorName = guard.user?.name ?? guard.user?.email ?? null;
           const actorEmail = guard.user?.email ?? null;
+
           if (!entry) {
             entry = await tx.marketingDailyEntry.create({
               data: {
@@ -665,55 +784,58 @@ export async function POST(req: NextRequest) {
                 submittedById: attendantId,
                 submittedByName: actorName,
                 submittedByEmail: actorEmail,
+                totalSales: 0,
+                totalProfit: 0,
               },
             });
           }
 
           let deltaSales = receiptSellingTotal;
           let deltaProfit = receiptSellingTotal - receiptBuyingTotal;
-          let receiptRecord;
-          if (normalizedSerial) {
-            receiptRecord = await tx.marketingReceipt.findFirst({
-              where: {
-                dailyEntryId: entry.id,
-                receiptNumber: normalizedSerial,
-              },
-              include: { items: true },
-            });
-          }
 
-          if (receiptRecord) {
-            const prevSelling = Number(receiptRecord.sellingTotal || 0);
-            const prevBuying = Number(receiptRecord.buyingTotal || 0);
+          if (receiptKey) {
+            const prev = await tx.marketingReceipt.findUnique({
+              where: { receiptKey },
+              select: { sellingTotal: true, buyingTotal: true },
+            });
+
+            const prevSelling = Number(prev?.sellingTotal ?? 0);
+            const prevBuying = Number(prev?.buyingTotal ?? 0);
+
             deltaSales = receiptSellingTotal - prevSelling;
-            deltaProfit = receiptSellingTotal - receiptBuyingTotal - (prevSelling - prevBuying);
-            await tx.marketingReceiptItem.deleteMany({ where: { receiptId: receiptRecord.id } });
-            receiptRecord = await tx.marketingReceipt.update({
-              where: { id: receiptRecord.id },
-              data: {
+            deltaProfit = (receiptSellingTotal - receiptBuyingTotal) - (prevSelling - prevBuying);
+
+            await tx.marketingReceipt.upsert({
+              where: { receiptKey },
+              create: {
+                dailyEntryId: entry.id,
+                receiptNumber: normalizedSerial || undefined,
+                receiptKey,
+                paymentMethod,
                 sellingTotal: receiptSellingTotal,
                 buyingTotal: receiptBuyingTotal,
+                items: receiptItemsPayload.length ? { create: receiptItemsPayload } : undefined,
+              },
+              update: {
                 paymentMethod,
-                items: receiptItemsPayload.length
-                  ? {
-                      create: receiptItemsPayload,
-                    }
-                  : undefined,
+                sellingTotal: receiptSellingTotal,
+                buyingTotal: receiptBuyingTotal,
+                items: {
+                  deleteMany: {},
+                  ...(receiptItemsPayload.length ? { create: receiptItemsPayload } : {}),
+                },
               },
             });
           } else {
-            receiptRecord = await tx.marketingReceipt.create({
+            await tx.marketingReceipt.create({
               data: {
                 dailyEntryId: entry.id,
-                receiptNumber: normalizedSerial || undefined,
+                receiptNumber: null,
+                receiptKey: null,
                 sellingTotal: receiptSellingTotal,
                 buyingTotal: receiptBuyingTotal,
                 paymentMethod,
-                items: receiptItemsPayload.length
-                  ? {
-                      create: receiptItemsPayload,
-                    }
-                  : undefined,
+                items: receiptItemsPayload.length ? { create: receiptItemsPayload } : undefined,
               },
             });
           }
@@ -721,10 +843,7 @@ export async function POST(req: NextRequest) {
           if ((deltaSales || deltaProfit) && entry.id) {
             await tx.marketingDailyEntry.update({
               where: { id: entry.id },
-              data: {
-                totalSales: { increment: deltaSales },
-                totalProfit: { increment: deltaProfit },
-              },
+              data: { totalSales: { increment: deltaSales }, totalProfit: { increment: deltaProfit } },
             });
           }
         } catch (e) {
@@ -944,25 +1063,33 @@ async function notifyInternalReceipt(receiptId: string, docType?: string, reques
     );
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
-  if (!receiptUrl) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
-    return;
-  }
+  const rid = requestId || randomUUID();
   if (requestId) {
     console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
   }
-  console.info('[receipts][internal] attempting push', { receiptId });
+  const receiptLinkSafe = (receiptLink && receiptLink.trim()) || `https://ops.betech.co.ke/receipts/${receiptId}`;
+  console.info('[receipts][internal] attempting push', { receiptId, rid });
   const result = await pushInternalReceiptAlert({
-    requestId,
+    requestId: rid,
     receiptNumber,
     amount: String(Math.round(invoiceAmount)),
     paymentMethod,
     createdBy: snapshot.attendantName ?? "(unknown)",
     itemsText: itemsShort,
-    receiptLink,
-    receiptPdfUrl: receiptUrl,
+    receiptLink: receiptLinkSafe,
+    receiptPdfUrl: null,
   });
-  console.info('[receipts][internal] push result', result);
+  console.info('[receipts][internal] push result', {
+    ok: result?.ok,
+    rid: result?.debug?.rid ?? null,
+    enabled: result?.debug?.enabled ?? null,
+    env: result?.debug?.env ?? null,
+    status: result?.debug?.steps?.createOrUpdate?.status ?? null,
+    stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
+    snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
+    json: result?.debug?.steps?.createOrUpdate?.json ?? null,
+    rawHead: result?.debug?.steps?.createOrUpdate?.raw ? (result.debug.steps.createOrUpdate.raw.length > 400 ? result.debug.steps.createOrUpdate.raw.slice(0, 400) : result.debug.steps.createOrUpdate.raw) : null,
+  });
   if (!result?.ok) {
     try {
       console.error('[receipts][internal] push failed', result?.debug ?? result);

@@ -1,21 +1,43 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, ctx: any) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
-
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
+  const paramsId = params.id as string | undefined;
   const url = new URL(req.url);
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+  const queryAttendantId = url.searchParams.get('attendantId') || undefined;
+  const attendantId = paramsId ?? queryAttendantId ?? pathAttendantId;
   const periodKey = url.searchParams.get("periodKey") || undefined;
 
+  // TEMP LOGGING: record incoming request for staging diagnostics
+  try {
+    console.info('[payroll-adjustments][req][GET]', {
+      url: req.url,
+      paramsId,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      periodKey,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   try {
     const where: any = { attendantId };
-    if (periodKey) where.periodKey = periodKey;
+    if (periodKey) {
+      const variants = getPeriodKeyVariants(periodKey);
+      where.periodKey = { in: variants.length ? variants : [periodKey] };
+    }
     const rows = await prisma.attendantPayrollAdjustment.findMany({ where, orderBy: { createdAt: "desc" } });
     return NextResponse.json({ rows });
   } catch (err: unknown) {
@@ -29,7 +51,6 @@ export async function POST(req: Request, ctx: any) {
   if (!auth.ok) return auth.res;
 
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
   let body: any;
   try {
     body = await req.json();
@@ -37,10 +58,35 @@ export async function POST(req: Request, ctx: any) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const bodyAttendantId = body?.attendantId as string | undefined;
+  const paramsId = (params.id as string | undefined) ?? undefined;
+  const url = new URL(req.url);
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+  const queryAttendantId = url.searchParams.get('attendantId') || undefined;
+  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId ?? pathAttendantId;
+
+  // TEMP LOGGING: record incoming request body and derived attendantId
+  try {
+    const bodySnippet = JSON.stringify(body || {}).slice(0, 2000);
+    console.info('[payroll-adjustments][req][POST]', {
+      url: req.url,
+      paramsId,
+      bodySnippet,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   const { periodKey, periodLabel, adjustmentType, label, amount, adjustmentKind } = body || {};
   if (!periodKey || typeof adjustmentType !== "string" || !label || typeof amount !== "number") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
+  if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   try {
     const kindCandidate = String(adjustmentKind ?? "DEDUCTION").toUpperCase();
@@ -69,11 +115,45 @@ export async function DELETE(req: Request, ctx: any) {
   if (!auth.ok) return auth.res;
 
   const params = (ctx && (ctx.params || ctx)) || {};
-  const attendantId = params.id as string;
   const url = new URL(req.url);
+  const paramsId = params.id as string | undefined;
+
+  // read optional body (may be empty for DELETE)
+  let body: any = null;
+  try {
+    body = await req.json();
+  } catch {
+    body = null;
+  }
+
+  const urlPathSegments = url.pathname.split('/').filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((s) => s === 'attendants');
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
+
+  const queryAttendantId = url.searchParams.get("attendantId") || undefined;
+  const bodyAttendantId = body?.attendantId as string | undefined;
+  const attendantId = paramsId ?? bodyAttendantId ?? queryAttendantId ?? pathAttendantId;
+
   const adjustmentId = url.searchParams.get("adjustmentId");
   if (!adjustmentId) return NextResponse.json({ error: "adjustmentId required" }, { status: 400 });
+  if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
+  // TEMP LOGGING: record incoming DELETE request context for staging
+  try {
+    const bodySnippet = body ? JSON.stringify(body).slice(0, 2000) : null;
+    console.info('[payroll-adjustments][req][DELETE]', {
+      url: req.url,
+      paramsId,
+      bodySnippet,
+      queryAttendantId,
+      pathAttendantId,
+      attendantId,
+      adjustmentId,
+      ts: new Date().toISOString(),
+    });
+  } catch {}
   try {
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

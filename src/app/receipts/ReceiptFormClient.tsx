@@ -52,10 +52,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showTax, setShowTax] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
-  const [paymentDetailsShown, setPaymentDetailsShown] = useState<boolean>(false);
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const hasPaymentMethodSelection = selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
   const primaryPaymentMethod = selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
+  const paymentDetailsShown = true;
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
   const [deliveryAddress, setDeliveryAddress] = useState<string | undefined>(undefined);
@@ -290,7 +290,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery") => {
     setCustomerType(type);
     if (type === "delivery") {
-      setPaymentDetailsShown(true);
       // ensure address input is visible for delivery customers
       setShowAddressInput(true);
     }
@@ -324,20 +323,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setMpesaPaid(clamped);
     setCashPaid(Math.max(0, total - clamped));
   };
-
-  const whatsappMessage = useMemo(() => {
-    if (!customerPhone || !customerName || !customerType) return "";
-    const lines = [
-      `Customer: ${customerName}`,
-      `Phone: ${customerPhone}`,
-      `Type: ${customerType}`,
-      `Total: KES ${total.toLocaleString()}`,
-      `Items: ${items.map((item) => item.title || "Item").join(", ")}`,
-      `MPESA: KES ${numericMpesaPaid.toLocaleString()}`,
-      `Cash: KES ${numericCashPaid.toLocaleString()}`,
-    ];
-    return lines.join("\n");
-  }, [customerName, customerPhone, customerType, total, items, mpesaPaid, cashPaid]);
 
   const handlePreview = (autoPrint = false) => {
     if (!hasPaymentMethodSelection) {
@@ -400,16 +385,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
     setSaving(true);
     try {
-      const payload = {
-        docType: docType.toLowerCase(),
-        serial,
-        date: new Date().toISOString(),
-        customerName,
-        customerPhone,
-        deliveryAddress: deliveryAddress || undefined,
-        attendantId: staffId,
-        issuedById: staffId,
-        taxRate: normalizedTaxRate,
+        const payload = {
+          docType: docType.toLowerCase(),
+          serial,
+          date: new Date().toISOString(),
+          customerName,
+          customerPhone,
+          deliveryAddress: deliveryAddress || undefined,
+          attendantId: staffId,
+          issuedById: staffId,
+          attendantName: selectedStaff?.name || "",
+          taxRate: normalizedTaxRate,
         showTax,
         discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
@@ -604,64 +590,70 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
           <div className="space-y-2">
             {items.map((it) => (
-              <div key={it.id} className="w-full flex items-center gap-3 border-b border-slate-800 pb-2">
-                <textarea
-                  className="w-1/2 min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
-                  value={it.title}
-                  onChange={(e) => updateRow(it.id, { title: e.target.value })}
-                  placeholder="Item description"
-                  rows={2}
-                />
-                <button
-                  type="button"
-                  className="h-12 px-4 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 flex items-center justify-center"
-                  onClick={() => aiDescription(it)}
-                  disabled={descLoadingId === it.id}
-                >
-                  {descLoadingId === it.id ? "…" : "✨ AI"}
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-20 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                  value={it.quantity}
-                  onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
-                />
-                <input
-                  type="number"
-                  min={0}
-                  className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                  value={it.unitPrice === "" ? "" : it.unitPrice}
-                  onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
-                  placeholder="Unit price"
-                />
-                {showSerials && (
-                  <input
-                    className="w-32 h-12 px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                    value={it.serial}
-                    onChange={(e) => updateRow(it.id, { serial: e.target.value })}
-                    placeholder="Serial / IMEI (optional)"
-                  />
-                )}
-                {showWarranty && (
-                  <select
-                    className="w-32 h-12 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
-                    value={it.warranty}
-                    onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
-                  >
-                    <option value="">No warranty</option>
-                    {warrantyOptions.map((w) => (
-                      <option key={w} value={w}>{w}</option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  type="button"
-                  className="h-12 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
-                  onClick={() => removeRow(it.id)}
-                >
-                  Remove
-                </button>
+              <div key={it.id} className="w-full border-b border-slate-800 pb-3 last:border-none last:pb-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <textarea
+                      className="w-full min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
+                      value={it.title}
+                      onChange={(e) => updateRow(it.id, { title: e.target.value })}
+                      placeholder="Item description"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="flex-shrink-0 h-12 px-4 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 flex items-center justify-center"
+                      onClick={() => aiDescription(it)}
+                      disabled={descLoadingId === it.id}
+                    >
+                      {descLoadingId === it.id ? "…" : "✨ AI"}
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      className="flex-shrink-0 h-12 min-w-[68px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                      value={it.quantity}
+                      onChange={(e) => updateRow(it.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      className="flex-shrink-0 h-12 min-w-[92px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200"
+                      value={it.unitPrice === "" ? "" : it.unitPrice}
+                      onChange={(e) => updateRow(it.id, { unitPrice: sanitizeNumericInput(e.target.value) })}
+                      placeholder="Unit price"
+                    />
+                    {showSerials && (
+                      <input
+                        className="h-12 min-w-[92px] px-3 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 w-full sm:w-auto"
+                        value={it.serial}
+                        onChange={(e) => updateRow(it.id, { serial: e.target.value })}
+                        placeholder="Serial / IMEI (optional)"
+                      />
+                    )}
+                    {showWarranty && (
+                      <select
+                        className="h-12 min-w-[120px] rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 w-full sm:w-auto"
+                        value={it.warranty}
+                        onChange={(e) => updateRow(it.id, { warranty: e.target.value })}
+                      >
+                        <option value="">No warranty</option>
+                        {warrantyOptions.map((w) => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      className="flex-shrink-0 h-12 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => removeRow(it.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -768,38 +760,23 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </label>
         </div>
         <div>
-          <label className={labelClass}>Payment details</label>
-          <div className="mt-2 space-y-3">
-            <label className="inline-flex items-center text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={paymentDetailsShown}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setPaymentDetailsShown(checked);
-                  if (checked) setSelectedPaymentMethods((prev) => ({ ...prev, MPESA: true }));
-                }}
-                className={`${checkboxClass} mr-2`}
-              />
-              Include payment details on receipt
-            </label>
-            <div className="flex gap-2">
-              {(["MPESA", "CASH"] as const).map((method) => (
-                <button
-                  key={method}
-                  type="button"
-                  onClick={() => togglePaymentMethodSelection(method)}
-                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                    selectedPaymentMethods[method]
-                      ? "bg-emerald-500 text-black"
-                      : "border border-white/10 text-slate-200"
-                  }`}
-                  aria-pressed={selectedPaymentMethods[method]}
-                >
-                  {method === "MPESA" ? "MPESA" : "Cash"}
-                </button>
-              ))}
-            </div>
+          <label className={labelClass}>Payment method</label>
+          <div className="mt-2 flex gap-2">
+            {(["MPESA", "CASH"] as const).map((method) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => togglePaymentMethodSelection(method)}
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  selectedPaymentMethods[method]
+                    ? "bg-emerald-500 text-black"
+                    : "border border-white/10 text-slate-200"
+                }`}
+                aria-pressed={selectedPaymentMethods[method]}
+              >
+                {method === "MPESA" ? "MPESA" : "Cash"}
+              </button>
+            ))}
           </div>
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
@@ -848,18 +825,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               Cash portion: KES {(total - numericMpesaPaid).toLocaleString()}
             </p>
           </div>
-        </div>
-      )}
-
-      {whatsappMessage && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">WhatsApp message</p>
-          <textarea
-            readOnly
-            value={whatsappMessage}
-            rows={5}
-            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-100"
-          />
         </div>
       )}
 

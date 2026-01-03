@@ -104,16 +104,21 @@ export default function AttendantOnlineClient() {
   const [period] = useState(() => getTradingPeriodFor(new Date()));
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [impersonated, setImpersonated] = useState<boolean>(false);
+  const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
 
   const appendImpersonateParam = useCallback(
     (params: URLSearchParams) => {
       if (impersonateId) {
         params.set("impersonateId", impersonateId);
+        // When impersonating, explicitly request mine scope to avoid global leakage
+        params.set("scope", "mine");
       }
     },
     [impersonateId],
   );
+
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -123,6 +128,31 @@ export default function AttendantOnlineClient() {
       setImpersonateId(imp);
     }
   }, []);
+
+  const identityMatches = useCallback(
+    (meta?: { resolvedUserId?: string | null }) => {
+      if (!impersonateId || !meta?.resolvedUserId) return true;
+      const matches = meta.resolvedUserId === impersonateId;
+      if (!matches) {
+        console.warn(
+          "[attendant/online] dropping response due to identity mismatch",
+          { impersonateId, resolved: meta.resolvedUserId, meta },
+        );
+      }
+      return matches;
+    },
+    [impersonateId],
+  );
+
+  const parseIdentityResponse = useCallback(
+    async <T = any>(res: Response): Promise<T | null> => {
+      const payload = await res.json().catch(() => null);
+      if (!payload) return null;
+      if (!identityMatches(payload.meta)) return null;
+      return payload.data ?? payload;
+    },
+    [identityMatches],
+  );
 
   // receipt totals & quick stats removed from right column
 
@@ -135,8 +165,17 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
+  const [marketplacePeriodIndex, setMarketplacePeriodIndex] = useState(0);
+  const marketplacePeriod = useMemo(() => {
+    const reference = new Date();
+    reference.setHours(0, 0, 0, 0);
+    reference.setDate(reference.getDate() + marketplacePeriodIndex * 28);
+    return getMarketplaceTradingPeriodFor(reference);
+  }, [marketplacePeriodIndex]);
   const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
+  useEffect(() => {
+    setTradingWeeks(buildTradingWeeks(marketplacePeriod.start));
+  }, [marketplacePeriod]);
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -157,9 +196,18 @@ export default function AttendantOnlineClient() {
       const query = params.toString();
       const res = await fetch(`/api/attendants/me${query ? `?${query}` : ""}`, { cache: "no-store" });
       if (!res.ok) return;
-      const data = await res.json();
-      if (data?.user?.id) setUserId(data.user.id);
-      if (data?.user?.role) setUserRole(data.user.role);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) return;
+      if (payload?.user?.id) setUserId(payload.user.id);
+      if (payload?.user?.role) setUserRole(payload.user.role);
+      // capture impersonation metadata when present so UI can surface it
+      if (payload?.impersonated) {
+        setImpersonated(true);
+        setImpersonatedBy(payload?.impersonatedBy ?? null);
+      } else {
+        setImpersonated(false);
+        setImpersonatedBy(null);
+      }
     } catch (err) {
       console.warn("[attendant/online] failed to load user", err);
     }
@@ -192,13 +240,17 @@ export default function AttendantOnlineClient() {
           end: formatNairobiParam(end, true),
         });
         appendImpersonateParam(params);
-        const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) {
-          setWeeklyEarnings(null);
-          return;
-        }
-        const data = await res.json();
-        setWeeklyEarnings(data);
+      const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setWeeklyEarnings(null);
+        return;
+      }
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setWeeklyEarnings(null);
+        return;
+      }
+      setWeeklyEarnings(payload);
       } catch (err) {
         setWeeklyEarnings(null);
       } finally {
@@ -217,13 +269,17 @@ export default function AttendantOnlineClient() {
           end: formatNairobiParam(period.end, true),
         });
         appendImpersonateParam(params);
-        const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) {
-          setOnlineSummary(null);
-          return;
-        }
-        const data = await res.json();
-        setOnlineSummary(data);
+      const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        setOnlineSummary(null);
+        return;
+      }
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setOnlineSummary(null);
+        return;
+      }
+      setOnlineSummary(payload);
       } catch (err) {
         setOnlineSummary(null);
       } finally {
@@ -239,6 +295,7 @@ export default function AttendantOnlineClient() {
         attendantId: userId,
         start: formatNairobiParam(period.start, false),
         end: formatNairobiParam(period.end, true),
+        issuerOnly: "true",
         includeItems: "true",
         size: "200",
       });
@@ -246,8 +303,9 @@ export default function AttendantOnlineClient() {
 
       const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load receipts for payroll period");
-      const data = await res.json();
-      setReceiptRows(Array.isArray(data.receipts) ? data.receipts : []);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) throw new Error("Failed to load receipts for payroll period");
+      setReceiptRows(Array.isArray(payload.receipts) ? payload.receipts : []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to load receipt totals";
       showToast(msg, "error");
@@ -272,10 +330,10 @@ export default function AttendantOnlineClient() {
         try {
           const adminRes = await fetch(`/api/admin/payroll/summary?${params.toString()}`, { cache: "no-store" });
           if (adminRes.ok) {
-            const adminData = await adminRes.json();
-            // Admin endpoint returns rows — pick the first row as the summary if available
-            if (Array.isArray(adminData.rows) && adminData.rows.length > 0) {
-              setPayrollSummary(adminData.rows[0]);
+            const adminPayload = await parseIdentityResponse(adminRes);
+            const rows = Array.isArray(adminPayload?.rows) ? adminPayload.rows : [];
+            if (rows.length > 0) {
+              setPayrollSummary(rows[0]);
               return;
             }
           }
@@ -290,8 +348,12 @@ export default function AttendantOnlineClient() {
         setPayrollSummary(null);
         return;
       }
-      const data = await res.json();
-      setPayrollSummary(data);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setPayrollSummary(null);
+        return;
+      }
+      setPayrollSummary(payload);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to load payroll summary";
       showToast(msg, "error");
@@ -320,11 +382,12 @@ export default function AttendantOnlineClient() {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to load shop sales");
-      const data = await res.json();
-      setShopSalesRows(Array.isArray(data.rows) ? data.rows : []);
-      setShopPeriodLabel(data.periodLabel ?? period.label);
-      setShopPeriodTotal(data.periodTotal ?? 0);
-      setShopAllTimeTotal(data.totalToDate ?? 0);
+      const payload = await parseIdentityResponse(res);
+      if (!payload) throw new Error("Failed to load shop sales");
+      setShopSalesRows(Array.isArray(payload.rows) ? payload.rows : []);
+      setShopPeriodLabel(payload.periodLabel ?? period.label);
+      setShopPeriodTotal(payload.periodTotal ?? 0);
+      setShopAllTimeTotal(payload.totalToDate ?? 0);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load shop sales";
@@ -382,7 +445,23 @@ export default function AttendantOnlineClient() {
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   }, [receiptRows]);
 
-  const receiptsCount = receiptRows.length;
+  const receiptsCount = useMemo(() => {
+    const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? [];
+    const localKeys = (receiptRows ?? []).map((r: any) => {
+      const createdAt = r.createdAt ?? r.generatedAt ?? new Date().toISOString();
+      const d = new Date(createdAt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const businessDate = `${y}-${m}-${day}`;
+      const raw = (r.receiptNumber ?? r.orderRef ?? r.receiptRef ?? r.id ?? "") as string;
+      const serial = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (serial && serial.length > 0) return `${businessDate}:${serial}`;
+      return `ID:${String(r.id ?? raw ?? "")}`;
+    });
+    const union = new Set<string>([...serverKeys, ...localKeys]);
+    return union.size;
+  }, [receiptRows, payrollSummary]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
@@ -403,6 +482,16 @@ export default function AttendantOnlineClient() {
     setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
   }, [fetchUser, tradingWeeks]);
 
+  // show a small banner when viewing as another attendant
+  const ImpersonationBanner = () => {
+    if (!impersonated) return null;
+    return (
+      <div className="rounded-md border border-amber-600 bg-amber-900/30 px-3 py-2 text-sm text-amber-100">
+        Viewing as another attendant{impersonatedBy ? ` (impersonated by ${impersonatedBy})` : ""} — some data may not match your account.
+      </div>
+    );
+  };
+
   const loadCommissionPreview = useCallback(async () => {
     if (!userId) return;
     try {
@@ -417,8 +506,12 @@ export default function AttendantOnlineClient() {
         setPreviewCommission(null);
         return;
       }
-      const data = await res.json();
-      setPreviewCommission(Number(data.totalCommission ?? data.totalCommission ?? 0));
+      const payload = await parseIdentityResponse(res);
+      if (!payload) {
+        setPreviewCommission(null);
+        return;
+      }
+      setPreviewCommission(Number(payload.totalCommission ?? 0));
     } catch (err) {
       setPreviewCommission(null);
     }
@@ -582,9 +675,30 @@ export default function AttendantOnlineClient() {
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
                           : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
                       ].join(" ")}
+                        >
+                          This marketplace period
+                        </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                      Marketplace window:
+                    </span>
+                    <span className="text-sm text-emerald-300">{marketplacePeriod.label}</span>
+                    <Button
+                      variant="secondary"
+                      className="px-3"
+                      onClick={() => setMarketplacePeriodIndex((prev) => Math.max(prev - 1, -12))}
+                    >
+                      Previous marketplace period
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-3"
+                      onClick={() => setMarketplacePeriodIndex(0)}
+                      disabled={marketplacePeriodIndex === 0}
                     >
                       This marketplace period
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div className="border-t border-slate-800 px-4 pt-3">
@@ -655,13 +769,23 @@ function PayrollEarningsCard({
   );
   const bonusValue = Number(summary?.bonusTotal ?? 0);
   const totalDeductions = Number(summary?.totalDeductions ?? 0);
-  const deductionBreakdown = [
-    ["Chama", chamaValue],
-    ["Lateness", Number(summary?.latenessTotal ?? 0)],
-    ["Discipline", Number(summary?.disciplineTotal ?? 0)],
-    ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
-    ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
-  ].filter(([, amount]) => Number(amount) > 0);
+  let deductionBreakdown: [string, number][] = [];
+  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
+    (summary?.adjustmentEntries ?? []);
+  if (adjEntries && adjEntries.length > 0) {
+    deductionBreakdown = adjEntries
+      .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
+      .map((e) => [String(e.label || e.adjustmentType), Number(e.amount ?? 0)]) as [string, number][];
+  } else {
+    const fallback: [string, number][] = [
+      ["Chama", chamaValue],
+      ["Lateness", Number(summary?.latenessTotal ?? 0)],
+      ["Discipline", Number(summary?.disciplineTotal ?? 0)],
+      ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
+      ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
+    ];
+    deductionBreakdown = fallback.filter(([, amount]) => Number(amount) > 0) as [string, number][];
+  }
 
   const rows = [
     { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },

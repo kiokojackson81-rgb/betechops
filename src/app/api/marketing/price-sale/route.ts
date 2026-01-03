@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeMarketingCommissionLedger } from "@/lib/marketingPeriodTotals";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
+import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,16 @@ export async function POST(req: Request) {
   const paymentMethod = (sale.paymentMethod === "CASH" ? "CASH" : "MPESA") as PaymentMethod;
   const receiptNumber =
     sale.receiptNumber && sale.receiptNumber.trim() !== "" ? sale.receiptNumber.trim() : null;
+
+  if (receiptNumber) {
+    const normalized = canonicalReceiptNumber(receiptNumber);
+    if (normalized) {
+      const owner = await findReceiptOwner(normalized);
+      if (owner && !(owner.type === "marketing" && owner.entryId === entry!.id)) {
+        return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+      }
+    }
+  }
 
   try {
     const marketingSale = await prisma.$transaction(async (tx) => {

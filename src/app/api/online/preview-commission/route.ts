@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { computeOnlinePeriodCommission } from "@/lib/onlineCommission";
 import { WeeklySaleStatus } from "@prisma/client";
+import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,12 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.res;
 
   const url = new URL(req.url);
-  const attendantId = url.searchParams.get("attendantId") ?? auth.user.id;
+  const identity = await resolveTargetUserId(req);
+  const meta = identity;
+  const attendantId = identity.resolvedUserId;
+  if (!attendantId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const startParam = parseDateParam(url.searchParams.get("start"));
   const endParam = parseDateParam(url.searchParams.get("end"));
 
@@ -71,5 +77,5 @@ export async function GET(req: Request) {
   };
 
   const result = computeOnlinePeriodCommission(periodInputs as any);
-  return NextResponse.json(result);
+  return NextResponse.json(composeIdentityResponse(meta, result as unknown as Record<string, unknown>));
 }
