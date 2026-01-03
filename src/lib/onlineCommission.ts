@@ -92,9 +92,13 @@ export function computeDirectCommission(totalSales: Money, totalProfit: Money): 
     return { amount, mode: amount > 0 ? "direct_fallback" : "none" };
   }
   const progressive = progressiveAmount(totalSales);
-  const profitPart = Math.round(Math.max(totalProfit ?? 0, 0) * 0.05);
+  // Apply 5% of profit only for the portion of sales within the first band
+  // (up to KES 500,000). This ensures we don't double-count 5% on the
+  // full profit when progressive payouts apply.
+  const profitWithinFirstBand = totalSales > 0 ? (Math.min(totalSales, 500_000) / totalSales) * Math.max(totalProfit ?? 0, 0) : 0;
+  const profitPart = Math.round(profitWithinFirstBand * 0.05);
   const amount = progressive + profitPart;
-  const reason = profitPart > 0 ? `progressive + 5% profit (${profitPart})` : undefined;
+  const reason = profitPart > 0 ? `progressive + 5% profit (first band ${profitPart})` : undefined;
   return { amount, mode: "direct_progressive", reason };
 }
 

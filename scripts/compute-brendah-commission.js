@@ -21,7 +21,10 @@ function computeDirectCommission(totalSales, totalProfit){
     const amount = Math.round(profit * 0.05);
     return { amount, mode: amount>0 ? 'direct_fallback' : 'none' };
   }
-  return { amount: progressiveAmount(totalSales), mode: 'direct_progressive' };
+  const progressive = progressiveAmount(totalSales);
+  const profitWithinFirstBand = totalSales > 0 ? (Math.min(totalSales, 500000) / totalSales) * Math.max(totalProfit||0, 0) : 0;
+  const profitPart = Math.round(profitWithinFirstBand * 0.05);
+  return { amount: progressive + profitPart, mode: 'direct_progressive' };
 }
 function computeMarketplaceCommission(totalSales){
   if (totalSales < 500000) return { amount: 0, mode: 'none' };
