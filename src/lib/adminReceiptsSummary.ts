@@ -234,6 +234,12 @@ export async function computeAdminReceiptSummary({
     const existingHasCost = existing ? recordHasCostData(existing) : false;
     const shouldReplace = () => {
       if (!existing) return true;
+      // If a marketing row exists but lacks cost information and the
+      // support row for the same receipt has cost, prefer the support row
+      // to avoid losing buying-price-derived profit information.
+      if (existing.source === "marketing" && record.source === "support" && !existingHasCost && candidateHasCost) {
+        return true;
+      }
       if (candidateHasCost !== existingHasCost) return candidateHasCost;
       return sourcePriority[record.source] > sourcePriority[existing.source];
     };
