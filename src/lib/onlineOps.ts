@@ -26,6 +26,7 @@ export type OnlineQuickStats = {
   receipts: number;
   salesKes: number;
   commissionKes: number;
+  commissionSource?: string;
   itemsSold: number;
   directSales: number;
   marketplaceSales: number;
@@ -72,6 +73,12 @@ type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
     createdAt: true;
   };
 }> & { commissionTotal: Prisma.Decimal | null };
+
+type ReceiptRecord = {
+  sales?: number;
+  profit?: number;
+  items?: number;
+};
 
 export async function findPreferredCommissionLedger(
   userId: string,
@@ -215,6 +222,20 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   const earningsCommission = Number(earnings.commissionTotal ?? 0);
   const ledgerCommission = ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? 0) : 0;
   const commissionKesValue = earningsCommission > 0 ? earningsCommission : ledgerCommission > 0 ? ledgerCommission : earnings.grossCommission;
+  const commissionSource =
+    earningsCommission > 0
+      ? "earnings"
+      : ledgerCommission > 0
+      ? ledger?.id
+        ? `ledger ${ledger.id}`
+        : "ledger"
+      : "computed";
+
+  console.info(
+    `[onlineQuickStats] user=${attendantId} period=${period.key} ledger=${ledger?.id ?? "none"} source=${commissionSource} value=${commissionKesValue.toFixed(
+      2,
+    )}`,
+  );
 
   return {
     periodKey: period.key,
@@ -222,6 +243,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     receipts: directStats.receipts + weeklyManual.entries,
     salesKes: totalTrackedSales,
     commissionKes: commissionKesValue,
+    commissionSource,
     itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
     directSales: directStats.sales,
     marketplaceSales,
@@ -235,7 +257,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const period = opts?.period ?? getTradingPeriodFor(new Date());
   const { accountIds, roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual] = await Promise.all([
+  const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
       ? prisma.marketplacePayoutWeek.findMany({
@@ -257,26 +279,82 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       },
     }),
     getWeeklyManualSales(attendantId, period),
+    prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
   ]);
 
   const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
   const combinedDirectSales = directStats.sales + weeklyManualSales;
-  const directSalesCommission =
-    combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
-      ? Math.max(0, Math.round(directStats.profit * 0.05))
-      : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
+  const combinedDirectProfit = directStats.profit;
 
   const marketplaceCommission = calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
   const isSupervisor = roles.includes("SUPERVISOR");
   const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
 
+  const summed = sumAdjustments(adjustments);
+  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
+
+  let directSalesCommission: number;
+  let brendahComputedCommission: number | null = null;
+  let brendahMergedSales = 0;
+  let brendahMergedProfit = 0;
+
+  if (isBrendah) {
+    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period });
+    const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
+    const marketingPer = (marketingSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
+    const supportPer = (supportSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
+    const merged = new Map<string, { sales: number; profit: number; items: number }>();
+    const normalize = (entry: ReceiptRecord) => ({
+      sales: Number(entry.sales ?? 0),
+      profit: Number(entry.profit ?? 0),
+      items: Number(entry.items ?? 0),
+    });
+
+    for (const [key, value] of Object.entries(marketingPer)) {
+      merged.set(key, normalize(value));
+    }
+    for (const [key, value] of Object.entries(supportPer)) {
+      const normalized = normalize(value);
+      if (merged.has(key)) {
+        const existing = merged.get(key)!;
+        if ((existing.profit ?? 0) <= 0 && normalized.profit > 0) {
+          merged.set(key, normalized);
+        }
+        continue;
+      }
+      merged.set(key, normalized);
+    }
+
+    for (const entry of merged.values()) {
+      if ((entry.profit ?? 0) <= 0) continue;
+      brendahMergedSales += entry.sales;
+      brendahMergedProfit += entry.profit;
+    }
+
+    const direct = computeDirectCommission(brendahMergedSales, brendahMergedProfit);
+    directSalesCommission = direct.amount;
+
+    const marketingTotals = (marketingSummary && marketingSummary.totals) || {};
+    const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
+      newProducts: marketingTotals.totalNewProducts ?? 0,
+      copiedProducts: marketingTotals.totalCopiedProducts ?? 0,
+      editedProducts: marketingTotals.totalEditedProducts ?? 0,
+    });
+
+    const productCommissionTotal = newProductCommission + copiedCommission + editedCommission;
+    brendahComputedCommission = direct.amount + productCommissionTotal + summed.commissionTopUpTotal;
+  } else {
+    directSalesCommission =
+      combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
+        ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
+        : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
+  }
+
   const grossCommission = directSalesCommission + marketplaceCommission + supervisorBonus - returnsDeduction;
   const baseSalary = plan?.baseSalary ?? 0;
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
-
-  const summed = sumAdjustments(adjustments);
 
   const totalEarnings = baseSalary + transportAllowance + grossCommission + summed.bonusTotal + summed.commissionTopUpTotal;
   const totalDeductions = summed.chamaTotal + summed.latenessTotal + summed.disciplineTotal + summed.otherDeductionsTotal;
@@ -284,57 +362,27 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
 
   // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
   const ledger = await findPreferredCommissionLedger(attendantId, period);
-
-  // Special-case for Brendah: compute commission using direct-sales formula + product commissions
-  // based on deduped marketing+support totals, but still allow an explicit persisted ledger
-  // commissionTotal to override when present (>0).
-  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
-  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
-
+  const ledgerCommissionValue = ledger ? Number(ledger.commissionTotal ?? 0) : 0;
   let commissionTotal: number;
-  if (isBrendah) {
-    // build merged totals from marketing + support to avoid unpriced receipts
-    const tradingPeriod = getTradingPeriodFor(new Date());
-    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period });
-    const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
-    const marketingPer: Record<string, any> = (marketingSummary as any)?.perReceipts ?? {};
-    const supportPer: Record<string, any> = (supportSummary as any)?.perReceipts ?? {};
-    const merged = new Map();
-    for (const [k, v] of Object.entries(marketingPer)) merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0 });
-    for (const [k, v] of Object.entries(supportPer)) {
-      const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0 };
-      if (merged.has(k)) {
-        const existing = merged.get(k);
-        if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
-          merged.set(k, supportObj);
-        }
-        continue;
-      }
-      merged.set(k, supportObj);
-    }
-    let mergedSales = 0;
-    let mergedProfit = 0;
-    let mergedItems = 0;
-    for (const [, v] of merged) {
-      mergedSales += v.sales;
-      mergedProfit += v.profit;
-      mergedItems += v.items ?? 0;
-    }
+  let commissionSourceLabel: string;
 
-    const prodTotals = (marketingSummary && marketingSummary.totals) || {};
-    const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
-      newProducts: prodTotals.totalNewProducts ?? 0,
-      copiedProducts: prodTotals.totalCopiedProducts ?? 0,
-      editedProducts: prodTotals.totalEditedProducts ?? 0,
-    });
-
-    const direct = computeDirectCommission(mergedSales, mergedProfit);
-    const computedGross = direct.amount + newProductCommission + copiedCommission + editedCommission + summed.commissionTopUpTotal;
-
-    commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : computedGross;
+  if (ledgerCommissionValue > 0) {
+    commissionTotal = ledgerCommissionValue;
+    commissionSourceLabel = `ledger${ledger?.id ? ` (${ledger.id})` : ""}`;
+  } else if (isBrendah && brendahComputedCommission != null) {
+    commissionTotal = brendahComputedCommission;
+    commissionSourceLabel = "computed-brendah";
   } else {
-    commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : grossCommission;
+    commissionTotal = grossCommission;
+    commissionSourceLabel = "computed-gross";
   }
+
+  const brendahDebug = isBrendah ? ` dedupSales=${brendahMergedSales} dedupProfit=${brendahMergedProfit}` : "";
+  console.info(
+    `[onlineEarningsSummary] user=${attendantId} period=${period.key} ledger=${ledger?.id ?? "none"} source=${commissionSourceLabel} total=${commissionTotal.toFixed(
+      2,
+    )}${brendahDebug}`,
+  );
 
   return {
     periodKey: period.key,

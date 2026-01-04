@@ -35,6 +35,9 @@ export default function QuickStats() {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Quick stats</p>
           <p className="text-sm text-slate-500">{stats?.periodLabel ?? "Current period"}</p>
           {stats?.ledgerId ? <p className="text-xs text-slate-400">Ledger: {stats.ledgerId}</p> : null}
+          {stats?.commissionSource ? (
+            <p className="text-xs text-slate-400">Commission source: {stats.commissionSource}</p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -88,4 +91,5 @@ type QuickStatsPayload = {
   remainingToNextTier: number;
   nextTierThreshold: number;
   ledgerId?: string | null;
+  commissionSource?: string | null;
 };
