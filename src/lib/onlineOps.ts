@@ -73,7 +73,7 @@ type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
   };
 }> & { commissionTotal: Prisma.Decimal | null };
 
-async function findPreferredCommissionLedger(
+export async function findPreferredCommissionLedger(
   userId: string,
   period: TradingPeriod,
 ): Promise<PreferredLedger | null> {

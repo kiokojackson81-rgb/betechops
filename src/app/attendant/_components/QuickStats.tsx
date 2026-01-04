@@ -34,6 +34,7 @@ export default function QuickStats() {
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Quick stats</p>
           <p className="text-sm text-slate-500">{stats?.periodLabel ?? "Current period"}</p>
+          {stats?.ledgerId ? <p className="text-xs text-slate-400">Ledger: {stats.ledgerId}</p> : null}
         </div>
         <button
           type="button"
@@ -86,4 +87,5 @@ type QuickStatsPayload = {
   itemsSold: number;
   remainingToNextTier: number;
   nextTierThreshold: number;
+  ledgerId?: string | null;
 };
