@@ -1,6 +1,6 @@
 "use server";
 
-import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma, Decimal, JsonValue } from "@prisma/client";
+import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma } from "@prisma/client";
 import { WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
@@ -68,7 +68,7 @@ type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
     detail: true;
     createdAt: true;
   };
-}> & { commissionTotal: Decimal | null };
+}> & { commissionTotal: Prisma.Decimal | null };
 
 async function findPreferredCommissionLedger(
   userId: string,
