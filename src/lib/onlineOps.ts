@@ -1,6 +1,6 @@
 "use server";
 
-import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma } from "@prisma/client";
+import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma, Decimal, JsonValue } from "@prisma/client";
 import { WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
@@ -59,22 +59,21 @@ export type OnlineEarningsSummary = {
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
 
+type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
+  select: {
+    grossCommission: true;
+    netCommission: true;
+    penalties: true;
+    commissionTotal: true;
+    detail: true;
+    createdAt: true;
+  };
+}> & { commissionTotal: Decimal | null };
+
 async function findPreferredCommissionLedger(
   userId: string,
   period: TradingPeriod,
-): Promise<
-  | (Prisma.CommissionLedgerGetPayload<{
-      select: {
-        grossCommission: true;
-        netCommission: true;
-        penalties: true;
-        commissionTotal: true;
-        detail: true;
-        createdAt: true;
-      };
-    }> & { commissionTotal?: number })
-  | null
-> {
+): Promise<PreferredLedger | null> {
   const windowMs = 24 * 60 * 60 * 1000;
   const exact = await prisma.commissionLedger.findUnique({
     where: {
