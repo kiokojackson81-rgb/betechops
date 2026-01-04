@@ -6,7 +6,10 @@ import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
-import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
+import { computeDirectCommission } from "@/lib/onlineCommission";
+import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
+import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 
 type AssignmentWithAccount = any;
@@ -84,6 +87,7 @@ async function findPreferredCommissionLedger(
       },
     },
     select: {
+      id: true,
       grossCommission: true,
       netCommission: true,
       penalties: true,
@@ -105,6 +109,7 @@ async function findPreferredCommissionLedger(
     },
     orderBy: { createdAt: "desc" },
     select: {
+      id: true,
       grossCommission: true,
       netCommission: true,
       penalties: true,
@@ -125,6 +130,7 @@ async function findPreferredCommissionLedger(
     },
     orderBy: { createdAt: "desc" },
     select: {
+      id: true,
       grossCommission: true,
       netCommission: true,
       penalties: true,
@@ -204,12 +210,18 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   }
   const remainingToNextTier = Math.max(0, nextTierThreshold - totalTrackedSales);
 
+  // Prefer authoritative `earnings.commissionTotal` first (set by getOnlineEarningsSummary),
+  // otherwise fall back to a persisted ledger value, or finally the computed earnings.grossCommission.
+  const earningsCommission = Number(earnings.commissionTotal ?? 0);
+  const ledgerCommission = ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? 0) : 0;
+  const commissionKesValue = earningsCommission > 0 ? earningsCommission : ledgerCommission > 0 ? ledgerCommission : earnings.grossCommission;
+
   return {
     periodKey: period.key,
     periodLabel: period.label,
     receipts: directStats.receipts + weeklyManual.entries,
     salesKes: totalTrackedSales,
-    commissionKes: ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? earnings.grossCommission) : earnings.grossCommission,
+    commissionKes: commissionKesValue,
     itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
     directSales: directStats.sales,
     marketplaceSales,
@@ -273,7 +285,56 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
   const ledger = await findPreferredCommissionLedger(attendantId, period);
 
-  const commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : grossCommission;
+  // Special-case for Brendah: compute commission using direct-sales formula + product commissions
+  // based on deduped marketing+support totals, but still allow an explicit persisted ledger
+  // commissionTotal to override when present (>0).
+  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
+
+  let commissionTotal: number;
+  if (isBrendah) {
+    // build merged totals from marketing + support to avoid unpriced receipts
+    const tradingPeriod = getTradingPeriodFor(new Date());
+    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period });
+    const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
+    const marketingPer: Record<string, any> = (marketingSummary as any)?.perReceipts ?? {};
+    const supportPer: Record<string, any> = (supportSummary as any)?.perReceipts ?? {};
+    const merged = new Map();
+    for (const [k, v] of Object.entries(marketingPer)) merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0 });
+    for (const [k, v] of Object.entries(supportPer)) {
+      const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0 };
+      if (merged.has(k)) {
+        const existing = merged.get(k);
+        if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+          merged.set(k, supportObj);
+        }
+        continue;
+      }
+      merged.set(k, supportObj);
+    }
+    let mergedSales = 0;
+    let mergedProfit = 0;
+    let mergedItems = 0;
+    for (const [, v] of merged) {
+      mergedSales += v.sales;
+      mergedProfit += v.profit;
+      mergedItems += v.items ?? 0;
+    }
+
+    const prodTotals = (marketingSummary && marketingSummary.totals) || {};
+    const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
+      newProducts: prodTotals.totalNewProducts ?? 0,
+      copiedProducts: prodTotals.totalCopiedProducts ?? 0,
+      editedProducts: prodTotals.totalEditedProducts ?? 0,
+    });
+
+    const direct = computeDirectCommission(mergedSales, mergedProfit);
+    const computedGross = direct.amount + newProductCommission + copiedCommission + editedCommission + summed.commissionTopUpTotal;
+
+    commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : computedGross;
+  } else {
+    commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : grossCommission;
+  }
 
   return {
     periodKey: period.key,
