@@ -271,21 +271,41 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     if (!ledger) {
       try {
         const windowMs = 24 * 60 * 60 * 1000;
-        const near = await prisma.commissionLedger.findFirst({
+        // Prefer the most-recent ledger that has an explicit persisted commissionTotal (> 0).
+        const nearPositive = await prisma.commissionLedger.findFirst({
           where: {
             userId: opts.userId,
             periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
+            commissionTotal: { gt: 0 },
           },
           orderBy: { createdAt: "desc" },
         });
-        if (near) {
+        if (nearPositive) {
           ledger = {
-            grossCommission: Number(near.grossCommission ?? 0),
-            netCommission: Number(near.netCommission ?? 0),
-            penalties: Number(near.penalties ?? 0),
-            commissionTotal: Number((near as any).commissionTotal ?? (near as any).commission_total ?? 0),
-            detail: near.detail ?? null,
+            grossCommission: Number(nearPositive.grossCommission ?? 0),
+            netCommission: Number(nearPositive.netCommission ?? 0),
+            penalties: Number(nearPositive.penalties ?? 0),
+            commissionTotal: Number((nearPositive as any).commissionTotal ?? (nearPositive as any).commission_total ?? 0),
+            detail: nearPositive.detail ?? null,
           } as any;
+        } else {
+          // Fallback: tolerant lookup without commissionTotal filter (preserves previous behavior)
+          const near = await prisma.commissionLedger.findFirst({
+            where: {
+              userId: opts.userId,
+              periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+          if (near) {
+            ledger = {
+              grossCommission: Number(near.grossCommission ?? 0),
+              netCommission: Number(near.netCommission ?? 0),
+              penalties: Number(near.penalties ?? 0),
+              commissionTotal: Number((near as any).commissionTotal ?? (near as any).commission_total ?? 0),
+              detail: near.detail ?? null,
+            } as any;
+          }
         }
       } catch (e) {
         // ignore tolerant lookup failures

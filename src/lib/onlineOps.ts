@@ -59,6 +59,84 @@ export type OnlineEarningsSummary = {
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
 
+async function findPreferredCommissionLedger(
+  userId: string,
+  period: TradingPeriod,
+): Promise<
+  | (Prisma.CommissionLedgerGetPayload<{
+      select: {
+        grossCommission: true;
+        netCommission: true;
+        penalties: true;
+        commissionTotal: true;
+        detail: true;
+        createdAt: true;
+      };
+    }> & { commissionTotal?: number })
+  | null
+> {
+  const windowMs = 24 * 60 * 60 * 1000;
+  const exact = await prisma.commissionLedger.findUnique({
+    where: {
+      userId_periodStart_periodEnd: {
+        userId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+    },
+    select: {
+      grossCommission: true,
+      netCommission: true,
+      penalties: true,
+      commissionTotal: true,
+      detail: true,
+      createdAt: true,
+    },
+  });
+  if (exact) return exact;
+
+  const nearPositive = await prisma.commissionLedger.findFirst({
+    where: {
+      userId,
+      periodStart: {
+        gte: new Date(period.start.getTime() - windowMs),
+        lte: new Date(period.start.getTime() + windowMs),
+      },
+      commissionTotal: { gt: 0 },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      grossCommission: true,
+      netCommission: true,
+      penalties: true,
+      commissionTotal: true,
+      detail: true,
+      createdAt: true,
+    },
+  });
+  if (nearPositive) return nearPositive;
+
+  const near = await prisma.commissionLedger.findFirst({
+    where: {
+      userId,
+      periodStart: {
+        gte: new Date(period.start.getTime() - windowMs),
+        lte: new Date(period.start.getTime() + windowMs),
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      grossCommission: true,
+      netCommission: true,
+      penalties: true,
+      commissionTotal: true,
+      detail: true,
+      createdAt: true,
+    },
+  });
+  return near;
+}
+
 export async function getMarketplaceAssignmentsForUser(attendantId: string): Promise<MarketplaceAssignmentSummary> {
   const now = new Date();
   const assignments = await prisma.marketplaceAccountAssignment.findMany({
@@ -103,16 +181,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     getOrCreateCommissionPeriod(period.start),
   ]);
 
-  // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
-  const ledger = await prisma.commissionLedger.findUnique({
-    where: {
-      userId_periodStart_periodEnd: {
-        userId: attendantId,
-        periodStart: period.start,
-        periodEnd: period.end,
-      },
-    },
-  });
+  const ledger = await findPreferredCommissionLedger(attendantId, period);
 
   const payoutSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
@@ -203,15 +272,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const netPay = totalEarnings - totalDeductions;
 
   // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
-  const ledger = await prisma.commissionLedger.findUnique({
-    where: {
-      userId_periodStart_periodEnd: {
-        userId: attendantId,
-        periodStart: period.start,
-        periodEnd: period.end,
-      },
-    },
-  });
+  const ledger = await findPreferredCommissionLedger(attendantId, period);
 
   const commissionTotal = ledger && Number(ledger.commissionTotal ?? 0) > 0 ? Number(ledger.commissionTotal) : grossCommission;
 
