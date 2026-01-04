@@ -65,6 +65,7 @@ const DIRECT_SALES_TIER_THRESHOLD = 500_000;
 
 type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
   select: {
+    id: true;
     grossCommission: true;
     netCommission: true;
     penalties: true;
