@@ -16,6 +16,8 @@ type UnpricedOrder = {
   productName: string;
   productUrl?: string;
   sellingPrice: number;
+  sellerFee?: number;
+  shippingFee?: number;
   currency: string;
   suggestedBuyingPrice: number | null;
 };
@@ -129,6 +131,13 @@ export default function UnpricedOrdersCard() {
               <div className="text-right">
                 <p className="text-xs text-slate-400">Selling price</p>
                 <p className="text-lg font-semibold text-emerald-400">KES {order.sellingPrice.toLocaleString()}</p>
+                <div className="text-xs text-slate-400 mt-1">
+                  <span>Seller fee: </span>
+                  <span className="text-slate-200">KES {(order.sellerFee ?? 0).toLocaleString()}</span>
+                  <span className="mx-2">•</span>
+                  <span>Shipping: </span>
+                  <span className="text-slate-200">KES {(order.shippingFee ?? 0).toLocaleString()}</span>
+                </div>
               </div>
             </div>
             {order.productUrl ? (

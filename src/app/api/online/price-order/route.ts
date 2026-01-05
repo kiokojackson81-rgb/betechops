@@ -49,9 +49,8 @@ export async function POST(req: Request) {
 
   const rounded = Math.round(buyingPrice);
   const sellingPrice = Number(order.sellingPrice ?? 0);
-  const raw = order.rawPayload as any;
-  const fee = Number((raw?.seller_fee?.amount ?? raw?.seller_fee_amount ?? 0) || 0);
-  const shipping = Number((raw?.shipping_fee?.amount ?? raw?.shipping_fee_amount ?? 0) || 0);
+  const fee = Number(order.sellerFee ?? 0);
+  const shipping = Number(order.shippingFee ?? 0);
   const profit = sellingPrice - fee - shipping - rounded;
 
   await prisma.marketplaceOrder.update({
