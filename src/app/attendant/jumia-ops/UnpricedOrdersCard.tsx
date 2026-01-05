@@ -22,8 +22,13 @@ type UnpricedOrder = {
   suggestedBuyingPrice: number | null;
 };
 
-export default function UnpricedOrdersCard() {
-  const [orders, setOrders] = useState<UnpricedOrder[]>([]);
+type Props = {
+  initialOrders?: UnpricedOrder[];
+  disableFetch?: boolean;
+};
+
+export default function UnpricedOrdersCard({ initialOrders, disableFetch }: Props) {
+  const [orders, setOrders] = useState<UnpricedOrder[]>(initialOrders ?? []);
   const [status, setStatus] = useState<string>("all");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -44,14 +49,21 @@ export default function UnpricedOrdersCard() {
   };
 
   useEffect(() => {
+    if (disableFetch) {
+      // If fetch is disabled (server provided initialOrders), skip client fetch.
+      setLoading(false);
+      return;
+    }
     fetchOrders();
     window.addEventListener("onlineOps:refresh", fetchOrders);
     return () => window.removeEventListener("onlineOps:refresh", fetchOrders);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (disableFetch) return;
     fetchOrders();
-  }, [status]);
+  }, [status, disableFetch]);
 
   const handleSave = async (order: UnpricedOrder) => {
     const input = drafts[order.id] ?? "";
