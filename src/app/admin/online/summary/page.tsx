@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -138,22 +138,30 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Load payout rows for JUMIA, normalize weeks to date strings, dedupe and aggregate per week
+  // Load payout rows for JUMIA, normalize weeks to Jumia trading periods, dedupe and aggregate per week (paid + unpaid together)
   const rawRows = await prisma.marketplacePayoutWeek.findMany({
     where: { account: { platform: "JUMIA" } },
     select: { weekStart: true, weekEnd: true, payoutAmount: true, grossSales: true, accountId: true },
     orderBy: { weekEnd: "desc" },
   });
 
-  const weekMap: Record<string, any> = {};
+  type WeekAgg = {
+    period: ReturnType<typeof getJumiaWeeklyPeriodFor>;
+    gross: number;
+    payout: number;
+    statementCount: number;
+    accountSet: Set<string>;
+  };
+
+  const weekMap: Record<string, WeekAgg> = {};
   for (const r of rawRows) {
-    const ws = new Date(r.weekStart).toISOString().slice(0, 10);
-    const we = new Date(r.weekEnd).toISOString().slice(0, 10);
-    const key = `${ws}_${we}`;
+    const baseDateValue = r.weekStart ?? r.weekEnd ?? new Date();
+    const baseDate = new Date(baseDateValue);
+    const period = getJumiaWeeklyPeriodFor(baseDate);
+    const key = period.key;
     if (!weekMap[key]) {
       weekMap[key] = {
-        weekStart: ws,
-        weekEnd: we,
+        period,
         gross: 0,
         payout: 0,
         statementCount: 0,
@@ -167,15 +175,14 @@ export default async function AdminOnlineSummaryPage() {
   }
 
   const recentWeeksEnriched = Object.values(weekMap)
-    .map((w: any) => ({
-      weekStart: w.weekStart,
-      weekEnd: w.weekEnd,
+    .map((w) => ({
+      period: w.period,
       _sum: { grossSales: w.gross, payoutAmount: w.payout },
       statementCount: w.statementCount,
       accountCount: w.accountSet.size,
-      label: `${weekLabelFormatter(new Date(w.weekStart))} - ${weekLabelFormatter(new Date(w.weekEnd))}`,
+      label: `${weekLabelFormatter(w.period.start)} - ${weekLabelFormatter(w.period.end)}`,
     }))
-    .sort((a: any, b: any) => (a.weekStart < b.weekStart ? 1 : -1))
+    .sort((a, b) => (a.period.start < b.period.start ? 1 : -1))
     .slice(0, 8);
 
   return (
