@@ -20,6 +20,7 @@
     "test:smoke": "node tests/smoke/users-search.js && node tests/smoke/uploads-sign.js && node tests/smoke/shops-assign.js",
     "smoke:local": "node scripts/smoke/test-apis.js",
     "run-jumia-sync": "node -r ts-node/register scripts/run-jumia-sync.ts",
+    "weekly-sales:sync": "node -r ts-node/register scripts/sync-and-backfill-weekly-sales.ts",
     "backfill:catalog-counters": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill-catalog-counters.js",
     "backfill:daily-report-metrics": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill-daily-report-metrics.ts",
     "cleanup:jumia-orders": "node scripts/run-cleanup.cjs",

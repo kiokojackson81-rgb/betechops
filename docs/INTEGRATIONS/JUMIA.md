@@ -25,6 +25,12 @@ This document summarises the Jumia integration, required env vars, runbook, and 
 3. If running multi-instance, set `REDIS_URL` to enable persistent token cache.
 4. Ensure Prometheus (or APM) is configured to scrape metrics emitted by the app.
 
+## Weekly sales autopopulation
+1. Ensure the Jumia credentials used by `syncOnlineMarketplaceData` are available either via the `JUMIA_*` env vars or by creating an `ApiCredential` row scoped to `GLOBAL` or the individual marketplace account.
+2. Run `npm run weekly-sales:sync`. The script executes `syncOnlineMarketplaceData({ lookbackDays: 70 })` to fetch payout statements into `MarketplacePayoutWeek` and then runs the backfill logic that upserts `WeeklySale` rows for the last four weeks (configurable via `WEEKLY_SALES_BACKFILL_LOOKBACK_DAYS`).
+3. Watch the logs (`sync-and-backfill-weekly-sales` prefix) for confirmation that statements populated and `WeeklySale` rows were created/updated.
+4. When automating deployments, call this script after credential rotation so the weekly sales view reflects the newest statements without manual entry.
+
 ## Copilot seed comments
 Add the provided `// TODO(copilot): ...` comments at the top of the target files (`src/lib/oidc.ts`, `src/lib/jumia.ts`, `src/lib/connectors/normalize.ts`, and new modules like `src/lib/jumia.feeds.ts`, `src/jobs/*`). Then start typing the function names — Copilot or an engineer can finish the implementation.
 
