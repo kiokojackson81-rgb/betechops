@@ -229,8 +229,8 @@ export default async function AdminOnlineSummaryPage() {
               const count = Number(w.accountCount ?? w._count?._all ?? 0);
               return (
                 <a
-                  key={`${w.weekStart}-${w.weekEnd}`}
-                  href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.weekStart).toISOString())}`}
+                  key={w.period.key}
+                  href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.period.start).toISOString())}`}
                   className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
                 >
                   <div className="text-sm text-slate-300">{w.label}</div>
