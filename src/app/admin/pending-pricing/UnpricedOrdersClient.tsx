@@ -30,6 +30,5 @@ export default async function UnpricedOrdersClient() {
   }));
 
   // Render client component with server-provided orders and disable client fetch
-  // @ts-expect-error Async Server Component returning a client component
   return <UnpricedOrdersCard initialOrders={orders} disableFetch />;
 }
