@@ -26,10 +26,17 @@ export async function loadJumiaCredentials(scope: string = DEFAULT_SCOPE): Promi
     };
   }
 
-  const credential = await prisma.apiCredential.findFirst({
+  // Try the requested scope first, then fall back to the GLOBAL scope
+  let credential = await prisma.apiCredential.findFirst({
     where: { scope },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
   });
+  if (!credential && scope !== "GLOBAL") {
+    credential = await prisma.apiCredential.findFirst({
+      where: { scope: "GLOBAL" },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    });
+  }
 
   if (credential?.clientId && credential.refreshToken) {
     return {
@@ -44,6 +51,6 @@ export async function loadJumiaCredentials(scope: string = DEFAULT_SCOPE): Promi
   }
 
   throw new Error(
-    "Jumia API credentials are not configured. Provide JUMIA_CLIENT_ID/JUMIA_REFRESH_TOKEN env vars or create an ApiCredential row with scope 'JUMIA_VENDOR'.",
+    "Jumia API credentials are not configured. Provide JUMIA_CLIENT_ID/JUMIA_REFRESH_TOKEN env vars or create an ApiCredential row with scope 'JUMIA_VENDOR' or 'GLOBAL'.",
   );
 }
