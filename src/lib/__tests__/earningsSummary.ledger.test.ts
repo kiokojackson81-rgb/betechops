@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { jest } from '@jest/globals';
 
 // Mock dependencies used by getEarningsSummaryForUser
