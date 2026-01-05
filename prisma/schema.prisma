@@ -978,6 +978,7 @@ model MarketplacePayoutWeek {
   account         MarketplaceAccount @relation(fields: [accountId], references: [id])
 
   @@unique([accountId, statementNumber])
+  @@unique([statementNumber, weekStart])
   @@index([accountId, weekEnd])
 }
 
