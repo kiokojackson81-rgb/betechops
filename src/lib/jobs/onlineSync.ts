@@ -74,7 +74,29 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     if (account.jumiaShopSid) accountsBySid.set(account.jumiaShopSid, account);
   });
 
-  const statements = await fetchStatements(apiBase, authHeader, createdAfter);
+  // Try to load GLOBAL/env credentials for fetching payout statements
+  let statements: JumiaStatement[] = [];
+  try {
+    const globalCreds = await (async () => {
+      try {
+        return await loadJumiaCredentials();
+      } catch (e) {
+        return null;
+      }
+    })();
+    if (globalCreds) {
+      const apiBaseGlobal = globalCreds.baseUrl?.trim() || DEFAULT_API_BASE;
+      const authSchemeGlobal = globalCreds.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
+      const accessTokenGlobal = await refreshJumiaToken(globalCreds, apiBaseGlobal);
+      const authHeaderGlobal = `${authSchemeGlobal} ${accessTokenGlobal}`;
+      statements = await fetchStatements(apiBaseGlobal, authHeaderGlobal, createdAfter);
+    } else {
+      statements = [];
+    }
+  } catch (err) {
+    console.warn("[onlineSync] Failed to fetch payout statements", err);
+    statements = [];
+  }
   for (const statement of statements) {
     const account = statement.shopSid ? accountsBySid.get(statement.shopSid) : null;
     if (!account) continue;
