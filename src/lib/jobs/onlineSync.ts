@@ -245,6 +245,8 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
       }
     }
   }
+  }
+
 }
 
 async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: string): Promise<string> {
