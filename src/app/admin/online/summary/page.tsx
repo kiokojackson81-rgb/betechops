@@ -135,6 +135,15 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
+  // Fetch recent distinct payout weeks (JUMIA) within the trading window
+  const recentWeeks = await prisma.marketplacePayoutWeek.findMany({
+    where: { weekEnd: { gte: period.start, lte: period.end } },
+    select: { weekStart: true, weekEnd: true },
+    distinct: ["weekStart", "weekEnd"],
+    orderBy: { weekEnd: "desc" },
+    take: 8,
+  });
+
   return (
     <div className="space-y-8">
       {warnings.length > 0 && (
@@ -161,6 +170,33 @@ export default async function AdminOnlineSummaryPage() {
               <p className="mt-2 text-2xl font-semibold text-white">{card.value}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Payout weeks</h3>
+            <p className="text-sm text-slate-400">Click a week to view per-account payout amounts (paid & unpaid).</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {recentWeeks.length ? (
+            recentWeeks.map((w) => {
+              const label = `${new Date(w.weekStart).toLocaleDateString()} - ${new Date(w.weekEnd).toLocaleDateString()}`;
+              return (
+                <a
+                  key={`${w.weekStart}-${w.weekEnd}`}
+                  href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.weekStart).toISOString())}`}
+                  className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
+                >
+                  <div className="text-sm text-slate-300">{label}</div>
+                </a>
+              );
+            })
+          ) : (
+            <div className="text-sm text-slate-400">No payout weeks found for this period.</div>
+          )}
         </div>
       </section>
 
