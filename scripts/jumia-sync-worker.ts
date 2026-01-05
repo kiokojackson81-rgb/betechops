@@ -17,6 +17,7 @@ try {
 // Use CommonJS require to avoid Node ESM resolution issues under ts-node
 const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
 const { syncOrdersIncremental, syncReturnOrders } = require('../src/lib/jobs/jumia');
+const { syncOnlineMarketplaceData } = require('../src/lib/jobs/onlineSync');
 const { performCleanup } = require('./cleanup-jumia-orders');
 
 // Default to 5s; can be overridden via env JUMIA_WORKER_INTERVAL_MS
@@ -34,6 +35,8 @@ const PENDING_EVERY_MS = Number(process.env.JUMIA_WORKER_PENDING_EVERY_MS ?? INT
 const RETURNS_EVERY_MS = Number(process.env.JUMIA_WORKER_RETURNS_EVERY_MS ?? 10 * 60_000);
 // Optional: retention cleanup cadence (default: every 6 hours)
 const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ?? 6 * 60 * 60_000);
+const ONLINE_OPS_EVERY_MS = Number(process.env.JUMIA_WORKER_ONLINE_OPS_EVERY_MS ?? INCREMENTAL_EVERY_MS);
+const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30);
 
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;
@@ -41,6 +44,7 @@ let lastIncrementalDeepAt = 0;
 let lastPendingAt = 0;
 let lastReturnsAt = 0;
 let lastRetentionAt = 0;
+let lastOnlineOpsAt = 0;
 let inFlight = false;
 
 function sleep(ms: number) {
@@ -90,6 +94,19 @@ async function tick() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(`${LOG_PREFIX} incremental sync failed`, err);
+    }
+  }
+
+  if (now - lastOnlineOpsAt >= ONLINE_OPS_EVERY_MS) {
+    try {
+      await syncOnlineMarketplaceData({ lookbackDays: ONLINE_OPS_LOOKBACK_DAYS });
+      logParts.push(`online-ops lookback=${ONLINE_OPS_LOOKBACK_DAYS}`);
+      lastOnlineOpsAt = now;
+      anyWork = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`${LOG_PREFIX} online ops sync failed`, err);
+      lastOnlineOpsAt = now;
     }
   }
 
