@@ -135,11 +135,12 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Fetch recent distinct payout weeks (JUMIA) within the trading window
-  const recentWeeks = await prisma.marketplacePayoutWeek.findMany({
-    where: { weekEnd: { gte: period.start, lte: period.end } },
-    select: { weekStart: true, weekEnd: true },
-    distinct: ["weekStart", "weekEnd"],
+  // Load the last eight payout-week aggregates directly from MarketplacePayoutWeek
+  const recentPayoutWeeks = await prisma.marketplacePayoutWeek.groupBy({
+    by: ["weekStart", "weekEnd"],
+    where: { account: { platform: "JUMIA" } },
+    _sum: { grossSales: true, payoutAmount: true },
+    _count: { _all: true },
     orderBy: { weekEnd: "desc" },
     take: 8,
   });
@@ -181,9 +182,12 @@ export default async function AdminOnlineSummaryPage() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recentWeeks.length ? (
-            recentWeeks.map((w) => {
+          {recentPayoutWeeks.length ? (
+            recentPayoutWeeks.map((w: any) => {
               const label = `${new Date(w.weekStart).toLocaleDateString()} - ${new Date(w.weekEnd).toLocaleDateString()}`;
+              const gross = Number(w._sum?.grossSales ?? 0);
+              const payout = Number(w._sum?.payoutAmount ?? 0);
+              const count = Number(w._count?._all ?? 0);
               return (
                 <a
                   key={`${w.weekStart}-${w.weekEnd}`}
@@ -191,11 +195,14 @@ export default async function AdminOnlineSummaryPage() {
                   className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
                 >
                   <div className="text-sm text-slate-300">{label}</div>
+                  <div className="mt-2 text-xs text-slate-400">Statements: {numberFormatter.format(count)}</div>
+                  <div className="mt-1 text-sm text-emerald-300">Gross: {currencyFormatter.format(gross)}</div>
+                  <div className="text-sm text-emerald-200">Payout: {currencyFormatter.format(payout)}</div>
                 </a>
               );
             })
           ) : (
-            <div className="text-sm text-slate-400">No payout weeks found for this period.</div>
+            <div className="text-sm text-slate-400">No payout weeks found.</div>
           )}
         </div>
       </section>
