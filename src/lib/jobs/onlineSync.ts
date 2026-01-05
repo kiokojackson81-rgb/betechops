@@ -37,10 +37,27 @@ type MarketplaceAccountWithAssignments = Prisma.MarketplaceAccountGetPayload<{
   include: { assignments: true };
 }>;
 
-export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }) {
-  const days = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
-  const createdAfter = new Date();
-  createdAfter.setDate(createdAfter.getDate() - days);
+type SyncOnlineMarketplaceOptions = {
+  lookbackDays?: number;
+  periodStart?: Date;
+  periodEnd?: Date;
+};
+
+export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOptions) {
+  let createdBefore = opts?.periodEnd ?? new Date();
+  let createdAfter =
+    opts?.periodStart ??
+    (() => {
+      const days = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
+      const base = new Date(createdBefore);
+      base.setDate(base.getDate() - days);
+      return base;
+    })();
+  if (createdAfter > createdBefore) {
+    const temp = createdAfter;
+    createdAfter = createdBefore;
+    createdBefore = temp;
+  }
 
   const activeAssignmentsWhere = {
     OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
@@ -159,7 +176,7 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     const accessTokenAcct = await refreshJumiaToken(credentialsForAccount, apiBaseAcct);
     const authHeaderAcct = `${authSchemeAcct} ${accessTokenAcct}`;
 
-    const orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter);
+    const orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter, createdBefore);
     for (const order of orders) {
       const shopSid = order.shopIds?.[0];
       // Ensure we only process orders for this account (token may return multiple shops)
@@ -299,10 +316,14 @@ async function fetchStatements(apiBase: string, authHeader: string, createdAfter
   return data.statements ?? [];
 }
 
-async function fetchOrders(apiBase: string, authHeader: string, createdAfter: Date): Promise<JumiaOrder[]> {
+async function fetchOrders(
+  apiBase: string,
+  authHeader: string,
+  createdAfter: Date,
+  createdBefore: Date,
+): Promise<JumiaOrder[]> {
   const orders: JumiaOrder[] = [];
   let nextToken: string | null = null;
-  const createdBefore = new Date();
 
   do {
     const url = new URL("/orders", apiBase);

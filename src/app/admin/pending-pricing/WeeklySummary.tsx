@@ -1,14 +1,18 @@
 import { prisma } from "@/lib/prisma";
-import { getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
+import { type TradingPeriod, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
 
 function fmt(n: number) {
   return `KES ${n.toLocaleString()}`;
 }
 
-export default async function WeeklySummary() {
-  const period = getJumiaWeeklyPeriodFor(new Date());
-  const start = period.start;
-  const end = period.end;
+type WeeklySummaryProps = {
+  period?: TradingPeriod;
+};
+
+export default async function WeeklySummary({ period }: WeeklySummaryProps) {
+  const activePeriod = period ?? getJumiaWeeklyPeriodFor(new Date());
+  const start = activePeriod.start;
+  const end = activePeriod.end;
 
   const agg = await prisma.marketplaceOrder.aggregate({
     where: { orderedAt: { gte: start, lte: end } },
@@ -32,7 +36,7 @@ export default async function WeeklySummary() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Marketplace (Jumia) — Weekly summary</h3>
-          <p className="text-sm text-slate-400">{period.label}</p>
+          <p className="text-sm text-slate-400">{activePeriod.label}</p>
         </div>
         <div className="text-right text-sm text-slate-300">
           <div>Orders: <span className="font-semibold">{count}</span></div>

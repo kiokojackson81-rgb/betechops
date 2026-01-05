@@ -1,12 +1,24 @@
 import { Platform } from "@prisma/client";
 
+import { type TradingPeriod } from "@/lib/tradingPeriod";
 import { prisma } from "@/lib/prisma";
 import UnpricedOrdersCard from "@/app/attendant/jumia-ops/UnpricedOrdersCard";
 
-export default async function UnpricedOrdersClient() {
+type Props = {
+  period: TradingPeriod;
+};
+
+export default async function UnpricedOrdersClient({ period }: Props) {
   // Server-side: fetch unpriced marketplace orders so admin users don't need attendant session
   const rows = await prisma.marketplaceOrder.findMany({
-    where: { platform: Platform.JUMIA, buyingPrice: null },
+    where: {
+      platform: Platform.JUMIA,
+      buyingPrice: null,
+      orderedAt: {
+        gte: period.start,
+        lte: period.end,
+      },
+    },
     include: { account: true },
     orderBy: { orderedAt: "desc" },
   });
