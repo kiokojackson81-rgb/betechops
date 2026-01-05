@@ -1,6 +1,6 @@
 "use server";
 
-import { Platform, Prisma } from "@prisma/client";
+import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 
@@ -154,6 +154,14 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         `[onlineSync] Unable to map marketplace account ${account.displayName ?? account.id} to a Shop record; payout data stored without WeeklySale entry.`,
       );
     }
+    else {
+      // Create or update an automatic WeeklySale entry for this payout week.
+      try {
+        await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, grossSales);
+      } catch (err) {
+        console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
+      }
+    }
   }
 
   // Fetch orders per-account using that account's credentials (support per-account ApiCredential)
@@ -264,6 +272,46 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
   }
 
+}
+
+export async function upsertWeeklySaleEntry(
+  shopId: string,
+  platform: Platform,
+  weekStart: Date,
+  weekEnd: Date,
+  amount: number,
+) {
+  // Upsert WeeklySale using the compound unique key: shopId_platform_weekStart_weekEnd
+  try {
+    await prisma.weeklySale.upsert({
+      where: {
+        shopId_platform_weekStart_weekEnd: {
+          shopId,
+          platform,
+          weekStart,
+          weekEnd,
+        },
+      },
+      create: {
+        shopId,
+        platform,
+        weekStart,
+        weekEnd,
+        amount: amount ?? 0,
+        userId: null,
+        status: WeeklySaleStatus.PENDING,
+        source: WeeklySaleSource.AUTOMATIC,
+        createdBy: null,
+      },
+      update: {
+        // Update amount only; leave userId/status/source untouched so admins keep control.
+        amount: amount ?? 0,
+      },
+    });
+  } catch (err) {
+    // Bubble up the error to caller for logging
+    throw err;
+  }
 }
 
 async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: string): Promise<string> {
