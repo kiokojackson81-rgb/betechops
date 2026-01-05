@@ -2,12 +2,13 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function startOfWeekUTC(date: Date) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = d.getUTCDay();
+function startOfWeekLocal(date: Date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0 = Sunday, 1 = Monday
   const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  d.setUTCHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
   return d;
 }
 
@@ -27,10 +28,11 @@ export async function reconcileWeeks(weeks = 8): Promise<ReconcileWeek[]> {
   const today = new Date();
   for (let i = 0; i < weeks; i++) {
     const ref = new Date(today);
-    ref.setUTCDate(ref.getUTCDate() - i * 7);
-    const weekStart = startOfWeekUTC(ref);
+    ref.setDate(ref.getDate() - i * 7);
+    const weekStart = startOfWeekLocal(ref);
     const weekEnd = new Date(weekStart);
-    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
 
     const rows = await prisma.marketplacePayoutWeek.findMany({ where: { AND: [{ weekStart: { lte: weekEnd } }, { weekEnd: { gte: weekStart } }] } });
 
