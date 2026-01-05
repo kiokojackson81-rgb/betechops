@@ -436,7 +436,19 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  const base = statement.period?.startDate ? new Date(statement.period.startDate) : statement.createdAt ? new Date(statement.createdAt) : new Date();
+  // Parse a date-only string (e.g. "2025-12-29" or ISO) as a local date
+  function parseDateOnly(s?: string | null) {
+    if (!s) return null;
+    const datePart = String(s).slice(0, 10);
+    const parts = datePart.split("-").map((v) => Number(v));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+    const [y, m, d] = parts;
+    return new Date(y, m - 1, d);
+  }
+
+  const parsed = statement.period?.startDate ? parseDateOnly(statement.period.startDate) : null;
+  const base = parsed ?? (statement.createdAt ? new Date(statement.createdAt) : new Date());
+
   // Normalize to Monday (start) through Sunday (end)
   function toMonday(d: Date) {
     const dt = new Date(d);
@@ -446,10 +458,12 @@ function deriveWeekWindow(statement: JumiaStatement) {
     dt.setDate(dt.getDate() + diff);
     return dt;
   }
+
   const weekStart = toMonday(base);
   const weekEnd = new Date(weekStart.getTime());
   weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(0, 0, 0, 0);
+  // Make weekEnd the inclusive end of day for clearer queries/labels
+  weekEnd.setHours(23, 59, 59, 999);
   return { weekStart, weekEnd };
 }
 
