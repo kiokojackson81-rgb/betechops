@@ -406,11 +406,21 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  const start = statement.period?.startDate ? new Date(statement.period.startDate) : statement.createdAt ? new Date(statement.createdAt) : new Date();
-  const end = statement.period?.endDate
-    ? new Date(statement.period.endDate)
-    : new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
-  return { weekStart: start, weekEnd: end };
+  const base = statement.period?.startDate ? new Date(statement.period.startDate) : statement.createdAt ? new Date(statement.createdAt) : new Date();
+  // Normalize to Monday (start) through Sunday (end)
+  function toMonday(d: Date) {
+    const dt = new Date(d);
+    dt.setHours(0, 0, 0, 0);
+    const day = dt.getDay(); // 0 = Sunday, 1 = Monday, ...
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    return dt;
+  }
+  const weekStart = toMonday(base);
+  const weekEnd = new Date(weekStart.getTime());
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(0, 0, 0, 0);
+  return { weekStart, weekEnd };
 }
 
 // Automatic WeeklySale creation has been disabled so admins can manage overrides manually.
