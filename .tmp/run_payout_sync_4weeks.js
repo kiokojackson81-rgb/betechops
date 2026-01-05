@@ -79,16 +79,45 @@ function deriveWeekWindow(statement) {
       for (const statement of statements) {
         const { weekStart, weekEnd } = deriveWeekWindow(statement);
         const payoutAmount = Number(statement.payout?.amount ?? 0);
+        // Prefer mapping by statement.shopSid when present to avoid assigning statements to the wrong account
+        const stmtShopSid = statement.shopSid ?? null;
+        let targetAccountId = acct.id;
+        if (stmtShopSid) {
+          const mapped = await prisma.marketplaceAccount.findFirst({ where: { jumiaShopSid: stmtShopSid } });
+          if (mapped) targetAccountId = mapped.id;
+        }
         try {
+          // Avoid creating the same statementNumber under multiple accounts: check if exists elsewhere
+          const existing = await prisma.marketplacePayoutWeek.findFirst({ where: { statementNumber: statement.statementNumber } });
+          if (existing && existing.accountId !== targetAccountId) {
+            // If the existing row's rawPayload indicates the same shopSid, prefer the mapped account and update if necessary
+            const existingShopSid = existing.rawPayload?.shopSid ?? null;
+            if (existingShopSid && stmtShopSid && existingShopSid === stmtShopSid) {
+              // If the target account already has a row for this statementNumber, update that row instead.
+              const targetExisting = await prisma.marketplacePayoutWeek.findUnique({ where: { accountId_statementNumber: { accountId: targetAccountId, statementNumber: statement.statementNumber } } });
+              if (targetExisting) {
+                await prisma.marketplacePayoutWeek.update({ where: { id: targetExisting.id }, data: { grossSales: payoutAmount, payoutAmount: payoutAmount, isPaid: Boolean(statement.paid), rawPayload: statement } });
+                upserted++;
+                continue;
+              }
+              // Update existing to point to the mapped account (no conflicting target row)
+              await prisma.marketplacePayoutWeek.update({ where: { id: existing.id }, data: { accountId: targetAccountId, grossSales: payoutAmount, payoutAmount: payoutAmount, isPaid: Boolean(statement.paid), rawPayload: statement } });
+              upserted++;
+              continue;
+            }
+            // Otherwise skip to avoid duplicate statementNumbers across accounts
+            console.warn('Skipping statement already present for another account', statement.statementNumber, existing.accountId, '->', targetAccountId);
+            continue;
+          }
           await prisma.marketplacePayoutWeek.upsert({
             where: {
               accountId_statementNumber: {
-                accountId: acct.id,
+                accountId: targetAccountId,
                 statementNumber: statement.statementNumber,
               },
             },
             create: {
-              accountId: acct.id,
+              accountId: targetAccountId,
               statementNumber: statement.statementNumber,
               weekStart,
               weekEnd,

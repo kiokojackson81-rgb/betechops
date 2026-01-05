@@ -115,49 +115,79 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     statements = [];
   }
   for (const statement of statements) {
-    const account = statement.shopSid ? accountsBySid.get(statement.shopSid) : null;
-    if (!account) continue;
+    const stmtShopSid = statement.shopSid ?? null;
+    const mappedAccount = stmtShopSid ? accountsBySid.get(stmtShopSid) : null;
+    if (!mappedAccount) {
+      console.warn(`[onlineSync] No marketplace account mapped for statement shopSid ${stmtShopSid} statement ${statement.statementNumber}`);
+      continue;
+    }
 
+    const targetAccountId = mappedAccount.id;
     const { weekStart, weekEnd } = deriveWeekWindow(statement);
     const grossSales = Number(statement.payout?.amount ?? 0);
-    await prisma.marketplacePayoutWeek.upsert({
-      where: {
-        accountId_statementNumber: {
-          accountId: account.id,
-          statementNumber: statement.statementNumber,
-        },
-      },
-      create: {
-        accountId: account.id,
-        statementNumber: statement.statementNumber,
-        weekStart,
-        weekEnd,
-        grossSales,
-        payoutAmount: grossSales,
-        currency: "KES",
-        isPaid: Boolean(statement.paid),
-        rawPayload: statement as unknown as Prisma.InputJsonValue,
-      },
-      update: {
-        grossSales,
-        payoutAmount: grossSales,
-        isPaid: Boolean(statement.paid),
-        rawPayload: statement as unknown as Prisma.InputJsonValue,
-      },
-    });
+
+    try {
+      const existing = await prisma.marketplacePayoutWeek.findFirst({ where: { statementNumber: statement.statementNumber } });
+      if (existing && existing.accountId !== targetAccountId) {
+        const existingShopSid = (existing.rawPayload as any)?.shopSid ?? null;
+        if (existingShopSid && stmtShopSid && existingShopSid === stmtShopSid) {
+          await prisma.marketplacePayoutWeek.update({
+            where: { id: existing.id },
+            data: {
+              accountId: targetAccountId,
+              grossSales,
+              payoutAmount: grossSales,
+              isPaid: Boolean(statement.paid),
+              rawPayload: statement as unknown as Prisma.InputJsonValue,
+            },
+          });
+        } else {
+          console.warn('[onlineSync] Skipping statement already present for another account', statement.statementNumber, 'existingAccount=', existing.accountId, 'targetAccount=', targetAccountId);
+          continue;
+        }
+      } else {
+        await prisma.marketplacePayoutWeek.upsert({
+          where: {
+            accountId_statementNumber: {
+              accountId: targetAccountId,
+              statementNumber: statement.statementNumber,
+            },
+          },
+          create: {
+            accountId: targetAccountId,
+            statementNumber: statement.statementNumber,
+            weekStart,
+            weekEnd,
+            grossSales,
+            payoutAmount: grossSales,
+            currency: "KES",
+            isPaid: Boolean(statement.paid),
+            rawPayload: statement as unknown as Prisma.InputJsonValue,
+          },
+          update: {
+            grossSales,
+            payoutAmount: grossSales,
+            isPaid: Boolean(statement.paid),
+            rawPayload: statement as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('[onlineSync] Failed to upsert MarketplacePayoutWeek', err);
+      continue;
+    }
 
     const shopRecord =
-      shopsById.get(account.id) ||
-      (account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined);
+      shopsById.get(mappedAccount.id) ||
+      (mappedAccount.displayName ? shopsByName.get(mappedAccount.displayName.trim().toLowerCase()) : undefined);
     if (!shopRecord) {
       console.warn(
-        `[onlineSync] Unable to map marketplace account ${account.displayName ?? account.id} to a Shop record; payout data stored without WeeklySale entry.`,
+        `[onlineSync] Unable to map marketplace account ${mappedAccount.displayName ?? mappedAccount.id} to a Shop record; payout data stored without WeeklySale entry.`,
       );
-    }
-    else {
+    } else {
       // Create or update an automatic WeeklySale entry for this payout week.
       try {
-        await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, grossSales);
+        await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, grossSales);
       } catch (err) {
         console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
       }
