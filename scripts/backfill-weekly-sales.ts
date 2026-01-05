@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import { upsertWeeklySaleEntry } from '@/lib/jobs/onlineSync';
+import { prisma } from '../src/lib/prisma';
+import { upsertWeeklySaleEntry } from '../src/lib/jobs/onlineSync';
 
 async function main() {
   const cutoff = new Date();
@@ -20,11 +20,16 @@ async function main() {
       console.warn('No Shop found for MarketplacePayoutWeek.accountId', r.accountId, 'skipping');
       continue;
     }
+    const account = await prisma.marketplaceAccount.findUnique({ where: { id: r.accountId } });
+    if (!account) {
+      console.warn('No MarketplaceAccount found for payout week.accountId', r.accountId, 'skipping');
+      continue;
+    }
     try {
-      await upsertWeeklySaleEntry(shop.id, (await prisma.marketplaceAccount.findUnique({ where: { id: r.accountId } })).platform, r.weekStart, r.weekEnd, Number(r.payoutAmount ?? r.grossSales ?? 0));
+      await upsertWeeklySaleEntry(shop.id, account.platform, r.weekStart, r.weekEnd, Number(r.payoutAmount ?? r.grossSales ?? 0));
       created++;
     } catch (err) {
-      console.error('Failed upserting weekly sale for payout week', r.id, err.message || err);
+      console.error('Failed upserting weekly sale for payout week', r.id, String(err));
     }
   }
 
