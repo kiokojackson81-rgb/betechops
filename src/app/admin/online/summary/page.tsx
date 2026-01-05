@@ -138,27 +138,45 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Load the last eight payout-week aggregates directly from MarketplacePayoutWeek
-  const recentPayoutWeeks = await prisma.marketplacePayoutWeek.groupBy({
-    by: ["weekStart", "weekEnd"],
+  // Load payout rows for JUMIA, normalize weeks to date strings, dedupe and aggregate per week
+  const rawRows = await prisma.marketplacePayoutWeek.findMany({
     where: { account: { platform: "JUMIA" } },
-    _sum: { grossSales: true, payoutAmount: true },
-    _count: { _all: true },
+    select: { weekStart: true, weekEnd: true, payoutAmount: true, grossSales: true, accountId: true },
     orderBy: { weekEnd: "desc" },
-    take: 8,
   });
 
-  // Enrich each week with unique account count and formatted label
-  const recentWeeksEnriched = await Promise.all(
-    recentPayoutWeeks.map(async (w: any) => {
-      const rows = await prisma.marketplacePayoutWeek.findMany({
-        where: { weekStart: w.weekStart, weekEnd: w.weekEnd, account: { platform: "JUMIA" } },
-        select: { accountId: true },
-      });
-      const uniqueAccounts = new Set(rows.map((r) => r.accountId)).size;
-      return { ...w, accountCount: uniqueAccounts, label: `${weekLabelFormatter(new Date(w.weekStart))} - ${weekLabelFormatter(new Date(w.weekEnd))}` };
-    }),
-  );
+  const weekMap: Record<string, any> = {};
+  for (const r of rawRows) {
+    const ws = new Date(r.weekStart).toISOString().slice(0, 10);
+    const we = new Date(r.weekEnd).toISOString().slice(0, 10);
+    const key = `${ws}_${we}`;
+    if (!weekMap[key]) {
+      weekMap[key] = {
+        weekStart: ws,
+        weekEnd: we,
+        gross: 0,
+        payout: 0,
+        statementCount: 0,
+        accountSet: new Set<string>(),
+      };
+    }
+    weekMap[key].gross += Number(r.grossSales ?? 0);
+    weekMap[key].payout += Number(r.payoutAmount ?? 0);
+    weekMap[key].statementCount += 1;
+    if (r.accountId) weekMap[key].accountSet.add(r.accountId);
+  }
+
+  const recentWeeksEnriched = Object.values(weekMap)
+    .map((w: any) => ({
+      weekStart: w.weekStart,
+      weekEnd: w.weekEnd,
+      _sum: { grossSales: w.gross, payoutAmount: w.payout },
+      statementCount: w.statementCount,
+      accountCount: w.accountSet.size,
+      label: `${weekLabelFormatter(new Date(w.weekStart))} - ${weekLabelFormatter(new Date(w.weekEnd))}`,
+    }))
+    .sort((a: any, b: any) => (a.weekStart < b.weekStart ? 1 : -1))
+    .slice(0, 8);
 
   return (
     <div className="space-y-8">
