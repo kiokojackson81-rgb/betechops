@@ -22,6 +22,32 @@ export function getJumiaWeeklyPeriodFor(date: Date): TradingPeriod {
   return { start, end, label, key };
 }
 
+const jumiaWeekDateFormat = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+export function formatJumiaWeekLabel(start: Date, end: Date) {
+  return `${jumiaWeekDateFormat.format(start)} - ${jumiaWeekDateFormat.format(end)}`;
+}
+
+export function getRecentCompleteJumiaWeeks(count: number, referenceDate = new Date()): TradingPeriod[] {
+  const baseRef = new Date(referenceDate);
+  baseRef.setHours(0, 0, 0, 0);
+  baseRef.setDate(baseRef.getDate() - 7); // move to the last completed week
+  const baseWeek = getJumiaWeeklyPeriodFor(baseRef);
+
+  const weeks: TradingPeriod[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const cursor = new Date(baseWeek.start);
+    cursor.setDate(cursor.getDate() - i * 7);
+    weeks.push(getJumiaWeeklyPeriodFor(cursor));
+  }
+
+  return weeks;
+}
+
 export function getRecentJumiaWeeks(n: number): TradingPeriod[] {
   const out: TradingPeriod[] = [];
   const today = new Date();

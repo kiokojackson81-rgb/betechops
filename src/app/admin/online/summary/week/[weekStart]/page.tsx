@@ -1,8 +1,16 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { formatJumiaWeekLabel } from '@/lib/tradingPeriod';
 import { redirect } from 'next/navigation';
 
-const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 });
+const currencyFormatter = new Intl.NumberFormat('en-KE', {
+  style: 'currency',
+  currency: 'KES',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const numberFormatter = new Intl.NumberFormat('en-KE');
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +32,35 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
 
   if (!weeks.length) return <div className="p-6">No payout data for this week.</div>;
 
-  const weekLabel = `${new Date(weeks[0].weekStart).toLocaleDateString()} - ${new Date(weeks[0].weekEnd).toLocaleDateString()}`;
+  const weekLabel = formatJumiaWeekLabel(weeks[0].weekStart, weeks[0].weekEnd);
+  const weekTotalGross = weeks.reduce((total, entry) => total + Number(entry.grossSales ?? 0), 0);
+  const weekTotalPayout = weeks.reduce((total, entry) => total + Number(entry.payoutAmount ?? 0), 0);
+  const paidStatements = weeks.filter((entry) => entry.isPaid).length;
+  const statementsCount = weeks.length;
+  const unpaidStatements = statementsCount - paidStatements;
 
   return (
     <div className="space-y-6 p-6">
       <h2 className="text-xl font-semibold">Payout week: {weekLabel}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Gross sales total</p>
+          <p className="mt-2 text-lg font-semibold text-white">{currencyFormatter.format(weekTotalGross)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Payout total</p>
+          <p className="mt-2 text-lg font-semibold text-emerald-200">{currencyFormatter.format(weekTotalPayout)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Statements synced</p>
+          <p className="mt-2 text-lg font-semibold text-white">{numberFormatter.format(statementsCount)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Paid / unpaid</p>
+          <p className="mt-2 text-lg font-semibold text-emerald-200">{numberFormatter.format(paidStatements)} paid</p>
+          <p className="text-sm text-yellow-300">{numberFormatter.format(unpaidStatements)} unpaid</p>
+        </div>
+      </div>
       <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
         <table className="w-full text-sm">
           <thead>

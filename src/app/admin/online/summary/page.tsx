@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { formatJumiaWeekLabel, getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -11,6 +11,13 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
   style: "currency",
   currency: "KES",
   maximumFractionDigits: 0,
+});
+
+const preciseCurrencyFormatter = new Intl.NumberFormat("en-KE", {
+  style: "currency",
+  currency: "KES",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 const numberFormatter = new Intl.NumberFormat("en-KE");
@@ -135,13 +142,12 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Fetch recent distinct payout weeks (JUMIA) within the trading window
-  const recentWeeks = await prisma.marketplacePayoutWeek.findMany({
-    where: { weekEnd: { gte: period.start, lte: period.end } },
-    select: { weekStart: true, weekEnd: true },
-    distinct: ["weekStart", "weekEnd"],
-    orderBy: { weekEnd: "desc" },
+  const recentWeekSummaries = await prisma.marketplacePayoutWeek.groupBy({
+    by: ["weekStart", "weekEnd"],
+    orderBy: { weekStart: "desc" },
     take: 8,
+    _sum: { grossSales: true, payoutAmount: true },
+    _count: { _all: true },
   });
 
   return (
@@ -181,21 +187,37 @@ export default async function AdminOnlineSummaryPage() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recentWeeks.length ? (
-            recentWeeks.map((w) => {
-              const label = `${new Date(w.weekStart).toLocaleDateString()} - ${new Date(w.weekEnd).toLocaleDateString()}`;
+          {recentWeekSummaries.length ? (
+            recentWeekSummaries.map((summary) => {
+              const label = formatJumiaWeekLabel(summary.weekStart, summary.weekEnd);
+              const grossSales = Number(summary._sum?.grossSales ?? 0);
+              const payoutAmount = Number(summary._sum?.payoutAmount ?? 0);
+              const statements = summary._count?._all ?? 0;
               return (
                 <a
-                  key={`${w.weekStart}-${w.weekEnd}`}
-                  href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.weekStart).toISOString())}`}
-                  className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
+                  key={`${summary.weekStart.toISOString()}-${summary.weekEnd.toISOString()}`}
+                  href={`/admin/online/summary/week/${encodeURIComponent(summary.weekStart.toISOString())}`}
+                  className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/60"
                 >
                   <div className="text-sm text-slate-300">{label}</div>
+                  <p className="mt-3 text-2xl font-semibold text-emerald-200">
+                    {preciseCurrencyFormatter.format(payoutAmount)}
+                  </p>
+                  <div className="mt-3 grid gap-2 text-xs uppercase tracking-wide text-slate-400">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">Gross</span>
+                      <span className="text-white">{preciseCurrencyFormatter.format(grossSales)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">Statements</span>
+                      <span className="text-white">{numberFormatter.format(statements)}</span>
+                    </div>
+                  </div>
                 </a>
               );
             })
           ) : (
-            <div className="text-sm text-slate-400">No payout weeks found for this period.</div>
+            <div className="text-sm text-slate-400">No payout weeks found.</div>
           )}
         </div>
       </section>
