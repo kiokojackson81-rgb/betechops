@@ -17,8 +17,15 @@ export function getJumiaWeeklyPeriodFor(date: Date): TradingPeriod {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   end.setHours(23, 59, 59, 999);
-  const label = `${start.toISOString().split('T')[0]} – ${end.toISOString().split('T')[0]}`;
-  const key = `${start.toISOString().split('T')[0]}_${end.toISOString().split('T')[0]}`;
+  function toLocalIso(dt: Date) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  const label = `${toLocalIso(start)} – ${toLocalIso(end)}`;
+  const key = `${toLocalIso(start)}_${toLocalIso(end)}`;
   return { start, end, label, key };
 }
 
@@ -74,7 +81,7 @@ export function getTradingPeriodFor(date: Date): TradingPeriod {
   const end = new Date(endYear, endMonth, 24, 23, 59, 59, 999);
 
   const label = `${formatLabel(start)} – ${formatLabel(end)}`;
-  const key = `${start.toISOString().split("T")[0]}_${end.toISOString().split("T")[0]}`;
+  const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}_${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
 
   return { start, end, label, key };
 }
