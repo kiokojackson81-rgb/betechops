@@ -15,6 +15,9 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 
 const numberFormatter = new Intl.NumberFormat("en-KE");
 
+const weekLabelFormatter = (d: Date) =>
+  d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/,/g, "");
+
 type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
 
 const makeEmptyPayoutAgg = () => ({
@@ -145,6 +148,18 @@ export default async function AdminOnlineSummaryPage() {
     take: 8,
   });
 
+  // Enrich each week with unique account count and formatted label
+  const recentWeeksEnriched = await Promise.all(
+    recentPayoutWeeks.map(async (w: any) => {
+      const rows = await prisma.marketplacePayoutWeek.findMany({
+        where: { weekStart: w.weekStart, weekEnd: w.weekEnd, account: { platform: "JUMIA" } },
+        select: { accountId: true },
+      });
+      const uniqueAccounts = new Set(rows.map((r) => r.accountId)).size;
+      return { ...w, accountCount: uniqueAccounts, label: `${weekLabelFormatter(new Date(w.weekStart))} - ${weekLabelFormatter(new Date(w.weekEnd))}` };
+    }),
+  );
+
   return (
     <div className="space-y-8">
       {warnings.length > 0 && (
@@ -182,20 +197,19 @@ export default async function AdminOnlineSummaryPage() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recentPayoutWeeks.length ? (
-            recentPayoutWeeks.map((w: any) => {
-              const label = `${new Date(w.weekStart).toLocaleDateString()} - ${new Date(w.weekEnd).toLocaleDateString()}`;
+          {recentWeeksEnriched.length ? (
+            recentWeeksEnriched.map((w: any) => {
               const gross = Number(w._sum?.grossSales ?? 0);
               const payout = Number(w._sum?.payoutAmount ?? 0);
-              const count = Number(w._count?._all ?? 0);
+              const count = Number(w.accountCount ?? w._count?._all ?? 0);
               return (
                 <a
                   key={`${w.weekStart}-${w.weekEnd}`}
                   href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.weekStart).toISOString())}`}
                   className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
                 >
-                  <div className="text-sm text-slate-300">{label}</div>
-                  <div className="mt-2 text-xs text-slate-400">Statements: {numberFormatter.format(count)}</div>
+                  <div className="text-sm text-slate-300">{w.label}</div>
+                  <div className="mt-2 text-xs text-slate-400">Accounts: {numberFormatter.format(count)}</div>
                   <div className="mt-1 text-sm text-emerald-300">Gross: {currencyFormatter.format(gross)}</div>
                   <div className="text-sm text-emerald-200">Payout: {currencyFormatter.format(payout)}</div>
                 </a>
