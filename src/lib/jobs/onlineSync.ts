@@ -38,11 +38,6 @@ type MarketplaceAccountWithAssignments = Prisma.MarketplaceAccountGetPayload<{
 }>;
 
 export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }) {
-  const credentials = await loadJumiaCredentials();
-  const apiBase = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
-  const authScheme = credentials.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
-  const accessToken = await refreshJumiaToken(credentials, apiBase);
-  const authHeader = `${authScheme} ${accessToken}`;
   const days = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const createdAfter = new Date();
   createdAfter.setDate(createdAfter.getDate() - days);
@@ -122,13 +117,33 @@ export async function syncOnlineMarketplaceData(opts?: { lookbackDays?: number }
     }
   }
 
-  const orders = await fetchOrders(apiBase, authHeader, createdAfter);
-    for (const order of orders) {
-    const shopSid = order.shopIds?.[0];
-    const account = shopSid ? accountsBySid.get(shopSid) : null;
-    if (!account) continue;
+  // Fetch orders per-account using that account's credentials (support per-account ApiCredential)
+  for (const account of jumiaAccounts) {
+    let credentialsForAccount: any = null;
+    try {
+      credentialsForAccount = await loadJumiaCredentials(`MARKETPLACE_ACCOUNT:${account.id}`);
+    } catch (err) {
+      // Fall back to GLOBAL/env if no per-account credential exists
+      try {
+        credentialsForAccount = await loadJumiaCredentials();
+      } catch (err2) {
+        console.warn(`[onlineSync] No Jumia credentials for account ${account.displayName ?? account.id}; skipping`);
+        continue;
+      }
+    }
 
-    const items = await fetchOrderItems(apiBase, authHeader, order.id);
+    const apiBaseAcct = credentialsForAccount.baseUrl?.trim() || DEFAULT_API_BASE;
+    const authSchemeAcct = credentialsForAccount.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
+    const accessTokenAcct = await refreshJumiaToken(credentialsForAccount, apiBaseAcct);
+    const authHeaderAcct = `${authSchemeAcct} ${accessTokenAcct}`;
+
+    const orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter);
+    for (const order of orders) {
+      const shopSid = order.shopIds?.[0];
+      // Ensure we only process orders for this account (token may return multiple shops)
+      if (account.jumiaShopSid && shopSid && shopSid !== account.jumiaShopSid) continue;
+
+      const items = await fetchOrderItems(apiBaseAcct, authHeaderAcct, order.id);
     for (const item of items) {
       const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
       const statusStr = typeof item.status === 'string' ? item.status : String(item.status ?? '');
