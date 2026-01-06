@@ -1,0 +1,54 @@
+{
+  "windowStart": "2025-12-29T00:00:00.000Z",
+  "windowEnd": "2026-01-04T00:00:00.000Z",
+  "aggs": [
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "displayName": "Betech Store",
+      "totalPayout": 424086.62,
+      "totalGross": 424086.62
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "displayName": "Jude Collection",
+      "totalPayout": 342814.26,
+      "totalGross": 342814.26
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "displayName": "Hitech Power",
+      "totalPayout": 196243.91,
+      "totalGross": 196243.91
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "displayName": "Sky Store Ke",
+      "totalPayout": 239368.33,
+      "totalGross": 239368.33
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "displayName": "JM Latest Collections",
+      "totalPayout": 176488.18,
+      "totalGross": 176488.18
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "displayName": "LabTech Kenya",
+      "totalPayout": 0,
+      "totalGross": 0
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "displayName": "Betech Solar Solution",
+      "totalPayout": 82472.25,
+      "totalGross": 82472.25
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "displayName": "Maxton Enterprise",
+      "totalPayout": 8527.82,
+      "totalGross": 8527.82
+    }
+  ]
+}

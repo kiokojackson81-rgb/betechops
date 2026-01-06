@@ -4,6 +4,7 @@ import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/cl
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 import { mondayToSundayLocalWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { chooseAuthoritativeCandidate, Candidate } from "@/lib/payoutDeduper";
 import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
@@ -167,35 +168,55 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
           },
         });
       } else {
-        // Collapse duplicates (if any) by selecting a keeper row and summing values
-        const keeper = existingRows.find((r) => Number(r.payoutAmount ?? r.grossSales ?? 0) > 0) ?? existingRows[0];
-        const otherRows = existingRows.filter((r) => r.id !== keeper.id);
+        // Enforce authoritative single-row per (accountId, canonicalWeekStart)
+        // Candidates include existing DB rows and the incoming statement.
+        const candidates: Candidate[] = existingRows.map((r) => ({
+          id: r.id,
+          statementNumber: r.statementNumber ?? null,
+          amount: Number(r.payoutAmount ?? r.grossSales ?? 0),
+          createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0),
+          rawPayload: r.rawPayload,
+          isPaid: r.isPaid ?? false,
+        }));
+        candidates.push({ id: null, statementNumber: statement.statementNumber ?? null, amount: grossSales, createdAt: statement.createdAt ? new Date(statement.createdAt) : new Date(), rawPayload: statement, isPaid: inferredPaid });
 
-        // Sum existing amounts and include this statement if its statementNumber is new
-        let aggregated = existingRows.reduce((s, r) => s + Number(r.payoutAmount ?? r.grossSales ?? 0), 0);
-        const alreadyHasStatement = existingRows.some((r) => r.statementNumber === statement.statementNumber);
-        if (!alreadyHasStatement) aggregated += grossSales;
+        const keeper = chooseAuthoritativeCandidate(candidates);
 
+        // Determine which DB row will become the keeper. If the incoming statement
+        // is the keeper (id === null) we'll reuse the first existing row id to
+        // store authoritative values and delete the rest, to avoid creating extra rows.
+        const keeperRow = keeper.id ? existingRows.find((r) => r.id === keeper!.id)! : existingRows[0];
+
+        // Build list of statementNumbers for logging/audit
+        const statementNumbers = Array.from(new Set(existingRows.map((r) => r.statementNumber).filter(Boolean).concat([statement.statementNumber]).filter(Boolean)));
+        if (existingRows.length > 1 || (existingRows.length === 1 && existingRows[0].statementNumber !== statement.statementNumber)) {
+          console.info(`[payout-sync] Duplicate statement ignored: accountId=${targetAccountId} weekStart=${weekStart.toISOString()} statementNumbers=[${statementNumbers.join(',')}]`);
+        }
+
+        // Apply authoritative values to chosen keeperRow
         try {
           await prisma.marketplacePayoutWeek.update({
-            where: { id: keeper.id },
+            where: { id: keeperRow.id },
             data: {
               accountId: targetAccountId,
-              statementNumber: statement.statementNumber,
-              grossSales: aggregated,
-              payoutAmount: aggregated,
-              isPaid: inferredPaid,
-              rawPayload: statement as unknown as Prisma.InputJsonValue,
+              statementNumber: keeper.statementNumber ?? statement.statementNumber,
+              grossSales: keeper.amount,
+              payoutAmount: keeper.amount,
+              isPaid: keeper.isPaid ?? inferredPaid,
+              rawPayload: keeper.rawPayload ?? (statement as unknown as Prisma.InputJsonValue),
+              weekStart,
               weekEnd,
             },
           });
         } catch (err) {
-          console.warn('[onlineSync] Failed to update existing MarketplacePayoutWeek', err);
+          console.warn('[onlineSync] Failed to update existing MarketplacePayoutWeek (keeper)', err);
         }
 
-        if (otherRows.length > 0) {
+        // Delete all other DB rows for this account/week
+        const others = existingRows.filter((r) => r.id !== keeperRow.id).map((r) => r.id);
+        if (others.length > 0) {
           try {
-            await prisma.marketplacePayoutWeek.deleteMany({ where: { id: { in: otherRows.map((r) => r.id) } } });
+            await prisma.marketplacePayoutWeek.deleteMany({ where: { id: { in: others } } });
           } catch (err) {
             console.warn('[onlineSync] Failed to remove duplicate MarketplacePayoutWeek rows', err);
           }
