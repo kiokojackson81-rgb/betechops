@@ -123,6 +123,11 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     }
 
     const targetAccountId = mappedAccount.id;
+    // Enforce strict identity: statement.shopSid must match the mapped account's jumiaShopSid
+    if (statement.shopSid && mappedAccount.jumiaShopSid && statement.shopSid !== mappedAccount.jumiaShopSid) {
+      console.error(`[onlineSync] SHOP_SID_MISMATCH statement ${statement.statementNumber} shopSid ${statement.shopSid} does not match account jumiaShopSid ${mappedAccount.jumiaShopSid} - skipping attribution`);
+      continue;
+    }
     const { weekStart, weekEnd } = deriveWeekWindow(statement);
     const grossSales = Number(statement.payout?.amount ?? 0);
 
