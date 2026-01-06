@@ -4,64 +4,10 @@ import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/cl
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 import { mondayToSundayUtcWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = 70;
-
-// Helper: sleep
-function sleep(ms: number) {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
-// Parse `Retry-After` header (seconds) or return null
-function parseRetryAfter(header: string | null) {
-  if (!header) return null;
-  const asInt = Number(header);
-  if (!Number.isNaN(asInt) && asInt > 0) return asInt * 1000;
-  // try parse http-date
-  const parsed = Date.parse(header);
-  if (!Number.isNaN(parsed)) return Math.max(0, parsed - Date.now());
-  return null;
-}
-
-// requestWithRetry: respects Retry-After and retries on 429/5xx with expon. backoff+jitter
-async function requestWithRetry(input: string, init?: RequestInit, opts?: { maxRetries?: number }) {
-  const maxRetries = opts?.maxRetries ?? 5;
-  const baseDelay = 500; // ms
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let res: Response;
-    try {
-      res = await fetch(input, init);
-    } catch (err) {
-      if (attempt === maxRetries) throw err;
-      const jitter = Math.random() * 200 + 100;
-      await sleep(Math.min(baseDelay * 2 ** attempt + jitter, 30000));
-      continue;
-    }
-
-    if (res.ok) return res;
-
-    const status = res.status;
-    const retryAfterHeader = res.headers.get("retry-after");
-    if (status === 429 || (status >= 500 && status < 600)) {
-      if (attempt === maxRetries) {
-        // attach body text for debugging
-        let bodyText = "";
-        try { bodyText = await res.text(); } catch (_) {}
-        throw new Error(`Request failed after ${maxRetries} retries: ${status} ${bodyText}`);
-      }
-      const raMs = parseRetryAfter(retryAfterHeader) ?? Math.min(baseDelay * 2 ** attempt, 30000);
-      const jitter = Math.round(raMs * (0.2 + Math.random() * 0.6));
-      await sleep(raMs + jitter);
-      continue;
-    }
-
-    // non-retriable error
-    return res;
-  }
-  throw new Error("requestWithRetry: unreachable");
-}
 
 type JumiaStatement = {
   statementNumber: string;

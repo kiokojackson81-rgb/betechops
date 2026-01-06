@@ -1,3 +1,5 @@
+import { requestWithRetry } from "../fetchWithRetry";
+
 type TokenResponse = {
   access_token: string;
   refresh_token?: string;
@@ -63,26 +65,25 @@ export class JumiaClient {
 
   async call<T>(path: string, init: RequestInit = {}): Promise<T> {
     await this.ensureAccessToken();
+    const buildUrl = () => `${this.apiBase.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+    const baseHeaders = () => ({
+      Accept: "application/json",
+      ...(init.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${this.accessToken}`,
+    });
+
     const exec = async (): Promise<T> => {
-      const url = `${this.apiBase.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-      const res = await fetch(url, {
+      const url = buildUrl();
+      const res = await requestWithRetry(url, {
         ...init,
-        headers: {
-          Accept: "application/json",
-          ...(init.headers as Record<string, string> | undefined),
-          Authorization: `Bearer ${this.accessToken}`,
-        },
+        headers: baseHeaders(),
       });
 
       if (res.status === 401) {
         await this.ensureAccessToken(true);
-        const retry = await fetch(url, {
+        const retry = await requestWithRetry(url, {
           ...init,
-          headers: {
-            Accept: "application/json",
-            ...(init.headers as Record<string, string> | undefined),
-            Authorization: `Bearer ${this.accessToken}`,
-          },
+          headers: baseHeaders(),
         });
         if (!retry.ok) {
           throw new Error(`${retry.status} ${await retry.text().catch(() => "")}`);
