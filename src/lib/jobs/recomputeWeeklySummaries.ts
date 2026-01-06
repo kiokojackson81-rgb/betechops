@@ -1,4 +1,4 @@
-import { prisma } from "../prisma.ts";
+import { prisma } from "../prisma";
 
 export type WeeklyAggregate = {
   accountId: string;
