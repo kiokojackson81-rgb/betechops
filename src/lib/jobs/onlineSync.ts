@@ -481,7 +481,7 @@ function getJumiaWeeklyPeriodFor(statement: JumiaStatement) {
   const NAIR0BI_OFFSET_HOURS = 3;
 
   const dateStr = statement.period?.startDate ?? (statement.createdAt ? String(statement.createdAt).split("T")[0] : null);
-  let y: number, m: number, d: number;
+  let y: number | undefined, m: number | undefined, d: number | undefined;
   if (dateStr) {
     const dateOnly = String(dateStr).split("T")[0];
     const parts = dateOnly.split("-").map((p) => Number(p));
@@ -503,7 +503,7 @@ function getJumiaWeeklyPeriodFor(statement: JumiaStatement) {
   }
 
   // Nairobi midnight in UTC = UTC timestamp for local midnight minus offset
-  const nairobiMidnightUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - NAIR0BI_OFFSET_HOURS * 3600 * 1000;
+  const nairobiMidnightUtcMs = Date.UTC(y!, m! - 1, d!, 0, 0, 0) - NAIR0BI_OFFSET_HOURS * 3600 * 1000;
   const nairobiMidnightUtc = new Date(nairobiMidnightUtcMs);
 
   // Determine day-of-week in Nairobi local terms
