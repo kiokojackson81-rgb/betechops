@@ -1,0 +1,19 @@
+{
+  "createdAt": "2026-01-06T11:17:06.905Z",
+  "actions": [
+    {
+      "action": "ensure_active",
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577"
+    },
+    {
+      "action": "assign_supervisor",
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "attendantId": "cmimxqfve0006v5mcewkm8waa"
+    },
+    {
+      "action": "enable_kilimall",
+      "updated": 5
+    }
+  ],
+  "benjaminId": "cmimxqfve0006v5mcewkm8waa"
+}
