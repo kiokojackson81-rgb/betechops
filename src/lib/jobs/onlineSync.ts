@@ -8,6 +8,61 @@ import { mondayToSundayUtcWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = 70;
 
+// Helper: sleep
+function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
+// Parse `Retry-After` header (seconds) or return null
+function parseRetryAfter(header: string | null) {
+  if (!header) return null;
+  const asInt = Number(header);
+  if (!Number.isNaN(asInt) && asInt > 0) return asInt * 1000;
+  // try parse http-date
+  const parsed = Date.parse(header);
+  if (!Number.isNaN(parsed)) return Math.max(0, parsed - Date.now());
+  return null;
+}
+
+// requestWithRetry: respects Retry-After and retries on 429/5xx with expon. backoff+jitter
+async function requestWithRetry(input: string, init?: RequestInit, opts?: { maxRetries?: number }) {
+  const maxRetries = opts?.maxRetries ?? 5;
+  const baseDelay = 500; // ms
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(input, init);
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      const jitter = Math.random() * 200 + 100;
+      await sleep(Math.min(baseDelay * 2 ** attempt + jitter, 30000));
+      continue;
+    }
+
+    if (res.ok) return res;
+
+    const status = res.status;
+    const retryAfterHeader = res.headers.get("retry-after");
+    if (status === 429 || (status >= 500 && status < 600)) {
+      if (attempt === maxRetries) {
+        // attach body text for debugging
+        let bodyText = "";
+        try { bodyText = await res.text(); } catch (_) {}
+        throw new Error(`Request failed after ${maxRetries} retries: ${status} ${bodyText}`);
+      }
+      const raMs = parseRetryAfter(retryAfterHeader) ?? Math.min(baseDelay * 2 ** attempt, 30000);
+      const jitter = Math.round(raMs * (0.2 + Math.random() * 0.6));
+      await sleep(raMs + jitter);
+      continue;
+    }
+
+    // non-retriable error
+    return res;
+  }
+  throw new Error("requestWithRetry: unreachable");
+}
+
 type JumiaStatement = {
   statementNumber: string;
   payout?: { amount?: number };
@@ -207,7 +262,28 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
 
   // Fetch orders per-account using that account's credentials (support per-account ApiCredential)
-  for (const account of jumiaAccounts) {
+  // Limit concurrency when syncing accounts to avoid hitting vendor rate limits.
+  async function runWithConcurrency<T>(items: T[], limit: number, worker: (it: T) => Promise<void>) {
+    let idx = 0;
+    async function runner() {
+      while (true) {
+        const i = idx++;
+        if (i >= items.length) return;
+        const it = items[i];
+        try {
+          await worker(it);
+        } catch (err) {
+          console.error('[onlineSync] account worker error', err);
+        }
+      }
+    }
+    const parallel = Math.min(limit, items.length);
+    const runners: Promise<void>[] = [];
+    for (let i = 0; i < parallel; i++) runners.push(runner());
+    await Promise.all(runners);
+  }
+
+  await runWithConcurrency(jumiaAccounts, 2, async (account) => {
     let credentialsForAccount: any = null;
     try {
       credentialsForAccount = await loadJumiaCredentials(`MARKETPLACE_ACCOUNT:${account.id}`);
@@ -217,7 +293,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         credentialsForAccount = await loadJumiaCredentials();
       } catch (err2) {
         console.warn(`[onlineSync] No Jumia credentials for account ${account.displayName ?? account.id}; skipping`);
-        continue;
+        return;
       }
     }
 
@@ -396,9 +472,7 @@ async function fetchStatements(apiBase: string, authHeader: string, createdAfter
   url.searchParams.set("paid", "true");
   url.searchParams.set("size", "1000");
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: authHeader },
-  });
+  const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
   if (!res.ok) {
     throw new Error(`Failed to fetch payout statements (${res.status})`);
   }
@@ -422,9 +496,7 @@ async function fetchOrders(
     url.searchParams.set("size", "200");
     if (nextToken) url.searchParams.set("token", nextToken);
 
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: authHeader },
-    });
+    const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
     if (!res.ok) throw new Error(`Failed to fetch orders (${res.status})`);
 
     const data = (await res.json()) as { orders?: JumiaOrder[]; nextToken?: string | null; isLastPage?: boolean };
@@ -439,9 +511,7 @@ async function fetchOrders(
 async function fetchOrderItems(apiBase: string, authHeader: string, orderId: string): Promise<JumiaOrderItem[]> {
   const url = new URL("/orders/items", apiBase);
   url.searchParams.set("orderId", orderId);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: authHeader },
-  });
+  const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
   if (!res.ok) throw new Error(`Failed to fetch order items (${res.status})`);
   const data = (await res.json()) as { items?: JumiaOrderItem[] };
   return data.items ?? [];
