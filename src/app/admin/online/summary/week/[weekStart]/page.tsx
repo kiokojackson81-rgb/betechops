@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { mondayToSundayUtcWindow, normalizeWeekStartFromParam } from '@/lib/weekWindow';
+import { mondayToSundayLocalWindow, normalizeWeekStartFromParam } from '@/lib/weekWindow';
 import { redirect } from 'next/navigation';
 
 const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 });
@@ -19,7 +19,7 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
       const decoded = decodeURIComponent(rawParam);
       const parsed = new Date(decoded);
       if (!Number.isNaN(parsed.getTime())) {
-        weekStart = mondayToSundayUtcWindow(parsed).weekStart;
+        weekStart = mondayToSundayLocalWindow(parsed).weekStart;
       }
     } catch {
       weekStart = null;
@@ -36,7 +36,7 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
 
   if (!weeks.length) return <div className="p-6">No payout data for this week.</div>;
 
-  const weekWindow = mondayToSundayUtcWindow(weekStart);
+  const weekWindow = mondayToSundayLocalWindow(weekStart);
   const weekLabel = `${weekWindow.weekStart.toLocaleDateString()} - ${weekWindow.weekEnd.toLocaleDateString()}`;
 
   return (

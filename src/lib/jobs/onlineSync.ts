@@ -3,7 +3,7 @@
 import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
-import { mondayToSundayUtcWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { mondayToSundayLocalWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
@@ -470,9 +470,20 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  // Prefer using Jumia-provided period start when present, but canonicalize
-  // to Africa/Nairobi Monday->Sunday boundaries to avoid off-by-offset duplicates.
-  return getJumiaWeeklyPeriodFor(statement);
+  // Prefer using Jumia-provided period start when present. Normalize the
+  // incoming date to a local Date at midnight and then compute the canonical
+  // Monday->Sunday local window to avoid off-by-offset duplicates.
+  const parsed = parseDateOnlyUtc(statement.period?.startDate);
+  let baseDate: Date;
+  if (parsed) {
+    // convert UTC date-only to a local Date with same year/month/day
+    baseDate = new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 0, 0, 0, 0);
+  } else if (statement.createdAt) {
+    baseDate = new Date(statement.createdAt);
+  } else {
+    baseDate = new Date();
+  }
+  return mondayToSundayLocalWindow(baseDate);
 }
 
 function getJumiaWeeklyPeriodFor(statement: JumiaStatement) {
