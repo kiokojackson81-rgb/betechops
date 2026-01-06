@@ -57,8 +57,20 @@ export async function reconcileWeeks(weeks = 8): Promise<ReconcileWeek[]> {
     let duplicates = 0;
     for (const [, arr] of byStatement) if (arr.length > 1) duplicates++;
 
+    // Compute deduplicated totals by taking a single representative row per statementNumber.
+    let dedupedGross = 0;
+    let dedupedPayout = 0;
+    for (const [, arr] of byStatement) {
+      // Prefer a row that contains a shopSid in the raw payload, otherwise take the first row
+      const preferred = arr.find((x) => (x.rawPayload as any)?.shopSid) ?? arr[0];
+      dedupedGross += Number(preferred.grossSales ?? 0);
+      dedupedPayout += Number(preferred.payoutAmount ?? preferred.grossSales ?? 0);
+    }
+
     const weeklySale = await prisma.weeklySale.aggregate({ _sum: { amount: true }, where: { platform: 'JUMIA', weekStart, weekEnd } });
     const weeklySum = Number(weeklySale._sum.amount ?? 0);
+
+    const inflation = Number((totalGross ?? 0) - dedupedGross);
 
     results.push({
       weekStart: weekStart.toISOString().split('T')[0],
@@ -66,6 +78,9 @@ export async function reconcileWeeks(weeks = 8): Promise<ReconcileWeek[]> {
       payoutRows: rows.length,
       totalGross,
       totalPayout,
+      dedupedGross,
+      dedupedPayout,
+      inflation,
       weeklySum,
       duplicates,
       missingSids: missingSids.size,

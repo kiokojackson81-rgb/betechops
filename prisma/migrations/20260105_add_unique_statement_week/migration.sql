@@ -14,9 +14,10 @@ DECLARE
   keep_id TEXT;
 BEGIN
   FOR rec IN
-    SELECT m.statementNumber AS statementNumber, m.weekStart AS weekStart, array_agg(m.id ORDER BY (CASE WHEN ((m.rawPayload->>'shopSid') IS NOT NULL AND (m.rawPayload->>'shopSid') = (SELECT jumiaShopSid FROM "MarketplaceAccount" WHERE id = m.accountId) ) THEN 0 ELSE 1 END), m.updatedAt DESC) AS ids
+    SELECT m."statementNumber" AS statementNumber, m."weekStart" AS weekStart,
+      array_agg(m.id ORDER BY (CASE WHEN ((m."rawPayload"->>'shopSid') IS NOT NULL AND (m."rawPayload"->>'shopSid') = (SELECT "jumiaShopSid" FROM "MarketplaceAccount" WHERE id = m."accountId") ) THEN 0 ELSE 1 END), m."updatedAt" DESC) AS ids
     FROM "MarketplacePayoutWeek" m
-    GROUP BY m.statementNumber, m.weekStart
+    GROUP BY m."statementNumber", m."weekStart"
     HAVING count(*) > 1
   LOOP
     ids := rec.ids;
@@ -36,6 +37,6 @@ BEGIN
 END$$;
 
 -- 3) Create unique index to prevent future duplicates
-CREATE UNIQUE INDEX IF NOT EXISTS "MarketplacePayoutWeek_statement_weekStart_uidx" ON "MarketplacePayoutWeek" (statementNumber, weekStart);
+CREATE UNIQUE INDEX IF NOT EXISTS "MarketplacePayoutWeek_statement_weekStart_uidx" ON "MarketplacePayoutWeek" ("statementNumber", "weekStart");
 
 COMMIT;

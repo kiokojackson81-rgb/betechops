@@ -127,33 +127,49 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     const grossSales = Number(statement.payout?.amount ?? 0);
 
     try {
-      const existing = await prisma.marketplacePayoutWeek.findFirst({ where: { statementNumber: statement.statementNumber } });
-      if (existing && existing.accountId !== targetAccountId) {
-        const existingShopSid = (existing.rawPayload as any)?.shopSid ?? null;
-        if (existingShopSid && stmtShopSid && existingShopSid === stmtShopSid) {
+      // First try to find an existing row for the same statementNumber + weekStart
+      const existing = await prisma.marketplacePayoutWeek.findFirst({
+        where: { statementNumber: statement.statementNumber, weekStart },
+      });
+
+      if (existing) {
+        // If the existing row belongs to a different account, prefer the canonical mapped account
+        // and update the existing row instead of creating a duplicate.
+        if (existing.accountId !== targetAccountId) {
+          try {
+            await prisma.marketplacePayoutWeek.update({
+              where: { id: existing.id },
+              data: {
+                accountId: targetAccountId,
+                grossSales,
+                payoutAmount: grossSales,
+                isPaid: Boolean(statement.paid),
+                rawPayload: statement as unknown as Prisma.InputJsonValue,
+                weekEnd,
+              },
+            });
+          } catch (err) {
+            console.warn('[onlineSync] Failed to reassign existing MarketplacePayoutWeek to mapped account', err);
+            // If update fails for any reason, skip to avoid creating duplicates
+            continue;
+          }
+        } else {
+          // Same account — update amounts/payload
           await prisma.marketplacePayoutWeek.update({
             where: { id: existing.id },
             data: {
-              accountId: targetAccountId,
               grossSales,
               payoutAmount: grossSales,
               isPaid: Boolean(statement.paid),
               rawPayload: statement as unknown as Prisma.InputJsonValue,
+              weekEnd,
             },
           });
-        } else {
-          console.warn('[onlineSync] Skipping statement already present for another account', statement.statementNumber, 'existingAccount=', existing.accountId, 'targetAccount=', targetAccountId);
-          continue;
         }
       } else {
-        await prisma.marketplacePayoutWeek.upsert({
-          where: {
-            accountId_statementNumber: {
-              accountId: targetAccountId,
-              statementNumber: statement.statementNumber,
-            },
-          },
-          create: {
+        // No existing row for this statementNumber+weekStart — create a new canonical row
+        await prisma.marketplacePayoutWeek.create({
+          data: {
             accountId: targetAccountId,
             statementNumber: statement.statementNumber,
             weekStart,
@@ -161,12 +177,6 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
             grossSales,
             payoutAmount: grossSales,
             currency: "KES",
-            isPaid: Boolean(statement.paid),
-            rawPayload: statement as unknown as Prisma.InputJsonValue,
-          },
-          update: {
-            grossSales,
-            payoutAmount: grossSales,
             isPaid: Boolean(statement.paid),
             rawPayload: statement as unknown as Prisma.InputJsonValue,
           },

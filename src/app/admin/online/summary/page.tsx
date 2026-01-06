@@ -139,9 +139,10 @@ export default async function AdminOnlineSummaryPage() {
   ];
 
   // Load payout rows for JUMIA, normalize weeks to Jumia trading periods, dedupe and aggregate per week (paid + unpaid together)
+  // Fetch raw payout rows for JUMIA; include statementNumber so we can deduplicate
   const rawRows = await prisma.marketplacePayoutWeek.findMany({
     where: { account: { platform: "JUMIA" } },
-    select: { weekStart: true, weekEnd: true, payoutAmount: true, grossSales: true, accountId: true },
+    select: { weekStart: true, weekEnd: true, payoutAmount: true, grossSales: true, accountId: true, statementNumber: true },
     orderBy: { weekEnd: "desc" },
   });
 
@@ -154,7 +155,12 @@ export default async function AdminOnlineSummaryPage() {
   };
 
   const weekMap: Record<string, WeekAgg> = {};
+  const seenStmt = new Set<string>();
   for (const r of rawRows) {
+    // Deduplicate by statementNumber + weekStart to avoid counting the same payout multiple times
+    const stmtKey = `${r.statementNumber ?? ""}::${new Date(r.weekStart ?? r.weekEnd ?? new Date()).toISOString().slice(0,10)}`;
+    if (seenStmt.has(stmtKey)) continue;
+    seenStmt.add(stmtKey);
     const baseDateValue = r.weekStart ?? r.weekEnd ?? new Date();
     const baseDate = new Date(baseDateValue);
     const period = getJumiaWeeklyPeriodFor(baseDate);
