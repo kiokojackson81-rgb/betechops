@@ -386,10 +386,9 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       } catch (err) {
         console.warn("Failed to create ProfitEvent reversal for returned order", err);
       }
+      }
     }
-  }
-  }
-
+  });
 }
 
 export async function upsertWeeklySaleEntry(
