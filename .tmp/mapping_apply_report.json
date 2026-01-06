@@ -2,9 +2,16 @@
   "applied": true,
   "results": [
     {
-      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
-      "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
-      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "jumiaShopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+      "existingShopHasSid": true,
+      "willApply": false
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "shopId": "cmk1kffnn0000v5l8iqi80uqt",
+      "jumiaShopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
       "existingShopHasSid": false,
       "willApply": true
     }
