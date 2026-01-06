@@ -22,6 +22,7 @@ export async function backfillWeeklySales(opts?: BackfillWeeklySalesOptions): Pr
   console.log(`[backfill-weekly-sales] Found aggregated payout groups to backfill: ${aggs.length} (lookbackDays=${lookbackDays})`);
 
   let created = 0;
+  const rowsScanned = aggs.length;
   for (const r of aggs) {
     const account = await prisma.marketplaceAccount.findUnique({ where: { id: r.accountId } });
     if (!account) {
@@ -41,7 +42,7 @@ export async function backfillWeeklySales(opts?: BackfillWeeklySalesOptions): Pr
     }
   }
 
-  return { rowsScanned: rows.length, upserted: created };
+  return { rowsScanned, upserted: created };
 }
 
 async function run(): Promise<void> {
