@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
 import { buildUtcWeekStartIso } from "@/lib/weekWindow";
+import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -139,51 +140,41 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Load payout rows for JUMIA, normalize weeks to Jumia trading periods, dedupe and aggregate per week (paid + unpaid together)
-  // Fetch raw payout rows for JUMIA; include statementNumber so we can deduplicate
-  const rawRows = await prisma.marketplacePayoutWeek.findMany({
-    where: { account: { platform: "JUMIA" } },
-    select: { weekStart: true, weekEnd: true, payoutAmount: true, grossSales: true, accountId: true, statementNumber: true },
-    orderBy: { weekEnd: "desc" },
-  });
+  // Aggregate payouts by canonical week window (grouped per account + week) to avoid duplicate rows
+  const allAggs = await recomputeWeeklySummary(new Date(0), new Date());
+  // Restrict to JUMIA accounts only
+  const jumiaAccountIds = new Set((await prisma.marketplaceAccount.findMany({ where: { platform: "JUMIA" }, select: { id: true } })).map((a) => a.id));
+  const jumiaAggs = allAggs.filter((a) => jumiaAccountIds.has(a.accountId));
 
   type WeekAgg = {
-    period: ReturnType<typeof getJumiaWeeklyPeriodFor>;
+    period: { start: Date; end: Date };
     gross: number;
     payout: number;
     statementCount: number;
     accountSet: Set<string>;
   };
 
-  const weekMap: Record<string, WeekAgg> = {};
-  const seenStmt = new Set<string>();
-  for (const r of rawRows) {
-    // Deduplicate by statementNumber + weekStart to avoid counting the same payout multiple times
-    const stmtKey = `${r.statementNumber ?? ""}::${new Date(r.weekStart ?? r.weekEnd ?? new Date()).toISOString().slice(0,10)}`;
-    if (seenStmt.has(stmtKey)) continue;
-    seenStmt.add(stmtKey);
-    const baseDateValue = r.weekStart ?? r.weekEnd ?? new Date();
-    const baseDate = new Date(baseDateValue);
-    const period = getJumiaWeeklyPeriodFor(baseDate);
-    const key = period.key;
-    if (!weekMap[key]) {
-      weekMap[key] = {
-        period,
-        gross: 0,
-        payout: 0,
-        statementCount: 0,
-        accountSet: new Set<string>(),
-      };
+  const accountWeekKeys = new Set<string>();
+  const weekMap = new Map<string, WeekAgg>();
+  for (const a of jumiaAggs) {
+    const key = a.weekStart.toISOString();
+    if (!weekMap.has(key)) {
+      weekMap.set(key, { period: { start: a.weekStart, end: a.weekEnd }, gross: 0, payout: 0, statementCount: 0, accountSet: new Set<string>() });
     }
-    weekMap[key].gross += Number(r.grossSales ?? 0);
-    weekMap[key].payout += Number(r.payoutAmount ?? 0);
-    weekMap[key].statementCount += 1;
-    if (r.accountId) weekMap[key].accountSet.add(r.accountId);
+    const entry = weekMap.get(key)!;
+    entry.gross += Number(a.totalGross ?? 0);
+    entry.payout += Number(a.totalPayout ?? 0);
+    entry.statementCount += 1; // one aggregated row per account/week
+    const accountKey = `${key}|${a.accountId ?? "unknown"}`;
+    if (!accountWeekKeys.has(accountKey)) {
+      accountWeekKeys.add(accountKey);
+      entry.accountSet.add(a.accountId);
+    }
   }
 
-  const recentWeeksEnriched = Object.values(weekMap)
+  const recentWeeksEnriched = Array.from(weekMap.values())
     .map((w) => ({
-      period: w.period,
+      period: { start: w.period.start, end: w.period.end },
       _sum: { grossSales: w.gross, payoutAmount: w.payout },
       statementCount: w.statementCount,
       accountCount: w.accountSet.size,

@@ -24,8 +24,29 @@ export function mondayToSundayUtcWindow(baseDate: Date): WeekWindow {
   return { weekStart, weekEnd };
 }
 
+function parseDateOnlyLocal(value?: string | null): Date | null {
+  if (!value) return null;
+  const datePart = String(value).slice(0, 10);
+  const parts = datePart.split("-").map((v) => Number(v));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+export function mondayToSundayLocalWindow(baseDate: Date): WeekWindow {
+  const anchored = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0, 0);
+  const day = anchored.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  anchored.setDate(anchored.getDate() + diffToMonday);
+  const weekStart = new Date(anchored.getTime());
+  const weekEnd = new Date(anchored.getTime());
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  return { weekStart, weekEnd };
+}
+
 export function buildUtcWeekStartIso(date: Date): string {
-  return mondayToSundayUtcWindow(date).weekStart.toISOString();
+  return mondayToSundayLocalWindow(date).weekStart.toISOString();
 }
 
 export function normalizeWeekStartFromParam(raw: string): Date | null {
@@ -42,11 +63,11 @@ export function normalizeWeekStartFromParam(raw: string): Date | null {
   }
   const asDate = new Date(parsedValue);
   if (!Number.isNaN(asDate.getTime())) {
-    return mondayToSundayUtcWindow(asDate).weekStart;
+    return mondayToSundayLocalWindow(asDate).weekStart;
   }
-  const parsedDateOnly = parseDateOnlyUtc(parsedValue);
+  const parsedDateOnly = parseDateOnlyLocal(parsedValue);
   if (parsedDateOnly) {
-    return mondayToSundayUtcWindow(parsedDateOnly).weekStart;
+    return mondayToSundayLocalWindow(parsedDateOnly).weekStart;
   }
   return null;
 }
