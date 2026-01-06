@@ -131,79 +131,86 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     const { weekStart, weekEnd } = deriveWeekWindow(statement);
     const grossSales = Number(statement.payout?.amount ?? 0);
 
+    // Ensure we can map account -> Shop before creating payout rows. If the Shop
+    // does not exist, skip inserting a MarketplacePayoutWeek for this statement.
+    const shopRecord = mappedAccount.jumiaShopSid ? shopsByJumiaSid.get(mappedAccount.jumiaShopSid) : undefined;
+    if (!shopRecord) {
+      console.warn(
+        `[onlineSync] No Shop record for marketplace account ${mappedAccount.displayName ?? mappedAccount.id} jumiaShopSid=${mappedAccount.jumiaShopSid}; skipping statement ${statement.statementNumber}`,
+      );
+      continue;
+    }
+
     try {
-      // First try to find an existing row for the same statementNumber + weekStart
-      const existing = await prisma.marketplacePayoutWeek.findFirst({
-        where: { statementNumber: statement.statementNumber, weekStart },
+      // Use composite key: accountId + weekStart + weekEnd to avoid duplicate rows
+      // Find any existing rows for this account where the stored week overlaps
+      // the canonical window. This collapses earlier rows that used slightly
+      // different timestamps (e.g. UTC vs Nairobi offsets).
+      const existingRows = await prisma.marketplacePayoutWeek.findMany({
+        where: { AND: [{ accountId: targetAccountId }, { weekStart: { lte: weekEnd } }, { weekEnd: { gte: weekStart } }] },
+        orderBy: { createdAt: 'asc' },
       });
 
-      if (existing) {
-        // If the existing row belongs to a different account, prefer the canonical mapped account
-        // and update the existing row instead of creating a duplicate.
-        if (existing.accountId !== targetAccountId) {
-          try {
-            await prisma.marketplacePayoutWeek.update({
-              where: { id: existing.id },
-              data: {
-                accountId: targetAccountId,
-                grossSales,
-                payoutAmount: grossSales,
-                isPaid: inferredPaid,
-                rawPayload: statement as unknown as Prisma.InputJsonValue,
-                weekEnd,
-              },
-            });
-          } catch (err) {
-            console.warn('[onlineSync] Failed to reassign existing MarketplacePayoutWeek to mapped account', err);
-            // If update fails for any reason, skip to avoid creating duplicates
-            continue;
-          }
-        } else {
-          // Same account — update amounts/payload
+      if (existingRows.length === 0) {
+        // No row for this account/week — create canonical row
+        await prisma.marketplacePayoutWeek.create({
+          data: {
+            accountId: targetAccountId,
+            statementNumber: statement.statementNumber,
+            weekStart,
+            weekEnd,
+            grossSales,
+            payoutAmount: grossSales,
+            currency: "LOCAL",
+            isPaid: inferredPaid,
+            rawPayload: statement as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } else {
+        // Collapse duplicates (if any) by selecting a keeper row and summing values
+        const keeper = existingRows.find((r) => Number(r.payoutAmount ?? r.grossSales ?? 0) > 0) ?? existingRows[0];
+        const otherRows = existingRows.filter((r) => r.id !== keeper.id);
+
+        // Sum existing amounts and include this statement if its statementNumber is new
+        let aggregated = existingRows.reduce((s, r) => s + Number(r.payoutAmount ?? r.grossSales ?? 0), 0);
+        const alreadyHasStatement = existingRows.some((r) => r.statementNumber === statement.statementNumber);
+        if (!alreadyHasStatement) aggregated += grossSales;
+
+        try {
           await prisma.marketplacePayoutWeek.update({
-            where: { id: existing.id },
+            where: { id: keeper.id },
             data: {
-              grossSales,
-              payoutAmount: grossSales,
+              accountId: targetAccountId,
+              statementNumber: statement.statementNumber,
+              grossSales: aggregated,
+              payoutAmount: aggregated,
               isPaid: inferredPaid,
               rawPayload: statement as unknown as Prisma.InputJsonValue,
               weekEnd,
             },
           });
+        } catch (err) {
+          console.warn('[onlineSync] Failed to update existing MarketplacePayoutWeek', err);
         }
-      } else {
-        // No existing row for this statementNumber+weekStart — create a new canonical row
-        await prisma.marketplacePayoutWeek.create({
-            data: {
-              accountId: targetAccountId,
-              statementNumber: statement.statementNumber,
-              weekStart,
-              weekEnd,
-              grossSales,
-              payoutAmount: grossSales,
-              currency: "KES",
-              isPaid: inferredPaid,
-              rawPayload: statement as unknown as Prisma.InputJsonValue,
-            },
-        });
+
+        if (otherRows.length > 0) {
+          try {
+            await prisma.marketplacePayoutWeek.deleteMany({ where: { id: { in: otherRows.map((r) => r.id) } } });
+          } catch (err) {
+            console.warn('[onlineSync] Failed to remove duplicate MarketplacePayoutWeek rows', err);
+          }
+        }
       }
     } catch (err) {
       console.warn('[onlineSync] Failed to upsert MarketplacePayoutWeek', err);
       continue;
     }
 
-    const shopRecord = mappedAccount.jumiaShopSid ? shopsByJumiaSid.get(mappedAccount.jumiaShopSid) : undefined;
-    if (!shopRecord) {
-      console.warn(
-        `[onlineSync] Unable to map marketplace account ${mappedAccount.displayName ?? mappedAccount.id} to a Shop record for jumiaShopSid=${mappedAccount.jumiaShopSid}; payout data stored without WeeklySale entry.`,
-      );
-    } else {
-      // Create or update an automatic WeeklySale entry for this payout week.
-      try {
-        await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, grossSales);
-      } catch (err) {
-        console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
-      }
+    // Create or update an automatic WeeklySale entry for this payout week.
+    try {
+      await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, grossSales);
+    } catch (err) {
+      console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
     }
   }
 
@@ -463,9 +470,52 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  const parsed = parseDateOnlyUtc(statement.period?.startDate ?? null);
-  const base = parsed ?? (statement.createdAt ? new Date(statement.createdAt) : new Date());
-  return mondayToSundayUtcWindow(base);
+  // Prefer using Jumia-provided period start when present, but canonicalize
+  // to Africa/Nairobi Monday->Sunday boundaries to avoid off-by-offset duplicates.
+  return getJumiaWeeklyPeriodFor(statement);
+}
+
+function getJumiaWeeklyPeriodFor(statement: JumiaStatement) {
+  // Nairobi timezone is UTC+3 (no DST). We'll compute Nairobi local midnight
+  // for a given date and convert to UTC for storage.
+  const NAIR0BI_OFFSET_HOURS = 3;
+
+  const dateStr = statement.period?.startDate ?? (statement.createdAt ? String(statement.createdAt).split("T")[0] : null);
+  let y: number, m: number, d: number;
+  if (dateStr) {
+    const dateOnly = String(dateStr).split("T")[0];
+    const parts = dateOnly.split("-").map((p) => Number(p));
+    if (parts.length >= 3 && !Number.isNaN(parts[0])) {
+      y = parts[0];
+      m = parts[1];
+      d = parts[2];
+    }
+  }
+  if (y === undefined) {
+    // Fallback: derive Nairobi date from `createdAt` or now
+    const fallback = statement.createdAt ? new Date(statement.createdAt) : new Date();
+    // Shift to Nairobi local time
+    const nairobiMs = fallback.getTime() + NAIR0BI_OFFSET_HOURS * 3600 * 1000;
+    const nairobi = new Date(nairobiMs);
+    y = nairobi.getUTCFullYear();
+    m = nairobi.getUTCMonth() + 1;
+    d = nairobi.getUTCDate();
+  }
+
+  // Nairobi midnight in UTC = UTC timestamp for local midnight minus offset
+  const nairobiMidnightUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - NAIR0BI_OFFSET_HOURS * 3600 * 1000;
+  const nairobiMidnightUtc = new Date(nairobiMidnightUtcMs);
+
+  // Determine day-of-week in Nairobi local terms
+  const nairobiLocalMidnight = new Date(nairobiMidnightUtcMs + NAIR0BI_OFFSET_HOURS * 3600 * 1000);
+  const day = nairobiLocalMidnight.getUTCDay(); // 0 == Sunday, 1 == Monday, ...
+  const deltaToMonday = (day + 6) % 7; // days to subtract to reach Monday
+
+  const mondayUtcMs = nairobiMidnightUtcMs - deltaToMonday * 24 * 3600 * 1000;
+  const weekStart = new Date(mondayUtcMs);
+  const weekEnd = new Date(mondayUtcMs + 7 * 24 * 3600 * 1000 - 1);
+
+  return { weekStart, weekEnd };
 }
 
 // Automatic WeeklySale creation has been disabled so admins can manage overrides manually.

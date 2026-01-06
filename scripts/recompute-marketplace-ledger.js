@@ -84,12 +84,18 @@ async function main() {
       return;
     }
 
-    // Sum grossSales from payout weeks for these accounts in the trading period
-    const payoutWeeks = await prisma.marketplacePayoutWeek.findMany({
-      where: { accountId: { in: accountIds }, weekEnd: { gte: period.start, lte: period.end } },
-      select: { grossSales: true },
+    // Sum grossSales from payout weeks for these accounts in the trading period (deduplicated per account/week)
+    const rows = await prisma.marketplacePayoutWeek.findMany({
+      where: { AND: [{ weekStart: { lte: period.end } }, { weekEnd: { gte: period.start } }, { accountId: { in: accountIds } }] },
+      select: { accountId: true, weekStart: true, weekEnd: true, grossSales: true, payoutAmount: true },
     });
-    const marketplaceSales = payoutWeeks.reduce((s, w) => s + toNumber(w.grossSales), 0);
+    const map = new Map();
+    for (const r of rows) {
+      const key = `${r.accountId}::${new Date(r.weekStart).toISOString()}::${new Date(r.weekEnd).toISOString()}`;
+      const val = toNumber(r.grossSales ?? r.payoutAmount ?? 0);
+      map.set(key, (map.get(key) || 0) + val);
+    }
+    const marketplaceSales = Array.from(map.values()).reduce((s, v) => s + v, 0);
 
     // Also include approved manual weeklySale entries overlapping the period
     const manual = await prisma.weeklySale.findMany({

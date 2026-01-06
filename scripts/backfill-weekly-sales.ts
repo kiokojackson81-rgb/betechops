@@ -1,5 +1,6 @@
 import { prisma } from '../src/lib/prisma';
 import { upsertWeeklySaleEntry } from '../src/lib/jobs/onlineSync';
+import { recomputeWeeklySummary } from '../src/lib/jobs/recomputeWeeklySummaries';
 import { pathToFileURL } from 'url';
 
 export type BackfillWeeklySalesOptions = {
@@ -16,30 +17,27 @@ export async function backfillWeeklySales(opts?: BackfillWeeklySalesOptions): Pr
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - lookbackDays);
 
-  const rows = await prisma.marketplacePayoutWeek.findMany({
-    where: { weekEnd: { gte: cutoff } },
-    orderBy: { weekEnd: 'desc' },
-  });
-
-  console.log(`[backfill-weekly-sales] Found payout weeks to backfill: ${rows.length} (lookbackDays=${lookbackDays})`);
+  // Use grouped aggregates per account/week to avoid duplicate rows
+  const aggs = await recomputeWeeklySummary(cutoff, new Date());
+  console.log(`[backfill-weekly-sales] Found aggregated payout groups to backfill: ${aggs.length} (lookbackDays=${lookbackDays})`);
 
   let created = 0;
-  for (const r of rows) {
-    const shop = await prisma.shop.findFirst({ where: { id: r.accountId } });
-    if (!shop) {
-      console.warn('No Shop found for MarketplacePayoutWeek.accountId', r.accountId, 'skipping');
-      continue;
-    }
+  for (const r of aggs) {
     const account = await prisma.marketplaceAccount.findUnique({ where: { id: r.accountId } });
     if (!account) {
-      console.warn('No MarketplaceAccount found for payout week.accountId', r.accountId, 'skipping');
+      console.warn('No MarketplaceAccount found for payout agg.accountId', r.accountId, 'skipping');
+      continue;
+    }
+    const shop = await prisma.shop.findFirst({ where: { jumiaShopSid: account.jumiaShopSid } });
+    if (!shop) {
+      console.warn('No Shop found for MarketplaceAccount.jumiaShopSid', account.jumiaShopSid, 'skipping');
       continue;
     }
     try {
-      await upsertWeeklySaleEntry(shop.id, account.platform, r.weekStart, r.weekEnd, Number(r.payoutAmount ?? r.grossSales ?? 0));
+      await upsertWeeklySaleEntry(shop.id, account.platform, r.weekStart, r.weekEnd, Number(r.totalPayout ?? r.totalGross ?? 0));
       created++;
     } catch (err) {
-      console.error('Failed upserting weekly sale for payout week', r.id, String(err));
+      console.error('Failed upserting weekly sale for payout agg', r.accountId, String(err));
     }
   }
 

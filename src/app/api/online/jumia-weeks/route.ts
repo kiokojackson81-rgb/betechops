@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 
 export const dynamic = "force-dynamic";
@@ -16,26 +17,26 @@ export async function GET(req: Request) {
 
   const payload = await Promise.all(
     assignments.map(async (assignment) => {
-      const weeks = await prisma.marketplacePayoutWeek.findMany({
-        where: { accountId: assignment.accountId },
-        orderBy: { weekEnd: "desc" },
-        take: 4,
-      });
-      const total4Weeks = weeks.reduce((sum: number, week: any) => sum + Number(week.grossSales ?? 0), 0);
+      // Use grouped aggregates to avoid duplicate rows skewing totals
+      const weekAggs = (await recomputeWeeklySummary(new Date(0), new Date())).filter((a) => a.accountId === assignment.accountId);
+      // sort by weekStart desc and take 4
+      weekAggs.sort((x, y) => y.weekStart.getTime() - x.weekStart.getTime());
+      const weeks = weekAggs.slice(0, 4);
+      const total4Weeks = weeks.reduce((sum, w) => sum + Number(w.totalGross ?? 0), 0);
 
       return {
         accountId: assignment.accountId,
         accountName: assignment.account.displayName,
         platform: assignment.account.platform,
-        weeks: weeks.map((week: any) => ({
-          id: week.id,
-          statementNumber: week.statementNumber,
+        weeks: weeks.map((week) => ({
+          id: null,
+          statementNumber: null,
           weekStart: week.weekStart.toISOString(),
           weekEnd: week.weekEnd.toISOString(),
-          grossSales: Number(week.grossSales ?? 0),
-          payoutAmount: Number(week.payoutAmount ?? 0),
-          currency: week.currency,
-          isPaid: week.isPaid,
+          grossSales: Number(week.totalGross ?? 0),
+          payoutAmount: Number(week.totalPayout ?? 0),
+          currency: 'LOCAL',
+          isPaid: true,
         })),
         total4Weeks,
       };

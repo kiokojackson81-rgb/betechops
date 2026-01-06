@@ -6,6 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 
 export const dynamic = "force-dynamic";
 
@@ -108,13 +109,12 @@ export async function GET(req: Request) {
   const platforms = Array.from(platformBuckets.values());
 
   // include marketplace payout weeks and weekly manual sales in marketplace totals
+  // Use grouped aggregates (one row per account/week) to avoid counting duplicate rows
   let payoutSales = 0;
   if (accountIds.length) {
-    const payoutWeeks = await prisma.marketplacePayoutWeek.findMany({
-      where: { accountId: { in: accountIds }, weekEnd: { gte: start, lte: end } },
-      select: { grossSales: true },
-    });
-    payoutSales = payoutWeeks.reduce((s, w) => s + Number(w.grossSales ?? 0), 0);
+    const aggs = await recomputeWeeklySummary(start, end);
+    const filtered = aggs.filter((a) => accountIds.includes(a.accountId));
+    payoutSales = filtered.reduce((s, a) => s + Number(a.totalGross ?? 0), 0);
   }
 
   const manualSummary = await prisma.weeklySale.aggregate({
