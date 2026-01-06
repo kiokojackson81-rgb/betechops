@@ -162,8 +162,8 @@ export default async function AdminOnlineSummaryPage() {
       weekMap.set(key, { period: { start: a.weekStart, end: a.weekEnd }, gross: 0, payout: 0, statementCount: 0, accountSet: new Set<string>() });
     }
     const entry = weekMap.get(key)!;
-    // Skip entries where both payout and gross are zero to avoid clutter
-    if ((Number(a.totalGross ?? 0) === 0) && (Number(a.totalPayout ?? 0) === 0)) continue;
+    // Include zero-magnitude entries so UI counts match recompute results
+    // (previously we skipped entries with both gross and payout == 0)
     entry.gross += Number(a.totalGross ?? 0);
     entry.payout += Number(a.totalPayout ?? 0);
     entry.statementCount += 1; // one aggregated row per account/week

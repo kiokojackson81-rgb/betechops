@@ -45,8 +45,27 @@ export function mondayToSundayLocalWindow(baseDate: Date): WeekWindow {
   return { weekStart, weekEnd };
 }
 
+// Canonical Nairobi week start (UTC) helper. Interprets any input Date as
+// a UTC timestamp and returns the canonical UTC Monday midnight for the
+// Nairobi-local week (UTC+3). This mirrors the canonicaliser used in
+// recompute and ingestion so UI slugs/parsing are deterministic.
+export function canonicalNairobiWeekStartUtc(dateUtc: Date): Date {
+  const NAIR0BI_OFFSET_HOURS = 3;
+  const nairobiMs = dateUtc.getTime() + NAIR0BI_OFFSET_HOURS * 3600 * 1000;
+  const nairobi = new Date(nairobiMs);
+  const y = nairobi.getUTCFullYear();
+  const m = nairobi.getUTCMonth();
+  const d = nairobi.getUTCDate();
+  const nairobiMidnightUtcMs = Date.UTC(y, m, d, 0, 0, 0) - NAIR0BI_OFFSET_HOURS * 3600 * 1000;
+  const nairobiLocalMidnight = new Date(nairobiMidnightUtcMs + NAIR0BI_OFFSET_HOURS * 3600 * 1000);
+  const day = nairobiLocalMidnight.getUTCDay();
+  const deltaToMonday = (day + 6) % 7;
+  const mondayUtcMs = nairobiMidnightUtcMs - deltaToMonday * 24 * 3600 * 1000;
+  return new Date(mondayUtcMs);
+}
+
 export function buildUtcWeekStartIso(date: Date): string {
-  return mondayToSundayLocalWindow(date).weekStart.toISOString();
+  return canonicalNairobiWeekStartUtc(date).toISOString();
 }
 
 export function normalizeWeekStartFromParam(raw: string): Date | null {
@@ -61,13 +80,15 @@ export function normalizeWeekStartFromParam(raw: string): Date | null {
       break;
     }
   }
+  // Try full ISO parse first
   const asDate = new Date(parsedValue);
   if (!Number.isNaN(asDate.getTime())) {
-    return mondayToSundayLocalWindow(asDate).weekStart;
+    return canonicalNairobiWeekStartUtc(asDate);
   }
   const parsedDateOnly = parseDateOnlyLocal(parsedValue);
   if (parsedDateOnly) {
-    return mondayToSundayLocalWindow(parsedDateOnly).weekStart;
+    // interpret the date-only as local midnight then canonicalise
+    return canonicalNairobiWeekStartUtc(parsedDateOnly);
   }
   return null;
 }
