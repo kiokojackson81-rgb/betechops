@@ -21,6 +21,9 @@ export type ReconcileWeek = {
   weeklySum: number;
   duplicates: number;
   missingSids: number;
+  dedupedGross: number;
+  dedupedPayout: number;
+  inflation: number;
 };
 
 export async function reconcileWeeks(weeks = 8): Promise<ReconcileWeek[]> {
