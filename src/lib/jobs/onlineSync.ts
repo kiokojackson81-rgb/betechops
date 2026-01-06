@@ -3,6 +3,7 @@
 import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
+import { mondayToSundayUtcWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = 70;
@@ -450,28 +451,6 @@ function deriveWeekWindow(statement: JumiaStatement) {
   const parsed = parseDateOnlyUtc(statement.period?.startDate ?? null);
   const base = parsed ?? (statement.createdAt ? new Date(statement.createdAt) : new Date());
   return mondayToSundayUtcWindow(base);
-}
-
-function parseDateOnlyUtc(s?: string | null) {
-  if (!s) return null;
-  const datePart = String(s).slice(0, 10);
-  const parts = datePart.split("-").map((v) => Number(v));
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
-  const [y, m, d] = parts;
-  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
-}
-
-// Normalize any base date to the UTC Monday-to-Sunday window it belongs to.
-function mondayToSundayUtcWindow(baseDate: Date) {
-  const d = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), 0, 0, 0, 0));
-  const day = d.getUTCDay(); // 0 = Sunday, 1 = Monday
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diffToMonday);
-  const weekStart = new Date(d.getTime());
-  const weekEnd = new Date(d.getTime());
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-  weekEnd.setUTCHours(23, 59, 59, 999);
-  return { weekStart, weekEnd };
 }
 
 // Automatic WeeklySale creation has been disabled so admins can manage overrides manually.

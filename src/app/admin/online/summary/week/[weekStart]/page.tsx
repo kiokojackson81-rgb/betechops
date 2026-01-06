@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { mondayToSundayUtcWindow, normalizeWeekStartFromParam } from '@/lib/weekWindow';
 import { redirect } from 'next/navigation';
 
 const currencyFormatter = new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 });
@@ -11,20 +12,20 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
   const role = (session?.user as any)?.role;
   if (role !== 'ADMIN' && role !== 'SUPERVISOR') return redirect('/not-authorized');
 
-  const weekStartIso = decodeURIComponent(params.weekStart);
-  const start = new Date(weekStartIso);
-  if (Number.isNaN(start.getTime())) return <div>Invalid week</div>;
+  const weekStart = normalizeWeekStartFromParam(params.weekStart);
+  if (!weekStart) return <div>Invalid week</div>;
 
   // find payout weeks matching this weekStart
   const weeks = await prisma.marketplacePayoutWeek.findMany({
-    where: { weekStart: start },
+    where: { weekStart },
     include: { account: true },
     orderBy: { payoutAmount: 'desc' },
   });
 
   if (!weeks.length) return <div className="p-6">No payout data for this week.</div>;
 
-  const weekLabel = `${new Date(weeks[0].weekStart).toLocaleDateString()} - ${new Date(weeks[0].weekEnd).toLocaleDateString()}`;
+  const weekWindow = mondayToSundayUtcWindow(weekStart);
+  const weekLabel = `${weekWindow.weekStart.toLocaleDateString()} - ${weekWindow.weekEnd.toLocaleDateString()}`;
 
   return (
     <div className="space-y-6 p-6">

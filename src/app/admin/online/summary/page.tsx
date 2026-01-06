@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
+import { buildUtcWeekStartIso } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -233,10 +234,11 @@ export default async function AdminOnlineSummaryPage() {
               const gross = Number(w._sum?.grossSales ?? 0);
               const payout = Number(w._sum?.payoutAmount ?? 0);
               const count = Number(w.accountCount ?? w._count?._all ?? 0);
+              const weekStartParam = encodeURIComponent(buildUtcWeekStartIso(w.period.start));
               return (
                 <a
                   key={w.period.key}
-                  href={`/admin/online/summary/week/${encodeURIComponent(new Date(w.period.start).toISOString())}`}
+                  href={`/admin/online/summary/week/${weekStartParam}`}
                   className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
                 >
                   <div className="text-sm text-slate-300">{w.label}</div>
