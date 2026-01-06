@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-01-06T05:30:00.000Z",
+  "note": "Proposed canonical mapping for JUMIA clientIds → canonical shopSid + DB account. Review conflicts before applying.",
+  "canonical": [
+    {
+      "name": "Betech Solar Solution",
+      "clientId": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "foundShopSids": ["29e1f2ad-b898-4d11-b3df-ab3dda5755fc"],
+      "currentAccountsWithThatShopSid": ["6e1186af-a6b3-4eb6-9547-1038733c3306"],
+      "currentAccountRowsWithClientIdCredential": ["fad5155d-4223-4b58-bec6-87f7a5690c37"],
+      "suggestedCanonicalShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "suggestedCanonicalAccountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "suggestedAction": "Attach credential (id:57b10d78...) to canonical account and deactivate duplicate account fad5155d-4223-4b58-..."
+    },
+    {
+      "name": "Hitech Power",
+      "clientId": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "foundShopSids": ["1951e826-57f2-4d6a-99ad-67b5139d8aca"],
+      "currentAccountsWithThatShopSid": ["447747f0-ed55-4794-b8a6-e492183ba9a0"],
+      "currentAccountRowsWithClientIdCredential": ["34b278de-4617-4a66-bfe1-8b08afafd7f9"],
+      "suggestedCanonicalShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "suggestedCanonicalAccountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "suggestedAction": "Attach credential cb40348d... to canonical account and deactivate 34b278de-4617-4a66-..."
+    },
+    {
+      "name": "Jude Collection",
+      "clientId": "70a7341a-1927-45a5-aec8-d0c5a4ac7b45",
+      "foundShopSids": [],
+      "currentAccountsWithThatShopSid": [],
+      "currentAccountRowsWithClientIdCredential": [],
+      "suggestedCanonicalShopSid": null,
+      "suggestedCanonicalAccountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "suggestedAction": "Create ApiCredential (scope MARKETPLACE_ACCOUNT:3ad790b3...) using provided clientId/refresh token, run mapping fetch to obtain shopSid, then set account jumiaShopSid and link credential."
+    },
+    {
+      "name": "LabTech Kenya",
+      "clientId": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "foundShopSids": ["45fd7334-a7db-4f49-ba60-347096fd818e"],
+      "currentAccountsWithThatShopSid": ["c6847a48-c9d8-45b9-b87b-2e22102ab4ab"],
+      "currentAccountRowsWithClientIdCredential": ["a840db92-3811-4114-a890-ad0329900f53"],
+      "suggestedCanonicalShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "suggestedCanonicalAccountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "suggestedAction": "Attach credential 8179243c... to canonical account and deactivate a840db92-3811-..."
+    },
+    {
+      "name": "Maxton Enterprise",
+      "clientId": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "foundShopSids": ["07ee95b2-acb7-4436-b98f-d8ce30d0c518"],
+      "currentAccountsWithThatShopSid": ["c4a9b0c1-1bd4-4575-bb0f-125997838914"],
+      "currentAccountRowsWithClientIdCredential": ["fdd39dc3-781f-475c-8939-b6559d6fb4d6"],
+      "suggestedCanonicalShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "suggestedCanonicalAccountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "suggestedAction": "Attach credential 890819c5... to canonical account and deactivate fdd39dc3-781f-..."
+    },
+    {
+      "name": "Sky Store Ke",
+      "clientId": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "foundShopSids": ["a4f06613-3271-4846-8b25-43b2bc093a80"],
+      "currentAccountsWithThatShopSid": ["3a4cc676-3432-43a1-b05c-82c935aedee1"],
+      "currentAccountRowsWithClientIdCredential": ["287e8f61-b92e-4463-afea-f855fa125bfb"],
+      "suggestedCanonicalShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "suggestedCanonicalAccountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "suggestedAction": "Attach credential a9cdf3b6... to canonical account and deactivate 287e8f61-..."
+    },
+    {
+      "name": "JM Latest Collections","clientId": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "foundShopSids": ["db15d4e6-19a0-4cc1-b8c9-0619c5388643"],
+      "currentAccountsWithThatShopSid": ["9257651a-3d68-4e88-b330-6cc53afb4cfc"],
+      "currentAccountRowsWithClientIdCredential": ["17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63"],
+      "suggestedCanonicalShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "suggestedCanonicalAccountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "suggestedAction": "Conflict: Betech Store (client e20e...) also maps to same shopSid. Recommend manual ownership resolution; keep canonical account 9257651a for shopSid and deactivate duplicate shop-mapped accounts."
+    },
+    {
+      "name": "Betech Store",
+      "clientId": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "foundShopSids": ["db15d4e6-19a0-4cc1-b8c9-0619c5388643"],
+      "currentAccountsWithThatShopSid": ["9257651a-3d68-4e88-b330-6cc53afb4cfc"],
+      "currentAccountRowsWithClientIdCredential": ["ff8e0bd3-8b24-40d6-af27-64d55a87c041"],
+      "suggestedCanonicalShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "suggestedCanonicalAccountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "suggestedAction": "Conflict: same shopSid used by JM Latest Collections. Recommend manual resolution; link credential 3e36e0c1... to canonical account 9257651a or rotate credentials so ownership is unambiguous."
+    }
+  ]
+}

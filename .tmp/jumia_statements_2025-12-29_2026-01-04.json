@@ -1,0 +1,340 @@
+{
+  "period": {
+    "start": "2025-12-28",
+    "end": "2026-01-04"
+  },
+  "fetched": 7,
+  "statements": [
+    {
+      "accountId": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+      "accountName": "Betech Store",
+      "statementNumber": "PS251229KE12DWN",
+      "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "amount": 176488.18,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE12DWN::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE12DWN",
+        "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+        "createdAt": "2025-12-29 01:07:31",
+        "updatedAt": "2026-01-05 01:04:18",
+        "openingBalance": 0,
+        "itemRevenue": 287885,
+        "shipmentFee": -6580,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -51586.49,
+        "subtotal1": 236298.51,
+        "refunds": -63498,
+        "feesOnRefundsTotal": 9774.7,
+        "subtotal2": 172800.51,
+        "closingBalance": 176488.18,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 176488.18,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+      "accountName": "Hitech Power",
+      "statementNumber": "PS251229KE12Y26",
+      "shopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "amount": 196243.91,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE12Y26::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE12Y26",
+        "shopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+        "createdAt": "2025-12-29 01:03:42",
+        "updatedAt": "2026-01-05 00:16:59",
+        "openingBalance": 0,
+        "itemRevenue": 244361,
+        "shipmentFee": -6720,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -44117.09,
+        "subtotal1": 200243.91,
+        "refunds": 0,
+        "feesOnRefundsTotal": 0,
+        "subtotal2": 200243.91,
+        "closingBalance": 196243.91,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 196243.91,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "287e8f61-b92e-4463-afea-f855fa125bfb",
+      "accountName": "Sky Store Ke",
+      "statementNumber": "PS251229KE13ZAF",
+      "shopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "amount": 239368.33,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE13ZAF::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE13ZAF",
+        "shopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+        "createdAt": "2025-12-29 01:06:09",
+        "updatedAt": "2026-01-05 00:01:40",
+        "openingBalance": 0,
+        "itemRevenue": 311848,
+        "shipmentFee": -3630,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -53254.67,
+        "subtotal1": 258593.33,
+        "refunds": -18500,
+        "feesOnRefundsTotal": 2775,
+        "subtotal2": 240093.33,
+        "closingBalance": 239368.33,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 239368.33,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "a840db92-3811-4114-a890-ad0329900f53",
+      "accountName": "LabTech Kenya",
+      "statementNumber": "PS251229KE14JOD",
+      "shopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "amount": 0,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE14JOD::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE14JOD",
+        "shopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+        "createdAt": "2025-12-29 00:47:35",
+        "updatedAt": "2026-01-05 00:51:30",
+        "openingBalance": 0,
+        "itemRevenue": 0,
+        "shipmentFee": 0,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": 0,
+        "subtotal1": 0,
+        "refunds": 0,
+        "feesOnRefundsTotal": 0,
+        "subtotal2": 0,
+        "closingBalance": 0,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 0,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+      "accountName": "JM Latest Collections",
+      "statementNumber": "PS251229KE12DWN",
+      "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "amount": 176488.18,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE12DWN::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE12DWN",
+        "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+        "createdAt": "2025-12-29 01:07:31",
+        "updatedAt": "2026-01-05 01:04:18",
+        "openingBalance": 0,
+        "itemRevenue": 287885,
+        "shipmentFee": -6580,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -51586.49,
+        "subtotal1": 236298.51,
+        "refunds": -63498,
+        "feesOnRefundsTotal": 9774.7,
+        "subtotal2": 172800.51,
+        "closingBalance": 176488.18,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 176488.18,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "fad5155d-4223-4b58-bec6-87f7a5690c37",
+      "accountName": "Betech Solar Solution",
+      "statementNumber": "PS251229KE13LSZ",
+      "shopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "amount": 82472.25,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE13LSZ::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE13LSZ",
+        "shopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+        "createdAt": "2025-12-29 01:08:45",
+        "updatedAt": "2026-01-05 00:12:35",
+        "openingBalance": 0,
+        "itemRevenue": 113485,
+        "shipmentFee": -2000,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -19022.75,
+        "subtotal1": 94462.25,
+        "refunds": -14400,
+        "feesOnRefundsTotal": 2410,
+        "subtotal2": 80062.25,
+        "closingBalance": 82472.25,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 82472.25,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    },
+    {
+      "accountId": "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+      "accountName": "Maxton Enterprise",
+      "statementNumber": "PS251229KE13XZB",
+      "shopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "amount": 8527.82,
+      "periodStart": null,
+      "weekStart": "2025-12-28",
+      "key": "PS251229KE13XZB::2025-12-28",
+      "raw": {
+        "statementNumber": "PS251229KE13XZB",
+        "shopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+        "createdAt": "2025-12-29 00:19:49",
+        "updatedAt": "2026-01-05 00:27:17",
+        "openingBalance": 0,
+        "itemRevenue": 13600,
+        "shipmentFee": -120,
+        "shipmentFeeCredit": 0,
+        "otherRevenueTotal": 0,
+        "feesTotal": -2568,
+        "subtotal1": 11032,
+        "refunds": 0,
+        "feesOnRefundsTotal": 0,
+        "subtotal2": 11032,
+        "closingBalance": 8527.82,
+        "guaranteeDeposit": 0,
+        "payout": {
+          "amount": 8527.82,
+          "currency": "KES"
+        },
+        "paid": false,
+        "paymentReference": null,
+        "subsidy": 0,
+        "subsidyRefund": 0
+      }
+    }
+  ],
+  "duplicates": [
+    {
+      "key": "PS251229KE12DWN::2025-12-28",
+      "items": [
+        {
+          "accountId": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+          "accountName": "Betech Store",
+          "statementNumber": "PS251229KE12DWN",
+          "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+          "amount": 176488.18,
+          "periodStart": null,
+          "weekStart": "2025-12-28",
+          "key": "PS251229KE12DWN::2025-12-28",
+          "raw": {
+            "statementNumber": "PS251229KE12DWN",
+            "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+            "createdAt": "2025-12-29 01:07:31",
+            "updatedAt": "2026-01-05 01:04:18",
+            "openingBalance": 0,
+            "itemRevenue": 287885,
+            "shipmentFee": -6580,
+            "shipmentFeeCredit": 0,
+            "otherRevenueTotal": 0,
+            "feesTotal": -51586.49,
+            "subtotal1": 236298.51,
+            "refunds": -63498,
+            "feesOnRefundsTotal": 9774.7,
+            "subtotal2": 172800.51,
+            "closingBalance": 176488.18,
+            "guaranteeDeposit": 0,
+            "payout": {
+              "amount": 176488.18,
+              "currency": "KES"
+            },
+            "paid": false,
+            "paymentReference": null,
+            "subsidy": 0,
+            "subsidyRefund": 0
+          }
+        },
+        {
+          "accountId": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+          "accountName": "JM Latest Collections",
+          "statementNumber": "PS251229KE12DWN",
+          "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+          "amount": 176488.18,
+          "periodStart": null,
+          "weekStart": "2025-12-28",
+          "key": "PS251229KE12DWN::2025-12-28",
+          "raw": {
+            "statementNumber": "PS251229KE12DWN",
+            "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+            "createdAt": "2025-12-29 01:07:31",
+            "updatedAt": "2026-01-05 01:04:18",
+            "openingBalance": 0,
+            "itemRevenue": 287885,
+            "shipmentFee": -6580,
+            "shipmentFeeCredit": 0,
+            "otherRevenueTotal": 0,
+            "feesTotal": -51586.49,
+            "subtotal1": 236298.51,
+            "refunds": -63498,
+            "feesOnRefundsTotal": 9774.7,
+            "subtotal2": 172800.51,
+            "closingBalance": 176488.18,
+            "guaranteeDeposit": 0,
+            "payout": {
+              "amount": 176488.18,
+              "currency": "KES"
+            },
+            "paid": false,
+            "paymentReference": null,
+            "subsidy": 0,
+            "subsidyRefund": 0
+          }
+        }
+      ]
+    }
+  ]
+}

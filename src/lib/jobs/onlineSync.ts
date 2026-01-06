@@ -75,15 +75,11 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
   const jumiaShops = await prisma.shop.findMany({
     where: { platform: Platform.JUMIA },
-    select: { id: true, name: true },
+    select: { id: true, name: true, jumiaShopSid: true },
   });
-  const shopsById = new Map<string, (typeof jumiaShops)[number]>();
-  const shopsByName = new Map<string, (typeof jumiaShops)[number]>();
+  const shopsByJumiaSid = new Map<string, (typeof jumiaShops)[number]>();
   jumiaShops.forEach((shop) => {
-    shopsById.set(shop.id, shop);
-    if (shop.name) {
-      shopsByName.set(shop.name.trim().toLowerCase(), shop);
-    }
+    if (shop.jumiaShopSid) shopsByJumiaSid.set(shop.jumiaShopSid, shop);
   });
 
   const accountsBySid = new Map<string, typeof jumiaAccounts[number]>();
@@ -192,12 +188,10 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       continue;
     }
 
-    const shopRecord =
-      shopsById.get(mappedAccount.id) ||
-      (mappedAccount.displayName ? shopsByName.get(mappedAccount.displayName.trim().toLowerCase()) : undefined);
+    const shopRecord = mappedAccount.jumiaShopSid ? shopsByJumiaSid.get(mappedAccount.jumiaShopSid) : undefined;
     if (!shopRecord) {
       console.warn(
-        `[onlineSync] Unable to map marketplace account ${mappedAccount.displayName ?? mappedAccount.id} to a Shop record; payout data stored without WeeklySale entry.`,
+        `[onlineSync] Unable to map marketplace account ${mappedAccount.displayName ?? mappedAccount.id} to a Shop record for jumiaShopSid=${mappedAccount.jumiaShopSid}; payout data stored without WeeklySale entry.`,
       );
     } else {
       // Create or update an automatic WeeklySale entry for this payout week.

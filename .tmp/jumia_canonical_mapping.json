@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-01-06T05:00:54.043Z",
+  "mappings": [
+    {
+      "clientId": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "foundCredential": true,
+      "credentialId": "57b10d78-3ef9-4655-bea8-111b13e1d1e9",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "29e1f2ad-b898-4d11-b3df-ab3dda5755fc"
+      ],
+      "sampleStatementCount": 50
+    },
+    {
+      "clientId": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "foundCredential": true,
+      "credentialId": "cb40348d-6bc5-4714-a6a0-7fa08797107c",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "1951e826-57f2-4d6a-99ad-67b5139d8aca"
+      ],
+      "sampleStatementCount": 50
+    },
+    {
+      "clientId": "70a7341a-1927-45a5-aec8-d0c5a4ac7b45",
+      "foundCredential": false
+    },
+    {
+      "clientId": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "foundCredential": true,
+      "credentialId": "8179243c-1d00-4bbc-8c2e-d5a1270702a0",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "45fd7334-a7db-4f49-ba60-347096fd818e"
+      ],
+      "sampleStatementCount": 32
+    },
+    {
+      "clientId": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "foundCredential": true,
+      "credentialId": "890819c5-5e6f-4bc4-90f0-eca5572eaa1f",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "07ee95b2-acb7-4436-b98f-d8ce30d0c518"
+      ],
+      "sampleStatementCount": 50
+    },
+    {
+      "clientId": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "foundCredential": true,
+      "credentialId": "a9cdf3b6-90c4-4b06-9a43-deb14501325a",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "a4f06613-3271-4846-8b25-43b2bc093a80"
+      ],
+      "sampleStatementCount": 50
+    },
+    {
+      "clientId": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "foundCredential": true,
+      "credentialId": "d261d665-8aa9-4f36-a953-b1a571593fc6",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "db15d4e6-19a0-4cc1-b8c9-0619c5388643"
+      ],
+      "sampleStatementCount": 50
+    },
+    {
+      "clientId": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "foundCredential": true,
+      "credentialId": "3e36e0c1-700f-4c69-92c3-51942833cc81",
+      "apiBase": "https://vendor-api.jumia.com",
+      "discoveredShopSids": [
+        "db15d4e6-19a0-4cc1-b8c9-0619c5388643"
+      ],
+      "sampleStatementCount": 50
+    }
+  ]
+}

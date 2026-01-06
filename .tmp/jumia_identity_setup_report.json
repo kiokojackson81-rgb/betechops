@@ -1,0 +1,63 @@
+{
+  "created": [
+    {
+      "name": "Jude Collection",
+      "accountId": "06d02077-8845-4511-ac40-c4fae7507f19"
+    }
+  ],
+  "updated": [],
+  "reactivated": [
+    "fad5155d-4223-4b58-bec6-87f7a5690c37",
+    "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+    "a840db92-3811-4114-a890-ad0329900f53",
+    "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+    "287e8f61-b92e-4463-afea-f855fa125bfb",
+    "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+    "ff8e0bd3-8b24-40d6-af27-64d55a87c041"
+  ],
+  "deactivated": [
+    {
+      "id": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "displayName": "Jumia Shop db15d4e6"
+    },
+    {
+      "id": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "displayName": "JUDE COLLECTIONS"
+    }
+  ],
+  "credentialsCreated": [],
+  "credentialsUpdated": [
+    {
+      "accountId": "fad5155d-4223-4b58-bec6-87f7a5690c37",
+      "credentialId": "57b10d78-3ef9-4655-bea8-111b13e1d1e9"
+    },
+    {
+      "accountId": "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+      "credentialId": "cb40348d-6bc5-4714-a6a0-7fa08797107c"
+    },
+    {
+      "accountId": "06d02077-8845-4511-ac40-c4fae7507f19",
+      "credentialId": "cmk2503xq0000v544ijzuab08"
+    },
+    {
+      "accountId": "a840db92-3811-4114-a890-ad0329900f53",
+      "credentialId": "8179243c-1d00-4bbc-8c2e-d5a1270702a0"
+    },
+    {
+      "accountId": "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+      "credentialId": "890819c5-5e6f-4bc4-90f0-eca5572eaa1f"
+    },
+    {
+      "accountId": "287e8f61-b92e-4463-afea-f855fa125bfb",
+      "credentialId": "a9cdf3b6-90c4-4b06-9a43-deb14501325a"
+    },
+    {
+      "accountId": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+      "credentialId": "d261d665-8aa9-4f36-a953-b1a571593fc6"
+    },
+    {
+      "accountId": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+      "credentialId": "3e36e0c1-700f-4c69-92c3-51942833cc81"
+    }
+  ]
+}

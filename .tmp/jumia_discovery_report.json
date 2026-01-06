@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-01-06T06:15:49.739Z",
+  "rows": [
+    {
+      "name": "Betech Solar Solution",
+      "clientId": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "ok": true,
+      "discoveredShopSids": [
+        "29e1f2ad-b898-4d11-b3df-ab3dda5755fc"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "Hitech Power",
+      "clientId": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "ok": true,
+      "discoveredShopSids": [
+        "1951e826-57f2-4d6a-99ad-67b5139d8aca"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "Jude Collection",
+      "clientId": "70a7341a-1927-45a5-aec8-d0c5a4ac7b45",
+      "ok": true,
+      "discoveredShopSids": [
+        "5497640c-3f51-4777-82fa-fc1c92dc588b"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "LabTech Kenya",
+      "clientId": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "ok": true,
+      "discoveredShopSids": [
+        "45fd7334-a7db-4f49-ba60-347096fd818e"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "Maxton Enterprise",
+      "clientId": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "ok": true,
+      "discoveredShopSids": [
+        "07ee95b2-acb7-4436-b98f-d8ce30d0c518"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "Sky Store Ke",
+      "clientId": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "ok": true,
+      "discoveredShopSids": [
+        "a4f06613-3271-4846-8b25-43b2bc093a80"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "JM Latest Collections",
+      "clientId": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "ok": true,
+      "discoveredShopSids": [
+        "db15d4e6-19a0-4cc1-b8c9-0619c5388643"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    },
+    {
+      "name": "Betech Store",
+      "clientId": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "ok": true,
+      "discoveredShopSids": [
+        "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4"
+      ],
+      "statementCount": 6,
+      "shopNameFromStatement": null
+    }
+  ]
+}

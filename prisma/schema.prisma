@@ -330,11 +330,14 @@ model Shop {
   assignments          ShopAssignment[]
   userAssignments      UserShop[]
   weeklySales          WeeklySale[]
+  jumiaShopSid         String?
   managers             User[]                @relation("ManagedBy")
+
+  @@unique([platform, jumiaShopSid])
 }
 
 /// WeeklySale records aggregate the total sales for a given attendant (user) and shop
-/// over a Monday→Saturday week. Each record can be marked as PENDING or PAID.
+/// over a Monday→Sunday week. Each record can be marked as PENDING or PAID.
 model WeeklySale {
   id         String           @id @default(cuid())
   shopId     String?
