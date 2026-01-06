@@ -124,6 +124,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       console.error(`[onlineSync] SHOP_SID_MISMATCH statement ${statement.statementNumber} shopSid ${statement.shopSid} does not match account jumiaShopSid ${mappedAccount.jumiaShopSid} - skipping attribution`);
       continue;
     }
+    // Treat missing `paid` as true because we queried with paid=true filter
+    const inferredPaid = statement.paid === undefined || statement.paid === null ? true : Boolean(statement.paid);
     const { weekStart, weekEnd } = deriveWeekWindow(statement);
     const grossSales = Number(statement.payout?.amount ?? 0);
 
@@ -144,7 +146,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
                 accountId: targetAccountId,
                 grossSales,
                 payoutAmount: grossSales,
-                isPaid: Boolean(statement.paid),
+                isPaid: inferredPaid,
                 rawPayload: statement as unknown as Prisma.InputJsonValue,
                 weekEnd,
               },
@@ -161,7 +163,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
             data: {
               grossSales,
               payoutAmount: grossSales,
-              isPaid: Boolean(statement.paid),
+              isPaid: inferredPaid,
               rawPayload: statement as unknown as Prisma.InputJsonValue,
               weekEnd,
             },
@@ -170,17 +172,17 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       } else {
         // No existing row for this statementNumber+weekStart — create a new canonical row
         await prisma.marketplacePayoutWeek.create({
-          data: {
-            accountId: targetAccountId,
-            statementNumber: statement.statementNumber,
-            weekStart,
-            weekEnd,
-            grossSales,
-            payoutAmount: grossSales,
-            currency: "KES",
-            isPaid: Boolean(statement.paid),
-            rawPayload: statement as unknown as Prisma.InputJsonValue,
-          },
+            data: {
+              accountId: targetAccountId,
+              statementNumber: statement.statementNumber,
+              weekStart,
+              weekEnd,
+              grossSales,
+              payoutAmount: grossSales,
+              currency: "KES",
+              isPaid: inferredPaid,
+              rawPayload: statement as unknown as Prisma.InputJsonValue,
+            },
         });
       }
     } catch (err) {
@@ -445,34 +447,30 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  // Parse a date-only string (e.g. "2025-12-29" or ISO) as a local date
-  function parseDateOnly(s?: string | null) {
-    if (!s) return null;
-    const datePart = String(s).slice(0, 10);
-    const parts = datePart.split("-").map((v) => Number(v));
-    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
-    const [y, m, d] = parts;
-    return new Date(y, m - 1, d);
-  }
-
-  const parsed = statement.period?.startDate ? parseDateOnly(statement.period.startDate) : null;
+  const parsed = parseDateOnlyUtc(statement.period?.startDate ?? null);
   const base = parsed ?? (statement.createdAt ? new Date(statement.createdAt) : new Date());
+  return mondayToSundayUtcWindow(base);
+}
 
-  // Normalize to Monday (start) through Sunday (end)
-  function toMonday(d: Date) {
-    const dt = new Date(d);
-    dt.setHours(0, 0, 0, 0);
-    const day = dt.getDay(); // 0 = Sunday, 1 = Monday, ...
-    const diff = day === 0 ? -6 : 1 - day;
-    dt.setDate(dt.getDate() + diff);
-    return dt;
-  }
+function parseDateOnlyUtc(s?: string | null) {
+  if (!s) return null;
+  const datePart = String(s).slice(0, 10);
+  const parts = datePart.split("-").map((v) => Number(v));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+  const [y, m, d] = parts;
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+}
 
-  const weekStart = toMonday(base);
-  const weekEnd = new Date(weekStart.getTime());
-  weekEnd.setDate(weekStart.getDate() + 6);
-  // Make weekEnd the inclusive end of day for clearer queries/labels
-  weekEnd.setHours(23, 59, 59, 999);
+// Normalize any base date to the UTC Monday-to-Sunday window it belongs to.
+function mondayToSundayUtcWindow(baseDate: Date) {
+  const d = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), 0, 0, 0, 0));
+  const day = d.getUTCDay(); // 0 = Sunday, 1 = Monday
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diffToMonday);
+  const weekStart = new Date(d.getTime());
+  const weekEnd = new Date(d.getTime());
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  weekEnd.setUTCHours(23, 59, 59, 999);
   return { weekStart, weekEnd };
 }
 
