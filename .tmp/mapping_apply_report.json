@@ -1,0 +1,12 @@
+{
+  "applied": true,
+  "results": [
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "existingShopHasSid": false,
+      "willApply": true
+    }
+  ]
+}

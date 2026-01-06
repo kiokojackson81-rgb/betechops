@@ -6,7 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
+import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
 
 export const dynamic = "force-dynamic";
 

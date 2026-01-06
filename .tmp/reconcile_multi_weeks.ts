@@ -1,5 +1,7 @@
-import { prisma } from "../src/lib/prisma";
-import recomputeWeeklySummary from "../src/lib/jobs/recomputeWeeklySummaries";
+import { PrismaClient } from '@prisma/client';
+import recomputeWeeklySummary from "../src/lib/jobs/recomputeWeeklySummaries.ts";
+
+const prisma = new PrismaClient();
 
 function startOfWeek(date: Date) {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -35,7 +37,7 @@ async function main() {
         if (!acct) missingSids.add(sid);
       }
     }
-    const duplicates = [];
+    const duplicates: Array<{ sn: string; count: number }> = [];
     for (const [sn, arr] of byStatement.entries()) if (arr.length > 1) duplicates.push({ sn, count: arr.length });
     const weeklySale = await prisma.weeklySale.aggregate({ _sum: { amount: true }, where: { platform: 'JUMIA', weekStart, weekEnd } });
     const weeklySum = weeklySale._sum.amount ?? 0;
@@ -49,4 +51,4 @@ async function main() {
   await prisma.$disconnect();
 }
 
-if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => { console.error(e); process.exit(1); });

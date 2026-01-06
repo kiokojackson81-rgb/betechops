@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
 import { buildUtcWeekStartIso } from "@/lib/weekWindow";
-import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
+import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 

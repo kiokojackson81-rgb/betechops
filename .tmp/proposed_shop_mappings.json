@@ -1,0 +1,64 @@
+{
+  "windowStart": "2025-12-29T00:00:00.000Z",
+  "windowEnd": "2026-01-04T00:00:00.000Z",
+  "proposals": [
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "jumiaShopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+      "candidates": []
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "jumiaShopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+      "candidates": []
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "jumiaShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "candidates": []
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "jumiaShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "candidates": []
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "candidates": [
+        {
+          "type": "nameContainsFrag",
+          "shop": {
+            "id": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+            "name": "Jumia Shop db15d4e6",
+            "location": null,
+            "phone": null,
+            "email": null,
+            "isActive": true,
+            "createdAt": "2026-01-05T18:26:14.567Z",
+            "updatedAt": "2026-01-05T18:26:14.567Z",
+            "platform": "JUMIA",
+            "credentialsEncrypted": null,
+            "disableAutoSync": false,
+            "jumiaShopSid": null
+          }
+        }
+      ]
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "jumiaShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "candidates": []
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "candidates": []
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "jumiaShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "candidates": []
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "windowStart": "2025-12-29T00:00:00.000Z",
+  "windowEnd": "2026-01-04T00:00:00.000Z",
+  "totalGroups": 8,
+  "missingCount": 8,
+  "missing": [
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "jumiaShopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 424086.62,
+      "totalGross": 424086.62
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "jumiaShopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 342814.26,
+      "totalGross": 342814.26
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "jumiaShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 196243.91,
+      "totalGross": 196243.91
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "jumiaShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 239368.33,
+      "totalGross": 239368.33
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 176488.18,
+      "totalGross": 176488.18
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "jumiaShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 0,
+      "totalGross": 0
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 82472.25,
+      "totalGross": 82472.25
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "jumiaShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "hasMarketplaceAccount": true,
+      "hasShop": false,
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "totalPayout": 8527.82,
+      "totalGross": 8527.82
+    }
+  ]
+}

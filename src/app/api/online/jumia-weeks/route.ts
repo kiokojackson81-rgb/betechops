@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
+import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 
 export const dynamic = "force-dynamic";
