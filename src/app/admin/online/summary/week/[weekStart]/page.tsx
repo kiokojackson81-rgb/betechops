@@ -12,7 +12,19 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
   const role = (session?.user as any)?.role;
   if (role !== 'ADMIN' && role !== 'SUPERVISOR') return redirect('/not-authorized');
 
-  const weekStart = normalizeWeekStartFromParam(params.weekStart);
+  const rawParam = params.weekStart ?? '';
+  let weekStart = normalizeWeekStartFromParam(rawParam);
+  if (!weekStart) {
+    try {
+      const decoded = decodeURIComponent(rawParam);
+      const parsed = new Date(decoded);
+      if (!Number.isNaN(parsed.getTime())) {
+        weekStart = mondayToSundayUtcWindow(parsed).weekStart;
+      }
+    } catch {
+      weekStart = null;
+    }
+  }
   if (!weekStart) return <div>Invalid week</div>;
 
   // find payout weeks matching this weekStart
