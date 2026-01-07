@@ -12,6 +12,7 @@ type StatementRowLike = {
   rawPayload?: any;
   isPaid?: boolean | null;
   account?: { displayName?: string | null };
+  id?: string;
 };
 
 const STATUS_PRIORITY: Record<string, number> = {
