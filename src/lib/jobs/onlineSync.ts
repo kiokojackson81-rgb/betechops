@@ -326,37 +326,42 @@ export async function upsertWeeklySaleEntry(
   weekEnd: Date,
   amount: number,
 ) {
-  // Upsert WeeklySale using the compound unique key: shopId_platform_weekStart_weekEnd
-  try {
-    await prisma.weeklySale.upsert({
-      where: {
-        shopId_platform_weekStart_weekEnd: {
-          shopId,
-          platform,
-          weekStart,
-          weekEnd,
-        },
-      },
-      create: {
-        shopId,
-        platform,
-        weekStart,
-        weekEnd,
+  const key = {
+    shopId,
+    platform,
+    weekStart,
+    weekEnd,
+  };
+  const existing = await prisma.weeklySale.findUnique({
+    where: { shopId_platform_weekStart_weekEnd: key },
+  });
+
+  if (!existing) {
+    await prisma.weeklySale.create({
+      data: {
+        ...key,
         amount: amount ?? 0,
         userId: null,
         status: WeeklySaleStatus.PENDING,
         source: WeeklySaleSource.AUTOMATIC,
         createdBy: null,
       },
-      update: {
-        // Update amount only; leave userId/status/source untouched so admins keep control.
-        amount: amount ?? 0,
-      },
     });
-  } catch (err) {
-    // Bubble up the error to caller for logging
-    throw err;
+    return;
   }
+
+  const isManualOverride =
+    existing.source === WeeklySaleSource.MANUAL || existing.createdBy !== null || existing.userId !== null;
+  if (isManualOverride) {
+    return;
+  }
+
+  await prisma.weeklySale.update({
+    where: { shopId_platform_weekStart_weekEnd: key },
+    data: {
+      amount: amount ?? 0,
+    },
+  });
 }
 
 async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: string): Promise<string> {

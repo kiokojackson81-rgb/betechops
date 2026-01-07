@@ -1,10 +1,11 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
+import { Platform, Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { chooseAuthoritativeCandidate } from "@/lib/payoutWeekDedupe";
 
 export const dynamic = "force-dynamic";
 
@@ -155,8 +156,13 @@ export default async function AdminOnlineSummaryPage() {
 
   const weekBucket = new Map<
     string,
-    { weekStart: Date; weekEnd: Date; gross: number; payout: number; accounts: Set<string> }
+    {
+      weekStart: Date;
+      weekEnd: Date;
+      accounts: Map<string, (typeof recentPayouts)[number][]>;
+    }
   >();
+
   for (const row of recentPayouts) {
     const canonicalStart = canonicalNairobiWeekStartUtc(new Date(row.weekStart));
     const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
@@ -165,24 +171,38 @@ export default async function AdminOnlineSummaryPage() {
       weekBucket.set(key, {
         weekStart: canonicalStart,
         weekEnd: canonicalEnd,
-        gross: 0,
-        payout: 0,
-        accounts: new Set<string>(),
+        accounts: new Map(),
       });
     }
     const entry = weekBucket.get(key)!;
-    entry.gross += Number(row.grossSales ?? 0);
-    entry.payout += Number(row.payoutAmount ?? row.grossSales ?? 0);
-    entry.accounts.add(row.accountId);
+    const bucket = entry.accounts.get(row.accountId) ?? [];
+    bucket.push(row);
+    entry.accounts.set(row.accountId, bucket);
   }
 
+  const allAccounts = await prisma.marketplaceAccount.findMany({
+    where: { platform: Platform.JUMIA, isActive: true },
+    select: { id: true },
+  });
+  const totalActiveAccounts = allAccounts.length;
+
   const recentWeeksEnriched = Array.from(weekBucket.values())
-    .map((entry) => ({
-      period: { start: entry.weekStart, end: entry.weekEnd },
-      _sum: { grossSales: entry.gross, payoutAmount: entry.payout },
-      accountCount: entry.accounts.size,
-      label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
-    }))
+    .map((entry) => {
+      const bestRows = Array.from(entry.accounts.values())
+        .map((rows) => chooseAuthoritativeCandidate(rows, entry.weekStart))
+        .filter(Boolean);
+      const present = bestRows.length;
+      const missing = Math.max(totalActiveAccounts - present, 0);
+      const payout = bestRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
+      const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
+      return {
+        period: { start: entry.weekStart, end: entry.weekEnd },
+        _sum: { grossSales: gross, payoutAmount: payout },
+        accountCount: present,
+        missingCount: missing,
+        label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
+      };
+    })
     .sort((a, b) => (a.period.start < b.period.start ? 1 : -1))
     .slice(0, 8);
 
@@ -227,16 +247,18 @@ export default async function AdminOnlineSummaryPage() {
             recentWeeksEnriched.map((w: any) => {
               const gross = Number(w._sum?.grossSales ?? 0);
               const payout = Number(w._sum?.payoutAmount ?? 0);
-              const count = Number(w.accountCount ?? 0);
               const weekStartParam = encodeURIComponent(buildUtcWeekStartIso(w.period.start));
               return (
                 <a
-                  key={w.period.key}
+                  key={w.period.start.toISOString()}
                   href={`/admin/online/summary/week/${weekStartParam}`}
                   className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
                 >
                   <div className="text-sm text-slate-300">{w.label}</div>
-                  <div className="mt-2 text-xs text-slate-400">Accounts: {numberFormatter.format(count)}</div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Accounts: <span className="font-semibold text-white">{totalActiveAccounts}</span> (Present{' '}
+                    {numberFormatter.format(w.accountCount ?? 0)} / Missing {numberFormatter.format(w.missingCount ?? 0)})
+                  </div>
                   <div className="mt-1 text-sm text-emerald-300">Gross: {currencyFormatter.format(gross)}</div>
                   <div className="text-sm text-emerald-200">Payout: {currencyFormatter.format(payout)}</div>
                 </a>
