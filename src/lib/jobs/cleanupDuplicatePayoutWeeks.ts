@@ -2,13 +2,37 @@ import { prisma } from "@/lib/prisma";
 import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { Prisma } from "@prisma/client";
 
-type PayoutRow = Prisma.MarketplacePayoutWeekGetPayload<{
-  include: { account: false };
-}>;
+type PayoutRow = {
+  id: string;
+  accountId: string;
+  statementNumber: string;
+  weekStart: Date;
+  weekEnd: Date;
+  rawPayload: Prisma.JsonValue;
+  updatedAt: Date;
+  createdAt: Date;
+  currency: string;
+  payoutAmount: Prisma.Decimal;
+  grossSales: Prisma.Decimal;
+  isPaid: boolean;
+};
 
 export async function cleanupDuplicatePayoutWeeks() {
   const rows = await prisma.marketplacePayoutWeek.findMany({
-    select: { id: true, accountId: true, statementNumber: true, weekStart: true, rawPayload: true, updatedAt: true },
+    select: {
+      id: true,
+      accountId: true,
+      statementNumber: true,
+      weekStart: true,
+      weekEnd: true,
+      rawPayload: true,
+      updatedAt: true,
+      createdAt: true,
+      currency: true,
+      payoutAmount: true,
+      grossSales: true,
+      isPaid: true,
+    },
     orderBy: [{ accountId: "asc" }, { weekStart: "asc" }],
   });
 
