@@ -219,7 +219,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       });
     }
 
-    const shopRecord = shopsByJumiaSid.get(account.jumiaShopSid);
+    const shopRecord = shopsByJumiaSid.get(account.jumiaShopSid!);
     if (!shopRecord) {
       logWarn("[onlineSync] No Shop record for account; skipping payout statements", {
         accountId: account.id,
