@@ -3,8 +3,8 @@
 import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
-import { mondayToSundayLocalWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
-import { chooseAuthoritativeCandidate, Candidate } from "@/lib/payoutDeduper";
+import { mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { deriveStatementStatus } from "@/lib/statementStatus";
 import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
@@ -105,7 +105,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       const authSchemeGlobal = globalCreds.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
       const accessTokenGlobal = await refreshJumiaToken(globalCreds, apiBaseGlobal);
       const authHeaderGlobal = `${authSchemeGlobal} ${accessTokenGlobal}`;
-      statements = await fetchStatements(apiBaseGlobal, authHeaderGlobal, createdAfter);
+      statements = await fetchStatementsAll(apiBaseGlobal, authHeaderGlobal, createdAfter);
     } else {
       statements = [];
     }
@@ -122,18 +122,25 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     }
 
     const targetAccountId = mappedAccount.id;
-    // Enforce strict identity: statement.shopSid must match the mapped account's jumiaShopSid
     if (statement.shopSid && mappedAccount.jumiaShopSid && statement.shopSid !== mappedAccount.jumiaShopSid) {
-      console.error(`[onlineSync] SHOP_SID_MISMATCH statement ${statement.statementNumber} shopSid ${statement.shopSid} does not match account jumiaShopSid ${mappedAccount.jumiaShopSid} - skipping attribution`);
+      console.error(
+        `[onlineSync] SHOP_SID_MISMATCH statement ${statement.statementNumber} shopSid ${statement.shopSid} does not match account jumiaShopSid ${mappedAccount.jumiaShopSid} - skipping attribution`,
+      );
       continue;
     }
-    // Treat missing `paid` as true because we queried with paid=true filter
-    const inferredPaid = statement.paid === undefined || statement.paid === null ? true : Boolean(statement.paid);
-    const { weekStart, weekEnd } = deriveWeekWindow(statement);
-    const grossSales = Number(statement.payout?.amount ?? 0);
 
-    // Ensure we can map account -> Shop before creating payout rows. If the Shop
-    // does not exist, skip inserting a MarketplacePayoutWeek for this statement.
+    const statementNumber = (statement.statementNumber ?? "").trim();
+    if (!statementNumber) {
+      console.warn(
+        `[onlineSync] Skipping statement without statementNumber for account ${mappedAccount.displayName ?? targetAccountId} shopSid ${stmtShopSid}`,
+      );
+      continue;
+    }
+
+    const { weekStart, weekEnd } = deriveWeekWindow(statement);
+    const amountValue = Number(statement.payout?.amount ?? 0);
+    const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
+
     const shopRecord = mappedAccount.jumiaShopSid ? shopsByJumiaSid.get(mappedAccount.jumiaShopSid) : undefined;
     if (!shopRecord) {
       console.warn(
@@ -143,93 +150,40 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     }
 
     try {
-      // Use composite key: accountId + weekStart + weekEnd to avoid duplicate rows
-      // Find any existing rows for this account where the stored week overlaps
-      // the canonical window. This collapses earlier rows that used slightly
-      // different timestamps (e.g. UTC vs Nairobi offsets).
-      const existingRows = await prisma.marketplacePayoutWeek.findMany({
-        where: { AND: [{ accountId: targetAccountId }, { weekStart: { lte: weekEnd } }, { weekEnd: { gte: weekStart } }] },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      if (existingRows.length === 0) {
-        // No row for this account/week — create canonical row
-        await prisma.marketplacePayoutWeek.create({
-          data: {
+      await prisma.marketplacePayoutWeek.upsert({
+        where: {
+          accountId_statementNumber: {
             accountId: targetAccountId,
-            statementNumber: statement.statementNumber,
-            weekStart,
-            weekEnd,
-            grossSales,
-            payoutAmount: grossSales,
-            currency: "LOCAL",
-            isPaid: inferredPaid,
-            rawPayload: statement as unknown as Prisma.InputJsonValue,
+            statementNumber,
           },
-        });
-      } else {
-        // Enforce authoritative single-row per (accountId, canonicalWeekStart)
-        // Candidates include existing DB rows and the incoming statement.
-        const candidates: Candidate[] = existingRows.map((r) => ({
-          id: r.id,
-          statementNumber: r.statementNumber ?? null,
-          amount: Number(r.payoutAmount ?? r.grossSales ?? 0),
-          createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0),
-          rawPayload: r.rawPayload,
-          isPaid: r.isPaid ?? false,
-        }));
-        candidates.push({ id: null, statementNumber: statement.statementNumber ?? null, amount: grossSales, createdAt: statement.createdAt ? new Date(statement.createdAt) : new Date(), rawPayload: statement, isPaid: inferredPaid });
-
-        const keeper = chooseAuthoritativeCandidate(candidates);
-
-        // Determine which DB row will become the keeper. If the incoming statement
-        // is the keeper (id === null) we'll reuse the first existing row id to
-        // store authoritative values and delete the rest, to avoid creating extra rows.
-        const keeperRow = keeper.id ? existingRows.find((r) => r.id === keeper!.id)! : existingRows[0];
-
-        // Build list of statementNumbers for logging/audit
-        const statementNumbers = Array.from(new Set(existingRows.map((r) => r.statementNumber).filter(Boolean).concat([statement.statementNumber]).filter(Boolean)));
-        if (existingRows.length > 1 || (existingRows.length === 1 && existingRows[0].statementNumber !== statement.statementNumber)) {
-          console.info(`[payout-sync] Duplicate statement ignored: accountId=${targetAccountId} weekStart=${weekStart.toISOString()} statementNumbers=[${statementNumbers.join(',')}]`);
-        }
-
-        // Apply authoritative values to chosen keeperRow
-        try {
-          await prisma.marketplacePayoutWeek.update({
-            where: { id: keeperRow.id },
-            data: {
-              accountId: targetAccountId,
-              statementNumber: keeper.statementNumber ?? statement.statementNumber,
-              grossSales: keeper.amount,
-              payoutAmount: keeper.amount,
-              isPaid: keeper.isPaid ?? inferredPaid,
-              rawPayload: keeper.rawPayload ?? (statement as unknown as Prisma.InputJsonValue),
-              weekStart,
-              weekEnd,
-            },
-          });
-        } catch (err) {
-          console.warn('[onlineSync] Failed to update existing MarketplacePayoutWeek (keeper)', err);
-        }
-
-        // Delete all other DB rows for this account/week
-        const others = existingRows.filter((r) => r.id !== keeperRow.id).map((r) => r.id);
-        if (others.length > 0) {
-          try {
-            await prisma.marketplacePayoutWeek.deleteMany({ where: { id: { in: others } } });
-          } catch (err) {
-            console.warn('[onlineSync] Failed to remove duplicate MarketplacePayoutWeek rows', err);
-          }
-        }
-      }
+        },
+        create: {
+          accountId: targetAccountId,
+          statementNumber,
+          weekStart,
+          weekEnd,
+          grossSales: amountValue,
+          payoutAmount: amountValue,
+          currency: "LOCAL",
+          isPaid,
+          rawPayload: statement as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          weekStart,
+          weekEnd,
+          grossSales: amountValue,
+          payoutAmount: amountValue,
+          isPaid,
+          rawPayload: statement as unknown as Prisma.InputJsonValue,
+        },
+      });
     } catch (err) {
       console.warn('[onlineSync] Failed to upsert MarketplacePayoutWeek', err);
       continue;
     }
 
-    // Create or update an automatic WeeklySale entry for this payout week.
     try {
-      await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, grossSales);
+      await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, amountValue);
     } catch (err) {
       console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
     }
@@ -438,11 +392,25 @@ async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: s
   return data.access_token;
 }
 
-async function fetchStatements(apiBase: string, authHeader: string, createdAfter: Date): Promise<JumiaStatement[]> {
+function statementTimestamp(statement: JumiaStatement): number {
+  const updated = (statement as any).updatedAt ?? statement.createdAt;
+  if (updated) {
+    const parsed = new Date(updated);
+    if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+  }
+  return 0;
+}
+
+async function fetchStatementsForPaidFlag(
+  apiBase: string,
+  authHeader: string,
+  createdAfter: Date,
+  paidFlag: boolean,
+): Promise<JumiaStatement[]> {
   const url = new URL("/payout-statement", apiBase);
   url.searchParams.set("createdAfter", createdAfter.toISOString().split("T")[0]);
   url.searchParams.set("currency", "LOCAL");
-  url.searchParams.set("paid", "true");
+  url.searchParams.set("paid", paidFlag ? "true" : "false");
   url.searchParams.set("size", "1000");
 
   const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
@@ -451,6 +419,29 @@ async function fetchStatements(apiBase: string, authHeader: string, createdAfter
   }
   const data = (await res.json()) as { statements?: JumiaStatement[] };
   return data.statements ?? [];
+}
+
+async function fetchStatementsAll(apiBase: string, authHeader: string, createdAfter: Date): Promise<JumiaStatement[]> {
+  const [paidStatements, unpaidStatements] = await Promise.all([
+    fetchStatementsForPaidFlag(apiBase, authHeader, createdAfter, true),
+    fetchStatementsForPaidFlag(apiBase, authHeader, createdAfter, false),
+  ]);
+  const statementMap = new Map<string, JumiaStatement>();
+  for (const statement of [...paidStatements, ...unpaidStatements]) {
+    const key = statement.statementNumber?.trim();
+    if (!key) continue;
+    const existing = statementMap.get(key);
+    if (!existing) {
+      statementMap.set(key, statement);
+      continue;
+    }
+    const currentTs = statementTimestamp(statement);
+    const existingTs = statementTimestamp(existing);
+    if (currentTs >= existingTs) {
+      statementMap.set(key, statement);
+    }
+  }
+  return Array.from(statementMap.values());
 }
 
 async function fetchOrders(
@@ -491,63 +482,9 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
-  // Prefer using Jumia-provided period start when present. Normalize the
-  // incoming date to a local Date at midnight and then compute the canonical
-  // Monday->Sunday local window to avoid off-by-offset duplicates.
   const parsed = parseDateOnlyUtc(statement.period?.startDate);
-  let baseDate: Date;
-  if (parsed) {
-    // convert UTC date-only to a local Date with same year/month/day
-    baseDate = new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 0, 0, 0, 0);
-  } else if (statement.createdAt) {
-    baseDate = new Date(statement.createdAt);
-  } else {
-    baseDate = new Date();
-  }
-  return mondayToSundayLocalWindow(baseDate);
-}
-
-function getJumiaWeeklyPeriodFor(statement: JumiaStatement) {
-  // Nairobi timezone is UTC+3 (no DST). We'll compute Nairobi local midnight
-  // for a given date and convert to UTC for storage.
-  const NAIR0BI_OFFSET_HOURS = 3;
-
-  const dateStr = statement.period?.startDate ?? (statement.createdAt ? String(statement.createdAt).split("T")[0] : null);
-  let y: number | undefined, m: number | undefined, d: number | undefined;
-  if (dateStr) {
-    const dateOnly = String(dateStr).split("T")[0];
-    const parts = dateOnly.split("-").map((p) => Number(p));
-    if (parts.length >= 3 && !Number.isNaN(parts[0])) {
-      y = parts[0];
-      m = parts[1];
-      d = parts[2];
-    }
-  }
-  if (y === undefined) {
-    // Fallback: derive Nairobi date from `createdAt` or now
-    const fallback = statement.createdAt ? new Date(statement.createdAt) : new Date();
-    // Shift to Nairobi local time
-    const nairobiMs = fallback.getTime() + NAIR0BI_OFFSET_HOURS * 3600 * 1000;
-    const nairobi = new Date(nairobiMs);
-    y = nairobi.getUTCFullYear();
-    m = nairobi.getUTCMonth() + 1;
-    d = nairobi.getUTCDate();
-  }
-
-  // Nairobi midnight in UTC = UTC timestamp for local midnight minus offset
-  const nairobiMidnightUtcMs = Date.UTC(y!, m! - 1, d!, 0, 0, 0) - NAIR0BI_OFFSET_HOURS * 3600 * 1000;
-  const nairobiMidnightUtc = new Date(nairobiMidnightUtcMs);
-
-  // Determine day-of-week in Nairobi local terms
-  const nairobiLocalMidnight = new Date(nairobiMidnightUtcMs + NAIR0BI_OFFSET_HOURS * 3600 * 1000);
-  const day = nairobiLocalMidnight.getUTCDay(); // 0 == Sunday, 1 == Monday, ...
-  const deltaToMonday = (day + 6) % 7; // days to subtract to reach Monday
-
-  const mondayUtcMs = nairobiMidnightUtcMs - deltaToMonday * 24 * 3600 * 1000;
-  const weekStart = new Date(mondayUtcMs);
-  const weekEnd = new Date(mondayUtcMs + 7 * 24 * 3600 * 1000 - 1);
-
-  return { weekStart, weekEnd };
+  const baseDate = parsed ?? (statement.createdAt ? new Date(statement.createdAt) : new Date());
+  return mondayToSundayNairobiWindow(baseDate);
 }
 
 // Automatic WeeklySale creation has been disabled so admins can manage overrides manually.

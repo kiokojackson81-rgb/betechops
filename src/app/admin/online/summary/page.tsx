@@ -1,9 +1,8 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, MarketplaceReturnStatus } from "@prisma/client";
-import { getTradingPeriodFor, getJumiaWeeklyPeriodFor } from "@/lib/tradingPeriod";
-import { buildUtcWeekStartIso } from "@/lib/weekWindow";
-import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -16,9 +15,6 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 });
 
 const numberFormatter = new Intl.NumberFormat("en-KE");
-
-const weekLabelFormatter = (d: Date) =>
-  d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/,/g, "");
 
 type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
 
@@ -141,46 +137,51 @@ export default async function AdminOnlineSummaryPage() {
   ];
 
   // Aggregate payouts by canonical week window (grouped per account + week) to avoid duplicate rows
-  const allAggs = await recomputeWeeklySummary(new Date(0), new Date());
-  // Restrict to JUMIA accounts only
-  const jumiaAccountIds = new Set((await prisma.marketplaceAccount.findMany({ where: { platform: "JUMIA" }, select: { id: true } })).map((a) => a.id));
-  const jumiaAggs = allAggs.filter((a) => jumiaAccountIds.has(a.accountId));
+  const lookbackDate = new Date();
+  lookbackDate.setDate(lookbackDate.getDate() - 90);
+  const recentPayouts = await prisma.marketplacePayoutWeek.findMany({
+    where: {
+      account: { platform: "JUMIA" },
+      weekEnd: { gte: lookbackDate },
+    },
+    select: {
+      accountId: true,
+      weekStart: true,
+      weekEnd: true,
+      grossSales: true,
+      payoutAmount: true,
+    },
+  });
 
-  type WeekAgg = {
-    period: { start: Date; end: Date };
-    gross: number;
-    payout: number;
-    statementCount: number;
-    accountSet: Set<string>;
-  };
-
-  const accountWeekKeys = new Set<string>();
-  const weekMap = new Map<string, WeekAgg>();
-  for (const a of jumiaAggs) {
-    const key = a.weekStart.toISOString();
-    if (!weekMap.has(key)) {
-      weekMap.set(key, { period: { start: a.weekStart, end: a.weekEnd }, gross: 0, payout: 0, statementCount: 0, accountSet: new Set<string>() });
+  const weekBucket = new Map<
+    string,
+    { weekStart: Date; weekEnd: Date; gross: number; payout: number; accounts: Set<string> }
+  >();
+  for (const row of recentPayouts) {
+    const canonicalStart = canonicalNairobiWeekStartUtc(new Date(row.weekStart));
+    const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    const key = canonicalStart.toISOString();
+    if (!weekBucket.has(key)) {
+      weekBucket.set(key, {
+        weekStart: canonicalStart,
+        weekEnd: canonicalEnd,
+        gross: 0,
+        payout: 0,
+        accounts: new Set<string>(),
+      });
     }
-    const entry = weekMap.get(key)!;
-    // Include zero-magnitude entries so UI counts match recompute results
-    // (previously we skipped entries with both gross and payout == 0)
-    entry.gross += Number(a.totalGross ?? 0);
-    entry.payout += Number(a.totalPayout ?? 0);
-    entry.statementCount += 1; // one aggregated row per account/week
-    const accountKey = `${key}|${a.accountId ?? "unknown"}`;
-    if (!accountWeekKeys.has(accountKey)) {
-      accountWeekKeys.add(accountKey);
-      entry.accountSet.add(a.accountId);
-    }
+    const entry = weekBucket.get(key)!;
+    entry.gross += Number(row.grossSales ?? 0);
+    entry.payout += Number(row.payoutAmount ?? row.grossSales ?? 0);
+    entry.accounts.add(row.accountId);
   }
 
-  const recentWeeksEnriched = Array.from(weekMap.values())
-    .map((w) => ({
-      period: { start: w.period.start, end: w.period.end },
-      _sum: { grossSales: w.gross, payoutAmount: w.payout },
-      statementCount: w.statementCount,
-      accountCount: w.accountSet.size,
-      label: `${weekLabelFormatter(w.period.start)} - ${weekLabelFormatter(w.period.end)}`,
+  const recentWeeksEnriched = Array.from(weekBucket.values())
+    .map((entry) => ({
+      period: { start: entry.weekStart, end: entry.weekEnd },
+      _sum: { grossSales: entry.gross, payoutAmount: entry.payout },
+      accountCount: entry.accounts.size,
+      label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
     }))
     .sort((a, b) => (a.period.start < b.period.start ? 1 : -1))
     .slice(0, 8);
@@ -226,7 +227,7 @@ export default async function AdminOnlineSummaryPage() {
             recentWeeksEnriched.map((w: any) => {
               const gross = Number(w._sum?.grossSales ?? 0);
               const payout = Number(w._sum?.payoutAmount ?? 0);
-              const count = Number(w.accountCount ?? w._count?._all ?? 0);
+              const count = Number(w.accountCount ?? 0);
               const weekStartParam = encodeURIComponent(buildUtcWeekStartIso(w.period.start));
               return (
                 <a
