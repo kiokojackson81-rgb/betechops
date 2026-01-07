@@ -32,7 +32,8 @@ type StatementIngestStats = {
   fetched: number;
   matched: number;
   upserted: number;
-  hadAnyMatched: boolean;
+  placeholdersUpserted: number;
+  weeksExpected: number;
   error?: string;
 };
 
@@ -53,7 +54,8 @@ export async function guardAccountHasShopSid(account: { id: string; displayName?
       fetched: 0,
       matched: 0,
       upserted: 0,
-      hadAnyMatched: false,
+      placeholdersUpserted: 0,
+      weeksExpected: 0,
       error: "MISSING_SHOP_SID",
     };
   }
@@ -64,33 +66,63 @@ export async function guardAccountHasShopSid(account: { id: string; displayName?
  * Coverage aggregator to run after runWithConcurrency finishes.
  * Call with stats collected from each account worker.
  */
-export async function logStatementCoverage(ingestStats: StatementIngestStats[], totalActiveAccounts: number): Promise<void> {
-  const accountsWithAnyStatements = ingestStats.filter((s) => s.hadAnyMatched).length;
+export async function logStatementCoverage(
+  ingestStats: StatementIngestStats[],
+  totalActiveAccounts: number,
+): Promise<void> {
   const fetchedTotal = ingestStats.reduce((sum, s) => sum + (s.fetched ?? 0), 0);
   const matchedTotal = ingestStats.reduce((sum, s) => sum + (s.matched ?? 0), 0);
   const upsertedTotal = ingestStats.reduce((sum, s) => sum + (s.upserted ?? 0), 0);
-  const missingAccounts = Math.max(totalActiveAccounts - accountsWithAnyStatements, 0);
+
+  const placeholdersTotal = ingestStats.reduce((sum, s) => sum + (s.placeholdersUpserted ?? 0), 0);
+  const weeksExpected = ingestStats[0]?.weeksExpected ?? 0;
+
+  // “missing” is ONLY config/hard errors (NOT matched=0)
+  const configMissingShopSid = ingestStats.filter((s) => s.error === "MISSING_SHOP_SID").length;
+  const configMissingShopRecord = ingestStats.filter((s) => s.error === "MISSING_SHOP_RECORD").length;
+
+  const hardErrors = ingestStats.filter(
+    (s) => s.error && s.error !== "MISSING_SHOP_SID" && s.error !== "MISSING_SHOP_RECORD",
+  ).length;
+
+  const missingStatsRows = Math.max(totalActiveAccounts - ingestStats.length, 0);
 
   logInfo("[onlineSync] payout statements coverage", {
     totalActiveAccounts,
-    accountsWithAnyStatements,
-    missingAccounts,
+    statsRows: ingestStats.length,
+    missingStatsRows,
+    weeksExpected,
+    placeholdersTotal,
+    configMissingShopSid,
+    configMissingShopRecord,
+    hardErrors,
     fetchedTotal,
     matchedTotal,
     upsertedTotal,
   });
 
-  const missingList = ingestStats
-    .filter((s) => !s.hadAnyMatched)
+  const problemList = ingestStats
+    .filter((s) => !!s.error)
     .map((s) => ({
       accountId: s.accountId,
       displayName: s.displayName,
       shopSid: s.shopSid,
       error: s.error,
+      fetched: s.fetched,
+      matched: s.matched,
+      upserted: s.upserted,
     }));
 
-  if (missingList.length) {
-    logWarn("[onlineSync] payout statements missing for accounts", { missingList });
+  if (problemList.length) {
+    logWarn("[onlineSync] payout statements coverage issues", { problemList });
+  }
+
+  if (missingStatsRows > 0) {
+    logWarn("[onlineSync] payout statements missing stats rows for some active accounts", {
+      totalActiveAccounts,
+      statsRows: ingestStats.length,
+      missingStatsRows,
+    });
   }
 }
 
@@ -131,6 +163,62 @@ type SyncOnlineMarketplaceOptions = {
 };
 
 export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOptions) {
+  // ---- helpers local to this module ----
+  const dec = (n: any) => new Prisma.Decimal(Number(n ?? 0));
+
+  const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
+
+  function buildWeekWindows(createdAfter: Date, createdBefore: Date) {
+    const windows: Array<{ weekStart: Date; weekEnd: Date }> = [];
+    let cursor = new Date(createdAfter);
+
+    for (let guard = 0; guard < 400; guard++) {
+      const { weekStart, weekEnd } = mondayToSundayNairobiWindow(cursor);
+      const last = windows[windows.length - 1];
+      if (!last || last.weekStart.getTime() !== weekStart.getTime()) {
+        windows.push({ weekStart, weekEnd });
+      }
+      const next = new Date(weekEnd);
+      next.setUTCDate(next.getUTCDate() + 1);
+      cursor = next;
+      if (cursor > createdBefore) break;
+    }
+    return windows.filter((w) => w.weekEnd >= createdAfter && w.weekStart <= createdBefore);
+  }
+
+  function placeholderStatementNumber(accountId: string, weekStart: Date) {
+    // deterministic + stable across runs
+    return `AUTO:${accountId}:${dateOnlyISO(weekStart)}`;
+  }
+
+  async function upsertPayoutWeekPlaceholder(accountId: string, weekStart: Date, weekEnd: Date) {
+    const statementNumber = placeholderStatementNumber(accountId, weekStart);
+    await prisma.marketplacePayoutWeek.upsert({
+      where: { accountId_statementNumber: { accountId, statementNumber } },
+      create: {
+        accountId,
+        statementNumber,
+        weekStart,
+        weekEnd,
+        grossSales: dec(0),
+        payoutAmount: dec(0),
+        currency: "KES",
+        isPaid: false,
+        rawPayload: { placeholder: true, source: "weekly_coverage", accountId, statementNumber } as any,
+      },
+      update: {
+        weekStart,
+        weekEnd,
+        grossSales: dec(0),
+        payoutAmount: dec(0),
+        currency: "KES",
+        isPaid: false,
+        rawPayload: { placeholder: true, source: "weekly_coverage", accountId, statementNumber } as any,
+      },
+    });
+  }
+
+  // ---- time window ----
   let createdBefore = opts?.periodEnd ?? new Date();
   let createdAfter =
     opts?.periodStart ??
@@ -140,60 +228,72 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       base.setDate(base.getDate() - days);
       return base;
     })();
+
   if (createdAfter > createdBefore) {
-    const temp = createdAfter;
+    const tmp = createdAfter;
     createdAfter = createdBefore;
-    createdBefore = temp;
+    createdBefore = tmp;
   }
 
-  const activeAssignmentsWhere = {
-    OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
-  };
+  const weekWindows = buildWeekWindows(createdAfter, createdBefore);
+
+  logInfo("[onlineSync] starting", {
+    createdAfter: createdAfter.toISOString(),
+    createdBefore: createdBefore.toISOString(),
+    weeks: weekWindows.length,
+  });
+
+  const activeAssignmentsWhere = { OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }] };
 
   const jumiaAccounts: MarketplaceAccountWithAssignments[] = await prisma.marketplaceAccount.findMany({
     where: { platform: Platform.JUMIA, isActive: true },
-    include: {
-      assignments: {
-        where: activeAssignmentsWhere,
-        orderBy: { startsAt: "desc" },
-      },
-    },
+    include: { assignments: { where: activeAssignmentsWhere, orderBy: { startsAt: "desc" } } },
   });
 
   const jumiaShops = await prisma.shop.findMany({
     where: { platform: Platform.JUMIA },
     select: { id: true, name: true, jumiaShopSid: true },
   });
+
   const shopsByJumiaSid = new Map<string, (typeof jumiaShops)[number]>();
-  jumiaShops.forEach((shop) => {
-    if (shop.jumiaShopSid) shopsByJumiaSid.set(shop.jumiaShopSid, shop);
-  });
+  for (const s of jumiaShops) {
+    if (s.jumiaShopSid) shopsByJumiaSid.set(s.jumiaShopSid, s);
+  }
 
-  const accountsBySid = new Map<string, typeof jumiaAccounts[number]>();
-  jumiaAccounts.forEach((account) => {
-    if (account.jumiaShopSid) accountsBySid.set(account.jumiaShopSid, account);
-  });
-
-  // collect per-account ingest stats for coverage reporting
+  // collect per-account ingest stats
   const ingestStats: StatementIngestStats[] = [];
+
+  // NOTE: no “early return” just because shopSid is missing.
+  // We still enforce placeholders so missing weeks NEVER happen.
+  const accountShopSidIssue = (account: { id: string; displayName?: string | null; jumiaShopSid?: string | null }) => {
+    if (!account.jumiaShopSid) {
+      logWarn("[onlineSync] account missing jumiaShopSid; cannot match statements or map WeeklySale", {
+        accountId: account.id,
+        displayName: account.displayName,
+      });
+      return "MISSING_SHOP_SID";
+    }
+    return null;
+  };
 
   async function fetchAndUpsertStatementsForAccount(
     account: MarketplaceAccountWithAssignments,
     credentials: LoadedJumiaCredentials,
   ): Promise<StatementIngestStats> {
-    const guard = await guardAccountHasShopSid(account);
-    if (guard) return guard;
+    const sidIssue = accountShopSidIssue(account);
 
     const apiBaseStmt = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
     const authSchemeStmt = credentials.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
-    const accessTokenStmt = await refreshJumiaToken(credentials, apiBaseStmt);
-    const authHeaderStmt = `${authSchemeStmt} ${accessTokenStmt}`;
 
-    let allStatements: JumiaStatement[] = [];
+    let accessTokenStmt = "";
     try {
-      allStatements = await fetchStatementsAll(apiBaseStmt, authHeaderStmt, createdAfter);
+      accessTokenStmt = await refreshJumiaToken(credentials, apiBaseStmt);
     } catch (err) {
-      logWarn(`[onlineSync] Failed to fetch payout statements for account ${account.id}`, { error: String(err) });
+      logWarn("[onlineSync] token refresh failed for statements", {
+        accountId: account.id,
+        displayName: account.displayName,
+        error: String(err),
+      });
       return {
         accountId: account.id,
         displayName: account.displayName ?? null,
@@ -201,50 +301,47 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         fetched: 0,
         matched: 0,
         upserted: 0,
-        hadAnyMatched: false,
-        error: String(err),
+        placeholdersUpserted: 0,
+        weeksExpected: weekWindows.length,
+        error: sidIssue ?? "TOKEN_REFRESH_FAILED",
       };
     }
 
-    const matchedStatements = allStatements.filter(
-      (statement) => statement?.shopSid && statement.shopSid === account.jumiaShopSid,
-    );
+    const authHeaderStmt = `${authSchemeStmt} ${accessTokenStmt}`;
 
-    if (allStatements.length > 0 && matchedStatements.length === 0) {
-      logWarn("[onlineSync] Statements fetched but none matched account shopSid", {
+    let allStatements: JumiaStatement[] = [];
+    try {
+      allStatements = await fetchStatementsAll(apiBaseStmt, authHeaderStmt, createdAfter);
+    } catch (err) {
+      logWarn("[onlineSync] failed to fetch payout statements (will rely on placeholders)", {
         accountId: account.id,
         displayName: account.displayName,
-        shopSid: account.jumiaShopSid,
-        fetched: allStatements.length,
+        error: String(err),
       });
+      allStatements = [];
     }
 
-    const shopRecord = shopsByJumiaSid.get(account.jumiaShopSid!);
-    if (!shopRecord) {
-      logWarn("[onlineSync] No Shop record for account; skipping payout statements", {
+    const matchedStatements = allStatements.filter(
+      (s) => s?.shopSid && account.jumiaShopSid && s.shopSid === account.jumiaShopSid,
+    );
+
+    const shopRecord = account.jumiaShopSid ? shopsByJumiaSid.get(account.jumiaShopSid) : null;
+    if (account.jumiaShopSid && !shopRecord) {
+      logWarn("[onlineSync] No Shop record for jumiaShopSid; WeeklySale will be skipped", {
         accountId: account.id,
         displayName: account.displayName,
         jumiaShopSid: account.jumiaShopSid,
       });
-      return {
-        accountId: account.id,
-        displayName: account.displayName ?? null,
-        shopSid: account.jumiaShopSid ?? null,
-        fetched: allStatements.length,
-        matched: matchedStatements.length,
-        upserted: 0,
-        hadAnyMatched: matchedStatements.length > 0,
-      };
     }
 
     let upserted = 0;
+
     for (const statement of matchedStatements) {
       const statementNumber = (statement.statementNumber ?? "").trim();
       if (!statementNumber) {
-        logWarn("[onlineSync] Skipping statement without statementNumber for account", {
+        logWarn("[onlineSync] skipping statement without statementNumber", {
           accountId: account.id,
           displayName: account.displayName,
-          shopSid: account.jumiaShopSid,
         });
         continue;
       }
@@ -255,35 +352,30 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
       try {
         await prisma.marketplacePayoutWeek.upsert({
-          where: {
-            accountId_statementNumber: {
-              accountId: account.id,
-              statementNumber,
-            },
-          },
+          where: { accountId_statementNumber: { accountId: account.id, statementNumber } },
           create: {
             accountId: account.id,
             statementNumber,
             weekStart,
             weekEnd,
-            grossSales: amountValue,
-            payoutAmount: amountValue,
+            grossSales: dec(amountValue),
+            payoutAmount: dec(amountValue),
             currency: "LOCAL",
             isPaid,
-            rawPayload: statement as unknown as Prisma.InputJsonValue,
+            rawPayload: statement as any,
           },
           update: {
             weekStart,
             weekEnd,
-            grossSales: amountValue,
-            payoutAmount: amountValue,
+            grossSales: dec(amountValue),
+            payoutAmount: dec(amountValue),
             isPaid,
-            rawPayload: statement as unknown as Prisma.InputJsonValue,
+            rawPayload: statement as any,
           },
         });
         upserted += 1;
       } catch (err) {
-        logWarn("[onlineSync] Failed to upsert MarketplacePayoutWeek", {
+        logWarn("[onlineSync] failed to upsert MarketplacePayoutWeek (real)", {
           accountId: account.id,
           statementNumber,
           error: String(err),
@@ -291,16 +383,53 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         continue;
       }
 
+      // Only if shop mapping exists
+      if (shopRecord) {
+        try {
+          await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, amountValue);
+        } catch (err) {
+          logWarn("[onlineSync] failed to upsert WeeklySale for payout week (real)", {
+            accountId: account.id,
+            statementNumber,
+            error: String(err),
+          });
+        }
+      }
+    }
+
+    // Enforce placeholders for ALL weeks in window (always)
+    let placeholdersUpserted = 0;
+    for (const w of weekWindows) {
       try {
-        await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, amountValue);
+        await upsertPayoutWeekPlaceholder(account.id, w.weekStart, w.weekEnd);
+        placeholdersUpserted += 1;
       } catch (err) {
-        logWarn("[onlineSync] Failed to upsert WeeklySale for payout week", {
+        logWarn("[onlineSync] failed to upsert payout week placeholder", {
           accountId: account.id,
-          statementNumber,
+          weekStart: w.weekStart.toISOString(),
           error: String(err),
         });
       }
+
+      // WeeklySale placeholders only when shopRecord exists
+      if (shopRecord) {
+        try {
+          await upsertWeeklySaleEntry(shopRecord.id, Platform.JUMIA, w.weekStart, w.weekEnd, 0);
+        } catch (err) {
+          logWarn("[onlineSync] failed to upsert WeeklySale placeholder", {
+            accountId: account.id,
+            shopId: shopRecord.id,
+            weekStart: w.weekStart.toISOString(),
+            error: String(err),
+          });
+        }
+      }
     }
+
+    // Define “missing” only as config/hard errors, not “matched=0”
+    const error =
+      sidIssue ?? (account.jumiaShopSid && !shopRecord ? "MISSING_SHOP_RECORD" : undefined);
+
     const stats: StatementIngestStats = {
       accountId: account.id,
       displayName: account.displayName ?? null,
@@ -308,23 +437,15 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       fetched: allStatements.length,
       matched: matchedStatements.length,
       upserted,
-      hadAnyMatched: matchedStatements.length > 0,
+      placeholdersUpserted,
+      weeksExpected: weekWindows.length,
+      error,
     };
 
-    logInfo("[onlineSync] payout statements", {
-      accountId: stats.accountId,
-      displayName: stats.displayName,
-      shopSid: stats.shopSid,
-      fetched: stats.fetched,
-      matched: stats.matched,
-      upserted: stats.upserted,
-    });
-
+    logInfo("[onlineSync] payout statements summary", stats);
     return stats;
   }
 
-  // Fetch orders per-account using that account's credentials (support per-account ApiCredential)
-  // Limit concurrency when syncing accounts to avoid hitting vendor rate limits.
   async function runWithConcurrency<T>(items: T[], limit: number, worker: (it: T) => Promise<void>) {
     let idx = 0;
     async function runner() {
@@ -335,132 +456,235 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         try {
           await worker(it);
         } catch (err) {
-          console.error('[onlineSync] account worker error', err);
+          logError("[onlineSync] account worker error", { error: String(err) });
         }
       }
     }
     const parallel = Math.min(limit, items.length);
-    const runners: Promise<void>[] = [];
-    for (let i = 0; i < parallel; i++) runners.push(runner());
-    await Promise.all(runners);
+    await Promise.all(Array.from({ length: parallel }, () => runner()));
   }
 
   await runWithConcurrency(jumiaAccounts, 2, async (account) => {
-    let credentialsForAccount: any = null;
+    // credentials: per-account first, fallback global
+    let credentialsForAccount: LoadedJumiaCredentials | null = null;
     try {
       credentialsForAccount = await loadJumiaCredentials(`MARKETPLACE_ACCOUNT:${account.id}`);
     } catch (err) {
-      // Fall back to GLOBAL/env if no per-account credential exists
       try {
         credentialsForAccount = await loadJumiaCredentials();
       } catch (err2) {
-        console.warn(`[onlineSync] No Jumia credentials for account ${account.displayName ?? account.id}; skipping`);
+        logWarn("[onlineSync] no Jumia credentials; skipping account", {
+          accountId: account.id,
+          displayName: account.displayName ?? account.id,
+        });
+        ingestStats.push({
+          accountId: account.id,
+          displayName: account.displayName ?? null,
+          shopSid: account.jumiaShopSid ?? null,
+          fetched: 0,
+          matched: 0,
+          upserted: 0,
+          placeholdersUpserted: 0,
+          weeksExpected: weekWindows.length,
+          error: "NO_CREDENTIALS",
+        });
         return;
       }
     }
 
-    const apiBaseAcct = credentialsForAccount.baseUrl?.trim() || DEFAULT_API_BASE;
-    const authSchemeAcct = credentialsForAccount.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
-    const accessTokenAcct = await refreshJumiaToken(credentialsForAccount, apiBaseAcct);
-    const authHeaderAcct = `${authSchemeAcct} ${accessTokenAcct}`;
-
+    // statements + placeholders
     try {
       const stats = await fetchAndUpsertStatementsForAccount(account, credentialsForAccount);
       ingestStats.push(stats);
     } catch (err) {
-      logError('[onlineSync] account ingest failed', { accountId: account.id, error: String(err) });
+      logError("[onlineSync] statements ingest failed", { accountId: account.id, error: String(err) });
+      ingestStats.push({
+        accountId: account.id,
+        displayName: account.displayName ?? null,
+        shopSid: account.jumiaShopSid ?? null,
+        fetched: 0,
+        matched: 0,
+        upserted: 0,
+        placeholdersUpserted: 0,
+        weeksExpected: weekWindows.length,
+        error: "STATEMENTS_INGEST_FAILED",
+      });
     }
 
-    const orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter, createdBefore);
+    // orders/items + profit logic
+    const apiBaseAcct = credentialsForAccount.baseUrl?.trim() || DEFAULT_API_BASE;
+    const authSchemeAcct = credentialsForAccount.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
+
+    let accessTokenAcct = "";
+    try {
+      accessTokenAcct = await refreshJumiaToken(credentialsForAccount, apiBaseAcct);
+    } catch (err) {
+      logWarn("[onlineSync] token refresh failed for orders", {
+        accountId: account.id,
+        displayName: account.displayName,
+        error: String(err),
+      });
+      return;
+    }
+    const authHeaderAcct = `${authSchemeAcct} ${accessTokenAcct}`;
+
+    let orders: JumiaOrder[] = [];
+    try {
+      orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter, createdBefore);
+    } catch (err) {
+      logWarn("[onlineSync] failed to fetch orders for account", {
+        accountId: account.id,
+        displayName: account.displayName,
+        error: String(err),
+      });
+      return;
+    }
+
+    let itemsFetched = 0;
+
     for (const order of orders) {
       const shopSid = order.shopIds?.[0];
-      // Ensure we only process orders for this account (token may return multiple shops)
       if (account.jumiaShopSid && shopSid && shopSid !== account.jumiaShopSid) continue;
 
-      const items = await fetchOrderItems(apiBaseAcct, authHeaderAcct, order.id);
-    for (const item of items) {
-      const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
-      const statusStr = typeof item.status === 'string' ? item.status : String(item.status ?? '');
-      const isReturnedFlag = statusStr.startsWith('RETURN') || statusStr === 'FAILED';
-      // load existing order (if any) so we can emit reversal events when needed
-      const existing = await prisma.marketplaceOrder.findUnique({ where: { id: item.id } });
+      let items: JumiaOrderItem[] = [];
+      try {
+        items = await fetchOrderItems(apiBaseAcct, authHeaderAcct, order.id);
+      } catch (err) {
+        logWarn("[onlineSync] failed to fetch order items", {
+          accountId: account.id,
+          orderId: order.id,
+          error: String(err),
+        });
+        continue;
+      }
 
-        // extract fee/shipping from raw payload when available
+      itemsFetched += items.length;
+
+      for (const item of items) {
+        const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
+        const statusStr = typeof item.status === "string" ? item.status : String(item.status ?? "");
+        const statusUpper = statusStr.toUpperCase();
+        const isReturnedFlag = statusUpper.startsWith("RETURN") || statusUpper === "FAILED";
+
+        // fees/shipping from raw payload
         const rawItem: any = item as any;
         const feeVal = Number((rawItem?.seller_fee?.amount ?? rawItem?.seller_fee_amount ?? 0) || 0);
         const shippingVal = Number((rawItem?.shipping_fee?.amount ?? rawItem?.shipping_fee_amount ?? 0) || 0);
 
-      const upsertResult = await prisma.marketplaceOrder.upsert({
-        where: {
-          id: item.id,
-        },
-        create: {
-          id: item.id,
-          accountId: account.id,
-          platform: Platform.JUMIA,
-          orderId: String(order.number ?? order.id),
-          orderItemId: item.id,
-          status: item.status,
-          orderedAt: new Date(order.createdAt),
-          productName: item.product?.name ?? "Unknown product",
-          productUrl: item.product?.sellerSku
-            ? `https://www.jumia.co.ke/${item.product.sellerSku}`
-            : undefined,
-          sellingPrice: sellingPriceLocal,
-          currency: item.country?.currencyCode ?? "KES",
-          isReturned: isReturnedFlag,
-          sellerFee: feeVal,
-          shippingFee: shippingVal,
-          rawPayload: item as unknown as Prisma.InputJsonValue,
-        },
-        update: {
-          status: item.status,
-          sellingPrice: sellingPriceLocal,
-          currency: item.country?.currencyCode ?? "KES",
-          isReturned: isReturnedFlag,
-          // store fee/shipping and raw payload; clear profit on return
-          sellerFee: feeVal,
-          shippingFee: shippingVal,
-          profit: isReturnedFlag ? 0 : undefined,
-          rawPayload: item as unknown as Prisma.InputJsonValue,
-        },
-      });
+        // existing record needed for reversal amount
+        const existing = await prisma.marketplaceOrder.findUnique({ where: { id: item.id } });
 
-      // If this item was previously recognised with profit and is now returned,
-      // create a reversal ProfitEvent to mirror the change.
-      try {
-        if (isReturnedFlag && existing && existing.profit && Number(existing.profit) > 0) {
-          await prisma.profitEvent.create({
-            data: {
-              marketplaceOrderId: existing.id,
-              type: "REVERSE",
-              amount: -Number(existing.profit),
-            },
-          });
-        }
-        // If this item is delivered and already has a buyingPrice set but no profit,
-        // compute profit using stored fee/shipping and record a RECOGNISE event.
-        const statusUpper = String(upsertResult.status ?? "").toUpperCase();
-        const buyingPriceVal = upsertResult.buyingPrice ? Number(upsertResult.buyingPrice) : null;
-        const existingProfitVal = upsertResult.profit ? Number(upsertResult.profit) : 0;
-        if (!isReturnedFlag && (statusUpper.includes("DELIVER") || statusUpper === "DELIVERED") && buyingPriceVal !== null && (existingProfitVal === 0 || existingProfitVal === null)) {
-          const computedProfit = Number(upsertResult.sellingPrice ?? 0) - (Number(upsertResult.sellerFee ?? feeVal) || feeVal) - (Number(upsertResult.shippingFee ?? shippingVal) || shippingVal) - buyingPriceVal;
-          try {
-            await prisma.marketplaceOrder.update({ where: { id: upsertResult.id }, data: { profit: computedProfit } });
-            await prisma.profitEvent.create({ data: { marketplaceOrderId: upsertResult.id, type: "RECOGNISE", amount: computedProfit } });
-          } catch (err) {
-            console.warn("Failed to record computed profit for delivered marketplace order", err);
+        const upserted = await prisma.marketplaceOrder.upsert({
+          where: { id: item.id },
+          create: {
+            id: item.id,
+            accountId: account.id,
+            platform: Platform.JUMIA,
+            orderId: String(order.number ?? order.id),
+            orderItemId: item.id,
+            status: item.status,
+            orderedAt: new Date(order.createdAt),
+            productName: item.product?.name ?? "Unknown product",
+            productUrl: item.product?.sellerSku ? `https://www.jumia.co.ke/${item.product.sellerSku}` : undefined,
+            sellingPrice: sellingPriceLocal,
+            currency: item.country?.currencyCode ?? "KES",
+            isReturned: isReturnedFlag,
+            sellerFee: feeVal,
+            shippingFee: shippingVal,
+            rawPayload: item as any,
+          },
+          update: {
+            status: item.status,
+            sellingPrice: sellingPriceLocal,
+            currency: item.country?.currencyCode ?? "KES",
+            isReturned: isReturnedFlag,
+            sellerFee: feeVal,
+            shippingFee: shippingVal,
+            // clear profit on return; otherwise keep profit as-is
+            profit: isReturnedFlag ? 0 : undefined,
+            rawPayload: item as any,
+          },
+        });
+
+        // PROFIT EVENTS — rely on @@unique([marketplaceOrderId, type]) and ignore P2002
+        try {
+          if (isReturnedFlag) {
+            const prevProfit = existing?.profit ? Number(existing.profit) : 0;
+            if (prevProfit > 0) {
+              try {
+                await prisma.profitEvent.create({
+                  data: {
+                    marketplaceOrderId: upserted.id,
+                    type: "REVERSE",
+                    amount: dec(0).minus(dec(prevProfit)),
+                  },
+                });
+              } catch (e: any) {
+                if (e?.code !== "P2002") {
+                  logWarn("[onlineSync] failed to create REVERSE ProfitEvent", {
+                    marketplaceOrderId: upserted.id,
+                    error: String(e),
+                  });
+                }
+              }
+            }
+            continue;
           }
+
+          const delivered = statusUpper.includes("DELIVER") || statusUpper === "DELIVERED";
+          const buyingPriceVal = upserted.buyingPrice ? Number(upserted.buyingPrice) : null;
+          const profitVal = upserted.profit == null ? null : Number(upserted.profit);
+
+          if (delivered && buyingPriceVal !== null && (profitVal === null || profitVal === 0)) {
+            const sellerFeeToUse =
+              upserted.sellerFee != null ? Number(upserted.sellerFee) : feeVal;
+            const shipFeeToUse =
+              upserted.shippingFee != null ? Number(upserted.shippingFee) : shippingVal;
+
+            const computedProfit =
+              Number(upserted.sellingPrice ?? 0) -
+              Number(sellerFeeToUse ?? 0) -
+              Number(shipFeeToUse ?? 0) -
+              buyingPriceVal;
+
+            await prisma.marketplaceOrder.update({
+              where: { id: upserted.id },
+              data: { profit: computedProfit },
+            });
+
+            try {
+              await prisma.profitEvent.create({
+                data: {
+                  marketplaceOrderId: upserted.id,
+                  type: "RECOGNISE",
+                  amount: dec(computedProfit),
+                },
+              });
+            } catch (e: any) {
+              if (e?.code !== "P2002") {
+                logWarn("[onlineSync] failed to create RECOGNISE ProfitEvent", {
+                  marketplaceOrderId: upserted.id,
+                  error: String(e),
+                });
+              }
+            }
+          }
+        } catch (err) {
+          logWarn("[onlineSync] ProfitEvent handling failed", { marketplaceOrderId: item.id, error: String(err) });
         }
-      } catch (err) {
-        console.warn("Failed to create ProfitEvent reversal for returned order", err);
-      }
       }
     }
+
+    logInfo("[onlineSync] account sync summary", {
+      accountId: account.id,
+      displayName: account.displayName,
+      ordersFetched: orders.length,
+      itemsFetched,
+    });
   });
 
-  // Emit structured coverage report for all accounts
   await logStatementCoverage(ingestStats, jumiaAccounts.length);
+  logInfo("[onlineSync] finished", { accounts: jumiaAccounts.length });
 }
 
 export async function upsertWeeklySaleEntry(
@@ -470,41 +694,39 @@ export async function upsertWeeklySaleEntry(
   weekEnd: Date,
   amount: number,
 ) {
-  const key = {
-    shopId,
-    platform,
-    weekStart,
-    weekEnd,
-  };
+  const key = { shopId, platform, weekStart, weekEnd };
   const existing = await prisma.weeklySale.findUnique({
     where: { shopId_platform_weekStart_weekEnd: key },
   });
+
+  const amountDec = new Prisma.Decimal(Number(amount ?? 0));
 
   if (!existing) {
     await prisma.weeklySale.create({
       data: {
         ...key,
-        amount: amount ?? 0,
+        amount: amountDec,
         userId: null,
         status: WeeklySaleStatus.PENDING,
         source: WeeklySaleSource.AUTOMATIC,
         createdBy: null,
+        approvedBy: null,
       },
     });
     return;
   }
 
   const isManualOverride =
-    existing.source === WeeklySaleSource.MANUAL || existing.createdBy !== null || existing.userId !== null;
-  if (isManualOverride) {
-    return;
-  }
+    existing.source === WeeklySaleSource.MANUAL ||
+    existing.createdBy !== null ||
+    existing.userId !== null ||
+    existing.approvedBy !== null;
+
+  if (isManualOverride) return;
 
   await prisma.weeklySale.update({
     where: { shopId_platform_weekStart_weekEnd: key },
-    data: {
-      amount: amount ?? 0,
-    },
+    data: { amount: amountDec },
   });
 }
 

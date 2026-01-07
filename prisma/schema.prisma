@@ -1018,15 +1018,16 @@ model MarketplaceOrder {
 }
 
 model ProfitEvent {
-  id               String          @id @default(cuid())
-  marketplaceOrderId String
-  type             ProfitEventType
-  amount           Decimal         @db.Decimal(14, 2)
-  createdAt        DateTime        @default(now())
-  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
+    id               String          @id @default(cuid())
+    marketplaceOrderId String
+    type             ProfitEventType
+    amount           Decimal         @db.Decimal(14, 2)
+    createdAt        DateTime        @default(now())
+    marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
 
-  @@index([marketplaceOrderId])
-}
+    @@index([marketplaceOrderId])
+    @@unique([marketplaceOrderId, type])
+  }
 
 model MarketplacePricingTemplate {
   id                    String   @id @default(cuid())
