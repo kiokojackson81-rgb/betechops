@@ -11,6 +11,7 @@ type StatementRowLike = {
   grossSales?: number | Decimal | null;
   rawPayload?: any;
   isPaid?: boolean | null;
+  account?: { displayName?: string | null };
 };
 
 const STATUS_PRIORITY: Record<string, number> = {
