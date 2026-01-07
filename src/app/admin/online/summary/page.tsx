@@ -2,9 +2,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Platform, Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate } from "@/lib/weekWindow";
+import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { logInfo } from "@/lib/logging";
 import { chooseAuthoritativeCandidate } from "@/lib/payoutWeekDedupe";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,10 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 });
 
 const numberFormatter = new Intl.NumberFormat("en-KE");
+
+const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
+const normalizeWeekDate = (date: Date) => parseDateOnlyUtc(dateOnlyISO(date)) ?? date;
+const isPlaceholderRow = (row: any) => row?.rawPayload?.placeholder === true;
 
 type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
 
@@ -186,25 +191,66 @@ export default async function AdminOnlineSummaryPage() {
   });
   const totalActiveAccounts = allAccounts.length;
 
-  const recentWeeksEnriched = Array.from(weekBucket.values())
-    .map((entry) => {
-      const bestRows = Array.from(entry.accounts.values())
-        .map((rows) => chooseAuthoritativeCandidate(rows, entry.weekStart))
-        .filter(Boolean);
-      const present = bestRows.length;
-      const missing = Math.max(totalActiveAccounts - present, 0);
-      const payout = bestRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
-      const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
-      return {
-        period: { start: entry.weekStart, end: entry.weekEnd },
-        _sum: { grossSales: gross, payoutAmount: payout },
-        accountCount: present,
-        missingCount: missing,
-        label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
-      };
-    })
-    .sort((a, b) => (a.period.start < b.period.start ? 1 : -1))
-    .slice(0, 8);
+  const enrichedWeeks = Array.from(weekBucket.values()).map((entry) => {
+    const bestRows = Array.from(entry.accounts.values())
+      .map((rows) => {
+        const nonPlaceholder = rows.filter((row) => !isPlaceholderRow(row));
+        const candidates = nonPlaceholder.length ? nonPlaceholder : rows;
+        return chooseAuthoritativeCandidate(candidates as any, entry.weekStart);
+      })
+      .filter(Boolean) as any[];
+    const present = bestRows.length;
+    const missing = Math.max(totalActiveAccounts - present, 0);
+    const payout = bestRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
+    const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
+    const realRows = bestRows.filter((row) => !isPlaceholderRow(row));
+    const placeholderRows = bestRows.filter((row) => isPlaceholderRow(row));
+    return {
+      period: { start: entry.weekStart, end: entry.weekEnd },
+      _sum: { grossSales: gross, payoutAmount: payout },
+      accountCount: present,
+      missingCount: missing,
+      label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
+      realRowCount: realRows.length,
+      placeholderRowCount: placeholderRows.length,
+      totalRealPayout: realRows.reduce(
+        (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
+        0,
+      ),
+      totalPlaceholderPayout: placeholderRows.reduce(
+        (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
+        0,
+      ),
+    };
+  });
+
+  const sortedWeeks = enrichedWeeks.sort((a, b) => (a.period.start < b.period.start ? 1 : -1));
+  const currentWeekEntry = sortedWeeks[0];
+  const recentWeeksEnriched = sortedWeeks.slice(0, 8);
+
+  if (currentWeekEntry) {
+    const normalizedStart = normalizeWeekDate(currentWeekEntry.period.start);
+    const normalizedEnd = normalizeWeekDate(currentWeekEntry.period.end);
+    const weeklySaleAgg = await prisma.weeklySale.aggregate({
+      _sum: { amount: true },
+      where: {
+        weekStart: normalizedStart,
+        weekEnd: normalizedEnd,
+      },
+    });
+    const totalWeeklySale = Number(weeklySaleAgg._sum?.amount ?? 0);
+    logInfo("[weekCard] payout breakdown", {
+      weekStart: currentWeekEntry.period.start.toISOString(),
+      weekEnd: currentWeekEntry.period.end.toISOString(),
+      totalRealPayout: currentWeekEntry.totalRealPayout,
+      totalPlaceholderPayout: currentWeekEntry.totalPlaceholderPayout,
+      totalWeeklySale,
+      realRowCount: currentWeekEntry.realRowCount,
+      placeholderRowCount: currentWeekEntry.placeholderRowCount,
+      presentAccounts: currentWeekEntry.accountCount,
+      missingAccounts: currentWeekEntry.missingCount,
+    });
+  }
 
   return (
     <div className="space-y-8">

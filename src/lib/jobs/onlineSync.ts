@@ -1,6 +1,7 @@
 "use server";
 
 import { Platform, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { logError, logInfo, logWarn } from "@/lib/logging";
 import { prisma } from "@/lib/prisma";
 import { loadJumiaCredentials, type LoadedJumiaCredentials } from "@/lib/credentials/jumia";
 import { mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
@@ -10,18 +11,17 @@ import { requestWithRetry } from "@/lib/fetchWithRetry";
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = 70;
 
-/** Structured logs: never leave dangling console.warn( calls */
-function logInfo(msg: string, meta?: Record<string, any>) {
-  if (meta) console.info(msg, JSON.stringify(meta));
-  else console.info(msg);
+const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
+
+function normalizeWeekDate(date: Date) {
+  return parseDateOnlyUtc(dateOnlyISO(date)) ?? date;
 }
-function logWarn(msg: string, meta?: Record<string, any>) {
-  if (meta) console.warn(msg, JSON.stringify(meta));
-  else console.warn(msg);
-}
-function logError(msg: string, meta?: Record<string, any>) {
-  if (meta) console.error(msg, JSON.stringify(meta));
-  else console.error(msg);
+
+function normalizeWeekWindow(weekStart: Date, weekEnd: Date) {
+  return {
+    weekStart: normalizeWeekDate(weekStart),
+    weekEnd: normalizeWeekDate(weekEnd),
+  };
 }
 
 /** Standard stats returned by per-account statement ingestion. */
@@ -166,19 +166,18 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   // ---- helpers local to this module ----
   const dec = (n: any) => new Prisma.Decimal(Number(n ?? 0));
 
-  const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
-
   function buildWeekWindows(createdAfter: Date, createdBefore: Date) {
     const windows: Array<{ weekStart: Date; weekEnd: Date }> = [];
     let cursor = new Date(createdAfter);
 
     for (let guard = 0; guard < 400; guard++) {
       const { weekStart, weekEnd } = mondayToSundayNairobiWindow(cursor);
+      const normalized = normalizeWeekWindow(weekStart, weekEnd);
       const last = windows[windows.length - 1];
-      if (!last || last.weekStart.getTime() !== weekStart.getTime()) {
-        windows.push({ weekStart, weekEnd });
+      if (!last || last.weekStart.getTime() !== normalized.weekStart.getTime()) {
+        windows.push(normalized);
       }
-      const next = new Date(weekEnd);
+      const next = new Date(normalized.weekEnd);
       next.setUTCDate(next.getUTCDate() + 1);
       cursor = next;
       if (cursor > createdBefore) break;
@@ -192,14 +191,15 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
 
   async function upsertPayoutWeekPlaceholder(accountId: string, weekStart: Date, weekEnd: Date) {
-    const statementNumber = placeholderStatementNumber(accountId, weekStart);
+    const { weekStart: normalizedStart, weekEnd: normalizedEnd } = normalizeWeekWindow(weekStart, weekEnd);
+    const statementNumber = placeholderStatementNumber(accountId, normalizedStart);
     await prisma.marketplacePayoutWeek.upsert({
       where: { accountId_statementNumber: { accountId, statementNumber } },
       create: {
         accountId,
         statementNumber,
-        weekStart,
-        weekEnd,
+        weekStart: normalizedStart,
+        weekEnd: normalizedEnd,
         grossSales: dec(0),
         payoutAmount: dec(0),
         currency: "KES",
@@ -207,8 +207,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         rawPayload: { placeholder: true, source: "weekly_coverage", accountId, statementNumber } as any,
       },
       update: {
-        weekStart,
-        weekEnd,
+        weekStart: normalizedStart,
+        weekEnd: normalizedEnd,
         grossSales: dec(0),
         payoutAmount: dec(0),
         currency: "KES",
@@ -347,6 +347,10 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       }
 
       const { weekStart, weekEnd } = deriveWeekWindow(statement);
+      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
+        weekStart,
+        weekEnd,
+      );
       const amountValue = Number(statement.payout?.amount ?? 0);
       const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
 
@@ -356,8 +360,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
           create: {
             accountId: account.id,
             statementNumber,
-            weekStart,
-            weekEnd,
+            weekStart: normalizedWeekStart,
+            weekEnd: normalizedWeekEnd,
             grossSales: dec(amountValue),
             payoutAmount: dec(amountValue),
             currency: "LOCAL",
@@ -365,8 +369,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
             rawPayload: statement as any,
           },
           update: {
-            weekStart,
-            weekEnd,
+            weekStart: normalizedWeekStart,
+            weekEnd: normalizedWeekEnd,
             grossSales: dec(amountValue),
             payoutAmount: dec(amountValue),
             isPaid,
@@ -386,7 +390,13 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       // Only if shop mapping exists
       if (shopRecord) {
         try {
-          await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, amountValue);
+          await upsertWeeklySaleEntry(
+            shopRecord.id,
+            account.platform,
+            normalizedWeekStart,
+            normalizedWeekEnd,
+            amountValue,
+          );
         } catch (err) {
           logWarn("[onlineSync] failed to upsert WeeklySale for payout week (real)", {
             accountId: account.id,
@@ -400,13 +410,17 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     // Enforce placeholders for ALL weeks in window (always)
     let placeholdersUpserted = 0;
     for (const w of weekWindows) {
+      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
+        w.weekStart,
+        w.weekEnd,
+      );
       try {
-        await upsertPayoutWeekPlaceholder(account.id, w.weekStart, w.weekEnd);
+        await upsertPayoutWeekPlaceholder(account.id, normalizedWeekStart, normalizedWeekEnd);
         placeholdersUpserted += 1;
       } catch (err) {
         logWarn("[onlineSync] failed to upsert payout week placeholder", {
           accountId: account.id,
-          weekStart: w.weekStart.toISOString(),
+          weekStart: normalizedWeekStart.toISOString(),
           error: String(err),
         });
       }
@@ -414,12 +428,17 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       // WeeklySale placeholders only when shopRecord exists
       if (shopRecord) {
         try {
-          await upsertWeeklySaleEntry(shopRecord.id, Platform.JUMIA, w.weekStart, w.weekEnd, 0);
+          await ensureWeeklySalePlaceholder(
+            shopRecord.id,
+            Platform.JUMIA,
+            normalizedWeekStart,
+            normalizedWeekEnd,
+          );
         } catch (err) {
           logWarn("[onlineSync] failed to upsert WeeklySale placeholder", {
             accountId: account.id,
             shopId: shopRecord.id,
-            weekStart: w.weekStart.toISOString(),
+            weekStart: normalizedWeekStart.toISOString(),
             error: String(err),
           });
         }
@@ -694,7 +713,8 @@ export async function upsertWeeklySaleEntry(
   weekEnd: Date,
   amount: number,
 ) {
-  const key = { shopId, platform, weekStart, weekEnd };
+  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(weekStart, weekEnd);
+  const key = { shopId, platform, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd };
   const existing = await prisma.weeklySale.findUnique({
     where: { shopId_platform_weekStart_weekEnd: key },
   });
@@ -761,6 +781,41 @@ async function refreshJumiaToken(credentials: LoadedJumiaCredentials, apiBase: s
     }
   }
   return data.access_token;
+}
+
+export async function ensureWeeklySalePlaceholder(
+  shopId: string,
+  platform: Platform,
+  weekStart: Date,
+  weekEnd: Date,
+) {
+  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
+    weekStart,
+    weekEnd,
+  );
+  const key = {
+    shopId,
+    platform,
+    weekStart: normalizedWeekStart,
+    weekEnd: normalizedWeekEnd,
+  };
+  try {
+    await prisma.weeklySale.create({
+      data: {
+        ...key,
+        amount: new Prisma.Decimal(0),
+        userId: null,
+        status: WeeklySaleStatus.PENDING,
+        source: WeeklySaleSource.AUTOMATIC,
+        createdBy: null,
+        approvedBy: null,
+      },
+    });
+  } catch (err: any) {
+    if (err?.code !== "P2002") {
+      throw err;
+    }
+  }
 }
 
 function statementTimestamp(statement: JumiaStatement): number {
