@@ -40,7 +40,7 @@ type StatementIngestStats = {
  * Paste this EXACTLY inside your per-account statement ingest helper.
  * It replaces console.warn(...) with structured logging and returns valid stats.
  */
-export function guardAccountHasShopSid(account: { id: string; displayName?: string | null; jumiaShopSid?: string | null }): StatementIngestStats | null {
+export async function guardAccountHasShopSid(account: { id: string; displayName?: string | null; jumiaShopSid?: string | null }): Promise<StatementIngestStats | null> {
   if (!account.jumiaShopSid) {
     logWarn("[onlineSync] account missing jumiaShopSid; cannot ingest payout statements", {
       accountId: account.id,
@@ -64,7 +64,7 @@ export function guardAccountHasShopSid(account: { id: string; displayName?: stri
  * Coverage aggregator to run after runWithConcurrency finishes.
  * Call with stats collected from each account worker.
  */
-export function logStatementCoverage(ingestStats: StatementIngestStats[], totalActiveAccounts: number) {
+export async function logStatementCoverage(ingestStats: StatementIngestStats[], totalActiveAccounts: number): Promise<void> {
   const accountsWithAnyStatements = ingestStats.filter((s) => s.hadAnyMatched).length;
   const fetchedTotal = ingestStats.reduce((sum, s) => sum + (s.fetched ?? 0), 0);
   const matchedTotal = ingestStats.reduce((sum, s) => sum + (s.matched ?? 0), 0);
@@ -181,7 +181,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     account: MarketplaceAccountWithAssignments,
     credentials: LoadedJumiaCredentials,
   ): Promise<StatementIngestStats> {
-    const guard = guardAccountHasShopSid(account);
+    const guard = await guardAccountHasShopSid(account);
     if (guard) return guard;
 
     const apiBaseStmt = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
@@ -460,7 +460,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   });
 
   // Emit structured coverage report for all accounts
-  logStatementCoverage(ingestStats, jumiaAccounts.length);
+  await logStatementCoverage(ingestStats, jumiaAccounts.length);
 }
 
 export async function upsertWeeklySaleEntry(
