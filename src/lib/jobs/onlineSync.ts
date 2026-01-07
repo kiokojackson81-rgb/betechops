@@ -90,103 +90,127 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     if (account.jumiaShopSid) accountsBySid.set(account.jumiaShopSid, account);
   });
 
-  // Try to load GLOBAL/env credentials for fetching payout statements
-  let statements: JumiaStatement[] = [];
-  try {
-    const globalCreds = await (async () => {
-      try {
-        return await loadJumiaCredentials();
-      } catch (e) {
-        return null;
-      }
-    })();
-    if (globalCreds) {
-      const apiBaseGlobal = globalCreds.baseUrl?.trim() || DEFAULT_API_BASE;
-      const authSchemeGlobal = globalCreds.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
-      const accessTokenGlobal = await refreshJumiaToken(globalCreds, apiBaseGlobal);
-      const authHeaderGlobal = `${authSchemeGlobal} ${accessTokenGlobal}`;
-      statements = await fetchStatementsAll(apiBaseGlobal, authHeaderGlobal, createdAfter);
-    } else {
-      statements = [];
-    }
-  } catch (err) {
-    console.warn("[onlineSync] Failed to fetch payout statements", err);
-    statements = [];
-  }
-  for (const statement of statements) {
-    const stmtShopSid = statement.shopSid ?? null;
-    const mappedAccount = stmtShopSid ? accountsBySid.get(stmtShopSid) : null;
-    if (!mappedAccount) {
-      console.warn(`[onlineSync] No marketplace account mapped for statement shopSid ${stmtShopSid} statement ${statement.statementNumber}`);
-      continue;
-    }
+  let payoutStatementCoverage = {
+    accountsWithStatements: 0,
+    totalStatementsFetched: 0,
+    totalStatementsMatched: 0,
+    totalStatementsUpserted: 0,
+  };
 
-    const targetAccountId = mappedAccount.id;
-    if (statement.shopSid && mappedAccount.jumiaShopSid && statement.shopSid !== mappedAccount.jumiaShopSid) {
-      console.error(
-        `[onlineSync] SHOP_SID_MISMATCH statement ${statement.statementNumber} shopSid ${statement.shopSid} does not match account jumiaShopSid ${mappedAccount.jumiaShopSid} - skipping attribution`,
-      );
-      continue;
-    }
-
-    const statementNumber = (statement.statementNumber ?? "").trim();
-    if (!statementNumber) {
+  async function fetchAndUpsertStatementsForAccount(
+    account: MarketplaceAccountWithAssignments,
+    credentials: LoadedJumiaCredentials,
+  ): Promise<{ fetched: number; matched: number; upserted: number }> {
+    if (!account.jumiaShopSid) {
       console.warn(
-        `[onlineSync] Skipping statement without statementNumber for account ${mappedAccount.displayName ?? targetAccountId} shopSid ${stmtShopSid}`,
+        `[onlineSync] Account ${account.displayName ?? account.id} has no jumiaShopSid; cannot ingest payout statements`,
       );
-      continue;
+      return { fetched: 0, matched: 0, upserted: 0 };
     }
 
-    const { weekStart, weekEnd } = deriveWeekWindow(statement);
-    const amountValue = Number(statement.payout?.amount ?? 0);
-    const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
+    const apiBaseStmt = credentials.baseUrl?.trim() || DEFAULT_API_BASE;
+    const authSchemeStmt = credentials.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
+    const accessTokenStmt = await refreshJumiaToken(credentials, apiBaseStmt);
+    const authHeaderStmt = `${authSchemeStmt} ${accessTokenStmt}`;
 
-    const shopRecord = mappedAccount.jumiaShopSid ? shopsByJumiaSid.get(mappedAccount.jumiaShopSid) : undefined;
+    let allStatements: JumiaStatement[] = [];
+    try {
+      allStatements = await fetchStatementsAll(apiBaseStmt, authHeaderStmt, createdAfter);
+    } catch (err) {
+      console.warn(`[onlineSync] Failed to fetch payout statements for account ${account.id}`, err);
+      return { fetched: 0, matched: 0, upserted: 0 };
+    }
+
+    const matchedStatements = allStatements.filter(
+      (statement) => statement?.shopSid && statement.shopSid === account.jumiaShopSid,
+    );
+
+    if (allStatements.length > 0 && matchedStatements.length === 0) {
+      console.warn(
+        `[onlineSync] Statements fetched but none matched account shopSid. account=${account.displayName ?? account.id} shopSid=${account.jumiaShopSid} fetched=${allStatements.length}`,
+      );
+    }
+
+    const shopRecord = shopsByJumiaSid.get(account.jumiaShopSid);
     if (!shopRecord) {
       console.warn(
-        `[onlineSync] No Shop record for marketplace account ${mappedAccount.displayName ?? mappedAccount.id} jumiaShopSid=${mappedAccount.jumiaShopSid}; skipping statement ${statement.statementNumber}`,
+        `[onlineSync] No Shop record for account ${account.displayName ?? account.id} jumiaShopSid=${account.jumiaShopSid}; skipping payout statements`,
       );
-      continue;
+      return { fetched: allStatements.length, matched: matchedStatements.length, upserted: 0 };
     }
 
-    try {
-      await prisma.marketplacePayoutWeek.upsert({
-        where: {
-          accountId_statementNumber: {
-            accountId: targetAccountId,
-            statementNumber,
+    let upserted = 0;
+    for (const statement of matchedStatements) {
+      const statementNumber = (statement.statementNumber ?? "").trim();
+      if (!statementNumber) {
+        console.warn(
+          `[onlineSync] Skipping statement without statementNumber for account ${account.displayName ?? account.id} shopSid=${account.jumiaShopSid}`,
+        );
+        continue;
+      }
+
+      const { weekStart, weekEnd } = deriveWeekWindow(statement);
+      const amountValue = Number(statement.payout?.amount ?? 0);
+      const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
+
+      try {
+        await prisma.marketplacePayoutWeek.upsert({
+          where: {
+            accountId_statementNumber: {
+              accountId: account.id,
+              statementNumber,
+            },
           },
-        },
-        create: {
-          accountId: targetAccountId,
-          statementNumber,
-          weekStart,
-          weekEnd,
-          grossSales: amountValue,
-          payoutAmount: amountValue,
-          currency: "LOCAL",
-          isPaid,
-          rawPayload: statement as unknown as Prisma.InputJsonValue,
-        },
-        update: {
-          weekStart,
-          weekEnd,
-          grossSales: amountValue,
-          payoutAmount: amountValue,
-          isPaid,
-          rawPayload: statement as unknown as Prisma.InputJsonValue,
-        },
-      });
-    } catch (err) {
-      console.warn('[onlineSync] Failed to upsert MarketplacePayoutWeek', err);
-      continue;
+          create: {
+            accountId: account.id,
+            statementNumber,
+            weekStart,
+            weekEnd,
+            grossSales: amountValue,
+            payoutAmount: amountValue,
+            currency: "LOCAL",
+            isPaid,
+            rawPayload: statement as unknown as Prisma.InputJsonValue,
+          },
+          update: {
+            weekStart,
+            weekEnd,
+            grossSales: amountValue,
+            payoutAmount: amountValue,
+            isPaid,
+            rawPayload: statement as unknown as Prisma.InputJsonValue,
+          },
+        });
+        upserted += 1;
+      } catch (err) {
+        console.warn(
+          `[onlineSync] Failed to upsert MarketplacePayoutWeek (account=${account.displayName ?? account.id} statement=${statementNumber})`,
+          err,
+        );
+        continue;
+      }
+
+      try {
+        await upsertWeeklySaleEntry(shopRecord.id, account.platform, weekStart, weekEnd, amountValue);
+      } catch (err) {
+        console.warn(
+          `[onlineSync] Failed to upsert WeeklySale for payout week (account=${account.displayName ?? account.id} statement=${statementNumber})`,
+          err,
+        );
+      }
     }
 
-    try {
-      await upsertWeeklySaleEntry(shopRecord.id, mappedAccount.platform, weekStart, weekEnd, amountValue);
-    } catch (err) {
-      console.warn('[onlineSync] Failed to upsert WeeklySale for payout week', err);
+    if (matchedStatements.length > 0) {
+      payoutStatementCoverage.accountsWithStatements += 1;
     }
+    payoutStatementCoverage.totalStatementsFetched += allStatements.length;
+    payoutStatementCoverage.totalStatementsMatched += matchedStatements.length;
+    payoutStatementCoverage.totalStatementsUpserted += upserted;
+
+    console.info(
+      `[onlineSync] payout statements: account=${account.displayName ?? account.id} shopSid=${account.jumiaShopSid} fetched=${allStatements.length} matched=${matchedStatements.length} upserted=${upserted}`,
+    );
+    return { fetched: allStatements.length, matched: matchedStatements.length, upserted };
   }
 
   // Fetch orders per-account using that account's credentials (support per-account ApiCredential)
@@ -229,6 +253,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     const authSchemeAcct = credentialsForAccount.authScheme?.trim() || process.env.JUMIA_AUTH_SCHEME?.trim() || "Bearer";
     const accessTokenAcct = await refreshJumiaToken(credentialsForAccount, apiBaseAcct);
     const authHeaderAcct = `${authSchemeAcct} ${accessTokenAcct}`;
+
+    await fetchAndUpsertStatementsForAccount(account, credentialsForAccount);
 
     const orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter, createdBefore);
     for (const order of orders) {
@@ -317,6 +343,13 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       }
     }
   });
+
+  console.info(
+    `[onlineSync] payout statements coverage: accountsTotal=${jumiaAccounts.length} accountsWithAnyStatements=${payoutStatementCoverage.accountsWithStatements} statementsFetched=${payoutStatementCoverage.totalStatementsFetched} statementsMatched=${payoutStatementCoverage.totalStatementsMatched} statementsUpserted=${payoutStatementCoverage.totalStatementsUpserted} missingAccounts=${Math.max(
+      jumiaAccounts.length - payoutStatementCoverage.accountsWithStatements,
+      0,
+    )}`,
+  );
 }
 
 export async function upsertWeeklySaleEntry(
