@@ -18,6 +18,7 @@ export async function backfillWeeklySales(opts?: BackfillWeeklySalesOptions): Pr
   cutoff.setDate(cutoff.getDate() - lookbackDays);
   // Dynamically import heavy ESM modules at runtime to avoid loader/cycle issues
   const [{ prisma }] = await Promise.all([import('../src/lib/prisma.ts')]);
+  const { upsertWeeklySaleEntry } = await import('../src/lib/jobs/onlineSync.ts');
 
   // Fetch payout rows overlapping the requested window and aggregate by account + canonical weekStart
   const rows = await prisma.marketplacePayoutWeek.findMany({
@@ -63,30 +64,8 @@ export async function backfillWeeklySales(opts?: BackfillWeeklySalesOptions): Pr
         continue;
       }
       const amount = Number(best.payoutAmount ?? best.grossSales ?? 0);
-      await prisma.weeklySale.upsert({
-        where: {
-          shopId_platform_weekStart_weekEnd: {
-            shopId: shop.id,
-            platform: account.platform,
-            weekStart: r.weekStart,
-            weekEnd: r.weekEnd,
-          },
-        },
-        create: {
-          shopId: shop.id,
-          platform: account.platform,
-          weekStart: r.weekStart,
-          weekEnd: r.weekEnd,
-          amount: amount ?? 0,
-          userId: null,
-          status: WeeklySaleStatus.PENDING,
-          source: WeeklySaleSource.AUTOMATIC,
-          createdBy: null,
-        },
-        update: {
-          amount: amount ?? 0,
-        },
-      });
+      // Use the centralized upsert helper which preserves manual overrides
+      await upsertWeeklySaleEntry(shop.id, account.platform, r.weekStart, r.weekEnd, amount);
       created++;
     } catch (err) {
       console.error('Failed upserting weekly sale for payout agg', r.accountId, String(err));
