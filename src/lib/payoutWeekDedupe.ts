@@ -1,14 +1,18 @@
 import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "./weekWindow";
 import { deriveStatementStatus } from "./statementStatus";
-import type { Decimal } from "@prisma/client/runtime";
+
+type NumericLike = {
+  toNumber?: () => number;
+  toString?: () => string;
+};
 
 type StatementRowLike = {
   weekStart: Date;
   updatedAt?: Date | null;
   createdAt?: Date | null;
   statementNumber?: string | null;
-  payoutAmount?: number | Decimal | null;
-  grossSales?: number | Decimal | null;
+  payoutAmount?: number | NumericLike | null;
+  grossSales?: number | NumericLike | null;
   rawPayload?: any;
   isPaid?: boolean | null;
   account?: { displayName?: string | null };
