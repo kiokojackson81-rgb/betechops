@@ -9,7 +9,8 @@ import { deriveStatementStatus } from "@/lib/statementStatus";
 import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
-const DEFAULT_LOOKBACK_DAYS = 70;
+const DEFAULT_LOOKBACK_DAYS = 30;
+const TIME_BUDGET_MS = 260_000;
 
 const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -151,7 +152,26 @@ type SyncOnlineMarketplaceOptions = {
   periodEnd?: Date;
 };
 
-export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOptions) {
+type SyncOnlineMarketplaceSummary = {
+  ok: boolean;
+  partial?: boolean;
+  createdAfter: string;
+  createdBefore: string;
+  weeks: number;
+  accounts: number;
+  ingestStatsCount: number;
+  placeholdersTotal: number;
+  fetchedTotal: number;
+  matchedTotal: number;
+  upsertedTotal: number;
+  hardErrors: number;
+  configMissingShopSid: number;
+  configMissingShopRecord: number;
+  error?: string;
+};
+
+export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOptions): Promise<SyncOnlineMarketplaceSummary> {
+  try {
   // ---- helpers local to this module ----
   const dec = (n: any) => new Prisma.Decimal(Number(n ?? 0));
 
@@ -206,10 +226,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     });
   }
 
-  async function ensureAccountPlaceholders(
-    accountId: string,
-    shopRecord: (typeof jumiaShops)[number] | null | undefined,
-  ) {
+  async function ensureAccountPlaceholders(accountId: string, shopRecord: (typeof jumiaShops)[number] | null | undefined) {
     let count = 0;
     for (const w of weekWindows) {
       const normalizedWeekStart = w.weekStart;
@@ -241,14 +258,54 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     return count;
   }
 
+  async function ensureShopForAccount(account: MarketplaceAccountWithAssignments) {
+    if (!account.jumiaShopSid) return null;
+    const existing = shopsByJumiaSid.get(account.jumiaShopSid);
+    if (existing) return existing;
+    try {
+      const upserted = await prisma.shop.upsert({
+        where: {
+          platform_jumiaShopSid: {
+            platform: Platform.JUMIA,
+            jumiaShopSid: account.jumiaShopSid,
+          },
+        },
+        create: {
+          name: account.displayName ?? `Jumia Shop ${account.jumiaShopSid}`,
+          platform: Platform.JUMIA,
+          jumiaShopSid: account.jumiaShopSid,
+          isActive: true,
+        },
+        update: {
+          name: account.displayName ?? `Jumia Shop ${account.jumiaShopSid}`,
+        },
+      });
+      shopsByJumiaSid.set(account.jumiaShopSid, upserted);
+      logInfo("[onlineSync] created missing Shop for jumiaShopSid", {
+        accountId: account.id,
+        displayName: account.displayName,
+        jumiaShopSid: account.jumiaShopSid,
+        shopId: upserted.id,
+      });
+      return upserted;
+    } catch (err) {
+      logWarn("[onlineSync] failed to create Shop for jumiaShopSid", {
+        accountId: account.id,
+        jumiaShopSid: account.jumiaShopSid,
+        error: String(err),
+      });
+      return null;
+    }
+  }
+
   // ---- time window ----
+  const lookbackDays = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   let createdBefore = opts?.periodEnd ?? new Date();
   let createdAfter =
     opts?.periodStart ??
     (() => {
-      const days = opts?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
       const base = new Date(createdBefore);
-      base.setDate(base.getDate() - days);
+      base.setDate(base.getDate() - lookbackDays);
       return base;
     })();
 
@@ -265,6 +322,21 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     createdBefore: createdBefore.toISOString(),
     weeks: weekWindows.length,
   });
+
+  const startedAt = Date.now();
+  let partial = false;
+  const checkTimeBudget = () => {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      if (!partial) {
+        logWarn("[onlineSync] time budget exceeded; stopping early", {
+          maxMs: TIME_BUDGET_MS,
+        });
+      }
+      partial = true;
+      return true;
+    }
+    return false;
+  };
 
   const activeAssignmentsWhere = { OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }] };
 
@@ -457,6 +529,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     let idx = 0;
     async function runner() {
       while (true) {
+        if (checkTimeBudget()) return;
         const i = idx++;
         if (i >= items.length) return;
         const it = items[i];
@@ -472,7 +545,11 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
 
   await runWithConcurrency(jumiaAccounts, 2, async (account) => {
-    const accountShopRecord = account.jumiaShopSid ? shopsByJumiaSid.get(account.jumiaShopSid) : null;
+    if (checkTimeBudget()) return;
+    const accountShopRecord =
+      account.jumiaShopSid
+        ? shopsByJumiaSid.get(account.jumiaShopSid) ?? (await ensureShopForAccount(account))
+        : null;
     const placeholdersUpserted = await ensureAccountPlaceholders(account.id, accountShopRecord);
 
     // credentials: per-account first, fallback global
@@ -503,6 +580,20 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     }
 
     // statements + placeholders
+    if (checkTimeBudget()) {
+      ingestStats.push({
+        accountId: account.id,
+        displayName: account.displayName ?? null,
+        shopSid: account.jumiaShopSid ?? null,
+        fetched: 0,
+        matched: 0,
+        upserted: 0,
+        placeholdersUpserted,
+        weeksExpected: weekWindows.length,
+        error: "TIME_BUDGET_EXCEEDED",
+      });
+      return;
+    }
     try {
       const stats = await fetchAndUpsertStatementsForAccount(account, credentialsForAccount);
       stats.placeholdersUpserted = placeholdersUpserted;
@@ -554,6 +645,9 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     let itemsFetched = 0;
 
     for (const order of orders) {
+      if (checkTimeBudget()) {
+        return;
+      }
       const shopSid = order.shopIds?.[0];
       if (account.jumiaShopSid && shopSid && shopSid !== account.jumiaShopSid) continue;
 
@@ -572,6 +666,9 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       itemsFetched += items.length;
 
       for (const item of items) {
+        if (checkTimeBudget()) {
+          return;
+        }
         const sellingPriceLocal = Number(item.paidPriceLocal ?? item.itemPriceLocal ?? 0);
         const statusStr = typeof item.status === "string" ? item.status : String(item.status ?? "");
         const statusUpper = statusStr.toUpperCase();
@@ -696,6 +793,52 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
   await logStatementCoverage(ingestStats, jumiaAccounts.length);
   logInfo("[onlineSync] finished", { accounts: jumiaAccounts.length });
+  const fetchedTotal = ingestStats.reduce((sum, s) => sum + (s.fetched ?? 0), 0);
+  const matchedTotal = ingestStats.reduce((sum, s) => sum + (s.matched ?? 0), 0);
+  const upsertedTotal = ingestStats.reduce((sum, s) => sum + (s.upserted ?? 0), 0);
+  const placeholdersTotal = ingestStats.reduce((sum, s) => sum + (s.placeholdersUpserted ?? 0), 0);
+  const hardErrors = ingestStats.filter(
+    (s) => s.error && s.error !== "MISSING_SHOP_SID" && s.error !== "MISSING_SHOP_RECORD" && s.error !== "TIME_BUDGET_EXCEEDED",
+  ).length;
+  const configMissingShopSid = ingestStats.filter((s) => s.error === "MISSING_SHOP_SID").length;
+  const configMissingShopRecord = ingestStats.filter((s) => s.error === "MISSING_SHOP_RECORD").length;
+  return {
+    ok: true,
+    partial,
+    createdAfter: createdAfter.toISOString(),
+    createdBefore: createdBefore.toISOString(),
+    weeks: weekWindows.length,
+    accounts: jumiaAccounts.length,
+    ingestStatsCount: ingestStats.length,
+    placeholdersTotal,
+    fetchedTotal,
+    matchedTotal,
+    upsertedTotal,
+    hardErrors,
+    configMissingShopSid,
+    configMissingShopRecord,
+  };
+  } catch (err) {
+    logError("[onlineSync] marketplace sync failed", { error: String(err) });
+    const fallbackDate = new Date();
+    return {
+      ok: false,
+      partial: false,
+      createdAfter: opts?.periodStart?.toISOString() ?? fallbackDate.toISOString(),
+      createdBefore: opts?.periodEnd?.toISOString() ?? fallbackDate.toISOString(),
+      weeks: 0,
+      accounts: 0,
+      ingestStatsCount: 0,
+      placeholdersTotal: 0,
+      fetchedTotal: 0,
+      matchedTotal: 0,
+      upsertedTotal: 0,
+      hardErrors: 0,
+      configMissingShopSid: 0,
+      configMissingShopRecord: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export async function upsertWeeklySaleEntry(
