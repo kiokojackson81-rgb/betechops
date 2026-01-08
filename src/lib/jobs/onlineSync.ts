@@ -218,6 +218,40 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     });
   }
 
+  async function ensureAccountPlaceholders(accountId: string, shopRecord: (typeof jumiaShops)[number] | null) {
+    let count = 0;
+    for (const w of weekWindows) {
+      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
+        w.weekStart,
+        w.weekEnd,
+      );
+      try {
+        await upsertPayoutWeekPlaceholder(accountId, normalizedWeekStart, normalizedWeekEnd);
+        count += 1;
+      } catch (err) {
+        logWarn("[onlineSync] failed to upsert payout week placeholder", {
+          accountId,
+          weekStart: normalizedWeekStart.toISOString(),
+          error: String(err),
+        });
+      }
+
+      if (shopRecord) {
+        try {
+          await ensureWeeklySalePlaceholder(shopRecord.id, Platform.JUMIA, normalizedWeekStart, normalizedWeekEnd);
+        } catch (err) {
+          logWarn("[onlineSync] failed to upsert WeeklySale placeholder", {
+            accountId,
+            shopId: shopRecord.id,
+            weekStart: normalizedWeekStart.toISOString(),
+            error: String(err),
+          });
+        }
+      }
+    }
+    return count;
+  }
+
   // ---- time window ----
   let createdBefore = opts?.periodEnd ?? new Date();
   let createdAfter =
@@ -321,9 +355,15 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       allStatements = [];
     }
 
-    const matchedStatements = allStatements.filter(
-      (s) => s?.shopSid && account.jumiaShopSid && s.shopSid === account.jumiaShopSid,
+    const matchedStatements = allStatements;
+    const distinctShopSid = Array.from(
+      new Set(allStatements.map((s) => s.shopSid).filter((v): v is string => Boolean(v))),
     );
+    logInfo("[onlineSync] statements fetched breakdown", {
+      accountId: account.id,
+      fetched: allStatements.length,
+      distinctShopSid,
+    });
 
     const shopRecord = account.jumiaShopSid ? shopsByJumiaSid.get(account.jumiaShopSid) : null;
     if (account.jumiaShopSid && !shopRecord) {
@@ -387,11 +427,12 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         continue;
       }
 
-      // Only if shop mapping exists
-      if (shopRecord) {
+      const statementShopRecord = statement.shopSid ? shopsByJumiaSid.get(statement.shopSid) : null;
+      const targetShopRecord = statementShopRecord ?? shopRecord;
+      if (targetShopRecord) {
         try {
           await upsertWeeklySaleEntry(
-            shopRecord.id,
+            targetShopRecord.id,
             account.platform,
             normalizedWeekStart,
             normalizedWeekEnd,
@@ -407,45 +448,6 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       }
     }
 
-    // Enforce placeholders for ALL weeks in window (always)
-    let placeholdersUpserted = 0;
-    for (const w of weekWindows) {
-      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
-        w.weekStart,
-        w.weekEnd,
-      );
-      try {
-        await upsertPayoutWeekPlaceholder(account.id, normalizedWeekStart, normalizedWeekEnd);
-        placeholdersUpserted += 1;
-      } catch (err) {
-        logWarn("[onlineSync] failed to upsert payout week placeholder", {
-          accountId: account.id,
-          weekStart: normalizedWeekStart.toISOString(),
-          error: String(err),
-        });
-      }
-
-      // WeeklySale placeholders only when shopRecord exists
-      if (shopRecord) {
-        try {
-          await ensureWeeklySalePlaceholder(
-            shopRecord.id,
-            Platform.JUMIA,
-            normalizedWeekStart,
-            normalizedWeekEnd,
-          );
-        } catch (err) {
-          logWarn("[onlineSync] failed to upsert WeeklySale placeholder", {
-            accountId: account.id,
-            shopId: shopRecord.id,
-            weekStart: normalizedWeekStart.toISOString(),
-            error: String(err),
-          });
-        }
-      }
-    }
-
-    // Define “missing” only as config/hard errors, not “matched=0”
     const error =
       sidIssue ?? (account.jumiaShopSid && !shopRecord ? "MISSING_SHOP_RECORD" : undefined);
 
@@ -456,7 +458,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       fetched: allStatements.length,
       matched: matchedStatements.length,
       upserted,
-      placeholdersUpserted,
+      placeholdersUpserted: 0,
       weeksExpected: weekWindows.length,
       error,
     };
@@ -484,6 +486,9 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
 
   await runWithConcurrency(jumiaAccounts, 2, async (account) => {
+    const accountShopRecord = account.jumiaShopSid ? shopsByJumiaSid.get(account.jumiaShopSid) : null;
+    const placeholdersUpserted = await ensureAccountPlaceholders(account.id, accountShopRecord);
+
     // credentials: per-account first, fallback global
     let credentialsForAccount: LoadedJumiaCredentials | null = null;
     try {
@@ -503,7 +508,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
           fetched: 0,
           matched: 0,
           upserted: 0,
-          placeholdersUpserted: 0,
+          placeholdersUpserted,
           weeksExpected: weekWindows.length,
           error: "NO_CREDENTIALS",
         });
@@ -514,6 +519,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     // statements + placeholders
     try {
       const stats = await fetchAndUpsertStatementsForAccount(account, credentialsForAccount);
+      stats.placeholdersUpserted = placeholdersUpserted;
       ingestStats.push(stats);
     } catch (err) {
       logError("[onlineSync] statements ingest failed", { accountId: account.id, error: String(err) });
@@ -524,7 +530,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         fetched: 0,
         matched: 0,
         upserted: 0,
-        placeholdersUpserted: 0,
+        placeholdersUpserted,
         weeksExpected: weekWindows.length,
         error: "STATEMENTS_INGEST_FAILED",
       });

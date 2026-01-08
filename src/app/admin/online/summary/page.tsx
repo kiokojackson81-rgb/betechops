@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Platform, Prisma, MarketplaceReturnStatus } from "@prisma/client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { logInfo } from "@/lib/logging";
@@ -154,6 +154,8 @@ export default async function AdminOnlineSummaryPage() {
       accountId: true,
       weekStart: true,
       weekEnd: true,
+      statementNumber: true,
+      rawPayload: true,
       grossSales: true,
       payoutAmount: true,
     },
@@ -169,8 +171,7 @@ export default async function AdminOnlineSummaryPage() {
   >();
 
   for (const row of recentPayouts) {
-    const canonicalStart = canonicalNairobiWeekStartUtc(new Date(row.weekStart));
-    const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    const { weekStart: canonicalStart, weekEnd: canonicalEnd } = mondayToSundayNairobiWindow(new Date(row.weekStart));
     const key = canonicalStart.toISOString();
     if (!weekBucket.has(key)) {
       weekBucket.set(key, {
@@ -201,26 +202,29 @@ export default async function AdminOnlineSummaryPage() {
       .filter(Boolean) as any[];
     const present = bestRows.length;
     const missing = Math.max(totalActiveAccounts - present, 0);
-    const payout = bestRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
     const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
     const realRows = bestRows.filter((row) => !isPlaceholderRow(row));
     const placeholderRows = bestRows.filter((row) => isPlaceholderRow(row));
+    const totalRealPayout = realRows.reduce(
+      (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
+      0,
+    );
+    const totalPlaceholderPayout = placeholderRows.reduce(
+      (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
+      0,
+    );
+    const displayPayout = totalRealPayout > 0 ? totalRealPayout : totalPlaceholderPayout;
     return {
       period: { start: entry.weekStart, end: entry.weekEnd },
-      _sum: { grossSales: gross, payoutAmount: payout },
+      _sum: { grossSales: gross, payoutAmount: displayPayout },
       accountCount: present,
       missingCount: missing,
       label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
       realRowCount: realRows.length,
       placeholderRowCount: placeholderRows.length,
-      totalRealPayout: realRows.reduce(
-        (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
-        0,
-      ),
-      totalPlaceholderPayout: placeholderRows.reduce(
-        (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
-        0,
-      ),
+      totalRealPayout,
+      totalPlaceholderPayout,
+      displayPayout,
     };
   });
 
