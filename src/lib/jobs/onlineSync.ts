@@ -228,6 +228,11 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
   async function ensureAccountPlaceholders(accountId: string, shopRecord: (typeof jumiaShops)[number] | null | undefined) {
     let count = 0;
+    logInfo("[onlineSync] ensuring placeholders", {
+      accountId,
+      weeks: weekWindows.length,
+      hasShop: !!shopRecord,
+    });
     for (const w of weekWindows) {
       const normalizedWeekStart = w.weekStart;
       const normalizedWeekEnd = w.weekEnd;
@@ -255,6 +260,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         }
       }
     }
+    logInfo("[onlineSync] placeholders ensured", { accountId, upserted: count });
     return count;
   }
 
@@ -633,6 +639,17 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     let orders: JumiaOrder[] = [];
     try {
       orders = await fetchOrders(apiBaseAcct, authHeaderAcct, createdAfter, createdBefore);
+      logInfo("[onlineSync] sample order", {
+        accountId: account.id,
+        sample: orders[0]
+          ? {
+              id: orders[0].id,
+              number: orders[0].number,
+              createdAt: orders[0].createdAt,
+              shopIds: orders[0].shopIds,
+            }
+          : null,
+      });
     } catch (err) {
       logWarn("[onlineSync] failed to fetch orders for account", {
         accountId: account.id,
@@ -1030,9 +1047,30 @@ async function fetchOrderItems(apiBase: string, authHeader: string, orderId: str
   const url = new URL("/orders/items", apiBase);
   url.searchParams.set("orderId", orderId);
   const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
-  if (!res.ok) throw new Error(`Failed to fetch order items (${res.status})`);
-  const data = (await res.json()) as { items?: JumiaOrderItem[] };
-  return data.items ?? [];
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    logWarn("[onlineSync] order items fetch failed", {
+      orderId,
+      status: res.status,
+      url: url.toString(),
+      body: body.slice(0, 300),
+    });
+    throw new Error(`Failed to fetch order items (${res.status})`);
+  }
+
+  const data = (await res.json()) as any;
+  const items: JumiaOrderItem[] = data.items ?? data.orderItems ?? data.data?.items ?? [];
+  if (!Array.isArray(items)) {
+    logWarn("[onlineSync] order items unexpected shape", {
+      orderId,
+      keys: Object.keys(data ?? {}),
+    });
+    return [];
+  }
+  if (items.length === 0) {
+    logInfo("[onlineSync] order has 0 items", { orderId });
+  }
+  return items;
 }
 
 function deriveWeekWindow(statement: JumiaStatement) {
