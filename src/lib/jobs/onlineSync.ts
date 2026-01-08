@@ -788,23 +788,19 @@ export async function ensureWeeklySalePlaceholder(
     weekStart: normalizedWeekStart,
     weekEnd: normalizedWeekEnd,
   };
-  try {
-    await prisma.weeklySale.create({
-      data: {
-        ...key,
-        amount: new Prisma.Decimal(0),
-        userId: null,
-        status: WeeklySaleStatus.PENDING,
-        source: WeeklySaleSource.AUTOMATIC,
-        createdBy: null,
-        approvedBy: null,
-      },
-    });
-  } catch (err: any) {
-    if (err?.code !== "P2002") {
-      throw err;
-    }
-  }
+  await prisma.weeklySale.upsert({
+    where: { shopId_platform_weekStart_weekEnd: key },
+    create: {
+      ...key,
+      amount: new Prisma.Decimal(0),
+      userId: null,
+      status: WeeklySaleStatus.PENDING,
+      source: WeeklySaleSource.AUTOMATIC,
+      createdBy: null,
+      approvedBy: null,
+    },
+    update: {},
+  });
 }
 
 function statementTimestamp(statement: JumiaStatement): number {
