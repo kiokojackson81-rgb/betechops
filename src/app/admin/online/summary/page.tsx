@@ -233,8 +233,9 @@ export default async function AdminOnlineSummaryPage() {
   const recentWeeksEnriched = sortedWeeks.slice(0, 8);
 
   if (currentWeekEntry) {
-    const normalizedStart = normalizeWeekDate(currentWeekEntry.period.start);
-    const normalizedEnd = normalizeWeekDate(currentWeekEntry.period.end);
+    const { weekStart: normalizedStart, weekEnd: normalizedEnd } = mondayToSundayNairobiWindow(
+      currentWeekEntry.period.start,
+    );
     const weeklySaleAgg = await prisma.weeklySale.aggregate({
       _sum: { amount: true },
       where: {

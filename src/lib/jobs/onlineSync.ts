@@ -13,17 +13,6 @@ const DEFAULT_LOOKBACK_DAYS = 70;
 
 const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
 
-function normalizeWeekDate(date: Date) {
-  return parseDateOnlyUtc(dateOnlyISO(date)) ?? date;
-}
-
-function normalizeWeekWindow(weekStart: Date, weekEnd: Date) {
-  return {
-    weekStart: normalizeWeekDate(weekStart),
-    weekEnd: normalizeWeekDate(weekEnd),
-  };
-}
-
 /** Standard stats returned by per-account statement ingestion. */
 type StatementIngestStats = {
   accountId: string;
@@ -171,8 +160,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     let cursor = new Date(createdAfter);
 
     for (let guard = 0; guard < 400; guard++) {
-      const { weekStart, weekEnd } = mondayToSundayNairobiWindow(cursor);
-      const normalized = normalizeWeekWindow(weekStart, weekEnd);
+      const normalized = mondayToSundayNairobiWindow(cursor);
       const last = windows[windows.length - 1];
       if (!last || last.weekStart.getTime() !== normalized.weekStart.getTime()) {
         windows.push(normalized);
@@ -191,7 +179,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   }
 
   async function upsertPayoutWeekPlaceholder(accountId: string, weekStart: Date, weekEnd: Date) {
-    const { weekStart: normalizedStart, weekEnd: normalizedEnd } = normalizeWeekWindow(weekStart, weekEnd);
+    const { weekStart: normalizedStart, weekEnd: normalizedEnd } = mondayToSundayNairobiWindow(weekStart);
     const statementNumber = placeholderStatementNumber(accountId, normalizedStart);
     await prisma.marketplacePayoutWeek.upsert({
       where: { accountId_statementNumber: { accountId, statementNumber } },
@@ -224,10 +212,8 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
   ) {
     let count = 0;
     for (const w of weekWindows) {
-      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
-        w.weekStart,
-        w.weekEnd,
-      );
+      const normalizedWeekStart = w.weekStart;
+      const normalizedWeekEnd = w.weekEnd;
       try {
         await upsertPayoutWeekPlaceholder(accountId, normalizedWeekStart, normalizedWeekEnd);
         count += 1;
@@ -390,10 +376,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       }
 
       const { weekStart, weekEnd } = deriveWeekWindow(statement);
-      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
-        weekStart,
-        weekEnd,
-      );
+      const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = mondayToSundayNairobiWindow(weekStart);
       const amountValue = Number(statement.payout?.amount ?? 0);
       const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
 
@@ -722,7 +705,7 @@ export async function upsertWeeklySaleEntry(
   weekEnd: Date,
   amount: number,
 ) {
-  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(weekStart, weekEnd);
+  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = mondayToSundayNairobiWindow(weekStart);
   const key = { shopId, platform, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd };
   const existing = await prisma.weeklySale.findUnique({
     where: { shopId_platform_weekStart_weekEnd: key },
@@ -796,12 +779,9 @@ export async function ensureWeeklySalePlaceholder(
   shopId: string,
   platform: Platform,
   weekStart: Date,
-  weekEnd: Date,
+  _weekEnd: Date,
 ) {
-  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
-    weekStart,
-    weekEnd,
-  );
+  const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = mondayToSundayNairobiWindow(weekStart);
   const key = {
     shopId,
     platform,
