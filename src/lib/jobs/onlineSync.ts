@@ -218,7 +218,10 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
     });
   }
 
-  async function ensureAccountPlaceholders(accountId: string, shopRecord: (typeof jumiaShops)[number] | null) {
+  async function ensureAccountPlaceholders(
+    accountId: string,
+    shopRecord: (typeof jumiaShops)[number] | null | undefined,
+  ) {
     let count = 0;
     for (const w of weekWindows) {
       const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = normalizeWeekWindow(
