@@ -14,6 +14,7 @@ export type Candidate = {
   statementNumber?: string | null;
   payoutAmount?: number | NumericLike | null;
   grossSales?: number | NumericLike | null;
+  amount?: number;
   rawPayload?: any;
   isPaid?: boolean | null;
   account?: { displayName?: string | null };
