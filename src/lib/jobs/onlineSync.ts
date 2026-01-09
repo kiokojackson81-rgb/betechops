@@ -810,6 +810,30 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
   await logStatementCoverage(ingestStats, jumiaAccounts.length);
   logInfo("[onlineSync] finished", { accounts: jumiaAccounts.length });
+  // Per-week debug logging: counts of real vs placeholder rows and payout sums
+  try {
+    for (const w of weekWindows) {
+      const normalizedStart = w.weekStart;
+      const rows = await prisma.marketplacePayoutWeek.findMany({
+        where: { weekStart: normalizedStart, account: { platform: Platform.JUMIA } },
+        select: { accountId: true, statementNumber: true, payoutAmount: true, grossSales: true, rawPayload: true },
+      });
+      const real = rows.filter((r) => !(r.rawPayload && (r.rawPayload as any).placeholder === true));
+      const placeholder = rows.filter((r) => (r.rawPayload && (r.rawPayload as any).placeholder === true));
+      const realSum = real.reduce((s, r) => s + Number(r.payoutAmount ?? r.grossSales ?? 0), 0);
+      const placeholderSum = placeholder.reduce((s, r) => s + Number(r.payoutAmount ?? r.grossSales ?? 0), 0);
+      logInfo('[onlineSync] week coverage', {
+        weekStart: normalizedStart.toISOString(),
+        totalRows: rows.length,
+        realCount: real.length,
+        placeholderCount: placeholder.length,
+        realSum,
+        placeholderSum,
+      });
+    }
+  } catch (e) {
+    logWarn('[onlineSync] per-week debug logging failed', { error: String(e) });
+  }
   const fetchedTotal = ingestStats.reduce((sum, s) => sum + (s.fetched ?? 0), 0);
   const matchedTotal = ingestStats.reduce((sum, s) => sum + (s.matched ?? 0), 0);
   const upsertedTotal = ingestStats.reduce((sum, s) => sum + (s.upserted ?? 0), 0);
