@@ -7,7 +7,7 @@ type NumericLike = {
 };
 
 export type Candidate = {
-  id?: string;
+  id?: string | null;
   weekStart?: Date;
   updatedAt?: Date | null;
   createdAt?: Date | null;
