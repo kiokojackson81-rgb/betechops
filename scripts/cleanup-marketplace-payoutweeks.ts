@@ -63,7 +63,7 @@ async function main() {
     const keeper = chooseAuthoritativeCandidate(candidates, canonicalStart);
 
     // If keeper is the synthetic incoming (id===null) choose earliest DB row as keeperRow
-    const keeperRow = keeper.id ? items.find((x) => x.id === keeper.id)! : items[0];
+    const keeperRow = keeper && keeper.id ? items.find((x) => x.id === keeper.id)! : items[0];
     const otherIds = items.filter((x) => x.id !== keeperRow.id).map((x) => x.id);
     const removedStatements = items.filter((x) => otherIds.includes(x.id)).map((x) => x.statementNumber).filter(Boolean);
 
@@ -71,7 +71,17 @@ async function main() {
 
     if (apply) {
       try {
-        await prisma.marketplacePayoutWeek.update({ where: { id: keeperRow.id }, data: { grossSales: keeper.amount ?? Number(keeperRow.grossSales ?? 0), payoutAmount: keeper.amount ?? Number(keeperRow.payoutAmount ?? 0), statementNumber: keeper.statementNumber ?? keeperRow.statementNumber ?? null, rawPayload: keeper.rawPayload ?? keeperRow.rawPayload, weekStart: new Date(key.split('::')[1]), weekEnd: new Date(new Date(key.split('::')[1]).getTime() + 7 * 24 * 3600 * 1000 - 1) } });
+        await prisma.marketplacePayoutWeek.update({
+          where: { id: keeperRow.id },
+          data: {
+            grossSales: (keeper?.amount ?? Number(keeperRow.grossSales ?? 0)),
+            payoutAmount: (keeper?.amount ?? Number(keeperRow.payoutAmount ?? 0)),
+            statementNumber: keeper?.statementNumber ?? keeperRow.statementNumber ?? null,
+            rawPayload: keeper?.rawPayload ?? keeperRow.rawPayload,
+            weekStart: new Date(key.split('::')[1]),
+            weekEnd: new Date(new Date(key.split('::')[1]).getTime() + 7 * 24 * 3600 * 1000 - 1),
+          },
+        });
       } catch (e) {
         console.warn('failed update keeper', e);
       }

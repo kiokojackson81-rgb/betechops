@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ accounts: [] });
   }
 
-  const weekStarts = [];
+  const weekStarts: Date[] = [];
   const today = new Date();
   let cursor = ensureCanonicalWeekStart(today);
   for (let i = 0; i < 4; i += 1) {
