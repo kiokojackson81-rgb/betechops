@@ -200,11 +200,11 @@ export default async function AdminOnlineSummaryPage() {
         return chooseAuthoritativeCandidate(candidates as any, entry.weekStart);
       })
       .filter(Boolean) as any[];
-    const present = bestRows.length;
-    const missing = Math.max(totalActiveAccounts - present, 0);
-    const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
     const realRows = bestRows.filter((row) => !isPlaceholderRow(row));
     const placeholderRows = bestRows.filter((row) => isPlaceholderRow(row));
+    const present = realRows.length;
+    const missing = Math.max(totalActiveAccounts - present, 0);
+    const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
     const totalRealPayout = realRows.reduce(
       (sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0),
       0,
