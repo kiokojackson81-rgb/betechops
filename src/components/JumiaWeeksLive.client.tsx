@@ -32,6 +32,9 @@ export default function JumiaWeeksLive({ initialData, totalActiveAccounts }: { i
           return;
         }
         const json = await res.json();
+        // debug: expose fetched payload in browser console for troubleshooting
+        // eslint-disable-next-line no-console
+        console.debug('[JumiaWeeksLive] fetched payload', json);
         // json.accounts -> array of accounts each with weeks[]; we need to aggregate per week across accounts
         const weeksMap = new Map<string, any>();
         for (const acc of json.accounts || []) {
