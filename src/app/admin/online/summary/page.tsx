@@ -214,12 +214,13 @@ export default async function AdminOnlineSummaryPage() {
       0,
     );
     const displayPayout = totalRealPayout > 0 ? totalRealPayout : totalPlaceholderPayout;
+    const weekEndInclusive = new Date(entry.weekEnd.getTime() - 1);
     return {
       period: { start: entry.weekStart, end: entry.weekEnd },
       _sum: { grossSales: gross, payoutAmount: displayPayout },
       accountCount: present,
       missingCount: missing,
-      label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(entry.weekEnd)}`,
+      label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(weekEndInclusive)}`,
       realRowCount: realRows.length,
       placeholderRowCount: placeholderRows.length,
       totalRealPayout,
@@ -308,7 +309,10 @@ export default async function AdminOnlineSummaryPage() {
                   <div className="text-sm text-slate-300">{w.label}</div>
                   <div className="mt-2 text-xs text-slate-400">
                     Accounts: <span className="font-semibold text-white">{totalActiveAccounts}</span> (Present{' '}
-                    {numberFormatter.format(w.accountCount ?? 0)} / Missing {numberFormatter.format(w.missingCount ?? 0)})
+                    {numberFormatter.format(w.realRowCount ?? w.accountCount ?? 0)} / Missing {numberFormatter.format(w.missingCount ?? 0)})
+                    {w.placeholderRowCount ? (
+                      <span className="ml-2 text-xs text-slate-400">(Placeholders {numberFormatter.format(w.placeholderRowCount)})</span>
+                    ) : null}
                   </div>
                   <div className="mt-1 text-sm text-emerald-300">Gross: {currencyFormatter.format(gross)}</div>
                   <div className="text-sm text-emerald-200">Payout: {currencyFormatter.format(payout)}</div>
