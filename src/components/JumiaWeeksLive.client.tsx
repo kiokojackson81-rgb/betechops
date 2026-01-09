@@ -26,7 +26,7 @@ export default function JumiaWeeksLive({ initialData, totalActiveAccounts }: { i
     const fetchOnce = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/online/jumia-weeks`, { cache: "no-store", credentials: 'include' });
+        const res = await fetch(`/api/admin/online/jumia-weeks`, { cache: "no-store", credentials: 'include' });
         if (!res.ok) {
           // don't overwrite existing data on auth errors or other failures
           return;
