@@ -214,13 +214,15 @@ export default async function AdminOnlineSummaryPage() {
       0,
     );
     const displayPayout = totalRealPayout > 0 ? totalRealPayout : totalPlaceholderPayout;
-    const weekEndInclusive = new Date(entry.weekEnd.getTime() - 1);
+    // Adjust week end for display by subtracting the Nairobi UTC offset (3 hours)
+    const displayEnd = new Date(entry.weekEnd.getTime() - 3 * 60 * 60 * 1000);
     return {
       period: { start: entry.weekStart, end: entry.weekEnd },
       _sum: { grossSales: gross, payoutAmount: displayPayout },
+      // Count only real rows as present; placeholders are missing.
       accountCount: present,
       missingCount: missing,
-      label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(weekEndInclusive)}`,
+      label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(displayEnd)}`,
       realRowCount: realRows.length,
       placeholderRowCount: placeholderRows.length,
       totalRealPayout,
