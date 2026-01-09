@@ -26,6 +26,30 @@ const STATUS_PRIORITY: Record<string, number> = {
   UNPAID: 1,
 };
 
+function toNumericValue(value?: number | NumericLike | null): number {
+  if (typeof value === "number") return value;
+  if (value && typeof value.toNumber === "function") {
+    return value.toNumber();
+  }
+  if (value && typeof value.toString === "function") {
+    const parsed = Number(value.toString());
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function payoutFieldValue(row: Candidate): number {
+  if (row.payoutAmount !== undefined && row.payoutAmount !== null) return toNumericValue(row.payoutAmount);
+  if (row.grossSales !== undefined && row.grossSales !== null) return toNumericValue(row.grossSales);
+  return 0;
+}
+
+function grossFieldValue(row: Candidate): number {
+  if (row.grossSales !== undefined && row.grossSales !== null) return toNumericValue(row.grossSales);
+  if (row.payoutAmount !== undefined && row.payoutAmount !== null) return toNumericValue(row.payoutAmount);
+  return 0;
+}
+
 function normalizedStatementNumber(row: Candidate) {
   return String(row.statementNumber ?? "").toUpperCase();
 }
@@ -73,7 +97,7 @@ export function chooseAuthoritativeCandidate(
     const statusRank = STATUS_PRIORITY[statusLabel] ?? 0;
 
     const updatedScore = getUpdatedTimestamp(row);
-    const payoutValue = Number((row.payoutAmount as any) ?? (row.grossSales as any) ?? 0);
+    const payoutValue = payoutFieldValue(row);
 
     const rowStart = canonicalNairobiWeekStartUtc(new Date(row.weekStart ?? canonicalWeekStart));
     const diff = Math.abs(rowStart.getTime() - canonicalStartMs);
@@ -127,7 +151,16 @@ export function chooseAuthoritativeCandidate(
     }
   }
 
-  return best;
+  if (!best) return null;
+  const payoutSum = pool.reduce((sum, row) => sum + payoutFieldValue(row), 0);
+  const grossSum = pool.reduce((sum, row) => sum + grossFieldValue(row), 0);
+
+  return {
+    ...best,
+    payoutAmount: payoutSum,
+    grossSales: grossSum,
+    amount: payoutSum,
+  };
 }
 
 export function ensureCanonicalWeekStart(date: Date): Date {
