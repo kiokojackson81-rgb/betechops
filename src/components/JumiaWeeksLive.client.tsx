@@ -26,8 +26,11 @@ export default function JumiaWeeksLive({ initialData, totalActiveAccounts }: { i
     const fetchOnce = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/online/jumia-weeks`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`status=${res.status}`);
+        const res = await fetch(`/api/online/jumia-weeks`, { cache: "no-store", credentials: 'include' });
+        if (!res.ok) {
+          // don't overwrite existing data on auth errors or other failures
+          return;
+        }
         const json = await res.json();
         // json.accounts -> array of accounts each with weeks[]; we need to aggregate per week across accounts
         const weeksMap = new Map<string, any>();
@@ -44,7 +47,7 @@ export default function JumiaWeeksLive({ initialData, totalActiveAccounts }: { i
         }
         const mapped = Array.from(weeksMap.entries()).map(([k, v]) => ({ ...v, label: k }));
         mapped.sort((a: any, b: any) => (a.label < b.label ? 1 : -1));
-        if (mounted) setWeeks(mapped.slice(0, 8));
+        if (mounted && mapped.length) setWeeks(mapped.slice(0, 8));
       } catch (e) {
         // ignore - keep existing UI
       } finally {
