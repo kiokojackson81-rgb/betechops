@@ -26,10 +26,14 @@ async function ensureCacheTable(prisma) {
   if (!fs.existsSync(sqlFile)) return;
   const sql = fs.readFileSync(sqlFile, 'utf8');
   try {
-    await prisma.$executeRawUnsafe(sql);
+    // Prisma does not accept multiple SQL commands in one prepared statement,
+    // so split and execute statements individually.
+    const stmts = sql.split(/;\s*\n/).map(s => s.trim()).filter(Boolean);
+    for (const stmt of stmts) {
+      await prisma.$executeRawUnsafe(stmt);
+    }
     console.log('[refresh-mview] ensured jumia_card_cache exists');
   } catch (err) {
-    // If already exists or other error, log and continue
     console.warn('[refresh-mview] ensure cache table warning:', err && err.message ? err.message : err);
   }
 }
@@ -39,10 +43,70 @@ async function computeAndUpsert(weekStart) {
   try {
     await ensureCacheTable(prisma);
 
-    const weekDate = new Date(weekStart + 'T00:00:00Z');
-    console.log('[refresh-mview] computing PS statement sums for', weekStart);
+    // Normalize the provided weekStart into the canonical Nairobi-week UTC
+    // weekStart (Monday 00:00 Nairobi expressed in UTC). Accepts either
+    // a plain date (YYYY-MM-DD) or an ISO string; falls back to the
+    // literal midnight UTC if parsing fails.
+    function parseDateOnlyUtc(value) {
+      if (!value) return null;
+      const datePart = String(value).slice(0, 10);
+      const parts = datePart.split('-').map((v) => Number(v));
+      if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+      const [year, month, day] = parts;
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    }
 
-    const rows = await prisma.marketplacePayoutWeek.findMany({ where: { weekStart: weekDate } });
+    const NAIROBI_TZ = 'Africa/Nairobi';
+    const NAIROBI_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+      timeZone: NAIROBI_TZ,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    function extractNairobiDateParts(dateUtc) {
+      const parts = NAIROBI_DATE_FORMATTER.formatToParts(dateUtc);
+      const yearPart = parts.find((p) => p.type === 'year')?.value ?? '';
+      const monthPart = parts.find((p) => p.type === 'month')?.value ?? '';
+      const dayPart = parts.find((p) => p.type === 'day')?.value ?? '';
+      return {
+        year: Number(yearPart),
+        month: Number(monthPart),
+        day: Number(dayPart),
+      };
+    }
+
+    function canonicalNairobiWeekStartUtc(dateUtc) {
+      const { year, month, day } = extractNairobiDateParts(dateUtc);
+      if ([year, month, day].some((v) => Number.isNaN(v))) {
+        return new Date(Date.UTC(dateUtc.getUTCFullYear(), dateUtc.getUTCMonth(), dateUtc.getUTCDate(), 0, 0, 0, 0));
+      }
+      const nairobiDateUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const currentDay = nairobiDateUtc.getUTCDay();
+      const deltaToMonday = (currentDay + 6) % 7;
+      nairobiDateUtc.setUTCDate(nairobiDateUtc.getUTCDate() - deltaToMonday);
+      return nairobiDateUtc;
+    }
+
+    let weekDate = null;
+    // Try to parse ISO first
+    const parsedIso = new Date(weekStart);
+    if (!Number.isNaN(parsedIso.getTime())) {
+      weekDate = canonicalNairobiWeekStartUtc(parsedIso);
+    } else {
+      const parsedDateOnly = parseDateOnlyUtc(weekStart);
+      if (parsedDateOnly) weekDate = canonicalNairobiWeekStartUtc(parsedDateOnly);
+    }
+    if (!weekDate) weekDate = new Date(new Date(weekStart + 'T00:00:00Z'));
+    console.log('[refresh-mview] computing PS statement sums for', weekStart, '-> canonical weekStart UTC', weekDate.toISOString());
+
+    // Allow a small tolerance window when matching weekStart because stored
+    // rows may use a UTC timestamp that corresponds to the Nairobi local
+    // midnight (which can differ by a few hours). Match any row whose
+    // `weekStart` falls within +/- 24 hours of the canonical value.
+    const startTolerance = new Date(weekDate.getTime() - 24 * 3600 * 1000);
+    const endTolerance = new Date(weekDate.getTime() + 24 * 3600 * 1000);
+    const rows = await prisma.marketplacePayoutWeek.findMany({ where: { weekStart: { gte: startTolerance, lt: endTolerance } } });
 
     const map = new Map();
     for (const r of rows) {
@@ -60,7 +124,7 @@ async function computeAndUpsert(weekStart) {
     for (const [shop, total] of map.entries()) {
       try {
         await prisma.$executeRawUnsafe(
-          'INSERT INTO public.jumia_card_cache(week_start, shop_sid, total, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (week_start, shop_sid) DO UPDATE SET total = EXCLUDED.total, updated_at = now()',
+          'INSERT INTO public.jumia_card_cache(week_start, shop_sid, total, updated_at) VALUES ($1, $2::uuid, $3, now()) ON CONFLICT (week_start, shop_sid) DO UPDATE SET total = EXCLUDED.total, updated_at = now()',
           weekDate,
           shop,
           total

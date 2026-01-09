@@ -56,9 +56,9 @@ export function canonicalNairobiWeekStartUtc(dateUtc: Date): Date {
 
 export function mondayToSundayNairobiWindow(baseInstant: Date): WeekWindow {
   const weekStart = canonicalNairobiWeekStartUtc(baseInstant);
-  const weekEnd = new Date(weekStart.getTime());
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-  weekEnd.setUTCHours(23, 59, 59, 999);
+  // Store weekEnd as exclusive (next Monday 00:00 UTC) so DB intervals are
+  // canonical [weekStart, weekEnd) and easier to reason about for overlaps.
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 3600 * 1000);
   return { weekStart, weekEnd };
 }
 
