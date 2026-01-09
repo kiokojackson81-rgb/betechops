@@ -51,7 +51,7 @@ async function main() {
       weekStart: new Date(r.weekStart),
     }));
     const incoming: Candidate = {
-      id: null,
+      id: null as string | null,
       statementNumber: null,
       amount: 0,
       createdAt: new Date(0),
