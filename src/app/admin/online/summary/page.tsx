@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { logInfo } from "@/lib/logging";
 import { chooseAuthoritativeCandidate } from "@/lib/payoutDeduper";
+import JumiaWeeksLive from '@/components/JumiaWeeksLive.client';
 
 export const dynamic = "force-dynamic";
 
@@ -296,35 +297,7 @@ export default async function AdminOnlineSummaryPage() {
             <p className="text-sm text-slate-400">Click a week to view per-account payout amounts (paid & unpaid).</p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recentWeeksEnriched.length ? (
-            recentWeeksEnriched.map((w: any) => {
-              const gross = Number(w._sum?.grossSales ?? 0);
-              const payout = Number(w._sum?.payoutAmount ?? 0);
-              const weekStartParam = encodeURIComponent(buildUtcWeekStartIso(w.period.start));
-              return (
-                <a
-                  key={w.period.start.toISOString()}
-                  href={`/admin/online/summary/week/${weekStartParam}`}
-                  className="block rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 hover:bg-slate-900/50"
-                >
-                  <div className="text-sm text-slate-300">{w.label}</div>
-                  <div className="mt-2 text-xs text-slate-400">
-                    Accounts: <span className="font-semibold text-white">{totalActiveAccounts}</span> (Present{' '}
-                    {numberFormatter.format(w.realRowCount ?? w.accountCount ?? 0)} / Missing {numberFormatter.format(w.missingCount ?? 0)})
-                    {w.placeholderRowCount ? (
-                      <span className="ml-2 text-xs text-slate-400">(Placeholders {numberFormatter.format(w.placeholderRowCount)})</span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 text-sm text-emerald-300">Gross: {currencyFormatter.format(gross)}</div>
-                  <div className="text-sm text-emerald-200">Payout: {currencyFormatter.format(payout)}</div>
-                </a>
-              );
-            })
-          ) : (
-            <div className="text-sm text-slate-400">No payout weeks found.</div>
-          )}
-        </div>
+        <JumiaWeeksLive initialData={recentWeeksEnriched.slice(0, 8)} totalActiveAccounts={totalActiveAccounts} />
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
