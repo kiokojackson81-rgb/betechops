@@ -22,7 +22,7 @@ type RowLike = {
   statusColor: string;
   payout: number;
   gross: number;
-  rowId?: string;
+  rowId?: string | null;
 };
 
 export default async function WeekDetailPage({ params }: { params: { weekStart: string } }) {
