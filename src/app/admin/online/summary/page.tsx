@@ -6,7 +6,7 @@ import { buildUtcWeekStartIso, canonicalNairobiWeekStartUtc, formatNairobiDate, 
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { logInfo } from "@/lib/logging";
-import { chooseAuthoritativeCandidate } from "@/lib/payoutWeekDedupe";
+import { chooseAuthoritativeCandidate } from "@/lib/payoutDeduper";
 
 export const dynamic = "force-dynamic";
 
