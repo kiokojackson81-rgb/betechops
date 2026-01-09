@@ -39,7 +39,7 @@ async function fetchStatements(apiBase, authHeader){
       account = await prisma.marketplaceAccount.findFirst({ where: { displayName: { contains: 'Jude', mode: 'insensitive' }, platform: 'JUMIA' } });
     }
     if (!account){
-      account = await prisma.marketplaceAccount.create({ data: { id: JUDE_ACCOUNT_ID, platform: 'JUMIA', displayName: 'JUDE COLLECTIONS', isActive: true } });
+      account = await prisma.marketplaceAccount.create({ data: { id: JUDE_ACCOUNT_ID, platform: 'JUMIA', displayName: 'JUDE COLLECTIONS', isActive: true, countryCode: 'KE' } });
       console.log('Created marketplaceAccount', account.id);
     } else {
       const updates = {};

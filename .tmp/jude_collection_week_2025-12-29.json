@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-01-06T21:15:56.962Z",
+  "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+  "displayName": "Jude Collection",
+  "shopId": "cmk1kffnn0000v5l8iqi80uqt",
+  "rows": [
+    {
+      "id": "cmk2lb4x80003v52kn2utsj8o",
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "statementNumber": "PS251229KE133G3",
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "grossSales": "171407.13",
+      "payoutAmount": "171407.13",
+      "currency": "LOCAL",
+      "isPaid": true,
+      "rawPayload": null,
+      "createdAt": "2026-01-06T12:53:00.717Z",
+      "updatedAt": "2026-01-06T21:11:56.683Z"
+    }
+  ],
+  "weeklySales": []
+}

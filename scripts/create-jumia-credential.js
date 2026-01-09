@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { prisma } = require('../src/lib/prisma');
+const { prisma } = require('../.worker-dist/src/lib/prisma');
 
 async function main() {
   const scope = process.env.SCOPE || 'JUMIA_VENDOR';

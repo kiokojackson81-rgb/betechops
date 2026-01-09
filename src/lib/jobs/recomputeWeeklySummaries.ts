@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { chooseAuthoritativeCandidate, Candidate } from "@/lib/payoutDeduper";
 
 export type WeeklyAggregate = {
   accountId: string;
@@ -33,20 +34,24 @@ export async function recomputeWeeklySummary(weekStart: Date, weekEnd: Date): Pr
   });
 
   // Aggregate by accountId + canonical Nairobi weekStart
-  const map = new Map<string, WeeklyAggregate>();
+  // Use authoritative single-row selection per account/week (do NOT sum duplicates).
+  const grouped = new Map<string, any[]>();
   for (const r of rows) {
     const canonicalStart = canonicalNairobiWeekStartUtc(new Date(r.weekStart));
-    const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 3600 * 1000 - 1);
     const key = `${r.accountId}::${canonicalStart.toISOString()}`;
-    const payout = Number(r.payoutAmount ?? r.grossSales ?? 0);
-    const gross = Number(r.grossSales ?? r.payoutAmount ?? 0);
-    if (!map.has(key)) {
-      map.set(key, { accountId: r.accountId, weekStart: canonicalStart, weekEnd: canonicalEnd, totalPayout: payout, totalGross: gross });
-    } else {
-      const cur = map.get(key)!;
-      cur.totalPayout += payout;
-      cur.totalGross += gross;
-    }
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(r);
+  }
+
+  const map = new Map<string, WeeklyAggregate>();
+  for (const [key, items] of grouped.entries()) {
+    const [accountId, startIso] = key.split('::');
+    const canonicalStart = new Date(startIso);
+    const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 3600 * 1000 - 1);
+    // build candidates from DB rows
+    const candidates: Candidate[] = items.map((r) => ({ id: r.id, statementNumber: r.statementNumber ?? null, amount: Number(r.payoutAmount ?? r.grossSales ?? 0), createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0), rawPayload: r.rawPayload, isPaid: r.isPaid ?? false }));
+    const keeper = chooseAuthoritativeCandidate(candidates);
+    map.set(key, { accountId, weekStart: canonicalStart, weekEnd: canonicalEnd, totalPayout: keeper.amount, totalGross: keeper.amount });
   }
 
   return Array.from(map.values());

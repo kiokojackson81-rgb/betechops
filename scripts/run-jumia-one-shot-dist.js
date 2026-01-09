@@ -6,19 +6,25 @@ const jobsMod = require('../.worker-dist/src/lib/jobs/onlineSync');
 
 async function main() {
   try {
-    if (process.env.DATABASE_URL) {
-      console.log(
-        '[run-jumia-one-shot-dist] DB:',
-        process.env.DATABASE_URL.replace(/:\\/\\/[^@]+@/, '://***:***@'),
-      );
-    }
-    if (process.env.DIRECT_URL) {
-      console.log('[run-jumia-one-shot-dist] DIRECT_URL:', process.env.DIRECT_URL.replace(/:\\/\\/[^@]+@/, '://***:***@'));
-    }
+      function maskCreds(url) {
+        if (!url || typeof url !== 'string') return url;
+        const protoIndex = url.indexOf('://');
+        if (protoIndex === -1) return url;
+        const atIndex = url.indexOf('@', protoIndex + 3);
+        if (atIndex === -1) return url;
+        return url.slice(0, protoIndex + 3) + '***:***' + url.slice(atIndex);
+      }
+
+      if (process.env.DATABASE_URL) {
+        console.log('[run-jumia-one-shot-dist] DB:', maskCreds(process.env.DATABASE_URL));
+      }
+      if (process.env.DIRECT_URL) {
+        console.log('[run-jumia-one-shot-dist] DIRECT_URL:', maskCreds(process.env.DIRECT_URL));
+      }
     const lookbackArg = process.argv.find((arg) => arg.startsWith('--lookbackDays='));
     const lookbackDays = lookbackArg
       ? Number.parseInt(lookbackArg.split('=')[1], 10)
-      : Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30);
+      : Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 90);
     if (Number.isNaN(lookbackDays)) {
       throw new Error('--lookbackDays must be a number');
     }

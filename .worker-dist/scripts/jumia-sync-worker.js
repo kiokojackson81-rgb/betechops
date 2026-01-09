@@ -1,0 +1,167 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+// Simple PM2-friendly worker that periodically pulls Jumia orders into the DB.
+// We now run two passes:
+//   1. Pending-orders window sync (fast, only the 7-day pending slice).
+//   2. Full incremental sync across all downstream statuses so local rows
+//      leave PENDING as soon as the vendor updates them.
+// Load .env if present but don't hard-require it (PM2 usually provides env)
+try {
+    require('dotenv/config');
+}
+catch { /* optional */ }
+// Prevent the whole worker process from exiting on an unexpected async
+// error (e.g. a bad credential causing a token-exchange failure). Instead
+// log the error and continue so other accounts can still be processed.
+process.on('unhandledRejection', (reason) => {
+    // eslint-disable-next-line no-console
+    console.error('[jumia-sync-worker] unhandledRejection', reason);
+});
+process.on('uncaughtException', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('[jumia-sync-worker] uncaughtException', err);
+});
+// Ensure path aliases (@/*) resolve in the compiled CJS bundle by mapping to .worker-dist/src/*
+try {
+    const tsconfigPaths = require('tsconfig-paths');
+    const path = require('path');
+    tsconfigPaths.register({
+        baseUrl: path.join(__dirname, '..'), // points to .worker-dist
+        paths: { '@/*': ['src/*'] },
+    });
+}
+catch { /* optional */ }
+// Use CommonJS require to avoid Node ESM resolution issues under ts-node
+const { syncAllAccountsPendingOrders } = require('../src/lib/jumia/syncPendingOrders');
+const { syncOrdersIncremental, syncReturnOrders } = require('../src/lib/jobs/jumia');
+const { syncOnlineMarketplaceData } = require('../src/lib/jobs/onlineSync');
+const { performCleanup } = require('./cleanup-jumia-orders');
+// Default to 5s; can be overridden via env JUMIA_WORKER_INTERVAL_MS
+const INTERVAL_MS = Number(process.env.JUMIA_WORKER_INTERVAL_MS ?? 5000);
+// Allow tuning for environments that prefer a slower incremental cadence,
+// but default to matching the tick interval so vendor/order state mirrors quickly.
+const INCREMENTAL_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_EVERY_MS ?? INTERVAL_MS);
+// Prefer a small lookback for fast frequent passes, and run an occasional deep backfill
+const INCREMENTAL_LOOKBACK_DAYS = Number(process.env.JUMIA_WORKER_INCREMENTAL_LOOKBACK_DAYS ?? 3);
+const INCREMENTAL_DEEP_EVERY_MS = Number(process.env.JUMIA_WORKER_INCREMENTAL_DEEP_EVERY_MS ?? 15 * 60000); // 15 minutes
+// Deep lookback falls back to JUMIA_SYNC_LOOKBACK_DAYS (defaults inside job to 120) when unset
+// Optional: run the heavy pending sweep less often than the tick to reduce vendor load
+const PENDING_EVERY_MS = Number(process.env.JUMIA_WORKER_PENDING_EVERY_MS ?? INTERVAL_MS);
+// Optional: run returns sync periodically (default: 10 minutes)
+const RETURNS_EVERY_MS = Number(process.env.JUMIA_WORKER_RETURNS_EVERY_MS ?? 10 * 60000);
+// Optional: retention cleanup cadence (default: every 6 hours)
+const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ?? 6 * 60 * 60000);
+const ONLINE_OPS_EVERY_MS = Number(process.env.JUMIA_WORKER_ONLINE_OPS_EVERY_MS ?? INCREMENTAL_EVERY_MS);
+const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30);
+const LOG_PREFIX = '[jumia-sync-worker]';
+let lastIncrementalAt = 0;
+let lastIncrementalDeepAt = 0;
+let lastPendingAt = 0;
+let lastReturnsAt = 0;
+let lastRetentionAt = 0;
+let lastOnlineOpsAt = 0;
+let inFlight = false;
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function tick() {
+    if (inFlight) {
+        // eslint-disable-next-line no-console
+        console.warn(`${LOG_PREFIX} previous tick still in-flight; skipping this interval`);
+        return;
+    }
+    inFlight = true;
+    const startedAt = new Date();
+    const logParts = [];
+    let anyWork = false;
+    const now = Date.now();
+    if (now - lastPendingAt >= PENDING_EVERY_MS) {
+        try {
+            const results = (await syncAllAccountsPendingOrders());
+            const totalOrders = results.reduce((acc, r) => acc + (r?.orders || 0), 0);
+            const totalPages = results.reduce((acc, r) => acc + (r?.pages || 0), 0);
+            logParts.push(`pending pages=${totalPages} orders=${totalOrders} shops=${results.length}`);
+            lastPendingAt = now;
+            anyWork = true;
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`${LOG_PREFIX} pending sync failed`, err);
+        }
+    }
+    if (now - lastIncrementalAt >= INCREMENTAL_EVERY_MS) {
+        try {
+            const doDeep = (now - lastIncrementalDeepAt) >= INCREMENTAL_DEEP_EVERY_MS;
+            const lookback = doDeep ? undefined : INCREMENTAL_LOOKBACK_DAYS;
+            const summary = (await syncOrdersIncremental(lookback ? { lookbackDays: lookback, skipNonUuid: true } : { skipNonUuid: true }));
+            const shopSummaries = Object.values(summary || {});
+            const incProcessed = shopSummaries.reduce((acc, s) => acc + (s?.processed || 0), 0);
+            const incUpserted = shopSummaries.reduce((acc, s) => acc + (s?.upserted || 0), 0);
+            logParts.push(`incremental ${doDeep ? 'deep' : 'fast'} processed=${incProcessed} upserted=${incUpserted} shops=${shopSummaries.length}`);
+            lastIncrementalAt = now;
+            if (doDeep)
+                lastIncrementalDeepAt = now;
+            anyWork = true;
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`${LOG_PREFIX} incremental sync failed`, err);
+        }
+    }
+    if (now - lastOnlineOpsAt >= ONLINE_OPS_EVERY_MS) {
+        try {
+            await syncOnlineMarketplaceData({ lookbackDays: ONLINE_OPS_LOOKBACK_DAYS });
+            logParts.push(`online-ops lookback=${ONLINE_OPS_LOOKBACK_DAYS}`);
+            lastOnlineOpsAt = now;
+            anyWork = true;
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`${LOG_PREFIX} online ops sync failed`, err);
+            lastOnlineOpsAt = now;
+        }
+    }
+    if (now - lastReturnsAt >= RETURNS_EVERY_MS) {
+        try {
+            const summary = await syncReturnOrders({ lookbackDays: 30 });
+            const shops = Object.keys(summary || {}).length;
+            const ensured = Object.values(summary || {}).reduce((acc, s) => acc + (s?.returnCases || 0), 0);
+            const processed = Object.values(summary || {}).reduce((acc, s) => acc + (s?.processed || 0), 0);
+            logParts.push(`returns processed=${processed} ensured=${ensured} shops=${shops}`);
+            lastReturnsAt = now;
+            anyWork = true;
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`${LOG_PREFIX} returns sync failed`, err);
+        }
+    }
+    if (now - lastRetentionAt >= RETENTION_EVERY_MS) {
+        try {
+            const days = Number(process.env.JUMIA_ORDERS_RETENTION_DAYS ?? 90);
+            const res = await performCleanup(days);
+            logParts.push(`retention days=${days} deleted=${res.deleted} orders=${res.deletedOrders ?? 0} items=${res.deletedOrderItems ?? 0} returns=${res.deletedReturnCases ?? 0}`);
+            lastRetentionAt = now;
+            anyWork = true;
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`${LOG_PREFIX} retention cleanup failed`, err);
+        }
+    }
+    if (anyWork && logParts.length) {
+        // eslint-disable-next-line no-console
+        console.log(`${LOG_PREFIX} tick ok @ ${startedAt.toISOString()} interval=${INTERVAL_MS}ms details: ${logParts.join(' | ')}`);
+    }
+    inFlight = false;
+}
+(async () => {
+    // eslint-disable-next-line no-console
+    console.log(`${LOG_PREFIX} starting, interval(ms)= ${INTERVAL_MS}, incrementalEvery(ms)= ${INCREMENTAL_EVERY_MS}, incrementalLookback(days)= ${INCREMENTAL_LOOKBACK_DAYS}, deepEvery(ms)= ${INCREMENTAL_DEEP_EVERY_MS}, pendingEvery(ms)= ${PENDING_EVERY_MS}, returnsEvery(ms)= ${RETURNS_EVERY_MS}, retentionEvery(ms)= ${RETENTION_EVERY_MS}`);
+    // initial tick immediately
+    await tick();
+    while (true) {
+        await sleep(INTERVAL_MS);
+        await tick();
+    }
+})();

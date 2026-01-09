@@ -1,5 +1,5 @@
-import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "./weekWindow";
-import { deriveStatementStatus } from "./statementStatus";
+import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "./weekWindow.ts";
+import { deriveStatementStatus } from "./statementStatus.ts";
 
 type NumericLike = {
   toNumber?: () => number;

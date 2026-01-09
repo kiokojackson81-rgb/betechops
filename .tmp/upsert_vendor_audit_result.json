@@ -1,0 +1,77 @@
+{
+  "inserted": [
+    {
+      "statement": "PS251222KE12DBU",
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "id": "cmk3sf38o0001v5yccz59ff5g"
+    },
+    {
+      "statement": "PS251222KE133G3",
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "id": "cmk3sf59k0003v5yc0ubj2a2t"
+    }
+  ],
+  "updated": [],
+  "skipped": [
+    {
+      "statement": "PS251229KE12DBU",
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE12DWN",
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251222KE12DWN",
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE13ZAF",
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251222KE13ZAF",
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE13XZB",
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251222KE13XZB",
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE133G3",
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE12Y26",
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251222KE12Y26",
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251229KE13LSZ",
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "reason": "already_present_same_amount"
+    },
+    {
+      "statement": "PS251222KE13LSZ",
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "reason": "already_present_same_amount"
+    }
+  ]
+}
