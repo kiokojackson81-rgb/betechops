@@ -42,6 +42,15 @@ export async function requestWithRetry(input: string, init?: RequestInit, opts?:
       continue;
     }
 
+    // For non-retriable client errors (4xx), surface response body in logs for diagnostics
+    try {
+      const bodyText = await res.text().catch(() => "");
+      // eslint-disable-next-line no-console
+      console.warn(`[fetchWithRetry] non-retriable response ${status} from ${input}: ${bodyText.slice(0, 1000)}`);
+    } catch (e) {
+      /* ignore */
+    }
+
     return res;
   }
   throw new Error("requestWithRetry: unreachable");
