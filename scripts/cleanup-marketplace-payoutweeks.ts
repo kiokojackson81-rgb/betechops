@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
-import { chooseAuthoritativeCandidate } from '../src/lib/payoutDeduper.ts';
+import { chooseAuthoritativeCandidate, Candidate } from '../src/lib/payoutDeduper.ts';
 
 function canonicalNairobiWeekStartUtc(dateUtc: Date): Date {
   const NAIR0BI_OFFSET_HOURS = 3;
@@ -40,10 +40,27 @@ async function main() {
   for (const [key, items] of groups.entries()) {
     if (items.length <= 1) continue;
     // build candidates for chooser
-    const candidates = items.map((r) => ({ id: r.id, statementNumber: r.statementNumber ?? null, amount: Number(r.payoutAmount ?? r.grossSales ?? 0), createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0), rawPayload: r.rawPayload, isPaid: r.isPaid ?? false }));
-    const incoming = { id: null, statementNumber: null, amount: 0, createdAt: new Date(0), rawPayload: null, isPaid: false };
+    const canonicalStart = new Date(key.split('::')[1]);
+    const candidates: Candidate[] = items.map((r) => ({
+      id: r.id,
+      statementNumber: r.statementNumber ?? null,
+      amount: Number(r.payoutAmount ?? r.grossSales ?? 0),
+      createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0),
+      rawPayload: r.rawPayload,
+      isPaid: r.isPaid ?? false,
+      weekStart: new Date(r.weekStart),
+    }));
+    const incoming: Candidate = {
+      id: null,
+      statementNumber: null,
+      amount: 0,
+      createdAt: new Date(0),
+      rawPayload: null,
+      isPaid: false,
+      weekStart: canonicalStart,
+    };
     candidates.push(incoming);
-    const keeper = chooseAuthoritativeCandidate(candidates as any);
+    const keeper = chooseAuthoritativeCandidate(candidates, canonicalStart);
 
     // If keeper is the synthetic incoming (id===null) choose earliest DB row as keeperRow
     const keeperRow = keeper.id ? items.find((x) => x.id === keeper.id)! : items[0];
