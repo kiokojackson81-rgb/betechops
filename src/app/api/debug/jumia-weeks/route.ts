@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { canonicalNairobiWeekStartUtc } from '@/lib/weekWindow';
 
-export const runtime = 'edge';
+// Force server runtime so Prisma Client can be used during production start
+export const runtime = 'nodejs';
 
 export async function GET() {
   try {
