@@ -297,7 +297,21 @@ export default async function AdminOnlineSummaryPage() {
             <p className="text-sm text-slate-400">Click a week to view per-account payout amounts (paid & unpaid).</p>
           </div>
         </div>
-        <JumiaWeeksLive initialData={recentWeeksEnriched.slice(0, 8)} totalActiveAccounts={totalActiveAccounts} />
+        <JumiaWeeksLive
+          initialData={recentWeeksEnriched.slice(0, 8).map((w) => ({
+            period: { start: w.period.start.toISOString(), end: w.period.end.toISOString() },
+            label: w.label,
+            _sum: { grossSales: Number(w._sum?.grossSales ?? 0), payoutAmount: Number(w._sum?.payoutAmount ?? 0) },
+            realRowCount: Number(w.realRowCount ?? 0),
+            placeholderRowCount: Number(w.placeholderRowCount ?? 0),
+            accountCount: Number(w.accountCount ?? 0),
+            missingCount: Number(w.missingCount ?? 0),
+            totalRealPayout: Number(w.totalRealPayout ?? 0),
+            totalPlaceholderPayout: Number(w.totalPlaceholderPayout ?? 0),
+            displayPayout: Number(w.displayPayout ?? 0),
+          }))}
+          totalActiveAccounts={totalActiveAccounts}
+        />
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
