@@ -9,7 +9,7 @@ import { deriveStatementStatus } from "@/lib/statementStatus";
 import { requestWithRetry } from "@/lib/fetchWithRetry";
 
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
-const DEFAULT_LOOKBACK_DAYS = 30;
+const DEFAULT_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 70);
 const TIME_BUDGET_MS = 260_000;
 
 const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
@@ -459,6 +459,13 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       const { isPaid } = deriveStatementStatus(statement.statementNumber, statement.paid);
 
       try {
+        await prisma.marketplacePayoutWeek.deleteMany({
+          where: {
+            accountId: account.id,
+            weekStart: normalizedWeekStart,
+            rawPayload: { path: ["placeholder"], equals: true },
+          },
+        });
         await prisma.marketplacePayoutWeek.upsert({
           where: { accountId_statementNumber: { accountId: account.id, statementNumber } },
           create: {
@@ -468,7 +475,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
             weekEnd: normalizedWeekEnd,
             grossSales: dec(amountValue),
             payoutAmount: dec(amountValue),
-            currency: "LOCAL",
+            currency: "KES",
             isPaid,
             rawPayload: statement as any,
           },
@@ -479,6 +486,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
             payoutAmount: dec(amountValue),
             isPaid,
             rawPayload: statement as any,
+            currency: "KES",
           },
         });
         upserted += 1;
