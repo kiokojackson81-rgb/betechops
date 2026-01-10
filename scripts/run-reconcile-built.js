@@ -1,4 +1,17 @@
 try { require('dotenv').config(); } catch {}
+const path = require('path');
+// Map `@/...` imports used inside .worker-dist to .worker-dist/src/...
+{
+  const Module = require('module');
+  const origResolve = Module._resolveFilename;
+  Module._resolveFilename = function (request, parent, isMain, options) {
+    if (typeof request === 'string' && request.startsWith('@/')) {
+      const mapped = path.resolve(__dirname, '..', '.worker-dist', 'src', request.slice(2));
+      return origResolve.call(this, mapped, parent, isMain, options);
+    }
+    return origResolve.call(this, request, parent, isMain, options);
+  };
+}
 const prisma = require('../.worker-dist/src/lib/prisma').prisma;
 const jumia = require('../.worker-dist/src/lib/jumia');
 
