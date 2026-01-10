@@ -34,6 +34,118 @@ const makeEmptyOrdersAgg = () => ({
   _count: { _all: 0 },
 });
 
+type EnrichedWeek = {
+  period: { start: Date; end: Date };
+  label: string;
+  _sum: { grossSales: number; payoutAmount: number };
+  accountCount: number;
+  missingCount: number;
+  realRowCount: number;
+  placeholderRowCount: number;
+  totalRealPayout: number;
+  totalPlaceholderPayout: number;
+  displayPayout: number;
+};
+
+function buildWeeksFromCacheRows(rows: any[], totalActiveAccounts: number): EnrichedWeek[] {
+  const weekBucket = new Map<string, { weekStart: Date; weekEnd: Date; shops: Map<string, number> }>();
+  for (const row of rows || []) {
+    if (!row?.week_start) continue;
+    const weekStart = canonicalNairobiWeekStartUtc(new Date(row.week_start));
+    const weekEnd = row.week_end ? new Date(row.week_end) : new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const key = weekStart.toISOString();
+    if (!weekBucket.has(key)) {
+      weekBucket.set(key, { weekStart, weekEnd, shops: new Map() });
+    }
+    const entry = weekBucket.get(key)!;
+    const shopId = String(row.shop ?? "unknown");
+    const prev = entry.shops.get(shopId) ?? 0;
+    entry.shops.set(shopId, prev + Number(row.total ?? 0));
+  }
+
+  return Array.from(weekBucket.values())
+    .map((entry) => {
+      const shops = Array.from(entry.shops.entries());
+      const gross = shops.reduce((sum, [, value]) => sum + Number(value || 0), 0);
+      const present = shops.length;
+      const missing = Math.max(totalActiveAccounts - present, 0);
+      const displayEnd = new Date(entry.weekEnd.getTime() - 3 * 60 * 60 * 1000);
+      return {
+        period: { start: entry.weekStart, end: entry.weekEnd },
+        _sum: { grossSales: gross, payoutAmount: gross },
+        accountCount: present,
+        missingCount: missing,
+        label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(displayEnd)}`,
+        realRowCount: present,
+        placeholderRowCount: 0,
+        totalRealPayout: gross,
+        totalPlaceholderPayout: 0,
+        displayPayout: gross,
+      };
+    })
+    .sort((a, b) => (a.period.start < b.period.start ? 1 : -1));
+}
+
+function buildWeeksFromPayoutRows(rows: any[], totalActiveAccounts: number): EnrichedWeek[] {
+  const weekBucket = new Map<string, { weekStart: Date; weekEnd: Date; accounts: Map<string, any[]> }>();
+  for (const row of rows || []) {
+    if (!row?.weekStart) continue;
+    const { weekStart: canonicalStart, weekEnd: canonicalEnd } = mondayToSundayNairobiWindow(new Date(row.weekStart));
+    const key = canonicalStart.toISOString();
+    if (!weekBucket.has(key)) {
+      weekBucket.set(key, { weekStart: canonicalStart, weekEnd: canonicalEnd, accounts: new Map() });
+    }
+    const entry = weekBucket.get(key)!;
+    const bucket = entry.accounts.get(row.accountId) ?? [];
+    bucket.push(row);
+    entry.accounts.set(row.accountId, bucket);
+  }
+
+  return Array.from(weekBucket.values())
+    .map((entry) => {
+      const bestRows = Array.from(entry.accounts.values())
+        .map((rows) => {
+          const nonPlaceholder = rows.filter((row) => !isPlaceholderRow(row));
+          const candidates = nonPlaceholder.length ? nonPlaceholder : rows;
+          return chooseAuthoritativeCandidate(candidates as any, entry.weekStart);
+        })
+        .filter(Boolean) as any[];
+
+      const realRows = bestRows.filter((row) => !isPlaceholderRow(row));
+      const placeholderRows = bestRows.filter((row) => isPlaceholderRow(row));
+      const present = realRows.length;
+      const missing = Math.max(totalActiveAccounts - present, 0);
+      const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
+      const totalRealPayout = realRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
+      const totalPlaceholderPayout = placeholderRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
+      const displayPayout = totalRealPayout > 0 ? totalRealPayout : totalPlaceholderPayout;
+      const displayEnd = new Date(entry.weekEnd.getTime() - 3 * 60 * 60 * 1000);
+      return {
+        period: { start: entry.weekStart, end: entry.weekEnd },
+        _sum: { grossSales: gross, payoutAmount: displayPayout },
+        accountCount: present,
+        missingCount: missing,
+        label: `${formatNairobiDate(entry.weekStart)} - ${formatNairobiDate(displayEnd)}`,
+        realRowCount: realRows.length,
+        placeholderRowCount: placeholderRows.length,
+        totalRealPayout,
+        totalPlaceholderPayout,
+        displayPayout,
+      };
+    })
+    .sort((a, b) => (a.period.start < b.period.start ? 1 : -1));
+}
+
+function shouldUseCache(cacheWeeks: EnrichedWeek[], dbWeeks: EnrichedWeek[]): boolean {
+  if (!cacheWeeks.length) return false;
+  if (!dbWeeks.length) return true;
+  const cacheRecent = cacheWeeks[0];
+  const dbRecent = dbWeeks[0];
+  const payoutDiff = Math.abs((cacheRecent.displayPayout ?? 0) - (dbRecent.displayPayout ?? 0));
+  if (payoutDiff > 1) return false;
+  return cacheRecent.realRowCount >= dbRecent.realRowCount;
+}
+
 export default async function AdminOnlineSummaryPage() {
   const session = await auth();
   const role = (session?.user as any)?.role;
@@ -152,51 +264,18 @@ export default async function AdminOnlineSummaryPage() {
   });
   const totalActiveAccounts = allAccounts.length;
 
-  let enrichedWeeks: any[] = [];
+  let cacheEnrichedWeeks: EnrichedWeek[] = [];
   try {
     const cacheRows = await prisma.$queryRawUnsafe(
       `SELECT week_start, week_end, platform, shop, total FROM public.jumia_card_cache WHERE week_start >= timestamptz '${lookbackDate.toISOString()}' ORDER BY week_start DESC`,
     );
-
-    const weekBucket = new Map<string, { weekStart: Date; weekEnd: Date; shops: Map<string, number> }>();
-    for (const r of cacheRows as any[]) {
-      const weekStart = new Date(r.week_start);
-      const weekEnd = new Date(r.week_end);
-      const key = canonicalNairobiWeekStartUtc(weekStart).toISOString();
-      if (!weekBucket.has(key)) {
-        weekBucket.set(key, { weekStart: canonicalNairobiWeekStartUtc(weekStart), weekEnd: weekEnd, shops: new Map() });
-      }
-      const entry = weekBucket.get(key)!;
-      const shopId = String(r.shop ?? 'unknown');
-      const prev = entry.shops.get(shopId) ?? 0;
-      entry.shops.set(shopId, prev + Number(r.total ?? 0));
-    }
-
-    enrichedWeeks = Array.from(weekBucket.values()).map((entry) => {
-      const shops = Array.from(entry.shops.entries());
-      const gross = shops.reduce((s, [, v]) => s + Number(v || 0), 0);
-      const totalRealPayout = gross;
-      const totalPlaceholderPayout = 0;
-      const displayPayout = totalRealPayout;
-      const present = shops.length;
-      const missing = Math.max(totalActiveAccounts - present, 0);
-      const displayEnd = new Date(entry.weekEnd.getTime() - 3 * 60 * 60 * 1000);
-      return {
-        period: { start: entry.weekStart, end: entry.weekEnd },
-        _sum: { grossSales: gross, payoutAmount: displayPayout },
-        accountCount: present,
-        missingCount: missing,
-        label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(displayEnd)}`,
-        realRowCount: present,
-        placeholderRowCount: 0,
-        totalRealPayout,
-        totalPlaceholderPayout,
-        displayPayout,
-      };
-    });
+    cacheEnrichedWeeks = buildWeeksFromCacheRows(cacheRows as any[], totalActiveAccounts);
   } catch (err) {
-    // Cache table may not exist in this environment — fall back to marketplacePayoutWeek aggregation
     console.error('[admin/online/summary] jumia_card_cache query failed, falling back to payoutWeek aggregation:', err);
+  }
+
+  let dbEnrichedWeeks: EnrichedWeek[] = [];
+  try {
     const recentPayouts = await prisma.marketplacePayoutWeek.findMany({
       where: {
         account: { platform: Platform.JUMIA },
@@ -216,52 +295,23 @@ export default async function AdminOnlineSummaryPage() {
         id: true,
       },
     });
-
-    const weekBucket2 = new Map<string, { weekStart: Date; weekEnd: Date; accounts: Map<string, any[]> }>();
-    for (const row of recentPayouts) {
-      const { weekStart: canonicalStart, weekEnd: canonicalEnd } = mondayToSundayNairobiWindow(new Date(row.weekStart));
-      const key = canonicalStart.toISOString();
-      if (!weekBucket2.has(key)) {
-        weekBucket2.set(key, { weekStart: canonicalStart, weekEnd: canonicalEnd, accounts: new Map() });
-      }
-      const entry = weekBucket2.get(key)!;
-      const bucket = entry.accounts.get(row.accountId) ?? [];
-      bucket.push(row);
-      entry.accounts.set(row.accountId, bucket);
-    }
-
-    enrichedWeeks = Array.from(weekBucket2.values()).map((entry) => {
-      const bestRows = Array.from(entry.accounts.values())
-        .map((rows) => {
-          const nonPlaceholder = rows.filter((row) => !isPlaceholderRow(row));
-          const candidates = nonPlaceholder.length ? nonPlaceholder : rows;
-          return chooseAuthoritativeCandidate(candidates as any, entry.weekStart);
-        })
-        .filter(Boolean) as any[];
-
-      const realRows = bestRows.filter((row) => !isPlaceholderRow(row));
-      const placeholderRows = bestRows.filter((row) => isPlaceholderRow(row));
-      const present = realRows.length;
-      const missing = Math.max(totalActiveAccounts - present, 0);
-      const gross = bestRows.reduce((sum, row) => sum + Number(row?.grossSales ?? 0), 0);
-      const totalRealPayout = realRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
-      const totalPlaceholderPayout = placeholderRows.reduce((sum, row) => sum + Number(row?.payoutAmount ?? row?.grossSales ?? 0), 0);
-      const displayPayout = totalRealPayout > 0 ? totalRealPayout : totalPlaceholderPayout;
-      const displayEnd = new Date(entry.weekEnd.getTime() - 3 * 60 * 60 * 1000);
-      return {
-        period: { start: entry.weekStart, end: entry.weekEnd },
-        _sum: { grossSales: gross, payoutAmount: displayPayout },
-        accountCount: present,
-        missingCount: missing,
-        label: `${formatNairobiDate(entry.weekStart)} – ${formatNairobiDate(displayEnd)}`,
-        realRowCount: realRows.length,
-        placeholderRowCount: placeholderRows.length,
-        totalRealPayout,
-        totalPlaceholderPayout,
-        displayPayout,
-      };
-    });
+    dbEnrichedWeeks = buildWeeksFromPayoutRows(recentPayouts, totalActiveAccounts);
+  } catch (err) {
+    console.error('[admin/online/summary] failed to load MarketplacePayoutWeek fallback for Jumia weeks:', err);
   }
+
+  const useCache = shouldUseCache(cacheEnrichedWeeks, dbEnrichedWeeks);
+  if (!useCache && cacheEnrichedWeeks.length && dbEnrichedWeeks.length) {
+    const cacheRecent = cacheEnrichedWeeks[0];
+    const dbRecent = dbEnrichedWeeks[0];
+    console.warn(
+      "[admin/online/summary] jumia_card_cache totals differ from MarketplacePayoutWeek (cache %s vs db %s) — using database data for week card",
+      cacheRecent.displayPayout,
+      dbRecent.displayPayout,
+    );
+  }
+
+  const enrichedWeeks = useCache ? cacheEnrichedWeeks : dbEnrichedWeeks;
 
   
 
