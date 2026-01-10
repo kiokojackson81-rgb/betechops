@@ -1559,7 +1559,21 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)] items-start">
           <div className="space-y-4">
-            <ReceiptsEditor receipts={receipts} setReceipts={setReceipts} totals={totals} />
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Sales records</p>
+                <h2 className="text-xl font-semibold">Add each receipt for today</h2>
+                <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
+              </div>
+              <ReceiptsEditor
+                receipts={receipts}
+                setReceipts={setReceipts}
+                totals={totals}
+                showWrapper={false}
+                showHeader={false}
+                wrapperClassName="space-y-4"
+              />
+            </Card>
           </div>
           <div className="space-y-4">
             <StatsCard
