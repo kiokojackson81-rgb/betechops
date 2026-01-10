@@ -14,11 +14,11 @@ async function compute(weekStart, shopSid, accountIds) {
   // Query only vendor PS statements
   const whereDate = new Date(weekStart + 'T00:00:00Z');
   const rows = await prisma.$queryRaw`
-    SELECT (raw_payload->>'statementNumber') AS stmt, SUM(payout_amount)::numeric(18,2) AS amount, (raw_payload->>'shopSid') AS shopSid
-    FROM marketplace_payout_week
-    WHERE week_start = ${whereDate}
-      AND (raw_payload->>'statementNumber') LIKE 'PS%'
-    GROUP BY (raw_payload->>'statementNumber'), (raw_payload->>'shopSid')
+    SELECT ("rawPayload"->>'statementNumber') AS stmt, SUM("payoutAmount")::numeric(18,2) AS amount, ("rawPayload"->>'shopSid') AS "shopSid"
+    FROM "MarketplacePayoutWeek"
+    WHERE "weekStart" = ${whereDate}
+      AND ("rawPayload"->>'statementNumber') LIKE 'PS%'
+    GROUP BY ("rawPayload"->>'statementNumber'), ("rawPayload"->>'shopSid')
     ORDER BY amount DESC
   `;
 

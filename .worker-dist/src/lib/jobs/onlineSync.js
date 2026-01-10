@@ -15,7 +15,7 @@ const statementStatus_1 = require("@/lib/statementStatus");
 const fetchWithRetry_1 = require("@/lib/fetchWithRetry");
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 70);
-const TIME_BUDGET_MS = 260000;
+const TIME_BUDGET_MS = Number(process.env.JUMIA_TIME_BUDGET_MS ?? 260000);
 const dateOnlyISO = (d) => d.toISOString().slice(0, 10);
 /**
  * Paste this EXACTLY inside your per-account statement ingest helper.

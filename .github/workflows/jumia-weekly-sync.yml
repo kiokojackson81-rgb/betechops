@@ -1,0 +1,23 @@
+name: Jumia weekly sync
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # daily at 03:00 UTC — adjust as needed
+  workflow_dispatch: {}
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Jumia sync endpoint
+        env:
+          API_URL: ${{ secrets.SYNC_API_URL }} # e.g. https://ops.betech.co.ke/api/admin/online/sync-now
+          ADMIN_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$ADMIN_TOKEN" ]; then
+            echo "Missing secrets: SYNC_API_URL or ADMIN_API_TOKEN";
+            exit 1;
+          fi
+          # call the protected endpoint (POST). If you require session-based auth adapt accordingly.
+          curl -sS -X POST "$API_URL" -H "Authorization: Bearer $ADMIN_TOKEN" -o out.json -w "\nHTTP_STATUS:%{http_code}\n"
+          cat out.json

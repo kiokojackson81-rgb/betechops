@@ -17,7 +17,8 @@ export default function JumiaManualSyncButton({ lookbackDays }: Props) {
       if (lookbackDays && lookbackDays > 0) {
         params.set("lookbackDays", lookbackDays.toString());
       }
-      const response = await fetch(`/api/jumia/sync-online-orders?${params.toString()}`, {
+      const dayParam = params.get("day") ? `?day=${encodeURIComponent(params.get("day")!)}` : "";
+      const response = await fetch(`/api/admin/online/sync-now${dayParam}`, {
         method: "POST",
         cache: "no-store",
         credentials: "include",

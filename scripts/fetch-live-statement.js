@@ -66,6 +66,7 @@ const jumia = require('../.worker-dist/src/lib/jumia');
     }
 
     // Special handling: when we were invoked with a statement number, use the DB row's account to pick per-account creds
+    // If we were given a statement number, prefer using the MarketplaceAccount -> JumiaAccount credentials
     if (/^PS\d/.test(process.argv[2])) {
       try {
         const stmt = await prisma.marketplacePayoutWeek.findFirst({ where: { statementNumber: process.argv[2] } });
@@ -73,17 +74,33 @@ const jumia = require('../.worker-dist/src/lib/jumia');
           const ma = await prisma.marketplaceAccount.findUnique({ where: { id: stmt.accountId } });
           if (ma) {
             const jm = await prisma.jumiaAccount.findFirst({ where: { clientId: ma.jumiaShopSid } });
-            if (jm && (!shop.credentialsEncrypted && !shop.apiConfig)) {
-              // attach apiConfig so loadShopAuthById picks it up
-              await prisma.shop.update({ where: { id: shop.id }, data: { apiConfig: { clientId: jm.clientId, refreshToken: jm.refreshToken } } });
-              // reload shop
-              shop = await prisma.shop.findUnique({ where: { id: shop.id } });
-              console.log('Attached JumiaAccount creds to shop from JumiaAccount', jm.id);
+            if (jm) {
+              const baseFromEnv = process.env.JUMIA_API_BASE || process.env.BASE_URL || process.env.base_url || 'https://vendor-api.jumia.com';
+              const q = day ? `?createdAfter=${encodeURIComponent(day)}&page=1&size=50` : '?page=1&size=50';
+              const pathBase = '/payout-statement';
+              const shopAuth = { clientId: jm.clientId, refreshToken: jm.refreshToken, apiBase: baseFromEnv };
+              const jres = await jumia.jumiaFetch(pathBase + q, { shopAuth });
+              // normalize statements
+              const statements = jres?.statements ?? jres?.data?.statements ?? jres?.data ?? jres;
+              console.log('Vendor response keys (direct):', Object.keys(jres || {}));
+              if (Array.isArray(statements)) {
+                console.log('Statements count (direct):', statements.length);
+                for (const s of statements) {
+                  if (s.statementNumber && (s.statementNumber === process.argv[2] || process.argv[2] === shop.jumiaShopSid)) {
+                    console.log('Matched statement (direct):');
+                    console.log(JSON.stringify(s, null, 2));
+                  }
+                }
+              } else {
+                console.log('Full response (direct):', JSON.stringify(jres, null, 2));
+              }
+              await prisma.$disconnect();
+              process.exit(0);
             }
           }
         }
       } catch (e) {
-        // continue without per-account creds
+        // fall back to fetchPayoutsForShop below
       }
     }
 
