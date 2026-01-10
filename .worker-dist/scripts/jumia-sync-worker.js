@@ -52,7 +52,7 @@ const RETURNS_EVERY_MS = Number(process.env.JUMIA_WORKER_RETURNS_EVERY_MS ?? 10 
 // Optional: retention cleanup cadence (default: every 6 hours)
 const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ?? 6 * 60 * 60000);
 const ONLINE_OPS_EVERY_MS = Number(process.env.JUMIA_WORKER_ONLINE_OPS_EVERY_MS ?? INCREMENTAL_EVERY_MS);
-const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30);
+const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 90);
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;
 let lastIncrementalDeepAt = 0;

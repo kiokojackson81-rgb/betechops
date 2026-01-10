@@ -287,7 +287,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
         },
       });
       shopsByJumiaSid.set(account.jumiaShopSid, upserted);
-      logInfo("[onlineSync] created missing Shop for jumiaShopSid", {
+      logInfo('[onlineSync] created missing Shop for jumiaShopSid', {
         accountId: account.id,
         displayName: account.displayName,
         jumiaShopSid: account.jumiaShopSid,
@@ -295,7 +295,7 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
       });
       return upserted;
     } catch (err) {
-      logWarn("[onlineSync] failed to create Shop for jumiaShopSid", {
+      logWarn('[onlineSync] failed to create Shop for jumiaShopSid', {
         accountId: account.id,
         jumiaShopSid: account.jumiaShopSid,
         error: String(err),

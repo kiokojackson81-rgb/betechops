@@ -11,7 +11,7 @@ async function handle(request) {
         // Also sync marketplace delivered items (Jumia order items)
         let marketplaceSummary = null;
         try {
-            marketplaceSummary = await (0, onlineSync_1.syncOnlineMarketplaceData)({ lookbackDays: Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30) });
+            marketplaceSummary = await (0, onlineSync_1.syncOnlineMarketplaceData)({ lookbackDays: Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 90) });
         }
         catch (err) {
             console.error('[api.jumia.sync-pending] marketplace sync failed', err);

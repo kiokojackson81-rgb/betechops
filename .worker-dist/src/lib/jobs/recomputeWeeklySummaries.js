@@ -42,9 +42,23 @@ async function recomputeWeeklySummary(weekStart, weekEnd) {
         const canonicalStart = new Date(startIso);
         const canonicalEnd = new Date(canonicalStart.getTime() + 7 * 24 * 3600 * 1000 - 1);
         // build candidates from DB rows
-        const candidates = items.map((r) => ({ id: r.id, statementNumber: r.statementNumber ?? null, amount: Number(r.payoutAmount ?? r.grossSales ?? 0), createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0), rawPayload: r.rawPayload, isPaid: r.isPaid ?? false }));
-        const keeper = (0, payoutDeduper_1.chooseAuthoritativeCandidate)(candidates);
-        map.set(key, { accountId, weekStart: canonicalStart, weekEnd: canonicalEnd, totalPayout: keeper.amount, totalGross: keeper.amount });
+        const candidates = items.map((r) => ({
+            id: r.id,
+            weekStart: new Date(r.weekStart),
+            createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0),
+            updatedAt: r.updatedAt ? new Date(r.updatedAt) : null,
+            statementNumber: r.statementNumber ?? null,
+            payoutAmount: r.payoutAmount ?? null,
+            grossSales: r.grossSales ?? null,
+            rawPayload: r.rawPayload,
+            isPaid: r.isPaid ?? false,
+        }));
+        const keeper = (0, payoutDeduper_1.chooseAuthoritativeCandidate)(candidates, canonicalStart);
+        if (!keeper)
+            continue;
+        const payout = Number(keeper.payoutAmount ?? 0);
+        const gross = Number(keeper.grossSales ?? payout);
+        map.set(key, { accountId, weekStart: canonicalStart, weekEnd: canonicalEnd, totalPayout: payout, totalGross: gross });
     }
     return Array.from(map.values());
 }

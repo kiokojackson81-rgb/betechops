@@ -6,18 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.viewport = exports.metadata = void 0;
 exports.default = RootLayout;
 const jsx_runtime_1 = require("react/jsx-runtime");
-const google_1 = require("next/font/google");
+// Avoid fetching Google Fonts during CI/local build; use CSS variable placeholders
+// instead of `next/font/google` which performs network requests at build time.
 require("./globals.css");
 const ToastContainer_1 = __importDefault(require("./_components/ToastContainer"));
 const ConfirmProvider_1 = __importDefault(require("./_components/ConfirmProvider"));
-const geistSans = (0, google_1.Geist)({
-    variable: "--font-geist-sans",
-    subsets: ["latin"],
-});
-const geistMono = (0, google_1.Geist_Mono)({
-    variable: "--font-geist-mono",
-    subsets: ["latin"],
-});
+const geistSans = { variable: "--font-geist-sans" };
+const geistMono = { variable: "--font-geist-mono" };
 exports.metadata = {
     title: {
         default: "BetechOps Operations",

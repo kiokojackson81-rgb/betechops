@@ -12,6 +12,7 @@ async function resolveTargetUserId(req, options) {
     const session = await (0, next_1.getServerSession)(nextAuth_1.authOptions);
     const actorId = session?.user?.id ?? null;
     const actorRole = (session?.user?.role) ?? null;
+    const actorEmail = typeof session?.user?.email === "string" ? session.user.email.toLowerCase() : null;
     const allowedRoles = options?.allowedImpersonationRoles ?? DEFAULT_IMPERSONATION_ROLES;
     const canImpersonate = Boolean(impersonateId && actorId && actorRole && allowedRoles.includes(actorRole));
     const resolvedUserId = canImpersonate ? impersonateId : actorId;
@@ -20,6 +21,7 @@ async function resolveTargetUserId(req, options) {
         actorRole,
         impersonateId,
         resolvedUserId,
+        actorEmail,
     };
 }
 function composeIdentityResponse(meta, data) {
