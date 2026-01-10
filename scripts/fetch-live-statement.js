@@ -56,6 +56,37 @@ const jumia = require('../.worker-dist/src/lib/jumia');
 
     console.log('Found shop id:', shop.id, 'name:', shop.name, 'jumiaShopSid:', shop.jumiaShopSid);
 
+    // If shop has no embedded credentials, try to attach per-account JumiaAccount creds
+    if (!shop.credentialsEncrypted && !shop.apiConfig) {
+      try {
+        const acct = await prisma.marketplaceAccount.findUnique({ where: { id: shop.id === null ? undefined : undefined } });
+      } catch (e) {
+        // ignore — we'll try to resolve via associated marketplace account by statement row below
+      }
+    }
+
+    // Special handling: when we were invoked with a statement number, use the DB row's account to pick per-account creds
+    if (/^PS\d/.test(process.argv[2])) {
+      try {
+        const stmt = await prisma.marketplacePayoutWeek.findFirst({ where: { statementNumber: process.argv[2] } });
+        if (stmt) {
+          const ma = await prisma.marketplaceAccount.findUnique({ where: { id: stmt.accountId } });
+          if (ma) {
+            const jm = await prisma.jumiaAccount.findFirst({ where: { clientId: ma.jumiaShopSid } });
+            if (jm && (!shop.credentialsEncrypted && !shop.apiConfig)) {
+              // attach apiConfig so loadShopAuthById picks it up
+              await prisma.shop.update({ where: { id: shop.id }, data: { apiConfig: { clientId: jm.clientId, refreshToken: jm.refreshToken } } });
+              // reload shop
+              shop = await prisma.shop.findUnique({ where: { id: shop.id } });
+              console.log('Attached JumiaAccount creds to shop from JumiaAccount', jm.id);
+            }
+          }
+        }
+      } catch (e) {
+        // continue without per-account creds
+      }
+    }
+
     const res = await jumia.fetchPayoutsForShop(shop.id, day ? { day } : undefined);
     console.log('Vendor response keys:', Object.keys(res));
     // try to extract statements list
