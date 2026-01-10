@@ -2,7 +2,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '../src/lib/prisma.ts';
-import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from '../src/lib/weekwindow.ts';
+import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from '../src/lib/weekWindow';
 
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return '';
