@@ -1559,14 +1559,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)] items-start">
           <div className="space-y-4">
-            <ReceiptsEditor
-              receipts={receipts}
-              setReceipts={setReceipts}
-              totals={totals}
-              showWrapper={false}
-              showHeader={false}
-              wrapperClassName="space-y-4"
-            />
+            <ReceiptsEditor receipts={receipts} setReceipts={setReceipts} totals={totals} />
           </div>
           <div className="space-y-4">
             <StatsCard
