@@ -26,23 +26,11 @@ export default function ReceiptsEditor({
   setReceipts,
   totals,
   hideBuyingPrice = false,
-  showWrapper = true,
-  showHeader = true,
-  headerLabel = "Sales records",
-  headerTitle = "Add each receipt for today",
-  headerSubtitle = "Totals are calculated automatically.",
-  wrapperClassName,
 }: {
   receipts: ReceiptRow[];
   setReceipts: React.Dispatch<React.SetStateAction<ReceiptRow[]>>;
   totals: { totalSales: number; totalProfit: number; totalItems: number };
   hideBuyingPrice?: boolean;
-  showWrapper?: boolean;
-  showHeader?: boolean;
-  headerLabel?: string;
-  headerTitle?: string;
-  headerSubtitle?: string;
-  wrapperClassName?: string;
 }) {
   const newSaleRow = (): ReceiptRow => ({
     id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
@@ -104,15 +92,13 @@ export default function ReceiptsEditor({
     );
   };
 
-  const content = (
-    <div className="space-y-4">
-      {showHeader && (
-        <div className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-wide text-slate-400">{headerLabel}</p>
-          <h2 className="text-xl font-semibold">{headerTitle}</h2>
-          <p className="text-sm text-slate-400">{headerSubtitle}</p>
-        </div>
-      )}
+  return (
+    <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-xs uppercase tracking-wide text-slate-400">Sales records</p>
+        <h2 className="text-xl font-semibold">Add each receipt for today</h2>
+        <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
+      </div>
 
       <div className="flex flex-col gap-3">
         {receipts.map((receipt) => (
@@ -212,16 +198,6 @@ export default function ReceiptsEditor({
           + Add receipt
         </Button>
       </div>
-    </div>
+    </Card>
   );
-
-  if (showWrapper) {
-    return (
-      <Card className={wrapperClassName ?? "border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4"}>
-        {content}
-      </Card>
-    );
-  }
-
-  return <div className={wrapperClassName ?? "space-y-4"}>{content}</div>;
 }

@@ -1557,25 +1557,16 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
           </div>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)] items-start">
-          <div className="space-y-4">
-            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 space-y-4">
-              <div className="flex flex-col gap-1">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Sales records</p>
-                <h2 className="text-xl font-semibold">Add each receipt for today</h2>
-                <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
-              </div>
-              <ReceiptsEditor
-                receipts={receipts}
-                setReceipts={setReceipts}
-                totals={totals}
-                showWrapper={false}
-                showHeader={false}
-                wrapperClassName="space-y-4"
-              />
-            </Card>
+        {/* SALES RECORDS + QUICK STATS ROW */}
+        <div className="grid gap-6 lg:grid-cols-12 items-start">
+          <div className="lg:col-span-8">
+            <ReceiptsEditor
+              receipts={receipts}
+              setReceipts={setReceipts}
+              totals={totals}
+            />
           </div>
-          <div className="space-y-4">
+          <div className="lg:col-span-4 space-y-4">
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
@@ -1588,25 +1579,25 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             <EarningsCard summary={earningsSummary} />
             {currentUserEmail === "jeniffer@betech.co.ke" && (
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-100">
-                      Sales needing buying price
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Attach buying price to attendants&apos; sales to earn commission.
-                    </p>
-                  </div>
-                  {unpricedSales.length > 0 ? (
-                    <div className="flex flex-col items-start rounded-xl border border-slate-800/80 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-300 sm:flex-row sm:items-center sm:gap-4">
-                      <span>{unpricedQueueStats.receipts} receipts</span>
-                      <span>{unpricedQueueStats.items} items pending</span>
-                      {unpricedQueueStats.supportReceipts ? (
-                        <span>{unpricedQueueStats.supportReceipts} support receipts</span>
-                      ) : null}
-                    </div>
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Sales needing buying price
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Attach buying price to attendants&apos; sales to earn commission.
+                </p>
+              </div>
+              {unpricedSales.length > 0 ? (
+                <div className="flex flex-col items-start rounded-xl border border-slate-800/80 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-300 sm:flex-row sm:items-center sm:gap-4">
+                  <span>{unpricedQueueStats.receipts} receipts</span>
+                  <span>{unpricedQueueStats.items} items pending</span>
+                  {unpricedQueueStats.supportReceipts ? (
+                    <span>{unpricedQueueStats.supportReceipts} support receipts</span>
                   ) : null}
                 </div>
+              ) : null}
+            </div>
 
                 {unpricedSales.length === 0 ? (
 
@@ -1841,155 +1832,192 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
                   </div>
 
                 )}
+
               </Card>
             )}
-            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20 sticky top-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
-                  <h2 className="text-xl font-semibold">{config.day}</h2>
-                </div>
-                <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
-                  Auto-loaded from selected day
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                {groupedYesNo.map(([section, fields]) => (
-                  <div key={section} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {fields.map((f) => (
-                        <button
-                          type="button"
-                          key={f.key}
-                          onClick={() => updateField(f.key, !Boolean(form.fields[f.key]))}
-                          className={pillClass(Boolean(form.fields[f.key]))}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                {form.dayOfWeek === "Thursday" && (
-                  <section className="mt-6 rounded-xl border border-red-500/30 p-4">
-                    <h3 className="mb-3 text-sm font-semibold">
-                      Weekly Marketing Activities (Thursday)
-                    </h3>
-
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Weekly meeting
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWeeklyMeetingAttended(true);
-                              updateField("weeklyMeetingAttended", true);
-                            }}
-                            className={pillClass(weeklyMeetingAttended)}
-                          >
-                            Attended weekly marketing meeting
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWeeklyMeetingAttended(false);
-                              updateField("weeklyMeetingAttended", false);
-                            }}
-                            className={pillClass(!weeklyMeetingAttended)}
-                          >
-                            Did not attend
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Video shoot
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWeeklyVideoShootParticipated(true);
-                              updateField("videoShoot", true);
-                            }}
-                            className={pillClass(weeklyVideoShootParticipated)}
-                          >
-                            Participated in video shoot
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWeeklyVideoShootParticipated(false);
-                              updateField("videoShoot", false);
-                            }}
-                            className={pillClass(!weeklyVideoShootParticipated)}
-                          >
-                            Skipped video shoot
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {(config.numericFields || []).length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-slate-200">
-                      Numeric checks
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {(config.numericFields || []).map((f) => (
-                        <div key={f.key} className="space-y-2">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            {f.label}
-                          </label>
-                          <Input
-                            type="number"
-                            min={f.min}
-                            value={String(form.fields[f.key] ?? "")}
-                            onChange={(e) => updateField(f.key, e.target.value)}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {(config.textFields || []).length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
-                    <div className="grid gap-3">
-                      {(config.textFields || []).map((f) => (
-                        <div key={f.key} className="space-y-2">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            {f.label}
-                          </label>
-                          <Textarea
-                            value={String(form.fields[f.key] ?? "")}
-                            onChange={(e) => updateField(f.key, e.target.value)}
-                            placeholder={f.placeholder}
-                            rows={3}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
           </div>
         </div>
+
+        <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
+              <h2 className="text-xl font-semibold">{config.day}</h2>
+            </div>
+            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+              Auto-loaded from selected day
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {groupedYesNo.map(([section, fields]) => (
+              <div key={section} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {fields.map((f) => (
+                    <button
+                      type="button"
+                      key={f.key}
+                      onClick={() =>
+                        updateField(f.key, !Boolean(form.fields[f.key]))
+                      }
+                      className={pillClass(Boolean(form.fields[f.key]))}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {form.dayOfWeek === "Thursday" && (
+              <section className="mt-6 rounded-xl border border-red-500/30 p-4">
+                <h3 className="mb-3 text-sm font-semibold">
+                  Weekly Marketing Activities (Thursday)
+                </h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Weekly meeting
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyMeetingAttended(true);
+                            updateField("weeklyMeetingAttended", true);
+                          }}
+                          className={pillClass(weeklyMeetingAttended)}
+                        >
+                          Attended weekly marketing meeting
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyMeetingAttended(false);
+                            updateField("weeklyMeetingAttended", false);
+                          }}
+                          className={pillClass(!weeklyMeetingAttended)}
+                        >
+                          Did not attend
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Video shoot
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyVideoShootParticipated(true);
+                            updateField("weeklyVideoShootParticipated", true);
+                          }}
+                          className={pillClass(weeklyVideoShootParticipated)}
+                        >
+                          Participated in weekly video shoot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeeklyVideoShootParticipated(false);
+                            updateField("weeklyVideoShootParticipated", false);
+                          }}
+                          className={pillClass(!weeklyVideoShootParticipated)}
+                        >
+                          Did not participate
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-full">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Number of videos participated in (shooting)
+                      </label>
+                      <div className="mt-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={String(weeklyVideoCount)}
+                          onChange={(e) => {
+                            const v =
+                              e.target.value === ""
+                                ? ""
+                                : Math.max(0, Number(e.target.value));
+                            setWeeklyVideoCount(
+                              v === "" ? "" : Number(v),
+                            );
+                            updateField(
+                              "weeklyVideoCount",
+                              v === "" ? "" : Number(v),
+                            );
+                          }}
+                          className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {(config.numericFields || []).length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-200">
+                  Numeric checks
+                </h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(config.numericFields || []).map((f) => (
+                    <div key={f.key} className="space-y-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        {f.label}
+                      </label>
+                      <Input
+                        type="number"
+                        min={f.min}
+                        value={String(form.fields[f.key] ?? "")}
+                        onChange={(e) => updateField(f.key, e.target.value)}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(config.textFields || []).length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
+                <div className="grid gap-3">
+                  {(config.textFields || []).map((f) => (
+                    <div key={f.key} className="space-y-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        {f.label}
+                      </label>
+                      <Textarea
+                        value={String(form.fields[f.key] ?? "")}
+                        onChange={(e) => updateField(f.key, e.target.value)}
+                        placeholder={f.placeholder}
+                        rows={3}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
 
         <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
           <Button
