@@ -8,6 +8,7 @@ import Link from "next/link";
 import { logInfo } from "@/lib/logging";
 import { chooseAuthoritativeCandidate } from "@/lib/payoutDeduper";
 import JumiaWeeksLive from '@/components/JumiaWeeksLive.client';
+import JumiaManualSyncButton from "@/components/JumiaManualSyncButton";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ const numberFormatter = new Intl.NumberFormat("en-KE");
 const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
 const normalizeWeekDate = (date: Date) => parseDateOnlyUtc(dateOnlyISO(date)) ?? date;
 const isPlaceholderRow = (row: any) => row?.rawPayload?.placeholder === true;
+
+const manualSyncLookbackDays = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 90);
 
 type ReturnGroup = { status: MarketplaceReturnStatus; _count: { _all: number } };
 
@@ -351,11 +354,12 @@ export default async function AdminOnlineSummaryPage() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">Payout weeks</h3>
             <p className="text-sm text-slate-400">Click a week to view per-account payout amounts (paid & unpaid).</p>
           </div>
+          <JumiaManualSyncButton lookbackDays={manualSyncLookbackDays} />
         </div>
         <JumiaWeeksLive
           initialData={recentWeeksEnriched.slice(0, 8).map((w) => ({
