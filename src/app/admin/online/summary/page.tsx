@@ -136,16 +136,6 @@ function buildWeeksFromPayoutRows(rows: any[], totalActiveAccounts: number): Enr
     .sort((a, b) => (a.period.start < b.period.start ? 1 : -1));
 }
 
-function shouldUseCache(cacheWeeks: EnrichedWeek[], dbWeeks: EnrichedWeek[]): boolean {
-  if (!cacheWeeks.length) return false;
-  if (!dbWeeks.length) return true;
-  const cacheRecent = cacheWeeks[0];
-  const dbRecent = dbWeeks[0];
-  const payoutDiff = Math.abs((cacheRecent.displayPayout ?? 0) - (dbRecent.displayPayout ?? 0));
-  if (payoutDiff > 1) return false;
-  return cacheRecent.realRowCount >= dbRecent.realRowCount;
-}
-
 export default async function AdminOnlineSummaryPage() {
   const session = await auth();
   const role = (session?.user as any)?.role;
@@ -255,7 +245,6 @@ export default async function AdminOnlineSummaryPage() {
     { label: "Returns waiting at hub", value: returnsOpen },
   ];
 
-  // Use public.jumia_card_cache as authoritative card totals (updated by refresh script)
   const lookbackDate = new Date();
   lookbackDate.setDate(lookbackDate.getDate() - 90);
   const allAccounts = await prisma.marketplaceAccount.findMany({
@@ -264,17 +253,7 @@ export default async function AdminOnlineSummaryPage() {
   });
   const totalActiveAccounts = allAccounts.length;
 
-  let cacheEnrichedWeeks: EnrichedWeek[] = [];
-  try {
-    const cacheRows = await prisma.$queryRawUnsafe(
-      `SELECT week_start, week_end, platform, shop, total FROM public.jumia_card_cache WHERE week_start >= timestamptz '${lookbackDate.toISOString()}' ORDER BY week_start DESC`,
-    );
-    cacheEnrichedWeeks = buildWeeksFromCacheRows(cacheRows as any[], totalActiveAccounts);
-  } catch (err) {
-    console.error('[admin/online/summary] jumia_card_cache query failed, falling back to payoutWeek aggregation:', err);
-  }
-
-  let dbEnrichedWeeks: EnrichedWeek[] = [];
+  let enrichedWeeks: EnrichedWeek[] = [];
   try {
     const recentPayouts = await prisma.marketplacePayoutWeek.findMany({
       where: {
@@ -295,23 +274,21 @@ export default async function AdminOnlineSummaryPage() {
         id: true,
       },
     });
-    dbEnrichedWeeks = buildWeeksFromPayoutRows(recentPayouts, totalActiveAccounts);
+    enrichedWeeks = buildWeeksFromPayoutRows(recentPayouts, totalActiveAccounts);
   } catch (err) {
-    console.error('[admin/online/summary] failed to load MarketplacePayoutWeek fallback for Jumia weeks:', err);
+    console.error("[admin/online/summary] failed to load MarketplacePayoutWeek data for Jumia weeks:", err);
   }
 
-  const useCache = shouldUseCache(cacheEnrichedWeeks, dbEnrichedWeeks);
-  if (!useCache && cacheEnrichedWeeks.length && dbEnrichedWeeks.length) {
-    const cacheRecent = cacheEnrichedWeeks[0];
-    const dbRecent = dbEnrichedWeeks[0];
-    console.warn(
-      "[admin/online/summary] jumia_card_cache totals differ from MarketplacePayoutWeek (cache %s vs db %s) — using database data for week card",
-      cacheRecent.displayPayout,
-      dbRecent.displayPayout,
-    );
+  if (!enrichedWeeks.length) {
+    try {
+      const cacheRows = await prisma.$queryRawUnsafe(
+        `SELECT week_start, week_end, platform, shop, total FROM public.jumia_card_cache WHERE week_start >= timestamptz '${lookbackDate.toISOString()}' ORDER BY week_start DESC`,
+      );
+      enrichedWeeks = buildWeeksFromCacheRows(cacheRows as any[], totalActiveAccounts);
+    } catch (err) {
+      console.error("[admin/online/summary] jumia_card_cache query failed while populating fallback weeks:", err);
+    }
   }
-
-  const enrichedWeeks = useCache ? cacheEnrichedWeeks : dbEnrichedWeeks;
 
   
 
