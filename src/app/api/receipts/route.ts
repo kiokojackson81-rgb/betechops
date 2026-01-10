@@ -110,10 +110,11 @@ export async function GET(req: NextRequest) {
   const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
-  const wantsMine = requestedScope === "mine" || isImpersonating || issuerOnly === true;
   const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  // Rules: impersonating forces mine; otherwise admins/supervisors may request global explicitly
-  const scope = isImpersonating ? "mine" : (wantsGlobal && canGlobal ? "global" : "mine");
+  const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
+  const allowGlobalScope = specialGlobalViewer || (wantsGlobal && canGlobal);
+  // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
+  const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
