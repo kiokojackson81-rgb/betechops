@@ -7,6 +7,7 @@ import ReceiptsSummary from "./list/ReceiptsSummary";
 import RowActions from "./list/RowActions";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRow = {
   id: string;
@@ -47,7 +48,7 @@ type PaymentTotals = {
 
 type StaffOption = { id: string; name: string };
 
-type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom";
+type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom" | "trading-period";
 
 type SupportItemDetail = {
   id: string;
@@ -331,13 +332,6 @@ export default function ReceiptsAdminClient({
     };
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [sseEnabled, setSseEnabled] = useState(false);
-  // Start with SSE turned off by default to avoid unexpected snapshot reloads
-  // flipping the UI; users can opt-in via the toggle in the UI.
-  const [sseOn, setSseOn] = useState<boolean>(false); // user preference: use SSE when supported
-  const [sseStatus, setSseStatus] = useState<"connected" | "reconnecting" | "fallback" | "closed">("fallback");
-  const sseRetryRef = useRef(0);
-  const sseEsRef = useRef<EventSource | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -397,7 +391,8 @@ export default function ReceiptsAdminClient({
         savedQuick === "today" ||
         savedQuick === "yesterday" ||
         savedQuick === "this-week" ||
-        savedQuick === "custom"
+        savedQuick === "custom" ||
+        savedQuick === "trading-period"
       ) {
         setQuickRange(savedQuick);
       }
@@ -564,123 +559,10 @@ export default function ReceiptsAdminClient({
     return () => controller.abort();
   }, [fetchSummary]);
 
-  // detect EventSource support and prefer SSE when available
   useEffect(() => {
-    if (typeof window !== "undefined" && "EventSource" in window) {
-      setSseEnabled(true);
-    }
-  }, []);
-
-  // Poll the summary every 30 seconds when SSE is not enabled
-  useEffect(() => {
-    if (sseEnabled && sseOn) return; // SSE will handle updates
-    // polling active when SSE not supported or user opted out
     const interval = setInterval(() => void fetchSummary(), 30_000);
-    // run an immediate fetch to ensure quick update when switching modes
-    void fetchSummary();
     return () => clearInterval(interval);
-  }, [fetchSummary, sseEnabled, sseOn]);
-
-  // If SSE is enabled and user opted-in, open an EventSource with reconnect/backoff
-  useEffect(() => {
-    if (!sseEnabled || !sseOn) {
-      // ensure any existing ES is closed
-      try {
-        sseEsRef.current?.close();
-      } catch {}
-      sseEsRef.current = null;
-      setSseStatus("fallback");
-      return;
-    }
-
-    let aborted = false;
-
-      const startEventSource = () => {
-        sseRetryRef.current = Math.max(0, sseRetryRef.current);
-        const params = new URLSearchParams();
-        const startParam = buildDateParam(appliedFilters.start, false);
-        const endParam = buildDateParam(appliedFilters.end, true);
-        if (startParam) params.set("start", startParam);
-        if (endParam) params.set("end", endParam);
-        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
-        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
-        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
-        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
-        params.set("scope", scopeMode);
-        const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
-
-      try {
-        const es = new EventSource(url);
-        sseEsRef.current = es;
-        setSseStatus("reconnecting");
-
-        es.onopen = () => {
-          sseRetryRef.current = 0;
-          setSseStatus("connected");
-        };
-
-        es.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            setSummaryTotals({
-              totalSales: Number(data.totalSales ?? 0),
-              totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-              totalCost: Number(data.totalCost ?? 0),
-              totalProfitPriced: Number(data.totalProfitPriced ?? 0),
-              totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-              receiptsCount: Number(data.receiptsCount ?? 0),
-              itemsCount: Number(data.itemsCount ?? 0),
-              hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
-              awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
-              paymentTotals:
-                data?.paymentTotals ??
-                {
-                  mpesa: { totalSales: 0, count: 0 },
-                  cash: { totalSales: 0, count: 0 },
-                },
-            });
-          } catch (err) {
-            console.warn("[receipts] failed to parse SSE data", err);
-          }
-        };
-
-        es.onerror = () => {
-          // close and attempt reconnect with backoff
-          try {
-            es.close();
-          } catch {}
-          if (aborted) return;
-          sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-          const attempt = sseRetryRef.current;
-          const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-          setSseStatus("reconnecting");
-          setTimeout(() => {
-            if (!aborted) startEventSource();
-          }, delay);
-        };
-      } catch (err) {
-        console.warn("[receipts] failed to create EventSource", err);
-        // schedule reconnection
-        sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-        const attempt = sseRetryRef.current;
-        const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-        setSseStatus("reconnecting");
-        setTimeout(() => {
-          if (!aborted) startEventSource();
-        }, delay);
-      }
-    };
-
-    startEventSource();
-
-    return () => {
-      aborted = true;
-      try {
-        sseEsRef.current?.close();
-      } catch {}
-      sseEsRef.current = null;
-    };
-  }, [sseEnabled, sseOn, appliedFilters, scopeMode]);
+  }, [fetchSummary]);
 
   const persistFilterValues = (nextFilters: FilterState) => {
     try {
@@ -721,26 +603,31 @@ export default function ReceiptsAdminClient({
 
   const applyQuickRange = (key: AdminQuickRangeKey) => {
     const now = new Date();
-    const bounds =
-      key === "today"
-        ? {
-            start: formatDateInput(startOfDayForRange(now)),
-            end: formatDateInput(startOfDayForRange(now)),
-          }
-        : key === "yesterday"
-        ? (() => {
-            const yesterday = new Date(now);
-            yesterday.setDate(now.getDate() - 1);
-            const dayStart = startOfDayForRange(yesterday);
-            return {
-              start: formatDateInput(dayStart),
-              end: formatDateInput(dayStart),
-            };
-          })()
-        : (() => {
-            const { start, end } = getWeekBounds(now);
-            return { start: formatDateInput(start), end: formatDateInput(end) };
-          })();
+    let bounds: { start: string; end: string } | null = null;
+    if (key === "today") {
+      const dayStart = startOfDayForRange(now);
+      bounds = {
+        start: formatDateInput(dayStart),
+        end: formatDateInput(dayStart),
+      };
+    } else if (key === "yesterday") {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const dayStart = startOfDayForRange(yesterday);
+      bounds = {
+        start: formatDateInput(dayStart),
+        end: formatDateInput(dayStart),
+      };
+    } else if (key === "this-week") {
+      const { start, end } = getWeekBounds(now);
+      bounds = { start: formatDateInput(start), end: formatDateInput(end) };
+    } else if (key === "trading-period") {
+      const period = getTradingPeriodFor(now);
+      bounds = { start: formatDateInput(period.start), end: formatDateInput(period.end) };
+    } else {
+      setQuickRange("custom");
+      return;
+    }
     const nextFilters = { ...filters, ...bounds };
     setFilters(nextFilters);
     setAppliedFilters(nextFilters);
@@ -1063,6 +950,7 @@ export default function ReceiptsAdminClient({
   const profitColor =
     hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
+  const tradingPeriod = getTradingPeriodFor(new Date());
   const rangeLabelText =
     quickRange === "today"
       ? "Today"
@@ -1070,6 +958,8 @@ export default function ReceiptsAdminClient({
       ? "Yesterday"
       : quickRange === "this-week"
       ? "This week"
+      : quickRange === "trading-period"
+      ? tradingPeriod.label
       : "Custom range";
   const partialTotals = useMemo(() => {
     const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
@@ -1168,10 +1058,7 @@ export default function ReceiptsAdminClient({
           summary={summaryForDisplay ?? null}
           loading={summaryLoading}
           quickRange={quickRange}
-          onApplyQuickRange={(k) => applyQuickRange(k)}
-          sseOn={sseOn && sseEnabled}
-          sseStatus={sseStatus}
-          onToggleSse={(v: boolean) => setSseOn(v)}
+          onApplyQuickRange={applyQuickRange}
           rangeLabel={rangeDisplay}
         />
         <PaymentMethodFilterCard
