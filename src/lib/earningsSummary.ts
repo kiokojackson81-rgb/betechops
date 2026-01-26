@@ -226,13 +226,12 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     }
   }
 
-  // Attempt to load any existing CommissionLedger for this attendant/period.
-  // Some ledgers were created with period boundaries normalized to local
-  // midnight (YYYY-MM-DD 00:00:00) while others use TZ-normalized bounds
-  // (e.g., 21:00:00Z). Try both exact periodStart/periodEnd and also look
-  // for a matching `detail.marketing.periodKey` to find overlapping ledgers.
-  let ledger: { grossCommission: number; netCommission: number; penalties: number; detail: unknown } | null = null;
+  // Load any existing CommissionLedger for this attendant/period. Prefer
+  // the most-recent ledger (by `createdAt`) and favour ledgers that have a
+  // persisted `commissionTotal` > 0 so recomputes/upserts are shown in the UI.
+  let ledger: { grossCommission: number; netCommission: number; penalties: number; detail: unknown; commissionTotal?: number } | null = null;
   try {
+    // First try exact unique lookup
     const exact = await prisma.commissionLedger.findUnique({
       where: {
         userId_periodStart_periodEnd: {
@@ -242,74 +241,42 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
         },
       },
     });
-    let found: any = exact ?? null;
-    if (!found) {
-      const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
-      const res: any = await prisma.$queryRaw`
-          SELECT id, "grossCommission", "netCommission", "penalties", "commissionTotal", detail
-          FROM "CommissionLedger"
-          WHERE "userId" = ${opts.userId}
-            AND (
-              (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
-              OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
-            )
-          LIMIT 1
-        `;
-      if (Array.isArray(res) && res.length > 0) found = res[0];
-    }
-    if (found) {
+    if (exact) {
       ledger = {
-        grossCommission: Number(found.grossCommission ?? 0),
-        netCommission: Number(found.netCommission ?? 0),
-        penalties: Number(found.penalties ?? 0),
-        // include persisted commissionTotal when available
-        commissionTotal: Number(found.commissionTotal ?? found.commission_total ?? 0),
-        detail: found.detail ?? null,
+        grossCommission: Number(exact.grossCommission ?? 0),
+        netCommission: Number(exact.netCommission ?? 0),
+        penalties: Number(exact.penalties ?? 0),
+        commissionTotal: Number((exact as any).commissionTotal ?? 0),
+        detail: exact.detail ?? null,
       } as any;
-    }
-    // If still not found, try a tolerant lookup: find any ledger for the user
-    // whose periodStart is within +/- 24 hours of the expected period start.
-    if (!ledger) {
-      try {
-        const windowMs = 24 * 60 * 60 * 1000;
-        // Prefer the most-recent ledger that has an explicit persisted commissionTotal (> 0).
-        const nearPositive = await prisma.commissionLedger.findFirst({
-          where: {
-            userId: opts.userId,
-            periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
-            commissionTotal: { gt: 0 },
-          },
-          orderBy: { createdAt: "desc" },
-        });
-        if (nearPositive) {
-          ledger = {
-            grossCommission: Number(nearPositive.grossCommission ?? 0),
-            netCommission: Number(nearPositive.netCommission ?? 0),
-            penalties: Number(nearPositive.penalties ?? 0),
-            commissionTotal: Number((nearPositive as any).commissionTotal ?? (nearPositive as any).commission_total ?? 0),
-            detail: nearPositive.detail ?? null,
-          } as any;
-        } else {
-          // Fallback: tolerant lookup without commissionTotal filter (preserves previous behavior)
-          const near = await prisma.commissionLedger.findFirst({
-            where: {
-              userId: opts.userId,
-              periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
-            },
-            orderBy: { createdAt: "desc" },
-          });
-          if (near) {
-            ledger = {
-              grossCommission: Number(near.grossCommission ?? 0),
-              netCommission: Number(near.netCommission ?? 0),
-              penalties: Number(near.penalties ?? 0),
-              commissionTotal: Number((near as any).commissionTotal ?? (near as any).commission_total ?? 0),
-              detail: near.detail ?? null,
-            } as any;
-          }
-        }
-      } catch (e) {
-        // ignore tolerant lookup failures
+    } else {
+      // If no exact row, collect candidate ledgers that either embed the
+      // periodKey in `detail.marketing.periodKey` or have a near periodStart.
+      const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
+      const windowMs = 24 * 60 * 60 * 1000;
+      const candidates: any[] = await prisma.$queryRaw`
+        SELECT id, "grossCommission", "netCommission", "penalties", "commissionTotal", detail, "createdAt"
+        FROM "CommissionLedger"
+        WHERE "userId" = ${opts.userId}
+          AND (
+            (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
+            OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
+            OR ("periodStart" >= ${new Date(tradingPeriod.start.getTime() - windowMs)} AND "periodStart" <= ${new Date(tradingPeriod.start.getTime() + windowMs)})
+          )
+        ORDER BY "createdAt" DESC
+        LIMIT 10
+      `;
+
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        // Prefer first candidate that has a positive commissionTotal
+        let chosen = candidates.find((c) => Number(c.commissionTotal ?? 0) > 0) || candidates[0];
+        ledger = {
+          grossCommission: Number(chosen.grossCommission ?? 0),
+          netCommission: Number(chosen.netCommission ?? 0),
+          penalties: Number(chosen.penalties ?? 0),
+          commissionTotal: Number(chosen.commissionTotal ?? 0),
+          detail: chosen.detail ?? null,
+        } as any;
       }
     }
   } catch (err) {
