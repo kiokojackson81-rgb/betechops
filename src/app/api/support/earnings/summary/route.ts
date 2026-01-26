@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
@@ -12,7 +12,9 @@ export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["SUPPORT_OPS", "ADMIN"]);
   if (!auth.ok) return auth.res;
 
-  const period = getTradingPeriodFor(new Date());
+  const url = new URL(req.url);
+  const periodKeyParam = url.searchParams.get("periodKey");
+  const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(new Date());
   const periodKey = period.key;
 
   const [{ aggregates }, compPlan, adjustments, ledger] = await Promise.all([

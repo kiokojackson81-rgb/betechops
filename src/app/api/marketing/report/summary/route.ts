@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole, getActorId } from "@/lib/api";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getCurrentTradingPeriodFor } from "@/lib/marketingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
@@ -39,20 +39,29 @@ export async function GET(req: Request) {
   const today = nowInNairobi();
   const { tiers } = await getOrCreateCommissionPeriod(today);
   const current = await getCurrentTradingPeriodFor(today);
+  const periodKeyParam = url.searchParams.get("periodKey");
+  const requestedPeriod = parseTradingPeriodKey(periodKeyParam ?? undefined);
 
   let argPeriod: {
     start: Date;
     end: Date;
     key: string;
     label: string;
-  } = {
-    start: current.startDate,
-    end: current.endDate,
-    key: current.key,
-    label: current.label,
-  };
+  } = requestedPeriod
+    ? {
+        start: requestedPeriod.start,
+        end: requestedPeriod.end,
+        key: requestedPeriod.key,
+        label: requestedPeriod.label,
+      }
+    : {
+        start: current.startDate,
+        end: current.endDate,
+        key: current.key,
+        label: current.label,
+      };
 
-  if (!(today >= argPeriod.start && today <= argPeriod.end)) {
+  if (!requestedPeriod && !(today >= argPeriod.start && today <= argPeriod.end)) {
     const fallback = getTradingPeriodFor(today);
     argPeriod = {
       start: fallback.start,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
@@ -31,7 +31,9 @@ export async function GET(req: Request) {
   if (url.searchParams.has("start") || url.searchParams.has("end")) {
     return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
   }
-  const period = getTradingPeriodFor(new Date());
+  const periodKeyParam = url.searchParams.get("periodKey");
+  const requestedPeriod = parseTradingPeriodKey(periodKeyParam ?? undefined);
+  const period = requestedPeriod ?? getTradingPeriodFor(new Date());
   await getOrCreateCommissionPeriod(period.start);
   const start = period.start;
   const end = period.end;

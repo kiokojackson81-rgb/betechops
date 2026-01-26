@@ -4,11 +4,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
+import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
+import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import {
   DayName,
   marketingDayConfigs,
@@ -652,6 +654,9 @@ export default function MarketingTrackerPage() {
       commission: { commission: number };
     };
   }>(null);
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const selectedPeriodKey = selectedPeriod.key;
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const earningsSummaryJsonRef = useRef<string>("");
   const [rawUnpricedSales, setRawUnpricedSales] = useState<UnpricedSale[]>([]);
@@ -1074,9 +1079,11 @@ export default function MarketingTrackerPage() {
       try {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         const imp = impersonateIdFromWindow();
-        const url = imp
-          ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(imp)}`
-          : "/api/marketing/report/summary";
+        const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+        if (imp) {
+          params.set("impersonateId", imp);
+        }
+        const url = `/api/marketing/report/summary?${params.toString()}`;
         const res = await fetch(url, {
           credentials: "same-origin",
           signal: controller.signal,
@@ -1127,7 +1134,7 @@ export default function MarketingTrackerPage() {
       clearInterval(id);
       controller.abort();
     };
-  }, []);
+  }, [selectedPeriodKey]);
 
   // Poll earnings summary for the current attendant (used by EarningsCard)
   useEffect(() => {
@@ -1295,7 +1302,10 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
-    periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Loading current period\u2026";
+    periodSummary?.period.label ??
+    serverPeriodSummary?.period.label ??
+    selectedPeriod.label ??
+    "Loading current period\u2026";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
@@ -1462,6 +1472,23 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             />
           </div>
         </header>
+
+        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
+              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
+              {selectedPeriodKey !== currentPeriod.key && (
+                <p className="text-xs text-amber-300">Showing archived period.</p>
+              )}
+            </div>
+            <PeriodSwitcher
+              currentPeriod={currentPeriod}
+              selectedPeriod={selectedPeriod}
+              onSelectPeriod={setSelectedPeriod}
+            />
+          </div>
+        </div>
 
         {periodSummary && (
           <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">

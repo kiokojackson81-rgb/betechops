@@ -132,3 +132,8 @@ export function parseTradingPeriodKey(periodKey?: string): TradingPeriod | null 
   const label = `${formatLabel(start)} - ${formatLabel(end)}`;
   return { start, end, label, key: `${startPart}_${endPart}` };
 }
+
+export function getPreviousTradingPeriod(period: TradingPeriod): TradingPeriod {
+  const previousDay = new Date(period.start.getTime() - 24 * 60 * 60 * 1000);
+  return getTradingPeriodFor(previousDay);
+}
