@@ -65,7 +65,7 @@ export default async function PayrollPage({
   // back to the older marketing earnings helper if needed.
   let summary: any = null;
   try {
-    const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: new Date() });
+    const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
     const ledgerDetail = currentLedgerRaw?.detail as Record<string, any> | undefined;
     const marketingCommissionValue =
       ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
