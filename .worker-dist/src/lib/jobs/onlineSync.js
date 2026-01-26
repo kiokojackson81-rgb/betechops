@@ -764,15 +764,17 @@ async function syncOnlineMarketplaceData(opts) {
 }
 async function upsertWeeklySaleEntry(shopId, platform, weekStart, weekEnd, amount) {
     const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = (0, weekWindow_1.mondayToSundayNairobiWindow)(weekStart);
-    const key = { shopId, platform, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd };
-    const existing = await prisma_1.prisma.weeklySale.findUnique({
-        where: { shopId_platform_weekStart_weekEnd: key },
-    });
+    const key = { shopId, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd };
     const amountDec = new client_1.Prisma.Decimal(Number(amount ?? 0));
+    // Locate existing WeeklySale without comparing enum columns (avoid enum operator issues)
+    const existing = await prisma_1.prisma.weeklySale.findFirst({ where: { shopId: shopId, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } });
     if (!existing) {
         await prisma_1.prisma.weeklySale.create({
             data: {
-                ...key,
+                shopId: shopId,
+                platform: client_1.Platform.JUMIA,
+                weekStart: normalizedWeekStart,
+                weekEnd: normalizedWeekEnd,
                 amount: amountDec,
                 userId: null,
                 status: client_1.WeeklySaleStatus.PENDING,
@@ -783,16 +785,10 @@ async function upsertWeeklySaleEntry(shopId, platform, weekStart, weekEnd, amoun
         });
         return;
     }
-    const isManualOverride = existing.source === client_1.WeeklySaleSource.MANUAL ||
-        existing.createdBy !== null ||
-        existing.userId !== null ||
-        existing.approvedBy !== null;
+    const isManualOverride = existing.source === client_1.WeeklySaleSource.MANUAL || existing.createdBy !== null || existing.userId !== null || existing.approvedBy !== null;
     if (isManualOverride)
         return;
-    await prisma_1.prisma.weeklySale.update({
-        where: { shopId_platform_weekStart_weekEnd: key },
-        data: { amount: amountDec },
-    });
+    await prisma_1.prisma.weeklySale.update({ where: { id: existing.id }, data: { amount: amountDec } });
 }
 async function refreshJumiaToken(credentials, apiBase) {
     const res = await fetch(new URL("/token", apiBase).toString(), {
@@ -835,19 +831,24 @@ async function ensureWeeklySalePlaceholder(shopId, platform, weekStart, _weekEnd
         weekStart: normalizedWeekStart,
         weekEnd: normalizedWeekEnd,
     };
-    await prisma_1.prisma.weeklySale.upsert({
-        where: { shopId_platform_weekStart_weekEnd: key },
-        create: {
-            ...key,
-            amount: new client_1.Prisma.Decimal(0),
-            userId: null,
-            status: client_1.WeeklySaleStatus.PENDING,
-            source: client_1.WeeklySaleSource.AUTOMATIC,
-            createdBy: null,
-            approvedBy: null,
-        },
-        update: {},
-    });
+    // Avoid upsert with enum comparisons — use findFirst/create to be compatible with DB enum types
+    const existing = await prisma_1.prisma.weeklySale.findFirst({ where: { shopId: shopId, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } });
+    if (!existing) {
+        await prisma_1.prisma.weeklySale.create({
+            data: {
+                shopId: shopId,
+                platform: client_1.Platform.JUMIA,
+                weekStart: normalizedWeekStart,
+                weekEnd: normalizedWeekEnd,
+                amount: new client_1.Prisma.Decimal(0),
+                userId: null,
+                status: client_1.WeeklySaleStatus.PENDING,
+                source: client_1.WeeklySaleSource.AUTOMATIC,
+                createdBy: null,
+                approvedBy: null,
+            },
+        });
+    }
 }
 function statementTimestamp(statement) {
     const updated = statement.updatedAt ?? statement.createdAt;

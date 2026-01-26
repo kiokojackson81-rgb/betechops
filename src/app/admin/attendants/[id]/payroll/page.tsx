@@ -116,6 +116,10 @@ export default async function PayrollPage({
       commission: grossCommission,
       sales: userSummary.totalSales,
     };
+    // expose jenifferProgress to client for UI display when applicable
+    if (isJeniffer) {
+      (summary as any).jenifferProgress = (userSummary as any).jenifferProgress ?? null;
+    }
   } catch (e) {
     // fallback to existing implementation if the new helper fails for any reason
     try {

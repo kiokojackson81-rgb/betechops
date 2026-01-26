@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
 import { computeDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
@@ -49,6 +49,7 @@ export type EarningsSummary = {
     detail: unknown;
   } | null;
   adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
+  jenifferProgress?: { commission: number; baseCommission: number; prorated: number; nextTarget: number | null; progressPercent: number } | null;
 };
 
 export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: Date }) {
@@ -317,11 +318,21 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   }
 
   // Compute commission. For Brendah we use the direct-sales formula from
-  // `computeDirectCommission` and add product commissions. For others we
-  // continue to use the tiered calculation with an optional fallback percent.
-  const fallbackPercent = isJeniffer ? 0 : (totalProfit > 0 ? 0.05 : 0);
+  // `computeDirectCommission`. For Jeniffer apply special prorated-tier
+  // rule (base payouts + prorated share of next tier). Others use the
+  // tiered calculation with a fallback percent based on profit.
+  let salesCommission: number;
+  let jenifferProgress: any = null;
 
-  let salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
+  if (isJeniffer) {
+    const res = computeJenifferProratedCommission(totalSales, tiers.map((t) => ({ minSales: Number(t.minSales), maxSales: t.maxSales == null ? null : Number(t.maxSales), payoutFlat: Number(t.payoutFlat) })));
+    salesCommission = Number(res.commission ?? 0);
+    jenifferProgress = res;
+  } else {
+    const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
+    salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
+  }
+
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
     copiedProducts,

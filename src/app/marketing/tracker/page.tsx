@@ -319,6 +319,20 @@ function EarningsCard({ summary }: EarningsCardProps) {
       </div>
 
       <div className="space-y-2 text-sm">
+            {(summary as any).jenifferProgress ? (
+              <div className="rounded-xl border border-amber-600/30 bg-amber-900/5 p-3">
+                <div className="text-xs uppercase tracking-wide text-amber-300">Jeniffer progress</div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-xs text-amber-200">Next target</div>
+                  <div className="text-sm font-semibold text-amber-100">{((summary as any).jenifferProgress.nextTarget ?? "—").toString()}</div>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-xs text-amber-200">Prorated earned</div>
+                  <div className="text-sm font-semibold text-amber-100">KES {(Number((summary as any).jenifferProgress.prorated) ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="mt-2 text-xs text-amber-300">Band progress: {Math.round(((summary as any).jenifferProgress.progressPercent ?? 0) * 10000) / 100}%</div>
+              </div>
+            ) : null}
         {rows.map((row) => (
           <div
             key={row.label}
