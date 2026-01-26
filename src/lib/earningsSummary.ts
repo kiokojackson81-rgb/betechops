@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
-import { computeDirectCommission } from "./onlineCommission";
+import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
@@ -342,7 +342,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   let computedGrossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
 
   if (isBrendah) {
-    const direct = computeDirectCommission(totalSales, totalProfit);
+    const direct = computeBrendahDirectCommission(totalSales, totalProfit);
     salesCommission = direct.amount;
     computedGrossCommission = direct.amount + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
   }
@@ -350,13 +350,14 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // Prefer a persisted `commissionTotal` when present (authoritative),
   // otherwise fall back to computed values. This ensures the UI quick-stats
   // reflect the ledger-upserted commission when admins have run a recompute.
+  // For Brendah we always use the computed formula (ignore persisted ledger
+  // overrides). For others prefer a persisted `commissionTotal` when present.
   let finalGrossCommission: number;
   const ledgerPersistedCommission = ledger && (ledger as any).commissionTotal ? Number((ledger as any).commissionTotal) : 0;
-  if (ledgerPersistedCommission > 0) {
-    finalGrossCommission = ledgerPersistedCommission;
-  } else if (isBrendah) {
-    // If no persisted commission, use computed for Brendah
+  if (isBrendah) {
     finalGrossCommission = computedGrossCommission;
+  } else if (ledgerPersistedCommission > 0) {
+    finalGrossCommission = ledgerPersistedCommission;
   } else {
     finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
   }
