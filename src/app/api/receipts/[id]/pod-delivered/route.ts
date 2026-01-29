@@ -56,36 +56,57 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   if (podDelivery.status !== 'pending') {
     return NextResponse.json({ error: 'POD receipt already finalized' }, { status: 409 });
   }
+  // allow caller to select outcome. default to delivered.
+  let desiredStatus = 'delivered';
+  try {
+    const body = await req.json();
+    if (body && typeof body.status === 'string') {
+      const s = body.status.trim().toLowerCase();
+      if (s === 'delivered' || s === 'delivery_failed' || s === 'failed') {
+        desiredStatus = s === 'failed' ? 'delivery_failed' : s;
+      }
+    }
+  } catch {
+    // no body / invalid json — default to 'delivered'
+  }
   if (!receipt.orderId || !receipt.order) {
     return NextResponse.json({ error: 'Missing associated order' }, { status: 400 });
   }
 
-  const updatedPodDelivery = {
-    ...podDelivery,
-    status: 'delivered',
-    deliveredAt: new Date().toISOString(),
-    deliveredById: guard?.user?.id ?? null,
-  };
+  const updatedPodDeliveryBase: Record<string, any> = { ...podDelivery };
+  if (desiredStatus === 'delivered') {
+    updatedPodDeliveryBase.status = 'delivered';
+    updatedPodDeliveryBase.deliveredAt = new Date().toISOString();
+    updatedPodDeliveryBase.deliveredById = guard?.user?.id ?? null;
+  } else {
+    updatedPodDeliveryBase.status = 'failed';
+    updatedPodDeliveryBase.failedAt = new Date().toISOString();
+    updatedPodDeliveryBase.failedById = guard?.user?.id ?? null;
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: receipt.orderId! },
-        data: {
-          status: 'COMPLETED',
-          paymentStatus: 'PAID',
-          paidAmount: Math.max(Number(receipt.order?.totalAmount ?? 0), 0),
-        },
-      });
+      // Only finalize order/payment when actually delivered. If delivery failed,
+      // we persist the failed state but do not update order/payment/commissions.
+      if (desiredStatus === 'delivered') {
+        await tx.order.update({
+          where: { id: receipt.orderId! },
+          data: {
+            status: 'COMPLETED',
+            paymentStatus: 'PAID',
+            paidAmount: Math.max(Number(receipt.order?.totalAmount ?? 0), 0),
+          },
+        });
+      }
       await tx.receipt.update({
         where: { id: receiptId },
         data: {
-          data: { ...baseData, podDelivery: updatedPodDelivery } as Prisma.InputJsonValue,
+          data: { ...baseData, podDelivery: updatedPodDeliveryBase } as Prisma.InputJsonValue,
         },
       });
     });
   } catch (err) {
-    console.error(`[pod][${requestId}] failed to mark POD delivered`, err);
+    console.error(`[pod][${requestId}] failed to mark POD ${desiredStatus}`, err);
     return NextResponse.json({ error: 'Failed to mark POD delivery' }, { status: 500 });
   }
 
@@ -106,7 +127,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
             orderId: receipt.orderId,
           } as Prisma.InputJsonValue,
           after: {
-            podDelivery: updatedPodDelivery,
+            podDelivery: updatedPodDeliveryBase,
             orderId: receipt.orderId,
           } as Prisma.InputJsonValue,
         },
@@ -128,9 +149,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               paidAmount: Number(previousOrder?.paidAmount ?? 0),
             } as Prisma.InputJsonValue,
             after: {
-              status: 'COMPLETED',
-              paymentStatus: 'PAID',
-              paidAmount: orderPaidAfter,
+              status: desiredStatus === 'delivered' ? 'COMPLETED' : previousOrder?.status ?? null,
+              paymentStatus: desiredStatus === 'delivered' ? 'PAID' : previousOrder?.paymentStatus ?? null,
+              paidAmount: desiredStatus === 'delivered' ? orderPaidAfter : Number(previousOrder?.paidAmount ?? 0),
             } as Prisma.InputJsonValue,
           },
         });
@@ -154,11 +175,22 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
   let sendResult: any = null;
   try {
-    sendResult = await sendReceiptChannels(receiptId, ['whatsapp'], {
-      requestId,
-      chatraceTag: 'betech_dispatch_pay_on_delivery',
-      skipDefaultChatraceTags: true,
-    });
+    // If a chatrace push already occurred at creation time, avoid duplicating the WhatsApp.
+    const existingChatrace = typeof baseData.chatrace === 'object' && baseData.chatrace ? (baseData.chatrace as Record<string, any>) : null;
+    if (desiredStatus === 'delivered' && existingChatrace?.status === 'sent') {
+      console.info(`[pod][${requestId}] skipping chatrace send: already sent at creation`);
+      sendResult = { ok: true, sent: [], channelStatus: { chatrace: 'skipped', whatsapp: 'skipped' } } as any;
+    } else if (desiredStatus === 'delivered') {
+      sendResult = await sendReceiptChannels(receiptId, ['whatsapp'], {
+        requestId,
+        chatraceTag: 'betech_dispatch_pay_on_delivery',
+        skipDefaultChatraceTags: true,
+      });
+    } else {
+      // delivery_failed: do not attempt to send WhatsApp
+      console.info(`[pod][${requestId}] delivery failed — skipping chatrace send`);
+      sendResult = { ok: true, sent: [], channelStatus: { chatrace: 'skipped', whatsapp: 'skipped' } } as any;
+    }
   } catch (sendErr) {
     console.error(`[pod][${requestId}] sendReceiptChannels failed`, sendErr);
     sendResult = {
