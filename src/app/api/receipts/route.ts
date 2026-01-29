@@ -155,22 +155,28 @@ export async function GET(req: NextRequest) {
       })
     : [];
 
-  const mapPosRow = (r: any) => ({
-    id: r.id,
-    source: "pos" as const,
-    orderRef: r.order?.orderNumber,
-    docType: r.docType,
-    createdAt: r.generatedAt,
-    customerName: r.order?.customerName,
-    customerPhone: (r.order as any)?.customerPhone ?? null,
-    total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
-    attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
-    status: r.order?.status ?? r.order?.paymentStatus ?? null,
-    items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
-    paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
-    paymentStatus: (r.order as any)?.paymentStatus ?? null,
-    detailUrl: `/receipts/${r.id}`,
-  });
+  const mapPosRow = (r: any) => {
+    const podDeliveryData = (r.data as any)?.podDelivery;
+    return {
+      id: r.id,
+      source: "pos" as const,
+      orderRef: r.order?.orderNumber,
+      docType: r.docType,
+      createdAt: r.generatedAt,
+      customerName: r.order?.customerName,
+      customerPhone: (r.order as any)?.customerPhone ?? null,
+      total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
+      attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
+      status: r.order?.status ?? r.order?.paymentStatus ?? null,
+      items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
+      paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
+      paymentStatus: (r.order as any)?.paymentStatus ?? null,
+      detailUrl: `/receipts/${r.id}`,
+      isPodDelivery: Boolean(podDeliveryData?.status),
+      podDeliveryStatus: podDeliveryData?.status ?? null,
+      podDeliveryNote: podDeliveryData?.note ?? null,
+    };
+  };
 
   const mapMarketingRow = (receipt: any) => ({
     id: `marketing-${receipt.id}`,

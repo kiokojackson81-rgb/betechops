@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Edit3, Trash2, Download, Send, Printer } from "lucide-react";
+import { Edit3, Trash2, Download, Send, Printer, Check } from "lucide-react";
 
 export default function RowActions({
   onEdit,
@@ -10,6 +10,9 @@ export default function RowActions({
   onDownload,
   onSendWhatsapp,
   onPrint,
+  onPodAction,
+  podActionLabel = "Mark delivered",
+  podActionProcessing = false,
   disabled,
 }: {
   onEdit: () => void;
@@ -18,6 +21,9 @@ export default function RowActions({
   onDownload: () => void;
   onSendWhatsapp: () => void;
   onPrint: () => void;
+  onPodAction?: () => void;
+  podActionLabel?: string;
+  podActionProcessing?: boolean;
   disabled?: boolean;
 }) {
   // Responsive layout: show icon + label on md+, icons-only on small screens
@@ -80,6 +86,19 @@ export default function RowActions({
         <Send size={16} />
         <span className="hidden md:inline">WhatsApp</span>
       </button>
+
+      {onPodAction && (
+        <button
+          aria-label={podActionLabel}
+          title={podActionLabel}
+          onClick={onPodAction}
+          disabled={disabled || podActionProcessing}
+          className={`${btnBase} bg-yellow-500/60 hover:bg-yellow-500 text-black`}
+        >
+          <Check size={16} />
+          <span className="hidden md:inline">{podActionProcessing ? "Processing..." : podActionLabel}</span>
+        </button>
+      )}
 
       <button
         aria-label="Print receipt"

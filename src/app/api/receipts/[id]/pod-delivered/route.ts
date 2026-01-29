@@ -89,6 +89,57 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: 'Failed to mark POD delivery' }, { status: 500 });
   }
 
+  const actorId = guard?.user?.id ?? null;
+  const orderId = receipt.orderId;
+  const previousOrder = receipt.order;
+  const orderPaidAfter = Math.max(Number(receipt.order?.totalAmount ?? 0), 0);
+  if (actorId) {
+    try {
+      await prisma.actionLog.create({
+        data: {
+          actorId,
+          entity: 'Receipt',
+          entityId: receiptId,
+          action: 'POD_DELIVERED',
+          before: {
+            podDelivery: podDelivery ?? null,
+            orderId: receipt.orderId,
+          } as Prisma.InputJsonValue,
+          after: {
+            podDelivery: updatedPodDelivery,
+            orderId: receipt.orderId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    } catch (logErr) {
+      console.warn('[pod] failed to create receipt action log', logErr);
+    }
+    if (orderId) {
+      try {
+        await prisma.actionLog.create({
+          data: {
+            actorId,
+            entity: 'Order',
+            entityId: orderId,
+            action: 'POD_DELIVERED',
+            before: {
+              status: previousOrder?.status ?? null,
+              paymentStatus: previousOrder?.paymentStatus ?? null,
+              paidAmount: Number(previousOrder?.paidAmount ?? 0),
+            } as Prisma.InputJsonValue,
+            after: {
+              status: 'COMPLETED',
+              paymentStatus: 'PAID',
+              paidAmount: orderPaidAfter,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      } catch (logErr) {
+        console.warn('[pod] failed to create order action log', logErr);
+      }
+    }
+  }
+
   if (receipt.order?.attendantId) {
     try {
       publishSummaryUpdate({

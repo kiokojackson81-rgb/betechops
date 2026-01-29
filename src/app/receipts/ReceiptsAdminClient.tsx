@@ -23,6 +23,9 @@ type ReceiptRow = {
   paymentStatus?: string | null;
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
+  isPodDelivery?: boolean;
+  podDeliveryStatus?: string | null;
+  podDeliveryNote?: string | null;
 };
 
 type ReceiptSummary = {
@@ -353,6 +356,7 @@ export default function ReceiptsAdminClient({
   });
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [podActionId, setPodActionId] = useState<string | null>(null);
   const firstLoadRef = useRef(true);
   const STORAGE_KEYS = {
     attendantId: "receipts.attendantId.v1",
@@ -650,6 +654,43 @@ export default function ReceiptsAdminClient({
   const handleManualRefresh = () => {
     void loadRows(page);
   };
+  const fetchReceiptDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
+      setDetail(payload as ReceiptDetailPayload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load receipt";
+      showToast(message, "error");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [showToast]);
+  const handleMarkPodDelivered = useCallback(
+    async (receiptId: string) => {
+      setPodActionId(receiptId);
+      try {
+        const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, { method: "POST" });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || "Failed to mark POD delivered");
+        showToast("POD delivery recorded and notification queued", "success");
+        void loadRows(page, { silent: true });
+        void fetchSummary();
+        if (selected?.id === receiptId) {
+          void fetchReceiptDetail(receiptId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to mark POD delivery";
+        showToast(message, "error");
+      } finally {
+        setPodActionId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
+
   const handleRowClick = (row: ReceiptRow) => {
     if ((row.source ?? "pos") !== "pos") {
       showToast("Receipt detail view is only available for POS receipts", "info");
@@ -658,20 +699,7 @@ export default function ReceiptsAdminClient({
     setSelected(row);
     setDrawerOpen(true);
     setDetail(null);
-    setDetailLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(`/api/receipts/${row.id}`, { cache: "no-store" });
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
-        setDetail(payload as ReceiptDetailPayload);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load receipt";
-        showToast(message, "error");
-      } finally {
-        setDetailLoading(false);
-      }
-    })();
+    void fetchReceiptDetail(row.id);
   };
 
   const closeDrawer = () => {
@@ -1203,6 +1231,7 @@ export default function ReceiptsAdminClient({
               </tr>
             )}
             {rows.map((row) => {
+              const isPodPending = row.isPodDelivery && row.podDeliveryStatus === "pending";
               const isSelected = row.id === selected?.id && drawerOpen;
               return (
                 <tr
@@ -1233,25 +1262,38 @@ export default function ReceiptsAdminClient({
                     <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
                       {formatBadgeLabel(row.status)}
                     </span>
+                    {row.isPodDelivery && (
+                      <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
+                        POD {formatBadgeLabel(row.podDeliveryStatus)}
+                      </div>
+                    )}
+                    {row.podDeliveryNote && (
+                      <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
                   <td className="px-3 py-3 text-right">
                       <RowActions
                         onEdit={() => {
-                        // load detail then open edit modal when ready
-                        setPendingEditId(row.id);
-                        handleRowClick(row);
-                      }}
-                      onEditItems={() => {
-                        setPendingEditId(row.id);
-                        handleRowClick(row);
-                      }}
-                      onDelete={() => void deleteReceiptById(row.id)}
-                      onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
-                      onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
-                      onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
+                          // load detail then open edit modal when ready
+                          setPendingEditId(row.id);
+                          handleRowClick(row);
+                        }}
+                        onEditItems={() => {
+                          setPendingEditId(row.id);
+                          handleRowClick(row);
+                        }}
+                        onDelete={() => void deleteReceiptById(row.id)}
+                        onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
+                        onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
+                        onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
+                        onPodAction={
+                          isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
+                        }
+                        podActionLabel="Mark POD delivered"
+                        podActionProcessing={podActionId === row.id}
                         disabled={loading || (row.source ?? "pos") !== "pos"}
-                    />
+                      />
                   </td>
                 </tr>
               );
@@ -1357,15 +1399,31 @@ export default function ReceiptsAdminClient({
                         <p className={`text-lg font-semibold ${profitColor}`}>
                           {hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data"}
                         </p>
-                      </div>
                     </div>
-                    {detail.receipt.docType === "LAYAWAY" && (
-                      <p className="mt-2 text-xs text-amber-300">
-                        Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
+                  </div>
+                  {detail.receipt.docType === "LAYAWAY" && (
+                    <p className="mt-2 text-xs text-amber-300">
+                      Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+                {detail.receipt.data?.podDelivery && (
+                  <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
+                    <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
+                      POD {formatBadgeLabel(detail.receipt.data.podDelivery.status)}
+                    </p>
+                    {detail.receipt.data.podDelivery.note && (
+                      <p className="mt-2 text-sm text-white">{detail.receipt.data.podDelivery.note}</p>
+                    )}
+                    {detail.receipt.data.podDelivery.createdAt && (
+                      <p className="mt-2 text-[11px] text-yellow-200">
+                        Created {formatDateTime(detail.receipt.data.podDelivery.createdAt)}
                       </p>
                     )}
                   </div>
-                </div>
+                )}
 
                 <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>
@@ -1460,6 +1518,16 @@ export default function ReceiptsAdminClient({
                   >
                     {sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp"}
                   </button>
+                  {detail.receipt.data?.podDelivery?.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkPodDelivered(detail.receipt.id)}
+                      disabled={podActionId === detail.receipt.id}
+                      className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
+                    >
+                      {podActionId === detail.receipt.id ? "Processing..." : "Mark POD delivered"}
+                    </button>
+                  )}
                   {allowEdit && (
                     <button
                       type="button"
