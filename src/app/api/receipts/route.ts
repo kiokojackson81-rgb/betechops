@@ -1059,6 +1059,7 @@ export async function POST(req: NextRequest) {
           requestId,
           chatraceTag: 'betech_dispatch_pay_on_delivery',
           skipDefaultChatraceTags: true,
+          markPodSent: true,
         });
         console.info(`[receiptSender][${requestId}] SEND:ok`, { channelStatus: sendResult.channelStatus });
       } catch (sendErr) {

@@ -5,6 +5,9 @@ import { publishSummaryUpdate } from '@/lib/receiptSseBroker';
 import { requireAttendant } from '@/lib/auth';
 import { sendReceiptChannels } from '@/workers/receiptSender';
 import { notifyInternalReceipt } from '@/lib/receiptInternalNotifications';
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from '@/lib/commission';
+import { getTradingPeriodFor } from '@/lib/tradingPeriod';
+import { recomputeSupportCommissionLedger } from '@/lib/supportCommission';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -87,7 +90,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   try {
     await prisma.$transaction(async (tx) => {
       // Only finalize order/payment when actually delivered. If delivery failed,
-      // we persist the failed state but do not update order/payment/commissions.
+      // we persist the failed state but do not immediately update order/payment/commissions.
       if (desiredStatus === 'delivered') {
         await tx.order.update({
           where: { id: receipt.orderId! },
@@ -98,12 +101,61 @@ export async function POST(req: NextRequest, context: ParamsContext) {
           },
         });
       }
+
       await tx.receipt.update({
         where: { id: receiptId },
         data: {
           data: { ...baseData, podDelivery: updatedPodDeliveryBase } as Prisma.InputJsonValue,
         },
       });
+
+      // If delivered, release commission record and earnings, recompute ledgers.
+      if (desiredStatus === 'delivered') {
+        try {
+          const attendantId = receipt.order?.attendantId ?? null;
+          // Release commission record if present
+          if (attendantId) {
+            const provisional = await tx.commissionRecord.findFirst({ where: { orderId: receipt.orderId } });
+            const { period, tiers } = await getOrCreateCommissionPeriod(new Date());
+            const totalsAgg = await tx.order.aggregate({
+              where: { attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: 'COMPLETED' },
+              _sum: { totalAmount: true, paidAmount: true },
+            });
+            const totalSales = Number(totalsAgg._sum.totalAmount ?? 0);
+            const totalProfit = totalSales;
+            const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers as any);
+
+            if (provisional && tx.commissionRecord) {
+              await tx.commissionRecord.update({ where: { id: provisional.id }, data: { amount: String(salesCommission), status: 'RELEASED', releasedAt: new Date(), periodId: period.id } });
+            }
+
+            // Release pending earnings for this order
+            if (tx.commissionEarning) {
+              await tx.commissionEarning.updateMany({ where: { orderItem: { orderId: receipt.orderId } as any, status: 'PENDING' }, data: { status: 'RELEASED' } });
+            }
+
+            // Upsert balance
+            if (tx.balance) {
+              try {
+                await tx.balance.upsert({ where: { userId: attendantId }, create: { userId: attendantId, available: Number(salesCommission), pending: 0 }, update: { available: { increment: Number(salesCommission) } as any } });
+              } catch (e) {
+                // ignore
+              }
+            }
+
+            // Create commission ledger entry for audit
+            if (tx.commissionLedger) {
+              try {
+                await tx.commissionLedger.create({ data: { userId: attendantId, periodStart: period.startDate, periodEnd: period.endDate, grossCommission: Number(salesCommission), penalties: 0, netCommission: Number(salesCommission), commissionTotal: Number(salesCommission), detail: { reason: 'POD delivered: release on delivery' } } });
+              } catch (e) {
+                // ignore ledger failures
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[pod] failed to release commissions on delivered', e);
+        }
+      }
     });
   } catch (err) {
     console.error(`[pod][${requestId}] failed to mark POD ${desiredStatus}`, err);
@@ -173,12 +225,27 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     }
   }
 
+  // Recompute support commission ledger for the attendant for today's trading period
+  try {
+    const attendantId = receipt.order?.attendantId ?? null;
+    if (attendantId) {
+      const period = getTradingPeriodFor(new Date());
+      await recomputeSupportCommissionLedger({ userId: attendantId, period });
+    }
+  } catch (e) {
+    console.warn('[pod] failed to recompute support commission ledger', e);
+  }
+
   let sendResult: any = null;
   try {
-    // If a chatrace push already occurred at creation time, avoid duplicating the WhatsApp.
+    // If a creation-time POD send already recorded a sent timestamp, avoid duplicating the WhatsApp.
     const existingChatrace = typeof baseData.chatrace === 'object' && baseData.chatrace ? (baseData.chatrace as Record<string, any>) : null;
-    if (desiredStatus === 'delivered' && existingChatrace?.status === 'sent') {
-      console.info(`[pod][${requestId}] skipping chatrace send: already sent at creation`);
+    const podSentAt = typeof baseData.podDelivery === 'object' && baseData.podDelivery ? (baseData.podDelivery as any).sentAt : null;
+    if (desiredStatus === 'delivered' && podSentAt) {
+      console.info(`[pod][${requestId}] skipping chatrace send: podDelivery.sentAt present (${podSentAt})`);
+      sendResult = { ok: true, sent: [], channelStatus: { chatrace: 'skipped', whatsapp: 'skipped' } } as any;
+    } else if (desiredStatus === 'delivered' && existingChatrace?.status === 'sent') {
+      console.info(`[pod][${requestId}] skipping chatrace send: chatrace.status=sent`);
       sendResult = { ok: true, sent: [], channelStatus: { chatrace: 'skipped', whatsapp: 'skipped' } } as any;
     } else if (desiredStatus === 'delivered') {
       sendResult = await sendReceiptChannels(receiptId, ['whatsapp'], {
