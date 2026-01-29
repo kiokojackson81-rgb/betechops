@@ -645,6 +645,32 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
                 receiptNumber: receipt.order?.orderNumber ?? receipt.id,
                 debug: result?.debug,
             });
+            // If this push is the creation-time POD send, record an explicit
+            // audit flag so downstream duplicate-detection and business logic
+            // can rely on a single canonical timestamp.
+            try {
+                const isPodTag = (opts?.chatraceTag || '').trim() === 'betech_dispatch_pay_on_delivery';
+                const shouldMarkPodSent = Boolean(opts?.markPodSent) || isPodTag;
+                if (result?.ok && shouldMarkPodSent) {
+                    const baseData = typeof receipt.data === 'object' && receipt.data
+                        ? { ...receipt.data }
+                        : {};
+                    const existingPod = typeof baseData.podDelivery === 'object' && baseData.podDelivery
+                        ? { ...baseData.podDelivery }
+                        : {};
+                    const nextData = { ...baseData, podDelivery: { ...existingPod, sentAt: new Date().toISOString() } };
+                    try {
+                        await prisma_1.prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData } });
+                        console.info('[receipts][podDelivery] marked creation-time podDelivery.sentAt', { receiptId: receipt.id });
+                    }
+                    catch (podErr) {
+                        console.error('[receipts][podDelivery] failed to persist sentAt', podErr instanceof Error ? podErr.message : String(podErr));
+                    }
+                }
+            }
+            catch (e) {
+                console.error('[receipts][podDelivery] unexpected error while marking podDelivery.sentAt', e);
+            }
             if (receipt.id === 'Betech-20251218-21941') {
                 console.error('[receipts][chatrace][DIAGNOSTIC] full debug', { receiptId: receipt.id, debug: result?.debug });
             }

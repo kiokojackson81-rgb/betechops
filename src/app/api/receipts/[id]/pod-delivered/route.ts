@@ -56,8 +56,16 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   if (!podDelivery?.status) {
     return NextResponse.json({ error: 'Receipt is not marked for POD delivery' }, { status: 400 });
   }
+  // Prevent concurrent/follow-up finalization
+  const lockTtlMs = Number(process.env.POD_FINALIZE_LOCK_TTL_MS || 5 * 60 * 1000);
   if (podDelivery.status !== 'pending') {
     return NextResponse.json({ error: 'POD receipt already finalized' }, { status: 409 });
+  }
+  if (podDelivery.lockedAt) {
+    const lockedAt = new Date(podDelivery.lockedAt);
+    if (!isNaN(lockedAt.getTime()) && Date.now() - lockedAt.getTime() < lockTtlMs) {
+      return NextResponse.json({ error: 'POD delivery is currently being finalized by another process' }, { status: 409 });
+    }
   }
   // allow caller to select outcome. default to delivered.
   let desiredStatus = 'delivered';
@@ -69,6 +77,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         desiredStatus = s === 'failed' ? 'delivery_failed' : s;
       }
     }
+    // Support optional forcing (admin-only) when callers send { force: true }
+    if (body && body.force === true) {
+      const role = guard?.user?.role ?? 'attendant';
+      if (role !== 'admin') {
+        return NextResponse.json({ error: 'Insufficient role to force finalization' }, { status: 403 });
+      }
+    }
   } catch {
     // no body / invalid json — default to 'delivered'
   }
@@ -77,18 +92,44 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   }
 
   const updatedPodDeliveryBase: Record<string, any> = { ...podDelivery };
+  const finalReason = (await (async () => {
+    try {
+      const b = await req.json();
+      return b?.reason ?? null;
+    } catch {
+      return null;
+    }
+  })()) as string | null;
+
   if (desiredStatus === 'delivered') {
     updatedPodDeliveryBase.status = 'delivered';
     updatedPodDeliveryBase.deliveredAt = new Date().toISOString();
     updatedPodDeliveryBase.deliveredById = guard?.user?.id ?? null;
+    if (finalReason) updatedPodDeliveryBase.deliveredReason = finalReason;
   } else {
-    updatedPodDeliveryBase.status = 'failed';
+    updatedPodDeliveryBase.status = 'delivery_failed';
     updatedPodDeliveryBase.failedAt = new Date().toISOString();
     updatedPodDeliveryBase.failedById = guard?.user?.id ?? null;
+    if (finalReason) updatedPodDeliveryBase.failedReason = finalReason;
   }
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Re-read receipt inside transaction to enforce lock and avoid race
+      const pr = await tx.receipt.findUnique({ where: { id: receiptId } });
+      const prData = typeof pr?.data === 'object' && pr?.data ? (pr.data as any) : {};
+      const prPod = prData?.podDelivery || {};
+      if (prPod.lockedAt) {
+        const lockedAt = new Date(prPod.lockedAt);
+        if (!isNaN(lockedAt.getTime()) && Date.now() - lockedAt.getTime() < lockTtlMs) {
+          throw new Error('POD finalization locked');
+        }
+      }
+
+      // mark lockedAt to prevent concurrent finalization
+      prPod.lockedAt = new Date().toISOString();
+      await tx.receipt.update({ where: { id: receiptId }, data: { data: { ...prData, podDelivery: prPod } as Prisma.InputJsonValue } });
+
       // Only finalize order/payment when actually delivered. If delivery failed,
       // we persist the failed state but do not immediately update order/payment/commissions.
       if (desiredStatus === 'delivered') {
@@ -105,7 +146,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       await tx.receipt.update({
         where: { id: receiptId },
         data: {
-          data: { ...baseData, podDelivery: updatedPodDeliveryBase } as Prisma.InputJsonValue,
+          data: { ...baseData, podDelivery: { ...updatedPodDeliveryBase, lockedAt: undefined } } as Prisma.InputJsonValue,
         },
       });
 
@@ -160,6 +201,25 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   } catch (err) {
     console.error(`[pod][${requestId}] failed to mark POD ${desiredStatus}`, err);
     return NextResponse.json({ error: 'Failed to mark POD delivery' }, { status: 500 });
+  }
+
+  // Ensure we don't leave a stale lock in receipt.data.podDelivery.lockedAt
+  try {
+    const recheck = await prisma.receipt.findUnique({ where: { id: receiptId } });
+    if (recheck) {
+      const rd = typeof recheck.data === 'object' && recheck.data ? (recheck.data as any) : {};
+      const rp = rd?.podDelivery || {};
+      if (rp.lockedAt) {
+        try {
+          rd.podDelivery = { ...rp, lockedAt: undefined };
+          await prisma.receipt.update({ where: { id: receiptId }, data: { data: rd as Prisma.InputJsonValue } });
+        } catch (clearErr) {
+          console.warn('[pod] failed to clear podDelivery.lockedAt after finalization', { receiptId, error: clearErr instanceof Error ? clearErr.message : String(clearErr) });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[pod] failed to re-check receipt to clear lock', e);
   }
 
   const actorId = guard?.user?.id ?? null;
