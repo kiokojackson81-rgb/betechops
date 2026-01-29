@@ -12,8 +12,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
-import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
+import { getSiteUrl, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
@@ -326,6 +325,7 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = (await req.json()) as any;
+  const isPodDelivery = Boolean(payload?.podDelivery);
   const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber
@@ -367,8 +367,26 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
+      const entryDateIso = entryDate.toISOString();
+      const metadataFromPayload =
+        payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined);
+      const podMetadata = isPodDelivery
+        ? {
+            ...(metadataFromPayload ?? {}),
+            podDelivery: {
+              status: 'pending',
+              type: 'pay_on_delivery',
+              note: payload?.podDelivery?.note ?? null,
+              createdAt: entryDateIso,
+              createdById: issuedById ?? null,
+            },
+          }
+        : metadataFromPayload;
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
+      const orderStatus = docType === "LAYAWAY" ? "PENDING" : isPodDelivery ? "PENDING" : "COMPLETED";
+      const orderPaymentStatus = docType === "LAYAWAY" ? "PARTIAL" : isPodDelivery ? "UNPAID" : "PAID";
+      const paidAmountValue = docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -410,12 +428,12 @@ export async function POST(req: NextRequest) {
           customerEmail: payload?.customerEmail ?? null,
           attendantId: attendantId ?? null,
           // persist deliveryAddress inside `metadata` JSON to avoid schema mismatch
-          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
+          metadata: podMetadata,
           shopId,
-          status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
-          paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
+          status: orderStatus,
+          paymentStatus: orderPaymentStatus,
           totalAmount: Number(total) || 0,
-          paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || 0,
+          paidAmount: paidAmountValue,
           // metadata already set above (may include deliveryAddress)
         },
         update: {
@@ -424,11 +442,11 @@ export async function POST(req: NextRequest) {
           customerEmail: payload?.customerEmail ?? undefined,
           attendantId: attendantId ?? undefined,
           // merge/update metadata to include deliveryAddress when present
-          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
+          metadata: podMetadata,
           totalAmount: Number(total) || undefined,
-          paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || undefined,
-          status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
-          paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
+          paidAmount: paidAmountValue,
+          status: orderStatus,
+          paymentStatus: orderPaymentStatus,
           // metadata already set above (may include deliveryAddress)
         },
       });
@@ -586,6 +604,17 @@ export async function POST(req: NextRequest) {
           attendantId,
           issuedById,
           items,
+          ...(isPodDelivery
+            ? {
+                podDelivery: {
+                  status: 'pending',
+                  type: 'pay_on_delivery',
+                  note: payload?.podDelivery?.note ?? null,
+                  createdAt: entryDateIso,
+                  createdById: issuedById ?? null,
+                },
+              }
+            : {}),
         },
       } as any;
 
@@ -962,32 +991,36 @@ export async function POST(req: NextRequest) {
       console.warn("[receipts] failed to publish summary update", err);
     }
 
-    console.info(`[receiptSender][${requestId}] START send pipeline`);
-    let sendResult;
-    try {
-      sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
-      console.info(`[receiptSender][${requestId}] SEND:ok`, {
-        channelStatus: sendResult.channelStatus,
-      });
-    } catch (sendErr) {
-      console.error(`[receiptSender][${requestId}] SEND:error`, sendErr);
-      sendResult = {
-        ok: false,
-        sent: [],
-        errors: [{ channel: 'send', error: String(sendErr) }],
-        channelStatus: {},
-      };
-    }
-
-    const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
-    if (pdfForInternal) {
+    let sendResult: any = null;
+    if (!isPodDelivery) {
+      console.info(`[receiptSender][${requestId}] START send pipeline`);
       try {
-        await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
-      } catch (internalErr) {
-        console.error("[receipts] failed to notify internal ops", internalErr);
+        sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
+        console.info(`[receiptSender][${requestId}] SEND:ok`, {
+          channelStatus: sendResult.channelStatus,
+        });
+      } catch (sendErr) {
+        console.error(`[receiptSender][${requestId}] SEND:error`, sendErr);
+        sendResult = {
+          ok: false,
+          sent: [],
+          errors: [{ channel: 'send', error: String(sendErr) }],
+          channelStatus: {},
+        };
+      }
+
+      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
+      if (pdfForInternal) {
+        try {
+          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+        } catch (internalErr) {
+          console.error("[receipts] failed to notify internal ops", internalErr);
+        }
+      } else {
+        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
       }
     } else {
-      console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
+      console.info(`[receiptSender][${requestId}] SEND:skipped pod_delivery`);
     }
 
     return NextResponse.json({ ok: true, ...result, send: sendResult });
@@ -997,108 +1030,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function notifyInternalReceipt(receiptId: string, docType?: string, requestId?: string, receiptUrl?: string) {
-  if (docType && docType !== "RECEIPT") return;
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
-  }
-  const receipt = await prisma.receipt.findUnique({
-    where: { id: receiptId },
-    include: {
-      issuedBy: { select: { name: true, email: true } },
-      order: {
-        select: {
-          orderNumber: true,
-          attendant: { select: { name: true } },
-        },
-      },
-    },
-  });
-  if (!receipt) return;
-
-  const receiptNumberValue =
-    (typeof receipt.totals === "object" && receipt.totals
-      ? (receipt.totals as Record<string, any>).receiptNumber
-      : null) ||
-    (typeof receipt.data === "object" && receipt.data
-      ? (receipt.data as Record<string, any>).receiptNumber
-      : null) ||
-    receipt.order?.orderNumber;
-  const receiptNumber = String(receiptNumberValue || receipt.orderId || receipt.id);
-
-  const snapshot: any =
-    typeof receipt.data === "object" && receipt.data
-      ? { ...(receipt.data as Record<string, unknown>) }
-      : { order: receipt.order, totals: receipt.totals };
-  if (!snapshot.attendantName) {
-    snapshot.attendantName =
-      receipt.order?.attendant?.name ??
-      receipt.issuedBy?.name ??
-      receipt.issuedBy?.email ??
-      "(unknown)";
-  }
-
-  const amountKES = extractReceiptTotalKES(receipt as any);
-  const invoiceAmount = Number.isFinite(amountKES) ? amountKES : 0;
-  const paymentMethod = String(
-    (typeof receipt.data === "object" && receipt.data
-      ? (receipt.data as Record<string, any>).paymentMethod
-      : null) ||
-      (typeof receipt.totals === "object" && receipt.totals
-        ? (receipt.totals as Record<string, any>).paymentMethod
-        : null) ||
-      ""
-  )
-    .trim();
-
-  const staffName =
-    receipt.issuedBy?.name ||
-    receipt.issuedBy?.email ||
-    "(unknown)";
-
-  const itemsShort = extractItemsShort(receipt as any);
-  const baseUrl =
-    (process.env.BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "https://ops.betech.co.ke").replace(
-      /\/$/,
-      ""
-    );
-  const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
-
-  const rid = requestId || randomUUID();
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
-  }
-  const receiptLinkSafe = (receiptLink && receiptLink.trim()) || `https://ops.betech.co.ke/receipts/${receiptId}`;
-  console.info('[receipts][internal] attempting push', { receiptId, rid });
-  const result = await pushInternalReceiptAlert({
-    requestId: rid,
-    receiptNumber,
-    amount: String(Math.round(invoiceAmount)),
-    paymentMethod,
-    createdBy: snapshot.attendantName ?? "(unknown)",
-    itemsText: itemsShort,
-    receiptLink: receiptLinkSafe,
-    receiptPdfUrl: null,
-  });
-  console.info('[receipts][internal] push result', {
-    ok: result?.ok,
-    rid: result?.debug?.rid ?? null,
-    enabled: result?.debug?.enabled ?? null,
-    env: result?.debug?.env ?? null,
-    status: result?.debug?.steps?.createOrUpdate?.status ?? null,
-    stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
-    snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
-    json: result?.debug?.steps?.createOrUpdate?.json ?? null,
-    rawHead: result?.debug?.steps?.createOrUpdate?.raw ? (result.debug.steps.createOrUpdate.raw.length > 400 ? result.debug.steps.createOrUpdate.raw.slice(0, 400) : result.debug.steps.createOrUpdate.raw) : null,
-  });
-  if (!result?.ok) {
-    try {
-      console.error('[receipts][internal] push failed', result?.debug ?? result);
-    } catch (logErr) {
-      console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
-    }
-  }
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:ok`);
-  }
-}
