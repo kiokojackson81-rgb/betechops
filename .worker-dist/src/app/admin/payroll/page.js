@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.dynamic = void 0;
 exports.default = AdminPayrollPage;
 const jsx_runtime_1 = require("react/jsx-runtime");
+const link_1 = __importDefault(require("next/link"));
 const navigation_1 = require("next/navigation");
 const prisma_1 = require("@/lib/prisma");
 const tradingPeriod_1 = require("@/lib/tradingPeriod");
@@ -28,12 +29,20 @@ const baseSummary = () => ({
     },
     entries: [],
 });
-async function AdminPayrollPage() {
+async function AdminPayrollPage({ searchParams, }) {
     const auth = await (0, api_1.requireRole)("ADMIN");
     if (!auth.ok) {
         (0, navigation_1.redirect)("/admin/login");
     }
-    const period = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const resolvedSearchParams = (await searchParams) ?? {};
+    const rawPeriodParam = Array.isArray(resolvedSearchParams.period)
+        ? resolvedSearchParams.period[0]
+        : resolvedSearchParams.period;
+    const requestedPeriod = (0, tradingPeriod_1.parseTradingPeriodKey)(rawPeriodParam ?? undefined);
+    const currentPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const period = requestedPeriod ?? currentPeriod;
+    const isCurrentPeriod = period.key === currentPeriod.key;
+    const previousPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date(period.start.getTime() - 24 * 60 * 60 * 1000));
     const periodKey = period.key;
     const periodKeyVariants = (0, payrollPeriodKey_1.getPeriodKeyVariantsFromDates)(period.start, period.end);
     const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
@@ -170,5 +179,5 @@ async function AdminPayrollPage() {
             commissionBreakdown: ledger?.commissionBreakdown ?? null,
         };
     });
-    return ((0, jsx_runtime_1.jsxs)("div", { className: "min-h-screen bg-slate-950 text-slate-100 p-6", children: [(0, jsx_runtime_1.jsxs)("header", { className: "mb-6", children: [(0, jsx_runtime_1.jsx)("h1", { className: "text-2xl font-semibold", children: "Admin payroll" }), (0, jsx_runtime_1.jsxs)("p", { className: "text-sm text-slate-400", children: ["Snapshot for ", period.label, ". Data comes from commission-ledger, comp plans and adjustments."] })] }), (0, jsx_runtime_1.jsx)(PayrollTableClient_1.default, { rows: rows, periodLabel: period.label })] }));
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "min-h-screen bg-slate-950 text-slate-100 p-6", children: [(0, jsx_runtime_1.jsx)("header", { className: "mb-6", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("h1", { className: "text-2xl font-semibold", children: "Admin payroll" }), (0, jsx_runtime_1.jsxs)("p", { className: "text-sm text-slate-400", children: ["Snapshot for ", period.label, ". Data comes from commission-ledger, comp plans and adjustments."] }), !isCurrentPeriod && ((0, jsx_runtime_1.jsxs)("p", { className: "text-xs text-slate-500", children: ["Showing archived period. The latest period is ", currentPeriod.label, "."] }))] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [(0, jsx_runtime_1.jsx)(link_1.default, { href: `/admin/payroll?period=${encodeURIComponent(previousPeriod.key)}`, className: "rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800", children: "View previous period" }), !isCurrentPeriod && ((0, jsx_runtime_1.jsx)(link_1.default, { href: "/admin/payroll", className: "rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800", children: "Return to current" }))] })] }) }), (0, jsx_runtime_1.jsx)(PayrollTableClient_1.default, { rows: rows, periodLabel: period.label })] }));
 }

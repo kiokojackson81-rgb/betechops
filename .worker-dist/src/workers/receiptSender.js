@@ -579,7 +579,10 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
             const receiptUrlStr = finalChatracePdfUrl.receiptUrl ?? '';
             const computedPdfUrlLength = receiptUrlStr.length;
             const finalMode = finalChatracePdfUrl.mode;
-            const finalTagName = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+            const defaultTag = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+            const finalTagName = (opts?.chatraceTag?.trim() || defaultTag);
+            const skipDefaultChatraceTags = Boolean(opts?.skipDefaultChatraceTags);
+            const tagForPush = opts?.chatraceTag?.trim() ? finalTagName : undefined;
             const finalReceiptUrl = finalMode === 'pdf' || finalMode === 'proxy' ? finalChatracePdfUrl.receiptUrl ?? undefined : undefined;
             console.info('[receipts][chatrace] preparing push', {
                 receiptId: receipt.id,
@@ -591,6 +594,8 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
                 CHATRACE_ACCOUNT_ID: !!process.env.CHATRACE_ACCOUNT_ID,
                 tokenPresent: !!process.env.CHATRACE_API_TOKEN,
                 tagName: finalTagName,
+                skipDefaultChatraceTags,
+                customTag: opts?.chatraceTag?.trim() ?? null,
             });
             const chitInput = {
                 phoneE164: normalizedChatracePhone,
@@ -606,7 +611,11 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
                 tagName: finalTagName,
             };
             console.info('[receipts][chatrace] outbound payload', { chitInput });
-            const result = await (0, chatrace_1.pushReceiptToChatrace)(chitInput);
+            const result = await (0, chatrace_1.pushReceiptToChatrace)({
+                ...chitInput,
+                tagName: tagForPush,
+                skipDefaultTags: skipDefaultChatraceTags,
+            });
             channelStatus.chatrace = result?.ok ? 'sent' : 'failed';
             if (!result?.ok) {
                 errors.push({
@@ -624,6 +633,8 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
                 tagName: finalTagName,
                 mode: finalMode,
                 receiptLink: receiptPageLink.length,
+                skipDefaultChatraceTags,
+                customTag: opts?.chatraceTag?.trim() ?? null,
             });
             await getChatraceMetaUpdate({
                 status: result?.ok ? 'sent' : 'failed',
@@ -729,8 +740,11 @@ async function sendReceiptChannels(receiptId, channels = [], opts) {
         const site = getSiteUrl();
         const receiptPage = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
         const finalMode = finalChatracePdfUrl.mode;
+        const defaultTag = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
+        const finalTag = (opts?.chatraceTag?.trim() || defaultTag);
+        const skipDefaultChatraceTags = Boolean(opts?.skipDefaultChatraceTags);
+        const tagForPush = opts?.chatraceTag?.trim() ? finalTag : undefined;
         const finalReceiptUrl = finalMode === 'pdf' || finalMode === 'proxy' ? finalChatracePdfUrl.receiptUrl ?? undefined : undefined;
-        const finalTag = finalMode === 'pdf' || finalMode === 'proxy' ? 'receipt_created_pdf' : 'receipt_created_link';
         console.info('[receiptSender] final receipt_url resolution', {
             receiptId: receipt.id,
             candidatePdfUrl: candidatePdf,

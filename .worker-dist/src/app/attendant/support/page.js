@@ -15,6 +15,7 @@ const Card_1 = __importDefault(require("@/app/_components/Card"));
 const SensitiveValue_1 = __importDefault(require("@/components/SensitiveValue"));
 const Button_1 = __importDefault(require("@/app/_components/Button"));
 const toast_1 = require("@/lib/ui/toast");
+const PeriodSwitcher_1 = __importDefault(require("@/app/_components/PeriodSwitcher"));
 const tradingPeriod_1 = require("@/lib/tradingPeriod");
 const marketingCommission_1 = require("@/lib/marketingCommission");
 const getLandingPage_1 = __importDefault(require("@/lib/getLandingPage"));
@@ -48,7 +49,10 @@ function SupportOpsPage() {
     const [initialized, setInitialized] = (0, react_1.useState)(false);
     const [serverSummary, setServerSummary] = (0, react_1.useState)(null);
     const [earningsSummary, setEarningsSummary] = (0, react_1.useState)(null);
-    const tradingPeriodLabel = (0, react_1.useMemo)(() => (0, tradingPeriod_1.getTradingPeriodFor)(new Date()).label, []);
+    const currentPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const [selectedPeriod, setSelectedPeriod] = (0, react_1.useState)(currentPeriod);
+    const selectedPeriodKey = selectedPeriod.key;
+    const tradingPeriodLabel = selectedPeriod.label;
     // Guard route for support attendants
     (0, react_1.useEffect)(() => {
         let cancelled = false;
@@ -86,9 +90,11 @@ function SupportOpsPage() {
     }, [router]);
     const fetchSummaries = (0, react_1.useCallback)(async () => {
         try {
+            const summaryParams = new URLSearchParams({ periodKey: selectedPeriodKey });
+            const earningsParams = new URLSearchParams({ periodKey: selectedPeriodKey });
             const [summaryRes, earningsRes] = await Promise.all([
-                fetch("/api/support/report/summary", { credentials: "same-origin" }),
-                fetch("/api/support/earnings/summary", { credentials: "same-origin" }),
+                fetch(`/api/support/report/summary?${summaryParams.toString()}`, { credentials: "same-origin" }),
+                fetch(`/api/support/earnings/summary?${earningsParams.toString()}`, { credentials: "same-origin" }),
             ]);
             if (summaryRes.ok) {
                 const data = (await summaryRes.json().catch(() => null));
@@ -104,7 +110,7 @@ function SupportOpsPage() {
         catch {
             // no-op; UI already reflects optimistic data
         }
-    }, []);
+    }, [selectedPeriodKey]);
     (0, react_1.useEffect)(() => {
         if (!initialized)
             return;
@@ -207,7 +213,7 @@ function SupportOpsPage() {
         return ((0, jsx_runtime_1.jsx)("div", { className: "flex min-h-screen items-center justify-center bg-slate-950 text-slate-200", children: (0, jsx_runtime_1.jsx)("p", { children: "Loading support dashboard." }) }));
     }
     const periodLabel = serverSummary?.period.label ?? tradingPeriodLabel;
-    return ((0, jsx_runtime_1.jsx)("div", { className: "min-h-screen bg-slate-950 text-slate-100", children: (0, jsx_runtime_1.jsxs)("form", { onSubmit: handleSubmit, className: "mx-auto max-w-6xl space-y-6 p-6", children: [(0, jsx_runtime_1.jsxs)("header", { className: "flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("h1", { className: "text-3xl font-semibold", children: "Support Operations" }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-300", children: "Sales capture, performance tracking, and quick earnings breakdown." })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => (0, react_2.signOut)({ callbackUrl: "/attendant/login" }), className: "rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10", children: "Log out" })] }), (0, jsx_runtime_1.jsx)(Card_1.default, { className: "border-slate-800 bg-slate-950/70", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-col gap-4 md:flex-row md:items-center md:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Date" }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-2 flex items-center gap-2", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.CalendarIcon, { size: 16, className: "text-slate-400" }), (0, jsx_runtime_1.jsx)("input", { type: "date", value: date, onChange: (event) => {
+    return ((0, jsx_runtime_1.jsx)("div", { className: "min-h-screen bg-slate-950 text-slate-100", children: (0, jsx_runtime_1.jsxs)("form", { onSubmit: handleSubmit, className: "mx-auto max-w-6xl space-y-6 p-6", children: [(0, jsx_runtime_1.jsxs)("header", { className: "flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("h1", { className: "text-3xl font-semibold", children: "Support Operations" }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-300", children: "Sales capture, performance tracking, and quick earnings breakdown." })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => (0, react_2.signOut)({ callbackUrl: "/attendant/login" }), className: "rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10", children: "Log out" })] }), (0, jsx_runtime_1.jsx)("div", { className: "flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-col gap-2 md:flex-row md:items-center md:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-[0.2em] text-slate-400", children: "Statistics period" }), (0, jsx_runtime_1.jsx)("p", { className: "text-lg font-semibold text-slate-100", children: selectedPeriod.label }), selectedPeriodKey !== currentPeriod.key && ((0, jsx_runtime_1.jsx)("p", { className: "text-xs text-amber-300", children: "Showing archived period." }))] }), (0, jsx_runtime_1.jsx)(PeriodSwitcher_1.default, { currentPeriod: currentPeriod, selectedPeriod: selectedPeriod, onSelectPeriod: setSelectedPeriod })] }) }), (0, jsx_runtime_1.jsx)(Card_1.default, { className: "border-slate-800 bg-slate-950/70", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-col gap-4 md:flex-row md:items-center md:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Date" }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-2 flex items-center gap-2", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.CalendarIcon, { size: 16, className: "text-slate-400" }), (0, jsx_runtime_1.jsx)("input", { type: "date", value: date, onChange: (event) => {
                                                     setDate(event.target.value);
                                                     const next = new Date(event.target.value);
                                                     if (!Number.isNaN(next.getTime())) {

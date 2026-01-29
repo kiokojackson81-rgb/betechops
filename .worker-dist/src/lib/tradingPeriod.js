@@ -4,6 +4,8 @@ exports.getJumiaWeeklyPeriodFor = getJumiaWeeklyPeriodFor;
 exports.getRecentJumiaWeeks = getRecentJumiaWeeks;
 exports.getTradingPeriodFor = getTradingPeriodFor;
 exports.getRecentTradingPeriods = getRecentTradingPeriods;
+exports.parseTradingPeriodKey = parseTradingPeriodKey;
+exports.getPreviousTradingPeriod = getPreviousTradingPeriod;
 function getJumiaWeeklyPeriodFor(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
@@ -83,4 +85,45 @@ function getRecentTradingPeriods(n) {
         cursor = getTradingPeriodFor(prevEnd);
     }
     return periods;
+}
+function parseTradingPeriodKey(periodKey) {
+    if (!periodKey) {
+        return null;
+    }
+    const trimmed = periodKey.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const parts = trimmed.split("_");
+    if (parts.length !== 2) {
+        return null;
+    }
+    const [startPart, endPart] = parts.map((part) => part.trim());
+    const parseDateParts = (value) => {
+        const segments = value.split("-");
+        if (segments.length !== 3)
+            return null;
+        const year = Number(segments[0]);
+        const month = Number(segments[1]);
+        const day = Number(segments[2]);
+        if ([year, month, day].some((n) => Number.isNaN(n)))
+            return null;
+        return { year, month, day };
+    };
+    const startSegments = parseDateParts(startPart);
+    const endSegments = parseDateParts(endPart);
+    if (!startSegments || !endSegments) {
+        return null;
+    }
+    const start = new Date(startSegments.year, startSegments.month - 1, startSegments.day, 0, 0, 0, 0);
+    const end = new Date(endSegments.year, endSegments.month - 1, endSegments.day, 23, 59, 59, 999);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return null;
+    }
+    const label = `${formatLabel(start)} - ${formatLabel(end)}`;
+    return { start, end, label, key: `${startPart}_${endPart}` };
+}
+function getPreviousTradingPeriod(period) {
+    const previousDay = new Date(period.start.getTime() - 24 * 60 * 60 * 1000);
+    return getTradingPeriodFor(previousDay);
 }

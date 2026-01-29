@@ -14,7 +14,9 @@ async function GET(req) {
     const auth = await (0, auth_1.requireAttendant)(req, ["SUPPORT_OPS", "ADMIN"]);
     if (!auth.ok)
         return auth.res;
-    const period = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const url = new URL(req.url);
+    const periodKeyParam = url.searchParams.get("periodKey");
+    const period = (0, tradingPeriod_1.parseTradingPeriodKey)(periodKeyParam ?? undefined) ?? (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
     const periodKey = period.key;
     const [{ aggregates }, compPlan, adjustments, ledger] = await Promise.all([
         (0, supportEntries_1.getSupportPeriodAggregates)({ userId: auth.user.id, period }),

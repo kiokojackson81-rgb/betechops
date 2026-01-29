@@ -19,8 +19,10 @@ async function GET(req) {
         return server_1.NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const now = new Date();
-    await (0, commission_1.getOrCreateCommissionPeriod)(now);
-    const period = (0, tradingPeriod_1.getTradingPeriodFor)(now);
+    const url = new URL(req.url);
+    const periodKeyParam = url.searchParams.get("periodKey");
+    const period = (0, tradingPeriod_1.parseTradingPeriodKey)(periodKeyParam ?? undefined) ?? (0, tradingPeriod_1.getTradingPeriodFor)(now);
+    await (0, commission_1.getOrCreateCommissionPeriod)(period.start);
     const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
         (0, earningsSummary_1.getEarningsSummaryForUser)({ userId }),
         (0, marketingPeriodTotals_1.summarizeMarketingReportsForPeriod)({ userId, period }),

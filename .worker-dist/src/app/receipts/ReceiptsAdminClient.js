@@ -45,6 +45,7 @@ const ReceiptsSummary_1 = __importDefault(require("./list/ReceiptsSummary"));
 const RowActions_1 = __importDefault(require("./list/RowActions"));
 const MarkdownRendererClient_1 = __importStar(require("@/components/MarkdownRendererClient"));
 const toast_1 = require("@/lib/ui/toast");
+const tradingPeriod_1 = require("@/lib/tradingPeriod");
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
 const WARRANTY_OPTIONS = ["", "3 Months", "6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
 const PAGE_SIZE = 50;
@@ -228,13 +229,6 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     const [error, setError] = (0, react_1.useState)(null);
     const [summaryTotals, setSummaryTotals] = (0, react_1.useState)(null);
     const [summaryLoading, setSummaryLoading] = (0, react_1.useState)(false);
-    const [sseEnabled, setSseEnabled] = (0, react_1.useState)(false);
-    // Start with SSE turned off by default to avoid unexpected snapshot reloads
-    // flipping the UI; users can opt-in via the toggle in the UI.
-    const [sseOn, setSseOn] = (0, react_1.useState)(false); // user preference: use SSE when supported
-    const [sseStatus, setSseStatus] = (0, react_1.useState)("fallback");
-    const sseRetryRef = (0, react_1.useRef)(0);
-    const sseEsRef = (0, react_1.useRef)(null);
     const [quickRange, setQuickRange] = (0, react_1.useState)("today");
     const [filters, setFilters] = (0, react_1.useState)(() => makeDefaultFilters());
     const [appliedFilters, setAppliedFilters] = (0, react_1.useState)(() => makeDefaultFilters());
@@ -256,6 +250,7 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     });
     const [deleting, setDeleting] = (0, react_1.useState)(false);
     const [exporting, setExporting] = (0, react_1.useState)(false);
+    const [podActionId, setPodActionId] = (0, react_1.useState)(null);
     const firstLoadRef = (0, react_1.useRef)(true);
     const STORAGE_KEYS = {
         attendantId: "receipts.attendantId.v1",
@@ -300,7 +295,8 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
             if (savedQuick === "today" ||
                 savedQuick === "yesterday" ||
                 savedQuick === "this-week" ||
-                savedQuick === "custom") {
+                savedQuick === "custom" ||
+                savedQuick === "trading-period") {
                 setQuickRange(savedQuick);
             }
         }
@@ -477,127 +473,10 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
         void fetchSummary({ signal: controller.signal });
         return () => controller.abort();
     }, [fetchSummary]);
-    // detect EventSource support and prefer SSE when available
     (0, react_1.useEffect)(() => {
-        if (typeof window !== "undefined" && "EventSource" in window) {
-            setSseEnabled(true);
-        }
-    }, []);
-    // Poll the summary every 30 seconds when SSE is not enabled
-    (0, react_1.useEffect)(() => {
-        if (sseEnabled && sseOn)
-            return; // SSE will handle updates
-        // polling active when SSE not supported or user opted out
         const interval = setInterval(() => void fetchSummary(), 30000);
-        // run an immediate fetch to ensure quick update when switching modes
-        void fetchSummary();
         return () => clearInterval(interval);
-    }, [fetchSummary, sseEnabled, sseOn]);
-    // If SSE is enabled and user opted-in, open an EventSource with reconnect/backoff
-    (0, react_1.useEffect)(() => {
-        if (!sseEnabled || !sseOn) {
-            // ensure any existing ES is closed
-            try {
-                sseEsRef.current?.close();
-            }
-            catch { }
-            sseEsRef.current = null;
-            setSseStatus("fallback");
-            return;
-        }
-        let aborted = false;
-        const startEventSource = () => {
-            sseRetryRef.current = Math.max(0, sseRetryRef.current);
-            const params = new URLSearchParams();
-            const startParam = buildDateParam(appliedFilters.start, false);
-            const endParam = buildDateParam(appliedFilters.end, true);
-            if (startParam)
-                params.set("start", startParam);
-            if (endParam)
-                params.set("end", endParam);
-            if (appliedFilters.attendantId)
-                params.set("attendantId", appliedFilters.attendantId);
-            if (appliedFilters.paymentMethod)
-                params.set("paymentMethod", appliedFilters.paymentMethod);
-            if (appliedFilters.docType)
-                params.set("docType", appliedFilters.docType);
-            if (appliedFilters.q.trim())
-                params.set("q", appliedFilters.q.trim());
-            params.set("scope", scopeMode);
-            const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
-            try {
-                const es = new EventSource(url);
-                sseEsRef.current = es;
-                setSseStatus("reconnecting");
-                es.onopen = () => {
-                    sseRetryRef.current = 0;
-                    setSseStatus("connected");
-                };
-                es.onmessage = (e) => {
-                    try {
-                        const data = JSON.parse(e.data);
-                        setSummaryTotals({
-                            totalSales: Number(data.totalSales ?? 0),
-                            totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-                            totalCost: Number(data.totalCost ?? 0),
-                            totalProfitPriced: Number(data.totalProfitPriced ?? 0),
-                            totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-                            receiptsCount: Number(data.receiptsCount ?? 0),
-                            itemsCount: Number(data.itemsCount ?? 0),
-                            hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
-                            awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
-                            paymentTotals: data?.paymentTotals ??
-                                {
-                                    mpesa: { totalSales: 0, count: 0 },
-                                    cash: { totalSales: 0, count: 0 },
-                                },
-                        });
-                    }
-                    catch (err) {
-                        console.warn("[receipts] failed to parse SSE data", err);
-                    }
-                };
-                es.onerror = () => {
-                    // close and attempt reconnect with backoff
-                    try {
-                        es.close();
-                    }
-                    catch { }
-                    if (aborted)
-                        return;
-                    sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-                    const attempt = sseRetryRef.current;
-                    const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-                    setSseStatus("reconnecting");
-                    setTimeout(() => {
-                        if (!aborted)
-                            startEventSource();
-                    }, delay);
-                };
-            }
-            catch (err) {
-                console.warn("[receipts] failed to create EventSource", err);
-                // schedule reconnection
-                sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-                const attempt = sseRetryRef.current;
-                const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-                setSseStatus("reconnecting");
-                setTimeout(() => {
-                    if (!aborted)
-                        startEventSource();
-                }, delay);
-            }
-        };
-        startEventSource();
-        return () => {
-            aborted = true;
-            try {
-                sseEsRef.current?.close();
-            }
-            catch { }
-            sseEsRef.current = null;
-        };
-    }, [sseEnabled, sseOn, appliedFilters, scopeMode]);
+    }, [fetchSummary]);
     const persistFilterValues = (nextFilters) => {
         try {
             window.localStorage.setItem(STORAGE_KEYS.attendantId, nextFilters.attendantId || "");
@@ -636,25 +515,35 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     };
     const applyQuickRange = (key) => {
         const now = new Date();
-        const bounds = key === "today"
-            ? {
-                start: formatDateInput(startOfDayForRange(now)),
-                end: formatDateInput(startOfDayForRange(now)),
-            }
-            : key === "yesterday"
-                ? (() => {
-                    const yesterday = new Date(now);
-                    yesterday.setDate(now.getDate() - 1);
-                    const dayStart = startOfDayForRange(yesterday);
-                    return {
-                        start: formatDateInput(dayStart),
-                        end: formatDateInput(dayStart),
-                    };
-                })()
-                : (() => {
-                    const { start, end } = getWeekBounds(now);
-                    return { start: formatDateInput(start), end: formatDateInput(end) };
-                })();
+        let bounds = null;
+        if (key === "today") {
+            const dayStart = startOfDayForRange(now);
+            bounds = {
+                start: formatDateInput(dayStart),
+                end: formatDateInput(dayStart),
+            };
+        }
+        else if (key === "yesterday") {
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            const dayStart = startOfDayForRange(yesterday);
+            bounds = {
+                start: formatDateInput(dayStart),
+                end: formatDateInput(dayStart),
+            };
+        }
+        else if (key === "this-week") {
+            const { start, end } = getWeekBounds(now);
+            bounds = { start: formatDateInput(start), end: formatDateInput(end) };
+        }
+        else if (key === "trading-period") {
+            const period = (0, tradingPeriod_1.getTradingPeriodFor)(now);
+            bounds = { start: formatDateInput(period.start), end: formatDateInput(period.end) };
+        }
+        else {
+            setQuickRange("custom");
+            return;
+        }
         const nextFilters = { ...filters, ...bounds };
         setFilters(nextFilters);
         setAppliedFilters(nextFilters);
@@ -677,6 +566,45 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     const handleManualRefresh = () => {
         void loadRows(page);
     };
+    const fetchReceiptDetail = (0, react_1.useCallback)(async (id) => {
+        setDetailLoading(true);
+        try {
+            const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok)
+                throw new Error(payload?.error || "Failed to load receipt");
+            setDetail(payload);
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to load receipt";
+            (0, toast_1.showToast)(message, "error");
+        }
+        finally {
+            setDetailLoading(false);
+        }
+    }, [toast_1.showToast]);
+    const handleMarkPodDelivered = (0, react_1.useCallback)(async (receiptId) => {
+        setPodActionId(receiptId);
+        try {
+            const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, { method: "POST" });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok)
+                throw new Error(payload?.error || "Failed to mark POD delivered");
+            (0, toast_1.showToast)("POD delivery recorded and notification queued", "success");
+            void loadRows(page, { silent: true });
+            void fetchSummary();
+            if (selected?.id === receiptId) {
+                void fetchReceiptDetail(receiptId);
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to mark POD delivery";
+            (0, toast_1.showToast)(message, "error");
+        }
+        finally {
+            setPodActionId(null);
+        }
+    }, [fetchReceiptDetail, fetchSummary, loadRows, page, selected, toast_1.showToast]);
     const handleRowClick = (row) => {
         if ((row.source ?? "pos") !== "pos") {
             (0, toast_1.showToast)("Receipt detail view is only available for POS receipts", "info");
@@ -685,23 +613,7 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
         setSelected(row);
         setDrawerOpen(true);
         setDetail(null);
-        setDetailLoading(true);
-        (async () => {
-            try {
-                const res = await fetch(`/api/receipts/${row.id}`, { cache: "no-store" });
-                const payload = await res.json().catch(() => ({}));
-                if (!res.ok)
-                    throw new Error(payload?.error || "Failed to load receipt");
-                setDetail(payload);
-            }
-            catch (err) {
-                const message = err instanceof Error ? err.message : "Failed to load receipt";
-                (0, toast_1.showToast)(message, "error");
-            }
-            finally {
-                setDetailLoading(false);
-            }
-        })();
+        void fetchReceiptDetail(row.id);
     };
     const closeDrawer = () => {
         setDrawerOpen(false);
@@ -985,13 +897,16 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     const profitAmount = hasCompleteCosts ? receiptGrandTotal - supportBuyingTotal : 0;
     const profitColor = hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
     const hasSupportItems = Boolean(detail?.supportItems?.length);
+    const tradingPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
     const rangeLabelText = quickRange === "today"
         ? "Today"
         : quickRange === "yesterday"
             ? "Yesterday"
             : quickRange === "this-week"
                 ? "This week"
-                : "Custom range";
+                : quickRange === "trading-period"
+                    ? tradingPeriod.label
+                    : "Custom range";
     const partialTotals = (0, react_1.useMemo)(() => {
         const totals = { MPESA: 0, CASH: 0 };
         rows.forEach((row) => {
@@ -1061,7 +976,7 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
     };
     return ((0, jsx_runtime_1.jsxs)("div", { className: "space-y-6", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap items-center justify-between gap-3", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: handleTriggerSummary, disabled: triggerSummaryLoading, className: `rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-wide transition ${triggerSummaryLoading
                             ? "border-white/20 bg-slate-900 text-slate-400 cursor-wait"
-                            : "border-emerald-500 text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/10"}`, children: triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now" }), triggerSummaryResult && ((0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-400", children: triggerSummaryResult }))] }), (0, jsx_runtime_1.jsx)(ReceiptsSummary_1.default, { summary: summaryForDisplay ?? null, loading: summaryLoading, quickRange: quickRange, onApplyQuickRange: (k) => applyQuickRange(k), sseOn: sseOn && sseEnabled, sseStatus: sseStatus, onToggleSse: (v) => setSseOn(v), rangeLabel: rangeDisplay }), (0, jsx_runtime_1.jsx)(PaymentMethodFilterCard, { totals: summaryForDisplay?.paymentTotals ?? null, partialTotals: partialTotals, activeMethod: appliedFilters.paymentMethod, loading: summaryLoading, onSelect: handlePaymentMethodSelect }), (0, jsx_runtime_1.jsxs)("section", { className: "rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30", children: [(0, jsx_runtime_1.jsxs)("div", { className: "grid gap-3 md:grid-cols-2 lg:grid-cols-4", children: [(0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["Search customer / order / staff", (0, jsx_runtime_1.jsx)("input", { value: filters.q, onChange: (e) => setFilters((prev) => ({ ...prev, q: e.target.value })), className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500", placeholder: "eg. Jane, OR-123..." })] }), (0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["Document type", (0, jsx_runtime_1.jsxs)("select", { value: filters.docType, onChange: (e) => setFilters((prev) => ({ ...prev, docType: e.target.value })), className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100", children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "All" }), DOC_TYPES.map((type) => ((0, jsx_runtime_1.jsx)("option", { value: type, children: type }, type)))] })] }), (0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["From", (0, jsx_runtime_1.jsx)("input", { type: "date", value: filters.start, onChange: (e) => {
+                            : "border-emerald-500 text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/10"}`, children: triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now" }), triggerSummaryResult && ((0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-400", children: triggerSummaryResult }))] }), (0, jsx_runtime_1.jsx)(ReceiptsSummary_1.default, { summary: summaryForDisplay ?? null, loading: summaryLoading, quickRange: quickRange, onApplyQuickRange: applyQuickRange, rangeLabel: rangeDisplay }), (0, jsx_runtime_1.jsx)(PaymentMethodFilterCard, { totals: summaryForDisplay?.paymentTotals ?? null, partialTotals: partialTotals, activeMethod: appliedFilters.paymentMethod, loading: summaryLoading, onSelect: handlePaymentMethodSelect }), (0, jsx_runtime_1.jsxs)("section", { className: "rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30", children: [(0, jsx_runtime_1.jsxs)("div", { className: "grid gap-3 md:grid-cols-2 lg:grid-cols-4", children: [(0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["Search customer / order / staff", (0, jsx_runtime_1.jsx)("input", { value: filters.q, onChange: (e) => setFilters((prev) => ({ ...prev, q: e.target.value })), className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500", placeholder: "eg. Jane, OR-123..." })] }), (0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["Document type", (0, jsx_runtime_1.jsxs)("select", { value: filters.docType, onChange: (e) => setFilters((prev) => ({ ...prev, docType: e.target.value })), className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100", children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "All" }), DOC_TYPES.map((type) => ((0, jsx_runtime_1.jsx)("option", { value: type, children: type }, type)))] })] }), (0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["From", (0, jsx_runtime_1.jsx)("input", { type: "date", value: filters.start, onChange: (e) => {
                                             setQuickRange("custom");
                                             setFilters((prev) => {
                                                 const next = { ...prev, start: e.target.value };
@@ -1078,16 +993,17 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
                                                 return next;
                                             });
                                         }, className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100" })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-4 grid gap-3 md:grid-cols-[2fr_1fr]", children: [(0, jsx_runtime_1.jsxs)("label", { className: "text-xs uppercase tracking-wide text-slate-400", children: ["Staff", (0, jsx_runtime_1.jsxs)("select", { value: filters.attendantId, onChange: (e) => setFilters((prev) => ({ ...prev, attendantId: e.target.value })), className: "mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100", children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "All staff" }), staffList.map((a) => ((0, jsx_runtime_1.jsx)("option", { value: a.id, children: a.name }, a.id)))] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap items-end gap-2", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => applyFilters(), className: "flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95", children: "Apply filters" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: resetFilters, className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5", children: "Reset" })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-4 flex flex-wrap gap-2", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: handleManualRefresh, className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5", disabled: loading, children: loading ? "Refreshing..." : "Refresh" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: handleExport, className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-50", disabled: exporting, children: exporting ? "Preparing CSV..." : "Export CSV" })] })] }), (0, jsx_runtime_1.jsxs)("section", { className: "overflow-x-auto rounded-2xl border border-white/5 bg-slate-950/40 p-2 shadow-inner shadow-black/40", children: [(0, jsx_runtime_1.jsxs)("table", { className: "min-w-full text-sm", children: [(0, jsx_runtime_1.jsx)("thead", { className: "text-xs uppercase tracking-wide text-slate-400", children: (0, jsx_runtime_1.jsxs)("tr", { children: [(0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Order" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Doc" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Customer" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Staff" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Total" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Payment" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Status" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-left", children: "Created" }), (0, jsx_runtime_1.jsx)("th", { className: "px-3 py-2 text-right", children: "Actions" })] }) }), (0, jsx_runtime_1.jsxs)("tbody", { className: "divide-y divide-white/5", children: [rows.length === 0 && ((0, jsx_runtime_1.jsx)("tr", { children: (0, jsx_runtime_1.jsx)("td", { colSpan: 9, className: "px-3 py-6 text-center text-slate-400", children: loading ? "Loading receipts..." : "No receipts match this filter." }) })), rows.map((row) => {
+                                        const isPodPending = row.isPodDelivery && row.podDeliveryStatus === "pending";
                                         const isSelected = row.id === selected?.id && drawerOpen;
-                                        return ((0, jsx_runtime_1.jsxs)("tr", { className: `cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`, onClick: () => handleRowClick(row), children: [(0, jsx_runtime_1.jsxs)("td", { className: "px-3 py-3", children: [(0, jsx_runtime_1.jsx)("div", { className: "font-semibold text-white", children: row.orderRef || "-" }), (0, jsx_runtime_1.jsxs)("div", { className: "text-xs text-slate-400", children: ["#", row.id.slice(0, 6)] })] }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getDocBadgeClass(row.docType)}`, children: formatBadgeLabel(row.docType) }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("div", { className: "text-white", children: row.customerName || "Walk-in" }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-slate-300", children: row.attendantName || "-" }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 font-semibold text-emerald-300", children: formatCurrency(row.total) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`, children: formatBadgeLabel(row.paymentMethod) }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getStatusBadgeClass(row.status)}`, children: formatBadgeLabel(row.status) }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-slate-300", children: formatDateTime(row.createdAt) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-right", children: (0, jsx_runtime_1.jsx)(RowActions_1.default, { onEdit: () => {
+                                        return ((0, jsx_runtime_1.jsxs)("tr", { className: `cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`, onClick: () => handleRowClick(row), children: [(0, jsx_runtime_1.jsxs)("td", { className: "px-3 py-3", children: [(0, jsx_runtime_1.jsx)("div", { className: "font-semibold text-white", children: row.orderRef || "-" }), (0, jsx_runtime_1.jsxs)("div", { className: "text-xs text-slate-400", children: ["#", row.id.slice(0, 6)] })] }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getDocBadgeClass(row.docType)}`, children: formatBadgeLabel(row.docType) }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("div", { className: "text-white", children: row.customerName || "Walk-in" }) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-slate-300", children: row.attendantName || "-" }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 font-semibold text-emerald-300", children: formatCurrency(row.total) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3", children: (0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`, children: formatBadgeLabel(row.paymentMethod) }) }), (0, jsx_runtime_1.jsxs)("td", { className: "px-3 py-3", children: [(0, jsx_runtime_1.jsx)("span", { className: `${badgeBaseClass} ${getStatusBadgeClass(row.status)}`, children: formatBadgeLabel(row.status) }), row.isPodDelivery && ((0, jsx_runtime_1.jsxs)("div", { className: "mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200", children: ["POD ", formatBadgeLabel(row.podDeliveryStatus)] })), row.podDeliveryNote && ((0, jsx_runtime_1.jsx)("p", { className: "mt-1 text-xs text-yellow-200", children: row.podDeliveryNote }))] }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-slate-300", children: formatDateTime(row.createdAt) }), (0, jsx_runtime_1.jsx)("td", { className: "px-3 py-3 text-right", children: (0, jsx_runtime_1.jsx)(RowActions_1.default, { onEdit: () => {
                                                             // load detail then open edit modal when ready
                                                             setPendingEditId(row.id);
                                                             handleRowClick(row);
                                                         }, onEditItems: () => {
                                                             setPendingEditId(row.id);
                                                             handleRowClick(row);
-                                                        }, onDelete: () => void deleteReceiptById(row.id), onDownload: () => window.open(`/receipts/${row.id}`, "_blank"), onSendWhatsapp: () => void sendReceiptById(row.id, "whatsapp"), onPrint: () => window.open(`/receipts/${row.id}`, "_blank"), disabled: loading || (row.source ?? "pos") !== "pos" }) })] }, row.id));
-                                    })] })] }), error && (0, jsx_runtime_1.jsx)("p", { className: "px-3 py-2 text-sm text-rose-300", children: error }), rows.length > 0 && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300", children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Page ", page, ", showing ", rows.length, " receipts"] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex gap-2", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => gotoPage(page - 1), disabled: page === 1 || loading, className: "rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40", children: "Prev" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => gotoPage(page + 1), disabled: !hasMore || loading, className: "rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40", children: "Next" })] })] }))] }), drawerOpen && ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("div", { className: "fixed inset-0 z-40 bg-black/60", onClick: closeDrawer }), (0, jsx_runtime_1.jsxs)("aside", { className: "fixed inset-y-0 right-0 z-50 w-full max-w-xl transform bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-[0.2em] text-slate-500", children: "Receipt detail" }), (0, jsx_runtime_1.jsx)("h2", { className: "text-xl font-semibold text-white", children: selected?.orderRef || selected?.id })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: closeDrawer, className: "rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10", children: "Close" })] }), detailLoading && (0, jsx_runtime_1.jsx)("p", { className: "mt-6 text-sm text-slate-400", children: "Loading details..." }), !detailLoading && detail?.receipt && ((0, jsx_runtime_1.jsxs)("div", { className: "mt-6 space-y-4", children: [(0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-4 text-slate-300", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Customer" }), (0, jsx_runtime_1.jsx)("p", { className: "text-base text-white", children: detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Served by" }), (0, jsx_runtime_1.jsx)("p", { children: detail.receipt.order?.attendant?.name || selected?.attendantName || "-" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Created" }), (0, jsx_runtime_1.jsx)("p", { children: formatDateTime(detail.receipt.generatedAt) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Doc type" }), (0, jsx_runtime_1.jsx)("p", { children: detail.receipt.docType })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-4", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Subtotal" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.totals?.subtotal) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Tax" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.totals?.tax) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Discount" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.discount) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Total" }), (0, jsx_runtime_1.jsx)("p", { className: "text-lg font-semibold text-emerald-300", children: formatCurrency(detail.receipt.totals?.total) })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-3 flex flex-wrap gap-4 text-sm text-slate-300", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Buying total" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(supportBuyingTotal) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Profit" }), (0, jsx_runtime_1.jsx)("p", { className: `text-lg font-semibold ${profitColor}`, children: hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data" })] })] }), detail.receipt.docType === "LAYAWAY" && ((0, jsx_runtime_1.jsxs)("p", { className: "mt-2 text-xs text-amber-300", children: ["Balance: ", formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)] }))] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/40 p-4", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Items" }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-3 space-y-2", children: [itemsWithCost.map((item) => {
+                                                        }, onDelete: () => void deleteReceiptById(row.id), onDownload: () => window.open(`/receipts/${row.id}`, "_blank"), onSendWhatsapp: () => void sendReceiptById(row.id, "whatsapp"), onPrint: () => window.open(`/receipts/${row.id}`, "_blank"), onPodAction: isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined, podActionLabel: "Mark POD delivered", podActionProcessing: podActionId === row.id, disabled: loading || (row.source ?? "pos") !== "pos" }) })] }, row.id));
+                                    })] })] }), error && (0, jsx_runtime_1.jsx)("p", { className: "px-3 py-2 text-sm text-rose-300", children: error }), rows.length > 0 && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300", children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Page ", page, ", showing ", rows.length, " receipts"] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex gap-2", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => gotoPage(page - 1), disabled: page === 1 || loading, className: "rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40", children: "Prev" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => gotoPage(page + 1), disabled: !hasMore || loading, className: "rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40", children: "Next" })] })] }))] }), drawerOpen && ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("div", { className: "fixed inset-0 z-40 bg-black/60", onClick: closeDrawer }), (0, jsx_runtime_1.jsxs)("aside", { className: "fixed inset-y-0 right-0 z-50 w-full max-w-xl transform bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-[0.2em] text-slate-500", children: "Receipt detail" }), (0, jsx_runtime_1.jsx)("h2", { className: "text-xl font-semibold text-white", children: selected?.orderRef || selected?.id })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: closeDrawer, className: "rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10", children: "Close" })] }), detailLoading && (0, jsx_runtime_1.jsx)("p", { className: "mt-6 text-sm text-slate-400", children: "Loading details..." }), !detailLoading && detail?.receipt && ((0, jsx_runtime_1.jsxs)("div", { className: "mt-6 space-y-4", children: [(0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-4 text-slate-300", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Customer" }), (0, jsx_runtime_1.jsx)("p", { className: "text-base text-white", children: detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Served by" }), (0, jsx_runtime_1.jsx)("p", { children: detail.receipt.order?.attendant?.name || selected?.attendantName || "-" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Created" }), (0, jsx_runtime_1.jsx)("p", { children: formatDateTime(detail.receipt.generatedAt) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Doc type" }), (0, jsx_runtime_1.jsx)("p", { children: detail.receipt.docType })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-4", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Subtotal" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.totals?.subtotal) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Tax" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.totals?.tax) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Discount" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(detail.receipt.discount) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Total" }), (0, jsx_runtime_1.jsx)("p", { className: "text-lg font-semibold text-emerald-300", children: formatCurrency(detail.receipt.totals?.total) })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-3 flex flex-wrap gap-4 text-sm text-slate-300", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Buying total" }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: formatCurrency(supportBuyingTotal) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Profit" }), (0, jsx_runtime_1.jsx)("p", { className: `text-lg font-semibold ${profitColor}`, children: hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data" })] })] }), detail.receipt.docType === "LAYAWAY" && ((0, jsx_runtime_1.jsxs)("p", { className: "mt-2 text-xs text-amber-300", children: ["Balance: ", formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)] }))] })] }), detail.receipt.data?.podDelivery && ((0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100", children: [(0, jsx_runtime_1.jsxs)("p", { className: "text-xs uppercase tracking-[0.3em] text-yellow-300", children: ["POD ", formatBadgeLabel(detail.receipt.data.podDelivery.status)] }), detail.receipt.data.podDelivery.note && ((0, jsx_runtime_1.jsx)("p", { className: "mt-2 text-sm text-white", children: detail.receipt.data.podDelivery.note })), detail.receipt.data.podDelivery.createdAt && ((0, jsx_runtime_1.jsxs)("p", { className: "mt-2 text-[11px] text-yellow-200", children: ["Created ", formatDateTime(detail.receipt.data.podDelivery.createdAt)] }))] })), (0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/40 p-4", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Items" }), (0, jsx_runtime_1.jsxs)("div", { className: "mt-3 space-y-2", children: [itemsWithCost.map((item) => {
                                                         const quantity = Math.max(1, Number(item.quantity ?? 1));
                                                         const sellingPrice = Number(item.sellingPrice ?? 0);
                                                         const lineTotal = sellingPrice * quantity;
@@ -1100,7 +1016,7 @@ function ReceiptsAdminClient({ initial = [], allowEdit, onSummaryChange, refresh
                                                                 ? "text-emerald-300"
                                                                 : "text-rose-300";
                                                         return ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: item.displayName || "Item" }), (0, jsx_runtime_1.jsxs)("p", { className: "text-xs text-slate-400 flex flex-wrap gap-2", children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Qty ", quantity.toLocaleString()] }), (0, jsx_runtime_1.jsxs)("span", { children: ["Selling ", formatCurrency(sellingPrice)] }), (0, jsx_runtime_1.jsxs)("span", { children: ["Cost ", unitCost !== null ? formatCurrency(unitCost) : "N/A"] }), lineProfit !== null ? ((0, jsx_runtime_1.jsxs)("span", { className: profitLabelClass, children: ["Profit ", formatCurrency(lineProfit)] })) : ((0, jsx_runtime_1.jsx)("span", { className: "text-slate-400", children: "Profit N/A" })), item.serial && (0, jsx_runtime_1.jsxs)("span", { children: ["SN ", item.serial] })] })] }), (0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-emerald-300", children: formatCurrency(lineTotal) })] }, item.id));
-                                                    }), itemsWithCost.length === 0 && ((0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-400", children: "No items recorded." }))] })] }), hasSupportItems && ((0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Support buying costs" }), (0, jsx_runtime_1.jsx)("div", { className: "mt-3 space-y-2", children: detail.supportItems?.map((support) => ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: support.productName || "Support entry" }), (0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Captured via support ledger" })] }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm font-semibold text-emerald-300", children: support.buyingPrice !== null ? formatCurrency(support.buyingPrice) : "-" })] }, support.id))) })] })), (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-2", children: [(0, jsx_runtime_1.jsx)(link_1.default, { href: `/receipts/${detail.receipt.id}`, target: "_blank", rel: "noopener noreferrer", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10", children: "Open printable" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend("email"), disabled: sendingChannel === "email", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50", children: sendingChannel === "email" ? "Sending..." : "Send email" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend("whatsapp"), disabled: sendingChannel === "whatsapp", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50", children: sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp" }), allowEdit && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: openEditModal, className: "rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95", children: "Edit receipt" })), allowEdit && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: handleDeleteReceipt, disabled: deleting, className: "rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60", children: deleting ? "Deleting..." : "Delete receipt" }))] }), detail.receipt.notes && ((0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Notes" }), (0, jsx_runtime_1.jsx)("div", { className: "no-print", children: (0, jsx_runtime_1.jsx)(MarkdownRendererClient_1.RichFormattingToggle, {}) })] }), (0, jsx_runtime_1.jsx)(MarkdownRendererClient_1.default, { mdText: detail.receipt.notes })] }))] }))] })] })), (0, jsx_runtime_1.jsx)(EditModal, { open: editState.open, draft: editState.draft, staffList: staffList, saving: editState.saving, onClose: () => setEditState({ open: false, draft: null, saving: false }), onDraftChange: updateDraft, onSave: handleSaveEdit })] }));
+                                                    }), itemsWithCost.length === 0 && ((0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-400", children: "No items recorded." }))] })] }), hasSupportItems && ((0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Support buying costs" }), (0, jsx_runtime_1.jsx)("div", { className: "mt-3 space-y-2", children: detail.supportItems?.map((support) => ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { className: "font-semibold text-white", children: support.productName || "Support entry" }), (0, jsx_runtime_1.jsx)("p", { className: "text-xs text-slate-500", children: "Captured via support ledger" })] }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm font-semibold text-emerald-300", children: support.buyingPrice !== null ? formatCurrency(support.buyingPrice) : "-" })] }, support.id))) })] })), (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap gap-2", children: [(0, jsx_runtime_1.jsx)(link_1.default, { href: `/receipts/${detail.receipt.id}`, target: "_blank", rel: "noopener noreferrer", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10", children: "Open printable" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend("email"), disabled: sendingChannel === "email", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50", children: sendingChannel === "email" ? "Sending..." : "Send email" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend("whatsapp"), disabled: sendingChannel === "whatsapp", className: "rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50", children: sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp" }), detail.receipt.data?.podDelivery?.status === "pending" && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleMarkPodDelivered(detail.receipt.id), disabled: podActionId === detail.receipt.id, className: "rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50", children: podActionId === detail.receipt.id ? "Processing..." : "Mark POD delivered" })), allowEdit && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: openEditModal, className: "rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95", children: "Edit receipt" })), allowEdit && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: handleDeleteReceipt, disabled: deleting, className: "rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60", children: deleting ? "Deleting..." : "Delete receipt" }))] }), detail.receipt.notes && ((0, jsx_runtime_1.jsxs)("div", { className: "rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between", children: [(0, jsx_runtime_1.jsx)("p", { className: "text-xs uppercase tracking-wide text-slate-400", children: "Notes" }), (0, jsx_runtime_1.jsx)("div", { className: "no-print", children: (0, jsx_runtime_1.jsx)(MarkdownRendererClient_1.RichFormattingToggle, {}) })] }), (0, jsx_runtime_1.jsx)(MarkdownRendererClient_1.default, { mdText: detail.receipt.notes })] }))] }))] })] })), (0, jsx_runtime_1.jsx)(EditModal, { open: editState.open, draft: editState.draft, staffList: staffList, saving: editState.saving, onClose: () => setEditState({ open: false, draft: null, saving: false }), onDraftChange: updateDraft, onSave: handleSaveEdit })] }));
 }
 function PaymentMethodFilterCard({ totals, partialTotals, activeMethod, loading, onSelect, }) {
     const methods = [

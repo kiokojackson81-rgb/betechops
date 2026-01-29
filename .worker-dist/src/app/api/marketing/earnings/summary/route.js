@@ -53,7 +53,9 @@ async function GET(req) {
         if (isJeniffer) {
             posSummary = await (0, posReceiptSummary_1.summarizePosReceiptsForPeriod)({ start: period.start, end: period.end });
             userSummary.totalSales = posSummary.totalSales;
-            userSummary.salesCommission = (0, commission_1.computeSalesCommissionFromTiers)(posSummary.totalSales, posSummary.totalProfit, tiers, 0);
+            userSummary.totalProfit = posSummary.totalProfit;
+            // Do NOT override `userSummary.salesCommission` here — `getEarningsSummaryForUser`
+            // already applies Jeniffer's prorated-tier rule and provides `jenifferProgress`.
         }
         const ledger = await prisma_1.prisma.commissionLedger.findUnique({
             where: {
@@ -97,6 +99,7 @@ async function GET(req) {
             sales: userSummary.totalSales,
             baseSalary: userSummary.baseSalary,
             transportAllowance: userSummary.transportAllowance,
+            jenifferProgress: userSummary.jenifferProgress ?? null,
             commission: grossCommission,
             bonusTotal: userSummary.bonusTotal,
             chamaTotal: userSummary.chamaTotal,

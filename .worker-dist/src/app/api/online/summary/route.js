@@ -32,7 +32,9 @@ async function GET(req) {
     if (url.searchParams.has("start") || url.searchParams.has("end")) {
         return server_1.NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
     }
-    const period = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const periodKeyParam = url.searchParams.get("periodKey");
+    const requestedPeriod = (0, tradingPeriod_1.parseTradingPeriodKey)(periodKeyParam ?? undefined);
+    const period = requestedPeriod ?? (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
     await (0, commission_1.getOrCreateCommissionPeriod)(period.start);
     const start = period.start;
     const end = period.end;

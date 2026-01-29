@@ -37,13 +37,22 @@ async function GET(req) {
     const today = (0, timezone_1.nowInNairobi)();
     const { tiers } = await (0, commission_1.getOrCreateCommissionPeriod)(today);
     const current = await (0, marketingPeriod_1.getCurrentTradingPeriodFor)(today);
-    let argPeriod = {
-        start: current.startDate,
-        end: current.endDate,
-        key: current.key,
-        label: current.label,
-    };
-    if (!(today >= argPeriod.start && today <= argPeriod.end)) {
+    const periodKeyParam = url.searchParams.get("periodKey");
+    const requestedPeriod = (0, tradingPeriod_1.parseTradingPeriodKey)(periodKeyParam ?? undefined);
+    let argPeriod = requestedPeriod
+        ? {
+            start: requestedPeriod.start,
+            end: requestedPeriod.end,
+            key: requestedPeriod.key,
+            label: requestedPeriod.label,
+        }
+        : {
+            start: current.startDate,
+            end: current.endDate,
+            key: current.key,
+            label: current.label,
+        };
+    if (!requestedPeriod && !(today >= argPeriod.start && today <= argPeriod.end)) {
         const fallback = (0, tradingPeriod_1.getTradingPeriodFor)(today);
         argPeriod = {
             start: fallback.start,

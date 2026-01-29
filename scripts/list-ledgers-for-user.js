@@ -1,14 +1,20 @@
-#!/usr/bin/env node
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+
+// Usage:
+// $env:DATABASE_URL="..."; node scripts/list-ledgers-for-user.js brendah@betech.co.ke
+
+const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+
 async function main(){
-  const userId = process.argv[2];
-  if(!userId){ console.error('Usage: node scripts/list-ledgers-for-user.js <USER_ID>'); process.exit(1); }
-  try{
-    const rows = await prisma.commissionLedger.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
-    console.log('CommissionLedger rows for', userId, 'count=', rows.length);
-    rows.forEach(r => console.log({ id: r.id, periodStart: r.periodStart, periodEnd: r.periodEnd, commissionTotal: r.commissionTotal || r.commission, grossCommission: r.grossCommission, netCommission: r.netCommission, createdAt: r.createdAt }));
-  }catch(e){ console.error(e); process.exitCode=1; }
-  finally{ await prisma.$disconnect(); }
+  const email = process.argv[2];
+  if (!email){ console.error('Usage: node scripts/list-ledgers-for-user.js <EMAIL>'); process.exit(1); }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user){ console.error('User not found', email); process.exit(1); }
+
+  const ledgers = await prisma.commissionLedger.findMany({ where: { userId: user.id }, orderBy: [{ createdAt: 'desc' }] });
+  console.log(JSON.stringify(ledgers.map(l => ({ id: l.id, createdAt: l.createdAt, periodStart: l.periodStart, periodEnd: l.periodEnd, commissionTotal: l.commissionTotal })), null, 2));
+  await prisma.$disconnect();
 }
-main();
+
+main().catch((e)=>{ console.error(e); prisma.$disconnect().catch(()=>{}); process.exit(1); });

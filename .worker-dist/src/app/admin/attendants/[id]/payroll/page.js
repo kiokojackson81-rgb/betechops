@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.dynamic = void 0;
 exports.default = PayrollPage;
 const jsx_runtime_1 = require("react/jsx-runtime");
+const link_1 = __importDefault(require("next/link"));
 const navigation_1 = require("next/navigation");
 const PayrollClient_1 = __importDefault(require("./PayrollClient"));
 const prisma_1 = require("@/lib/prisma");
@@ -16,7 +17,7 @@ const api_1 = require("@/lib/api");
 const Card_1 = __importDefault(require("@/app/_components/Card"));
 const payrollPeriodKey_1 = require("@/lib/payrollPeriodKey");
 exports.dynamic = "force-dynamic";
-async function PayrollPage({ params }) {
+async function PayrollPage({ params, searchParams, }) {
     const auth = await (0, api_1.requireRole)("ADMIN");
     if (!auth.ok) {
         (0, navigation_1.redirect)("/admin/login");
@@ -28,7 +29,13 @@ async function PayrollPage({ params }) {
         return ((0, jsx_runtime_1.jsx)("div", { className: "p-6", children: (0, jsx_runtime_1.jsx)(Card_1.default, { className: "border-red-500/30 bg-red-900/10", children: "Attendant not found" }) }));
     }
     const plan = await prisma_1.prisma.attendantCompPlan.findUnique({ where: { attendantId } });
-    const period = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const resolvedSearchParams = (await searchParams) ?? {};
+    const rawPeriodParam = Array.isArray(resolvedSearchParams.period)
+        ? resolvedSearchParams.period[0]
+        : resolvedSearchParams.period;
+    const requestedPeriod = (0, tradingPeriod_1.parseTradingPeriodKey)(rawPeriodParam ?? undefined);
+    const currentPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date());
+    const period = requestedPeriod ?? currentPeriod;
     const periodKey = period.key;
     const periodLabel = period.label;
     const currentLedgerRaw = (await prisma_1.prisma.commissionLedger.findUnique({
@@ -45,7 +52,7 @@ async function PayrollPage({ params }) {
     // back to the older marketing earnings helper if needed.
     let summary = null;
     try {
-        const userSummary = await (0, earningsSummary_1.getEarningsSummaryForUser)({ userId: attendantId, asOf: new Date() });
+        const userSummary = await (0, earningsSummary_1.getEarningsSummaryForUser)({ userId: attendantId, asOf: period.start });
         const ledgerDetail = currentLedgerRaw?.detail;
         const marketingCommissionValue = ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
         const supportCommissionValue = ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
@@ -85,6 +92,10 @@ async function PayrollPage({ params }) {
             commission: grossCommission,
             sales: userSummary.totalSales,
         };
+        // expose jenifferProgress to client for UI display when applicable
+        if (isJeniffer) {
+            summary.jenifferProgress = userSummary.jenifferProgress ?? null;
+        }
     }
     catch (e) {
         // fallback to existing implementation if the new helper fails for any reason
@@ -118,20 +129,18 @@ async function PayrollPage({ params }) {
                 ]))
                 : {},
         };
-    const recentPeriods = (0, tradingPeriod_1.getRecentTradingPeriods)(2);
-    const previousPeriod = recentPeriods.length > 1 ? recentPeriods[1] : null;
-    const previousLedgerRaw = previousPeriod &&
-        (await prisma_1.prisma.commissionLedger.findUnique({
-            where: {
-                userId_periodStart_periodEnd: {
-                    userId: attendantId,
-                    periodStart: previousPeriod.start,
-                    periodEnd: previousPeriod.end,
-                },
+    const previousPeriod = (0, tradingPeriod_1.getTradingPeriodFor)(new Date(period.start.getTime() - 24 * 60 * 60 * 1000));
+    const previousLedgerRaw = await prisma_1.prisma.commissionLedger.findUnique({
+        where: {
+            userId_periodStart_periodEnd: {
+                userId: attendantId,
+                periodStart: previousPeriod.start,
+                periodEnd: previousPeriod.end,
             },
-        }));
+        },
+    });
     const previousLedger = previousLedgerRaw
         ? { netCommission: Number(previousLedgerRaw.netCommission ?? 0) }
         : null;
-    return ((0, jsx_runtime_1.jsxs)("div", { className: "min-h-screen bg-slate-950 text-slate-100 p-6", children: [(0, jsx_runtime_1.jsxs)("header", { className: "mb-6", children: [(0, jsx_runtime_1.jsxs)("h1", { className: "text-2xl font-semibold", children: ["Payroll \u2014 ", attendant.name ?? attendant.email] }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-400", children: "Manage comp plans and payroll adjustments for this attendant." })] }), (0, jsx_runtime_1.jsx)(PayrollClient_1.default, { attendant: attendant, initialPlan: plan, periodKey: periodKey, periodLabel: periodLabel, initialAdjustments: adjustments, initialSummary: summary, ledger: currentLedger, previousLedger: previousLedger ?? null })] }));
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "min-h-screen bg-slate-950 text-slate-100 p-6", children: [(0, jsx_runtime_1.jsx)("header", { className: "mb-6", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsxs)("h1", { className: "text-2xl font-semibold", children: ["Payroll - ", attendant.name ?? attendant.email] }), (0, jsx_runtime_1.jsx)("p", { className: "text-sm text-slate-400", children: "Manage comp plans and payroll adjustments for this attendant." }), period.key !== currentPeriod.key && ((0, jsx_runtime_1.jsxs)("p", { className: "text-xs text-slate-500", children: ["Showing archived period (", period.label, ")."] }))] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [(0, jsx_runtime_1.jsx)(link_1.default, { href: `/admin/attendants/${attendantId}/payroll?period=${encodeURIComponent(previousPeriod.key)}`, className: "rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800", children: "View previous period" }), period.key !== currentPeriod.key && ((0, jsx_runtime_1.jsx)(link_1.default, { href: `/admin/attendants/${attendantId}/payroll`, className: "rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800", children: "Return to current" }))] })] }) }), (0, jsx_runtime_1.jsx)(PayrollClient_1.default, { attendant: attendant, initialPlan: plan, periodKey: periodKey, periodLabel: periodLabel, initialAdjustments: adjustments, initialSummary: summary, ledger: currentLedger, previousLedger: previousLedger ?? null })] }));
 }

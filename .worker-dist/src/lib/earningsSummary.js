@@ -193,13 +193,12 @@ async function getEarningsSummaryForUser(opts) {
                 bonusTotal += amt;
         }
     }
-    // Attempt to load any existing CommissionLedger for this attendant/period.
-    // Some ledgers were created with period boundaries normalized to local
-    // midnight (YYYY-MM-DD 00:00:00) while others use TZ-normalized bounds
-    // (e.g., 21:00:00Z). Try both exact periodStart/periodEnd and also look
-    // for a matching `detail.marketing.periodKey` to find overlapping ledgers.
+    // Load any existing CommissionLedger for this attendant/period. Prefer
+    // the most-recent ledger (by `createdAt`) and favour ledgers that have a
+    // persisted `commissionTotal` > 0 so recomputes/upserts are shown in the UI.
     let ledger = null;
     try {
+        // First try exact unique lookup
         const exact = await prisma_1.prisma.commissionLedger.findUnique({
             where: {
                 userId_periodStart_periodEnd: {
@@ -209,77 +208,42 @@ async function getEarningsSummaryForUser(opts) {
                 },
             },
         });
-        let found = exact ?? null;
-        if (!found) {
-            const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
-            const res = await prisma_1.prisma.$queryRaw `
-          SELECT id, "grossCommission", "netCommission", "penalties", "commissionTotal", detail
-          FROM "CommissionLedger"
-          WHERE "userId" = ${opts.userId}
-            AND (
-              (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
-              OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
-            )
-          LIMIT 1
-        `;
-            if (Array.isArray(res) && res.length > 0)
-                found = res[0];
-        }
-        if (found) {
+        if (exact) {
             ledger = {
-                grossCommission: Number(found.grossCommission ?? 0),
-                netCommission: Number(found.netCommission ?? 0),
-                penalties: Number(found.penalties ?? 0),
-                // include persisted commissionTotal when available
-                commissionTotal: Number(found.commissionTotal ?? found.commission_total ?? 0),
-                detail: found.detail ?? null,
+                grossCommission: Number(exact.grossCommission ?? 0),
+                netCommission: Number(exact.netCommission ?? 0),
+                penalties: Number(exact.penalties ?? 0),
+                commissionTotal: Number(exact.commissionTotal ?? 0),
+                detail: exact.detail ?? null,
             };
         }
-        // If still not found, try a tolerant lookup: find any ledger for the user
-        // whose periodStart is within +/- 24 hours of the expected period start.
-        if (!ledger) {
-            try {
-                const windowMs = 24 * 60 * 60 * 1000;
-                // Prefer the most-recent ledger that has an explicit persisted commissionTotal (> 0).
-                const nearPositive = await prisma_1.prisma.commissionLedger.findFirst({
-                    where: {
-                        userId: opts.userId,
-                        periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
-                        commissionTotal: { gt: 0 },
-                    },
-                    orderBy: { createdAt: "desc" },
-                });
-                if (nearPositive) {
-                    ledger = {
-                        grossCommission: Number(nearPositive.grossCommission ?? 0),
-                        netCommission: Number(nearPositive.netCommission ?? 0),
-                        penalties: Number(nearPositive.penalties ?? 0),
-                        commissionTotal: Number(nearPositive.commissionTotal ?? nearPositive.commission_total ?? 0),
-                        detail: nearPositive.detail ?? null,
-                    };
-                }
-                else {
-                    // Fallback: tolerant lookup without commissionTotal filter (preserves previous behavior)
-                    const near = await prisma_1.prisma.commissionLedger.findFirst({
-                        where: {
-                            userId: opts.userId,
-                            periodStart: { gte: new Date(tradingPeriod.start.getTime() - windowMs), lte: new Date(tradingPeriod.start.getTime() + windowMs) },
-                        },
-                        orderBy: { createdAt: "desc" },
-                    });
-                    if (near) {
-                        ledger = {
-                            grossCommission: Number(near.grossCommission ?? 0),
-                            netCommission: Number(near.netCommission ?? 0),
-                            penalties: Number(near.penalties ?? 0),
-                            commissionTotal: Number(near.commissionTotal ?? near.commission_total ?? 0),
-                            detail: near.detail ?? null,
-                        };
-                    }
-                }
-            }
-            catch (e) {
-                // ignore tolerant lookup failures
+        else {
+            // If no exact row, collect candidate ledgers that either embed the
+            // periodKey in `detail.marketing.periodKey` or have a near periodStart.
+            const periodKeyDateOnlyLocal = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
+            const windowMs = 24 * 60 * 60 * 1000;
+            const candidates = await prisma_1.prisma.$queryRaw `
+        SELECT id, "grossCommission", "netCommission", "penalties", "commissionTotal", detail, "createdAt"
+        FROM "CommissionLedger"
+        WHERE "userId" = ${opts.userId}
+          AND (
+            (detail->'marketing'->>'periodKey') = ${tradingPeriod.key}
+            OR (detail->'marketing'->>'periodKey') = ${periodKeyDateOnlyLocal}
+            OR ("periodStart" >= ${new Date(tradingPeriod.start.getTime() - windowMs)} AND "periodStart" <= ${new Date(tradingPeriod.start.getTime() + windowMs)})
+          )
+        ORDER BY "createdAt" DESC
+        LIMIT 10
+      `;
+            if (Array.isArray(candidates) && candidates.length > 0) {
+                // Prefer first candidate that has a positive commissionTotal
+                let chosen = candidates.find((c) => Number(c.commissionTotal ?? 0) > 0) || candidates[0];
+                ledger = {
+                    grossCommission: Number(chosen.grossCommission ?? 0),
+                    netCommission: Number(chosen.netCommission ?? 0),
+                    penalties: Number(chosen.penalties ?? 0),
+                    commissionTotal: Number(chosen.commissionTotal ?? 0),
+                    detail: chosen.detail ?? null,
+                };
             }
         }
     }
@@ -288,10 +252,20 @@ async function getEarningsSummaryForUser(opts) {
         ledger = null;
     }
     // Compute commission. For Brendah we use the direct-sales formula from
-    // `computeDirectCommission` and add product commissions. For others we
-    // continue to use the tiered calculation with an optional fallback percent.
-    const fallbackPercent = isJeniffer ? 0 : (totalProfit > 0 ? 0.05 : 0);
-    let salesCommission = (0, commission_1.computeSalesCommissionFromTiers)(totalSales, totalProfit, tiers, fallbackPercent);
+    // `computeDirectCommission`. For Jeniffer apply special prorated-tier
+    // rule (base payouts + prorated share of next tier). Others use the
+    // tiered calculation with a fallback percent based on profit.
+    let salesCommission;
+    let jenifferProgress = null;
+    if (isJeniffer) {
+        const res = (0, commission_1.computeJenifferProratedCommission)(totalSales, tiers.map((t) => ({ minSales: Number(t.minSales), maxSales: t.maxSales == null ? null : Number(t.maxSales), payoutFlat: Number(t.payoutFlat) })));
+        salesCommission = Number(res.commission ?? 0);
+        jenifferProgress = res;
+    }
+    else {
+        const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
+        salesCommission = (0, commission_1.computeSalesCommissionFromTiers)(totalSales, totalProfit, tiers, fallbackPercent);
+    }
     const { newProductCommission, copiedCommission, editedCommission } = (0, commission_1.computeProductCommissions)({
         newProducts,
         copiedProducts,
@@ -299,21 +273,22 @@ async function getEarningsSummaryForUser(opts) {
     });
     let computedGrossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
     if (isBrendah) {
-        const direct = (0, onlineCommission_1.computeDirectCommission)(totalSales, totalProfit);
+        const direct = (0, onlineCommission_1.computeBrendahDirectCommission)(totalSales, totalProfit);
         salesCommission = direct.amount;
         computedGrossCommission = direct.amount + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
     }
     // Prefer a persisted `commissionTotal` when present (authoritative),
     // otherwise fall back to computed values. This ensures the UI quick-stats
     // reflect the ledger-upserted commission when admins have run a recompute.
+    // For Brendah we always use the computed formula (ignore persisted ledger
+    // overrides). For others prefer a persisted `commissionTotal` when present.
     let finalGrossCommission;
     const ledgerPersistedCommission = ledger && ledger.commissionTotal ? Number(ledger.commissionTotal) : 0;
-    if (ledgerPersistedCommission > 0) {
-        finalGrossCommission = ledgerPersistedCommission;
-    }
-    else if (isBrendah) {
-        // If no persisted commission, use computed for Brendah
+    if (isBrendah) {
         finalGrossCommission = computedGrossCommission;
+    }
+    else if (ledgerPersistedCommission > 0) {
+        finalGrossCommission = ledgerPersistedCommission;
     }
     else {
         finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
