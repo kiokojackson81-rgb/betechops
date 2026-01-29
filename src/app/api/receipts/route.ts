@@ -1026,7 +1026,37 @@ export async function POST(req: NextRequest) {
         console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
       }
     } else {
-      console.info(`[receiptSender][${requestId}] SEND:skipped pod_delivery`);
+      // For POD receipts, still trigger an immediate WhatsApp via Chatrace at
+      // creation time (whatsapp-only). This sends using the POD dispatch tag and
+      // skips default tags so downstream routing can treat it as a POD event.
+      console.info(`[receiptSender][${requestId}] START send pipeline (pod_delivery)`);
+      try {
+        sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp'], {
+          requestId,
+          chatraceTag: 'betech_dispatch_pay_on_delivery',
+          skipDefaultChatraceTags: true,
+        });
+        console.info(`[receiptSender][${requestId}] SEND:ok`, { channelStatus: sendResult.channelStatus });
+      } catch (sendErr) {
+        console.error(`[receiptSender][${requestId}] SEND:error (pod)`, sendErr);
+        sendResult = {
+          ok: false,
+          sent: [],
+          errors: [{ channel: 'send', error: String(sendErr) }],
+          channelStatus: {},
+        };
+      }
+
+      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
+      if (pdfForInternal) {
+        try {
+          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+        } catch (internalErr) {
+          console.error("[receipts] failed to notify internal ops (pod)", internalErr);
+        }
+      } else {
+        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf (pod)`);
+      }
     }
 
     return NextResponse.json({ ok: true, ...result, send: sendResult });
