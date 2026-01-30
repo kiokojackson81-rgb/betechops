@@ -828,6 +828,7 @@ export async function sendReceiptChannels(
               const contactId = result?.debug?.contactId ?? (existingPod2.contactId ?? (baseData2.chatrace as any)?.debug?.contactId);
               const podUpdates = {
                 ...existingPod2,
+                status: existingPod2.status ?? 'pending',
                 sentAt: existingPod2.sentAt ?? new Date().toISOString(),
                 sentBy: actorId ?? 'system',
                 sentDebug: result?.debug ?? undefined,
@@ -853,7 +854,7 @@ export async function sendReceiptChannels(
                 maxAttempts,
               };
 
-              await persistPodDelivery(receipt, { ...existingPod3, retry: retryData });
+              await persistPodDelivery(receipt, { ...existingPod3, retry: retryData, status: existingPod3.status ?? 'pending' });
               console.info('[receipts][podDelivery] scheduled retry for chatrace push', { receiptId: receipt.id, retry: retryData });
 
               // Write an actionLog entry describing the scheduled retry
