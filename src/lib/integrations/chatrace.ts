@@ -16,6 +16,9 @@ export type SendReceiptToChatraceInput = {
   receiptId?: string;
   tagName?: string;
   skipDefaultTags?: boolean;
+  items?: any[];
+  paymentMethod?: string;
+  attendant?: string;
 };
 
 function checkConfig() {
@@ -177,6 +180,21 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   }
   actions.push(setFieldValue('receipt_channel', 'customer'));
 
+  // Map optional richer fields so Chatrace templates can access them
+  if (input.paymentMethod) {
+    actions.push(setFieldValue('payment_method', input.paymentMethod));
+  }
+  if (input.attendant) {
+    actions.push(setFieldValue('attendant', input.attendant));
+  }
+  if (input.items && Array.isArray(input.items)) {
+    try {
+      actions.push(setFieldValue('items', JSON.stringify(input.items)));
+    } catch {
+      actions.push(setFieldValue('items', String(input.items)));
+    }
+  }
+
   if (!skipDefaultTags) {
     actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
     actions.push({
@@ -201,6 +219,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     hasReceiptUrl: !!finalReceiptUrl,
     receiptMode,
     finalReceiptUrlLength: finalReceiptUrl.length,
+    itemsCount: Array.isArray(input.items) ? input.items.length : 0,
+    paymentMethod: input.paymentMethod ?? null,
+    attendant: input.attendant ?? null,
   };
 
   console.info('[chatrace] pushReceipt', {

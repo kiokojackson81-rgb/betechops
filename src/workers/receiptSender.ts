@@ -679,6 +679,10 @@ export async function sendReceiptChannels(
         receiptUrl: finalReceiptUrl,
         receiptId: receipt.id,
         tagName: finalTagName,
+        // Provide richer fields so Chatrace templates can render real receipt data
+        items: (receipt.order as any)?.items ?? (snapshot.items ?? []),
+        paymentMethod: (snapshot.paymentMethod as string) ?? (receipt.order as any)?.paymentMethod ?? undefined,
+        attendant: snapshot.attendantName ?? (receipt.order as any)?.attendant?.name ?? receipt.issuedBy?.name,
       };
 
       console.info('[receipts][chatrace] outbound payload', { chitInput });
