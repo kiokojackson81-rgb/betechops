@@ -666,26 +666,67 @@ export async function sendReceiptChannels(
         customTag: opts?.chatraceTag?.trim() ?? null,
       });
 
+      // Resolve customer name from multiple likely locations (order first,
+      // then receipt.data). Also attempt to find nested customer.name fields.
+      const orderAny = receipt.order as any;
+      const dataAny = (receipt.data as any) || {};
+      const nestedCustomerName = orderAny?.customer?.name ?? dataAny?.customer?.name;
+      const resolvedCustomerName =
+        orderAny?.customerName ??
+        nestedCustomerName ??
+        dataAny?.customerName ??
+        dataAny?.customerNameFull ??
+        'Customer';
+
+      if (resolvedCustomerName === 'Customer') {
+        console.warn('[receipts][chatrace] using fallback customer name', { receiptId: receipt.id });
+      }
+      if (!normalizedChatracePhone) {
+        console.warn('[receipts][chatrace] missing/invalid customer phone for chatrace push', { receiptId: receipt.id });
+      }
+
+      // Resolve receipt number (prefer explicit order number or stored receipt number)
+      const resolvedReceiptNumber = orderAny?.orderNumber ?? dataAny?.receiptNumber ?? receipt.id;
+
+      // Resolve amount: prefer totals.total, then order.totalAmount, else sum items as fallback
+      let resolvedAmountNum = Number.isFinite(Number(totals?.total)) ? Number(totals!.total) : NaN;
+      if (!Number.isFinite(resolvedAmountNum) && typeof receipt.order?.totalAmount === 'number') {
+        resolvedAmountNum = receipt.order.totalAmount;
+      }
+      if (!Number.isFinite(resolvedAmountNum)) {
+        const itemsForSum = (orderAny?.items ?? snapshot.items ?? []) as any[];
+        resolvedAmountNum = itemsForSum.reduce((sum, it) => {
+          const qty = Number.isFinite(Number(it?.quantity ?? 1)) ? Number(it?.quantity ?? 1) : 1;
+          const unit = Number.isFinite(Number(it?.unitPrice ?? it?.sellingPrice ?? 0)) ? Number(it?.unitPrice ?? it?.sellingPrice ?? 0) : 0;
+          return sum + qty * unit;
+        }, 0);
+      }
+      const resolvedAmount = Math.round(Number.isFinite(resolvedAmountNum) ? resolvedAmountNum : invoiceAmount).toString();
+
       const chitInput = {
         phoneE164: normalizedChatracePhone,
-        customerName:
-          (receipt.order as any)?.customerName ??
-          (receipt.data as any)?.customerName ??
-          'Customer',
-        receiptNumber: receipt.order?.orderNumber ?? receipt.id,
-        amount: Math.round(invoiceAmount).toString(),
+        customerName: resolvedCustomerName,
+        receiptNumber: resolvedReceiptNumber,
+        amount: resolvedAmount,
         currency: 'KES',
         receiptLink: receiptPageLink,
         receiptUrl: finalReceiptUrl,
         receiptId: receipt.id,
         tagName: finalTagName,
         // Provide richer fields so Chatrace templates can render real receipt data
-        items: (receipt.order as any)?.items ?? (snapshot.items ?? []),
-        paymentMethod: (snapshot.paymentMethod as string) ?? (receipt.order as any)?.paymentMethod ?? undefined,
-        attendant: snapshot.attendantName ?? (receipt.order as any)?.attendant?.name ?? receipt.issuedBy?.name,
+        items: (orderAny?.items ?? snapshot.items ?? []),
+        paymentMethod: (snapshot.paymentMethod as string) ?? (orderAny as any)?.paymentMethod ?? undefined,
+        attendant: snapshot.attendantName ?? (orderAny as any)?.attendant?.name ?? receipt.issuedBy?.name,
       };
 
       console.info('[receipts][chatrace] outbound payload', { chitInput });
+
+      // Persist the pre-push payload in receipt.data.chatrace.debug for post-mortem
+      try {
+        await getChatraceMetaUpdate({ debug: { prePushPayload: chitInput } });
+      } catch (persistErr) {
+        console.warn('[receipts][chatrace] failed to persist prePushPayload', { receiptId: receipt.id, error: persistErr instanceof Error ? persistErr.message : String(persistErr) });
+      }
       // Evaluate whether this push should be skipped due to a prior POD send
       const baseData:
         | Record<string, unknown>
