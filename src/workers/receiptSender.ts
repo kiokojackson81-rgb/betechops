@@ -666,8 +666,6 @@ export async function sendReceiptChannels(
         customTag: opts?.chatraceTag?.trim() ?? null,
       });
 
-      // Resolve customer name from multiple likely locations (order first,
-      // then receipt.data). Also attempt to find nested customer.name fields.
       const orderAny = receipt.order as any;
       const dataAny = (receipt.data as any) || {};
       const nestedCustomerName = orderAny?.customer?.name ?? dataAny?.customer?.name;
@@ -677,7 +675,6 @@ export async function sendReceiptChannels(
         dataAny?.customerName ??
         dataAny?.customerNameFull ??
         'Customer';
-
       if (resolvedCustomerName === 'Customer') {
         console.warn('[receipts][chatrace] using fallback customer name', { receiptId: receipt.id });
       }
@@ -685,49 +682,6 @@ export async function sendReceiptChannels(
         console.warn('[receipts][chatrace] missing/invalid customer phone for chatrace push', { receiptId: receipt.id });
       }
 
-      // Resolve receipt number (prefer explicit order number or stored receipt number)
-      const resolvedReceiptNumber = orderAny?.orderNumber ?? dataAny?.receiptNumber ?? receipt.id;
-
-      // Resolve amount: prefer totals.total, then order.totalAmount, else sum items as fallback
-      let resolvedAmountNum = Number.isFinite(Number(totals?.total)) ? Number(totals!.total) : NaN;
-      if (!Number.isFinite(resolvedAmountNum) && typeof receipt.order?.totalAmount === 'number') {
-        resolvedAmountNum = receipt.order.totalAmount;
-      }
-      if (!Number.isFinite(resolvedAmountNum)) {
-        const itemsForSum = (orderAny?.items ?? snapshot.items ?? []) as any[];
-        resolvedAmountNum = itemsForSum.reduce((sum, it) => {
-          const qty = Number.isFinite(Number(it?.quantity ?? 1)) ? Number(it?.quantity ?? 1) : 1;
-          const unit = Number.isFinite(Number(it?.unitPrice ?? it?.sellingPrice ?? 0)) ? Number(it?.unitPrice ?? it?.sellingPrice ?? 0) : 0;
-          return sum + qty * unit;
-        }, 0);
-      }
-      const resolvedAmount = Math.round(Number.isFinite(resolvedAmountNum) ? resolvedAmountNum : invoiceAmount).toString();
-
-      const chitInput = {
-        phoneE164: normalizedChatracePhone,
-        customerName: resolvedCustomerName,
-        receiptNumber: resolvedReceiptNumber,
-        amount: resolvedAmount,
-        currency: 'KES',
-        receiptLink: receiptPageLink,
-        receiptUrl: finalReceiptUrl,
-        receiptId: receipt.id,
-        tagName: finalTagName,
-        // Provide richer fields so Chatrace templates can render real receipt data
-        items: (orderAny?.items ?? snapshot.items ?? []),
-        paymentMethod: (snapshot.paymentMethod as string) ?? (orderAny as any)?.paymentMethod ?? undefined,
-        attendant: snapshot.attendantName ?? (orderAny as any)?.attendant?.name ?? receipt.issuedBy?.name,
-      };
-
-      console.info('[receipts][chatrace] outbound payload', { chitInput });
-
-      // Persist the pre-push payload in receipt.data.chatrace.debug for post-mortem
-      try {
-        await getChatraceMetaUpdate({ debug: { prePushPayload: chitInput } });
-      } catch (persistErr) {
-        console.warn('[receipts][chatrace] failed to persist prePushPayload', { receiptId: receipt.id, error: persistErr instanceof Error ? persistErr.message : String(persistErr) });
-      }
-      // Evaluate whether this push should be skipped due to a prior POD send
       const baseData:
         | Record<string, unknown>
         | undefined =
@@ -745,13 +699,82 @@ export async function sendReceiptChannels(
       const shouldMarkPodSent = Boolean(opts?.markPodSent) || isPodTag;
       const shouldSkipBecauseAlreadySent = Boolean(shouldMarkPodSent && (existingPod?.sentAt || existingPod?.contactId || existingContactId));
 
-      if (shouldSkipBecauseAlreadySent) {
-        console.info('[receipts][chatrace] skipping push: already marked sent', { receiptId: receipt.id, sentAt: existingPod?.sentAt ?? null, contactId: existingPod?.contactId ?? existingContactId ?? null });
-        channelStatus.chatrace = 'skipped_already_sent';
-        // Persist a lightweight chatrace metadata update to reflect the skip (no error)
-        await getChatraceMetaUpdate({ status: 'skipped', lastSentAt: existingPod?.sentAt ?? null, pdfUrl: finalChatracePdfUrl.receiptUrl ?? null, pdfMode: finalMode });
+      const resolvedReceiptNumber = orderAny?.orderNumber ?? dataAny?.receiptNumber ?? receipt.id;
+      let resolvedAmountNum = Number.isFinite(Number(totals?.total)) ? Number(totals!.total) : NaN;
+      if (!Number.isFinite(resolvedAmountNum) && typeof receipt.order?.totalAmount === 'number') {
+        resolvedAmountNum = receipt.order.totalAmount;
       }
+      if (!Number.isFinite(resolvedAmountNum)) {
+        const itemsForSum = (orderAny?.items ?? snapshot.items ?? []) as any[];
+        resolvedAmountNum = itemsForSum.reduce((sum, it) => {
+          const qty = Number.isFinite(Number(it?.quantity ?? 1)) ? Number(it?.quantity ?? 1) : 1;
+          const unit = Number.isFinite(Number(it?.unitPrice ?? it?.sellingPrice ?? 0)) ? Number(it?.unitPrice ?? it?.sellingPrice ?? 0) : 0;
+          return sum + qty * unit;
+        }, 0);
+      }
+      const resolvedAmount = Math.round(Number.isFinite(resolvedAmountNum) ? resolvedAmountNum : invoiceAmount).toString();
+      const itemsForChatrace = (orderAny?.items ?? snapshot.items ?? []) as any[];
+      const normalizedItems = itemsForChatrace
+        .map((item) => {
+          const title = item?.title ?? item?.productName ?? item?.description ?? 'Item';
+          const qty = Number.isFinite(Number(item?.quantity ?? 1)) ? Number(item?.quantity ?? 1) : 1;
+          const unitPrice = Number.isFinite(Number(item?.unitPrice ?? item?.sellingPrice ?? 0)) ? Number(item?.unitPrice ?? item?.sellingPrice ?? 0) : 0;
+          return {
+            title,
+            quantity: qty,
+            unitPrice,
+            total: Math.round(qty * unitPrice),
+          };
+        })
+        .filter((item) => item.quantity > 0 || item.total > 0);
+      const resolvedDocType = (receipt.docType ?? 'RECEIPT').toUpperCase();
+      const resolvedCustomerEmail =
+        orderAny?.customerEmail ??
+        dataAny?.customerEmail ??
+        dataAny?.customerEmailAddress ??
+        undefined;
+      const resolvedPaymentMethod =
+        (snapshot.paymentMethod as string) ??
+        (orderAny as any)?.paymentMethod ??
+        dataAny?.paymentMethod ??
+        undefined;
+      const resolvedAttendant = snapshot.attendantName ?? (orderAny as any)?.attendant?.name ?? receipt.issuedBy?.name;
+      const podNote = existingPod?.note ?? dataAny?.podDelivery?.note ?? null;
+      const brandingLabel = (branding as any)?.siteTitle ?? (branding as any)?.name ?? branding?.letterheadUrl ?? 'Betech';
 
+      const chitInput = {
+        phoneE164: normalizedChatracePhone,
+        customerName: resolvedCustomerName,
+        customerEmail: resolvedCustomerEmail,
+        customerPhone: normalizedChatracePhone,
+        receiptNumber: resolvedReceiptNumber,
+        amount: resolvedAmount,
+        currency: 'KES',
+        receiptLink: receiptPageLink,
+        receiptUrl: finalReceiptUrl,
+        receiptId: receipt.id,
+        tagName: finalTagName,
+        docType: resolvedDocType,
+        orderRef: orderAny?.orderNumber ?? null,
+        note: podNote ?? undefined,
+        branding: brandingLabel,
+        totals: {
+          total: Number(resolvedAmountNum),
+          roundedTotal: Number(resolvedAmount),
+        },
+        items: normalizedItems,
+        paymentMethod: resolvedPaymentMethod,
+        attendant: resolvedAttendant,
+      };
+
+      console.info('[receipts][chatrace] outbound payload', { chitInput });
+
+      try {
+        await getChatraceMetaUpdate({ debug: { prePushPayload: chitInput } });
+      } catch (persistErr) {
+        console.warn('[receipts][chatrace] failed to persist prePushPayload', { receiptId: receipt.id, error: persistErr instanceof Error ? persistErr.message : String(persistErr) });
+      }
+    
       let result: any = null;
       if (!shouldSkipBecauseAlreadySent) {
         result = await pushReceiptToChatrace({
@@ -800,31 +823,20 @@ export async function sendReceiptChannels(
         if (shouldMarkPodSent) {
           try {
             if (result?.ok) {
-              // Successful push: persist sent audit info and clear retry metadata
               const baseData2 = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
               const existingPod2 = typeof baseData2.podDelivery === 'object' && baseData2.podDelivery ? { ...(baseData2.podDelivery as Record<string, unknown>) } : {};
               const contactId = result?.debug?.contactId ?? (existingPod2.contactId ?? (baseData2.chatrace as any)?.debug?.contactId);
-              const nextData = {
-                ...baseData2,
-                podDelivery: {
-                  ...existingPod2,
-                  sentAt: existingPod2.sentAt ?? new Date().toISOString(),
-                  sentBy: actorId ?? 'system',
-                  sentDebug: result?.debug ?? undefined,
-                  contactId: contactId ?? undefined,
-                  // clear retry info
-                  retry: undefined,
-                },
-                // keep existing chatrace debug too
+              const podUpdates = {
+                ...existingPod2,
+                sentAt: existingPod2.sentAt ?? new Date().toISOString(),
+                sentBy: actorId ?? 'system',
+                sentDebug: result?.debug ?? undefined,
+                contactId: contactId ?? undefined,
+                retry: undefined,
               };
-              try {
-                await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData as Prisma.InputJsonValue } });
-                console.info('[receipts][podDelivery] marked creation-time podDelivery.sentAt/contactId', { receiptId: receipt.id });
-              } catch (podErr) {
-                console.error('[receipts][podDelivery] failed to persist sentAt/contactId', podErr instanceof Error ? podErr.message : String(podErr));
-              }
+              await persistPodDelivery(receipt, podUpdates);
+              console.info('[receipts][podDelivery] marked creation-time podDelivery.sentAt/contactId', { receiptId: receipt.id });
             } else if (!shouldSkipBecauseAlreadySent) {
-              // Failed push: schedule retry with exponential backoff and log attempt
               const baseData3 = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
               const existingPod3 = typeof baseData3.podDelivery === 'object' && baseData3.podDelivery ? { ...(baseData3.podDelivery as Record<string, unknown>) } : {};
               const prevAttempts = Number((existingPod3.retry && (existingPod3.retry as any).attempts) || 0);
@@ -841,13 +853,8 @@ export async function sendReceiptChannels(
                 maxAttempts,
               };
 
-              const nextData = { ...baseData3, podDelivery: { ...existingPod3, retry: retryData } };
-              try {
-                await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData as Prisma.InputJsonValue } });
-                console.info('[receipts][podDelivery] scheduled retry for chatrace push', { receiptId: receipt.id, retry: retryData });
-              } catch (upErr) {
-                console.error('[receipts][podDelivery] failed to persist retry metadata', upErr instanceof Error ? upErr.message : String(upErr));
-              }
+              await persistPodDelivery(receipt, { ...existingPod3, retry: retryData });
+              console.info('[receipts][podDelivery] scheduled retry for chatrace push', { receiptId: receipt.id, retry: retryData });
 
               // Write an actionLog entry describing the scheduled retry
               try {
@@ -1113,6 +1120,23 @@ async function persistReceiptFiles(params: PersistReceiptFilesParams) {
       });
     }
   } catch (error) {
-    console.error('[receiptSender] failed to create ReceiptFile record', error);
+      console.error('[receiptSender] failed to create ReceiptFile record', error);
+  }
+}
+
+async function persistPodDelivery(receipt: any, updates: Record<string, unknown>) {
+  const baseData =
+    typeof receipt.data === 'object' && receipt.data
+      ? { ...(receipt.data as Record<string, unknown>) }
+      : {};
+  const existingPod =
+    typeof baseData.podDelivery === 'object' && baseData.podDelivery
+      ? { ...(baseData.podDelivery as Record<string, unknown>) }
+      : {};
+  const nextData = { ...baseData, podDelivery: { ...existingPod, ...updates } };
+  try {
+    await prisma.receipt.update({ where: { id: receipt.id }, data: { data: nextData as Prisma.InputJsonValue } });
+  } catch (err) {
+    console.error('[receiptSender] failed to persist podDelivery metadata', err);
   }
 }
