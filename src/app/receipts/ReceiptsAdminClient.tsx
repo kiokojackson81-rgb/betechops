@@ -42,6 +42,8 @@ type FilterState = {
   end: string;
   attendantId: string;
   paymentMethod: "MPESA" | "CASH" | "";
+  customerType?: string;
+  podStatus?: string;
 };
 
 type PaymentTotals = {
@@ -166,6 +168,8 @@ const makeDefaultFilters = (): FilterState => {
     end: formatDateInput(end),
     attendantId: "",
     paymentMethod: "",
+    customerType: undefined,
+    podStatus: undefined,
   };
 };
 
@@ -448,6 +452,8 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
+        if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -504,6 +510,8 @@ export default function ReceiptsAdminClient({
         params.set("q", appliedFilters.q.trim());
       }
       params.set("scope", scopeMode);
+      if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
+      if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -1188,6 +1196,30 @@ export default function ReceiptsAdminClient({
             </button>
           </div>
         </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            POD receipts only
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={Boolean(filters.customerType === 'pod')}
+                onChange={(e) => setFilters((prev) => ({ ...prev, customerType: e.target.checked ? 'pod' : undefined }))}
+                className="h-4 w-4"
+              />
+              <select
+                value={filters.podStatus ?? ''}
+                onChange={(e) => setFilters((prev) => ({ ...prev, podStatus: e.target.value || undefined }))}
+                disabled={filters.customerType !== 'pod'}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="">Any</option>
+                <option value="pending">Pending</option>
+                <option value="delivered">Delivered</option>
+                <option value="delivery_failed">Delivery Failed</option>
+              </select>
+            </div>
+          </label>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
@@ -1286,6 +1318,7 @@ export default function ReceiptsAdminClient({
                         onDelete={() => void deleteReceiptById(row.id)}
                         onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
                         onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
+                        onResendPod={row.isPodDelivery ? () => void sendReceiptById(row.id, "whatsapp") : undefined}
                         onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
                         onPodAction={
                           isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
@@ -1518,6 +1551,16 @@ export default function ReceiptsAdminClient({
                   >
                     {sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp"}
                   </button>
+                  {detail.receipt.data?.podDelivery && (
+                    <button
+                      type="button"
+                      onClick={() => sendReceiptById(detail.receipt.id, "whatsapp")}
+                      disabled={sendingChannel === "whatsapp"}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Resend POD
+                    </button>
+                  )}
                   {detail.receipt.data?.podDelivery?.status === "pending" && (
                     <button
                       type="button"

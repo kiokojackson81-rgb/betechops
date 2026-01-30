@@ -22,6 +22,7 @@ export default function RowActions({
   onSendWhatsapp: () => void;
   onPrint: () => void;
   onPodAction?: () => void;
+  onResendPod?: () => void;
   podActionLabel?: string;
   podActionProcessing?: boolean;
   disabled?: boolean;
@@ -97,6 +98,19 @@ export default function RowActions({
         >
           <Check size={16} />
           <span className="hidden md:inline">{podActionProcessing ? "Processing..." : podActionLabel}</span>
+        </button>
+      )}
+
+      {onResendPod && (
+        <button
+          aria-label="Resend POD"
+          title="Resend POD"
+          onClick={onResendPod}
+          disabled={disabled}
+          className={`${btnBase} bg-yellow-600/60 hover:bg-yellow-600 text-black`}
+        >
+          <Send size={16} />
+          <span className="hidden md:inline">Resend POD</span>
         </button>
       )}
 
