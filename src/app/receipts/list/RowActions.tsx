@@ -11,6 +11,7 @@ export default function RowActions({
   onSendWhatsapp,
   onPrint,
   onPodAction,
+  onResendPod,
   podActionLabel = "Mark delivered",
   podActionProcessing = false,
   disabled,
