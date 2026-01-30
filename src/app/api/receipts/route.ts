@@ -131,6 +131,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Optional filter: customerType=pod to show POD receipts only, with optional status filter
+  const customerType = url.searchParams.get('customerType') || undefined;
+  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
+  if (customerType === 'pod') {
+    if (podStatus) {
+      and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
+    } else {
+      // any receipt that has podDelivery metadata
+      and.push({ data: { path: ['podDelivery'], not: { equals: null } } });
+    }
+  }
+
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
