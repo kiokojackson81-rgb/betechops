@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { buildReceiptKey, normalizePaymentMethod } from "@/lib/receiptKey";
+import { canonicalReceiptNumber } from "@/lib/receipts/utils";
 
 export type SupportPeriodAggregates = {
   totalSales: number;
@@ -14,6 +15,17 @@ export type SupportPeriodAggregates = {
 
 export async function getSupportPeriodAggregates(opts: { userId: string; period: TradingPeriod }) {
   const { userId, period } = opts;
+
+  // Find POS receipts with POD pending in this period and precompute canonical keys
+  const posPodPending = await prisma.receipt.findMany({
+    where: { generatedAt: { gte: period.start, lte: period.end }, data: { path: ['podDelivery', 'status'], equals: 'pending' } },
+    select: { id: true, data: true, order: true },
+  });
+  const excludedCanonicals = new Set<string>();
+  for (const r of posPodPending) {
+    const cand = canonicalReceiptNumber(r.order?.orderNumber ?? (r.data && (r.data as any).receiptNumber) ?? r.id);
+    if (cand) excludedCanonicals.add(cand);
+  }
 
   const entries = await prisma.supportDailyEntry.findMany({
     where: {
@@ -55,6 +67,11 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
 
     for (const r of entry.receipts ?? []) {
       const key = buildReceiptKey(r.receiptNumber ?? null, r.id) || `ID:${r.id}`;
+      const canonical = canonicalReceiptNumber(r.receiptNumber ?? r.id);
+      if (canonical && excludedCanonicals.has(canonical)) {
+        // Skip this support receipt because a pos POD-pending receipt exists
+        continue;
+      }
       const selling = Number(r.sellingTotal ?? 0);
       const buying = Number(r.buyingTotal ?? 0);
       const itemsCount = Array.isArray(r.items) ? r.items.length : 0;

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { canonicalReceiptNumber } from "@/lib/receipts/utils";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { COMMISSION_LADDER } from "@/lib/commissionCommon";
@@ -85,6 +86,20 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     return { totals: emptyTotals(), entryCount: 0 };
   }
 
+  // Precompute POS receipts that are POD-pending in this period. If a POS
+  // receipt exists with a pending podDelivery for the same canonical receipt
+  // key, prefer excluding marketing rows for that canonical key to avoid
+  // double-counting until POD is finalized.
+  const posPodPending = await client.receipt.findMany({
+    where: { generatedAt: { gte: period.start, lte: period.end }, data: { path: ['podDelivery', 'status'], equals: 'pending' } },
+    select: { id: true, data: true, order: true },
+  });
+  const excludedCanonicals = new Set<string>();
+  for (const r of posPodPending) {
+    const cand = canonicalReceiptNumber(r.order?.orderNumber ?? (r.data && (r.data as any).receiptNumber) ?? r.id);
+    if (cand) excludedCanonicals.add(cand);
+  }
+
   const [marketingEntries, reports] = await Promise.all([
     client.marketingDailyEntry.findMany({
       where: {
@@ -151,6 +166,9 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       receipts.forEach((receipt) => {
         const method = normalizeMethod(receipt.paymentMethod);
         const receiptIdBase = recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+
+        // Skip marketing receipt when a POS POD-pending receipt exists for same canonical key
+        if (receiptIdBase && excludedCanonicals.has(receiptIdBase)) return;
 
         if (!markIfNew(receiptIdBase)) {
           return;

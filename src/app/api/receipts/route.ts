@@ -713,7 +713,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Record support daily entry + receipt so support commission ledger can include this sale
-      if (attendantId) {
+      if (attendantId && !isPodDelivery) {
         const startOfDay = new Date(entryDate);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(entryDate);
@@ -815,7 +815,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (attendantId && tx.marketingDailyEntry && tx.marketingReceipt) {
+      if (attendantId && !isPodDelivery && tx.marketingDailyEntry && tx.marketingReceipt) {
         try {
           const marketingStart = new Date(entryDate);
           marketingStart.setHours(0, 0, 0, 0);
