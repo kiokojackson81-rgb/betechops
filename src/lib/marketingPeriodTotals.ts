@@ -165,12 +165,12 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     if (receipts.length > 0) {
       receipts.forEach((receipt) => {
         const method = normalizeMethod(receipt.paymentMethod);
-        const receiptIdBase = recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+        const canonicalKey = canonicalReceiptNumber(receipt.receiptNumber ?? receipt.id) ?? recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
 
         // Skip marketing receipt when a POS POD-pending receipt exists for same canonical key
-        if (receiptIdBase && excludedCanonicals.has(receiptIdBase)) return;
+        if (canonicalKey && excludedCanonicals.has(canonicalKey)) return;
 
-        if (!markIfNew(receiptIdBase)) {
+        if (!markIfNew(canonicalKey)) {
           return;
         }
 
