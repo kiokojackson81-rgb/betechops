@@ -142,12 +142,12 @@ export async function GET(req: NextRequest) {
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
   } else {
-    // By default exclude POS receipts that are currently POD-pending.
-    // Use a top-level NOT wrapper to make the Prisma JSON comparison robust
-    // (some nested `not: { equals: 'pending' }` forms can behave inconsistently).
-    // This allows receipts with no podDelivery metadata or with non-pending
-    // statuses to pass through.
-    and.push({ NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } });
+    // Do not exclude POD-pending receipts from the list API — the admin
+    // UI wants to display POD receipts in the listing. Aggregation and
+    // counting logic should exclude pending POD receipts (handled client-
+    // side in the admin UI and in dedicated summary endpoints).
+    // If the caller explicitly requests POD receipts via `customerType=pod`,
+    // the earlier branch above will apply the appropriate filter.
   }
 
   const where: Prisma.ReceiptWhereInput = { AND: and };
