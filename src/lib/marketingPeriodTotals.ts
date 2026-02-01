@@ -176,7 +176,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
         const selling = toNumber(receipt.sellingTotal);
         totals.totalSales += selling;
-        const stats = perReceipts.get(receiptIdBase)!;
+        const stats = perReceipts.get(canonicalKey)!;
         stats.sales += selling;
         const items = receipt.items ?? [];
         const fallbackCost = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);

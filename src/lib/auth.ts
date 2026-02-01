@@ -21,8 +21,15 @@ export const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "kiokojackson81@gmail.c
 export async function auth(): Promise<Session | null> {
   // next-auth types can vary between versions; cast to any in this narrow spot
   // to avoid build-time type incompatibilities while preserving runtime behavior.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return await getServerSession(authOptions as any);
+  // Wrap in try/catch because in unit tests the Next request context may be
+  // unavailable which causes `getServerSession` to throw. In that case return
+  // null so callers can handle unauthenticated flows in tests.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await getServerSession(authOptions as any);
+  } catch (err) {
+    return null;
+  }
 }
 
 // Simple auth helper for audit logging (placeholder until we wire real audit/session data)

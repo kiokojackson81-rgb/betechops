@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod, type Prisma, type SupportReceipt } from "@prisma/client";
+import { PaymentMethod, Prisma, type SupportReceipt } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
     } else {
       // any receipt that has podDelivery metadata
-      and.push({ data: { path: ['podDelivery'], not: { equals: Prisma.JsonNull } } });
+      and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
   } else {
     // By default (when not explicitly filtering for POD receipts) exclude POS
@@ -381,8 +381,16 @@ export async function POST(req: NextRequest) {
 
   try {
     // allow linking when caller opts-in via ?link=1 or payload.link = true
-    const url = new URL(req.url);
-    const allowLink = url.searchParams.get("link") === "1" || url.searchParams.get("link") === "true" || Boolean(payload?.link);
+    let allowLink = Boolean(payload?.link);
+    try {
+      const url = req && req.url ? new URL(req.url) : null as any;
+      if (url) {
+        allowLink = url.searchParams.get("link") === "1" || url.searchParams.get("link") === "true" || allowLink;
+      }
+    } catch (e) {
+      // malformed or missing URL in test mocks - fall back to payload.link
+      allowLink = Boolean(payload?.link);
+    }
 
     // Early duplicate guard: check across POS, marketing, support
     const existing = await findReceiptOwner(String(serial));
@@ -1110,6 +1118,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result, send: sendResult });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    try {
+      console.error('[receipts.POST] unexpected error', err);
+    } catch (e) {
+      // ignore logging failures
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
