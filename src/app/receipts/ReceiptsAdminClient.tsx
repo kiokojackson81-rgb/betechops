@@ -1009,7 +1009,8 @@ export default function ReceiptsAdminClient({
     return totals;
   }, [rows]);
   const derivedSummary = useMemo(() => {
-    const paymentTotals = rows.reduce(
+    const filtered = rows.filter((row) => (row.podDeliveryStatus ?? "").toLowerCase() !== "pending");
+    const paymentTotals = filtered.reduce(
       (acc, row) => {
         const method = row.paymentMethod ?? "";
         const amount = Number(row.total ?? 0);
@@ -1028,21 +1029,21 @@ export default function ReceiptsAdminClient({
       } as PaymentTotals,
     );
 
-    const itemsCount = rows.reduce((sum, row) => {
+    const itemsCount = filtered.reduce((sum, row) => {
       const itemList = Array.isArray(row.items) && row.items.length > 0 ? row.items.length : 1;
       return sum + itemList;
     }, 0);
 
-    const totalSales = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    const totalSales = filtered.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
     return {
       totalSales,
       totalCost: 0,
       totalProfit: 0,
       totalProfitPriced: 0,
       totalProfitInclusive: 0,
-      receiptsCount: rows.length,
+      receiptsCount: filtered.length,
       itemsCount,
-      hasCompleteCosts: rows.length === 0,
+      hasCompleteCosts: filtered.length === 0,
       awaitingPricingCount: 0,
       paymentTotals,
     };
