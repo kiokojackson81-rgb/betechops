@@ -87,7 +87,7 @@ const buildSupportSearchOr = (q: string): Prisma.SupportReceiptWhereInput["OR"] 
   { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
 ];
 
-const jsonNullFilter: Prisma.JsonNullValueFilter = { equals: Prisma.JsonNull };
+const jsonNullFilter: Prisma.JsonNullValueFilter = Prisma.JsonNull;
 
 const buildPosScopeCondition = (userId?: string | null): Prisma.ReceiptWhereInput[] => {
   if (!userId) return [];
@@ -164,7 +164,7 @@ export async function computeAdminReceiptSummary({
   } else {
     podAndConditions.push({
       OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery'], equals: jsonNullFilter } },
         { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
       ],
     });
