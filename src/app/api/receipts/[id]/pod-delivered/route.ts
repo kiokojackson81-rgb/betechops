@@ -69,38 +69,32 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   }
   // allow caller to select outcome. default to delivered.
   let desiredStatus = 'delivered';
+  let finalReason: string | null = null;
   try {
-    const body = await req.json();
+    const body = (await req.json()) ?? {};
     if (body && typeof body.status === 'string') {
       const s = body.status.trim().toLowerCase();
       if (s === 'delivered' || s === 'delivery_failed' || s === 'failed') {
         desiredStatus = s === 'failed' ? 'delivery_failed' : s;
       }
     }
-    // Support optional forcing (admin-only) when callers send { force: true }
     if (body && body.force === true) {
       const role = guard?.user?.role ?? 'attendant';
       if (role !== 'admin') {
         return NextResponse.json({ error: 'Insufficient role to force finalization' }, { status: 403 });
       }
     }
+    if (body && typeof body.reason === 'string' && body.reason.trim().length > 0) {
+      finalReason = body.reason.trim();
+    }
   } catch {
-    // no body / invalid json — default to 'delivered'
+    // no body / invalid json – default to 'delivered'
   }
   if (!receipt.orderId || !receipt.order) {
     return NextResponse.json({ error: 'Missing associated order' }, { status: 400 });
   }
 
   const updatedPodDeliveryBase: Record<string, any> = { ...podDelivery };
-  const finalReason = (await (async () => {
-    try {
-      const b = await req.json();
-      return b?.reason ?? null;
-    } catch {
-      return null;
-    }
-  })()) as string | null;
-
   if (desiredStatus === 'delivered') {
     updatedPodDeliveryBase.status = 'delivered';
     updatedPodDeliveryBase.deliveredAt = new Date().toISOString();
