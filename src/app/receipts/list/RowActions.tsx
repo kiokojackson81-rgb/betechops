@@ -37,7 +37,10 @@ export default function RowActions({
       <button
         aria-label="Edit receipt"
         title="Edit receipt"
-        onClick={onEdit}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
       >
@@ -48,7 +51,10 @@ export default function RowActions({
       <button
         aria-label="Edit items"
         title="Edit items"
-        onClick={onEditItems}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEditItems();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
       >
@@ -59,7 +65,10 @@ export default function RowActions({
       <button
         aria-label="Delete receipt"
         title="Delete"
-        onClick={onDelete}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-rose-700 hover:bg-rose-600 text-white`}
       >
@@ -70,7 +79,10 @@ export default function RowActions({
       <button
         aria-label="Download receipt"
         title="Download"
-        onClick={onDownload}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDownload();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-slate-700 hover:bg-slate-600 text-slate-100`}
       >
@@ -81,7 +93,10 @@ export default function RowActions({
       <button
         aria-label="Send via WhatsApp"
         title="WhatsApp"
-        onClick={onSendWhatsapp}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSendWhatsapp();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-emerald-600 hover:bg-emerald-500 text-black`}
       >
@@ -93,7 +108,10 @@ export default function RowActions({
         <button
           aria-label={podActionLabel}
           title={podActionLabel}
-          onClick={onPodAction}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPodAction?.();
+          }}
           disabled={disabled || podActionProcessing}
           className={`${btnBase} bg-yellow-500/60 hover:bg-yellow-500 text-black`}
         >
@@ -106,7 +124,10 @@ export default function RowActions({
         <button
           aria-label="Resend POD"
           title="Resend POD"
-          onClick={onResendPod}
+          onClick={(e) => {
+            e.stopPropagation();
+            onResendPod();
+          }}
           disabled={disabled}
           className={`${btnBase} bg-yellow-600/60 hover:bg-yellow-600 text-black`}
         >
@@ -118,7 +139,10 @@ export default function RowActions({
       <button
         aria-label="Print receipt"
         title="Print"
-        onClick={onPrint}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPrint();
+        }}
         disabled={disabled}
         className={`${btnBase} bg-slate-800 hover:bg-slate-700 text-slate-100`}
       >
