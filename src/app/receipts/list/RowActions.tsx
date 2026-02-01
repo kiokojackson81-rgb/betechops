@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Edit3, Trash2, Download, Send, Printer, Check } from "lucide-react";
+import { Edit3, Trash2, Download, Send, Printer, Check, DollarSign } from "lucide-react";
 
 export default function RowActions({
   onEdit,
@@ -11,6 +11,7 @@ export default function RowActions({
   onSendWhatsapp,
   onPrint,
   onPodAction,
+  onMarkPaid,
   onResendPod,
   podActionLabel = "Mark delivered",
   podActionProcessing = false,
@@ -23,6 +24,7 @@ export default function RowActions({
   onSendWhatsapp: () => void;
   onPrint: () => void;
   onPodAction?: () => void;
+  onMarkPaid?: () => void;
   onResendPod?: () => void;
   podActionLabel?: string;
   podActionProcessing?: boolean;
@@ -117,6 +119,22 @@ export default function RowActions({
         >
           <Check size={16} />
           <span className="hidden md:inline">{podActionProcessing ? "Processing..." : podActionLabel}</span>
+        </button>
+      )}
+
+      {onMarkPaid && (
+        <button
+          aria-label="Mark paid"
+          title="Mark paid"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkPaid?.();
+          }}
+          disabled={disabled}
+          className={`${btnBase} bg-emerald-600/80 hover:bg-emerald-600 text-black`}
+        >
+          <DollarSign size={16} />
+          <span className="hidden md:inline">Mark Paid</span>
         </button>
       )}
 

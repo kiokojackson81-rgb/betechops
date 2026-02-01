@@ -260,6 +260,11 @@ const getPaymentBadgeClass = (method?: string | null) => {
   return PAYMENT_BADGE_VARIANTS[method.toUpperCase()] ?? "border border-white/10 bg-white/5 text-white";
 };
 
+const isSalesReceiptSource = (source?: string) => {
+  const normalized = (source ?? "pos").toLowerCase();
+  return normalized === "pos" || normalized === "support";
+};
+
 const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
   const receipt = detail.receipt;
   const order = receipt?.order ?? {};
@@ -715,9 +720,58 @@ export default function ReceiptsAdminClient({
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
 
+  const handleMarkPodPaid = useCallback(
+    async (receiptId: string) => {
+      setPodActionId(receiptId);
+      // Confirm action with the user to avoid accidental marks
+      try {
+        const proceed = window.confirm('Mark this POD as paid? This will record an admin-paid flag.');
+        if (!proceed) {
+          setPodActionId(null);
+          return;
+        }
+      } catch (e) {
+        // If window.confirm is unavailable for any reason, continue.
+      }
+      try {
+        console.info('[receipts][client] marking POD paid', { receiptId });
+        const res = await fetch(`/api/receipts/${receiptId}/pod-paid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({}),
+        });
+        let payload: any = {};
+        try {
+          payload = await res.json();
+        } catch (e) {
+          console.warn('[receipts][client] pod-paid: failed to parse JSON', e);
+        }
+        console.info('[receipts][client] pod-paid response', { status: res.status, body: payload });
+        if (!res.ok) {
+          const errMsg = payload?.error || payload?.message || `Failed to mark POD paid (status ${res.status})`;
+          throw new Error(errMsg);
+        }
+        showToast('POD marked paid', 'success');
+        await loadRows(page, { silent: true });
+        await fetchSummary();
+        if (selected?.id === receiptId) {
+          await fetchReceiptDetail(receiptId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to mark POD paid';
+        console.error('[receipts][client] pod-paid error', message);
+        showToast(message, 'error');
+      } finally {
+        setPodActionId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
+
   const handleRowClick = (row: ReceiptRow) => {
-    if ((row.source ?? "pos") !== "pos") {
-      showToast("Receipt detail view is only available for POS receipts", "info");
+    if (!isSalesReceiptSource(row.source)) {
+      showToast("Receipt detail view is only available for sales receipts", "info");
       return;
     }
     setSelected(row);
@@ -735,8 +789,8 @@ export default function ReceiptsAdminClient({
 
   const handleSend = async (channel: "email" | "whatsapp") => {
     if (!selected) return;
-    if ((selected.source ?? "pos") !== "pos") {
-      showToast("Sending is only supported for POS receipts", "info");
+    if (!isSalesReceiptSource(selected.source)) {
+      showToast("Sending is only supported for sales receipts", "info");
       return;
     }
     setSendingChannel(channel);
@@ -765,8 +819,8 @@ export default function ReceiptsAdminClient({
   };
 
   const sendReceiptById = async (receiptId: string, channel: "email" | "whatsapp") => {
-    if (receiptId.startsWith("marketing-") || receiptId.startsWith("support-")) {
-      showToast("Sending is only supported for POS receipts", "info");
+    if (receiptId.startsWith("marketing-")) {
+      showToast("Sending is only supported for sales receipts", "info");
       return;
     }
     setSendingChannel(channel);
@@ -808,8 +862,8 @@ export default function ReceiptsAdminClient({
 
   const deleteReceiptById = async (receiptId: string) => {
     if (!allowEdit) return;
-    if (receiptId.startsWith("marketing-") || receiptId.startsWith("support-")) {
-      showToast("Deletion is only supported for POS receipts", "info");
+    if (receiptId.startsWith("marketing-")) {
+      showToast("Deletion is only supported for sales receipts", "info");
       return;
     }
     if (!window.confirm("Delete this receipt and all related records from the system?")) return;
@@ -1351,6 +1405,7 @@ export default function ReceiptsAdminClient({
                         onPodAction={
                           isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
                         }
+                        onMarkPaid={row.isPodDelivery && row.podDeliveryStatus === 'delivered' ? () => void handleMarkPodPaid(row.id) : undefined}
                         podActionLabel="Mark POD delivered"
                         podActionProcessing={podActionId === row.id}
                         disabled={loading}
@@ -1597,6 +1652,16 @@ export default function ReceiptsAdminClient({
                       className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
                     >
                       {podActionId === detail.receipt.id ? "Processing..." : "Mark POD delivered"}
+                    </button>
+                  )}
+                  {detail.receipt.data?.podDelivery?.status === "delivered" && !detail.receipt.data?.podDelivery?.paidAt && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkPodPaid(detail.receipt.id)}
+                      disabled={podActionId === detail.receipt.id}
+                      className="rounded-xl border border-emerald-500/70 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/40 disabled:opacity-50"
+                    >
+                      {podActionId === detail.receipt.id ? "Processing..." : "Mark Paid"}
                     </button>
                   )}
                   {allowEdit && (
