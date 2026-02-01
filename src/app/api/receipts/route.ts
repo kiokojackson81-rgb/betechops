@@ -134,12 +134,12 @@ export async function GET(req: NextRequest) {
   // Optional filter: customerType=pod to show POD receipts only, with optional status filter
   const customerType = url.searchParams.get('customerType') || undefined;
   const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
-  if (customerType === 'pod') {
+    if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
     } else {
       // any receipt that has podDelivery metadata
-      and.push({ data: { path: ['podDelivery'], not: { equals: null } } });
+      and.push({ data: { path: ['podDelivery'], not: { equals: Prisma.JsonNull } } });
     }
   } else {
     // By default (when not explicitly filtering for POD receipts) exclude POS
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
     // metadata or with non-pending statuses to pass through.
     and.push({
       OR: [
-        { data: { path: ['podDelivery'], equals: null } },
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
         { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
       ],
     });
