@@ -220,13 +220,15 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               const endOfDay = new Date(entryDate);
               endOfDay.setHours(23, 59, 59, 999);
 
-              const supportReceiptItems = (await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } }))?.items.map((it: any) => ({
+              const orderForSupport = await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } });
+
+              const supportReceiptItems = (orderForSupport?.items || []).map((it: any) => ({
                 productName: String(it.title || it.productName || 'Item').trim(),
                 buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
-              })) || [];
+              }));
 
               const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum: number, item: any) => sum + (item.buyingPrice || 0), 0);
-              const supportSellingTotal = Math.round(Number(orderWithItems?.totalAmount ?? receipt.order?.totalAmount ?? 0));
+              const supportSellingTotal = Math.round(Number(orderForSupport?.totalAmount ?? receipt.order?.totalAmount ?? 0));
 
               const receiptKey = null;
               const paymentMethod = (baseData as any)?.paymentMethod ?? null;
