@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         try {
           const attendantId = receipt.order?.attendantId ?? null;
           const entryDate = new Date();
-          const dayOfWeek = entryDate.getDay();
+          const dayOfWeek = String(entryDate.getDay());
 
           // Marketing entry/upsert
           if (attendantId && tx.marketingDailyEntry && tx.marketingReceipt) {
