@@ -142,16 +142,12 @@ export async function GET(req: NextRequest) {
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
   } else {
-    // By default (when not explicitly filtering for POD receipts) exclude POS
-    // receipts that are currently POD-pending so they are not counted in
-    // totals/quick-stats until delivered. Allow receipts with no podDelivery
-    // metadata or with non-pending statuses to pass through.
-    and.push({
-      OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
-      ],
-    });
+    // By default exclude POS receipts that are currently POD-pending.
+    // Use a top-level NOT wrapper to make the Prisma JSON comparison robust
+    // (some nested `not: { equals: 'pending' }` forms can behave inconsistently).
+    // This allows receipts with no podDelivery metadata or with non-pending
+    // statuses to pass through.
+    and.push({ NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } });
   }
 
   const where: Prisma.ReceiptWhereInput = { AND: and };

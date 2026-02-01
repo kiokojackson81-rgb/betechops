@@ -340,18 +340,15 @@ export async function GET(req: Request) {
     // - POS receipts issued by this user (also uses `generatedAt` + issuedById)
     const posCountAll = await prisma.receipt.count({ where: {
       generatedAt: { gte: argPeriod.start, lte: argPeriod.end },
-      OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
-      ],
+      // Exclude POD-pending receipts by using a top-level NOT filter for
+      // `podDelivery.status = 'pending'`. This is more robust than nested
+      // `not: { equals: 'pending' }` on the JSON path.
+      NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } },
     } });
     const posCountIssuedByUser = await prisma.receipt.count({ where: {
       generatedAt: { gte: argPeriod.start, lte: argPeriod.end },
       issuedById: targetUserId,
-      OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
-      ],
+      NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } },
     } });
 
     const supportOwners = new Set<string>();
