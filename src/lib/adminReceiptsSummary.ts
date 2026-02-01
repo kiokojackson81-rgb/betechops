@@ -137,6 +137,14 @@ export async function computeAdminReceiptSummary({
     posWhere.data.equals = paymentMethod;
   }
 
+  // Exclude POS receipts that are POD-pending by default so admin summaries
+  // don't prematurely count POS POD receipts. Keep receipts with no
+  // podDelivery or where podDelivery.status !== 'pending'.
+  posWhere.OR = [...(posWhere.OR ?? []),
+    { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+    { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+  ];
+
   const dailyEntryWhere: any = {
     date: { gte: start, lte: end },
   };

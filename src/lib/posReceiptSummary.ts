@@ -90,6 +90,10 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
         gte: period.start,
         lte: period.end,
       },
+      OR: [
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+      ],
     },
     include: {
       order: {

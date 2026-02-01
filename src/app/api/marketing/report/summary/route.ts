@@ -8,6 +8,7 @@ import { computeSalesCommissionFromTiers, getOrCreateCommissionPeriod } from "@/
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from '@prisma/client';
 import { nowInNairobi } from "@/lib/timezone";
 import { summarizePosReceiptsForPeriod, type PosReceiptSummary } from "@/lib/posReceiptSummary";
 
@@ -337,8 +338,21 @@ export async function GET(req: Request) {
     // POS receipts counts:
     // - total POS receipts in the period (uses `generatedAt`, same as POS summary)
     // - POS receipts issued by this user (also uses `generatedAt` + issuedById)
-    const posCountAll = await prisma.receipt.count({ where: { generatedAt: { gte: argPeriod.start, lte: argPeriod.end } } });
-    const posCountIssuedByUser = await prisma.receipt.count({ where: { generatedAt: { gte: argPeriod.start, lte: argPeriod.end }, issuedById: targetUserId } });
+    const posCountAll = await prisma.receipt.count({ where: {
+      generatedAt: { gte: argPeriod.start, lte: argPeriod.end },
+      OR: [
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+      ],
+    } });
+    const posCountIssuedByUser = await prisma.receipt.count({ where: {
+      generatedAt: { gte: argPeriod.start, lte: argPeriod.end },
+      issuedById: targetUserId,
+      OR: [
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+      ],
+    } });
 
     const supportOwners = new Set<string>();
     const supportOwnerEmails = new Set<string>();
