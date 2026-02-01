@@ -1047,7 +1047,7 @@ export default function ReceiptsAdminClient({
       paymentTotals,
     };
   }, [rows]);
-  const shouldUseDerivedSummary = rows.length > 0 && (!summaryTotals || summaryTotals.totalSales === 0);
+  const shouldUseDerivedSummary = rows.length > 0 && !summaryTotals;
   const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
   const summarySalesLabel = summaryLoading
     ? "Loading..."
