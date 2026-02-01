@@ -178,10 +178,26 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               }
             }
 
-            // Create commission ledger entry for audit
+            // Create commission ledger entry for audit (guard against duplicates)
             if (tx.commissionLedger) {
               try {
-                await tx.commissionLedger.create({ data: { userId: attendantId, periodStart: period.startDate, periodEnd: period.endDate, grossCommission: Number(salesCommission), penalties: 0, netCommission: Number(salesCommission), commissionTotal: Number(salesCommission), detail: { reason: 'POD delivered: release on delivery' } } });
+                const existingLedger = await tx.commissionLedger.findFirst({
+                  where: { userId: attendantId, periodStart: period.startDate, periodEnd: period.endDate },
+                });
+                if (!existingLedger) {
+                  await tx.commissionLedger.create({
+                    data: {
+                      userId: attendantId,
+                      periodStart: period.startDate,
+                      periodEnd: period.endDate,
+                      grossCommission: Number(salesCommission),
+                      penalties: 0,
+                      netCommission: Number(salesCommission),
+                      commissionTotal: Number(salesCommission),
+                      detail: { reason: 'POD delivered: release on delivery' },
+                    },
+                  });
+                }
               } catch (e) {
                 // ignore ledger failures
               }
