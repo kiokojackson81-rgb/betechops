@@ -58,6 +58,8 @@ type SummaryOptions = {
   docType?: string;
   scope?: "mine" | "global";
   currentUserId?: string | null;
+  customerType?: string;
+  podStatus?: string;
 };
 
 const buildPosSearchOr = (q: string): Prisma.ReceiptWhereInput[] => [
@@ -103,6 +105,8 @@ export async function computeAdminReceiptSummary({
   docType,
   scope = "global",
   currentUserId,
+  customerType,
+  podStatus,
 }: SummaryOptions) {
   const normalizedDocType = docType ? docType.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
@@ -110,6 +114,14 @@ export async function computeAdminReceiptSummary({
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
   const includeSupportReceipts = !normalizedDocType || isSupportDocType;
+  const normalizedCustomerType = customerType ? customerType.toLowerCase().trim() : undefined;
+  const normalizedPodStatus = (() => {
+    const value = podStatus ? podStatus.toLowerCase().trim() : undefined;
+    if (!value) return undefined;
+    if (value === "failed") return "delivery_failed";
+    if (value === "delivery_failed" || value === "pending" || value === "delivered") return value;
+    return undefined;
+  })();
 
   const posWhere: any = {
     generatedAt: { gte: start, lte: end },
@@ -140,10 +152,21 @@ export async function computeAdminReceiptSummary({
   // Exclude POS receipts that are POD-pending by default so admin summaries
   // don't prematurely count POS POD receipts. Keep receipts with no
   // podDelivery or where podDelivery.status !== 'pending'.
-  posWhere.OR = [...(posWhere.OR ?? []),
-    { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-    { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
-  ];
+  const podAndConditions: Prisma.ReceiptWhereInput[] = posWhere.AND ?? [];
+  if (normalizedCustomerType === "pod") {
+    if (normalizedPodStatus) {
+      podAndConditions.push({ data: { path: ['podDelivery', 'status'], equals: normalizedPodStatus } });
+    }
+    podAndConditions.push({ data: { path: ['podDelivery'], not: { equals: Prisma.JsonNull } } });
+  } else {
+    podAndConditions.push({
+      OR: [
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+      ],
+    });
+  }
+  posWhere.AND = podAndConditions;
 
   const dailyEntryWhere: any = {
     date: { gte: start, lte: end },

@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
   if (scope === "mine" && !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const customerType = url.searchParams.get("customerType") || undefined;
+  const podStatus = url.searchParams.get("status") || undefined;
 
   try {
     const summary = await computeAdminReceiptSummary({
@@ -31,6 +33,8 @@ export async function GET(request: NextRequest) {
       search,
       scope,
       currentUserId: userId,
+      customerType,
+      podStatus,
     });
     return NextResponse.json(summary);
   } catch (error) {
