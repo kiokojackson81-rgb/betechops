@@ -1280,7 +1280,7 @@ export default function ReceiptsAdminClient({
               </tr>
             )}
             {rows.map((row) => {
-              const isPodPending = row.isPodDelivery && row.podDeliveryStatus === "pending";
+              const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? '').toLowerCase() === "pending";
               const isSelected = row.id === selected?.id && drawerOpen;
               return (
                 <tr
