@@ -1342,7 +1342,7 @@ export default function ReceiptsAdminClient({
                         }
                         podActionLabel="Mark POD delivered"
                         podActionProcessing={podActionId === row.id}
-                        disabled={loading || (row.source ?? "pos") !== "pos"}
+                        disabled={loading}
                       />
                   </td>
                 </tr>
