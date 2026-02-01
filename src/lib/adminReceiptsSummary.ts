@@ -158,11 +158,11 @@ export async function computeAdminReceiptSummary({
       podAndConditions.push({ data: { path: ['podDelivery', 'status'], equals: normalizedPodStatus } });
     }
     // Ensure `podDelivery` is present (not JSON null).
-    podAndConditions.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
+    podAndConditions.push({ data: { path: ['podDelivery'], not: { equals: null } } });
   } else {
     podAndConditions.push({
       OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { data: { path: ['podDelivery'], equals: null } },
         { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
       ],
     });
