@@ -93,7 +93,7 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
       },
       OR: [
         { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+        { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
       ],
     },
     include: {
@@ -110,6 +110,14 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
       },
     },
   })) as PosReceiptRow[];
+
+  // Ensure POD-pending receipts are excluded at the application layer
+  // to avoid any inconsistencies with Prisma JSON path filters.
+  const filteredReceipts = receipts.filter((r) => {
+    const pod = r.data?.podDelivery as any | undefined;
+    if (!pod) return true;
+    return (pod.status || '').toString().toLowerCase() !== 'pending';
+  });
 
   const seen = new Map<string, string>();
   const periodLabel = `${period.start.toISOString()}_${period.end.toISOString()}`;

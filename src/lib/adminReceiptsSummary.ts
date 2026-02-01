@@ -163,7 +163,7 @@ export async function computeAdminReceiptSummary({
     podAndConditions.push({
       OR: [
         { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { data: { path: ['podDelivery', 'status'], not: { equals: 'pending' } } },
+        { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
       ],
     });
   }
@@ -215,6 +215,25 @@ export async function computeAdminReceiptSummary({
         })
       : [],
   ]);
+
+  // Post-query safeguard: filter out POD-pending receipts at the app level
+  // unless the caller explicitly requested POD receipts via `customerType='pod'`.
+  const posReceiptsFinal = (() => {
+    if (normalizedCustomerType === 'pod') {
+      // If a specific podStatus was requested, enforce it.
+      if (normalizedPodStatus) {
+        return (posReceipts as any[]).filter((r) => {
+          const pod = r.data?.podDelivery as any | undefined;
+          return (pod?.status ?? '').toString().toLowerCase() === normalizedPodStatus;
+        });
+      }
+      return posReceipts;
+    }
+    return (posReceipts as any[]).filter((r) => {
+      const pod = r.data?.podDelivery as any | undefined;
+      return !pod || (pod.status || '').toString().toLowerCase() !== 'pending';
+    });
+  })();
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
     source: "marketing" as const,
