@@ -144,6 +144,120 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         },
       });
 
+      // If delivered, also insert marketing/support daily entries so the
+      // receipt becomes visible in the pricing/marketing views (same as non-POD flow).
+      if (desiredStatus === 'delivered') {
+        try {
+          const attendantId = receipt.order?.attendantId ?? null;
+          const entryDate = new Date();
+          const dayOfWeek = entryDate.getDay();
+
+          // Marketing entry/upsert
+          if (attendantId && tx.marketingDailyEntry && tx.marketingReceipt) {
+            try {
+              const marketingStart = new Date(entryDate);
+              marketingStart.setHours(0, 0, 0, 0);
+              const marketingEnd = new Date(entryDate);
+              marketingEnd.setHours(23, 59, 59, 999);
+
+              let entry = await tx.marketingDailyEntry.findFirst({
+                where: { submittedById: attendantId, date: { gte: marketingStart, lte: marketingEnd } },
+              });
+
+              const actorName = guard.user?.name ?? guard.user?.email ?? null;
+              const actorEmail = guard.user?.email ?? null;
+
+              if (!entry) {
+                entry = await tx.marketingDailyEntry.create({
+                  data: {
+                    date: entryDate,
+                    dayOfWeek,
+                    submittedById: attendantId,
+                    submittedByName: actorName,
+                    submittedByEmail: actorEmail,
+                    totalSales: 0,
+                    totalProfit: 0,
+                  },
+                });
+              }
+
+              const orderWithItems = await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } });
+              const receiptSellingTotal = Math.round(Number(orderWithItems?.totalAmount ?? receipt.order?.totalAmount ?? 0));
+              const receiptItemsPayload = (orderWithItems?.items || []).map((it: any) => ({
+                productName: String(it.title || it.productName || 'Item').trim(),
+                buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
+              }));
+              const receiptBuyingTotal = receiptItemsPayload.reduce((s: number, i: any) => s + i.buyingPrice, 0);
+
+              await tx.marketingReceipt.create({
+                data: {
+                  dailyEntryId: entry.id,
+                  receiptNumber: receipt.order?.orderNumber ?? null,
+                  receiptKey: null,
+                  paymentMethod: (baseData as any)?.paymentMethod ?? null,
+                  sellingTotal: receiptSellingTotal,
+                  buyingTotal: receiptBuyingTotal,
+                  items: receiptItemsPayload.length ? { create: receiptItemsPayload } : undefined,
+                },
+              });
+
+              if (entry.id) {
+                await tx.marketingDailyEntry.update({
+                  where: { id: entry.id },
+                  data: { totalSales: { increment: receiptSellingTotal }, totalProfit: { increment: receiptSellingTotal - receiptBuyingTotal } },
+                });
+              }
+            } catch (e) {
+              console.warn('[pod] failed to update marketing entry', e);
+            }
+          }
+
+          // Support entry/upsert
+          if (attendantId && tx.supportDailyEntry && tx.supportReceipt) {
+            try {
+              const startOfDay = new Date(entryDate);
+              startOfDay.setHours(0, 0, 0, 0);
+              const endOfDay = new Date(entryDate);
+              endOfDay.setHours(23, 59, 59, 999);
+
+              const supportReceiptItems = (await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } }))?.items.map((it: any) => ({
+                productName: String(it.title || it.productName || 'Item').trim(),
+                buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
+              })) || [];
+
+              const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum: number, item: any) => sum + (item.buyingPrice || 0), 0);
+              const supportSellingTotal = Math.round(Number(orderWithItems?.totalAmount ?? receipt.order?.totalAmount ?? 0));
+
+              const receiptKey = null;
+              const paymentMethod = (baseData as any)?.paymentMethod ?? null;
+
+              const entryId = (await tx.supportDailyEntry.findFirst({ where: { submittedById: attendantId, date: { gte: startOfDay, lte: endOfDay } }, select: { id: true } }))?.id
+                ?? (await tx.supportDailyEntry.create({ data: { date: entryDate, dayOfWeek, totalSales: 0, totalProfit: 0, newBatteries: 0, changedBatteries: 0, submittedById: attendantId }, select: { id: true } })).id;
+
+              await tx.supportReceipt.create({
+                data: {
+                  dailyEntryId: entryId,
+                  receiptNumber: receipt.order?.orderNumber ?? null,
+                  receiptKey: null,
+                  paymentMethod,
+                  sellingTotal: supportSellingTotal,
+                  buyingTotal: supportReceiptBuyingTotal,
+                  items: supportReceiptItems.length ? { create: supportReceiptItems } : undefined,
+                },
+              });
+
+              if (entryId) {
+                await tx.supportDailyEntry.update({ where: { id: entryId }, data: { totalSales: { increment: supportSellingTotal }, totalProfit: { increment: supportSellingTotal - supportReceiptBuyingTotal } } });
+              }
+            } catch (e) {
+              console.warn('[pod] failed to update support entry', e);
+            }
+          }
+        } catch (e) {
+          console.warn('[pod] failed to create marketing/support entries during finalize', e);
+        }
+      }
+
       // If delivered, release commission record and earnings, recompute ledgers.
       if (desiredStatus === 'delivered') {
         try {
