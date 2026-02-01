@@ -1325,12 +1325,23 @@ export default function ReceiptsAdminClient({
                       <RowActions
                         onEdit={() => {
                           // load detail then open edit modal when ready
+                          // Allow editing for POD/non-POS receipts by bypassing the
+                          // POS-only `handleRowClick` guard which prevents opening
+                          // details for non-POS receipts. We still set `pendingEditId`
+                          // so the pending-edit effect will open the edit modal once
+                          // the detail payload has been loaded.
                           setPendingEditId(row.id);
-                          handleRowClick(row);
+                          setSelected(row);
+                          setDrawerOpen(true);
+                          setDetail(null);
+                          void fetchReceiptDetail(row.id);
                         }}
                         onEditItems={() => {
                           setPendingEditId(row.id);
-                          handleRowClick(row);
+                          setSelected(row);
+                          setDrawerOpen(true);
+                          setDetail(null);
+                          void fetchReceiptDetail(row.id);
                         }}
                         onDelete={() => void deleteReceiptById(row.id)}
                         onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
