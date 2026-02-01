@@ -848,7 +848,18 @@ export default function ReceiptsAdminClient({
     try {
       const res = await fetch(`/api/receipts/${selected.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to delete receipt");
+      if (!res.ok) {
+        const errMsg = data?.error || "Failed to delete receipt";
+        const lower = String(errMsg).toLowerCase();
+        if (res.status === 404 || lower.includes("not found")) {
+          showToast("Receipt not found; refreshing list", "info");
+          closeDrawer();
+          await loadRows(page);
+          setDeleting(false);
+          return;
+        }
+        throw new Error(errMsg);
+      }
       showToast("Receipt deleted", "success");
       closeDrawer();
       await loadRows(page);
@@ -871,7 +882,18 @@ export default function ReceiptsAdminClient({
     try {
       const res = await fetch(`/api/receipts/${receiptId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to delete receipt");
+      if (!res.ok) {
+        const errMsg = data?.error || "Failed to delete receipt";
+        const lower = String(errMsg).toLowerCase();
+        if (res.status === 404 || lower.includes("not found")) {
+          showToast("Receipt not found; refreshing list", "info");
+          if (selected?.id === receiptId) closeDrawer();
+          await loadRows(page);
+          setDeleting(false);
+          return;
+        }
+        throw new Error(errMsg);
+      }
       showToast("Receipt deleted", "success");
       // if we deleted the currently selected, close drawer
       if (selected?.id === receiptId) closeDrawer();
