@@ -449,6 +449,9 @@ export async function DELETE(_req: NextRequest, context: ParamsContext) {
     return guard.res;
   }
   const { id } = await resolveParams(context);
+  const actorId = (guard.session?.user as any)?.id ?? null;
+
+  console.info('[receipts][DELETE] starting', { receiptId: id, actorId });
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -463,10 +466,25 @@ export async function DELETE(_req: NextRequest, context: ParamsContext) {
           },
         },
       });
-      if (!receipt) throw new Error("Receipt not found");
+      if (!receipt) throw new Error('Receipt not found');
       const order = receipt.order;
-      if (!order) throw new Error("Associated order missing");
+      if (!order) throw new Error('Associated order missing');
       const orderId = order.id;
+
+      // Write an actionLog entry describing the deletion (before state)
+      try {
+        await tx.actionLog.create({
+          data: {
+            actorId: actorId ?? 'system',
+            entity: 'Receipt',
+            entityId: id,
+            action: 'DELETE',
+            before: receipt as any,
+          },
+        });
+      } catch (logErr) {
+        console.warn('[receipts][DELETE] failed to write actionLog before delete', { receiptId: id, error: logErr instanceof Error ? logErr.message : String(logErr) });
+      }
 
       if (order.orderNumber) {
         await cleanupMarketingReceipts(tx, order.orderNumber);
@@ -488,9 +506,15 @@ export async function DELETE(_req: NextRequest, context: ParamsContext) {
       await tx.receipt.delete({ where: { id } });
       await tx.order.delete({ where: { id: orderId } });
     });
+
+    console.info('[receipts][DELETE] success', { receiptId: id, actorId });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to delete receipt";
+    const msg = err instanceof Error ? err.message : 'Failed to delete receipt';
+    console.error('[receipts][DELETE] failed', { receiptId: id, actorId, error: msg });
+    if (msg === 'Receipt not found') {
+      return NextResponse.json({ error: msg }, { status: 404 });
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
