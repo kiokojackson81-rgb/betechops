@@ -680,18 +680,34 @@ export default function ReceiptsAdminClient({
     async (receiptId: string) => {
       setPodActionId(receiptId);
       try {
-        const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, { method: "POST" });
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(payload?.error || "Failed to mark POD delivered");
-        showToast("POD delivery recorded and notification queued", "success");
-        void loadRows(page, { silent: true });
-        void fetchSummary();
+        console.info('[receipts][client] marking POD delivered', { receiptId });
+        const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({}),
+        });
+        let payload: any = {};
+        try {
+          payload = await res.json();
+        } catch (e) {
+          console.warn('[receipts][client] pod-delivered: failed to parse JSON', e);
+        }
+        console.info('[receipts][client] pod-delivered response', { status: res.status, body: payload });
+        if (!res.ok) {
+          const errMsg = payload?.error || payload?.message || `Failed to mark POD delivered (status ${res.status})`;
+          throw new Error(errMsg);
+        }
+        showToast('POD delivery recorded and notification queued', 'success');
+        await loadRows(page, { silent: true });
+        await fetchSummary();
         if (selected?.id === receiptId) {
-          void fetchReceiptDetail(receiptId);
+          await fetchReceiptDetail(receiptId);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to mark POD delivery";
-        showToast(message, "error");
+        const message = err instanceof Error ? err.message : 'Failed to mark POD delivery';
+        console.error('[receipts][client] pod-delivered error', message);
+        showToast(message, 'error');
       } finally {
         setPodActionId(null);
       }
