@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from '@prisma/client';
 import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { normalizeReceiptNumber } from "@/lib/receiptKey";
 
