@@ -26,18 +26,8 @@ export default async function AdminReceiptsPage() {
     const receipts = j.receipts || [];
     return (
       <main className="min-h-screen w-full bg-slate-950 text-slate-100">
-        <div className="w-full space-y-6 px-4 py-6 lg:px-8 xl:px-12">
-          <header className="rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/70 p-6 shadow-[0_25px_60px_rgba(2,6,23,0.85)]">
-            <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Unified admin</p>
-            <h1 className="pb-2 text-3xl font-semibold text-white">Admin · Receipts</h1>
-            <p className="max-w-3xl text-sm text-slate-300">
-              A desktop-first dashboard for viewing, filtering, and exporting receipts. The panels below stretch
-              the full width of the page so blocks stay aligned and avoid the overlapping margins from earlier layouts.
-            </p>
-          </header>
-          <section className="w-full">
-            <ReceiptsAdminClient initial={receipts} allowEdit scope="global" />
-          </section>
+        <div className="w-full px-4 py-6 lg:px-8 xl:px-12">
+          <ReceiptsAdminClient initial={receipts} allowEdit scope="global" />
         </div>
       </main>
     );
