@@ -1197,10 +1197,18 @@ export default function ReceiptsAdminClient({
     applyFilters({ paymentMethod: next });
   };
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex-1 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <main className="w-full space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/70 p-6 shadow-[0_30px_70px_rgba(2,6,23,0.85)]">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="max-w-3xl space-y-1">
+            <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Receipts overview</p>
+            <h2 className="text-2xl font-semibold text-white">Receipt operations at a glance</h2>
+            <p className="text-sm text-slate-300">
+              The summaries in this panel stay arranged in balanced blocks so the page feels structured and fills the
+              width without extra side margins.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2 text-right">
             <button
               type="button"
               onClick={handleTriggerSummary}
@@ -1214,101 +1222,103 @@ export default function ReceiptsAdminClient({
               {triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now"}
             </button>
             {triggerSummaryResult && (
-              <p className="text-xs text-slate-400">
-                {triggerSummaryResult}
-              </p>
+              <p className="text-xs text-emerald-200">{triggerSummaryResult}</p>
             )}
           </div>
-          <ReceiptsSummary
-            summary={summaryForDisplay ?? null}
-            loading={summaryLoading}
-            quickRange={quickRange}
-            onApplyQuickRange={applyQuickRange}
-            rangeLabel={rangeDisplay}
-          />
-          <PaymentMethodFilterCard
-            totals={summaryForDisplay?.paymentTotals ?? null}
-            partialTotals={partialTotals}
-            activeMethod={appliedFilters.paymentMethod}
-            loading={summaryLoading}
-            onSelect={handlePaymentMethodSelect}
-          />
         </div>
-        <section className="lg:w-80 w-full rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-inner shadow-black/40">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">POD receipts only</p>
-              <p className="text-sm text-slate-300">Dedicated panel for delivered PODs.</p>
-            </div>
-            <span className="text-xs text-emerald-300">Filtered</span>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,3.5fr)_360px]">
+          <div className="space-y-6">
+            <ReceiptsSummary
+              summary={summaryForDisplay ?? null}
+              loading={summaryLoading}
+              quickRange={quickRange}
+              onApplyQuickRange={applyQuickRange}
+              rangeLabel={rangeDisplay}
+            />
+            <PaymentMethodFilterCard
+              totals={summaryForDisplay?.paymentTotals ?? null}
+              partialTotals={partialTotals}
+              activeMethod={appliedFilters.paymentMethod}
+              loading={summaryLoading}
+              onSelect={handlePaymentMethodSelect}
+            />
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Total PODs</p>
-              <p className="text-2xl font-semibold text-white">{podStats.total}</p>
+          <div className="rounded-[28px] border border-white/10 bg-slate-950/75 p-5 shadow-inner shadow-black/40">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">POD receipts only</p>
+                <p className="text-sm text-slate-300">Dedicated panel for delivered PODs.</p>
+              </div>
+              <span className="text-xs text-emerald-300">Filtered</span>
             </div>
-            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Value</p>
-              <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Total PODs</p>
+                <p className="text-2xl font-semibold text-white">{podStats.total}</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Value</p>
+                <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Delivered</p>
+                <p className="text-lg font-semibold text-emerald-300">{podStats.delivered}</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Pending / Failed</p>
+                <p className="text-lg font-semibold text-rose-300">
+                  {podStats.pending} / {podStats.failed}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Delivered</p>
-              <p className="text-lg font-semibold text-emerald-300">{podStats.delivered}</p>
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Status filter</p>
+              <select
+                value={podPanelStatus}
+                onChange={(e) => setPodPanelStatus(e.target.value as "all" | "pending" | "delivered" | "delivery_failed")}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="all">All PODs</option>
+                <option value="delivered">Delivered</option>
+                <option value="pending">Pending</option>
+                <option value="delivery_failed">Delivery Failed</option>
+              </select>
             </div>
-            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Pending / Failed</p>
-              <p className="text-lg font-semibold text-rose-300">
-                {podStats.pending} / {podStats.failed}
-              </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={applyPodFilters}
+                className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
+              >
+                Apply POD filter
+              </button>
+              <button
+                type="button"
+                onClick={clearPodFilters}
+                className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
+              >
+                Clear filters
+              </button>
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
+              >
+                Export CSV
+              </button>
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Status filter</p>
-            <select
-              value={podPanelStatus}
-              onChange={(e) => setPodPanelStatus(e.target.value as "all" | "pending" | "delivered" | "delivery_failed")}
-              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="all">All PODs</option>
-              <option value="delivered">Delivered</option>
-              <option value="pending">Pending</option>
-              <option value="delivery_failed">Delivery Failed</option>
-            </select>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={applyPodFilters}
-              className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
-            >
-              Apply POD filter
-            </button>
-            <button
-              type="button"
-              onClick={clearPodFilters}
-              className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
-            >
-              Clear filters
-            </button>
-            <button
-              type="button"
-              onClick={handleManualRefresh}
-              className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
-            >
-              Export CSV
-            </button>
-          </div>
-        </section>
-      </div>
-      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        </div>
+      </section>
+      <section className="rounded-[32px] border border-white/10 bg-slate-950/80 p-6 shadow-[0_25px_50px_rgba(0,0,0,0.65)]">
+        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <label className="text-xs uppercase tracking-wide text-slate-400">
             Search customer / order / staff
             <input
@@ -1335,19 +1345,19 @@ export default function ReceiptsAdminClient({
           </label>
           <label className="text-xs uppercase tracking-wide text-slate-400">
             From
-              <input
-                type="date"
-                value={filters.start}
-                onChange={(e) => {
-                  setQuickRange("custom");
-                  setFilters((prev) => {
-                    const next = { ...prev, start: e.target.value };
-                    if (next.end && next.start && next.start > next.end) next.end = next.start;
-                    return next;
-                  });
-                }}
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-              />
+            <input
+              type="date"
+              value={filters.start}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setFilters((prev) => {
+                  const next = { ...prev, start: e.target.value };
+                  if (next.end && next.start && next.start > next.end) next.end = next.start;
+                  return next;
+                });
+              }}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            />
           </label>
           <label className="text-xs uppercase tracking-wide text-slate-400">
             To
@@ -1366,7 +1376,7 @@ export default function ReceiptsAdminClient({
             />
           </label>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
           <label className="text-xs uppercase tracking-wide text-slate-400">
             Staff
             <select
@@ -1399,7 +1409,7 @@ export default function ReceiptsAdminClient({
             </button>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <label className="text-xs uppercase tracking-wide text-slate-400">
             POD receipts only
             <div className="mt-1 flex items-center gap-2">
@@ -1423,7 +1433,7 @@ export default function ReceiptsAdminClient({
             </div>
           </label>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleManualRefresh}
@@ -1442,80 +1452,81 @@ export default function ReceiptsAdminClient({
           </button>
         </div>
       </section>
-      <section className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-950/40 p-2 shadow-inner shadow-black/40">
-        <table className="min-w-full text-sm">
-          <thead className="text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th className="px-3 py-2 text-left">Order</th>
-              <th className="px-3 py-2 text-left">Doc</th>
-              <th className="px-3 py-2 text-left">Customer</th>
-              <th className="px-3 py-2 text-left">Staff</th>
-              <th className="px-3 py-2 text-left">Total</th>
-              <th className="px-3 py-2 text-left">Payment</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Created</th>
-              <th className="px-3 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {rows.length === 0 && (
+      <section className="rounded-[32px] border border-white/10 bg-slate-950/70 p-4 shadow-[0_25px_55px_rgba(0,0,0,0.65)]">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Receipt list</p>
+          <span className="text-xs text-slate-400">
+            Showing {rows.length} receipts · page {page}
+          </span>
+        </div>
+        <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">
+          <table className="min-w-full text-sm">
+            <thead className="text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
-                  {loading ? "Loading receipts..." : "No receipts match this filter."}
-                </td>
+                <th className="px-3 py-2 text-left">Order</th>
+                <th className="px-3 py-2 text-left">Doc</th>
+                <th className="px-3 py-2 text-left">Customer</th>
+                <th className="px-3 py-2 text-left">Staff</th>
+                <th className="px-3 py-2 text-left">Total</th>
+                <th className="px-3 py-2 text-left">Payment</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Created</th>
+                <th className="px-3 py-2 text-right">Actions</th>
               </tr>
-            )}
-            {rows.map((row) => {
-              const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? '').toLowerCase() === "pending";
-              const isSelected = row.id === selected?.id && drawerOpen;
-              return (
-                <tr
-                  key={row.id}
-                  className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
-                  onClick={() => handleRowClick(row)}
-                >
-                  <td className="px-3 py-3">
-                    <div className="font-semibold text-white">{row.orderRef || "-"}</div>
-                    <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
+                    {loading ? "Loading receipts..." : "No receipts match this filter."}
                   </td>
-                  <td className="px-3 py-3">
-                    <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
-                      {formatBadgeLabel(row.docType)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="text-white">{row.customerName || "Walk-in"}</div>
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
-                  <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
-                  <td className="px-3 py-3">
-                    <span className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}>
-                      {formatBadgeLabel(row.paymentMethod)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
-                      {formatBadgeLabel(row.status)}
-                    </span>
-                    {row.isPodDelivery && (
-                      <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
-                        POD {formatBadgeLabel(row.podDeliveryStatus)}
-                      </div>
-                    )}
-                    {row.podDeliveryNote && (
-                      <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
-                  <td className="px-3 py-3 text-right">
+                </tr>
+              )}
+              {rows.map((row) => {
+                const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "pending";
+                const isSelected = row.id === selected?.id && drawerOpen;
+                return (
+                  <tr
+                    key={row.id}
+                    className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
+                    onClick={() => handleRowClick(row)}
+                  >
+                    <td className="px-3 py-3">
+                      <div className="font-semibold text-white">{row.orderRef || "-"}</div>
+                      <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
+                        {formatBadgeLabel(row.docType)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="text-white">{row.customerName || "Walk-in"}</div>
+                    </td>
+                    <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
+                    <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
+                    <td className="px-3 py-3">
+                      <span className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}>
+                        {formatBadgeLabel(row.paymentMethod)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
+                        {formatBadgeLabel(row.status)}
+                      </span>
+                      {row.isPodDelivery && (
+                        <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
+                          POD {formatBadgeLabel(row.podDeliveryStatus)}
+                        </div>
+                      )}
+                      {row.podDeliveryNote && (
+                        <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
+                    <td className="px-3 py-3 text-right">
                       <RowActions
                         onEdit={() => {
-                          // load detail then open edit modal when ready
-                          // Allow editing for POD/non-POS receipts by bypassing the
-                          // POS-only `handleRowClick` guard which prevents opening
-                          // details for non-POS receipts. We still set `pendingEditId`
-                          // so the pending-edit effect will open the edit modal once
-                          // the detail payload has been loaded.
                           setPendingEditId(row.id);
                           setSelected(row);
                           setDrawerOpen(true);
@@ -1537,43 +1548,44 @@ export default function ReceiptsAdminClient({
                         onPodAction={
                           isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
                         }
-                        onMarkPaid={row.isPodDelivery && row.podDeliveryStatus === 'delivered' ? () => void handleMarkPodPaid(row.id) : undefined}
+                        onMarkPaid={row.isPodDelivery && row.podDeliveryStatus === "delivered" ? () => void handleMarkPodPaid(row.id) : undefined}
                         podActionLabel="Mark POD delivered"
                         podActionProcessing={podActionId === row.id}
                         disabled={loading}
                       />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {error && <p className="px-3 py-2 text-sm text-rose-300">{error}</p>}
-        {rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300">
-            <span>
-              Page {page}, showing {rows.length} receipts
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => gotoPage(page - 1)}
-                disabled={page === 1 || loading}
-                className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => gotoPage(page + 1)}
-                disabled={!hasMore || loading}
-                className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
-              >
-                Next
-              </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {error && <p className="px-3 py-2 text-sm text-rose-300">{error}</p>}
+          {rows.length > 0 && (
+            <div className="flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300">
+              <span>
+                Page {page}, showing {rows.length} receipts
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => gotoPage(page - 1)}
+                  disabled={page === 1 || loading}
+                  className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => gotoPage(page + 1)}
+                  disabled={!hasMore || loading}
+                  className="rounded-xl border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-slate-200 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
       {drawerOpen && (
         <>
@@ -1839,18 +1851,17 @@ export default function ReceiptsAdminClient({
           </aside>
         </>
       )}
-
-  <EditModal
-    open={editState.open}
-    draft={editState.draft}
-    staffList={staffList}
-    saving={editState.saving}
-    onClose={() => setEditState({ open: false, draft: null, saving: false })}
-    onDraftChange={updateDraft}
-    onSave={handleSaveEdit}
-  />
-</div>
-);
+      <EditModal
+        open={editState.open}
+        draft={editState.draft}
+        staffList={staffList}
+        saving={editState.saving}
+        onClose={() => setEditState({ open: false, draft: null, saving: false })}
+        onDraftChange={updateDraft}
+        onSave={handleSaveEdit}
+      />
+    </main>
+  );
 }
 
 type PaymentMethodCardProps = {
