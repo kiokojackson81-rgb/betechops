@@ -1436,21 +1436,21 @@ export default function ReceiptsAdminClient({
           </span>
         </div>
         <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">
-          <table className="min-w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-slate-400">
+          <table className="min-w-[900px] text-sm">
+            <thead className="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">
               <tr>
-                <th className="px-3 py-2 text-left">Order</th>
-                <th className="px-3 py-2 text-left">Doc</th>
-                <th className="px-3 py-2 text-left">Customer</th>
-                <th className="px-3 py-2 text-left">Staff</th>
-                <th className="px-3 py-2 text-left">Total</th>
-                <th className="px-3 py-2 text-left">Payment</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Created</th>
-                <th className="px-3 py-2 text-right">Actions</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Order</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Doc</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Customer</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Staff</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Total</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Payment</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Status</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Created</th>
+                <th className="px-3 py-2 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-white/5 whitespace-nowrap">
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
@@ -1467,18 +1467,18 @@ export default function ReceiptsAdminClient({
                     className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
                     onClick={() => handleRowClick(row)}
                   >
-                    <td className="px-3 py-3">
-                      <div className="font-semibold text-white">{row.orderRef || "-"}</div>
-                      <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
-                        {formatBadgeLabel(row.docType)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="text-white">{row.customerName || "Walk-in"}</div>
-                    </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                  <div className="font-semibold text-white">{row.orderRef || "-"}</div>
+                  <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
+                      {formatBadgeLabel(row.docType)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="text-white">{row.customerName || "Walk-in"}</div>
+                  </td>
                     <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
                     <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
                     <td className="px-3 py-3">
