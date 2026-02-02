@@ -1409,30 +1409,6 @@ export default function ReceiptsAdminClient({
             </button>
           </div>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <label className="text-xs uppercase tracking-wide text-slate-400">
-            POD receipts only
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={Boolean(filters.customerType === 'pod')}
-                onChange={(e) => setFilters((prev) => ({ ...prev, customerType: e.target.checked ? 'pod' : undefined }))}
-                className="h-4 w-4"
-              />
-              <select
-                value={filters.podStatus ?? ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, podStatus: e.target.value || undefined }))}
-                disabled={filters.customerType !== 'pod'}
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-              >
-                <option value="">Any</option>
-                <option value="pending">Pending</option>
-                <option value="delivered">Delivered</option>
-                <option value="delivery_failed">Delivery Failed</option>
-              </select>
-            </div>
-          </label>
-        </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
