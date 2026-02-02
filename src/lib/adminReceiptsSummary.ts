@@ -207,18 +207,20 @@ export async function computeAdminReceiptSummary({
           where: posWhere,
           include: {
             order: {
-            include: {
-              items: {
-                include: {
-                  orderCosts: {
-                    select: {
-                      unitCost: true,
+              include: {
+                items: {
+                  include: {
+                    orderCosts: {
+                      select: {
+                        unitCost: true,
+                      },
                     },
                   },
                 },
               },
             },
-          })
+          },
+        })
       : [],
   ]);
 
