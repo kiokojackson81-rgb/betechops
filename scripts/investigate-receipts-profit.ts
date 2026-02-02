@@ -16,17 +16,31 @@ async function analyzeRange(fromIso: string, toIso: string) {
   console.log(`\n=== RANGE ${from.toISOString()} -> ${to.toISOString()} ===`);
 
   // marketing receipts (marketingReceipt table used by admin summary)
-  const marketing = await prisma.marketingReceipt.findMany({
-    where: { dailyEntry: { date: { gte: from, lte: to } } },
-    include: { items: true },
-    orderBy: { id: "asc" },
-  });
+  let marketing: any[] = [];
+  try {
+    // some deployments may not have the marketingReceipt model/table
+    // @ts-ignore
+    marketing = await prisma.marketingReceipt.findMany({
+      where: { dailyEntry: { date: { gte: from, lte: to } } },
+      include: { items: true },
+      orderBy: { id: "asc" },
+    });
+  } catch (e) {
+    marketing = [];
+  }
 
-  const support = await prisma.supportReceipt.findMany({
-    where: { dailyEntry: { date: { gte: from, lte: to } } },
-    include: { items: true },
-    orderBy: { id: "asc" },
-  });
+  let support: any[] = [];
+  try {
+    // some deployments may not have the supportReceipt model/table
+    // @ts-ignore
+    support = await prisma.supportReceipt.findMany({
+      where: { dailyEntry: { date: { gte: from, lte: to } } },
+      include: { items: true },
+      orderBy: { id: "asc" },
+    });
+  } catch (e) {
+    support = [];
+  }
 
   const pos = await prisma.receipt.findMany({
     where: { generatedAt: { gte: from, lte: to } },

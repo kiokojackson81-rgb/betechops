@@ -269,6 +269,9 @@ export async function computeAdminReceiptSummary({
       key: buildReceiptKey("pos", orderRef, receipt.id),
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
+      // Prefer an explicit aggregate buying total stored on the receipt (if present),
+      // otherwise fall back to item-level costs computed below.
+      buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
       items: (receipt.order?.items ?? []).map((item) => {
         const costs = Array.isArray(item.orderCosts)
           ? item.orderCosts
@@ -379,8 +382,19 @@ export async function computeAdminReceiptSummary({
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
+    // If an explicit profit value is present on the record (or in its data),
+    // prefer that because some receipts persist a computed `profit` already
+    // (e.g. from background jobs). This lets admin summaries reflect stored
+    // per-receipt profits even when item-level costs are absent.
+    const explicitProfitRaw = (receipt as any).profit ?? (receipt as any).data?.profit ?? undefined;
+    const explicitProfit = typeof explicitProfitRaw === 'number' && Number.isFinite(explicitProfitRaw) ? Number(explicitProfitRaw) : undefined;
+
     let receiptProfit = 0;
-    if (hasAggregateCost || allItemsPriced) {
+    if (explicitProfit !== undefined) {
+      // Use explicit profit; do not mark as awaitingPricing.
+      receiptProfit = explicitProfit;
+      totalProfitPriced += receiptProfit;
+    } else if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       totalCost += buyingSum;
       receiptProfit = sell - buyingSum;

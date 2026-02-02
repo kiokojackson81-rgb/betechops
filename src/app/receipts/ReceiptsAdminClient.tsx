@@ -54,6 +54,7 @@ type PaymentTotals = {
 type StaffOption = { id: string; name: string };
 
 type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom" | "trading-period";
+type PodPanelStatus = "all" | "pending" | "delivered" | "delivery_failed";
 
 type SupportItemDetail = {
   id: string;
@@ -372,7 +373,7 @@ export default function ReceiptsAdminClient({
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [podActionId, setPodActionId] = useState<string | null>(null);
-  const [podPanelStatus, setPodPanelStatus] = useState<"all" | "pending" | "delivered" | "delivery_failed">("delivered");
+  const [podPanelStatus, setPodPanelStatus] = useState<PodPanelStatus>("delivered");
   const firstLoadRef = useRef(true);
   const STORAGE_KEYS = {
     attendantId: "receipts.attendantId.v1",
@@ -1096,14 +1097,16 @@ export default function ReceiptsAdminClient({
     );
   }, [podRows]);
 
-  const applyPodFilters = () => {
+  const applyPodFilters = (status: PodPanelStatus = podPanelStatus) => {
+    setPodPanelStatus(status);
     applyFilters({
       customerType: "pod",
-      podStatus: podPanelStatus === "all" ? undefined : podPanelStatus,
+      podStatus: status === "all" ? undefined : status,
     });
   };
 
   const clearPodFilters = () => {
+    setPodPanelStatus("all");
     applyFilters({ customerType: undefined, podStatus: undefined });
   };
   const { itemsWithCost, supportBuyingTotal, hasCompleteCosts } = costSummary;
@@ -1251,33 +1254,60 @@ export default function ReceiptsAdminClient({
               </div>
               <span className="text-xs text-emerald-300">Filtered</span>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Total PODs</p>
-                <p className="text-2xl font-semibold text-white">{podStats.total}</p>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Value</p>
-                <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Delivered</p>
-                <p className="text-lg font-semibold text-emerald-300">{podStats.delivered}</p>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Pending / Failed</p>
-                <p className="text-lg font-semibold text-rose-300">
-                  {podStats.pending} / {podStats.failed}
-                </p>
-              </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => applyPodFilters("all")}
+              aria-pressed={podPanelStatus === "all"}
+              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                podPanelStatus === "all"
+                  ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-500">Total PODs</p>
+              <p className="text-2xl font-semibold text-white">{podStats.total}</p>
+            </button>
+            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Value</p>
+              <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => applyPodFilters("delivered")}
+              aria-pressed={podPanelStatus === "delivered"}
+              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                podPanelStatus === "delivered"
+                  ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-500">Delivered</p>
+              <p className="text-lg font-semibold text-emerald-300">{podStats.delivered}</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPodFilters("pending")}
+              aria-pressed={podPanelStatus === "pending"}
+              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                podPanelStatus === "pending"
+                  ? "border-rose-500 text-white bg-rose-500/10 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
+                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-rose-500 hover:bg-slate-900/70"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-500">Pending / Failed</p>
+              <p className="text-lg font-semibold text-rose-300">
+                {podStats.pending} / {podStats.failed}
+              </p>
+            </button>
+          </div>
             <div className="mt-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Status filter</p>
-              <select
-                value={podPanelStatus}
-                onChange={(e) => setPodPanelStatus(e.target.value as "all" | "pending" | "delivered" | "delivery_failed")}
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-              >
+            <select
+              value={podPanelStatus}
+              onChange={(e) => setPodPanelStatus(e.target.value as PodPanelStatus)}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            >
                 <option value="all">All PODs</option>
                 <option value="delivered">Delivered</option>
                 <option value="pending">Pending</option>
@@ -1287,7 +1317,7 @@ export default function ReceiptsAdminClient({
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={applyPodFilters}
+                onClick={() => applyPodFilters()}
                 className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-100 hover:bg-white/5"
               >
                 Apply POD filter
