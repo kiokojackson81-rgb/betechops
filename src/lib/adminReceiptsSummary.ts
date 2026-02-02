@@ -208,12 +208,16 @@ export async function computeAdminReceiptSummary({
           include: {
             order: {
               include: {
-                items: {
-                  select: {
-                    quantity: true,
-                    unitCost: true,
-                  },
-                },
+      items: {
+        select: {
+          quantity: true,
+          orderCosts: {
+            select: {
+              unitCost: true,
+            },
+          },
+        },
+      },
               },
             },
           },
@@ -265,10 +269,19 @@ export async function computeAdminReceiptSummary({
       key: buildReceiptKey("pos", orderRef, receipt.id),
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
-      items: (receipt.order?.items ?? []).map((item) => ({
-        quantity: item.quantity,
-        buyingPrice: Number(item.unitCost ?? 0),
-      })),
+      items: (receipt.order?.items ?? []).map((item) => {
+        const costs = Array.isArray(item.orderCosts)
+          ? item.orderCosts
+          : [];
+        const buyingSum = costs.reduce(
+          (sum, cost) => sum + Number(cost.unitCost ?? 0),
+          0,
+        );
+        return {
+          quantity: item.quantity,
+          buyingPrice: buyingSum,
+        };
+      }),
     };
   });
 
