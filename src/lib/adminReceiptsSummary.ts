@@ -209,7 +209,10 @@ export async function computeAdminReceiptSummary({
             order: {
               include: {
                 items: {
-                  select: { quantity: true },
+                  select: {
+                    quantity: true,
+                    unitCost: true,
+                  },
                 },
               },
             },
@@ -262,7 +265,10 @@ export async function computeAdminReceiptSummary({
       key: buildReceiptKey("pos", orderRef, receipt.id),
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
-      items: (receipt.order?.items ?? []).map((item) => ({ quantity: item.quantity })),
+      items: (receipt.order?.items ?? []).map((item) => ({
+        quantity: item.quantity,
+        buyingPrice: Number(item.unitCost ?? 0),
+      })),
     };
   });
 
@@ -330,9 +336,7 @@ export async function computeAdminReceiptSummary({
   const filteredMarketingSupport = filteredRecords.filter((record) => record.source !== "pos");
   const filteredPos = filteredRecords.filter((record) => record.source === "pos");
 
-  const totalSales =
-    filteredMarketingSupport.reduce((sum, receipt) => sum + Number(receipt.sellingTotal ?? 0), 0) +
-    filteredPos.reduce((sum, receipt) => sum + Number(receipt.sellingTotal ?? 0), 0);
+  const totalSales = filteredRecords.reduce((sum, receipt) => sum + Number(receipt.sellingTotal ?? 0), 0);
 
   const marketingItemsCount = filteredMarketingSupport.reduce(
     (sum, receipt) => sum + sumItemQuantities(receipt.items),
@@ -351,31 +355,32 @@ export async function computeAdminReceiptSummary({
   let totalProfitInclusive = 0;
   let awaitingPricingCount = 0;
   let hasIncompleteCosts = false;
-  for (const receipt of filteredMarketingSupport) {
+  for (const receipt of filteredRecords) {
     const items = Array.isArray(receipt.items) ? receipt.items : [];
     const aggregateCost = Number(receipt.buyingTotal ?? 0);
-    const allItemsPriced = items.length > 0 && items.every((it) => Number((it as any)?.buyingPrice ?? 0) > 0);
+    const costFromItems = items.reduce(
+      (sum, it) => sum + (Number(it?.buyingPrice ?? 0) * (Number(it?.quantity ?? 1) || 1)),
+      0,
+    );
+    const allItemsPriced = items.length > 0 && items.every((it) => Number(it?.buyingPrice ?? 0) > 0);
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
     let receiptProfit = 0;
     if (hasAggregateCost || allItemsPriced) {
-      const buyingSum = hasAggregateCost
-        ? aggregateCost
-        : items.reduce((sum, it) => sum + Number((it as any)?.buyingPrice ?? 0), 0);
+      const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       totalCost += buyingSum;
       receiptProfit = sell - buyingSum;
       totalProfitPriced += receiptProfit;
     } else {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
-      receiptProfit = 0;
     }
 
     totalProfitInclusive += receiptProfit;
   }
 
-  const hasCompleteCosts = filteredMarketingSupport.length === 0 ? true : !hasIncompleteCosts;
+  const hasCompleteCosts = filteredRecords.length === 0 ? true : !hasIncompleteCosts;
 
   return {
     totalSales,
