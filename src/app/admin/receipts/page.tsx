@@ -5,6 +5,14 @@ import { absUrl, withParams } from "@/lib/abs-url";
 
 export const dynamic = "force-dynamic";
 
+// Force a desktop viewport for this admin page so mobile devices render
+// the desktop UI (exclude from mobile-optimized layout).
+export const viewport = {
+  // Use a fixed desktop width to prevent mobile scaling/stacking
+  width: "1024",
+  initialScale: 1,
+};
+
 export default async function AdminReceiptsPage() {
   try {
     const apiUrl = await absUrl("/api/receipts");
