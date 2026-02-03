@@ -247,6 +247,12 @@ export async function computeAdminReceiptSummary({
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: receipt.items ?? [],
     buyingTotal: Number(receipt.buyingTotal ?? 0),
+    profit: (() => {
+      const p = (receipt as any).profit ?? (receipt as any).data?.profit;
+      if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
+      if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
+      return undefined;
+    })(),
   }));
 
   const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
@@ -256,6 +262,12 @@ export async function computeAdminReceiptSummary({
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: receipt.items ?? [],
     buyingTotal: Number(receipt.buyingTotal ?? 0),
+    profit: (() => {
+      const p = (receipt as any).profit ?? (receipt as any).data?.profit;
+      if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
+      if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
+      return undefined;
+    })(),
   }));
 
   const posRecords: ReceiptSummaryRecord[] = posReceipts.map((receipt) => {
@@ -268,6 +280,12 @@ export async function computeAdminReceiptSummary({
       // Prefer an explicit aggregate buying total stored on the receipt (if present),
       // otherwise fall back to item-level costs computed below.
       buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
+      profit: (() => {
+        const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
+        if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
+        if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
+        return undefined;
+      })(),
       items: (receipt.order?.items ?? []).map((item) => {
         const costs = Array.isArray(item.orderCosts)
           ? item.orderCosts
