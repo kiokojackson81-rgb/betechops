@@ -41,6 +41,74 @@ function formatCurrencyKes(value: number) {
   }
 }
 
+function toFiniteNumber(value: unknown) {
+  if (value === null || value === undefined) return 0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function computeReceiptProfit(order: any, snapshot: Record<string, unknown>) {
+  const sellingTotal = toFiniteNumber((snapshot?.totals as any)?.total ?? order?.totalAmount ?? 0);
+  const aggregateBuying = toFiniteNumber((snapshot as any).buyingTotal ?? 0);
+  if (aggregateBuying > 0) {
+    return sellingTotal - aggregateBuying;
+  }
+
+  const items = Array.isArray(order?.items) ? (order.items as any[]) : [];
+  let costTotal = 0;
+  let hasCostData = false;
+  for (const item of items) {
+    const costs = Array.isArray(item.orderCosts) ? item.orderCosts : [];
+    if (!costs.length) continue;
+    const unitCostSum = costs.reduce((sum, cost) => sum + toFiniteNumber((cost as any).unitCost), 0);
+    if (unitCostSum <= 0) continue;
+    const qty = Number.isFinite(Number(item?.quantity ?? 1)) ? Number(item?.quantity ?? 1) : 1;
+    costTotal += unitCostSum * qty;
+    hasCostData = true;
+  }
+
+  return hasCostData ? sellingTotal - costTotal : null;
+}
+
+async function persistReceiptProfit(receipt: any, snapshot: Record<string, unknown>) {
+  const explicitProfit =
+    typeof (receipt as any).profit === 'number' && Number.isFinite((receipt as any).profit)
+      ? Number((receipt as any).profit)
+      : typeof receipt.data === 'object' && receipt.data
+      ? typeof (receipt.data as any).profit === 'number'
+        ? Number((receipt.data as any).profit)
+        : undefined
+      : undefined;
+
+  if (explicitProfit !== undefined) {
+    return explicitProfit;
+  }
+
+  const computedProfit = computeReceiptProfit(receipt.order, snapshot);
+  if (computedProfit === null || Number.isNaN(computedProfit)) {
+    return null;
+  }
+
+  const nextData =
+    typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
+  nextData.profit = computedProfit;
+
+  try {
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: { data: nextData as Prisma.InputJsonValue },
+    });
+    if (typeof receipt.data === 'object' && receipt.data) {
+      receipt.data = nextData;
+    }
+    snapshot.profit = computedProfit;
+  } catch (error) {
+    console.error('[receiptSender] failed to persist profit', error);
+  }
+
+  return computedProfit;
+}
+
 type WhatsAppMessageParams = {
   customerName?: string;
   receiptNumber: string;
@@ -345,6 +413,7 @@ export async function sendReceiptChannels(
   }
   snapshot.branding = branding;
   const brandedSnapshot = { ...snapshot, branding };
+  await persistReceiptProfit(receipt, snapshot);
 
   const sent: string[] = [];
   const errors: any[] = [];
