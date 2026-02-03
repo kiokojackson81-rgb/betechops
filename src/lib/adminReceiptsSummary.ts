@@ -13,6 +13,7 @@ type ReceiptSummaryRecord = {
   sellingTotal: number;
   items: Array<{ quantity?: number; buyingPrice?: number | null } | null>;
   buyingTotal?: number;
+  profit?: number;
 };
 
 export type PaymentTotals = {
@@ -208,15 +209,11 @@ export async function computeAdminReceiptSummary({
           include: {
             order: {
               include: {
-                items: {
-                  include: {
-                    orderCosts: {
-                      select: {
-                        unitCost: true,
-                      },
-                    },
-                  },
-                },
+            items: {
+              include: {
+                orderCosts: true,
+              },
+            },
               },
             },
           },
