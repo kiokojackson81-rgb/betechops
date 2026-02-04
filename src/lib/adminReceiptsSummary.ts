@@ -46,12 +46,6 @@ export const normalizePaymentMethod = (value: string | null | undefined): "MPESA
 const sumItemQuantities = (items: Array<{ quantity?: number } | null>): number =>
   items.reduce((sum, item) => sum + (Number(item?.quantity ?? 1) || 0), 0);
 
-const buildReceiptKey = (source: Source, receiptNumber: string | null | undefined, fallbackId: string) => {
-  const normalized = receiptNumber ? canonicalReceiptNumber(receiptNumber) : null;
-  if (normalized) return `num:${normalized}`;
-  return `${source}:${fallbackId}`;
-};
-
 type SummaryOptions = {
   start: Date;
   end: Date;
