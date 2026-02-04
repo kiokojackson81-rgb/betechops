@@ -13,6 +13,7 @@ type ReceiptSummaryRecord = {
   sellingTotal: number;
   items: Array<{ quantity?: number; buyingPrice?: number | null } | null>;
   buyingTotal?: number;
+  supportBuyingTotal?: number;
   profit?: number;
 };
 
@@ -221,6 +222,42 @@ export async function computeAdminReceiptSummary({
       : [],
   ]);
 
+  const supportLedgerCandidates = new Set<string>();
+  for (const receipt of posReceipts) {
+    const orderNumber = receipt.order?.orderNumber;
+    if (!orderNumber) continue;
+    supportLedgerCandidates.add(orderNumber);
+    const normalized = canonicalReceiptNumber(orderNumber);
+    if (normalized) {
+      supportLedgerCandidates.add(normalized);
+    }
+  }
+
+  const supportBuyingTotalsByNormalized = new Map<string, number>();
+  const supportBuyingTotalsByRaw = new Map<string, number>();
+  if (supportLedgerCandidates.size > 0) {
+    try {
+      const ledgerEntries = await prisma.supportReceipt.findMany({
+        where: { receiptNumber: { in: Array.from(supportLedgerCandidates) } },
+        select: { receiptNumber: true, buyingTotal: true },
+      });
+      for (const entry of ledgerEntries) {
+        if (!entry.receiptNumber) continue;
+        const buyingTotal = Number(entry.buyingTotal ?? 0);
+        if (buyingTotal <= 0) continue;
+        if (!supportBuyingTotalsByRaw.has(entry.receiptNumber)) {
+          supportBuyingTotalsByRaw.set(entry.receiptNumber, buyingTotal);
+        }
+        const normalized = canonicalReceiptNumber(entry.receiptNumber) ?? entry.receiptNumber;
+        if (normalized && !supportBuyingTotalsByNormalized.has(normalized)) {
+          supportBuyingTotalsByNormalized.set(normalized, buyingTotal);
+        }
+      }
+    } catch (err) {
+      console.warn("[adminReceiptsSummary] failed to load support ledger buying totals", err);
+    }
+  }
+
   // Post-query safeguard: filter out POD-pending receipts at the app level
   // unless the caller explicitly requested POD receipts via `customerType='pod'`.
   const posReceiptsFinal = (() => {
@@ -272,6 +309,10 @@ export async function computeAdminReceiptSummary({
 
   const posRecords: ReceiptSummaryRecord[] = posReceipts.map((receipt) => {
     const orderRef = receipt.order?.orderNumber ?? null;
+    const normalizedOrderNumber = canonicalReceiptNumber(orderRef ?? undefined);
+    const supportBuyingTotal =
+      (normalizedOrderNumber && supportBuyingTotalsByNormalized.get(normalizedOrderNumber)) ??
+      (orderRef && supportBuyingTotalsByRaw.get(orderRef));
     return {
       source: "pos" as const,
       key: buildReceiptKey("pos", orderRef, receipt.id),
@@ -280,6 +321,7 @@ export async function computeAdminReceiptSummary({
       // Prefer an explicit aggregate buying total stored on the receipt (if present),
       // otherwise fall back to item-level costs computed below.
       buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
+      supportBuyingTotal: supportBuyingTotal,
       profit: (() => {
         const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
         if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
@@ -313,6 +355,7 @@ export async function computeAdminReceiptSummary({
   const dedupedMap = new Map<string, ReceiptSummaryRecord>();
   const recordHasCostData = (record: ReceiptSummaryRecord) => {
     if (Number(record.buyingTotal ?? 0) > 0) return true;
+    if (Number(record.supportBuyingTotal ?? 0) > 0) return true;
     const items = Array.isArray(record.items) ? record.items : [];
     return items.some((item) => Number(item?.buyingPrice ?? 0) > 0);
   };
@@ -413,7 +456,9 @@ export async function computeAdminReceiptSummary({
   let hasIncompleteCosts = false;
   for (const receipt of filteredRecords) {
     const items = Array.isArray(receipt.items) ? receipt.items : [];
-    const aggregateCost = Number(receipt.buyingTotal ?? 0);
+    const supportBuying = Number(receipt.supportBuyingTotal ?? 0);
+    const aggregateCostRaw = Number(receipt.buyingTotal ?? 0);
+    const aggregateCost = supportBuying > 0 ? supportBuying : aggregateCostRaw;
     const costFromItems = items.reduce(
       (sum, it) => sum + (Number(it?.buyingPrice ?? 0) * (Number(it?.quantity ?? 1) || 1)),
       0,

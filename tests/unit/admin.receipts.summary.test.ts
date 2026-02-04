@@ -12,6 +12,7 @@ jest.mock('@/lib/prisma', () => ({
 
 import { GET } from '../../src/app/api/admin/receipts/summary/route';
 import { prisma } from '@/lib/prisma';
+import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 
 describe('admin receipts summary', () => {
   afterEach(() => jest.resetAllMocks());
@@ -26,9 +27,11 @@ describe('admin receipts summary', () => {
     ]);
 
     // One support receipt with a known buyingPrice
-    (prisma as any).supportReceipt.findMany.mockResolvedValue([
-      { id: 'sr1', sellingTotal: 400, items: [{ buyingPrice: 150 }] },
-    ]);
+    (prisma as any).supportReceipt.findMany
+      .mockResolvedValueOnce([
+        { id: 'sr1', sellingTotal: 400, items: [{ buyingPrice: 150 }] },
+      ])
+      .mockResolvedValueOnce([]);
 
     const req: any = { url: `http://localhost/api/admin/receipts/summary?start=${encodeURIComponent(
       start,
@@ -44,5 +47,44 @@ describe('admin receipts summary', () => {
     // totalProfit = (400 - 150) = 250
     expect(body.totalProfit).toBe(250);
     expect(body.receiptsCount).toBe(2);
+  });
+
+  it('uses support ledger buying totals to populate POS profit when item costs are missing', async () => {
+    const start = '2025-12-12T00:00:00+03:00';
+    const end = '2025-12-12T23:59:59.999+03:00';
+    const orderNumber = 'Betech-20260203-54502';
+    const normalizedOrderNumber = canonicalReceiptNumber(orderNumber) ?? orderNumber;
+
+    (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany
+      .mockResolvedValueOnce([]) // support receipts payload
+      .mockResolvedValueOnce([
+        { receiptNumber: normalizedOrderNumber, buyingTotal: 2500 },
+      ]);
+
+    (prisma as any).receipt.findMany.mockResolvedValue([
+      {
+        id: 'pos1',
+        docType: 'RECEIPT',
+        generatedAt: start,
+        totals: { total: 5000 },
+        order: {
+          orderNumber,
+          totalAmount: 5000,
+          items: [],
+        },
+      },
+    ]);
+
+    const req: any = { url: `http://localhost/api/admin/receipts/summary?start=${encodeURIComponent(
+      start,
+    )}&end=${encodeURIComponent(end)}` };
+
+    const res = await GET(req as any);
+    const body = await res.json();
+
+    expect(body.totalSales).toBe(5000);
+    expect(body.totalProfit).toBe(2500);
+    expect(body.receiptsCount).toBe(1);
   });
 });
