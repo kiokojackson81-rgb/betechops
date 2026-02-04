@@ -261,13 +261,10 @@ export async function POST(req: Request) {
       (sum, e) => sum + e.receipts.filter((r) => r.paymentMethod === "CASH").length,
       0
     );
-    const periodReceiptRows = periodEntries.reduce(
-      (sum, e) =>
-        sum +
-        (Array.isArray(e.receipts) ? e.receipts.length : 0) +
-        (Array.isArray(e.sales) ? e.sales.length : 0),
-      0,
-    );
+    const periodReceiptRows = periodEntries.reduce((sum, e) => {
+      const rowCount = (Array.isArray(e.receipts) ? e.receipts.length : 0) + (Array.isArray((e as any).sales) ? (e as any).sales.length : 0);
+      return sum + rowCount;
+    }, 0);
     const periodTotalReceipts = periodEntries.reduce((sum, e) => sum + e.receipts.length, 0);
     const commissionInfo = getCommissionSummaryForSales(periodSales);
     let commissionValue = 0;

@@ -286,7 +286,7 @@ export async function computeAdminReceiptSummary({
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
     source: "marketing" as const,
-    key: buildReceiptKey("marketing", receipt.receiptNumber ?? null, receipt.id),
+    key: buildReceiptKey(receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -301,7 +301,7 @@ export async function computeAdminReceiptSummary({
 
   const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
     source: "support" as const,
-    key: buildReceiptKey("support", receipt.receiptNumber ?? null, receipt.id),
+    key: buildReceiptKey(receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -332,7 +332,7 @@ export async function computeAdminReceiptSummary({
     }
     return {
       source: "pos" as const,
-      key: buildReceiptKey("pos", orderRef, receipt.id),
+      key: buildReceiptKey(orderRef, receipt.id),
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
       // Prefer an explicit aggregate buying total stored on the receipt (if present),

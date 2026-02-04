@@ -159,7 +159,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       return { totals, entryCount: weeklyRows.length, rawRowCount: weeklyRows.length };
     }
 
-    return { totals: emptyTotals(), entryCount: 0 };
+    return { totals: emptyTotals(), entryCount: 0, rawRowCount: 0 };
   }
 
   const totals = emptyTotals();

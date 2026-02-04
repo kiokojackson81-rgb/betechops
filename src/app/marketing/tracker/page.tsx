@@ -1297,7 +1297,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
     (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
   const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
-  const serverPeriodReceiptRows = serverPeriodSummary?.aggregates?.totalReceiptRows ?? 0;
+  const serverPeriodReceiptRows = (serverPeriodSummary?.aggregates as any)?.totalReceiptRows ?? 0;
   const combinedPeriodReceiptRows = serverPeriodReceiptRows + totalReceiptRows;
 
   const commissionSummary = useMemo(
