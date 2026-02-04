@@ -53,6 +53,7 @@ type RemoteSummaryPayload = {
   aggregates?: {
     totalSales?: number;
     totalItems?: number;
+    totalReceiptRows?: number;
     paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number };
     commission?: { commission?: number };
   };
@@ -183,6 +184,7 @@ const getWeekBounds = (reference: Date) => {
 type StatsCardProps = {
   periodLabel: string;
   receipts: number;
+  receiptRows: number;
   salesKes: number;
   items: number;
   commissionKes: number;
@@ -193,6 +195,7 @@ type StatsCardProps = {
 function StatsCard({
   periodLabel,
   receipts,
+  receiptRows,
   salesKes,
   items,
   commissionKes,
@@ -228,6 +231,7 @@ function StatsCard({
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">Receipts</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(receipts)}</p>
+          <p className="text-[11px] text-slate-400">Rows: {mask(receiptRows.toLocaleString())}</p>
         </div>
 
         {/* Sales */}
@@ -1059,14 +1063,15 @@ export default function MarketingTrackerPage() {
           start: data.period?.start ?? "",
           end: data.period?.end ?? "",
         },
-        aggregates: {
-          totalSales: data.aggregates?.totalSales ?? 0,
-          totalItems: data.aggregates?.totalItems ?? 0,
-          paymentStats: {
-            totalSalesMpesa: paymentStatsRaw.totalSalesMpesa ?? 0,
-            totalSalesCash: paymentStatsRaw.totalSalesCash ?? 0,
-            countMpesaReceipts: paymentStatsRaw.countMpesaReceipts ?? 0,
-            countCashReceipts: paymentStatsRaw.countCashReceipts ?? 0,
+      aggregates: {
+        totalSales: data.aggregates?.totalSales ?? 0,
+        totalItems: data.aggregates?.totalItems ?? 0,
+        totalReceiptRows: data.aggregates?.totalReceiptRows ?? 0,
+        paymentStats: {
+          totalSalesMpesa: paymentStatsRaw.totalSalesMpesa ?? 0,
+          totalSalesCash: paymentStatsRaw.totalSalesCash ?? 0,
+          countMpesaReceipts: paymentStatsRaw.countMpesaReceipts ?? 0,
+          countCashReceipts: paymentStatsRaw.countCashReceipts ?? 0,
           },
           commission: {
             commission: data.aggregates?.commission?.commission ?? 0,
@@ -1275,9 +1280,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
 }, [receipts]);
 
 // derived stats for the Quick stats card
-const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
+  const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   const totalSales = totals.totalSales;
   const totalItems = totals.totalItems;
+  const totalReceiptRows = receipts.length;
   // Combine server-side period totals (if any) with the unsaved local receipts
   // so the Quick stats update instantly as the attendant enters or deletes sales.
   // Use `serverPeriodSummary` (authoritative) for calculations so the visible
@@ -1291,6 +1297,8 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
     (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
     (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
   const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
+  const serverPeriodReceiptRows = serverPeriodSummary?.aggregates?.totalReceiptRows ?? 0;
+  const combinedPeriodReceiptRows = serverPeriodReceiptRows + totalReceiptRows;
 
   const commissionSummary = useMemo(
     () => getCommissionSummaryForSales(combinedPeriodSales),
@@ -1611,6 +1619,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
+              receiptRows={combinedPeriodReceiptRows}
               salesKes={displayedSalesKes}
               items={displayedItems}
               commissionKes={commissionKes}

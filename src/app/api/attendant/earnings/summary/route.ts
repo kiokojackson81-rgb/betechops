@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
   const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
     getEarningsSummaryForUser({ userId }),
-    summarizeMarketingReportsForPeriod({ userId, period }),
+    summarizeMarketingReportsForPeriod({ userId, userEmail: identity.actorEmail, period }),
     getSupportPeriodAggregates({ userId, period }),
     prisma.commissionLedger.findUnique({
       where: {

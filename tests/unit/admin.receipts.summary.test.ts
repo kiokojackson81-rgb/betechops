@@ -13,6 +13,7 @@ jest.mock('@/lib/prisma', () => ({
 import { GET } from '../../src/app/api/admin/receipts/summary/route';
 import { prisma } from '@/lib/prisma';
 import { canonicalReceiptNumber } from '@/lib/receiptGuard';
+import { buildReceiptKey } from '@/lib/receiptKey';
 
 describe('admin receipts summary', () => {
   afterEach(() => jest.resetAllMocks());
@@ -53,13 +54,12 @@ describe('admin receipts summary', () => {
     const start = '2025-12-12T00:00:00+03:00';
     const end = '2025-12-12T23:59:59.999+03:00';
     const orderNumber = 'Betech-20260203-54502';
-    const normalizedOrderNumber = canonicalReceiptNumber(orderNumber) ?? orderNumber;
 
     (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
     (prisma as any).supportReceipt.findMany
       .mockResolvedValueOnce([]) // support receipts payload
       .mockResolvedValueOnce([
-        { receiptNumber: normalizedOrderNumber, buyingTotal: 2500 },
+        { receiptKey: buildReceiptKey(orderNumber), buyingTotal: 2500 },
       ]);
 
     (prisma as any).receipt.findMany.mockResolvedValue([

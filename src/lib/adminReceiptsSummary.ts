@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
 
 type PaymentBucket = { totalSales: number; count: number };
@@ -227,30 +228,42 @@ export async function computeAdminReceiptSummary({
     const orderNumber = receipt.order?.orderNumber;
     if (!orderNumber) continue;
     supportLedgerCandidates.add(orderNumber);
+    const receiptKeyCandidate = buildReceiptKey(orderNumber, receipt.id);
+    if (receiptKeyCandidate) {
+      supportLedgerCandidates.add(receiptKeyCandidate);
+    }
     const normalized = canonicalReceiptNumber(orderNumber);
     if (normalized) {
       supportLedgerCandidates.add(normalized);
     }
   }
 
-  const supportBuyingTotalsByNormalized = new Map<string, number>();
-  const supportBuyingTotalsByRaw = new Map<string, number>();
-  if (supportLedgerCandidates.size > 0) {
+  const supportBuyingTotals = new Map<string, number>();
+  const candidateArray = Array.from(supportLedgerCandidates).filter((value) => value && value.length > 0);
+  if (candidateArray.length > 0) {
     try {
       const ledgerEntries = await prisma.supportReceipt.findMany({
-        where: { receiptNumber: { in: Array.from(supportLedgerCandidates) } },
-        select: { receiptNumber: true, buyingTotal: true },
+        where: {
+          OR: [
+            { receiptNumber: { in: candidateArray } },
+            { receiptKey: { in: candidateArray } },
+          ],
+        },
+        select: { receiptNumber: true, receiptKey: true, buyingTotal: true },
       });
       for (const entry of ledgerEntries) {
-        if (!entry.receiptNumber) continue;
         const buyingTotal = Number(entry.buyingTotal ?? 0);
         if (buyingTotal <= 0) continue;
-        if (!supportBuyingTotalsByRaw.has(entry.receiptNumber)) {
-          supportBuyingTotalsByRaw.set(entry.receiptNumber, buyingTotal);
-        }
-        const normalized = canonicalReceiptNumber(entry.receiptNumber) ?? entry.receiptNumber;
-        if (normalized && !supportBuyingTotalsByNormalized.has(normalized)) {
-          supportBuyingTotalsByNormalized.set(normalized, buyingTotal);
+        const keys = [entry.receiptNumber, entry.receiptKey].filter(Boolean) as string[];
+        for (const key of keys) {
+          if (!key) continue;
+          if (!supportBuyingTotals.has(key)) {
+            supportBuyingTotals.set(key, buyingTotal);
+          }
+          const normalized = canonicalReceiptNumber(key);
+          if (normalized && !supportBuyingTotals.has(normalized)) {
+            supportBuyingTotals.set(normalized, buyingTotal);
+          }
         }
       }
     } catch (err) {
@@ -310,9 +323,19 @@ export async function computeAdminReceiptSummary({
   const posRecords: ReceiptSummaryRecord[] = posReceipts.map((receipt) => {
     const orderRef = receipt.order?.orderNumber ?? null;
     const normalizedOrderNumber = canonicalReceiptNumber(orderRef ?? undefined);
-    const supportBuyingTotal =
-      (normalizedOrderNumber && supportBuyingTotalsByNormalized.get(normalizedOrderNumber)) ??
-      (orderRef && supportBuyingTotalsByRaw.get(orderRef));
+    const keyCandidates = [
+      orderRef,
+      normalizedOrderNumber,
+      buildReceiptKey(orderRef, receipt.id),
+    ].filter((value): value is string => Boolean(value));
+    let supportBuyingTotal: number | undefined;
+    for (const key of keyCandidates) {
+      const candidate = supportBuyingTotals.get(key);
+      if (typeof candidate === "number" && candidate > 0) {
+        supportBuyingTotal = candidate;
+        break;
+      }
+    }
     return {
       source: "pos" as const,
       key: buildReceiptKey("pos", orderRef, receipt.id),

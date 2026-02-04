@@ -73,7 +73,11 @@ export async function GET(req: Request) {
   }
 
   const [marketingSummary, supportSummary] = await Promise.all([
-    summarizeMarketingReportsForPeriod({ userId: targetUserId, period: argPeriod }),
+    summarizeMarketingReportsForPeriod({
+      userId: targetUserId,
+      userEmail: targetUserEmail,
+      period: argPeriod,
+    }),
     getSupportPeriodAggregates({ userId: targetUserId, period: argPeriod }),
   ]);
 
@@ -226,6 +230,7 @@ export async function GET(req: Request) {
       totalItems,
       paymentStats: mergedPaymentStats,
       commission: { commission },
+      totalReceiptRows: marketingSummary?.rawRowCount ?? 0,
     },
   };
 

@@ -28,6 +28,7 @@ export type MarketingPeriodTotals = {
 type SummarizeResult = {
   totals: MarketingPeriodTotals;
   entryCount: number;
+  rawRowCount: number;
   // per-receipt breakdown keyed by canonical receipt id used by this summarizer
   perReceipts?: Record<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>;
 };
@@ -77,14 +78,19 @@ const deriveReceiptsFromSales = (sales: { receiptNumber: string | null; paymentM
 
 export async function summarizeMarketingReportsForPeriod(opts: {
   userId: string;
+  userEmail?: string | null;
   period: TradingPeriod;
   client?: PrismaClientOrTx;
 }): Promise<SummarizeResult> {
   const { userId, period } = opts;
   const client = opts.client ?? prisma;
   if (!userId) {
-    return { totals: emptyTotals(), entryCount: 0 };
+    return { totals: emptyTotals(), entryCount: 0, rawRowCount: 0 };
   }
+  const normalizedEmail =
+    typeof opts.userEmail === "string" && opts.userEmail.trim().length > 0
+      ? opts.userEmail.trim().toLowerCase()
+      : null;
 
   // Precompute POS receipts that are POD-pending in this period. If a POS
   // receipt exists with a pending podDelivery for the same canonical receipt
@@ -99,12 +105,21 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     const cand = canonicalReceiptNumber(r.order?.orderNumber ?? (r.data && (r.data as any).receiptNumber) ?? r.id);
     if (cand) excludedCanonicals.add(cand);
   }
+  let rawRowCount = 0;
 
+  const submittedByConditions: Prisma.MarketingDailyEntryWhereInput[] = [
+    { submittedById: userId },
+  ];
+  if (normalizedEmail) {
+    submittedByConditions.push({
+      submittedByEmail: { equals: normalizedEmail, mode: "insensitive" },
+    });
+  }
   const [marketingEntries, reports] = await Promise.all([
     client.marketingDailyEntry.findMany({
       where: {
-        submittedById: userId,
         date: { gte: period.start, lte: period.end },
+        OR: submittedByConditions,
       },
       include: {
         receipts: { include: { items: true } },
@@ -141,7 +156,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       totals.totalReceipts = weeklyRows.length;
       totals.totalItems = 0;
       totals.paymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
-      return { totals, entryCount: weeklyRows.length };
+      return { totals, entryCount: weeklyRows.length, rawRowCount: weeklyRows.length };
     }
 
     return { totals: emptyTotals(), entryCount: 0 };
@@ -162,6 +177,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
   marketingEntries.forEach((entry) => {
     const receipts = entry.receipts ?? [];
+    rawRowCount += receipts.length;
     if (receipts.length > 0) {
       receipts.forEach((receipt) => {
         const method = normalizeMethod(receipt.paymentMethod);
@@ -207,6 +223,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     }
 
     const sales = entry.sales ?? [];
+    rawRowCount += sales.length;
     if (sales.length > 0) {
       const entrySeen = new Set<string>();
       sales.forEach((sale, index) => {
@@ -253,6 +270,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
     if (markIfNew(fallbackKey)) {
       totals.totalReceipts += 1;
+      rawRowCount += 1;
     }
   });
 
@@ -267,6 +285,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
     const receiptsFromMetrics = Math.max(0, Math.floor(toNumber(totalsJson.receipts)));
     const sales = Array.isArray(report.sales) ? report.sales : [];
+    rawRowCount += sales.length;
 
     const entrySalesReceiptKeys = new Set<string>();
     let newReceiptCount = 0;
@@ -310,6 +329,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         totals.totalReceipts += receiptsFromMetrics;
         totals.totalSales += toNumber(report.totalSales);
       }
+      rawRowCount += receiptsFromMetrics;
     }
 
     totals.totalProfit += entryProfit;
@@ -324,6 +344,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   return {
     totals,
     entryCount: marketingEntries.length + reports.length,
+    rawRowCount,
     perReceipts: Object.fromEntries(Array.from(perReceipts.entries())),
   };
 }

@@ -102,8 +102,14 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     copiedProducts += report.copiesUploaded ?? 0;
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: opts.userId },
+    select: { email: true },
+  });
+  const normalizedEmail = (user?.email ?? "").toLowerCase();
   const marketingSummary = await summarizeMarketingReportsForPeriod({
     userId: opts.userId,
+    userEmail: user?.email ?? null,
     period: tradingPeriod,
   });
   const marketingTotals = marketingSummary.totals;
@@ -139,17 +145,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     mergedItems += v.items ?? 0;
   }
 
-  let user: { email?: string | null } | null = null;
-  try {
-    if (prisma && prisma.user && typeof prisma.user.findUnique === 'function') {
-      user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
-    }
-  } catch (e) {
-    // In test environments prisma may be partially mocked; default to null
-    user = null;
-  }
-  const isJeniffer = (user?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
-  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
+  const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
+  const isBrendah = normalizedEmail === "brendah@betech.co.ke";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (isJeniffer) {
     posSummary = await summarizePosReceiptsForPeriod({ start, end });

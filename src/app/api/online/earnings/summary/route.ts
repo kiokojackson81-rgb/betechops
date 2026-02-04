@@ -164,7 +164,7 @@ export async function GET(req: Request) {
 
   const [summary, marketingSummary, supportSummary] = await Promise.all([
     getEarningsSummaryForUser({ userId }),
-    summarizeMarketingReportsForPeriod({ userId, period }),
+    summarizeMarketingReportsForPeriod({ userId, userEmail: user?.email ?? null, period }),
     getSupportPeriodAggregates({ userId, period }),
   ]);
 

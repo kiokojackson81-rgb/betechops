@@ -207,11 +207,21 @@ export async function GET(req: Request) {
   // Use the parsed `period` (from start/end/periodKey) so non-admin requests
   // can request explicit ranges. If none provided, `parsePeriod` already
   // falls back to the current trading period.
+  const targetUser = targetAttendant
+    ? await prisma.user.findUnique({
+        where: { id: targetAttendant },
+        select: { email: true },
+      })
+    : null;
   const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
     // Pass `asOf` so `getEarningsSummaryForUser` computes using a period
     // that aligns with the requested `start` date when provided.
     getEarningsSummaryForUser({ userId: targetAttendant, asOf: period.start }),
-    summarizeMarketingReportsForPeriod({ userId: targetAttendant, period }),
+    summarizeMarketingReportsForPeriod({
+      userId: targetAttendant,
+      userEmail: targetUser?.email ?? null,
+      period,
+    }),
     getSupportPeriodAggregates({ userId: targetAttendant, period }),
     prisma.commissionLedger.findUnique({
       where: {
