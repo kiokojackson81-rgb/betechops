@@ -245,8 +245,8 @@ export async function computeAdminReceiptSummary({
     key: buildReceiptKey("marketing", receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
-    items: receipt.items ?? [],
-    buyingTotal: Number(receipt.buyingTotal ?? 0),
+    items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
+    buyingTotal: Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
     profit: (() => {
       const p = (receipt as any).profit ?? (receipt as any).data?.profit;
       if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
@@ -260,8 +260,8 @@ export async function computeAdminReceiptSummary({
     key: buildReceiptKey("support", receipt.receiptNumber ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
-    items: receipt.items ?? [],
-    buyingTotal: Number(receipt.buyingTotal ?? 0),
+    items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
+    buyingTotal: Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
     profit: (() => {
       const p = (receipt as any).profit ?? (receipt as any).data?.profit;
       if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
@@ -426,7 +426,7 @@ export async function computeAdminReceiptSummary({
     // prefer that because some receipts persist a computed `profit` already
     // (e.g. from background jobs). This lets admin summaries reflect stored
     // per-receipt profits even when item-level costs are absent.
-    const explicitProfitRaw = (receipt as any).profit ?? (receipt as any).data?.profit ?? undefined;
+    const explicitProfitRaw = (receipt as any).profit ?? undefined;
     const explicitProfit = typeof explicitProfitRaw === 'number' && Number.isFinite(explicitProfitRaw) ? Number(explicitProfitRaw) : undefined;
 
     let receiptProfit = 0;
