@@ -450,7 +450,7 @@ export async function computeAdminReceiptSummary({
   // If we were able to compute a DB-side aggregate of stored per-receipt
   // profits, prefer that value for the priced/inclusive totals so the
   // admin summary reflects persisted profits directly from the DB.
-  if (dbProfitAgg) {
+  if (dbProfitAgg && Number(dbProfitAgg.priced_count ?? 0) > 0) {
     totalProfitPriced = Number(dbProfitAgg.total_profit ?? 0);
     totalProfitInclusive = Number(dbProfitAgg.total_profit ?? 0);
     // Adjust awaitingPricingCount conservatively when possible.
