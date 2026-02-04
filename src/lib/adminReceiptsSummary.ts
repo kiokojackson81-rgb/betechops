@@ -344,6 +344,32 @@ export async function computeAdminReceiptSummary({
 
   const dedupedRecords = Array.from(dedupedMap.values());
 
+  // Attempt a server-side aggregation of persisted per-receipt profits
+  // to ensure admin summaries reflect JSON-stored profits even when
+  // item-level costs are missing. Limit this DB-side aggregation to
+  // global scope (avoid complex per-user scope SQL joins here).
+  let dbProfitAgg: { total_profit: number; priced_count: number } | null = null;
+  try {
+    if (scope === "global") {
+      const raw: any = await prisma.$queryRaw`
+        SELECT
+          COALESCE(SUM((data->>'profit')::numeric), 0) AS total_profit,
+          COUNT(*) FILTER (WHERE (data->>'profit') IS NOT NULL) AS priced_count
+        FROM "Receipt"
+        WHERE generatedAt >= ${start} AND generatedAt <= ${end}
+      `;
+      if (Array.isArray(raw) && raw.length > 0) {
+        const first = raw[0];
+        dbProfitAgg = {
+          total_profit: first.total_profit ? Number(first.total_profit) : 0,
+          priced_count: first.priced_count ? Number(first.priced_count) : 0,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[adminReceiptsSummary] failed DB-side profit aggregation', e instanceof Error ? e.message : String(e));
+  }
+
   const paymentTotals = dedupedRecords.reduce(
     (acc, { paymentMethod: method, sellingTotal }) => {
       const normalized = normalizePaymentMethod(method);
@@ -419,6 +445,20 @@ export async function computeAdminReceiptSummary({
     }
 
     totalProfitInclusive += receiptProfit;
+  }
+
+  // If we were able to compute a DB-side aggregate of stored per-receipt
+  // profits, prefer that value for the priced/inclusive totals so the
+  // admin summary reflects persisted profits directly from the DB.
+  if (dbProfitAgg) {
+    totalProfitPriced = Number(dbProfitAgg.total_profit ?? 0);
+    totalProfitInclusive = Number(dbProfitAgg.total_profit ?? 0);
+    // Adjust awaitingPricingCount conservatively when possible.
+    try {
+      awaitingPricingCount = Math.max(0, receiptsCount - Number(dbProfitAgg.priced_count ?? 0));
+    } catch {
+      // ignore
+    }
   }
 
   const hasCompleteCosts = filteredRecords.length === 0 ? true : !hasIncompleteCosts;
