@@ -1062,6 +1062,7 @@ export default function MarketingTrackerPage() {
         aggregates: {
           totalSales: data.aggregates?.totalSales ?? 0,
           totalItems: data.aggregates?.totalItems ?? 0,
+          totalReceiptRows: data.aggregates?.totalReceiptRows ?? 0,
           paymentStats: {
             totalSalesMpesa: paymentStatsRaw.totalSalesMpesa ?? 0,
             totalSalesCash: paymentStatsRaw.totalSalesCash ?? 0,
@@ -1097,6 +1098,7 @@ export default function MarketingTrackerPage() {
           ...next,
           aggregates: {
             ...next.aggregates,
+            totalReceiptRows: next.aggregates?.totalReceiptRows ?? 0,
             paymentStats: {
               totalSalesMpesa: next.aggregates.paymentStats.totalSalesMpesa ?? 0,
               totalSalesCash: next.aggregates.paymentStats.totalSalesCash ?? 0,
@@ -1114,6 +1116,7 @@ export default function MarketingTrackerPage() {
           const changed =
             prev.aggregates.totalSales !== safeNext.aggregates.totalSales ||
             prev.aggregates.totalItems !== safeNext.aggregates.totalItems ||
+            prev.aggregates.totalReceiptRows !== safeNext.aggregates.totalReceiptRows ||
             prev.aggregates.paymentStats.totalSalesMpesa !== safeNext.aggregates.paymentStats.totalSalesMpesa ||
             prev.aggregates.paymentStats.totalSalesCash !== safeNext.aggregates.paymentStats.totalSalesCash ||
             prev.aggregates.commission.commission !== safeNext.aggregates.commission.commission ||
