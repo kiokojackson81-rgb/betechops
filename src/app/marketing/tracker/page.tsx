@@ -1426,6 +1426,7 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             aggregates: {
               totalSales: data.periodSummary.periodSales ?? 0,
               totalItems: data.periodSummary.totalItems ?? 0,
+              totalReceiptRows: data.periodSummary.totalReceiptRows ?? ((data.periodSummary.countMpesaReceipts ?? 0) + (data.periodSummary.countCashReceipts ?? 0)),
               paymentStats: {
                 totalSalesMpesa: data.periodSummary.mpesaTotal ?? 0,
                 totalSalesCash: data.periodSummary.cashTotal ?? 0,
