@@ -230,7 +230,10 @@ export async function GET(req: Request) {
       totalItems,
       paymentStats: mergedPaymentStats,
       commission: { commission },
-      totalReceiptRows: marketingSummary?.rawRowCount ?? 0,
+      totalReceiptRows:
+        isJeniffer && posSummary
+          ? posSummary.receiptKeys.length || posSummary.totalReceipts
+          : marketingSummary?.rawRowCount ?? 0,
     },
   };
 
