@@ -627,6 +627,7 @@ export default function MarketingTrackerPage() {
     aggregates: {
       totalSales: number;
       totalItems: number;
+      totalReceiptRows: number;
       paymentStats: {
         totalSalesMpesa: number;
         totalSalesCash: number;
@@ -646,6 +647,7 @@ export default function MarketingTrackerPage() {
     aggregates: {
       totalSales: number;
       totalItems: number;
+      totalReceiptRows: number;
       paymentStats: {
         totalSalesMpesa: number;
         totalSalesCash: number;
