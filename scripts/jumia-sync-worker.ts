@@ -5,6 +5,17 @@
 //      leave PENDING as soon as the vendor updates them.
 // Load .env if present but don't hard-require it (PM2 usually provides env)
 try { require('dotenv/config'); } catch { /* optional */ }
+// Prevent the whole worker process from exiting on an unexpected async
+// error (e.g. a bad credential causing a token-exchange failure). Instead
+// log the error and continue so other accounts can still be processed.
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('[jumia-sync-worker] unhandledRejection', reason);
+});
+process.on('uncaughtException', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('[jumia-sync-worker] uncaughtException', err);
+});
 // Ensure path aliases (@/*) resolve in the compiled CJS bundle by mapping to .worker-dist/src/*
 try {
   const tsconfigPaths = require('tsconfig-paths');
@@ -36,7 +47,7 @@ const RETURNS_EVERY_MS = Number(process.env.JUMIA_WORKER_RETURNS_EVERY_MS ?? 10 
 // Optional: retention cleanup cadence (default: every 6 hours)
 const RETENTION_EVERY_MS = Number(process.env.JUMIA_WORKER_RETENTION_EVERY_MS ?? 6 * 60 * 60_000);
 const ONLINE_OPS_EVERY_MS = Number(process.env.JUMIA_WORKER_ONLINE_OPS_EVERY_MS ?? INCREMENTAL_EVERY_MS);
-const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 30);
+const ONLINE_OPS_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 90);
 
 const LOG_PREFIX = '[jumia-sync-worker]';
 let lastIncrementalAt = 0;

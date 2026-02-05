@@ -230,6 +230,25 @@ export default function PayrollClient({
 
   return (
     <div className="space-y-6">
+      {(attendant.email ?? "").toLowerCase() === "jeniffer@betech.co.ke" && summary?.jenifferProgress ? (
+        <Card className="border-amber-600/20 bg-amber-900/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-100">Jeniffer commission progress</h3>
+              <p className="text-xs text-amber-300">Prorated portion toward next tier</p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-semibold text-amber-200">KES {Number(summary.jenifferProgress.prorated ?? 0).toLocaleString()}</div>
+              <div className="text-xs text-amber-300">{Math.round((summary.jenifferProgress.progressPercent ?? 0) * 10000) / 100}%</div>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-amber-900/30">
+              <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.round((summary.jenifferProgress.progressPercent ?? 0) * 100)}%` }} />
+            </div>
+          </div>
+        </Card>
+      ) : null}
       <Card className="border-slate-800 bg-slate-900/60">
         <div className="flex items-center justify-between">
           <div>

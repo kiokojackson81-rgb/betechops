@@ -7,6 +7,7 @@ export type IdentityMeta = {
   actorRole: Role | null;
   impersonateId: string | null;
   resolvedUserId: string | null;
+  actorEmail: string | null;
 };
 
 const DEFAULT_IMPERSONATION_ROLES: Role[] = ["ADMIN", "SUPERVISOR"];
@@ -22,6 +23,8 @@ export async function resolveTargetUserId(
   const session: any = await getServerSession(authOptions as any);
   const actorId = session?.user?.id ?? null;
   const actorRole = ((session?.user as { role?: Role } | undefined)?.role) ?? null;
+  const actorEmail =
+    typeof session?.user?.email === "string" ? session.user.email.toLowerCase() : null;
 
   const allowedRoles = options?.allowedImpersonationRoles ?? DEFAULT_IMPERSONATION_ROLES;
   const canImpersonate =
@@ -34,6 +37,7 @@ export async function resolveTargetUserId(
     actorRole,
     impersonateId,
     resolvedUserId,
+    actorEmail,
   };
 }
 

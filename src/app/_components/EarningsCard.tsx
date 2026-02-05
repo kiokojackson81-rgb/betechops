@@ -40,6 +40,38 @@ export default function EarningsCard({
 
   const mask = (val: string) => (locked ? "•••" : val);
 
+  const renderJenifferProgress = () => {
+    const p = (summary as any).jenifferProgress;
+    if (!p) return null;
+    const percent = Math.round((p.progressPercent ?? 0) * 10000) / 100; // 2 decimals
+    const formattedProrated = formatCurrency(Number(p.prorated ?? 0));
+    const nextTarget = p.nextTarget ? String(p.nextTarget.toLocaleString?.() ?? p.nextTarget) : "—";
+    return (
+      <div className="rounded-xl border border-amber-600/40 bg-amber-900/10 p-3">
+        <div className="text-xs uppercase tracking-wide text-amber-200">Progress to next target</div>
+        <div className="mt-1 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-amber-100">Next target</div>
+            <div className="text-sm font-semibold text-amber-200">{nextTarget}</div>
+          </div>
+          <div className="ml-4 w-44">
+            <div className="text-sm text-amber-100">Prorated earned</div>
+            <div className="text-sm font-semibold text-amber-200">{mask(formattedProrated)}</div>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-amber-900/30">
+            <div
+              className="h-full rounded-full bg-amber-500"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <div className="mt-1 text-xs text-amber-300">{percent}% to next tier</div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/60">
       <div className="flex items-start justify-between gap-3">
@@ -54,6 +86,7 @@ export default function EarningsCard({
         <p className="text-2xl font-semibold text-emerald-300">{mask(formatCurrency(summary.netPay))}</p>
       </div>
       <div className="space-y-3 text-sm text-slate-100">
+        {renderJenifferProgress()}
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between">
             <span className="text-slate-400">{row.label}</span>

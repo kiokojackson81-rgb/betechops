@@ -6,13 +6,14 @@ import Link from "next/link";
 import Card from "@/app/_components/Card";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
 import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
+import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -213,9 +214,10 @@ export default function DailyReportFinal() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const tradingPeriod = getTradingPeriodFor(new Date(date));
-  const tradingPeriodLabel = tradingPeriod?.label;
-  const tradingPeriodKey = tradingPeriod?.key;
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const selectedPeriodKey = selectedPeriod.key;
+  const selectedPeriodLabel = selectedPeriod.label;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -225,10 +227,14 @@ export default function DailyReportFinal() {
 
   const loadEarnings = useCallback(
     async (signal?: AbortSignal) => {
-      if (!tradingPeriodKey) return null;
+      if (!selectedPeriodKey) return null;
       try {
         const basePath = "/api/attendant/earnings/summary";
-        const url = impersonateId ? `${basePath}?impersonateId=${encodeURIComponent(impersonateId)}` : basePath;
+        const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+        if (impersonateId) {
+          params.set("impersonateId", impersonateId);
+        }
+        const url = `${basePath}?${params.toString()}`;
         const res = await fetch(url, {
           method: "GET",
           cache: "no-store",
@@ -265,21 +271,22 @@ export default function DailyReportFinal() {
         return null;
       }
     },
-    [impersonateId, tradingPeriodKey],
+    [impersonateId, selectedPeriodKey],
   );
 
   useEffect(() => {
-    if (!tradingPeriodKey) return;
+    if (!selectedPeriodKey) return;
     const controller = new AbortController();
     loadEarnings(controller.signal);
     return () => controller.abort();
-  }, [loadEarnings, tradingPeriodKey]);
+  }, [loadEarnings, selectedPeriodKey]);
 
   const fetchPeriodSummary = useCallback(
     async (signal?: AbortSignal) => {
-      if (!tradingPeriodKey || typeof window === "undefined") return null;
+      if (!selectedPeriodKey || typeof window === "undefined") return null;
       try {
         const url = new URL("/api/marketing/report/summary", window.location.origin);
+        url.searchParams.set("periodKey", selectedPeriodKey);
         url.searchParams.set("date", date);
         if (impersonateId) {
           url.searchParams.set("impersonateId", impersonateId);
@@ -303,15 +310,15 @@ export default function DailyReportFinal() {
         return null;
       }
     },
-    [date, impersonateId, tradingPeriodKey],
+    [date, impersonateId, selectedPeriodKey],
   );
 
   useEffect(() => {
-    if (!tradingPeriodKey) return;
+    if (!selectedPeriodKey) return;
     const controller = new AbortController();
     fetchPeriodSummary(controller.signal);
     return () => controller.abort();
-  }, [fetchPeriodSummary, tradingPeriodKey]);
+  }, [fetchPeriodSummary, selectedPeriodKey]);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     const totalReceipts = receipts.length;
@@ -351,8 +358,8 @@ export default function DailyReportFinal() {
   // earnings data to authenticated attendants. This lets the UI show a card
   // with basic values even when the user is not signed in.
   const publicFallbackSummary: EarningsSummary = {
-    periodKey: tradingPeriodKey ?? "",
-    periodLabel: tradingPeriodLabel ?? "",
+    periodKey: selectedPeriodKey,
+    periodLabel: selectedPeriodLabel,
     totalSales: serverStats?.totalSales ?? 0,
     totalProfit: 0,
     totalNewProducts: serverStats?.totalNewProducts ?? 0,
@@ -736,15 +743,32 @@ export default function DailyReportFinal() {
                 onReceiptsClick={() => setShowMyReceipts(true)}
                 showDot={true}
               />
+        </div>
+      </div>
+    </div>
+
+        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
+              <p className="text-lg font-semibold text-slate-50">{selectedPeriodLabel}</p>
+              {selectedPeriodKey !== currentPeriod.key && (
+                <p className="text-xs text-amber-300">Showing archived period.</p>
+              )}
             </div>
+            <PeriodSwitcher
+              currentPeriod={currentPeriod}
+              selectedPeriod={selectedPeriod}
+              onSelectPeriod={setSelectedPeriod}
+            />
           </div>
         </div>
 
-        <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-8">
-            <div className="flex-1">
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Date</label>
-            </div>
+      <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-8">
+          <div className="flex-1">
+            <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Date</label>
+          </div>
 
             <div className="md:flex md:items-center md:justify-end md:gap-3">
               <div className="md:w-[150px]">{datePicker}</div>
@@ -829,7 +853,7 @@ export default function DailyReportFinal() {
               walkInsServed={displayedWalkInsServed}
               walkInsPurchased={displayedWalkInsPurchased}
               commissionKes={commissionForPeriod}
-              tradingPeriodLabel={tradingPeriodLabel}
+              periodLabel={selectedPeriodLabel}
             />
 
             <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
@@ -1514,7 +1538,7 @@ type QuickStatsProps = {
   walkInsServed: number;
   walkInsPurchased: number;
   commissionKes: number;
-  tradingPeriodLabel?: string;
+  periodLabel?: string;
 };
 
 function QuickStats({
@@ -1526,7 +1550,7 @@ function QuickStats({
   walkInsServed,
   walkInsPurchased,
   commissionKes,
-  tradingPeriodLabel,
+  periodLabel,
 }: QuickStatsProps) {
   const { locked, toggle } = useCardLock("dailyreport:quickstats");
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
@@ -1538,7 +1562,7 @@ function QuickStats({
           <h2 className="text-lg font-semibold tracking-tight text-slate-50">Quick stats</h2>
           <LockButton locked={locked} onToggle={toggle} />
         </div>
-        <p className="text-xs text-slate-400 md:text-right">{tradingPeriodLabel || "TRADING PERIOD 25TH LAST MONTH - 24TH THIS MONTH"}</p>
+        <p className="text-xs text-slate-400 md:text-right">{periodLabel || "TRADING PERIOD 25TH LAST MONTH - 24TH THIS MONTH"}</p>
       </div>
 
       <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3">

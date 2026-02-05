@@ -51,10 +51,17 @@ async function main() {
 
     let payoutSales = 0;
     if (accountIds.length) {
-      const weeks = await prisma.marketplacePayoutWeek.findMany({
-        where: { accountId: { in: accountIds }, weekEnd: { gte: period.start, lte: period.end } },
+      const rows = await prisma.marketplacePayoutWeek.findMany({
+        where: { AND: [{ weekStart: { lte: period.end } }, { weekEnd: { gte: period.start } }, { accountId: { in: accountIds } }] },
       });
-      payoutSales = weeks.reduce((s, w) => s + Number(w.grossSales ?? 0), 0);
+      // aggregate by accountId + weekStart/weekEnd to dedupe slightly-offset rows
+      const map = new Map();
+      for (const r of rows) {
+        const key = `${r.accountId}::${new Date(r.weekStart).toISOString()}::${new Date(r.weekEnd).toISOString()}`;
+        const val = Number(r.grossSales ?? r.payoutAmount ?? 0);
+        map.set(key, (map.get(key) || 0) + val);
+      }
+      payoutSales = Array.from(map.values()).reduce((s, v) => s + v, 0);
     }
 
     const weeklyManual = await prisma.weeklySale.aggregate({

@@ -1,18 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// Avoid fetching Google Fonts during CI/local build; use CSS variable placeholders
+// instead of `next/font/google` which performs network requests at build time.
 import "./globals.css";
 import ToastContainer from './_components/ToastContainer';
 import ConfirmProvider from './_components/ConfirmProvider';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = { variable: "--font-geist-sans" } as const;
+const geistMono = { variable: "--font-geist-mono" } as const;
 
 export const metadata: Metadata = {
   title: {

@@ -1,0 +1,433 @@
+{
+  "generatedAt": "2026-01-07T03:03:07.353Z",
+  "startDate": "2025-12-21",
+  "results": [
+    {
+      "credentialId": "3e36e0c1-700f-4c69-92c3-51942833cc81",
+      "scope": "MARKETPLACE_ACCOUNT:303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE12DBU",
+          "shopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+          "createdAt": "2025-12-28 22:03:37",
+          "updatedAt": "2026-01-06 09:43:00",
+          "openingBalance": 0,
+          "itemRevenue": 525426,
+          "shipmentFee": -15520,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -94610.23,
+          "subtotal1": 430815.77,
+          "refunds": -3799,
+          "feesOnRefundsTotal": 569.85,
+          "subtotal2": 427016.77,
+          "closingBalance": 424086.62,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 424086.62,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2434101-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE12DBU",
+          "shopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+          "createdAt": "2025-12-21 21:47:48",
+          "updatedAt": "2026-01-02 12:55:15",
+          "openingBalance": 0,
+          "itemRevenue": 482837,
+          "shipmentFee": -19190,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -94106.27,
+          "subtotal1": 388730.73,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 388730.73,
+          "closingBalance": 385230.73,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 385230.73,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2394377-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "d261d665-8aa9-4f36-a953-b1a571593fc6",
+      "scope": "MARKETPLACE_ACCOUNT:9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE12DWN",
+          "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+          "createdAt": "2025-12-29 01:07:31",
+          "updatedAt": "2026-01-06 09:34:10",
+          "openingBalance": 0,
+          "itemRevenue": 287885,
+          "shipmentFee": -6580,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -51586.49,
+          "subtotal1": 236298.51,
+          "refunds": -63498,
+          "feesOnRefundsTotal": 9774.7,
+          "subtotal2": 172800.51,
+          "closingBalance": 176488.18,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 176488.18,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2439498-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE12DWN",
+          "shopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+          "createdAt": "2025-12-22 00:07:29",
+          "updatedAt": "2026-01-02 12:38:37",
+          "openingBalance": 0,
+          "itemRevenue": 332258,
+          "shipmentFee": -6230,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -59543.48,
+          "subtotal1": 272714.52,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 272714.52,
+          "closingBalance": 266586.01,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 266586.01,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2394891-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "a9cdf3b6-90c4-4b06-9a43-deb14501325a",
+      "scope": "MARKETPLACE_ACCOUNT:3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE13ZAF",
+          "shopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+          "createdAt": "2025-12-29 01:06:09",
+          "updatedAt": "2026-01-06 09:36:22",
+          "openingBalance": 0,
+          "itemRevenue": 311848,
+          "shipmentFee": -3630,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -53254.67,
+          "subtotal1": 258593.33,
+          "refunds": -18500,
+          "feesOnRefundsTotal": 2775,
+          "subtotal2": 240093.33,
+          "closingBalance": 239368.33,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 239368.33,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2431433-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE13ZAF",
+          "shopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+          "createdAt": "2025-12-22 01:12:49",
+          "updatedAt": "2026-01-02 12:55:27",
+          "openingBalance": 0,
+          "itemRevenue": 316497,
+          "shipmentFee": -4000,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -51474.55,
+          "subtotal1": 265022.45,
+          "refunds": -18500,
+          "feesOnRefundsTotal": 3025,
+          "subtotal2": 246522.45,
+          "closingBalance": 246547.45,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 246547.45,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2394414-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "890819c5-5e6f-4bc4-90f0-eca5572eaa1f",
+      "scope": "MARKETPLACE_ACCOUNT:c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE13XZB",
+          "shopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+          "createdAt": "2025-12-29 00:19:49",
+          "updatedAt": "2026-01-06 09:38:37",
+          "openingBalance": 0,
+          "itemRevenue": 13600,
+          "shipmentFee": -120,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -2568,
+          "subtotal1": 11032,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 11032,
+          "closingBalance": 8527.82,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 8527.82,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2436309-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE13XZB",
+          "shopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+          "createdAt": "2025-12-22 00:59:24",
+          "updatedAt": "2026-01-02 12:35:14",
+          "openingBalance": 0,
+          "itemRevenue": 59397,
+          "shipmentFee": -750,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -9659.55,
+          "subtotal1": 49737.45,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 49737.45,
+          "closingBalance": 47542.38,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 47542.38,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2389799-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "8179243c-1d00-4bbc-8c2e-d5a1270702a0",
+      "scope": "MARKETPLACE_ACCOUNT:c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 0,
+      "statements": []
+    },
+    {
+      "credentialId": "cmk2503xq0000v544ijzuab08",
+      "scope": "MARKETPLACE_ACCOUNT:3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE133G3",
+          "shopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+          "createdAt": "2025-12-29 00:17:25",
+          "updatedAt": "2026-01-06 09:42:56",
+          "openingBalance": 0,
+          "itemRevenue": 212312,
+          "shipmentFee": -5310,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -38951.52,
+          "subtotal1": 173360.48,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 173360.48,
+          "closingBalance": 171407.13,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 171407.13,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2435902-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE133G3",
+          "shopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+          "createdAt": "2025-12-22 01:17:18",
+          "updatedAt": "2026-01-02 12:35:14",
+          "openingBalance": 0,
+          "itemRevenue": 312122,
+          "shipmentFee": -8560,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -58592.9,
+          "subtotal1": 253529.1,
+          "refunds": -13999,
+          "feesOnRefundsTotal": 2349.85,
+          "subtotal2": 239530.1,
+          "closingBalance": 240782.02,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 240782.02,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2389249-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "cb40348d-6bc5-4714-a6a0-7fa08797107c",
+      "scope": "MARKETPLACE_ACCOUNT:447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE12Y26",
+          "shopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+          "createdAt": "2025-12-29 01:03:42",
+          "updatedAt": "2026-01-06 09:47:42",
+          "openingBalance": 0,
+          "itemRevenue": 244361,
+          "shipmentFee": -6720,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -44117.09,
+          "subtotal1": 200243.91,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 200243.91,
+          "closingBalance": 196243.91,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 196243.91,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2434890-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE12Y26",
+          "shopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+          "createdAt": "2025-12-22 00:17:57",
+          "updatedAt": "2026-01-02 12:55:39",
+          "openingBalance": 0,
+          "itemRevenue": 340977,
+          "shipmentFee": -8100,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -60386.52,
+          "subtotal1": 280590.48,
+          "refunds": -9699,
+          "feesOnRefundsTotal": 1704.85,
+          "subtotal2": 270891.48,
+          "closingBalance": 269096.33,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 269096.33,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2393603-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    },
+    {
+      "credentialId": "57b10d78-3ef9-4655-bea8-111b13e1d1e9",
+      "scope": "MARKETPLACE_ACCOUNT:6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "apiBase": "https://vendor-api.jumia.com",
+      "count": 2,
+      "statements": [
+        {
+          "statementNumber": "PS251229KE13LSZ",
+          "shopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+          "createdAt": "2025-12-29 01:08:45",
+          "updatedAt": "2026-01-06 09:42:22",
+          "openingBalance": 0,
+          "itemRevenue": 113485,
+          "shipmentFee": -2000,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -19022.75,
+          "subtotal1": 94462.25,
+          "refunds": -14400,
+          "feesOnRefundsTotal": 2410,
+          "subtotal2": 80062.25,
+          "closingBalance": 82472.25,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 82472.25,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2434300-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        },
+        {
+          "statementNumber": "PS251222KE13LSZ",
+          "shopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+          "createdAt": "2025-12-22 01:11:38",
+          "updatedAt": "2026-01-02 12:57:27",
+          "openingBalance": 0,
+          "itemRevenue": 66134,
+          "shipmentFee": -1210,
+          "shipmentFeeCredit": 0,
+          "otherRevenueTotal": 0,
+          "feesTotal": -10926.1,
+          "subtotal1": 55207.9,
+          "refunds": 0,
+          "feesOnRefundsTotal": 0,
+          "subtotal2": 55207.9,
+          "closingBalance": 55207.9,
+          "guaranteeDeposit": 0,
+          "payout": {
+            "amount": 55207.9,
+            "currency": "KES"
+          },
+          "paid": true,
+          "paymentReference": "2395267-1",
+          "subsidy": 0,
+          "subsidyRefund": 0
+        }
+      ]
+    }
+  ]
+}

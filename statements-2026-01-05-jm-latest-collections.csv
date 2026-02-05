@@ -1,0 +1,2 @@
+accountId,accountDisplayName,statementNumber,weekStart,weekEnd,grossSales,payoutAmount,currency,isPaid,createdAt
+0307b9d2-5971-4abd-ab3b-d75bed0bab74,JM Latest Collections,PS260105KE12DWN,2026-01-04T21:00:00.000Z,2026-01-11T20:59:59.999Z,308921.76,308921.76,KES,false,2026-01-09T12:39:19.342Z

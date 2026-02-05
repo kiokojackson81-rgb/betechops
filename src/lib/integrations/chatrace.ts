@@ -15,6 +15,10 @@ export type SendReceiptToChatraceInput = {
   receiptUrl?: string; // final URL to be written into Chatrace `receipt_url`
   receiptId?: string;
   tagName?: string;
+  skipDefaultTags?: boolean;
+  items?: any[];
+  paymentMethod?: string;
+  attendant?: string;
 };
 
 function checkConfig() {
@@ -36,6 +40,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptUrl,
     receiptId,
     tagName,
+    skipDefaultTags,
   } = input;
   const receiptUrlTrimmed = receiptUrl?.trim();
   const debug: any = {
@@ -52,6 +57,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       baseUrl: BASE_URL,
       accountId: ACCOUNT_ID,
       headerKeys: [],
+      skipDefaultTags: Boolean(skipDefaultTags),
     },
   };
 
@@ -174,21 +180,48 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   }
   actions.push(setFieldValue('receipt_channel', 'customer'));
 
-  actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
-  actions.push({
-    action: 'add_tag',
-    tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
-  });
+  // Map optional richer fields so Chatrace templates can access them
+  if (input.paymentMethod) {
+    actions.push(setFieldValue('payment_method', input.paymentMethod));
+  }
+  if (input.attendant) {
+    actions.push(setFieldValue('attendant', input.attendant));
+  }
+  if (input.items && Array.isArray(input.items)) {
+    try {
+      actions.push(setFieldValue('items', JSON.stringify(input.items)));
+    } catch {
+      actions.push(setFieldValue('items', String(input.items)));
+    }
+  }
+
+  if (!skipDefaultTags) {
+    actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+    actions.push({
+      action: 'add_tag',
+      tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+    });
+  }
+  if (finalTag) {
+    actions.push({
+      action: 'add_tag',
+      tag_name: finalTag,
+    });
+  }
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
     actionsCount: actions.length,
-    tag: 'receipt_created',
-    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+    tag: finalTag || 'receipt_created',
+    debugTag: finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
+    skipDefaultTags: Boolean(skipDefaultTags),
     hasReceiptUrl: !!finalReceiptUrl,
     receiptMode,
     finalReceiptUrlLength: finalReceiptUrl.length,
+    itemsCount: Array.isArray(input.items) ? input.items.length : 0,
+    paymentMethod: input.paymentMethod ?? null,
+    attendant: input.attendant ?? null,
   };
 
   console.info('[chatrace] pushReceipt', {
@@ -201,15 +234,15 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptUrlTrimmedLength: receiptUrlTrimmed?.length ?? 0,
     finalReceiptUrlLength: finalReceiptUrl.length,
     finalReceiptUrlSnippet: finalReceiptUrl.slice(0, 120),
-    tagToApply: 'receipt_created',
-    debugTag: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
+    tagToApply: finalTag || 'receipt_created',
+    debugTag: finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
   });
 
   // summary log for monitoring integrations (phone, final receipt_url, tag, mode)
   console.info('[chatrace] pushSummary', {
     phone: phoneE164,
     receipt_url: finalReceiptUrl,
-    tag: 'receipt_created',
+    tag: finalTag || 'receipt_created',
     receiptMode,
   });
 

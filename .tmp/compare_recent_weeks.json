@@ -1,0 +1,417 @@
+{
+  "generatedAt": "2026-01-06T21:07:10.559Z",
+  "weeks": [
+    {
+      "weekStart": "2026-01-04T21:00:00.000Z",
+      "weekEnd": "2026-01-11T20:59:59.999Z",
+      "aggCount": 13,
+      "weeklySaleCount": 7,
+      "details": [
+        {
+          "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+          "displayName": "Betech Store",
+          "totalPayout": 424086.62,
+          "totalGross": 424086.62,
+          "hasShop": false,
+          "shopId": null,
+          "hasWeeklySale": false
+        },
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 196243.91,
+          "totalGross": 196243.91,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 239368.33,
+          "totalGross": 239368.33,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 14975,
+          "totalGross": 14975,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 54439.93,
+          "totalGross": 54439.93,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 176488.18,
+          "totalGross": 176488.18,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 87666.82,
+          "totalGross": 87666.82,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 8674.15,
+          "totalGross": 8674.15,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 82472.25,
+          "totalGross": 82472.25,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 8527.82,
+          "totalGross": 8527.82,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        }
+      ]
+    },
+    {
+      "weekStart": "2025-12-28T21:00:00.000Z",
+      "weekEnd": "2026-01-04T20:59:59.999Z",
+      "aggCount": 8,
+      "weeklySaleCount": 16,
+      "details": [
+        {
+          "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+          "displayName": "Betech Store",
+          "totalPayout": 424086.62,
+          "totalGross": 424086.62,
+          "hasShop": false,
+          "shopId": null,
+          "hasWeeklySale": false
+        },
+        {
+          "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+          "displayName": "Jude Collection",
+          "totalPayout": 342814.26,
+          "totalGross": 342814.26,
+          "hasShop": true,
+          "shopId": "cmk1kffnn0000v5l8iqi80uqt",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 196243.91,
+          "totalGross": 196243.91,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 239368.33,
+          "totalGross": 239368.33,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 176488.18,
+          "totalGross": 176488.18,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 82472.25,
+          "totalGross": 82472.25,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 8527.82,
+          "totalGross": 8527.82,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        }
+      ]
+    },
+    {
+      "weekStart": "2025-12-21T21:00:00.000Z",
+      "weekEnd": "2025-12-28T20:59:59.999Z",
+      "aggCount": 6,
+      "weeklySaleCount": 6,
+      "details": [
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 266586.01,
+          "totalGross": 266586.01,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 55207.9,
+          "totalGross": 55207.9,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 47542.38,
+          "totalGross": 47542.38,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 269096.33,
+          "totalGross": 269096.33,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 246547.45,
+          "totalGross": 246547.45,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        }
+      ]
+    },
+    {
+      "weekStart": "2025-12-14T21:00:00.000Z",
+      "weekEnd": "2025-12-21T20:59:59.999Z",
+      "aggCount": 6,
+      "weeklySaleCount": 7,
+      "details": [
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 357711.36,
+          "totalGross": 357711.36,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 597042.5,
+          "totalGross": 597042.5,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 408679.6,
+          "totalGross": 408679.6,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 124895.95,
+          "totalGross": 124895.95,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 9601.81,
+          "totalGross": 9601.81,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 0,
+          "totalGross": 0,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        }
+      ]
+    },
+    {
+      "weekStart": "2025-12-07T21:00:00.000Z",
+      "weekEnd": "2025-12-14T20:59:59.999Z",
+      "aggCount": 6,
+      "weeklySaleCount": 14,
+      "details": [
+        {
+          "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "displayName": "Hitech Power",
+          "totalPayout": 315223.99,
+          "totalGross": 315223.99,
+          "hasShop": true,
+          "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "displayName": "Sky Store Ke",
+          "totalPayout": 254504.11,
+          "totalGross": 254504.11,
+          "hasShop": true,
+          "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "displayName": "JM Latest Collections",
+          "totalPayout": 359881.19,
+          "totalGross": 359881.19,
+          "hasShop": true,
+          "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "displayName": "Betech Solar Solution",
+          "totalPayout": 80648.39,
+          "totalGross": 80648.39,
+          "hasShop": true,
+          "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "displayName": "Maxton Enterprise",
+          "totalPayout": 37000.45,
+          "totalGross": 37000.45,
+          "hasShop": true,
+          "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+          "hasWeeklySale": true
+        },
+        {
+          "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "displayName": "LabTech Kenya",
+          "totalPayout": 12501.28,
+          "totalGross": 12501.28,
+          "hasShop": true,
+          "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+          "hasWeeklySale": true
+        }
+      ]
+    },
+    {
+      "weekStart": "2025-11-30T21:00:00.000Z",
+      "weekEnd": "2025-12-07T20:59:59.999Z",
+      "aggCount": 0,
+      "weeklySaleCount": 7,
+      "details": []
+    },
+    {
+      "weekStart": "2025-11-23T21:00:00.000Z",
+      "weekEnd": "2025-11-30T20:59:59.999Z",
+      "aggCount": 0,
+      "weeklySaleCount": 8,
+      "details": []
+    },
+    {
+      "weekStart": "2025-11-16T21:00:00.000Z",
+      "weekEnd": "2025-11-23T20:59:59.999Z",
+      "aggCount": 0,
+      "weeklySaleCount": 7,
+      "details": []
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "applied": true,
+  "generatedAt": "2026-01-10T14:24:20.321Z",
+  "entries": [
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk2lb4c30001v52kse7olz1w",
+      "removedIds": [
+        "cmk4aghov001fjj04fwxj8uuf"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:303a17e3-f7e0-40fd-9adc-aa0a6820f90d:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1eqr0n000nv5lcf0ez3yhq",
+      "removedIds": [
+        "cmk4al406002fjj04yy3i1ywg"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:3a4cc676-3432-43a1-b05c-82c935aedee1:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1eqqka000lv5lc0i9ld9e2",
+      "removedIds": [
+        "cmk5s3k4o0033l2044znoekux"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:3a4cc676-3432-43a1-b05c-82c935aedee1:2026-01-05"
+      ]
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk2lb4x80003v52kn2utsj8o",
+      "removedIds": [
+        "cmk5s64we0055jo04mjzai3k4",
+        "cmk4ambeu003xjj04gk328s7q",
+        "cmk8e5v0j0001v5mwntr2x8yx"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:3ad790b3-e827-49e2-b1a1-4fb978c9b577:2025-12-29",
+        "AUTO:3ad790b3-e827-49e2-b1a1-4fb978c9b577:2026-01-04",
+        "PS260105KE133G3"
+      ]
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1eqoi6000dv5lc496c1ifz",
+      "removedIds": [
+        "cmk4ah4ag001xjj04w0v9digj"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:447747f0-ed55-4794-b8a6-e492183ba9a0:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1eqoal000bv5lc3cybtua2",
+      "removedIds": [
+        "cmk5s1038002dl204v40i3t58"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:447747f0-ed55-4794-b8a6-e492183ba9a0:2026-01-05"
+      ]
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1eqyd5001hv5lc5g59d3te",
+      "removedIds": [
+        "cmk4ag9ev000zjj04v84udag7"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:6e1186af-a6b3-4eb6-9547-1038733c3306:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1eqy1t001fv5lcooxv3fpc",
+      "removedIds": [
+        "cmk5rzpct000tl204vj5phoh6"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:6e1186af-a6b3-4eb6-9547-1038733c3306:2026-01-05"
+      ]
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1eqw5i0017v5lc9yj2jfiv",
+      "removedIds": [
+        "cmk4ag9ej000vjj047oy47fxs"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:9257651a-3d68-4e88-b330-6cc53afb4cfc:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1eqvr90015v5lclx4hxjlr",
+      "removedIds": [
+        "cmk5rzpd00011l2048e94na5h"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:9257651a-3d68-4e88-b330-6cc53afb4cfc:2026-01-05"
+      ]
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1er0i0001rv5lcu3u7967c",
+      "removedIds": [
+        "cmk5s4u0z004fl204ix2b2w16",
+        "cmk4am8vs003fjj04rzkpn7m9"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:c4a9b0c1-1bd4-4575-bb0f-125997838914:2025-12-29",
+        "AUTO:c4a9b0c1-1bd4-4575-bb0f-125997838914:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1er07j001pv5lc8cf6otkw",
+      "removedIds": [
+        "cmk5s4u18004jl20425ob9vq9"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:c4a9b0c1-1bd4-4575-bb0f-125997838914:2026-01-05"
+      ]
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "canonicalWeekStart": "2025-12-28T21:00:00.000Z",
+      "keeperId": "cmk1eqtml000xv5lcp3wep71a",
+      "removedIds": [
+        "cmk5s4t7p003pl20488jbx31g",
+        "cmk4am7zd002xjj04wdts54ga"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:c6847a48-c9d8-45b9-b87b-2e22102ab4ab:2025-12-29",
+        "AUTO:c6847a48-c9d8-45b9-b87b-2e22102ab4ab:2026-01-04"
+      ]
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "canonicalWeekStart": "2026-01-04T21:00:00.000Z",
+      "keeperId": "cmk1eqte0000vv5lc408vmbbe",
+      "removedIds": [
+        "cmk5s4t7z003tl2044wthf1p0"
+      ],
+      "removedStatementNumbers": [
+        "AUTO:c6847a48-c9d8-45b9-b87b-2e22102ab4ab:2026-01-05"
+      ]
+    }
+  ]
+}

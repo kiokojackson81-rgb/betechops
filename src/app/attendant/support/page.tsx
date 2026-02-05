@@ -9,7 +9,8 @@ import Card from "@/app/_components/Card";
 import SensitiveValue from "@/components/SensitiveValue";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
+import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
@@ -98,8 +99,10 @@ export default function SupportOpsPage() {
   const [earningsSummary, setEarningsSummary] = useState<SupportEarningsSummary | null>(
     null,
   );
-
-  const tradingPeriodLabel = useMemo(() => getTradingPeriodFor(new Date()).label, []);
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const selectedPeriodKey = selectedPeriod.key;
+  const tradingPeriodLabel = selectedPeriod.label;
 
   // Guard route for support attendants
   useEffect(() => {
@@ -136,9 +139,11 @@ export default function SupportOpsPage() {
 
   const fetchSummaries = useCallback(async () => {
     try {
+      const summaryParams = new URLSearchParams({ periodKey: selectedPeriodKey });
+      const earningsParams = new URLSearchParams({ periodKey: selectedPeriodKey });
       const [summaryRes, earningsRes] = await Promise.all([
-        fetch("/api/support/report/summary", { credentials: "same-origin" }),
-        fetch("/api/support/earnings/summary", { credentials: "same-origin" }),
+        fetch(`/api/support/report/summary?${summaryParams.toString()}`, { credentials: "same-origin" }),
+        fetch(`/api/support/earnings/summary?${earningsParams.toString()}`, { credentials: "same-origin" }),
       ]);
       if (summaryRes.ok) {
         const data = (await summaryRes.json().catch(() => null)) as
@@ -155,7 +160,7 @@ export default function SupportOpsPage() {
     } catch {
       // no-op; UI already reflects optimistic data
     }
-  }, []);
+  }, [selectedPeriodKey]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -304,6 +309,23 @@ export default function SupportOpsPage() {
             Log out
           </button>
         </header>
+
+        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
+              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
+              {selectedPeriodKey !== currentPeriod.key && (
+                <p className="text-xs text-amber-300">Showing archived period.</p>
+              )}
+            </div>
+            <PeriodSwitcher
+              currentPeriod={currentPeriod}
+              selectedPeriod={selectedPeriod}
+              onSelectPeriod={setSelectedPeriod}
+            />
+          </div>
+        </div>
 
         <Card className="border-slate-800 bg-slate-950/70">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

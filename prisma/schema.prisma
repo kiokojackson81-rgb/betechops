@@ -330,17 +330,20 @@ model Shop {
   assignments          ShopAssignment[]
   userAssignments      UserShop[]
   weeklySales          WeeklySale[]
+  jumiaShopSid         String?
   managers             User[]                @relation("ManagedBy")
+
+  @@unique([platform, jumiaShopSid])
 }
 
 /// WeeklySale records aggregate the total sales for a given attendant (user) and shop
-/// over a Monday→Saturday week. Each record can be marked as PENDING or PAID.
+/// over a Monday→Sunday week. Each record can be marked as PENDING or PAID.
 model WeeklySale {
   id         String           @id @default(cuid())
   shopId     String?
   userId     String?
-  weekStart  DateTime
-  weekEnd    DateTime
+  weekStart  DateTime @db.Timestamptz(0)
+  weekEnd    DateTime @db.Timestamptz(3)
   amount     Decimal          @db.Decimal(12, 2)
   createdAt  DateTime         @default(now())
   platform   Platform
@@ -966,8 +969,8 @@ model MarketplacePayoutWeek {
   id              String             @id @default(cuid())
   accountId       String
   statementNumber String
-  weekStart       DateTime
-  weekEnd         DateTime
+  weekStart       DateTime @db.Timestamptz(0)
+  weekEnd         DateTime @db.Timestamptz(3)
   grossSales      Decimal            @db.Decimal(14, 2)
   payoutAmount    Decimal            @db.Decimal(14, 2)
   currency        String             @default("KES")
@@ -978,6 +981,7 @@ model MarketplacePayoutWeek {
   account         MarketplaceAccount @relation(fields: [accountId], references: [id])
 
   @@unique([accountId, statementNumber])
+  @@unique([statementNumber, weekStart])
   @@index([accountId, weekEnd])
 }
 
@@ -1014,15 +1018,16 @@ model MarketplaceOrder {
 }
 
 model ProfitEvent {
-  id               String          @id @default(cuid())
-  marketplaceOrderId String
-  type             ProfitEventType
-  amount           Decimal         @db.Decimal(14, 2)
-  createdAt        DateTime        @default(now())
-  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
+    id               String          @id @default(cuid())
+    marketplaceOrderId String
+    type             ProfitEventType
+    amount           Decimal         @db.Decimal(14, 2)
+    createdAt        DateTime        @default(now())
+    marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
 
-  @@index([marketplaceOrderId])
-}
+    @@index([marketplaceOrderId])
+    @@unique([marketplaceOrderId, type])
+  }
 
 model MarketplacePricingTemplate {
   id                    String   @id @default(cuid())

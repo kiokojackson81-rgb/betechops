@@ -12,8 +12,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { pushInternalReceiptAlert } from "@/lib/chatraceInternalFixed";
-import { extractItemsShort, extractReceiptTotalKES } from "@/lib/receiptExtract";
+import { getSiteUrl, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
@@ -110,10 +109,11 @@ export async function GET(req: NextRequest) {
   const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
-  const wantsMine = requestedScope === "mine" || isImpersonating || issuerOnly === true;
   const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  // Rules: impersonating forces mine; otherwise admins/supervisors may request global explicitly
-  const scope = isImpersonating ? "mine" : (wantsGlobal && canGlobal ? "global" : "mine");
+  const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
+  const allowGlobalScope = specialGlobalViewer || (wantsGlobal && canGlobal);
+  // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
+  const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
@@ -128,6 +128,18 @@ export async function GET(req: NextRequest) {
       and.push({ issuedById: attendantId });
     } else {
       and.push({ OR: ownerOr });
+    }
+  }
+
+  // Optional filter: customerType=pod to show POD receipts only, with optional status filter
+  const customerType = url.searchParams.get('customerType') || undefined;
+  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
+  if (customerType === 'pod') {
+    if (podStatus) {
+      and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
+    } else {
+      // any receipt that has podDelivery metadata
+      and.push({ data: { path: ['podDelivery'], not: { equals: null } } });
     }
   }
 
@@ -155,22 +167,28 @@ export async function GET(req: NextRequest) {
       })
     : [];
 
-  const mapPosRow = (r: any) => ({
-    id: r.id,
-    source: "pos" as const,
-    orderRef: r.order?.orderNumber,
-    docType: r.docType,
-    createdAt: r.generatedAt,
-    customerName: r.order?.customerName,
-    customerPhone: (r.order as any)?.customerPhone ?? null,
-    total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
-    attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
-    status: r.order?.status ?? r.order?.paymentStatus ?? null,
-    items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
-    paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
-    paymentStatus: (r.order as any)?.paymentStatus ?? null,
-    detailUrl: `/receipts/${r.id}`,
-  });
+  const mapPosRow = (r: any) => {
+    const podDeliveryData = (r.data as any)?.podDelivery;
+    return {
+      id: r.id,
+      source: "pos" as const,
+      orderRef: r.order?.orderNumber,
+      docType: r.docType,
+      createdAt: r.generatedAt,
+      customerName: r.order?.customerName,
+      customerPhone: (r.order as any)?.customerPhone ?? null,
+      total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
+      attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
+      status: r.order?.status ?? r.order?.paymentStatus ?? null,
+      items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
+      paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
+      paymentStatus: (r.order as any)?.paymentStatus ?? null,
+      detailUrl: `/receipts/${r.id}`,
+      isPodDelivery: Boolean(podDeliveryData?.status),
+      podDeliveryStatus: podDeliveryData?.status ?? null,
+      podDeliveryNote: podDeliveryData?.note ?? null,
+    };
+  };
 
   const mapMarketingRow = (receipt: any) => ({
     id: `marketing-${receipt.id}`,
@@ -325,6 +343,7 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = (await req.json()) as any;
+  const isPodDelivery = Boolean(payload?.podDelivery);
   const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber
@@ -366,8 +385,26 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
+      const entryDateIso = entryDate.toISOString();
+      const metadataFromPayload =
+        payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined);
+      const podMetadata = isPodDelivery
+        ? {
+            ...(metadataFromPayload ?? {}),
+            podDelivery: {
+              status: 'pending',
+              type: 'pay_on_delivery',
+              note: payload?.podDelivery?.note ?? null,
+              createdAt: entryDateIso,
+              createdById: issuedById ?? null,
+            },
+          }
+        : metadataFromPayload;
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
+      const orderStatus = docType === "LAYAWAY" ? "PENDING" : isPodDelivery ? "PENDING" : "COMPLETED";
+      const orderPaymentStatus = docType === "LAYAWAY" ? "PARTIAL" : isPodDelivery ? "UNPAID" : "PAID";
+      const paidAmountValue = docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -409,12 +446,12 @@ export async function POST(req: NextRequest) {
           customerEmail: payload?.customerEmail ?? null,
           attendantId: attendantId ?? null,
           // persist deliveryAddress inside `metadata` JSON to avoid schema mismatch
-          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
+          metadata: podMetadata,
           shopId,
-          status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
-          paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
+          status: orderStatus,
+          paymentStatus: orderPaymentStatus,
           totalAmount: Number(total) || 0,
-          paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || 0,
+          paidAmount: paidAmountValue,
           // metadata already set above (may include deliveryAddress)
         },
         update: {
@@ -423,11 +460,11 @@ export async function POST(req: NextRequest) {
           customerEmail: payload?.customerEmail ?? undefined,
           attendantId: attendantId ?? undefined,
           // merge/update metadata to include deliveryAddress when present
-          metadata: payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined),
+          metadata: podMetadata,
           totalAmount: Number(total) || undefined,
-          paidAmount: docType === "LAYAWAY" ? deposit : Number(total) || undefined,
-          status: docType === "LAYAWAY" ? "PENDING" : "COMPLETED",
-          paymentStatus: docType === "LAYAWAY" ? "PARTIAL" : "PAID",
+          paidAmount: paidAmountValue,
+          status: orderStatus,
+          paymentStatus: orderPaymentStatus,
           // metadata already set above (may include deliveryAddress)
         },
       });
@@ -585,6 +622,17 @@ export async function POST(req: NextRequest) {
           attendantId,
           issuedById,
           items,
+          ...(isPodDelivery
+            ? {
+                podDelivery: {
+                  status: 'pending',
+                  type: 'pay_on_delivery',
+                  note: payload?.podDelivery?.note ?? null,
+                  createdAt: entryDateIso,
+                  createdById: issuedById ?? null,
+                },
+              }
+            : {}),
         },
       } as any;
 
@@ -633,17 +681,32 @@ export async function POST(req: NextRequest) {
       // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          await tx.commissionEarning.createMany({
-            data: createdOrderItems.map((it) => ({
-              staffId: attendantId,
-              orderItemId: it.id,
-              basis: "gross",
-              qty: it.quantity,
-              amount: 0,
-              status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
-              calcDetail: { reason: "receipt_seed", total },
-            })),
-          });
+          if (!isPodDelivery) {
+            await tx.commissionEarning.createMany({
+              data: createdOrderItems.map((it) => ({
+                staffId: attendantId,
+                orderItemId: it.id,
+                basis: "gross",
+                qty: it.quantity,
+                amount: 0,
+                status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
+                calcDetail: { reason: "receipt_seed", total },
+              })),
+            });
+          } else {
+            // For POD receipts, seed earnings as PENDING so no immediate releases occur
+            await tx.commissionEarning.createMany({
+              data: createdOrderItems.map((it) => ({
+                staffId: attendantId,
+                orderItemId: it.id,
+                basis: "gross",
+                qty: it.quantity,
+                amount: 0,
+                status: "PENDING",
+                calcDetail: { reason: "receipt_seed_pod", total },
+              })),
+            });
+          }
         } catch (e) {
           // ignore if tx mock doesn't implement commissionEarning
         }
@@ -865,20 +928,29 @@ export async function POST(req: NextRequest) {
       // Seed CommissionEarning rows (gross-based) for this order's items; recompute jobs can overwrite
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          const perItemEarnings = createdOrderItems.map((it) => {
-            const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
-            const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
-            return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status, calcDetail: { reason: "receipt_seed", total } };
-          });
-          await tx.commissionEarning.createMany({ data: perItemEarnings });
+          if (!isPodDelivery) {
+            const perItemEarnings = createdOrderItems.map((it) => {
+              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
+              const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
+              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status, calcDetail: { reason: "receipt_seed", total } };
+            });
+            await tx.commissionEarning.createMany({ data: perItemEarnings });
 
-          // If immediate threshold hit, also release commission record now
-          if (total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
-            try {
-              await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
-            } catch (e) {
-              // ignore in partial mocks
+            // If immediate threshold hit, also release commission record now
+            if (total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
+              try {
+                await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
+              } catch (e) {
+                // ignore in partial mocks
+              }
             }
+          } else {
+            // For POD receipts, create per-item earnings but leave as PENDING (no immediate releases)
+            const perItemEarnings = createdOrderItems.map((it) => {
+              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
+              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status: "PENDING", calcDetail: { reason: "receipt_seed_pod", total } };
+            });
+            await tx.commissionEarning.createMany({ data: perItemEarnings });
           }
         } catch (e) {
           // ignore commission earnings in partial tx mocks
@@ -897,8 +969,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Optionally release immediately if threshold met
-      if (Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
+      // Optionally release immediately if threshold met (skip for POD receipts)
+      if (!isPodDelivery && Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
         const { period, tiers } = await getOrCreateCommissionPeriod(new Date());
         const totalsAgg = await tx.order.aggregate({
           where: { attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: "COMPLETED" },
@@ -961,32 +1033,67 @@ export async function POST(req: NextRequest) {
       console.warn("[receipts] failed to publish summary update", err);
     }
 
-    console.info(`[receiptSender][${requestId}] START send pipeline`);
-    let sendResult;
-    try {
-      sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
-      console.info(`[receiptSender][${requestId}] SEND:ok`, {
-        channelStatus: sendResult.channelStatus,
-      });
-    } catch (sendErr) {
-      console.error(`[receiptSender][${requestId}] SEND:error`, sendErr);
-      sendResult = {
-        ok: false,
-        sent: [],
-        errors: [{ channel: 'send', error: String(sendErr) }],
-        channelStatus: {},
-      };
-    }
-
-    const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
-    if (pdfForInternal) {
+    let sendResult: any = null;
+    if (!isPodDelivery) {
+      console.info(`[receiptSender][${requestId}] START send pipeline`);
       try {
-        await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
-      } catch (internalErr) {
-        console.error("[receipts] failed to notify internal ops", internalErr);
+        sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
+        console.info(`[receiptSender][${requestId}] SEND:ok`, {
+          channelStatus: sendResult.channelStatus,
+        });
+      } catch (sendErr) {
+        console.error(`[receiptSender][${requestId}] SEND:error`, sendErr);
+        sendResult = {
+          ok: false,
+          sent: [],
+          errors: [{ channel: 'send', error: String(sendErr) }],
+          channelStatus: {},
+        };
+      }
+
+      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
+      if (pdfForInternal) {
+        try {
+          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+        } catch (internalErr) {
+          console.error("[receipts] failed to notify internal ops", internalErr);
+        }
+      } else {
+        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
       }
     } else {
-      console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
+      // For POD receipts, still trigger an immediate WhatsApp via Chatrace at
+      // creation time (whatsapp-only). This sends using the POD dispatch tag and
+      // skips default tags so downstream routing can treat it as a POD event.
+      console.info(`[receiptSender][${requestId}] START send pipeline (pod_delivery)`);
+      try {
+        sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp'], {
+          requestId,
+          chatraceTag: 'betech_dispatch_pay_on_delivery',
+          skipDefaultChatraceTags: true,
+          markPodSent: true,
+        });
+        console.info(`[receiptSender][${requestId}] SEND:ok`, { channelStatus: sendResult.channelStatus });
+      } catch (sendErr) {
+        console.error(`[receiptSender][${requestId}] SEND:error (pod)`, sendErr);
+        sendResult = {
+          ok: false,
+          sent: [],
+          errors: [{ channel: 'send', error: String(sendErr) }],
+          channelStatus: {},
+        };
+      }
+
+      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
+      if (pdfForInternal) {
+        try {
+          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+        } catch (internalErr) {
+          console.error("[receipts] failed to notify internal ops (pod)", internalErr);
+        }
+      } else {
+        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf (pod)`);
+      }
     }
 
     return NextResponse.json({ ok: true, ...result, send: sendResult });
@@ -996,108 +1103,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function notifyInternalReceipt(receiptId: string, docType?: string, requestId?: string, receiptUrl?: string) {
-  if (docType && docType !== "RECEIPT") return;
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
-  }
-  const receipt = await prisma.receipt.findUnique({
-    where: { id: receiptId },
-    include: {
-      issuedBy: { select: { name: true, email: true } },
-      order: {
-        select: {
-          orderNumber: true,
-          attendant: { select: { name: true } },
-        },
-      },
-    },
-  });
-  if (!receipt) return;
-
-  const receiptNumberValue =
-    (typeof receipt.totals === "object" && receipt.totals
-      ? (receipt.totals as Record<string, any>).receiptNumber
-      : null) ||
-    (typeof receipt.data === "object" && receipt.data
-      ? (receipt.data as Record<string, any>).receiptNumber
-      : null) ||
-    receipt.order?.orderNumber;
-  const receiptNumber = String(receiptNumberValue || receipt.orderId || receipt.id);
-
-  const snapshot: any =
-    typeof receipt.data === "object" && receipt.data
-      ? { ...(receipt.data as Record<string, unknown>) }
-      : { order: receipt.order, totals: receipt.totals };
-  if (!snapshot.attendantName) {
-    snapshot.attendantName =
-      receipt.order?.attendant?.name ??
-      receipt.issuedBy?.name ??
-      receipt.issuedBy?.email ??
-      "(unknown)";
-  }
-
-  const amountKES = extractReceiptTotalKES(receipt as any);
-  const invoiceAmount = Number.isFinite(amountKES) ? amountKES : 0;
-  const paymentMethod = String(
-    (typeof receipt.data === "object" && receipt.data
-      ? (receipt.data as Record<string, any>).paymentMethod
-      : null) ||
-      (typeof receipt.totals === "object" && receipt.totals
-        ? (receipt.totals as Record<string, any>).paymentMethod
-        : null) ||
-      ""
-  )
-    .trim();
-
-  const staffName =
-    receipt.issuedBy?.name ||
-    receipt.issuedBy?.email ||
-    "(unknown)";
-
-  const itemsShort = extractItemsShort(receipt as any);
-  const baseUrl =
-    (process.env.BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "https://ops.betech.co.ke").replace(
-      /\/$/,
-      ""
-    );
-  const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
-
-  const rid = requestId || randomUUID();
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
-  }
-  const receiptLinkSafe = (receiptLink && receiptLink.trim()) || `https://ops.betech.co.ke/receipts/${receiptId}`;
-  console.info('[receipts][internal] attempting push', { receiptId, rid });
-  const result = await pushInternalReceiptAlert({
-    requestId: rid,
-    receiptNumber,
-    amount: String(Math.round(invoiceAmount)),
-    paymentMethod,
-    createdBy: snapshot.attendantName ?? "(unknown)",
-    itemsText: itemsShort,
-    receiptLink: receiptLinkSafe,
-    receiptPdfUrl: null,
-  });
-  console.info('[receipts][internal] push result', {
-    ok: result?.ok,
-    rid: result?.debug?.rid ?? null,
-    enabled: result?.debug?.enabled ?? null,
-    env: result?.debug?.env ?? null,
-    status: result?.debug?.steps?.createOrUpdate?.status ?? null,
-    stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
-    snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
-    json: result?.debug?.steps?.createOrUpdate?.json ?? null,
-    rawHead: result?.debug?.steps?.createOrUpdate?.raw ? (result.debug.steps.createOrUpdate.raw.length > 400 ? result.debug.steps.createOrUpdate.raw.slice(0, 400) : result.debug.steps.createOrUpdate.raw) : null,
-  });
-  if (!result?.ok) {
-    try {
-      console.error('[receipts][internal] push failed', result?.debug ?? result);
-    } catch (logErr) {
-      console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
-    }
-  }
-  if (requestId) {
-    console.info(`[receiptSender][${requestId}] INTERNAL:ok`);
-  }
-}

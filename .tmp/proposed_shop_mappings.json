@@ -1,0 +1,104 @@
+{
+  "proposals": [
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "jumiaShopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+      "displayName": "Betech Store",
+      "candidates": [
+        {
+          "shop": {
+            "id": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+            "name": "Betech Solar Solution",
+            "location": null,
+            "phone": null,
+            "email": null,
+            "isActive": true,
+            "createdAt": "2026-01-05T18:26:16.922Z",
+            "updatedAt": "2026-01-06T19:21:11.635Z",
+            "platform": "JUMIA",
+            "credentialsEncrypted": null,
+            "disableAutoSync": false,
+            "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc"
+          },
+          "methods": [
+            "name-contains-Betech",
+            "fuzzy-name-overlap"
+          ],
+          "meta": {}
+        },
+        {
+          "shop": {
+            "id": "cmjab1irk0000l704ol1hslnx",
+            "name": "Betech Solar Solution",
+            "location": null,
+            "phone": null,
+            "email": null,
+            "isActive": true,
+            "createdAt": "2025-12-17T17:48:03.009Z",
+            "updatedAt": "2025-12-17T17:48:03.009Z",
+            "platform": "JUMIA",
+            "credentialsEncrypted": null,
+            "disableAutoSync": false,
+            "jumiaShopSid": null
+          },
+          "methods": [
+            "name-contains-Betech",
+            "fuzzy-name-overlap"
+          ],
+          "meta": {}
+        }
+      ]
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "jumiaShopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+      "displayName": "Jude Collection",
+      "candidates": [
+        {
+          "shop": {
+            "id": "cmk1kffnn0000v5l8iqi80uqt",
+            "name": "JUDE COLLECTIONS",
+            "location": null,
+            "phone": null,
+            "email": null,
+            "isActive": true,
+            "createdAt": "2026-01-05T19:40:35.460Z",
+            "updatedAt": "2026-01-05T19:40:35.460Z",
+            "platform": "JUMIA",
+            "credentialsEncrypted": null,
+            "disableAutoSync": false,
+            "jumiaShopSid": null
+          },
+          "methods": [
+            "name-contains-Jude",
+            "name-contains-Collection",
+            "fuzzy-name-overlap"
+          ],
+          "meta": {}
+        },
+        {
+          "shop": {
+            "id": "cmk27p94e0000v52gvemg0by6",
+            "name": "Jude Collection",
+            "location": null,
+            "phone": null,
+            "email": null,
+            "isActive": true,
+            "createdAt": "2026-01-06T06:32:04.718Z",
+            "updatedAt": "2026-01-06T06:32:04.718Z",
+            "platform": "JUMIA",
+            "credentialsEncrypted": null,
+            "disableAutoSync": false,
+            "jumiaShopSid": null
+          },
+          "methods": [
+            "name-contains-Jude",
+            "name-contains-Collection",
+            "fuzzy-name-overlap"
+          ],
+          "meta": {}
+        }
+      ]
+    }
+  ]
+}

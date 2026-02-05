@@ -5,6 +5,7 @@ import { WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
 import { computeDirectCommission } from "@/lib/onlineCommission";
@@ -174,12 +175,10 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   const [directStats, payoutWeeks, onlineOrdersCount, earnings, weeklyManual, commissionConfig] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
-      ? prisma.marketplacePayoutWeek.findMany({
-          where: {
-            accountId: { in: accountIds },
-            weekEnd: { gte: period.start, lte: period.end },
-          },
-        })
+      ? (async () => {
+          const aggs = await recomputeWeeklySummary(period.start, period.end);
+          return aggs.filter((a) => accountIds.includes(a.accountId));
+        })()
       : Promise.resolve([]),
     accountIds.length
       ? prisma.marketplaceOrder.count({
@@ -196,7 +195,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
 
   const ledger = await findPreferredCommissionLedger(attendantId, period);
 
-  const payoutSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
+  const payoutSales = payoutWeeks.reduce((sum, w) => sum + Number((w as any).totalGross ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
   const marketplaceSales = payoutSales + weeklyManualSales;
   const totalTrackedSales = directStats.sales + marketplaceSales;
@@ -261,12 +260,10 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     accountIds.length
-      ? prisma.marketplacePayoutWeek.findMany({
-          where: {
-            accountId: { in: accountIds },
-            weekEnd: { gte: period.start, lte: period.end },
-          },
-        })
+      ? (async () => {
+          const aggs = await recomputeWeeklySummary(period.start, period.end);
+          return aggs.filter((a) => accountIds.includes(a.accountId));
+        })()
       : Promise.resolve([]),
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
     prisma.attendantPayrollAdjustment.findMany({
@@ -283,7 +280,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
   ]);
 
-  const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number(w.grossSales ?? 0), 0);
+  const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number((w as any).totalGross ?? 0), 0);
   const weeklyManualSales = weeklyManual.totalSales;
   const combinedDirectSales = directStats.sales + weeklyManualSales;
   const combinedDirectProfit = directStats.profit;

@@ -61,8 +61,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [deliveryAddress, setDeliveryAddress] = useState<string | undefined>(undefined);
   const [addressLoading, setAddressLoading] = useState(false);
   const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
-  const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "">("");
+  const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
+  const [podNote, setPodNote] = useState<string>("");
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
@@ -287,7 +288,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     });
   };
 
-  const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery") => {
+  const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery" | "pod") => {
     setCustomerType(type);
     if (type === "delivery") {
       // ensure address input is visible for delivery customers
@@ -295,6 +296,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     if (type !== "delivery") {
       setDeliveryStatus("pending");
+    }
+    if (type !== "pod") {
+      setPodNote("");
+    } else {
+      setShowAddressInput(true);
     }
   };
 
@@ -385,17 +391,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
     setSaving(true);
     try {
-        const payload = {
-          docType: docType.toLowerCase(),
-          serial,
-          date: new Date().toISOString(),
-          customerName,
-          customerPhone,
-          deliveryAddress: deliveryAddress || undefined,
-          attendantId: staffId,
-          issuedById: staffId,
-          attendantName: selectedStaff?.name || "",
-          taxRate: normalizedTaxRate,
+      const payload = {
+        docType: docType.toLowerCase(),
+        serial,
+        date: new Date().toISOString(),
+        customerName,
+        customerPhone,
+        deliveryAddress: deliveryAddress || undefined,
+        attendantId: staffId,
+        issuedById: staffId,
+        attendantName: selectedStaff?.name || "",
+        taxRate: normalizedTaxRate,
         showTax,
         discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
@@ -403,6 +409,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         paymentMethod: resolvedPaymentMethod,
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
+        podDelivery: customerType === "pod" ? { note: podNote || "" } : undefined,
         notes,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
@@ -539,7 +546,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs uppercase tracking-wide text-slate-400">Customer type*</span>
-        {(["walk-in", "online", "delivery"] as const).map((type) => (
+        {(["walk-in", "online", "delivery", "pod"] as const).map((type) => (
           <button
             key={type}
             type="button"
@@ -548,7 +555,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               customerType === type ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
             }`}
           >
-            {type.replace("-", " ")}
+            {type === "pod" ? "POD (pay on delivery)" : type.replace("-", " ")}
           </button>
         ))}
       </div>
@@ -574,6 +581,21 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             <p className="text-xs text-rose-300">Failed deliveries are recorded but cannot be submitted.</p>
           )}
         </>
+      )}
+      {customerType === "pod" && (
+        <div className="mt-3 space-y-2 rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-wide text-yellow-300">Pay on delivery note</p>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-yellow-300">Outside Nairobi</span>
+          </div>
+          <textarea
+            value={podNote}
+            onChange={(e) => setPodNote(e.target.value)}
+            placeholder="Add any pickup or delivery instructions for POD customers"
+            className="w-full rounded-xl border border-yellow-500/30 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+            rows={3}
+          />
+        </div>
       )}
 
       <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">

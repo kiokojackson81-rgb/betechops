@@ -1,0 +1,117 @@
+{
+  "generatedAt": "2026-01-06T10:28:16.860Z",
+  "processed": 8,
+  "report": [
+    {
+      "id": "a840db92-3811-4114-a890-ad0329900f53",
+      "displayName": "LabTech Kenya",
+      "jumiaShopSid": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "06d02077-8845-4511-ac40-c4fae7507f19",
+      "displayName": "Jude Collection",
+      "jumiaShopSid": null,
+      "deps": {
+        "assignments": 0,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": true
+    },
+    {
+      "id": "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+      "displayName": "Hitech Power",
+      "jumiaShopSid": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "fad5155d-4223-4b58-bec6-87f7a5690c37",
+      "displayName": "Betech Solar Solution",
+      "jumiaShopSid": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+      "displayName": "Betech Store",
+      "jumiaShopSid": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "deps": {
+        "assignments": 1,
+        "orders": 1,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+      "displayName": "JM Latest Collections",
+      "jumiaShopSid": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "287e8f61-b92e-4463-afea-f855fa125bfb",
+      "displayName": "Sky Store Ke",
+      "jumiaShopSid": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    },
+    {
+      "id": "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+      "displayName": "Maxton Enterprise",
+      "jumiaShopSid": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "deps": {
+        "assignments": 1,
+        "orders": 0,
+        "payoutWeeks": 0,
+        "returns": 0,
+        "apiCredentials": 0
+      },
+      "deleted": false,
+      "reason": "has_dependent_rows"
+    }
+  ]
+}

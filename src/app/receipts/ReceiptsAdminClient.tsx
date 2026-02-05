@@ -7,6 +7,7 @@ import ReceiptsSummary from "./list/ReceiptsSummary";
 import RowActions from "./list/RowActions";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRow = {
   id: string;
@@ -22,6 +23,9 @@ type ReceiptRow = {
   paymentStatus?: string | null;
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
+  isPodDelivery?: boolean;
+  podDeliveryStatus?: string | null;
+  podDeliveryNote?: string | null;
 };
 
 type ReceiptSummary = {
@@ -38,6 +42,8 @@ type FilterState = {
   end: string;
   attendantId: string;
   paymentMethod: "MPESA" | "CASH" | "";
+  customerType?: string;
+  podStatus?: string;
 };
 
 type PaymentTotals = {
@@ -47,7 +53,7 @@ type PaymentTotals = {
 
 type StaffOption = { id: string; name: string };
 
-type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom";
+type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom" | "trading-period";
 
 type SupportItemDetail = {
   id: string;
@@ -162,6 +168,8 @@ const makeDefaultFilters = (): FilterState => {
     end: formatDateInput(end),
     attendantId: "",
     paymentMethod: "",
+    customerType: undefined,
+    podStatus: undefined,
   };
 };
 
@@ -331,13 +339,6 @@ export default function ReceiptsAdminClient({
     };
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [sseEnabled, setSseEnabled] = useState(false);
-  // Start with SSE turned off by default to avoid unexpected snapshot reloads
-  // flipping the UI; users can opt-in via the toggle in the UI.
-  const [sseOn, setSseOn] = useState<boolean>(false); // user preference: use SSE when supported
-  const [sseStatus, setSseStatus] = useState<"connected" | "reconnecting" | "fallback" | "closed">("fallback");
-  const sseRetryRef = useRef(0);
-  const sseEsRef = useRef<EventSource | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -359,6 +360,7 @@ export default function ReceiptsAdminClient({
   });
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [podActionId, setPodActionId] = useState<string | null>(null);
   const firstLoadRef = useRef(true);
   const STORAGE_KEYS = {
     attendantId: "receipts.attendantId.v1",
@@ -397,7 +399,8 @@ export default function ReceiptsAdminClient({
         savedQuick === "today" ||
         savedQuick === "yesterday" ||
         savedQuick === "this-week" ||
-        savedQuick === "custom"
+        savedQuick === "custom" ||
+        savedQuick === "trading-period"
       ) {
         setQuickRange(savedQuick);
       }
@@ -449,6 +452,8 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
+        if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -505,6 +510,8 @@ export default function ReceiptsAdminClient({
         params.set("q", appliedFilters.q.trim());
       }
       params.set("scope", scopeMode);
+      if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
+      if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -564,123 +571,10 @@ export default function ReceiptsAdminClient({
     return () => controller.abort();
   }, [fetchSummary]);
 
-  // detect EventSource support and prefer SSE when available
   useEffect(() => {
-    if (typeof window !== "undefined" && "EventSource" in window) {
-      setSseEnabled(true);
-    }
-  }, []);
-
-  // Poll the summary every 30 seconds when SSE is not enabled
-  useEffect(() => {
-    if (sseEnabled && sseOn) return; // SSE will handle updates
-    // polling active when SSE not supported or user opted out
     const interval = setInterval(() => void fetchSummary(), 30_000);
-    // run an immediate fetch to ensure quick update when switching modes
-    void fetchSummary();
     return () => clearInterval(interval);
-  }, [fetchSummary, sseEnabled, sseOn]);
-
-  // If SSE is enabled and user opted-in, open an EventSource with reconnect/backoff
-  useEffect(() => {
-    if (!sseEnabled || !sseOn) {
-      // ensure any existing ES is closed
-      try {
-        sseEsRef.current?.close();
-      } catch {}
-      sseEsRef.current = null;
-      setSseStatus("fallback");
-      return;
-    }
-
-    let aborted = false;
-
-      const startEventSource = () => {
-        sseRetryRef.current = Math.max(0, sseRetryRef.current);
-        const params = new URLSearchParams();
-        const startParam = buildDateParam(appliedFilters.start, false);
-        const endParam = buildDateParam(appliedFilters.end, true);
-        if (startParam) params.set("start", startParam);
-        if (endParam) params.set("end", endParam);
-        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
-        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
-        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
-        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
-        params.set("scope", scopeMode);
-        const url = `/api/admin/receipts/summary/stream?${params.toString()}`;
-
-      try {
-        const es = new EventSource(url);
-        sseEsRef.current = es;
-        setSseStatus("reconnecting");
-
-        es.onopen = () => {
-          sseRetryRef.current = 0;
-          setSseStatus("connected");
-        };
-
-        es.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            setSummaryTotals({
-              totalSales: Number(data.totalSales ?? 0),
-              totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-              totalCost: Number(data.totalCost ?? 0),
-              totalProfitPriced: Number(data.totalProfitPriced ?? 0),
-              totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-              receiptsCount: Number(data.receiptsCount ?? 0),
-              itemsCount: Number(data.itemsCount ?? 0),
-              hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
-              awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
-              paymentTotals:
-                data?.paymentTotals ??
-                {
-                  mpesa: { totalSales: 0, count: 0 },
-                  cash: { totalSales: 0, count: 0 },
-                },
-            });
-          } catch (err) {
-            console.warn("[receipts] failed to parse SSE data", err);
-          }
-        };
-
-        es.onerror = () => {
-          // close and attempt reconnect with backoff
-          try {
-            es.close();
-          } catch {}
-          if (aborted) return;
-          sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-          const attempt = sseRetryRef.current;
-          const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-          setSseStatus("reconnecting");
-          setTimeout(() => {
-            if (!aborted) startEventSource();
-          }, delay);
-        };
-      } catch (err) {
-        console.warn("[receipts] failed to create EventSource", err);
-        // schedule reconnection
-        sseRetryRef.current = (sseRetryRef.current ?? 0) + 1;
-        const attempt = sseRetryRef.current;
-        const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(attempt, 6)));
-        setSseStatus("reconnecting");
-        setTimeout(() => {
-          if (!aborted) startEventSource();
-        }, delay);
-      }
-    };
-
-    startEventSource();
-
-    return () => {
-      aborted = true;
-      try {
-        sseEsRef.current?.close();
-      } catch {}
-      sseEsRef.current = null;
-    };
-  }, [sseEnabled, sseOn, appliedFilters, scopeMode]);
+  }, [fetchSummary]);
 
   const persistFilterValues = (nextFilters: FilterState) => {
     try {
@@ -721,26 +615,31 @@ export default function ReceiptsAdminClient({
 
   const applyQuickRange = (key: AdminQuickRangeKey) => {
     const now = new Date();
-    const bounds =
-      key === "today"
-        ? {
-            start: formatDateInput(startOfDayForRange(now)),
-            end: formatDateInput(startOfDayForRange(now)),
-          }
-        : key === "yesterday"
-        ? (() => {
-            const yesterday = new Date(now);
-            yesterday.setDate(now.getDate() - 1);
-            const dayStart = startOfDayForRange(yesterday);
-            return {
-              start: formatDateInput(dayStart),
-              end: formatDateInput(dayStart),
-            };
-          })()
-        : (() => {
-            const { start, end } = getWeekBounds(now);
-            return { start: formatDateInput(start), end: formatDateInput(end) };
-          })();
+    let bounds: { start: string; end: string } | null = null;
+    if (key === "today") {
+      const dayStart = startOfDayForRange(now);
+      bounds = {
+        start: formatDateInput(dayStart),
+        end: formatDateInput(dayStart),
+      };
+    } else if (key === "yesterday") {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const dayStart = startOfDayForRange(yesterday);
+      bounds = {
+        start: formatDateInput(dayStart),
+        end: formatDateInput(dayStart),
+      };
+    } else if (key === "this-week") {
+      const { start, end } = getWeekBounds(now);
+      bounds = { start: formatDateInput(start), end: formatDateInput(end) };
+    } else if (key === "trading-period") {
+      const period = getTradingPeriodFor(now);
+      bounds = { start: formatDateInput(period.start), end: formatDateInput(period.end) };
+    } else {
+      setQuickRange("custom");
+      return;
+    }
     const nextFilters = { ...filters, ...bounds };
     setFilters(nextFilters);
     setAppliedFilters(nextFilters);
@@ -763,6 +662,43 @@ export default function ReceiptsAdminClient({
   const handleManualRefresh = () => {
     void loadRows(page);
   };
+  const fetchReceiptDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
+      setDetail(payload as ReceiptDetailPayload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load receipt";
+      showToast(message, "error");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [showToast]);
+  const handleMarkPodDelivered = useCallback(
+    async (receiptId: string) => {
+      setPodActionId(receiptId);
+      try {
+        const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, { method: "POST" });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || "Failed to mark POD delivered");
+        showToast("POD delivery recorded and notification queued", "success");
+        void loadRows(page, { silent: true });
+        void fetchSummary();
+        if (selected?.id === receiptId) {
+          void fetchReceiptDetail(receiptId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to mark POD delivery";
+        showToast(message, "error");
+      } finally {
+        setPodActionId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
+
   const handleRowClick = (row: ReceiptRow) => {
     if ((row.source ?? "pos") !== "pos") {
       showToast("Receipt detail view is only available for POS receipts", "info");
@@ -771,20 +707,7 @@ export default function ReceiptsAdminClient({
     setSelected(row);
     setDrawerOpen(true);
     setDetail(null);
-    setDetailLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(`/api/receipts/${row.id}`, { cache: "no-store" });
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
-        setDetail(payload as ReceiptDetailPayload);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load receipt";
-        showToast(message, "error");
-      } finally {
-        setDetailLoading(false);
-      }
-    })();
+    void fetchReceiptDetail(row.id);
   };
 
   const closeDrawer = () => {
@@ -1063,6 +986,7 @@ export default function ReceiptsAdminClient({
   const profitColor =
     hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
+  const tradingPeriod = getTradingPeriodFor(new Date());
   const rangeLabelText =
     quickRange === "today"
       ? "Today"
@@ -1070,6 +994,8 @@ export default function ReceiptsAdminClient({
       ? "Yesterday"
       : quickRange === "this-week"
       ? "This week"
+      : quickRange === "trading-period"
+      ? tradingPeriod.label
       : "Custom range";
   const partialTotals = useMemo(() => {
     const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
@@ -1168,10 +1094,7 @@ export default function ReceiptsAdminClient({
           summary={summaryForDisplay ?? null}
           loading={summaryLoading}
           quickRange={quickRange}
-          onApplyQuickRange={(k) => applyQuickRange(k)}
-          sseOn={sseOn && sseEnabled}
-          sseStatus={sseStatus}
-          onToggleSse={(v: boolean) => setSseOn(v)}
+          onApplyQuickRange={applyQuickRange}
           rangeLabel={rangeDisplay}
         />
         <PaymentMethodFilterCard
@@ -1273,6 +1196,30 @@ export default function ReceiptsAdminClient({
             </button>
           </div>
         </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            POD receipts only
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={Boolean(filters.customerType === 'pod')}
+                onChange={(e) => setFilters((prev) => ({ ...prev, customerType: e.target.checked ? 'pod' : undefined }))}
+                className="h-4 w-4"
+              />
+              <select
+                value={filters.podStatus ?? ''}
+                onChange={(e) => setFilters((prev) => ({ ...prev, podStatus: e.target.value || undefined }))}
+                disabled={filters.customerType !== 'pod'}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="">Any</option>
+                <option value="pending">Pending</option>
+                <option value="delivered">Delivered</option>
+                <option value="delivery_failed">Delivery Failed</option>
+              </select>
+            </div>
+          </label>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
@@ -1316,6 +1263,7 @@ export default function ReceiptsAdminClient({
               </tr>
             )}
             {rows.map((row) => {
+              const isPodPending = row.isPodDelivery && row.podDeliveryStatus === "pending";
               const isSelected = row.id === selected?.id && drawerOpen;
               return (
                 <tr
@@ -1346,25 +1294,39 @@ export default function ReceiptsAdminClient({
                     <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
                       {formatBadgeLabel(row.status)}
                     </span>
+                    {row.isPodDelivery && (
+                      <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
+                        POD {formatBadgeLabel(row.podDeliveryStatus)}
+                      </div>
+                    )}
+                    {row.podDeliveryNote && (
+                      <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
                   <td className="px-3 py-3 text-right">
                       <RowActions
                         onEdit={() => {
-                        // load detail then open edit modal when ready
-                        setPendingEditId(row.id);
-                        handleRowClick(row);
-                      }}
-                      onEditItems={() => {
-                        setPendingEditId(row.id);
-                        handleRowClick(row);
-                      }}
-                      onDelete={() => void deleteReceiptById(row.id)}
-                      onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
-                      onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
-                      onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
+                          // load detail then open edit modal when ready
+                          setPendingEditId(row.id);
+                          handleRowClick(row);
+                        }}
+                        onEditItems={() => {
+                          setPendingEditId(row.id);
+                          handleRowClick(row);
+                        }}
+                        onDelete={() => void deleteReceiptById(row.id)}
+                        onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
+                        onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
+                        onResendPod={row.isPodDelivery ? () => void sendReceiptById(row.id, "whatsapp") : undefined}
+                        onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
+                        onPodAction={
+                          isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
+                        }
+                        podActionLabel="Mark POD delivered"
+                        podActionProcessing={podActionId === row.id}
                         disabled={loading || (row.source ?? "pos") !== "pos"}
-                    />
+                      />
                   </td>
                 </tr>
               );
@@ -1470,15 +1432,31 @@ export default function ReceiptsAdminClient({
                         <p className={`text-lg font-semibold ${profitColor}`}>
                           {hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data"}
                         </p>
-                      </div>
                     </div>
-                    {detail.receipt.docType === "LAYAWAY" && (
-                      <p className="mt-2 text-xs text-amber-300">
-                        Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
+                  </div>
+                  {detail.receipt.docType === "LAYAWAY" && (
+                    <p className="mt-2 text-xs text-amber-300">
+                      Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+                {detail.receipt.data?.podDelivery && (
+                  <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
+                    <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
+                      POD {formatBadgeLabel(detail.receipt.data.podDelivery.status)}
+                    </p>
+                    {detail.receipt.data.podDelivery.note && (
+                      <p className="mt-2 text-sm text-white">{detail.receipt.data.podDelivery.note}</p>
+                    )}
+                    {detail.receipt.data.podDelivery.createdAt && (
+                      <p className="mt-2 text-[11px] text-yellow-200">
+                        Created {formatDateTime(detail.receipt.data.podDelivery.createdAt)}
                       </p>
                     )}
                   </div>
-                </div>
+                )}
 
                 <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>
@@ -1573,6 +1551,26 @@ export default function ReceiptsAdminClient({
                   >
                     {sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp"}
                   </button>
+                  {detail.receipt.data?.podDelivery && (
+                    <button
+                      type="button"
+                      onClick={() => sendReceiptById(detail.receipt.id, "whatsapp")}
+                      disabled={sendingChannel === "whatsapp"}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Resend POD
+                    </button>
+                  )}
+                  {detail.receipt.data?.podDelivery?.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkPodDelivered(detail.receipt.id)}
+                      disabled={podActionId === detail.receipt.id}
+                      className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
+                    >
+                      {podActionId === detail.receipt.id ? "Processing..." : "Mark POD delivered"}
+                    </button>
+                  )}
                   {allowEdit && (
                     <button
                       type="button"

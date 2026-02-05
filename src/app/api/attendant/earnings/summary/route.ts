@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
@@ -19,8 +19,10 @@ export async function GET(req: Request) {
   }
 
   const now = new Date();
-  await getOrCreateCommissionPeriod(now);
-  const period = getTradingPeriodFor(now);
+  const url = new URL(req.url);
+  const periodKeyParam = url.searchParams.get("periodKey");
+  const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
+  await getOrCreateCommissionPeriod(period.start);
 
   const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
     getEarningsSummaryForUser({ userId }),

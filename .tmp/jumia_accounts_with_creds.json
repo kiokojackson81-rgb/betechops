@@ -1,0 +1,167 @@
+{
+  "generatedAt": "2026-01-06T04:36:04.536Z",
+  "count": 14,
+  "rows": [
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "accountName": "Betech Solar Solution",
+      "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "fad5155d-4223-4b58-bec6-87f7a5690c37",
+      "accountName": "Betech Solar Solution",
+      "jumiaShopSid": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "isActive": true,
+      "credential": {
+        "id": "57b10d78-3ef9-4655-bea8-111b13e1d1e9",
+        "scope": "MARKETPLACE_ACCOUNT:fad5155d-4223-4b58-bec6-87f7a5690c37",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "b2a2***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+      "accountName": "Betech Store",
+      "jumiaShopSid": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "isActive": true,
+      "credential": {
+        "id": "3e36e0c1-700f-4c69-92c3-51942833cc81",
+        "scope": "MARKETPLACE_ACCOUNT:ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "e20e***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "accountName": "Hitech Power",
+      "jumiaShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+      "accountName": "Hitech Power",
+      "jumiaShopSid": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "isActive": true,
+      "credential": {
+        "id": "cb40348d-6bc5-4714-a6a0-7fa08797107c",
+        "scope": "MARKETPLACE_ACCOUNT:34b278de-4617-4a66-bfe1-8b08afafd7f9",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "8c0e***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+      "accountName": "JM Latest Collections",
+      "jumiaShopSid": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "isActive": true,
+      "credential": {
+        "id": "d261d665-8aa9-4f36-a953-b1a571593fc6",
+        "scope": "MARKETPLACE_ACCOUNT:17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "f7df***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "accountName": "JUDE COLLECTIONS",
+      "jumiaShopSid": null,
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "accountName": "Jumia Shop db15d4e6",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "accountName": "LabTech Kenya",
+      "jumiaShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "a840db92-3811-4114-a890-ad0329900f53",
+      "accountName": "LabTech Kenya",
+      "jumiaShopSid": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "isActive": true,
+      "credential": {
+        "id": "8179243c-1d00-4bbc-8c2e-d5a1270702a0",
+        "scope": "MARKETPLACE_ACCOUNT:a840db92-3811-4114-a890-ad0329900f53",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "3579***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+      "accountName": "Maxton Enterprise",
+      "jumiaShopSid": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "isActive": true,
+      "credential": {
+        "id": "890819c5-5e6f-4bc4-90f0-eca5572eaa1f",
+        "scope": "MARKETPLACE_ACCOUNT:fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "61e5***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "accountName": "Maxton Enterprise",
+      "jumiaShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    },
+    {
+      "accountId": "287e8f61-b92e-4463-afea-f855fa125bfb",
+      "accountName": "Sky Store Ke",
+      "jumiaShopSid": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "isActive": true,
+      "credential": {
+        "id": "a9cdf3b6-90c4-4b06-9a43-deb14501325a",
+        "scope": "MARKETPLACE_ACCOUNT:287e8f61-b92e-4463-afea-f855fa125bfb",
+        "apiBase": "https://vendor-api.jumia.com",
+        "clientId": "cd95***",
+        "issuer": null,
+        "updatedAt": "2025-12-08T06:37:44.403Z"
+      },
+      "vendorCredential": null
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "accountName": "Sky Store Ke",
+      "jumiaShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "isActive": true,
+      "credential": null,
+      "vendorCredential": null
+    }
+  ]
+}

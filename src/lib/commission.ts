@@ -201,6 +201,28 @@ export function computeProductCommissions(args: {
   return { newProductCommission, copiedCommission, editedCommission };
 }
 
+// Special Jeniffer prorated commission: keep full payouts for completed tiers
+// and prorate the next tier payout based on progress within the band.
+export function computeJenifferProratedCommission(totalSales: number, tiers: { minSales: number; maxSales?: number | null; payoutFlat: number }[]) {
+  if (!tiers || tiers.length === 0) return { commission: 0, baseCommission: 0, prorated: 0, nextTarget: null, progressPercent: 0 };
+  const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
+  let nextIdx = sorted.findIndex((t) => t.minSales > totalSales);
+  if (nextIdx === -1) {
+    const total = sorted.reduce((s, t) => s + t.payoutFlat, 0);
+    return { commission: total, baseCommission: total, prorated: 0, nextTarget: null, progressPercent: 1 };
+  }
+  let baseCommission = 0;
+  for (let i = 0; i < nextIdx; i++) baseCommission += sorted[i].payoutFlat;
+  if (nextIdx === 0) return { commission: baseCommission, baseCommission, prorated: 0, nextTarget: sorted[0].minSales, progressPercent: totalSales / sorted[0].minSales };
+  const prev = sorted[nextIdx - 1];
+  const next = sorted[nextIdx];
+  const bandWidth = Math.max(1, next.minSales - prev.minSales);
+  const progressInBand = Math.max(0, Math.min(1, (totalSales - prev.minSales) / bandWidth));
+  const prorated = next.payoutFlat * progressInBand;
+  const commission = baseCommission + prorated;
+  return { commission, baseCommission, prorated, nextTarget: next.minSales, progressPercent: progressInBand };
+}
+
 // Commission ladder used by reporting code to compute progress and cumulative rewards.
 // Re-export pure helpers from the server-safe common module.
 export { COMMISSION_LADDER, calculateCumulativeCommission };

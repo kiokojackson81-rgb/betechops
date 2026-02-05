@@ -1,0 +1,257 @@
+{
+  "generatedAt": "2026-01-06T09:34:59.595Z",
+  "accounts": [
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "displayName": "Betech Solar Solution",
+      "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "7c6e40e3-353c-421f-8e09-e58506c83732",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "fad5155d-4223-4b58-bec6-87f7a5690c37",
+      "displayName": "Betech Solar Solution",
+      "jumiaShopSid": "b2a290cc-74fd-4b9e-a598-ef42fc57f918",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "e3a114d5-d7c1-4000-ae00-309cb0da4a41",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "303a17e3-f7e0-40fd-9adc-aa0a6820f90d",
+      "displayName": "Betech Store",
+      "jumiaShopSid": "c897dcd1-5a4d-4d68-80ff-e8fda74f79e4",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "ab3b613c-5874-42b1-863a-7d7b35f3cc2d",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "ff8e0bd3-8b24-40d6-af27-64d55a87c041",
+      "displayName": "Betech Store",
+      "jumiaShopSid": "e20e8623-e422-4566-a08a-37751f4bc759",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "8a37c9b0-cf54-4d67-98c4-f4d01ac3d427",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "displayName": "Hitech Power",
+      "jumiaShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "fda7106b-b17f-48e2-a4f2-e7c05df788d5",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "34b278de-4617-4a66-bfe1-8b08afafd7f9",
+      "displayName": "Hitech Power",
+      "jumiaShopSid": "8c0e5ed0-8eb7-49c6-982c-1acdfef94d37",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "be7847b0-76a4-41ab-93cd-1dcc4b5547ca",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "displayName": "JM Latest Collections",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "2f1751fb-1f6e-41de-8aaa-dc1a2cec5961",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "17f6a584-4c8a-43e0-be1f-bbbfb5ff0d63",
+      "displayName": "JM Latest Collections",
+      "jumiaShopSid": "f7df0953-7c18-4191-b304-614f9f0987a4",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "9580fbc2-de75-426d-b6f1-e6e34d796ad2",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "06d02077-8845-4511-ac40-c4fae7507f19",
+      "displayName": "Jude Collection",
+      "jumiaShopSid": null,
+      "isActive": false,
+      "assignments": []
+    },
+    {
+      "accountId": "3ad790b3-e827-49e2-b1a1-4fb978c9b577",
+      "displayName": "Jude Collection",
+      "jumiaShopSid": "5497640c-3f51-4777-82fa-fc1c92dc588b",
+      "isActive": true,
+      "assignments": []
+    },
+    {
+      "accountId": "a840db92-3811-4114-a890-ad0329900f53",
+      "displayName": "LabTech Kenya",
+      "jumiaShopSid": "3579f345-a3ac-4e9d-b355-1990f0ad8a54",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "8dfb74d2-4628-4c7d-8cde-e3d339a06b41",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "displayName": "LabTech Kenya",
+      "jumiaShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "cbc19783-681a-4067-941a-1dccc955e20a",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "displayName": "Maxton Enterprise",
+      "jumiaShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "c8ec30a6-5551-494d-8905-05b960dc9080",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "fdd39dc3-781f-475c-8939-b6559d6fb4d6",
+      "displayName": "Maxton Enterprise",
+      "jumiaShopSid": "61e52422-f98e-49da-87e2-f9c832bf1a04",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "fa0674e6-c779-4c69-b42a-7b406c0b477e",
+          "attendantId": "cmimxqfgo0004v5mc5pn1r486",
+          "role": "JUMIA_KILIMALL_OPS",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Stephen",
+          "email": "stephen@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "displayName": "Sky Store Ke",
+      "jumiaShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "isActive": true,
+      "assignments": [
+        {
+          "id": "48441ec2-83c9-4ea4-8535-cfc47b7ba0bf",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": null,
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    },
+    {
+      "accountId": "287e8f61-b92e-4463-afea-f855fa125bfb",
+      "displayName": "Sky Store Ke",
+      "jumiaShopSid": "cd95a840-f194-4f49-88fd-848f2c59456f",
+      "isActive": false,
+      "assignments": [
+        {
+          "id": "cbea646d-878a-4095-8e5b-9755e61ca0fd",
+          "attendantId": "cmimxqfve0006v5mcewkm8waa",
+          "role": "SUPERVISOR",
+          "startsAt": "2025-12-07T08:51:00.385Z",
+          "endsAt": "2026-01-06T09:34:02.698Z",
+          "name": "Benjamin",
+          "email": "benjamin@betech.co.ke"
+        }
+      ]
+    }
+  ]
+}

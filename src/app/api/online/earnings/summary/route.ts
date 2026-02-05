@@ -341,14 +341,8 @@ export async function GET(req: Request) {
     }
   }
 
-  if (isJeniffer && jenifferPosSummary) {
-    salesCommission = computeSalesCommissionFromTiers(
-      jenifferPosSummary.totalSales,
-      jenifferPosSummary.totalProfit,
-      tiers,
-      0,
-    );
-  }
+  // For Jeniffer, prefer the computed commission from `getEarningsSummaryForUser`
+  // which applies the prorated-tier rule. Do not overwrite with generic tier compute.
 
   const grossCommission =
     salesCommission +

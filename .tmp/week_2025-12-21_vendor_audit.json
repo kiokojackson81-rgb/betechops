@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-01-06T21:34:50.652Z",
+  "weekStart": "2025-12-14T21:00:00.000Z",
+  "weekEnd": "2025-12-21T20:59:59.999Z",
+  "rows": [
+    {
+      "accountId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "displayName": "Sky Store Ke",
+      "jumiaShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80",
+      "shopId": "3a4cc676-3432-43a1-b05c-82c935aedee1",
+      "statementId": "cmk17o3tw0013v5o8lbl4vfkk",
+      "statementNumber": "PS251215KE13ZAF",
+      "amount": 597042.5,
+      "createdAt": "2026-01-05T13:43:25.028Z",
+      "rawShopSid": "a4f06613-3271-4846-8b25-43b2bc093a80"
+    },
+    {
+      "accountId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "displayName": "JM Latest Collections",
+      "jumiaShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643",
+      "shopId": "9257651a-3d68-4e88-b330-6cc53afb4cfc",
+      "statementId": "cmk17o9u4001rv5o8c8w9tnhc",
+      "statementNumber": "PS251215KE12DWN",
+      "amount": 408679.6,
+      "createdAt": "2026-01-05T13:43:32.812Z",
+      "rawShopSid": "db15d4e6-19a0-4cc1-b8c9-0619c5388643"
+    },
+    {
+      "accountId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "displayName": "Hitech Power",
+      "jumiaShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca",
+      "shopId": "447747f0-ed55-4794-b8a6-e492183ba9a0",
+      "statementId": "cmk17nzhb000lv5o8tjiri1mi",
+      "statementNumber": "PS251215KE12Y26",
+      "amount": 357711.36,
+      "createdAt": "2026-01-05T13:43:19.391Z",
+      "rawShopSid": "1951e826-57f2-4d6a-99ad-67b5139d8aca"
+    },
+    {
+      "accountId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "displayName": "Betech Solar Solution",
+      "jumiaShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc",
+      "shopId": "6e1186af-a6b3-4eb6-9547-1038733c3306",
+      "statementId": "cmk17odia0029v5o8f20dovqp",
+      "statementNumber": "PS251215KE13LSZ",
+      "amount": 124895.95,
+      "createdAt": "2026-01-05T13:43:37.570Z",
+      "rawShopSid": "29e1f2ad-b898-4d11-b3df-ab3dda5755fc"
+    },
+    {
+      "accountId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "displayName": "Maxton Enterprise",
+      "jumiaShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518",
+      "shopId": "c4a9b0c1-1bd4-4575-bb0f-125997838914",
+      "statementId": "cmk17oion002rv5o8px5l841u",
+      "statementNumber": "PS251215KE13XZB",
+      "amount": 9601.81,
+      "createdAt": "2026-01-05T13:43:44.279Z",
+      "rawShopSid": "07ee95b2-acb7-4436-b98f-d8ce30d0c518"
+    },
+    {
+      "accountId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "displayName": "LabTech Kenya",
+      "jumiaShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e",
+      "shopId": "c6847a48-c9d8-45b9-b87b-2e22102ab4ab",
+      "statementId": "cmk1equ4s0011v5lcw31xsejj",
+      "statementNumber": "PS251215KE14JOD",
+      "amount": 0,
+      "createdAt": "2026-01-05T17:01:29.740Z",
+      "rawShopSid": "45fd7334-a7db-4f49-ba60-347096fd818e"
+    }
+  ]
+}

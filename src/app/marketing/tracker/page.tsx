@@ -4,11 +4,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
+import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
 import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
+import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import {
   DayName,
   marketingDayConfigs,
@@ -319,6 +321,20 @@ function EarningsCard({ summary }: EarningsCardProps) {
       </div>
 
       <div className="space-y-2 text-sm">
+            {(summary as any).jenifferProgress ? (
+              <div className="rounded-xl border border-amber-600/30 bg-amber-900/5 p-3">
+                <div className="text-xs uppercase tracking-wide text-amber-300">Jeniffer progress</div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-xs text-amber-200">Next target</div>
+                  <div className="text-sm font-semibold text-amber-100">{((summary as any).jenifferProgress.nextTarget ?? "—").toString()}</div>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-xs text-amber-200">Prorated earned</div>
+                  <div className="text-sm font-semibold text-amber-100">KES {(Number((summary as any).jenifferProgress.prorated) ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="mt-2 text-xs text-amber-300">Band progress: {Math.round(((summary as any).jenifferProgress.progressPercent ?? 0) * 10000) / 100}%</div>
+              </div>
+            ) : null}
         {rows.map((row) => (
           <div
             key={row.label}
@@ -638,6 +654,9 @@ export default function MarketingTrackerPage() {
       commission: { commission: number };
     };
   }>(null);
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const selectedPeriodKey = selectedPeriod.key;
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const earningsSummaryJsonRef = useRef<string>("");
   const [rawUnpricedSales, setRawUnpricedSales] = useState<UnpricedSale[]>([]);
@@ -1060,9 +1079,11 @@ export default function MarketingTrackerPage() {
       try {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         const imp = impersonateIdFromWindow();
-        const url = imp
-          ? `/api/marketing/report/summary?impersonateId=${encodeURIComponent(imp)}`
-          : "/api/marketing/report/summary";
+        const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+        if (imp) {
+          params.set("impersonateId", imp);
+        }
+        const url = `/api/marketing/report/summary?${params.toString()}`;
         const res = await fetch(url, {
           credentials: "same-origin",
           signal: controller.signal,
@@ -1113,7 +1134,7 @@ export default function MarketingTrackerPage() {
       clearInterval(id);
       controller.abort();
     };
-  }, []);
+  }, [selectedPeriodKey]);
 
   // Poll earnings summary for the current attendant (used by EarningsCard)
   useEffect(() => {
@@ -1281,7 +1302,10 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
-    periodSummary?.period.label ?? serverPeriodSummary?.period.label ?? "Loading current period\u2026";
+    periodSummary?.period.label ??
+    serverPeriodSummary?.period.label ??
+    selectedPeriod.label ??
+    "Loading current period\u2026";
   const displayedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
@@ -1448,6 +1472,23 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
             />
           </div>
         </header>
+
+        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
+              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
+              {selectedPeriodKey !== currentPeriod.key && (
+                <p className="text-xs text-amber-300">Showing archived period.</p>
+              )}
+            </div>
+            <PeriodSwitcher
+              currentPeriod={currentPeriod}
+              selectedPeriod={selectedPeriod}
+              onSelectPeriod={setSelectedPeriod}
+            />
+          </div>
+        </div>
 
         {periodSummary && (
           <Card className="border-emerald-700/60 bg-emerald-900/20 text-emerald-100 shadow-xl shadow-emerald-900/30">

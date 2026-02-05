@@ -6,7 +6,8 @@ import Button from "@/app/_components/Button";
 // SensitiveValue and card-lock helpers removed (cards cleaned up)
 import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
+import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 
@@ -101,7 +102,10 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
 };
 
 export default function AttendantOnlineClient() {
-  const [period] = useState(() => getTradingPeriodFor(new Date()));
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const period = selectedPeriod;
+  const selectedPeriodKey = selectedPeriod.key;
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [impersonated, setImpersonated] = useState<boolean>(false);
@@ -265,8 +269,7 @@ export default function AttendantOnlineClient() {
       setOnlineSummaryLoading(true);
       try {
         const params = new URLSearchParams({
-          start: formatNairobiParam(period.start, false),
-          end: formatNairobiParam(period.end, true),
+          periodKey: selectedPeriodKey,
         });
         appendImpersonateParam(params);
       const res = await fetch(`/api/online/summary?${params.toString()}`, { cache: "no-store" });
@@ -285,7 +288,7 @@ export default function AttendantOnlineClient() {
       } finally {
         setOnlineSummaryLoading(false);
       }
-    }, [period, userId, appendImpersonateParam]);
+    }, [selectedPeriodKey, userId, appendImpersonateParam]);
 
     const loadReceiptStats = useCallback(async () => {
     if (!userId) return;
@@ -538,7 +541,8 @@ export default function AttendantOnlineClient() {
     // earnings summary loader removed
 
   // Prefer authoritative online summary (trading-period marketplace totals) when available.
-  const quickStatsPeriodLabel = onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? period.label;
+  const quickStatsPeriodLabel =
+    onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? selectedPeriod.label;
   const marketplace = onlineSummary?.marketplace ?? null;
   const aggregatorJumiaSales = platformTotals.jumiaSales;
   const aggregatorKilimallSales = platformTotals.kilimallSales;
@@ -598,6 +602,23 @@ export default function AttendantOnlineClient() {
             </Link>
           </div>
         </header>
+
+        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
+              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
+              {selectedPeriodKey !== currentPeriod.key && (
+                <p className="text-xs text-amber-300">Showing archived period.</p>
+              )}
+            </div>
+            <PeriodSwitcher
+              currentPeriod={currentPeriod}
+              selectedPeriod={selectedPeriod}
+              onSelectPeriod={setSelectedPeriod}
+            />
+          </div>
+        </div>
 
         {/* Payroll earnings period banner removed */}
 
