@@ -53,7 +53,8 @@ type RemoteSummaryPayload = {
   aggregates?: {
     totalSales?: number;
     totalItems?: number;
-    paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number };
+    totalReceiptRows?: number;
+    paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number; countMpesaReceipts?: number; countCashReceipts?: number };
     commission?: { commission?: number };
   };
 };
