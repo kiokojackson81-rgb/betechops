@@ -789,6 +789,90 @@ export async function sendReceiptChannels(
         debug: result?.debug,
       });
 
+      // Admin WhatsApp alert via Chatrace: set admin contact fields then apply tag
+      try {
+        const adminPhonesRaw = (process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS || '').split(',').map((s) => s.trim()).filter(Boolean);
+        if (adminPhonesRaw.length > 0) {
+          // Build items_summary: plain numbered lines
+          const itemsForSummary = (orderAny?.items ?? snapshot.items ?? []) as any[];
+          const itemsLines = (itemsForSummary || []).map((it, idx) => {
+            const title = it?.title || it?.productName || 'Item';
+            const qty = Number.isFinite(Number(it?.quantity ?? 1)) ? Number(it?.quantity ?? 1) : 1;
+            return `${idx + 1}) ${title} x${qty}`;
+          });
+          const itemsSummary = itemsLines.length ? itemsLines.join('\n') : 'Items: (not available)';
+
+          // Compute total_sales_today in KES for Africa/Nairobi timezone (UTC+3)
+          const nairobiOffsetMs = 3 * 60 * 60 * 1000;
+          const createdAt = receipt.createdAt ? new Date(receipt.createdAt) : new Date();
+          const createdInNairobi = new Date(createdAt.getTime() + nairobiOffsetMs);
+          const yyyy = createdInNairobi.getUTCFullYear();
+          const mm = createdInNairobi.getUTCMonth();
+          const dd = createdInNairobi.getUTCDate();
+          const startUtcMs = Date.UTC(yyyy, mm, dd, 0, 0, 0) - nairobiOffsetMs;
+          const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+          const receiptsToday = await prisma.receipt.findMany({
+            where: { createdAt: { gte: new Date(startUtcMs), lt: new Date(endUtcMs) } },
+            include: { order: true },
+          });
+          let totalSalesToday = 0;
+          for (const r of receiptsToday) {
+            const t = typeof r.totals === 'object' && r.totals ? (r.totals as any).total : undefined;
+            let val = NaN;
+            if (typeof t === 'number') val = t;
+            else if (typeof t === 'string') val = Number(t);
+            else if (typeof r.order?.totalAmount === 'number') val = r.order.totalAmount;
+            else if (Array.isArray((r.order as any)?.items)) {
+              val = (r.order as any).items.reduce((s: number, it: any) => {
+                const q = Number.isFinite(Number(it?.quantity ?? 1)) ? Number(it?.quantity ?? 1) : 1;
+                const p = Number.isFinite(Number(it?.unitPrice ?? it?.sellingPrice ?? 0)) ? Number(it?.unitPrice ?? it?.sellingPrice ?? 0) : 0;
+                return s + q * p;
+              }, 0);
+            }
+            totalSalesToday += Number.isFinite(Number(val)) ? Number(val) : 0;
+          }
+
+          // Build admin payload fields
+          const adminPayloadBase = {
+            receiptNumber: resolvedReceiptNumber,
+            customerName: resolvedCustomerName,
+            customerPhone: rawCustomerPhone || '',
+            formattedAmount: formatCurrencyKes(Number(resolvedAmount)),
+            paymentMethod: chitInput.paymentMethod ?? '',
+            createdBy: snapshot.attendantName ?? receipt.issuedBy?.name ?? 'system',
+            itemsSummary,
+            totalSalesToday: Math.round(totalSalesToday),
+          } as any;
+
+          const adminResults: any[] = [];
+          for (const raw of adminPhonesRaw) {
+            const admNorm = normalizePhone(raw);
+            if (!admNorm) continue;
+            try {
+              const adminPushResult = await pushReceiptToChatrace({
+                phoneE164: admNorm,
+                // these fields should be mapped to the contact custom fields by the integration
+                ...adminPayloadBase,
+                tagName: 'receipt_admin_alert',
+                skipDefaultTags: true,
+              });
+              adminResults.push({ phone: admNorm, ok: adminPushResult?.ok, debug: adminPushResult?.debug });
+            } catch (e) {
+              adminResults.push({ phone: admNorm, ok: false, error: e instanceof Error ? e.message : String(e) });
+            }
+          }
+
+          // Persist admin push debug
+          try {
+            await getChatraceMetaUpdate({ adminDebug: { pushes: adminResults } });
+          } catch (persistAdminErr) {
+            console.warn('[receipts][chatrace] failed to persist adminDebug', persistAdminErr instanceof Error ? persistAdminErr.message : String(persistAdminErr));
+          }
+        }
+      } catch (adminErr) {
+        console.error('[receipts][chatrace] admin alert failed', adminErr instanceof Error ? adminErr.message : String(adminErr));
+      }
+
       // If this push is the creation-time POD send, record an explicit
       // audit flag so downstream duplicate-detection and business logic
       // can rely on a single canonical timestamp.
@@ -1032,6 +1116,40 @@ export async function sendReceiptChannels(
   } catch (e) {
     // non-fatal
     console.error('Failed to write send action log', e);
+  }
+
+  // Admin notification (optional): send a simple email to configured admin addresses
+  try {
+    const adminList = (process.env.ADMIN_NOTIFICATION_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const rawSendgridKey = process.env.SENDGRID_API_KEY || process.env.SENDGRID_KEY || '';
+    if (adminList.length && rawSendgridKey && process.env.SENDGRID_FROM) {
+      try {
+        sgMail.setApiKey(rawSendgridKey);
+        const adminSubject = `New receipt created: ${receipt.order?.orderNumber ?? receipt.id}`;
+        const adminBody = [
+          `Receipt ID: ${receipt.id}`,
+          `Order: ${receipt.order?.orderNumber ?? 'n/a'}`,
+          `Customer: ${snapshot.customerName ?? (receipt.order as any)?.customerName ?? 'n/a'}`,
+          `Phone: ${rawCustomerPhone || 'n/a'}`,
+          `Amount: ${formatCurrencyKes(invoiceAmount)} (${invoiceAmount})`,
+          `Receipt URL: ${candidatePdfUrl ?? receiptPageLink}`,
+          '',
+          `Statuses: ${JSON.stringify(channelStatus)}`,
+        ].join('\n');
+
+        await sgMail.send({
+          to: adminList,
+          from: process.env.SENDGRID_FROM,
+          subject: adminSubject,
+          text: adminBody,
+        });
+        logStep(requestId, 'ADMIN_NOTIFY', 'sent', { to: adminList.length });
+      } catch (mailErr) {
+        console.error('[receiptSender] failed to send admin notification', mailErr instanceof Error ? mailErr.message : String(mailErr));
+      }
+    }
+  } catch (e) {
+    console.warn('[receiptSender] admin notify skipped or failed', e instanceof Error ? e.message : String(e));
   }
 
   const ok = errors.length === 0;
