@@ -264,6 +264,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   const path = '/contacts';
   // Step 1: upsert contact and set fields
+  // Persist the exact request bodies into debug for post-mortem
+  debug.steps = debug.steps || {};
+  debug.steps.create = debug.steps.create || {};
+  debug.steps.create.request = { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions };
   const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions }, headers);
   debug.steps.create = {
     status: createRes.status,
@@ -292,7 +296,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     return { ok: false, debug };
   }
 
-  // Step 2: apply tags in a separate request to ensure fields are persisted
+  // Step 2: apply tags in a separate request to ensure fields are persisted.
+  // Add a short delay to avoid Chatrace evaluating the Flow before fields are indexed.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  await sleep(300);
+  debug.steps.tag = debug.steps.tag || {};
+  debug.steps.tag.request = { phone: phoneE164, actions: tagActions };
   const tagRes = await runRequest(path, { phone: phoneE164, actions: tagActions }, headers);
   debug.steps.tag = { status: tagRes.status, bodySnippet: (tagRes.text || '').slice(0, 200), ok: tagRes.ok };
   try {
