@@ -212,6 +212,17 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   fieldActions.push(setFieldValue('items_summary', itemsSummarySafe));
   // Optionally include receipt_id as well
   if (receiptId) fieldActions.push(setFieldValue('receipt_id', receiptId));
+  // Also write common alias fields so templates that use alternate names
+  // (e.g. order_placed, order_number) still receive the value.
+  try {
+    fieldActions.push(setFieldValue('order_placed', receiptNumber));
+    fieldActions.push(setFieldValue('order_number', receiptNumber));
+    fieldActions.push(setFieldValue('receipt_no', receiptNumber));
+    // Some flows expect items under a shorter key
+    fieldActions.push(setFieldValue('items', itemsSummarySafe));
+  } catch (e) {
+    // noop — best-effort
+  }
 
   // Build tag actions separately so they can be applied after fields persist
   const tagActions: any[] = [];
