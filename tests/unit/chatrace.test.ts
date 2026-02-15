@@ -27,8 +27,9 @@ describe('pushReceiptToChatrace', () => {
         text: async () => JSON.stringify(payload),
       });
 
-    // single POST /contacts should be performed
+    // first POST sets fields, second POST applies tag
     fetchMock.mockResolvedValueOnce(successResponse({ success: true, data: { id: 'c111' }, contact_created: false }));
+    fetchMock.mockResolvedValueOnce(successResponse({ success: true }));
 
     const { pushReceiptToChatrace } = await import('@/lib/integrations/chatrace');
     await pushReceiptToChatrace({
@@ -42,11 +43,14 @@ describe('pushReceiptToChatrace', () => {
       tagName: 'receipt_created',
     });
 
-    // should call single POST /contacts to upsert + apply actions
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const createCall = fetchMock.mock.calls[0];
-    expect(createCall[1]?.method).toBe('POST');
-    expect(String(createCall[0])).toContain('/contacts');
+    // should call two POST /contacts: fields then tags
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstCall = fetchMock.mock.calls[0];
+    const secondCall = fetchMock.mock.calls[1];
+    expect(firstCall[1]?.method).toBe('POST');
+    expect(String(firstCall[0])).toContain('/contacts');
+    expect(secondCall[1]?.method).toBe('POST');
+    expect(String(secondCall[0])).toContain('/contacts');
   });
 
   it('creates a contact when none exists before updating', async () => {
@@ -62,8 +66,9 @@ describe('pushReceiptToChatrace', () => {
         text: async () => JSON.stringify(payload),
       });
 
-    // single POST /contacts should be performed to create+actions
+    // first POST creates + sets fields; second POST applies tag
     fetchMock.mockResolvedValueOnce(createResponse({ success: true, data: { id: 'c222' }, contact_created: true }));
+    fetchMock.mockResolvedValueOnce(createResponse({ success: true }));
 
     const { pushReceiptToChatrace } = await import('@/lib/integrations/chatrace');
     await pushReceiptToChatrace({
@@ -77,10 +82,13 @@ describe('pushReceiptToChatrace', () => {
       tagName: 'receipt_created',
     });
 
-    // should call single POST /contacts to create + apply actions
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const createCall = fetchMock.mock.calls[0];
-    expect(createCall[1]?.method).toBe('POST');
-    expect(String(createCall[0])).toContain('/contacts');
+    // should call two POST /contacts: create/fields then tags
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstCall = fetchMock.mock.calls[0];
+    const secondCall = fetchMock.mock.calls[1];
+    expect(firstCall[1]?.method).toBe('POST');
+    expect(String(firstCall[0])).toContain('/contacts');
+    expect(secondCall[1]?.method).toBe('POST');
+    expect(String(secondCall[0])).toContain('/contacts');
   });
 });

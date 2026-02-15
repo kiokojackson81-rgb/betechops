@@ -164,18 +164,18 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     field_name: fieldName,
     value: value == null ? '' : String(value),
   });
-  // Build minimal required custom fields and tags according to integration
-  // requirements. We MUST only upsert the contact, set custom fields and
-  // apply the trigger tag `receipt_created`. We may also apply an
-  // additional custom tag (e.g. POD) if provided in `tagName`.
-  const actions: any[] = [];
+  // Build minimal required custom fields according to integration
+  // requirements. We'll perform a two-step POST: first upsert/set fields,
+  // then apply the trigger tag `receipt_created` so Chatrace Flows render
+  // template variables from the persisted fields.
+  const fieldActions: any[] = [];
 
   // Required custom fields (must match exactly)
-  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
-  actions.push(setFieldValue('customer_name', customerName || 'Customer'));
-  actions.push(setFieldValue('receipt_number', receiptNumber));
-  actions.push(setFieldValue('amount', amount));
-  actions.push(setFieldValue('currency', currency || 'KES'));
+  fieldActions.push(setFieldValue('receipt_url', finalReceiptUrl));
+  fieldActions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  fieldActions.push(setFieldValue('receipt_number', receiptNumber));
+  fieldActions.push(setFieldValue('amount', amount));
+  fieldActions.push(setFieldValue('currency', currency || 'KES'));
 
   // Format items_summary as plain text lines (1. name xqty — KES #)
   const formatCurrencyKesLocal = (v: number | string) => {
@@ -190,33 +190,45 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   let itemsSummary = '';
   try {
     if (input.items && Array.isArray(input.items) && input.items.length) {
-      itemsSummary = input.items
-        .map((it: any, idx: number) => {
-          const title = String(it.title || it.productName || it.product || it.name || '').trim() || 'Item';
-          const qty = Number.isFinite(Number(it.quantity ?? 1)) ? Number(it.quantity ?? 1) : 1;
-          const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice ?? 0)) ? Number(it.unitPrice ?? it.sellingPrice ?? 0) : 0;
-          const priceText = formatCurrencyKesLocal(unit * qty);
-          return `${idx + 1}. ${title} x${qty} — ${priceText}`;
-        })
-        .join('\n');
+      const lines = input.items.map((it: any, idx: number) => {
+        const title = String(it.title || it.productName || it.product || it.name || '').trim() || 'Item';
+        const qty = Number.isFinite(Number(it.quantity ?? 1)) ? Number(it.quantity ?? 1) : 1;
+        const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice ?? 0)) ? Number(it.unitPrice ?? it.sellingPrice ?? 0) : 0;
+        const priceText = formatCurrencyKesLocal(unit * qty);
+        return `${idx + 1}) ${title} x${qty} — ${priceText}`;
+      });
+      itemsSummary = lines.join('\n');
+      // Truncate to ~700 chars to keep WhatsApp template safe
+      const MAX_LEN = 700;
+      if (itemsSummary.length > MAX_LEN) {
+        itemsSummary = itemsSummary.slice(0, MAX_LEN - 1).trimEnd() + '…';
+      }
     }
   } catch (e) {
     itemsSummary = '';
   }
-  actions.push(setFieldValue('items_summary', itemsSummary));
+  // Ensure we always set the field (empty string if no items) so the template variables exist
+  fieldActions.push(setFieldValue('items_summary', itemsSummary));
+  // Optionally include receipt_id as well
+  if (receiptId) fieldActions.push(setFieldValue('receipt_id', receiptId));
 
+  // Build tag actions separately so they can be applied after fields persist
+  const tagActions: any[] = [];
   // Always apply the trigger tag the Flow listens for
-  actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+  tagActions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+  // Apply pdf/link variant tag (helps flows that branch on pdf vs link)
+  tagActions.push({ action: 'add_tag', tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link' });
   // Also apply any custom tag provided (e.g. pod dispatch). Do not skip
   // applying the core trigger tag even when skipDefaultTags is true.
   if (finalTag && finalTag !== 'receipt_created') {
-    actions.push({ action: 'add_tag', tag_name: finalTag });
+    tagActions.push({ action: 'add_tag', tag_name: finalTag });
   }
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
-    actionsCount: actions.length,
+    fieldActionsCount: fieldActions.length,
+    tagActionsCount: tagActions.length,
     tag: finalTag || 'receipt_created',
     debugTag: finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
     skipDefaultTags: Boolean(skipDefaultTags),
@@ -251,7 +263,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   });
 
   const path = '/contacts';
-  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions }, headers);
+  // Step 1: upsert contact and set fields
+  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions }, headers);
   debug.steps.create = {
     status: createRes.status,
     bodySnippet: (createRes.text || '').slice(0, 200),
@@ -271,7 +284,23 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const success = Boolean(bodyJson?.success);
   console.info('[chatrace] create contact response', { receiptNumber, phoneE164, status: createRes.status, success });
 
-  debug.ok = Boolean(createRes.ok && success);
+  // If first step failed, persist debug and return
+  if (!createRes.ok || !success) {
+    debug.ok = false;
+    if (!debug.error) debug.error = 'failed_to_create_or_update_contact';
+    await persistDebug(receiptNumber, debug);
+    return { ok: false, debug };
+  }
+
+  // Step 2: apply tags in a separate request to ensure fields are persisted
+  const tagRes = await runRequest(path, { phone: phoneE164, actions: tagActions }, headers);
+  debug.steps.tag = { status: tagRes.status, bodySnippet: (tagRes.text || '').slice(0, 200), ok: tagRes.ok };
+  try {
+    const tagJson = tagRes.json ?? null;
+    debug.steps.tag.response = tagJson;
+  } catch {}
+
+  debug.ok = Boolean(tagRes.ok || createRes.ok);
   await persistDebug(receiptNumber, debug);
   return { ok: debug.ok, debug };
 }
