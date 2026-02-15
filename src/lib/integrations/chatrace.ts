@@ -207,8 +207,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   } catch (e) {
     itemsSummary = '';
   }
-  // Ensure we always set the field (empty string if no items) so the template variables exist
-  fieldActions.push(setFieldValue('items_summary', itemsSummary));
+  // Ensure we always set the field (fallback text when no items) so the template parameters never send empty
+  const itemsSummarySafe = itemsSummary.trim().length ? itemsSummary : 'Items: (not available)';
+  fieldActions.push(setFieldValue('items_summary', itemsSummarySafe));
   // Optionally include receipt_id as well
   if (receiptId) fieldActions.push(setFieldValue('receipt_id', receiptId));
 
