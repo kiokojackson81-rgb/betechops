@@ -262,6 +262,7 @@ export async function POST(req: Request) {
       0
     );
     const periodTotalReceipts = periodEntries.reduce((sum, e) => sum + e.receipts.length, 0);
+    const periodTotalReceiptRows = periodTotalReceipts;
     const commissionInfo = getCommissionSummaryForSales(periodSales);
     let commissionValue = 0;
     if (periodProfit > 0) {
@@ -279,6 +280,7 @@ export async function POST(req: Request) {
       countMpesaReceipts: periodMpesaCount,
       countCashReceipts: periodCashCount,
       totalReceipts: periodTotalReceipts,
+      totalReceiptRows: periodTotalReceiptRows,
       totalItems: periodItems,
       commission: commissionValue,
       nextTarget: commissionInfo.nextTarget,

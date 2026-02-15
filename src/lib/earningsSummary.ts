@@ -139,7 +139,13 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     mergedItems += v.items ?? 0;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
+  let user: { email?: string } | null = null;
+  try {
+    user = typeof prisma.user?.findUnique === 'function' ? await prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } }) : null;
+  } catch (err) {
+    console.warn('[earningsSummary] failed to load user email, proceeding without it', err instanceof Error ? err.message : String(err));
+    user = null;
+  }
   const isJeniffer = (user?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
   const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;

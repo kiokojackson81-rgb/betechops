@@ -1,5 +1,5 @@
 export const COMMISSION_LADDER: { min: number; reward: number }[] = [
-  { min: 500_000, reward: 10_000 },
+  { min: 1_000_000, reward: 10_000 },
   { min: 2_000_000, reward: 15_000 },
   { min: 3_000_000, reward: 20_000 },
   { min: 4_000_000, reward: 20_000 },

@@ -164,49 +164,53 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     field_name: fieldName,
     value: value == null ? '' : String(value),
   });
-
+  // Build minimal required custom fields and tags according to integration
+  // requirements. We MUST only upsert the contact, set custom fields and
+  // apply the trigger tag `receipt_created`. We may also apply an
+  // additional custom tag (e.g. POD) if provided in `tagName`.
   const actions: any[] = [];
-  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
-  actions.push(setFieldValue('media_url', finalReceiptUrl));
-  actions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
-  actions.push(setFieldValue('file_url', finalReceiptUrl));
 
+  // Required custom fields (must match exactly)
+  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
   actions.push(setFieldValue('customer_name', customerName || 'Customer'));
-  actions.push(setFieldValue('order_placed', receiptNumber));
+  actions.push(setFieldValue('receipt_number', receiptNumber));
   actions.push(setFieldValue('amount', amount));
   actions.push(setFieldValue('currency', currency || 'KES'));
-  if (receiptId) {
-    actions.push(setFieldValue('receipt_id', receiptId));
-  }
-  actions.push(setFieldValue('receipt_channel', 'customer'));
 
-  // Map optional richer fields so Chatrace templates can access them
-  if (input.paymentMethod) {
-    actions.push(setFieldValue('payment_method', input.paymentMethod));
-  }
-  if (input.attendant) {
-    actions.push(setFieldValue('attendant', input.attendant));
-  }
-  if (input.items && Array.isArray(input.items)) {
+  // Format items_summary as plain text lines (1. name xqty — KES #)
+  const formatCurrencyKesLocal = (v: number | string) => {
     try {
-      actions.push(setFieldValue('items', JSON.stringify(input.items)));
+      const n = Number(v) || 0;
+      return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
     } catch {
-      actions.push(setFieldValue('items', String(input.items)));
+      return `${Math.round(Number(v) || 0)} KES`;
     }
-  }
+  };
 
-  if (!skipDefaultTags) {
-    actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
-    actions.push({
-      action: 'add_tag',
-      tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
-    });
+  let itemsSummary = '';
+  try {
+    if (input.items && Array.isArray(input.items) && input.items.length) {
+      itemsSummary = input.items
+        .map((it: any, idx: number) => {
+          const title = String(it.title || it.productName || it.product || it.name || '').trim() || 'Item';
+          const qty = Number.isFinite(Number(it.quantity ?? 1)) ? Number(it.quantity ?? 1) : 1;
+          const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice ?? 0)) ? Number(it.unitPrice ?? it.sellingPrice ?? 0) : 0;
+          const priceText = formatCurrencyKesLocal(unit * qty);
+          return `${idx + 1}. ${title} x${qty} — ${priceText}`;
+        })
+        .join('\n');
+    }
+  } catch (e) {
+    itemsSummary = '';
   }
-  if (finalTag) {
-    actions.push({
-      action: 'add_tag',
-      tag_name: finalTag,
-    });
+  actions.push(setFieldValue('items_summary', itemsSummary));
+
+  // Always apply the trigger tag the Flow listens for
+  actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+  // Also apply any custom tag provided (e.g. pod dispatch). Do not skip
+  // applying the core trigger tag even when skipDefaultTags is true.
+  if (finalTag && finalTag !== 'receipt_created') {
+    actions.push({ action: 'add_tag', tag_name: finalTag });
   }
 
   debug.payloadPreview = {

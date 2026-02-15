@@ -10,15 +10,35 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const receiptId = url.searchParams.get('receiptId') || undefined;
+  const podOnly = ['1', 'true', 'yes'].includes((url.searchParams.get('podOnly') || '').toLowerCase());
 
   const where: any = {};
   if (receiptId) where.receiptId = receiptId;
+  if (podOnly) {
+    where.receipt = { data: { path: ['podDelivery'], not: { equals: null } } };
+  }
 
-  const files = await prisma.receiptFile.findMany({ where, orderBy: { uploadedAt: 'desc' }, include: { receipt: { select: { id: true, data: true, docType: true } } } });
+  const files = await prisma.receiptFile.findMany({
+    where,
+    orderBy: { uploadedAt: 'desc' },
+    include: {
+      receipt: {
+        select: {
+          id: true,
+          docType: true,
+          data: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
 
-  // Expose a lightweight podDelivery summary for the admin UI
   const filesWithPod = files.map((f) => {
-    const pod = f.receipt && typeof f.receipt.data === 'object' && f.receipt.data ? (f.receipt.data as any).podDelivery ?? null : null;
+    const receiptObj = f.receipt ?? null;
+    const pod =
+      receiptObj && typeof receiptObj.data === 'object' && receiptObj.data
+        ? (receiptObj.data as any).podDelivery ?? null
+        : null;
     return {
       id: f.id,
       receiptId: f.receiptId,
@@ -29,7 +49,15 @@ export async function GET(req: NextRequest) {
       uploadedAt: f.uploadedAt,
       expiresAt: f.expiresAt,
       podDelivery: pod,
-      receiptDocType: f.receipt?.docType ?? null,
+      receiptDocType: receiptObj?.docType ?? null,
+      receipt: receiptObj
+        ? {
+            id: receiptObj.id,
+            docType: receiptObj.docType,
+            createdAt: receiptObj.createdAt,
+            data: receiptObj.data,
+          }
+        : null,
     };
   });
 

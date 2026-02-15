@@ -148,6 +148,8 @@ export async function GET(req: Request) {
     totalReceipts = merged.size;
   }
 
+  const totalReceiptRows = posSummary?.totalReceipts ?? totalReceipts;
+
   let commission = 0;
   if (isJeniffer && posSummary) {
     commission = computeSalesCommissionFromTiers(
@@ -221,6 +223,7 @@ export async function GET(req: Request) {
     },
     aggregates: {
       totalSales,
+      totalReceiptRows,
       totalReceipts,
       totalItems,
       paymentStats: mergedPaymentStats,

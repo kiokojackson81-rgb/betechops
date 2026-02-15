@@ -1294,8 +1294,11 @@ const totalReceipts = totals.filledReceiptsCount ?? receipts.length;
   const combinedPeriodItems = serverPeriodTotalItems + totalItems;
   // receipts: server may provide counts per payment method in paymentStats
   const serverPeriodReceipts =
-    (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
-    (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
+    typeof serverPeriodSummary?.aggregates?.totalReceiptRows === "number" &&
+    serverPeriodSummary.aggregates.totalReceiptRows > 0
+      ? serverPeriodSummary.aggregates.totalReceiptRows
+      : (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
+        (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
   const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
 
   const commissionSummary = useMemo(

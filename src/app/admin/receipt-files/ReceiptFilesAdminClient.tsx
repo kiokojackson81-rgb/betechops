@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 export default function ReceiptFilesAdminClient() {
   const [files, setFiles] = useState<any[]>([]);
@@ -8,70 +8,141 @@ export default function ReceiptFilesAdminClient() {
   const [showOnlyPod, setShowOnlyPod] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/receipt-files');
-      const j = await res.json();
-      setFiles(j.files || []);
+      const url = showOnlyPod ? '/api/receipt-files?podOnly=1' : '/api/receipt-files';
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      setFiles(Array.isArray(data.files) ? data.files : []);
     } catch (err) {
       console.error('failed to load receipt files', err);
       setFiles([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [showOnlyPod]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const remove = async (id: string) => {
     if (!confirm('Delete this receipt file?')) return;
     const res = await fetch(`/api/receipt-files/${id}`, { method: 'DELETE' });
-    const j = await res.json();
-    if (j.ok) load(); else alert(j.error || 'Failed');
+    const j = await res.json().catch(() => ({}));
+    if (j.ok) {
+      void load();
+    } else {
+      alert(j.error || 'Failed');
+    }
   };
 
   return (
     <div>
-      <h2 className="text-lg font-semibold">Receipt Files</h2>
-      <div className="mt-2 mb-2 flex items-center gap-3">
-        <label className="text-sm">Show only POD receipts</label>
-        <input type="checkbox" checked={showOnlyPod} onChange={(e) => setShowOnlyPod(e.target.checked)} />
-        <button className="ml-4 text-sm text-sky-600" onClick={() => load()}>Refresh</button>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Receipt Files</h2>
+        <button
+          onClick={() => load()}
+          disabled={loading}
+          className="text-sm text-sky-600 transition hover:text-sky-400 disabled:text-slate-500"
+        >
+          Refresh
+        </button>
       </div>
-      {loading ? <div>Loading...</div> : (
-        <table className="w-full border-collapse mt-2">
-          <thead><tr><th>Receipt</th><th>URL</th><th>UploadedAt</th><th>ExpiresAt</th><th>Actions</th></tr></thead>
-          <tbody>
-            {files
-              .filter((f) => !showOnlyPod || Boolean(f.podDelivery))
-              .map((f) => (
-              <React.Fragment key={f.id}>
-                <tr className="border-t">
-                  <td>
-                    <div>{f.receiptId}</div>
-                    <div className="text-[11px] text-slate-400">{f.receiptDocType ?? ''}</div>
-                    {f.podDelivery ? <div className="text-[11px] text-amber-300">POD: {String(f.podDelivery.status ?? '')}</div> : null}
-                  </td>
-                  <td><a href={f.url} target="_blank" rel="noreferrer">link</a></td>
-                  <td>{new Date(f.uploadedAt).toLocaleString()}</td>
-                  <td>{f.expiresAt ? new Date(f.expiresAt).toLocaleString() : ''}</td>
-                  <td className="flex items-center gap-2">
-                    <button className="text-red-600" onClick={() => remove(f.id)}>Delete</button>
-                    <button className="text-sm text-slate-600" onClick={() => setExpanded(prev => ({ ...prev, [f.id]: !prev[f.id] }))}>{expanded[f.id] ? 'Hide' : 'Details'}</button>
-                  </td>
-                </tr>
-                {expanded[f.id] ? (
-                  <tr>
-                    <td colSpan={5} className="bg-slate-50 p-2">
-                      <pre className="text-xs max-h-48 overflow-auto">{JSON.stringify(f, null, 2)}</pre>
+      <div className="mt-2 mb-3 flex items-center gap-2">
+        <label className="text-sm">Show only POD receipts</label>
+        <input
+          type="checkbox"
+          checked={showOnlyPod}
+          onChange={(e) => setShowOnlyPod(e.target.checked)}
+          className="h-4 w-4 rounded accent-emerald-500"
+        />
+      </div>
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
+                <th className="py-2 pr-4">Receipt</th>
+                <th className="py-2 pr-4">Link</th>
+                <th className="py-2 pr-4">Uploaded At</th>
+                <th className="py-2 pr-4">Expires At</th>
+                <th className="py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f) => (
+                <React.Fragment key={f.id}>
+                  <tr className="border-t border-white/5 bg-slate-950/40">
+                    <td className="py-3 align-top">
+                      <div className="font-semibold text-slate-100">{f.receiptId}</div>
+                      <div className="text-[11px] text-slate-400">
+                        Type: {f.receiptDocType ?? 'unknown'}
+                      </div>
+                      {f.podDelivery ? (
+                        <div className="text-[11px] text-amber-300">
+                          POD: {String(f.podDelivery.status ?? 'pending')}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-slate-500">Not marked POD</div>
+                      )}
+                    </td>
+                    <td className="py-3">
+                      <a
+                        className="text-emerald-400 underline-offset-2 hover:underline"
+                        href={f.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        link
+                      </a>
+                    </td>
+                    <td className="py-3">
+                      {f.uploadedAt ? new Date(f.uploadedAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="py-3">
+                      {f.expiresAt ? new Date(f.expiresAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button className="text-red-600" onClick={() => remove(f.id)}>
+                          Delete
+                        </button>
+                        <button
+                          className="text-slate-300"
+                          onClick={() =>
+                            setExpanded((prev) => ({ ...prev, [f.id]: !prev[f.id] }))
+                          }
+                        >
+                          {expanded[f.id] ? 'Hide' : 'Details'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : null}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+                  {expanded[f.id] && (
+                    <tr>
+                      <td colSpan={5} className="bg-slate-900/80 px-3 py-2">
+                        <pre className="text-[11px] text-slate-200">
+                          {JSON.stringify(
+                            {
+                              ...f,
+                              receipt: f.receipt ? { ...f.receipt, data: f.receipt.data ?? null } : null,
+                            },
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
