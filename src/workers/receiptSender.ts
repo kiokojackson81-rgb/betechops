@@ -833,28 +833,41 @@ export async function sendReceiptChannels(
           }
 
           // Build admin payload fields
-          const adminPayloadBase = {
-            receiptNumber: resolvedReceiptNumber,
-            customerName: resolvedCustomerName,
-            customerPhone: rawCustomerPhone || '',
-            formattedAmount: formatCurrencyKes(Number(resolvedAmount)),
-            paymentMethod: chitInput.paymentMethod ?? '',
-            createdBy: snapshot.attendantName ?? receipt.issuedBy?.name ?? 'system',
-            itemsSummary,
-            totalSalesToday: Math.round(totalSalesToday),
-          } as any;
-
           const adminResults: any[] = [];
+          const formattedAmount = formatCurrencyKes(Number(resolvedAmount));
+          const createdBy = snapshot.attendantName ?? receipt.issuedBy?.name ?? 'system';
+          const paymentMethod = chitInput.paymentMethod ?? '';
+
+          // Prepare exact snake_case custom field map required by template
+          const adminExtraFields: Record<string, string | number> = {
+            receipt_number: resolvedReceiptNumber,
+            customer_name: resolvedCustomerName,
+            customer_phone: rawCustomerPhone || '',
+            formatted_amount: formattedAmount,
+            payment_method: paymentMethod,
+            created_by: createdBy,
+            items_summary: itemsSummary,
+            total_sales_today: Math.round(totalSalesToday),
+          };
+
           for (const raw of adminPhonesRaw) {
             const admNorm = normalizePhone(raw);
             if (!admNorm) continue;
             try {
+              // Use pushReceiptToChatrace but pass `extraFields` so the helper writes
+              // the exact custom field names before applying the tag.
               const adminPushResult = await pushReceiptToChatrace({
                 phoneE164: admNorm,
-                // these fields should be mapped to the contact custom fields by the integration
-                ...adminPayloadBase,
+                customerName: resolvedCustomerName,
+                receiptNumber: resolvedReceiptNumber,
+                amount: resolvedAmount,
+                currency: 'KES',
+                receiptLink: receiptPageLink,
+                receiptUrl: finalReceiptUrl ?? undefined,
+                receiptId: receipt.id,
                 tagName: 'receipt_admin_alert',
                 skipDefaultTags: true,
+                extraFields: adminExtraFields,
               });
               adminResults.push({ phone: admNorm, ok: adminPushResult?.ok, debug: adminPushResult?.debug });
             } catch (e) {

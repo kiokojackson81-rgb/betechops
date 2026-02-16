@@ -19,6 +19,8 @@ export type SendReceiptToChatraceInput = {
   items?: any[];
   paymentMethod?: string;
   attendant?: string;
+  // extra custom fields to set with exact field names (e.g. formatted_amount)
+  extraFields?: Record<string, string | number | null | undefined>;
 };
 
 function checkConfig() {
@@ -222,6 +224,17 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     fieldActions.push(setFieldValue('items', itemsSummarySafe));
   } catch (e) {
     // noop — best-effort
+  }
+
+  // Add any extraFields provided by caller using exact field names
+  try {
+    if (input.extraFields && typeof input.extraFields === 'object') {
+      for (const [k, v] of Object.entries(input.extraFields)) {
+        fieldActions.push(setFieldValue(String(k), v == null ? '' : String(v)));
+      }
+    }
+  } catch (e) {
+    // ignore
   }
 
   // Build tag actions separately so they can be applied after fields persist
