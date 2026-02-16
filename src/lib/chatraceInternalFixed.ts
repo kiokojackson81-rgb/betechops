@@ -145,6 +145,9 @@ export async function pushInternalReceiptAlert(input: {
     { action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "customer_name", value: input.customerName ?? "Customer" },
     { action: "set_field_value", field_name: "customer_phone", value: toDigitsOrEmpty(input.customerPhone) },
+    // Keep both "amount"+"currency" and "formatted_amount" for template compatibility.
+    { action: "set_field_value", field_name: "amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
+    { action: "set_field_value", field_name: "currency", value: "KES" },
     { action: "set_field_value", field_name: "formatted_amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
     { action: "set_field_value", field_name: "payment_method", value: input.paymentMethod },
     { action: "set_field_value", field_name: "created_by", value: input.createdBy },
