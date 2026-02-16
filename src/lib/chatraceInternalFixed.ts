@@ -96,8 +96,9 @@ export async function pushInternalReceiptAlert(input: {
   // Optional fields for newer admin templates (snake_case fields)
   customerName?: string;
   customerPhone?: string;
-  formattedAmount?: string;
+  formattedAmount?: string | number;
   itemsSummary?: string;
+  itemsCount?: number;
   totalSalesToday?: string | number;
   receiptLink?: string; // kept for caller compatibility, ignored in payload
   receiptPdfUrl?: string | null; // kept for caller compatibility, ignored in payload
@@ -118,6 +119,20 @@ export async function pushInternalReceiptAlert(input: {
   }
 
   const itemsSummary = (input.itemsSummary ?? input.itemsText ?? '').toString();
+
+  // Some Chatrace instances configure these custom fields as "Number".
+  // If so, sending non-numeric strings may result in blank values.
+  const toDigitsOrEmpty = (value?: string) => {
+    const raw = (value ?? '').toString().trim();
+    if (!raw) return '';
+    const digits = raw.replace(/[^0-9]/g, '');
+    return digits;
+  };
+  const toNumberStringOrEmpty = (value?: string | number) => {
+    if (value == null) return '';
+    const n = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) ? String(Math.round(n)) : '';
+  };
   const actions = [
     // Legacy/internal field names (keep for backwards compatibility)
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
@@ -129,12 +144,13 @@ export async function pushInternalReceiptAlert(input: {
     // Newer admin WhatsApp template field names (must match Chatrace Flow mapping)
     { action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "customer_name", value: input.customerName ?? "Customer" },
-    { action: "set_field_value", field_name: "customer_phone", value: input.customerPhone ?? "" },
-    { action: "set_field_value", field_name: "formatted_amount", value: input.formattedAmount ?? input.amount },
+    { action: "set_field_value", field_name: "customer_phone", value: toDigitsOrEmpty(input.customerPhone) },
+    { action: "set_field_value", field_name: "formatted_amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
     { action: "set_field_value", field_name: "payment_method", value: input.paymentMethod },
     { action: "set_field_value", field_name: "created_by", value: input.createdBy },
-    { action: "set_field_value", field_name: "items_summary", value: itemsSummary },
-    { action: "set_field_value", field_name: "total_sales_today", value: input.totalSalesToday ?? "" },
+    // If items_summary is configured as Number, store item count and use admin_items for the text list.
+    { action: "set_field_value", field_name: "items_summary", value: toNumberStringOrEmpty(input.itemsCount ?? '') },
+    { action: "set_field_value", field_name: "total_sales_today", value: toNumberStringOrEmpty(input.totalSalesToday) },
 
     { action: "add_tag", tag_name: "receipt_admin_alert" },
   ];

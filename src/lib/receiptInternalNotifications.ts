@@ -16,6 +16,12 @@ function formatCurrencyKes(value: number) {
   }
 }
 
+function digitsOnly(value?: string) {
+  const raw = (value ?? '').toString().trim();
+  if (!raw) return '';
+  return raw.replace(/[^0-9]/g, '');
+}
+
 function getNairobiUtcWindow(date: Date) {
   // Nairobi is UTC+3 and does not observe DST.
   const nairobiOffsetMs = 3 * 60 * 60 * 1000;
@@ -95,6 +101,12 @@ export async function notifyInternalReceipt(
 
   const itemsShort = extractItemsShort(receipt as any);
   const itemsSummary = String(itemsShort || '').replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+  const itemsCount = itemsShort
+    ? String(itemsShort)
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean).length
+    : 0;
   const baseUrl = getSiteUrl().replace(/\/$/, '');
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
@@ -129,14 +141,17 @@ export async function notifyInternalReceipt(
     requestId: rid,
     receiptNumber,
     amount: String(Math.round(invoiceAmount)),
-    formattedAmount,
+    // If the Chatrace field is configured as Number, send a numeric-only value.
+    formattedAmount: Math.round(invoiceAmount),
     paymentMethod,
     createdBy: snapshot.attendantName ?? '(unknown)',
     itemsText: itemsShort,
     itemsSummary,
+    itemsCount,
     totalSalesToday: Math.round(totalSalesToday),
     customerName: (receipt.order as any)?.customerName ?? snapshot.customerName ?? 'Customer',
-    customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
+    // If the Chatrace field is configured as Number, send digits only (E.164 without +).
+    customerPhone: digitsOnly((receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? ''),
     receiptLink: receiptLinkSafe,
     receiptPdfUrl: receiptUrl ?? null,
   });
