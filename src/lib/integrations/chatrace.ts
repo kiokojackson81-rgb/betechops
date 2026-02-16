@@ -19,6 +19,8 @@ export type SendReceiptToChatraceInput = {
   items?: any[];
   paymentMethod?: string;
   attendant?: string;
+  // extra custom fields to set with exact field names (e.g. formatted_amount)
+  extraFields?: Record<string, string | number | null | undefined>;
 };
 
 function checkConfig() {
@@ -162,59 +164,126 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const setFieldValue = (fieldName: string, value: any) => ({
     action: 'set_field_value',
     field_name: fieldName,
-    value: value == null ? '' : String(value),
+    value: (() => {
+      const raw = value == null ? '' : String(value);
+      // Chatrace/WhatsApp template params must not contain newlines/tabs
+      // or excessive consecutive spaces. Replace newlines/tabs with a single
+      // space and collapse multiple spaces to a single space.
+      try {
+        return raw.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+      } catch (e) {
+        return raw;
+      }
+    })(),
   });
+  // Build minimal required custom fields according to integration
+  // requirements. We'll perform a two-step POST: first upsert/set fields,
+  // then apply the trigger tag `receipt_created` so Chatrace Flows render
+  // template variables from the persisted fields.
+  const fieldActions: any[] = [];
 
-  const actions: any[] = [];
-  actions.push(setFieldValue('receipt_url', finalReceiptUrl));
-  actions.push(setFieldValue('media_url', finalReceiptUrl));
-  actions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
-  actions.push(setFieldValue('file_url', finalReceiptUrl));
+  // Required custom fields (must match exactly)
+  fieldActions.push(setFieldValue('receipt_url', finalReceiptUrl));
+  // Common aliases used by older templates/flows
+  fieldActions.push(setFieldValue('media_url', finalReceiptUrl));
+  fieldActions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
+  fieldActions.push(setFieldValue('file_url', finalReceiptUrl));
+  fieldActions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  fieldActions.push(setFieldValue('receipt_number', receiptNumber));
+  fieldActions.push(setFieldValue('amount', amount));
+  fieldActions.push(setFieldValue('currency', currency || 'KES'));
 
-  actions.push(setFieldValue('customer_name', customerName || 'Customer'));
-  actions.push(setFieldValue('order_placed', receiptNumber));
-  actions.push(setFieldValue('amount', amount));
-  actions.push(setFieldValue('currency', currency || 'KES'));
-  if (receiptId) {
-    actions.push(setFieldValue('receipt_id', receiptId));
-  }
-  actions.push(setFieldValue('receipt_channel', 'customer'));
-
-  // Map optional richer fields so Chatrace templates can access them
-  if (input.paymentMethod) {
-    actions.push(setFieldValue('payment_method', input.paymentMethod));
-  }
-  if (input.attendant) {
-    actions.push(setFieldValue('attendant', input.attendant));
-  }
-  if (input.items && Array.isArray(input.items)) {
+  // Format items_summary as plain text lines (1. name xqty — KES #)
+  const formatCurrencyKesLocal = (v: number | string) => {
     try {
-      actions.push(setFieldValue('items', JSON.stringify(input.items)));
+      const n = Number(v) || 0;
+      return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
     } catch {
-      actions.push(setFieldValue('items', String(input.items)));
+      return `${Math.round(Number(v) || 0)} KES`;
     }
+  };
+
+  let itemsSummary = '';
+  try {
+    if (input.items && Array.isArray(input.items) && input.items.length) {
+      const lines = input.items.map((it: any, idx: number) => {
+        const title = String(it.title || it.productName || it.product || it.name || '').trim() || 'Item';
+        const qty = Number.isFinite(Number(it.quantity ?? 1)) ? Number(it.quantity ?? 1) : 1;
+        const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice ?? 0)) ? Number(it.unitPrice ?? it.sellingPrice ?? 0) : 0;
+        const priceText = formatCurrencyKesLocal(unit * qty);
+        return `${idx + 1}) ${title} x${qty} — ${priceText}`;
+      });
+      itemsSummary = lines.join('\n');
+      // Truncate to ~700 chars to keep WhatsApp template safe
+      const MAX_LEN = 700;
+      if (itemsSummary.length > MAX_LEN) {
+        itemsSummary = itemsSummary.slice(0, MAX_LEN - 1).trimEnd() + '…';
+      }
+    }
+  } catch (e) {
+    itemsSummary = '';
+  }
+  // Ensure we always set the field (fallback text when no items) so the template parameters never send empty
+  const itemsSummarySafe = itemsSummary.trim().length ? itemsSummary : 'Items: (not available)';
+  fieldActions.push(setFieldValue('items_summary', itemsSummarySafe));
+  // Optionally include receipt_id as well
+  if (receiptId) fieldActions.push(setFieldValue('receipt_id', receiptId));
+  // Also write common alias fields so templates that use alternate names
+  // (e.g. order_placed, order_number) still receive the value.
+  try {
+    fieldActions.push(setFieldValue('order_placed', receiptNumber));
+    fieldActions.push(setFieldValue('order_number', receiptNumber));
+    fieldActions.push(setFieldValue('receipt_no', receiptNumber));
+    // Some flows expect items under a shorter key
+    fieldActions.push(setFieldValue('items', itemsSummarySafe));
+  } catch (e) {
+    // noop — best-effort
   }
 
+  // Add any extraFields provided by caller using exact field names
+  try {
+    if (input.extraFields && typeof input.extraFields === 'object') {
+      for (const [k, v] of Object.entries(input.extraFields)) {
+        fieldActions.push(setFieldValue(String(k), v == null ? '' : String(v)));
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Build tag actions separately so they can be applied after fields persist
+  const tagActions: any[] = [];
+
+  // When callers want to set fields without triggering flows (e.g. SMS/email-only,
+  // internal/admin alerts), they can pass skipDefaultTags=true. In that case we
+  // only apply the explicit tagName (if provided).
   if (!skipDefaultTags) {
-    actions.push({ action: 'add_tag', tag_name: 'receipt_created' });
-    actions.push({
+    // Default trigger tags that most Flows listen for
+    tagActions.push({ action: 'add_tag', tag_name: 'receipt_created' });
+    tagActions.push({
       action: 'add_tag',
       tag_name: receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link',
     });
   }
+
+  // Apply any custom tag provided (e.g. pod dispatch, admin alert).
   if (finalTag) {
-    actions.push({
-      action: 'add_tag',
-      tag_name: finalTag,
-    });
+    // Avoid duplicating the default trigger when skipDefaultTags is false and caller
+    // explicitly passes receipt_created.
+    if (!(!skipDefaultTags && finalTag === 'receipt_created')) {
+      tagActions.push({ action: 'add_tag', tag_name: finalTag });
+    }
   }
 
   debug.payloadPreview = {
     phone: phoneE164,
     first_name: customerName || 'Customer',
-    actionsCount: actions.length,
-    tag: finalTag || 'receipt_created',
-    debugTag: finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
+    fieldActionsCount: fieldActions.length,
+    tagActionsCount: tagActions.length,
+    tag: finalTag || (skipDefaultTags ? null : 'receipt_created'),
+    debugTag:
+      finalTag ||
+      (skipDefaultTags ? null : receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
     skipDefaultTags: Boolean(skipDefaultTags),
     hasReceiptUrl: !!finalReceiptUrl,
     receiptMode,
@@ -234,20 +303,25 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptUrlTrimmedLength: receiptUrlTrimmed?.length ?? 0,
     finalReceiptUrlLength: finalReceiptUrl.length,
     finalReceiptUrlSnippet: finalReceiptUrl.slice(0, 120),
-    tagToApply: finalTag || 'receipt_created',
-    debugTag: finalTag || (receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
+    tagToApply: finalTag || (skipDefaultTags ? '(no_tag)' : 'receipt_created'),
+    debugTag: finalTag || (skipDefaultTags ? '(no_tag)' : receiptMode === 'pdf' ? 'receipt_created_pdf' : 'receipt_created_link'),
   });
 
   // summary log for monitoring integrations (phone, final receipt_url, tag, mode)
   console.info('[chatrace] pushSummary', {
     phone: phoneE164,
     receipt_url: finalReceiptUrl,
-    tag: finalTag || 'receipt_created',
+    tag: finalTag || (skipDefaultTags ? '(no_tag)' : 'receipt_created'),
     receiptMode,
   });
 
   const path = '/contacts';
-  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions }, headers);
+  // Step 1: upsert contact and set fields
+  // Persist the exact request bodies into debug for post-mortem
+  debug.steps = debug.steps || {};
+  debug.steps.create = debug.steps.create || {};
+  debug.steps.create.request = { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions };
+  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions }, headers);
   debug.steps.create = {
     status: createRes.status,
     bodySnippet: (createRes.text || '').slice(0, 200),
@@ -267,7 +341,41 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const success = Boolean(bodyJson?.success);
   console.info('[chatrace] create contact response', { receiptNumber, phoneE164, status: createRes.status, success });
 
-  debug.ok = Boolean(createRes.ok && success);
+  // If first step failed, persist debug and return
+  if (!createRes.ok || !success) {
+    debug.ok = false;
+    if (!debug.error) debug.error = 'failed_to_create_or_update_contact';
+    await persistDebug(receiptNumber, debug);
+    return { ok: false, debug };
+  }
+
+  // If we are not applying any tags, we're done (fields are set, but no Flow is triggered).
+  if (tagActions.length === 0) {
+    debug.steps.tag = { skipped: true };
+    debug.ok = true;
+    await persistDebug(receiptNumber, debug);
+    return { ok: true, debug };
+  }
+
+  // Step 2: apply tags in a separate request to ensure fields are persisted.
+  // Add a short delay to avoid Chatrace evaluating the Flow before fields are indexed.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const baseDelayMsRaw = process.env.CHATRACE_TAG_DELAY_MS ? Number(process.env.CHATRACE_TAG_DELAY_MS) : 300;
+  const baseDelayMs = Number.isFinite(baseDelayMsRaw) ? Math.max(0, Math.round(baseDelayMsRaw)) : 300;
+  const isAdminAlert = finalTag === 'receipt_admin_alert';
+  const delayMs =
+    process.env.NODE_ENV === 'test' ? 0 : isAdminAlert ? Math.max(baseDelayMs, 1500) : baseDelayMs;
+  await sleep(delayMs);
+  debug.steps.tag = debug.steps.tag || {};
+  debug.steps.tag.request = { phone: phoneE164, actions: tagActions };
+  const tagRes = await runRequest(path, { phone: phoneE164, actions: tagActions }, headers);
+  debug.steps.tag = { status: tagRes.status, bodySnippet: (tagRes.text || '').slice(0, 200), ok: tagRes.ok };
+  try {
+    const tagJson = tagRes.json ?? null;
+    debug.steps.tag.response = tagJson;
+  } catch {}
+
+  debug.ok = Boolean(tagRes.ok || createRes.ok);
   await persistDebug(receiptNumber, debug);
   return { ok: debug.ok, debug };
 }

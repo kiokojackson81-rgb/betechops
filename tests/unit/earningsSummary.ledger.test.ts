@@ -1,5 +1,6 @@
 jest.mock('@/lib/prisma', () => ({
   prisma: {
+    user: { findUnique: jest.fn().mockResolvedValue({ email: 'test@example.com' }) },
     profitSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
     dailyReport: { findMany: jest.fn().mockResolvedValue([]) },
     attendantCompPlan: { findUnique: jest.fn().mockResolvedValue(null) },

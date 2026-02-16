@@ -93,6 +93,12 @@ export async function pushInternalReceiptAlert(input: {
   paymentMethod: string;
   createdBy: string;
   itemsText: string;
+  // Optional fields for newer admin templates (snake_case fields)
+  customerName?: string;
+  customerPhone?: string;
+  formattedAmount?: string;
+  itemsSummary?: string;
+  totalSalesToday?: string | number;
   receiptLink?: string; // kept for caller compatibility, ignored in payload
   receiptPdfUrl?: string | null; // kept for caller compatibility, ignored in payload
   requestId?: string;
@@ -111,12 +117,25 @@ export async function pushInternalReceiptAlert(input: {
     console.info('[internal][adminAlert] ignoring receiptPdfUrl for internal alert', { receiptNumber: input.receiptNumber });
   }
 
+  const itemsSummary = (input.itemsSummary ?? input.itemsText ?? '').toString();
   const actions = [
+    // Legacy/internal field names (keep for backwards compatibility)
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "admin_amount", value: input.amount },
     { action: "set_field_value", field_name: "admin_payment_method", value: input.paymentMethod },
     { action: "set_field_value", field_name: "admin_created_by", value: input.createdBy },
-    { action: "set_field_value", field_name: "admin_items", value: input.itemsText },
+    { action: "set_field_value", field_name: "admin_items", value: itemsSummary },
+
+    // Newer admin WhatsApp template field names (must match Chatrace Flow mapping)
+    { action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber },
+    { action: "set_field_value", field_name: "customer_name", value: input.customerName ?? "Customer" },
+    { action: "set_field_value", field_name: "customer_phone", value: input.customerPhone ?? "" },
+    { action: "set_field_value", field_name: "formatted_amount", value: input.formattedAmount ?? input.amount },
+    { action: "set_field_value", field_name: "payment_method", value: input.paymentMethod },
+    { action: "set_field_value", field_name: "created_by", value: input.createdBy },
+    { action: "set_field_value", field_name: "items_summary", value: itemsSummary },
+    { action: "set_field_value", field_name: "total_sales_today", value: input.totalSalesToday ?? "" },
+
     { action: "add_tag", tag_name: "receipt_admin_alert" },
   ];
 

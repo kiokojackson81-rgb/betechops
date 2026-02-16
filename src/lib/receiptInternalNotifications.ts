@@ -8,6 +8,26 @@ export function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ops.betech.co.ke';
 }
 
+function formatCurrencyKes(value: number) {
+  try {
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${Math.round(value)} KES`;
+  }
+}
+
+function getNairobiUtcWindow(date: Date) {
+  // Nairobi is UTC+3 and does not observe DST.
+  const nairobiOffsetMs = 3 * 60 * 60 * 1000;
+  const createdInNairobi = new Date(date.getTime() + nairobiOffsetMs);
+  const yyyy = createdInNairobi.getUTCFullYear();
+  const mm = createdInNairobi.getUTCMonth();
+  const dd = createdInNairobi.getUTCDate();
+  const startUtcMs = Date.UTC(yyyy, mm, dd, 0, 0, 0) - nairobiOffsetMs;
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+  return { start: new Date(startUtcMs), end: new Date(endUtcMs) };
+}
+
 export async function notifyInternalReceipt(
   receiptId: string,
   docType?: string,
@@ -25,7 +45,10 @@ export async function notifyInternalReceipt(
       order: {
         select: {
           orderNumber: true,
+          customerName: true,
+          customerPhone: true,
           attendant: { select: { name: true } },
+          totalAmount: true,
         },
       },
     },
@@ -56,6 +79,7 @@ export async function notifyInternalReceipt(
 
   const amountKES = extractReceiptTotalKES(receipt as any);
   const invoiceAmount = Number.isFinite(amountKES) ? amountKES : 0;
+  const formattedAmount = formatCurrencyKes(invoiceAmount);
   const paymentMethod = String(
     (typeof receipt.data === 'object' && receipt.data
       ? (receipt.data as Record<string, any>).paymentMethod
@@ -70,6 +94,7 @@ export async function notifyInternalReceipt(
   const staffName = receipt.issuedBy?.name || receipt.issuedBy?.email || '(unknown)';
 
   const itemsShort = extractItemsShort(receipt as any);
+  const itemsSummary = String(itemsShort || '').replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
   const baseUrl = getSiteUrl().replace(/\/$/, '');
   const receiptLink = `${baseUrl}/receipts/${receipt.id}`;
 
@@ -78,14 +103,40 @@ export async function notifyInternalReceipt(
     console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
   }
   const receiptLinkSafe = (receiptUrl && receiptUrl.trim()) || receiptLink;
+
+  // Daily total sales (Nairobi day window). Best-effort; failures should not block the admin alert.
+  let totalSalesToday = 0;
+  try {
+    const { start, end } = getNairobiUtcWindow(receipt.createdAt ? new Date(receipt.createdAt) : new Date());
+    const receiptsToday = await prisma.receipt.findMany({
+      where: { createdAt: { gte: start, lt: end } },
+      include: { order: { select: { totalAmount: true } } },
+    });
+    for (const r of receiptsToday) {
+      const t = typeof r.totals === 'object' && r.totals ? (r.totals as any).total : undefined;
+      let val = NaN;
+      if (typeof t === 'number') val = t;
+      else if (typeof t === 'string') val = Number(t);
+      else if (typeof r.order?.totalAmount === 'number') val = r.order.totalAmount;
+      totalSalesToday += Number.isFinite(Number(val)) ? Number(val) : 0;
+    }
+  } catch (e) {
+    console.warn('[receipts][internal] failed to compute totalSalesToday', e instanceof Error ? e.message : String(e));
+  }
+
   console.info('[receipts][internal] attempting push', { receiptId, rid });
   const result = await pushInternalReceiptAlert({
     requestId: rid,
     receiptNumber,
     amount: String(Math.round(invoiceAmount)),
+    formattedAmount,
     paymentMethod,
     createdBy: snapshot.attendantName ?? '(unknown)',
     itemsText: itemsShort,
+    itemsSummary,
+    totalSalesToday: Math.round(totalSalesToday),
+    customerName: (receipt.order as any)?.customerName ?? snapshot.customerName ?? 'Customer',
+    customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
     receiptLink: receiptLinkSafe,
     receiptPdfUrl: receiptUrl ?? null,
   });
