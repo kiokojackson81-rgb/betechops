@@ -205,11 +205,17 @@ export async function computeAdminReceiptSummary({
           include: {
             order: {
               include: {
-            items: {
-              include: {
-                orderCosts: true,
-              },
-            },
+                items: {
+                  include: {
+                    orderCosts: true,
+                    profitSnapshots: {
+                      orderBy: { computedAt: "desc" },
+                      take: 1,
+                      select: { unitCost: true, profit: true, qty: true },
+                    },
+                    product: { select: { lastBuyingPrice: true } },
+                  },
+                },
               },
             },
           },
@@ -346,16 +352,22 @@ export async function computeAdminReceiptSummary({
         return undefined;
       })(),
       items: (receipt.order?.items ?? []).map((item) => {
-        const costs = Array.isArray(item.orderCosts)
-          ? item.orderCosts
-          : [];
-        const buyingSum = costs.reduce(
-          (sum, cost) => sum + Number(cost.unitCost ?? 0),
-          0,
-        );
+        const costs = Array.isArray((item as any).orderCosts) ? (item as any).orderCosts : [];
+        const buyingSum = costs.reduce((sum: number, cost: any) => sum + Number(cost.unitCost ?? 0), 0);
+
+        // Fallback cost sources (in priority order):
+        // - Latest profit snapshot unitCost (if computed)
+        // - Product.lastBuyingPrice (if available)
+        const snapUnitCost = (() => {
+          const snap = Array.isArray((item as any).profitSnapshots) ? (item as any).profitSnapshots[0] : null;
+          const n = snap ? Number(snap.unitCost ?? 0) : 0;
+          return Number.isFinite(n) ? n : 0;
+        })();
+        const productLastBuying = Number((item as any).product?.lastBuyingPrice ?? 0) || 0;
+        const fallbackUnitCost = snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : 0;
         return {
           quantity: item.quantity,
-          buyingPrice: buyingSum,
+          buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
         };
       }),
     };
