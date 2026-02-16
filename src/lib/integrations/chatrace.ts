@@ -164,7 +164,17 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const setFieldValue = (fieldName: string, value: any) => ({
     action: 'set_field_value',
     field_name: fieldName,
-    value: value == null ? '' : String(value),
+    value: (() => {
+      const raw = value == null ? '' : String(value);
+      // Chatrace/WhatsApp template params must not contain newlines/tabs
+      // or excessive consecutive spaces. Replace newlines/tabs with a single
+      // space and collapse multiple spaces to a single space.
+      try {
+        return raw.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+      } catch (e) {
+        return raw;
+      }
+    })(),
   });
   // Build minimal required custom fields according to integration
   // requirements. We'll perform a two-step POST: first upsert/set fields,
