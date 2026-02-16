@@ -148,26 +148,6 @@ export async function computeAdminReceiptSummary({
     posWhere.data.equals = paymentMethod;
   }
 
-  // Exclude POS receipts that are POD-pending by default so admin summaries
-  // don't prematurely count POS POD receipts. Keep receipts with no
-  // podDelivery or where podDelivery.status !== 'pending'.
-  const podAndConditions: Prisma.ReceiptWhereInput[] = posWhere.AND ?? [];
-  if (normalizedCustomerType === "pod") {
-    if (normalizedPodStatus) {
-      podAndConditions.push({ data: { path: ['podDelivery', 'status'], equals: normalizedPodStatus } });
-    }
-    // Ensure `podDelivery` is present (not JSON null).
-    podAndConditions.push({ data: { path: ['podDelivery'], not: jsonNullFilter } });
-  } else {
-    podAndConditions.push({
-      OR: [
-        { data: { path: ['podDelivery'], equals: jsonNullFilter } },
-        { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
-      ],
-    });
-  }
-  posWhere.AND = podAndConditions;
-
   const dailyEntryWhere: any = {
     date: { gte: start, lte: end },
   };
@@ -271,24 +251,55 @@ export async function computeAdminReceiptSummary({
     }
   }
 
-  // Post-query safeguard: filter out POD-pending receipts at the app level
-  // unless the caller explicitly requested POD receipts via `customerType='pod'`.
+  // Filter POS receipts by POD presence at the app level to keep JSON where
+  // logic simple and predictable across "data" shapes (null vs object).
+  //
+  // - Default (customerType not 'pod'): exclude all POD receipts so POD workflows
+  //   never affect normal POS summaries.
+  // - When customerType='pod': include only POD receipts, optionally filtering by status.
   const posReceiptsFinal = (() => {
-    if (normalizedCustomerType === 'pod') {
-      // If a specific podStatus was requested, enforce it.
+    const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+    const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+
+    if (normalizedCustomerType === "pod") {
+      const onlyPods = (posReceipts as any[]).filter(isPodReceipt);
       if (normalizedPodStatus) {
-        return (posReceipts as any[]).filter((r) => {
-          const pod = r.data?.podDelivery as any | undefined;
-          return (pod?.status ?? '').toString().toLowerCase() === normalizedPodStatus;
-        });
+        return onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus);
       }
-      return posReceipts;
+      return onlyPods;
     }
-    return (posReceipts as any[]).filter((r) => {
-      const pod = r.data?.podDelivery as any | undefined;
-      return !pod || (pod.status || '').toString().toLowerCase() !== 'pending';
-    });
+
+    return (posReceipts as any[]).filter((r) => !isPodReceipt(r));
   })();
+
+  // Best-effort cost lookup: ProductCost.latest per productId (used when orderCosts are missing).
+  const productCostMap = new Map<string, number>();
+  try {
+    const productIds = new Set<string>();
+    for (const r of posReceiptsFinal as any[]) {
+      const items = (r?.order?.items ?? []) as any[];
+      for (const it of items) {
+        if (it?.productId) productIds.add(String(it.productId));
+      }
+    }
+    const ids = Array.from(productIds);
+    if (ids.length > 0) {
+      const costs = await prisma.productCost.findMany({
+        where: { productId: { in: ids } },
+        orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
+        distinct: ["productId"],
+        select: { productId: true, price: true },
+      });
+      for (const c of costs) {
+        const n = Number(c.price ?? 0);
+        if (c.productId && Number.isFinite(n) && n > 0) {
+          productCostMap.set(String(c.productId), n);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[adminReceiptsSummary] failed to load ProductCost fallbacks", e instanceof Error ? e.message : String(e));
+  }
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
     source: "marketing" as const,
@@ -358,13 +369,16 @@ export async function computeAdminReceiptSummary({
         // Fallback cost sources (in priority order):
         // - Latest profit snapshot unitCost (if computed)
         // - Product.lastBuyingPrice (if available)
+        // - ProductCost.latest (if available)
         const snapUnitCost = (() => {
           const snap = Array.isArray((item as any).profitSnapshots) ? (item as any).profitSnapshots[0] : null;
           const n = snap ? Number(snap.unitCost ?? 0) : 0;
           return Number.isFinite(n) ? n : 0;
         })();
         const productLastBuying = Number((item as any).product?.lastBuyingPrice ?? 0) || 0;
-        const fallbackUnitCost = snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : 0;
+        const productCost = productCostMap.get(String((item as any).productId ?? "")) ?? 0;
+        const fallbackUnitCost =
+          snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
         return {
           quantity: item.quantity,
           buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
@@ -416,31 +430,9 @@ export async function computeAdminReceiptSummary({
 
   const dedupedRecords = Array.from(dedupedMap.values());
 
-  // Attempt a server-side aggregation of persisted per-receipt profits
-  // to ensure admin summaries reflect JSON-stored profits even when
-  // item-level costs are missing. Limit this DB-side aggregation to
-  // global scope (avoid complex per-user scope SQL joins here).
-  let dbProfitAgg: { total_profit: number; priced_count: number } | null = null;
-  try {
-    if (scope === "global") {
-      const raw: any = await prisma.$queryRaw`
-        SELECT
-          COALESCE(SUM((data->>'profit')::numeric), 0) AS total_profit,
-          COUNT(*) FILTER (WHERE (data->>'profit') IS NOT NULL) AS priced_count
-        FROM "Receipt"
-        WHERE generatedAt >= ${start} AND generatedAt <= ${end}
-      `;
-      if (Array.isArray(raw) && raw.length > 0) {
-        const first = raw[0];
-        dbProfitAgg = {
-          total_profit: first.total_profit ? Number(first.total_profit) : 0,
-          priced_count: first.priced_count ? Number(first.priced_count) : 0,
-        };
-      }
-    }
-  } catch (e) {
-    console.warn('[adminReceiptsSummary] failed DB-side profit aggregation', e instanceof Error ? e.message : String(e));
-  }
+  // NOTE: We intentionally do not override computed totals with a DB-side
+  // SUM(data->>'profit') because it can drift from the active filters and
+  // can be unset for many receipts. Profit should reflect per-receipt sums.
 
   const paymentTotals = dedupedRecords.reduce(
     (acc, { paymentMethod: method, sellingTotal }) => {
@@ -519,20 +511,6 @@ export async function computeAdminReceiptSummary({
     }
 
     totalProfitInclusive += receiptProfit;
-  }
-
-  // If we were able to compute a DB-side aggregate of stored per-receipt
-  // profits, prefer that value for the priced/inclusive totals so the
-  // admin summary reflects persisted profits directly from the DB.
-  if (dbProfitAgg && Number(dbProfitAgg.priced_count ?? 0) > 0) {
-    totalProfitPriced = Number(dbProfitAgg.total_profit ?? 0);
-    totalProfitInclusive = Number(dbProfitAgg.total_profit ?? 0);
-    // Adjust awaitingPricingCount conservatively when possible.
-    try {
-      awaitingPricingCount = Math.max(0, receiptsCount - Number(dbProfitAgg.priced_count ?? 0));
-    } catch {
-      // ignore
-    }
   }
 
   const hasCompleteCosts = filteredRecords.length === 0 ? true : !hasIncompleteCosts;

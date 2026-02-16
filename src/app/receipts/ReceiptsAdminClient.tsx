@@ -465,8 +465,6 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
-        if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
-        if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -523,8 +521,6 @@ export default function ReceiptsAdminClient({
         params.set("q", appliedFilters.q.trim());
       }
       params.set("scope", scopeMode);
-      if (appliedFilters.customerType === 'pod') params.set('customerType', 'pod');
-      if (appliedFilters.podStatus) params.set('status', appliedFilters.podStatus);
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -1080,34 +1076,91 @@ export default function ReceiptsAdminClient({
       setExporting(false);
     }
   };
-  const podRows = useMemo(() => rows.filter((row) => Boolean(row.isPodDelivery)), [rows]);
+  const [podPanelSummary, setPodPanelSummary] = useState<{
+    all: { count: number; value: number };
+    delivered: { count: number; value: number };
+    pending: { count: number; value: number };
+    failed: { count: number; value: number };
+  } | null>(null);
+  const [podPanelLoading, setPodPanelLoading] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      setPodPanelLoading(true);
+      try {
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        const base = new URLSearchParams();
+        if (startParam) base.set("start", startParam);
+        if (endParam) base.set("end", endParam);
+        if (appliedFilters.paymentMethod) base.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.attendantId) base.set("attendantId", appliedFilters.attendantId);
+        if (appliedFilters.docType) base.set("docType", appliedFilters.docType);
+        if (appliedFilters.q.trim()) base.set("q", appliedFilters.q.trim());
+        base.set("scope", scopeMode);
+        base.set("customerType", "pod");
+
+        const fetchOne = async (status?: string) => {
+          const params = new URLSearchParams(base);
+          if (status) params.set("status", status);
+          const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || "Failed to load POD summary");
+          return {
+            count: Number(data.receiptsCount ?? 0),
+            value: Number(data.totalSales ?? 0),
+          };
+        };
+
+        const [all, delivered, pending, failed] = await Promise.all([
+          fetchOne(),
+          fetchOne("delivered"),
+          fetchOne("pending"),
+          fetchOne("delivery_failed"),
+        ]);
+        setPodPanelSummary({ all, delivered, pending, failed });
+      } catch (e) {
+        console.warn("[receipts] POD panel summary error", e);
+        setPodPanelSummary(null);
+      } finally {
+        setPodPanelLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [
+    appliedFilters.start,
+    appliedFilters.end,
+    appliedFilters.paymentMethod,
+    appliedFilters.attendantId,
+    appliedFilters.docType,
+    appliedFilters.q,
+    scopeMode,
+  ]);
 
   const podStats = useMemo(() => {
-    return podRows.reduce(
-      (stats, row) => {
-        stats.total += 1;
-        stats.totalValue += Number(row.total ?? 0);
-        const status = `${row.podDeliveryStatus ?? ""}`.toLowerCase();
-        if (status === "delivered") stats.delivered += 1;
-        else if (status === "pending") stats.pending += 1;
-        else if (status === "delivery_failed") stats.failed += 1;
-        return stats;
-      },
-      { total: 0, totalValue: 0, delivered: 0, pending: 0, failed: 0 },
-    );
-  }, [podRows]);
+    if (podPanelSummary) {
+      return {
+        total: podPanelSummary.all.count,
+        totalValue: podPanelSummary.all.value,
+        delivered: podPanelSummary.delivered.count,
+        pending: podPanelSummary.pending.count,
+        failed: podPanelSummary.failed.count,
+      };
+    }
+    return { total: 0, totalValue: 0, delivered: 0, pending: 0, failed: 0 };
+  }, [podPanelSummary]);
 
   const applyPodFilters = (status: PodPanelStatus = podPanelStatus) => {
     setPodPanelStatus(status);
-    applyFilters({
-      customerType: "pod",
-      podStatus: status === "all" ? undefined : status,
-    });
   };
 
   const clearPodFilters = () => {
     setPodPanelStatus("all");
-    applyFilters({ customerType: undefined, podStatus: undefined });
   };
   const { itemsWithCost, supportBuyingTotal, hasCompleteCosts } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
@@ -1252,7 +1305,9 @@ export default function ReceiptsAdminClient({
                 <p className="text-xs uppercase tracking-wide text-slate-400">POD receipts only</p>
                 <p className="text-sm text-slate-300">Dedicated panel for delivered PODs.</p>
               </div>
-              <span className="text-xs text-emerald-300">Filtered</span>
+              <span className="text-xs text-emerald-300">
+                {podPanelLoading ? "Loading..." : podPanelStatus === "all" ? "All" : "Filtered"}
+              </span>
             </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
