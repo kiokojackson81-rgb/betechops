@@ -229,10 +229,19 @@ export async function computeAdminReceiptSummary({
             { receiptKey: { in: candidateArray } },
           ],
         },
-        select: { receiptNumber: true, receiptKey: true, buyingTotal: true },
+        select: {
+          receiptNumber: true,
+          receiptKey: true,
+          buyingTotal: true,
+          items: { select: { buyingPrice: true } },
+        },
       });
       for (const entry of ledgerEntries) {
-        const buyingTotal = Number(entry.buyingTotal ?? 0);
+        const explicitBuyingTotal = Number(entry.buyingTotal ?? 0);
+        const itemsSum = Array.isArray((entry as any).items)
+          ? (entry as any).items.reduce((sum: number, it: any) => sum + Number(it?.buyingPrice ?? 0), 0)
+          : 0;
+        const buyingTotal = explicitBuyingTotal > 0 ? explicitBuyingTotal : itemsSum;
         if (buyingTotal <= 0) continue;
         const keys = [entry.receiptNumber, entry.receiptKey].filter(Boolean) as string[];
         for (const key of keys) {
@@ -269,7 +278,10 @@ export async function computeAdminReceiptSummary({
       return onlyPods;
     }
 
-    return (posReceipts as any[]).filter((r) => !isPodReceipt(r));
+    // Default: include all POS receipts (POD and non-POD) so the main summary
+    // reflects the same receipts list shown on the page. The POD panel fetches
+    // its own totals via customerType='pod'.
+    return posReceipts as any[];
   })();
 
   // Best-effort cost lookup: ProductCost.latest per productId (used when orderCosts are missing).
