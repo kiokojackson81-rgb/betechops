@@ -315,7 +315,8 @@ export async function computeAdminReceiptSummary({
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
     source: "marketing" as const,
-    key: buildReceiptKey(receipt.receiptNumber ?? null, receipt.id),
+    // Prefer receiptNumber, fall back to receiptKey (if present) before id.
+    key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -330,7 +331,8 @@ export async function computeAdminReceiptSummary({
 
   const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
     source: "support" as const,
-    key: buildReceiptKey(receipt.receiptNumber ?? null, receipt.id),
+    // Prefer receiptNumber, fall back to receiptKey (if present) before id.
+    key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -343,7 +345,7 @@ export async function computeAdminReceiptSummary({
     })(),
   }));
 
-  const posRecords: ReceiptSummaryRecord[] = posReceipts.map((receipt) => {
+  const posRecords: ReceiptSummaryRecord[] = posReceiptsFinal.map((receipt) => {
     const orderRef = receipt.order?.orderNumber ?? null;
     const normalizedOrderNumber = canonicalReceiptNumber(orderRef ?? undefined);
     const keyCandidates = [
@@ -408,26 +410,28 @@ export async function computeAdminReceiptSummary({
   };
 
   const dedupedMap = new Map<string, ReceiptSummaryRecord>();
-  const recordHasCostData = (record: ReceiptSummaryRecord) => {
-    if (Number(record.buyingTotal ?? 0) > 0) return true;
-    if (Number(record.supportBuyingTotal ?? 0) > 0) return true;
+  const recordCostScore = (record: ReceiptSummaryRecord): number => {
+    const aggregate = Math.max(Number(record.supportBuyingTotal ?? 0), Number(record.buyingTotal ?? 0));
+    if (aggregate > 0) return 1000;
     const items = Array.isArray(record.items) ? record.items : [];
-    return items.some((item) => Number(item?.buyingPrice ?? 0) > 0);
+    if (!items.length) return 0;
+    const priced = items.filter((it) => Number(it?.buyingPrice ?? 0) > 0).length;
+    return priced / items.length;
   };
 
   for (const record of combinedRecords) {
     const existing = dedupedMap.get(record.key);
-    const candidateHasCost = recordHasCostData(record);
-    const existingHasCost = existing ? recordHasCostData(existing) : false;
+    const candidateScore = recordCostScore(record);
+    const existingScore = existing ? recordCostScore(existing) : -1;
     const shouldReplace = () => {
       if (!existing) return true;
       // If a marketing row exists but lacks cost information and the
       // support row for the same receipt has cost, prefer the support row
       // to avoid losing buying-price-derived profit information.
-      if (existing.source === "marketing" && record.source === "support" && !existingHasCost && candidateHasCost) {
+      if (existing.source === "marketing" && record.source === "support" && existingScore <= 0 && candidateScore > 0) {
         return true;
       }
-      if (candidateHasCost !== existingHasCost) return candidateHasCost;
+      if (candidateScore !== existingScore) return candidateScore > existingScore;
       return sourcePriority[record.source] > sourcePriority[existing.source];
     };
 
