@@ -149,7 +149,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const isBrendah = normalizedEmail === "brendah@betech.co.ke";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (isJeniffer) {
-    posSummary = await summarizePosReceiptsForPeriod({ start, end });
+    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: opts.userId });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   } else if (mergedSales > totalSales) {

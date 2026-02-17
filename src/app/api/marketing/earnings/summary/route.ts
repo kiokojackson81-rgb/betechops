@@ -46,13 +46,13 @@ export async function GET(req: Request) {
     // Load user email to detect Jeniffer special-case so we don't let persisted
     // CommissionLedger values overwrite her computed sales commission.
     const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
-    const attendantEmail = (attendant?.email ?? "").toLowerCase();
+    const attendantEmail = (attendant?.email ?? "").toLowerCase().trim();
     const isJeniffer = attendantEmail === "jeniffer@betech.co.ke";
     const today = nowInNairobi();
     const { tiers } = await getOrCreateCommissionPeriod(today);
     let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
     if (isJeniffer) {
-      posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end });
+      posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId: attendantId });
       userSummary.totalSales = posSummary.totalSales;
       userSummary.totalProfit = posSummary.totalProfit;
       // Do NOT override `userSummary.salesCommission` here — `getEarningsSummaryForUser`

@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     where: { id: targetUserId },
     select: { email: true, name: true },
   });
-  const targetUserEmail = targetUser?.email?.toLowerCase() ?? null;
+  const targetUserEmail = targetUser?.email?.toLowerCase().trim() ?? null;
   const targetUserName = targetUser?.name ?? null;
   const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
 
@@ -115,7 +115,8 @@ export async function GET(req: Request) {
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
   if (isJeniffer) {
-    posSummary = await summarizePosReceiptsForPeriod({ start: argPeriod.start, end: argPeriod.end });
+    // Jeniffer's tracker uses POS receipts as the source of truth, scoped to her receipts.
+    posSummary = await summarizePosReceiptsForPeriod({ start: argPeriod.start, end: argPeriod.end, userId: targetUserId });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
     totalItems = posSummary.totalItems;

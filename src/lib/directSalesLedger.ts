@@ -15,7 +15,7 @@ export async function recomputeDirectSalesLedger(opts: {
   if (!period) throw new Error("No trading period for given date");
   const { tiers } = await getOrCreateCommissionPeriod(period.start);
 
-  const totals = await summarizePosReceiptsForPeriod(period);
+  const totals = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId: opts.userId });
   const totalSales = totals.totalSales ?? 0;
   const totalProfit = totals.totalProfit ?? 0;
 

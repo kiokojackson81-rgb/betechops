@@ -84,13 +84,23 @@ const canonicalKeyForRow = (row: PosReceiptRow) => {
   return canonicalNumber || row.id;
 };
 
-export async function summarizePosReceiptsForPeriod(period: { start: Date; end: Date }) {
+export async function summarizePosReceiptsForPeriod(period: { start: Date; end: Date; userId?: string | null }) {
+  const ownerOr =
+    period.userId && period.userId.length > 0
+      ? [
+          { issuedById: period.userId },
+          { order: { attendantId: period.userId } },
+          { data: { path: ["attendantId"], equals: period.userId } },
+        ]
+      : null;
+
   const receipts = (await prisma.receipt.findMany({
     where: {
       generatedAt: {
         gte: period.start,
         lte: period.end,
       },
+      ...(ownerOr ? { AND: [{ OR: ownerOr }] } : {}),
       OR: [
         { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
         { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
@@ -131,7 +141,7 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
     countCashReceipts: 0,
   };
 
-  for (const receipt of receipts) {
+  for (const receipt of filteredReceipts) {
     const key = canonicalKeyForRow(receipt);
     if (seen.has(key)) {
       console.warn(
@@ -170,4 +180,9 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
     receiptKeys: Array.from(seen.keys()),
     paymentStats,
   };
+}
+
+// Back-compat alias: older call sites referenced "for user" naming during refactors.
+export async function summarizePosReceiptsForPeriodForUser(period: { start: Date; end: Date; userId?: string | null }) {
+  return summarizePosReceiptsForPeriod(period);
 }
