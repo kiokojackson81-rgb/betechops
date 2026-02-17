@@ -504,22 +504,22 @@ export async function computeAdminReceiptSummary({
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
-    // If an explicit profit value is present on the record (or in its data),
-    // prefer that because some receipts persist a computed `profit` already
-    // (e.g. from background jobs). This lets admin summaries reflect stored
-    // per-receipt profits even when item-level costs are absent.
+    // Some receipts persist a computed `profit` already (e.g. background jobs).
+    // Only use it as a fallback when we *can't* recompute profit from costs.
+    // This avoids masking real profit with a default/placeholder 0.
     const explicitProfitRaw = (receipt as any).profit ?? undefined;
-    const explicitProfit = typeof explicitProfitRaw === 'number' && Number.isFinite(explicitProfitRaw) ? Number(explicitProfitRaw) : undefined;
+    const explicitProfit =
+      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw) ? Number(explicitProfitRaw) : undefined;
 
     let receiptProfit = 0;
-    if (explicitProfit !== undefined) {
-      // Use explicit profit; do not mark as awaitingPricing.
-      receiptProfit = explicitProfit;
-      totalProfitPriced += receiptProfit;
-    } else if (hasAggregateCost || allItemsPriced) {
+    if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       totalCost += buyingSum;
       receiptProfit = sell - buyingSum;
+      totalProfitPriced += receiptProfit;
+    } else if (explicitProfit !== undefined) {
+      // Use explicit profit; do not mark as awaitingPricing.
+      receiptProfit = explicitProfit;
       totalProfitPriced += receiptProfit;
     } else {
       awaitingPricingCount += 1;
