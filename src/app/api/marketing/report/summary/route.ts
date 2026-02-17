@@ -31,11 +31,14 @@ export async function GET(req: Request) {
 
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
-    select: { email: true, name: true },
+    select: { email: true, name: true, attendantCategory: true },
   });
   const targetUserEmail = targetUser?.email?.toLowerCase().trim() ?? null;
   const targetUserName = targetUser?.name ?? null;
   const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
+  // Direct sales ops should use POS receipts as source-of-truth on the tracker page.
+  // Keep the legacy Jeniffer email gate for backwards-compat.
+  const usePosTotals = isJeniffer || targetUser?.attendantCategory === "DIRECT_SALES_OPS";
 
   const today = nowInNairobi();
   const { tiers } = await getOrCreateCommissionPeriod(today);
@@ -114,8 +117,8 @@ export async function GET(req: Request) {
   let totalReceipts = 0;
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
-  if (isJeniffer) {
-    // Jeniffer's tracker uses POS receipts as the source of truth, scoped to her receipts.
+  if (usePosTotals) {
+    // Direct sales ops tracker uses POS receipts as the source of truth, scoped to the user.
     posSummary = await summarizePosReceiptsForPeriod({ start: argPeriod.start, end: argPeriod.end, userId: targetUserId });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
@@ -155,7 +158,7 @@ export async function GET(req: Request) {
   }
 
   let commission = 0;
-  if (isJeniffer && posSummary) {
+  if (usePosTotals && posSummary) {
     commission = computeSalesCommissionFromTiers(
       posSummary.totalSales,
       posSummary.totalProfit,
@@ -167,7 +170,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    if (!isJeniffer && targetUserEmail) {
+    if (!usePosTotals && targetUserEmail) {
       const unpriced = await getUnpricedDailySalesForCurrentPeriod();
       const hasUnpricedForUser = unpriced.some(
         (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
@@ -180,7 +183,7 @@ export async function GET(req: Request) {
     // ignore
   }
 
-  if (!isJeniffer) {
+  if (!usePosTotals) {
     try {
       const ledger = await prisma.commissionLedger.findUnique({
         where: {

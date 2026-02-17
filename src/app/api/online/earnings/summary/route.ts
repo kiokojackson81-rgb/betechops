@@ -155,12 +155,14 @@ export async function GET(req: Request) {
     where: { id: userId },
     select: { email: true },
   });
-  const isJeniffer = (user?.email ?? "").toLowerCase().trim() === "jeniffer@betech.co.ke";
+  const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
+  const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
+  const usePosTotals = isJeniffer || (user as any)?.attendantCategory === "DIRECT_SALES_OPS";
 
   const now = new Date();
   const { tiers } = await getOrCreateCommissionPeriod(now);
   const period = getTradingPeriodFor(now);
-  const jenifferPosSummary = isJeniffer ? await summarizePosReceiptsForPeriod({ ...period, userId }) : null;
+  const jenifferPosSummary = usePosTotals ? await summarizePosReceiptsForPeriod({ ...period, userId }) : null;
 
   const [summary, marketingSummary, supportSummary] = await Promise.all([
     getEarningsSummaryForUser({ userId }),

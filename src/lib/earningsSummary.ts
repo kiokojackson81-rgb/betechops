@@ -146,9 +146,13 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   }
 
   const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
+  // Treat all DIRECT_SALES_OPS attendants like Jeniffer for sales source-of-truth:
+  // use POS receipts scoped to the user rather than self-reported marketing rows.
+  const isDirectSalesOps = (opts as any)?.attendantCategory === "DIRECT_SALES_OPS";
+  const usePosTotals = isJeniffer || isDirectSalesOps;
   const isBrendah = normalizedEmail === "brendah@betech.co.ke";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
-  if (isJeniffer) {
+  if (usePosTotals) {
     posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: opts.userId });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;

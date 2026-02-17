@@ -45,13 +45,17 @@ export async function GET(req: Request) {
 
     // Load user email to detect Jeniffer special-case so we don't let persisted
     // CommissionLedger values overwrite her computed sales commission.
-    const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+    const attendant = await prisma.user.findUnique({
+      where: { id: attendantId },
+      select: { email: true, attendantCategory: true },
+    });
     const attendantEmail = (attendant?.email ?? "").toLowerCase().trim();
     const isJeniffer = attendantEmail === "jeniffer@betech.co.ke";
+    const usePosTotals = isJeniffer || attendant?.attendantCategory === "DIRECT_SALES_OPS";
     const today = nowInNairobi();
     const { tiers } = await getOrCreateCommissionPeriod(today);
     let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
-    if (isJeniffer) {
+    if (usePosTotals) {
       posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId: attendantId });
       userSummary.totalSales = posSummary.totalSales;
       userSummary.totalProfit = posSummary.totalProfit;
@@ -73,7 +77,7 @@ export async function GET(req: Request) {
     // do not apply the CommissionLedger override. For everyone else, prefer
     // persisted ledger values when present.
     let salesCommission = 0;
-    if (!isJeniffer) {
+    if (!usePosTotals) {
       const detail = ledger?.detail as Record<string, any> | undefined;
       const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
       const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
