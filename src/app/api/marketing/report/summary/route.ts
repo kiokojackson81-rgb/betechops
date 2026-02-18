@@ -36,8 +36,8 @@ export async function GET(req: Request) {
   const targetUserEmail = targetUser?.email?.toLowerCase().trim() ?? null;
   const targetUserName = targetUser?.name ?? null;
   const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
-  // Direct sales ops should use POS receipts as source-of-truth on the tracker page.
-  // Keep the legacy Jeniffer email gate for backwards-compat.
+  // POS receipts are the source-of-truth for DIRECT_SALES_OPS tracker stats.
+  // Jeniffer is a special global viewer: show global POS totals (not user-scoped).
   const usePosTotals = isJeniffer || targetUser?.attendantCategory === "DIRECT_SALES_OPS";
 
   const today = nowInNairobi();
@@ -118,8 +118,12 @@ export async function GET(req: Request) {
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
   if (usePosTotals) {
-    // Direct sales ops tracker uses POS receipts as the source of truth, scoped to the user.
-    posSummary = await summarizePosReceiptsForPeriod({ start: argPeriod.start, end: argPeriod.end, userId: targetUserId });
+    // Jeniffer: global POS totals. Other DIRECT_SALES_OPS: user-scoped POS totals.
+    posSummary = await summarizePosReceiptsForPeriod({
+      start: argPeriod.start,
+      end: argPeriod.end,
+      userId: isJeniffer ? null : targetUserId,
+    });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
     totalItems = posSummary.totalItems;
