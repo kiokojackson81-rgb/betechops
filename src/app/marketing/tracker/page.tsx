@@ -1305,9 +1305,12 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     [combinedPeriodSales],
   );
 
-  // Prefer the server-calculated earnings summary commission when available
-  // so the Quick stats panel matches the detailed Earnings card exactly.
-  const commissionKes = earningsSummary?.commission ?? commissionSummary.commission;
+  // Prefer the earnings summary commission only when it is non-zero; otherwise
+  // fall back to the cumulative ladder used by the tracker "tiers" UI.
+  const commissionKes =
+    typeof earningsSummary?.commission === "number" && earningsSummary.commission > 0
+      ? earningsSummary.commission
+      : commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
     periodSummary?.period.label ??

@@ -84,6 +84,20 @@ export async function GET(req: Request) {
     getSupportPeriodAggregates({ userId: targetUserId, period: argPeriod }),
   ]);
 
+  // WeeklySale (approved) can be the authoritative source of totals for a period,
+  // especially when POS receipts are incomplete/backfilled and when not all
+  // sales were recorded as structured receipt rows.
+  const weeklySalesTotal = await prisma.weeklySale
+    .aggregate({
+      where: {
+        status: "APPROVED" as any,
+        weekStart: { gte: argPeriod.start, lte: argPeriod.end },
+      },
+      _sum: { amount: true },
+    })
+    .then((res) => Number(res?._sum?.amount ?? 0))
+    .catch(() => 0);
+
   const marketingTotals = marketingSummary?.totals ?? {
     totalSales: 0,
     totalProfit: 0,
@@ -157,15 +171,23 @@ export async function GET(req: Request) {
       userId: isJeniffer ? null : targetUserId,
     });
 
-    // Safety: if POS is undercounting (e.g. missing generatedAt / backfilled data),
-    // prefer the merged marketing+support totals so Quick stats stays accurate.
-    const preferMerged = mergedSales > 0 && mergedSales > (posSummary.totalSales ?? 0);
-    if (preferMerged) {
+    // Safety: POS receipts can undercount when backfilled or when `generatedAt` isn't
+    // representative. Prefer the best available total among merged (marketing+support)
+    // and weekly approved totals.
+    const posSales = posSummary.totalSales ?? 0;
+    const bestSales = Math.max(posSales, mergedSales, weeklySalesTotal);
+    const preferMergedOrWeekly = bestSales > 0 && bestSales > posSales;
+    if (preferMergedOrWeekly) {
       totalSales = mergedSales;
       totalProfit = mergedProfit;
       totalItems = mergedItems;
       totalReceipts = mergedReceipts;
       mergedPaymentStats = mergedStats;
+      // If weeklySale is the best signal, prefer its totalSales but keep receipt/item
+      // counts from merged sources (WeeklySale has no receipt/item breakdown).
+      if (weeklySalesTotal > mergedSales) {
+        totalSales = weeklySalesTotal;
+      }
     } else {
       totalSales = posSummary.totalSales;
       totalProfit = posSummary.totalProfit;
@@ -469,6 +491,7 @@ export async function GET(req: Request) {
       usePosTotals,
       mergedSales,
       mergedReceipts,
+      weeklySalesTotal,
       posSales: posSummary?.totalSales ?? null,
       posReceipts: posSummary?.totalReceipts ?? null,
       selectedSales: totalSales,
