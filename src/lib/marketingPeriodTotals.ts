@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { canonicalReceiptNumber } from "@/lib/receipts/utils";
+import { canonicalReceiptNumber, buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { COMMISSION_LADDER } from "@/lib/commissionCommon";
@@ -181,10 +181,12 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     if (receipts.length > 0) {
       receipts.forEach((receipt) => {
         const method = normalizeMethod(receipt.paymentMethod);
-        const canonicalKey = canonicalReceiptNumber(receipt.receiptNumber ?? receipt.id) ?? recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+        const canonical =
+          canonicalReceiptNumber(receipt.receiptNumber ?? receipt.id) ?? recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+        const canonicalKey = buildDatedReceiptKey(entry.date, canonical) ?? canonical;
 
         // Skip marketing receipt when a POS POD-pending receipt exists for same canonical key
-        if (canonicalKey && excludedCanonicals.has(canonicalKey)) return;
+        if (canonical && excludedCanonicals.has(canonical)) return;
 
         if (!markIfNew(canonicalKey)) {
           return;
@@ -233,7 +235,9 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         if (entrySeen.has(receiptIdBase)) return;
         entrySeen.add(receiptIdBase);
 
-        if (!markIfNew(receiptIdBase)) return;
+        const canonical = canonicalReceiptNumber(receiptIdBase) ?? receiptIdBase;
+        const receiptKey = buildDatedReceiptKey(entry.date, canonical) ?? canonical;
+        if (!markIfNew(receiptKey)) return;
 
         const selling = toNumber((sale as any).sellingPrice);
         const buying = toNumber((sale as any).buyingPrice);
@@ -246,7 +250,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         totals.totalItems += itemsCount;
         totals.totalReceipts += 1;
 
-        const stats = perReceipts.get(receiptIdBase)!;
+        const stats = perReceipts.get(receiptKey)!;
         stats.sales += selling;
         if (buying > 0) stats.profit += selling - buying;
         stats.items += itemsCount;
@@ -300,13 +304,17 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       if (entrySalesReceiptKeys.has(receiptIdBase)) return;
       entrySalesReceiptKeys.add(receiptIdBase);
 
-      if (!markIfNew(receiptIdBase)) return;
+      const baseDateRaw = (report as any).date ?? (report as any).createdAt ?? null;
+      const baseDate = baseDateRaw instanceof Date ? baseDateRaw : null;
+      const canonical = canonicalReceiptNumber(receiptIdBase) ?? receiptIdBase;
+      const receiptKey = baseDate ? (buildDatedReceiptKey(baseDate, canonical) ?? canonical) : canonical;
+      if (!markIfNew(receiptKey)) return;
 
         const price = toNumber(sale.price);
         totals.totalSales += price;
         newReceiptCount += 1;
 
-        const stats = perReceipts.get(receiptIdBase)!;
+        const stats = perReceipts.get(receiptKey)!;
         stats.sales += price;
         stats.items += 1;
 

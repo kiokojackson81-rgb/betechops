@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
-import { buildReceiptKey, normalizePaymentMethod } from "@/lib/receiptKey";
-import { canonicalReceiptNumber } from "@/lib/receipts/utils";
+import { normalizePaymentMethod } from "@/lib/receiptKey";
+import { canonicalReceiptNumber, buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 
 export type SupportPeriodAggregates = {
   totalSales: number;
@@ -66,12 +66,12 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     aggregates.changedBatteries += (entry as any).changedBatteries ?? 0;
 
     for (const r of entry.receipts ?? []) {
-      const key = buildReceiptKey(r.receiptNumber ?? null, r.id) || `ID:${r.id}`;
       const canonical = canonicalReceiptNumber(r.receiptNumber ?? r.id);
       if (canonical && excludedCanonicals.has(canonical)) {
         // Skip this support receipt because a pos POD-pending receipt exists
         continue;
       }
+      const key = buildDatedReceiptKey(entry.date, r.receiptNumber ?? r.id) || `ID:${r.id}`;
       const selling = Number(r.sellingTotal ?? 0);
       const buying = Number(r.buyingTotal ?? 0);
       const itemsCount = Array.isArray(r.items) ? r.items.length : 0;
