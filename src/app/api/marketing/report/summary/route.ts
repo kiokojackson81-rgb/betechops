@@ -117,6 +117,38 @@ export async function GET(req: Request) {
   let totalReceipts = 0;
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
+  // Always compute merged (marketing+support) totals as a fallback/diagnostic baseline.
+  // Precedence per receipt: MARKETING > SUPPORT (unless marketing profit missing but support has profit).
+  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
+    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
+  }
+  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
+    const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
+    if (merged.has(k)) {
+      const existing = merged.get(k)!;
+      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
+        merged.set(k, supportObj);
+      }
+      continue;
+    }
+    merged.set(k, supportObj);
+  }
+  let mergedSales = 0;
+  let mergedProfit = 0;
+  let mergedItems = 0;
+  const mergedStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
+  for (const [, v] of merged) {
+    mergedSales += v.sales;
+    mergedProfit += v.profit;
+    mergedItems += v.items;
+    mergedStats.totalSalesMpesa += v.mpesa;
+    mergedStats.totalSalesCash += v.cash;
+    if (v.mpesa > 0) mergedStats.countMpesaReceipts += 1;
+    if (v.cash > 0) mergedStats.countCashReceipts += 1;
+  }
+  const mergedReceipts = merged.size;
+
   if (usePosTotals) {
     // Jeniffer: global POS totals. Other DIRECT_SALES_OPS: user-scoped POS totals.
     posSummary = await summarizePosReceiptsForPeriod({
@@ -124,41 +156,29 @@ export async function GET(req: Request) {
       end: argPeriod.end,
       userId: isJeniffer ? null : targetUserId,
     });
-    totalSales = posSummary.totalSales;
-    totalProfit = posSummary.totalProfit;
-    totalItems = posSummary.totalItems;
-    totalReceipts = posSummary.totalReceipts;
-    mergedPaymentStats = posSummary.paymentStats;
+
+    // Safety: if POS is undercounting (e.g. missing generatedAt / backfilled data),
+    // prefer the merged marketing+support totals so Quick stats stays accurate.
+    const preferMerged = mergedSales > 0 && mergedSales > (posSummary.totalSales ?? 0);
+    if (preferMerged) {
+      totalSales = mergedSales;
+      totalProfit = mergedProfit;
+      totalItems = mergedItems;
+      totalReceipts = mergedReceipts;
+      mergedPaymentStats = mergedStats;
+    } else {
+      totalSales = posSummary.totalSales;
+      totalProfit = posSummary.totalProfit;
+      totalItems = posSummary.totalItems;
+      totalReceipts = posSummary.totalReceipts;
+      mergedPaymentStats = posSummary.paymentStats;
+    }
   } else {
-    // Merge with precedence: MARKETING > SUPPORT
-    const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
-
-    for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
-      merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
-    }
-
-    for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-      const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
-      if (merged.has(k)) {
-        const existing = merged.get(k)!;
-        if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
-          merged.set(k, supportObj);
-        }
-        continue; // marketing wins otherwise
-      }
-      merged.set(k, supportObj);
-    }
-
-    for (const [, v] of merged) {
-      totalSales += v.sales;
-      totalProfit += v.profit;
-      totalItems += v.items;
-      mergedPaymentStats.totalSalesMpesa += v.mpesa;
-      mergedPaymentStats.totalSalesCash += v.cash;
-      if (v.mpesa > 0) mergedPaymentStats.countMpesaReceipts += 1;
-      if (v.cash > 0) mergedPaymentStats.countCashReceipts += 1;
-    }
-    totalReceipts = merged.size;
+    totalSales = mergedSales;
+    totalProfit = mergedProfit;
+    totalItems = mergedItems;
+    totalReceipts = mergedReceipts;
+    mergedPaymentStats = mergedStats;
   }
 
   let commission = 0;
@@ -445,6 +465,16 @@ export async function GET(req: Request) {
       receiptsPerSource: { marketing: marketingKeys.length, support: supportKeys.length, pos: posCountAll, posIssuedBy: posCountIssuedByUser },
     };
 
+    const selection = {
+      usePosTotals,
+      mergedSales,
+      mergedReceipts,
+      posSales: posSummary?.totalSales ?? null,
+      posReceipts: posSummary?.totalReceipts ?? null,
+      selectedSales: totalSales,
+      selectedReceipts: totalReceipts,
+    };
+
     // final diagnosis
     const diagnosis = {
       impersonationHonored: Boolean(impersonateId && auth.role === "ADMIN"),
@@ -460,7 +490,7 @@ export async function GET(req: Request) {
       totalsNonZero: totalSales > 0 || totalItems > 0,
     };
 
-    payload.debug = { identity, db: dbMeta, sourceCounts, marketing: marketingAudit, support: supportAudit, diagnosis, sanity };
+    payload.debug = { identity, db: dbMeta, sourceCounts, marketing: marketingAudit, support: supportAudit, selection, diagnosis, sanity };
   }
 
   const res = NextResponse.json(payload);
