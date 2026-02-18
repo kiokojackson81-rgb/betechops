@@ -207,7 +207,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   try {
     if (input.items && Array.isArray(input.items) && input.items.length) {
       const lines = input.items.map((it: any, idx: number) => {
-        const title = String(it.title || it.productName || it.product || it.name || '').trim() || 'Item';
+        const title = String(it.title || it.productName || it.product?.name || it.productTitle || it.product_name || it.name || '').trim() || 'Item';
         const qty = Number.isFinite(Number(it.quantity ?? 1)) ? Number(it.quantity ?? 1) : 1;
         const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice ?? 0)) ? Number(it.unitPrice ?? it.sellingPrice ?? 0) : 0;
         const priceText = formatCurrencyKesLocal(unit * qty);

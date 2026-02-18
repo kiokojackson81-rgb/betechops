@@ -147,7 +147,7 @@ function buildWhatsAppMessage(params: WhatsAppMessageParams) {
   const greeting = customerName ? `Hello ${customerName},` : 'Hello,';
   const itemLines = (items || [])
     .map((item) => {
-      const title = item?.title || item?.productName || 'Item';
+      const title = item?.title || item?.productName || item?.product?.name || 'Item';
       const qty = Number.isFinite(Number(item?.quantity ?? 1)) ? Number(item?.quantity ?? 1) : 1;
       const unitPrice = Number.isFinite(Number(item?.unitPrice ?? item?.sellingPrice ?? 0))
         ? Number(item?.unitPrice ?? item?.sellingPrice ?? 0)
@@ -394,7 +394,15 @@ export async function sendReceiptChannels(
   const startTime = Date.now();
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
-    include: { order: { include: { items: true, attendant: true } }, issuedBy: true },
+    include: {
+      order: {
+        include: {
+          items: { include: { product: { select: { name: true } } } },
+          attendant: true,
+        },
+      },
+      issuedBy: true,
+    },
   });
   if (!receipt) throw new Error('Receipt not found');
   const wantEmail = channels.length === 0 || channels.includes('email');
@@ -785,7 +793,7 @@ export async function sendReceiptChannels(
       const itemsForChatrace = (orderAny?.items ?? snapshot.items ?? []) as any[];
       const normalizedItems = itemsForChatrace
         .map((item) => {
-          const title = item?.title ?? item?.productName ?? item?.description ?? 'Item';
+          const title = item?.title ?? item?.productName ?? item?.product?.name ?? item?.description ?? 'Item';
           const qty = Number.isFinite(Number(item?.quantity ?? 1)) ? Number(item?.quantity ?? 1) : 1;
           const unitPrice = Number.isFinite(Number(item?.unitPrice ?? item?.sellingPrice ?? 0)) ? Number(item?.unitPrice ?? item?.sellingPrice ?? 0) : 0;
           return {
