@@ -45,6 +45,17 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
           items: { select: { id: true, buyingPrice: true } },
         },
       },
+      sales: {
+        select: {
+          id: true,
+          receiptNumber: true,
+          sellingPrice: true,
+          buyingPrice: true,
+          itemsCount: true,
+          paymentMethod: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -65,12 +76,14 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     aggregates.newBatteries += (entry as any).newBatteries ?? 0;
     aggregates.changedBatteries += (entry as any).changedBatteries ?? 0;
 
+    const entryReceiptCanonicals = new Set<string>();
     for (const r of entry.receipts ?? []) {
       const canonical = canonicalReceiptNumber(r.receiptNumber ?? r.id);
       if (canonical && excludedCanonicals.has(canonical)) {
         // Skip this support receipt because a pos POD-pending receipt exists
         continue;
       }
+      if (canonical) entryReceiptCanonicals.add(canonical);
       const key = buildDatedReceiptKey(entry.date, r.receiptNumber ?? r.id) || `ID:${r.id}`;
       const selling = Number(r.sellingTotal ?? 0);
       const buying = Number(r.buyingTotal ?? 0);
@@ -97,6 +110,50 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
           mpesa: method === "MPESA" ? selling : 0,
           cash: method === "CASH" ? selling : 0,
         });
+      }
+    }
+
+    // Also include SupportSale rows (some entries are recorded as sales-only without receipt rows).
+    // Avoid double-counting if a receipt row for the same receiptNumber exists in this entry.
+    const sales = (entry as any).sales ?? [];
+    if (Array.isArray(sales) && sales.length > 0) {
+      const entrySeen = new Set<string>();
+      for (const sale of sales) {
+        const receiptNumber = (sale as any).receiptNumber ?? null;
+        const saleCanonical = canonicalReceiptNumber(receiptNumber);
+        if (saleCanonical && excludedCanonicals.has(saleCanonical)) continue;
+        if (saleCanonical && entryReceiptCanonicals.has(saleCanonical)) continue;
+
+        const receiptIdBase = (receiptNumber && String(receiptNumber).trim().length > 0) ? String(receiptNumber).trim() : String((sale as any).id ?? "");
+        if (!receiptIdBase) continue;
+        // de-dupe within entry on (receiptIdBase|method)
+        const method = normalizePaymentMethod((sale as any).paymentMethod);
+        const seenKey = `${receiptIdBase}|${method}`;
+        if (entrySeen.has(seenKey)) continue;
+        entrySeen.add(seenKey);
+
+        const key = buildDatedReceiptKey(entry.date, receiptIdBase) || `ID:${receiptIdBase}`;
+        const selling = Number((sale as any).sellingPrice ?? 0);
+        const buying = Number((sale as any).buyingPrice ?? 0);
+        const itemsCount = Math.max(1, Math.trunc(Number((sale as any).itemsCount ?? 1)));
+
+        const existing = seen.get(key);
+        if (existing) {
+          existing.sales += selling;
+          if (buying > 0) existing.profit += selling - buying;
+          existing.items += itemsCount;
+          if (method === "CASH") existing.cash += selling;
+          else existing.mpesa += selling;
+        } else {
+          seen.set(key, {
+            id: String((sale as any).id ?? key),
+            sales: selling,
+            profit: buying > 0 ? selling - buying : 0,
+            items: itemsCount,
+            mpesa: method === "MPESA" ? selling : 0,
+            cash: method === "CASH" ? selling : 0,
+          });
+        }
       }
     }
   }

@@ -176,6 +176,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   };
 
   marketingEntries.forEach((entry) => {
+    const entryReceiptCanonicals = new Set<string>();
     const receipts = entry.receipts ?? [];
     rawRowCount += receipts.length;
     if (receipts.length > 0) {
@@ -183,6 +184,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         const method = normalizeMethod(receipt.paymentMethod);
         const canonical =
           canonicalReceiptNumber(receipt.receiptNumber ?? receipt.id) ?? recKey(String(receipt.receiptNumber ?? receipt.id ?? ""));
+        if (canonical) entryReceiptCanonicals.add(canonical);
         const canonicalKey = buildDatedReceiptKey(entry.date, canonical) ?? canonical;
 
         // Skip marketing receipt when a POS POD-pending receipt exists for same canonical key
@@ -221,7 +223,6 @@ export async function summarizeMarketingReportsForPeriod(opts: {
           stats.mpesa += selling;
         }
       });
-      return;
     }
 
     const sales = entry.sales ?? [];
@@ -236,6 +237,10 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         entrySeen.add(receiptIdBase);
 
         const canonical = canonicalReceiptNumber(receiptIdBase) ?? receiptIdBase;
+        // If this entry already has a receipt row for the same canonical receipt id,
+        // do not double-count the sale row.
+        const saleCanonical = canonicalReceiptNumber((sale as any).receiptNumber);
+        if (saleCanonical && entryReceiptCanonicals.has(saleCanonical)) return;
         const receiptKey = buildDatedReceiptKey(entry.date, canonical) ?? canonical;
         if (!markIfNew(receiptKey)) return;
 
@@ -265,16 +270,20 @@ export async function summarizeMarketingReportsForPeriod(opts: {
           stats.mpesa += selling;
         }
       });
-      return;
     }
 
-    const fallbackSales = toNumber(entry.totalSales);
-    totals.totalSales += fallbackSales;
-    totals.totalProfit += toNumber(entry.totalProfit);
-    const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
-    if (markIfNew(fallbackKey)) {
-      totals.totalReceipts += 1;
-      rawRowCount += 1;
+    // Only fall back to the entry-level totals when the entry has no structured
+    // receipts or sales rows. If rows exist but were excluded (e.g. POD-pending),
+    // do NOT use the fallback totals because they'd reintroduce the excluded sales.
+    if ((receipts?.length ?? 0) === 0 && (sales?.length ?? 0) === 0) {
+      const fallbackSales = toNumber(entry.totalSales);
+      totals.totalSales += fallbackSales;
+      totals.totalProfit += toNumber(entry.totalProfit);
+      const fallbackKey = `${entry.id ?? entry.date?.toISOString() ?? "entry"}|fallback`;
+      if (markIfNew(fallbackKey)) {
+        totals.totalReceipts += 1;
+        rawRowCount += 1;
+      }
     }
   });
 
