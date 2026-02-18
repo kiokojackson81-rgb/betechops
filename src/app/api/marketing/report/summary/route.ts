@@ -91,7 +91,10 @@ export async function GET(req: Request) {
     .aggregate({
       where: {
         status: "APPROVED" as any,
-        weekStart: { gte: argPeriod.start, lte: argPeriod.end },
+        // Include weeks that overlap the period window (not just those that start within it).
+        // Many weeks start before the trading period start but end inside it.
+        weekStart: { lte: argPeriod.end },
+        weekEnd: { gte: argPeriod.start },
       },
       _sum: { amount: true },
     })
