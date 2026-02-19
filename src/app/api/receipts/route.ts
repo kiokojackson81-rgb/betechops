@@ -1084,7 +1084,7 @@ export async function POST(req: NextRequest) {
       try {
         sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp'], {
           requestId,
-          chatraceTag: 'pod_dispatch_speedaf',
+          chatraceTag: (process.env.CHATRACE_POD_CUSTOMER_TAG || 'pod_dispatch_speedaf').trim(),
           skipDefaultChatraceTags: true,
           markPodSent: true,
         });

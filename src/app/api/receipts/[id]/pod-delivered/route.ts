@@ -436,7 +436,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     } else if (desiredStatus === 'delivered') {
       sendResult = await sendReceiptChannels(receiptId, ['whatsapp'], {
         requestId,
-        chatraceTag: 'pod_dispatch_speedaf',
+        chatraceTag: (process.env.CHATRACE_POD_CUSTOMER_TAG || 'pod_dispatch_speedaf').trim(),
         skipDefaultChatraceTags: true,
       });
     } else {

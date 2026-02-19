@@ -50,7 +50,12 @@ export async function runPodRetry(limit = 50) {
       // Build options for send; reuse any configured fallbackChannels stored in podDelivery
       const fallbackChannels = Array.isArray(pod.fallbackChannels) ? pod.fallbackChannels : undefined;
       const requestId = randomUUID();
-      const opts: any = { requestId, chatraceTag: 'pod_dispatch_speedaf', markPodSent: true, skipDefaultChatraceTags: true };
+      const opts: any = {
+        requestId,
+        chatraceTag: (process.env.CHATRACE_POD_CUSTOMER_TAG || 'pod_dispatch_speedaf').trim(),
+        markPodSent: true,
+        skipDefaultChatraceTags: true,
+      };
       if (Array.isArray(fallbackChannels)) opts.fallbackChannels = fallbackChannels;
 
       // Attempt send (whatsapp via chatrace)

@@ -189,6 +189,16 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   fieldActions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
   fieldActions.push(setFieldValue('file_url', finalReceiptUrl));
   fieldActions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  // Some Chatrace flows map template var #1 to "contact.first_name". Chatrace
+  // has a top-level "first_name" attribute (we set it in the /contacts body),
+  // but we also set these custom-field aliases to prevent blank names when
+  // flows/templates are misconfigured to read from a custom field instead.
+  try {
+    fieldActions.push(setFieldValue('contact.first_name', customerName || 'Customer'));
+    fieldActions.push(setFieldValue('contact_first_name', customerName || 'Customer'));
+  } catch {
+    // best-effort only
+  }
   fieldActions.push(setFieldValue('receipt_number', receiptNumber));
   fieldActions.push(setFieldValue('amount', amount));
   fieldActions.push(setFieldValue('currency', currency || 'KES'));
@@ -268,9 +278,27 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   // Apply any custom tag provided (e.g. pod dispatch, admin alert).
   if (finalTag) {
+    // Some flows are triggered by "Tag applied" rules. If the same tag already
+    // exists on the contact, re-applying it may not retrigger the rule.
+    // For these ephemeral/notification tags, we optionally force a re-trigger
+    // by removing then adding the tag.
+    const FORCE_RETRIGGER_TAGS = new Set([
+      'pod_dispatch_speedaf',
+      'betech_dispatch_pay_on_delivery',
+      'pod_receipt_admin_alert',
+      'followup_responsible_alert',
+      // legacy/internal
+      'receipt_admin_alert',
+    ]);
+    const forceRetrigger =
+      process.env.CHATRACE_FORCE_RETRIGGER_TAGS === '1' || FORCE_RETRIGGER_TAGS.has(finalTag);
+
     // Avoid duplicating the default trigger when skipDefaultTags is false and caller
     // explicitly passes receipt_created.
     if (!(!skipDefaultTags && finalTag === 'receipt_created')) {
+      if (forceRetrigger) {
+        tagActions.push({ action: 'remove_tag', tag_name: finalTag });
+      }
       tagActions.push({ action: 'add_tag', tag_name: finalTag });
     }
   }

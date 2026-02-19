@@ -253,9 +253,10 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
 
   // ADMIN POD RECEIPT ALERT
   try {
+    const adminPodTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
     await pushInternalReceiptAlert({
       requestId,
-      tagName: 'pod_receipt_admin_alert',
+      tagName: adminPodTag,
       receiptNumber,
       amount: String(Math.round(invoiceAmount)),
       formattedAmount: Math.round(invoiceAmount),
@@ -270,17 +271,18 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
       podPendingTotal: pendingTotal,
     });
   } catch (e) {
-    console.error('[pod][internal] failed to push pod_receipt_admin_alert', e instanceof Error ? e.message : String(e));
+    console.error('[pod][internal] failed to push admin POD alert', e instanceof Error ? e.message : String(e));
   }
 
   // FOLLOW-UP RESPONSIBLE ALERT
   try {
     const followupPhone =
       (process.env.CHATRACE_INTERNAL_FOLLOWUP_PHONE || '254716722601').toString().trim();
+    const followupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'followup_responsible_alert').toString().trim();
     await pushInternalReceiptAlert({
       requestId,
       toPhone: followupPhone,
-      tagName: 'followup_responsible_alert',
+      tagName: followupTag,
       receiptNumber,
       amount: String(Math.round(invoiceAmount)),
       formattedAmount: Math.round(invoiceAmount),
@@ -295,6 +297,6 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
       podPendingList: pendingList,
     });
   } catch (e) {
-    console.error('[pod][internal] failed to push followup_responsible_alert', e instanceof Error ? e.message : String(e));
+    console.error('[pod][internal] failed to push follow-up POD alert', e instanceof Error ? e.message : String(e));
   }
 }

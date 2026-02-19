@@ -160,6 +160,15 @@ export async function pushInternalReceiptAlert(input: {
     const n = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
     return Number.isFinite(n) ? String(Math.round(n)) : '';
   };
+  const FORCE_RETRIGGER_TAGS = new Set([
+    'pod_receipt_admin_alert',
+    'followup_responsible_alert',
+    // legacy/internal
+    'receipt_admin_alert',
+  ]);
+  const forceRetrigger =
+    process.env.CHATRACE_INTERNAL_FORCE_RETRIGGER_TAGS === '1' || FORCE_RETRIGGER_TAGS.has(tagName);
+
   const actions = [
     // Legacy/internal field names (keep for backwards compatibility)
     { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
@@ -171,6 +180,10 @@ export async function pushInternalReceiptAlert(input: {
     // Newer admin WhatsApp template field names (must match Chatrace Flow mapping)
     { action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber },
     { action: "set_field_value", field_name: "customer_name", value: input.customerName ?? "Customer" },
+    // Additional aliases for templates that incorrectly use contact.first_name
+    // as a custom field instead of the Contact's first_name attribute.
+    { action: "set_field_value", field_name: "contact.first_name", value: input.customerName ?? "Customer" },
+    { action: "set_field_value", field_name: "contact_first_name", value: input.customerName ?? "Customer" },
     { action: "set_field_value", field_name: "customer_phone", value: toDigitsOrEmpty(input.customerPhone) },
     // Keep both "amount"+"currency" and "formatted_amount" for template compatibility.
     { action: "set_field_value", field_name: "amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
@@ -187,6 +200,7 @@ export async function pushInternalReceiptAlert(input: {
     { action: "set_field_value", field_name: "pod_pending_total", value: toNumberStringOrEmpty(input.podPendingTotal) },
     { action: "set_field_value", field_name: "pod_pending_list", value: (input.podPendingList ?? "").toString() },
 
+    ...(forceRetrigger ? [{ action: "remove_tag", tag_name: tagName }] : []),
     { action: "add_tag", tag_name: tagName },
   ];
 
