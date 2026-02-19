@@ -23,6 +23,13 @@ function digitsOnly(value?: string) {
   return raw.replace(/[^0-9]/g, '');
 }
 
+function isPodPaymentMethod(value: string) {
+  const raw = (value ?? '').toString().trim().toLowerCase();
+  if (!raw) return false;
+  const compact = raw.replace(/[\s_-]+/g, '');
+  return compact === 'pod' || compact.includes('payondelivery');
+}
+
 function getNairobiUtcWindow(date: Date) {
   // Nairobi is UTC+3 and does not observe DST.
   const nairobiOffsetMs = 3 * 60 * 60 * 1000;
@@ -97,6 +104,19 @@ export async function notifyInternalReceipt(
       ''
   )
     .trim();
+
+  // For POD receipts we only want the dedicated POD internal alerts
+  // (pod_receipt_admin_alert + pod_followup_alert). Skip the "normal"
+  // internal admin receipt notification to avoid duplicate messages.
+  if (isPodPaymentMethod(paymentMethod)) {
+    const ridSkip = requestId || randomUUID();
+    console.info('[receipts][internal] skipping normal admin alert for POD receipt', {
+      receiptId,
+      rid: ridSkip,
+      paymentMethod,
+    });
+    return;
+  }
 
   const staffName = receipt.issuedBy?.name || receipt.issuedBy?.email || '(unknown)';
 
