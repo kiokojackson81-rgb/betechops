@@ -136,6 +136,19 @@ export async function pushInternalReceiptAlert(input: {
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
   if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
+  // Meta/WhatsApp template parameters cannot contain newlines/tabs or long runs
+  // of spaces. Keep this sanitizer strict to prevent template send failures.
+  const sanitizeMetaParam = (value: string, opts?: { list?: boolean; maxLen?: number }) => {
+    const raw = (value ?? "").toString();
+    const replaced = opts?.list
+      ? raw.replace(/[\r\n\t]+/g, " | ")
+      : raw.replace(/[\r\n\t]+/g, " ");
+    // Collapse multi-space runs to a single space (also prevents >4 consecutive spaces).
+    const collapsed = replaced.replace(/ {2,}/g, " ").trim();
+    const maxLen = opts?.maxLen ?? 950;
+    return collapsed.length > maxLen ? `${collapsed.slice(0, maxLen - 1)}…` : collapsed;
+  };
+
   // If caller passed URLs, explicitly ignore them for internal alerts and log that fact
   if (input.receiptLink) {
     console.info('[internal][adminAlert] ignoring receiptLink (static button in WA template)', { receiptNumber: input.receiptNumber });
@@ -176,12 +189,14 @@ export async function pushInternalReceiptAlert(input: {
   const safeCustomerName = (input.customerName ?? '').toString().trim() || 'Customer';
   const safeReceiptNumber = (input.receiptNumber ?? '').toString().trim();
   const safeCreatedBy = (input.createdBy ?? '').toString().trim() || '(unknown)';
-  const safeAdminItems = itemsSummary.trim() || 'Items: (not available)';
+  const safeAdminItemsRaw = itemsSummary.trim() || 'Items: (not available)';
+  const safeAdminItems = sanitizeMetaParam(safeAdminItemsRaw, { list: true, maxLen: 800 });
   const safeCustomerPhone = toDigitsOrEmpty((input.customerPhone ?? '').toString());
   const safeFormattedAmount = toNumberStringOrZero(input.formattedAmount ?? input.amount);
   const safePodPendingCount = toNumberStringOrZero(input.podPendingCount ?? 0);
   const safePodPendingTotal = toNumberStringOrZero(input.podPendingTotal ?? 0);
-  const safePodPendingList = (input.podPendingList ?? '').toString().trim() || 'None';
+  const safePodPendingListRaw = (input.podPendingList ?? '').toString().trim() || 'None';
+  const safePodPendingList = sanitizeMetaParam(safePodPendingListRaw, { list: true, maxLen: 900 });
 
   // Internal validation for POD flows: if key fields are missing, do not apply the tag.
   if (isPodInternalTag) {
