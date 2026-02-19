@@ -27,19 +27,37 @@ function snippet(text: string, max = 220) {
 
 type ChatraceStep = { status: number; ok: boolean; bodySnippet: string; raw?: string; json?: any };
 
-async function postJson(url: string, token: string, body: unknown, rid?: string): Promise<ChatraceStep> {
+function normalizeRecipientPhone(value: string) {
+  const raw = (value ?? "").toString().trim();
+  if (!raw) return "";
+  if (raw.startsWith("+")) return raw;
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("254")) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 10) return `+254${digits.slice(1)}`;
+  return digits; // best-effort fallback
+}
+
+async function postJson(
+  url: string,
+  token: string,
+  body: unknown,
+  opts?: { rid?: string; accountId?: string },
+): Promise<ChatraceStep> {
   const timeoutMs = 8_000;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers: Record<string, string> = {
+      "X-ACCESS-TOKEN": token,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (opts?.accountId) headers["X-ACCOUNT-ID"] = String(opts.accountId);
     const res = await fetch(url, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "X-ACCESS-TOKEN": token,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(body),
     });
     clearTimeout(id);
@@ -53,7 +71,7 @@ async function postJson(url: string, token: string, body: unknown, rid?: string)
 
     if (!res.ok) {
       console.error('[chatrace][internal][http] non-2xx', {
-        rid: rid || null,
+        rid: opts?.rid || null,
         url,
         status: res.status,
         bodySnippet: snippet(raw, 500),
@@ -64,7 +82,7 @@ async function postJson(url: string, token: string, body: unknown, rid?: string)
   } catch (e: any) {
     clearTimeout(id);
     const stack = e && e.stack ? e.stack : String(e);
-    console.error('[chatrace][internal][http] exception', { rid: rid || null, url, stack });
+    console.error('[chatrace][internal][http] exception', { rid: opts?.rid || null, url, stack });
     const err = String(e);
     return { status: 0, ok: false, bodySnippet: snippet(err), raw: err, json: null };
   }
@@ -187,9 +205,9 @@ export async function pushInternalReceiptAlert(input: {
 
   const toPhone = (input.toPhone || env.adminPhone || "").toString().trim();
   if (!toPhone) return { ok: false, debug: { ...debug, error: "missing_internal_recipient_phone" } };
-  const payload = { phone: toPhone, actions };
+  const payload = { phone: normalizeRecipientPhone(toPhone), actions };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const step = await postJson(url, env.token, payload, rid);
+  const step = await postJson(url, env.token, payload, { rid, accountId: env.accountId });
   try {
     console.info('[internal][adminAlert] response', {
       status: step.status,
