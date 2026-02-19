@@ -250,6 +250,7 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
   } catch (e) {
     console.warn('[pod][internal] failed to compute pending stats', e instanceof Error ? e.message : String(e));
   }
+  if (!pendingList || !pendingList.trim()) pendingList = 'None';
 
   // ADMIN POD RECEIPT ALERT
   try {
@@ -278,7 +279,7 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
   try {
     const followupPhone =
       (process.env.CHATRACE_INTERNAL_FOLLOWUP_PHONE || '254716722601').toString().trim();
-    const followupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'followup_responsible_alert').toString().trim();
+    const followupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'pod_followup_alert').toString().trim();
     await pushInternalReceiptAlert({
       requestId,
       toPhone: followupPhone,

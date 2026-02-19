@@ -146,6 +146,9 @@ export async function pushInternalReceiptAlert(input: {
 
   const tagName = (input.tagName || "receipt_admin_alert").trim();
   const itemsSummary = (input.itemsSummary ?? input.itemsText ?? '').toString();
+  const podAdminTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
+  const podFollowupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'pod_followup_alert').toString().trim();
+  const isPodInternalTag = tagName === podAdminTag || tagName === podFollowupTag;
 
   // Some Chatrace instances configure these custom fields as "Number".
   // If so, sending non-numeric strings may result in blank values.
@@ -155,93 +158,151 @@ export async function pushInternalReceiptAlert(input: {
     const digits = raw.replace(/[^0-9]/g, '');
     return digits;
   };
-  const toNumberStringOrEmpty = (value?: string | number) => {
-    if (value == null) return '';
+  const toNumberStringOrZero = (value?: string | number) => {
+    if (value == null) return '0';
     const n = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
-    return Number.isFinite(n) ? String(Math.round(n)) : '';
+    return Number.isFinite(n) ? String(Math.round(n)) : '0';
   };
   const FORCE_RETRIGGER_TAGS = new Set([
     'pod_receipt_admin_alert',
-    'followup_responsible_alert',
+    'pod_followup_alert',
+    'followup_responsible_alert', // legacy
     // legacy/internal
     'receipt_admin_alert',
   ]);
   const forceRetrigger =
     process.env.CHATRACE_INTERNAL_FORCE_RETRIGGER_TAGS === '1' || FORCE_RETRIGGER_TAGS.has(tagName);
 
-  const actions = [
+  const safeCustomerName = (input.customerName ?? '').toString().trim() || 'Customer';
+  const safeReceiptNumber = (input.receiptNumber ?? '').toString().trim();
+  const safeCreatedBy = (input.createdBy ?? '').toString().trim() || '(unknown)';
+  const safeAdminItems = itemsSummary.trim() || 'Items: (not available)';
+  const safeCustomerPhone = toDigitsOrEmpty((input.customerPhone ?? '').toString());
+  const safeFormattedAmount = toNumberStringOrZero(input.formattedAmount ?? input.amount);
+  const safePodPendingCount = toNumberStringOrZero(input.podPendingCount ?? 0);
+  const safePodPendingTotal = toNumberStringOrZero(input.podPendingTotal ?? 0);
+  const safePodPendingList = (input.podPendingList ?? '').toString().trim() || 'None';
+
+  // Internal validation for POD flows: if key fields are missing, do not apply the tag.
+  if (isPodInternalTag) {
+    if (!safeReceiptNumber) throw new Error('Missing required POD fields: receipt_number');
+    if (!safeCustomerName) throw new Error('Missing required POD fields: customer_name');
+  }
+
+  // Build actions in two phases:
+  // 1) set_field_value actions (contact upsert + field updates)
+  // 2) tag actions (remove/add tag) to trigger the flow after fields exist
+  const fieldActions: any[] = [];
+
+  if (isPodInternalTag) {
+    // Strict field naming for POD templates (no aliases, no curly braces).
+    fieldActions.push({ action: "set_field_value", field_name: "customer_name", value: safeCustomerName });
+    fieldActions.push({ action: "set_field_value", field_name: "customer_phone", value: safeCustomerPhone });
+    fieldActions.push({ action: "set_field_value", field_name: "receipt_number", value: safeReceiptNumber });
+    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmount });
+    fieldActions.push({ action: "set_field_value", field_name: "created_by", value: safeCreatedBy });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_items", value: safeAdminItems });
+    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_count", value: safePodPendingCount });
+    if (tagName === podAdminTag) {
+      fieldActions.push({ action: "set_field_value", field_name: "pod_pending_total", value: safePodPendingTotal });
+    }
+    if (tagName === podFollowupTag) {
+      fieldActions.push({ action: "set_field_value", field_name: "pod_pending_list", value: safePodPendingList });
+    }
+  } else {
     // Legacy/internal field names (keep for backwards compatibility)
-    { action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber },
-    { action: "set_field_value", field_name: "admin_amount", value: input.amount },
-    { action: "set_field_value", field_name: "admin_payment_method", value: input.paymentMethod },
-    { action: "set_field_value", field_name: "admin_created_by", value: input.createdBy },
-    { action: "set_field_value", field_name: "admin_items", value: itemsSummary },
+    fieldActions.push({ action: "set_field_value", field_name: "admin_receipt_number", value: input.receiptNumber });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_amount", value: input.amount });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_payment_method", value: input.paymentMethod });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_created_by", value: input.createdBy });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_items", value: itemsSummary });
 
-    // Newer admin WhatsApp template field names (must match Chatrace Flow mapping)
-    { action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber },
-    { action: "set_field_value", field_name: "customer_name", value: input.customerName ?? "Customer" },
-    // Additional aliases for templates that incorrectly use contact.first_name
-    // as a custom field instead of the Contact's first_name attribute.
-    { action: "set_field_value", field_name: "contact.first_name", value: input.customerName ?? "Customer" },
-    { action: "set_field_value", field_name: "contact_first_name", value: input.customerName ?? "Customer" },
-    { action: "set_field_value", field_name: "customer_phone", value: toDigitsOrEmpty(input.customerPhone) },
-    // Keep both "amount"+"currency" and "formatted_amount" for template compatibility.
-    { action: "set_field_value", field_name: "amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
-    { action: "set_field_value", field_name: "currency", value: "KES" },
-    { action: "set_field_value", field_name: "formatted_amount", value: toNumberStringOrEmpty(input.formattedAmount ?? input.amount) },
-    { action: "set_field_value", field_name: "payment_method", value: input.paymentMethod },
-    { action: "set_field_value", field_name: "created_by", value: input.createdBy },
-    // If items_summary is configured as Number, store item count and use admin_items for the text list.
-    { action: "set_field_value", field_name: "items_summary", value: toNumberStringOrEmpty(input.itemsCount ?? '') },
-    { action: "set_field_value", field_name: "total_sales_today", value: toNumberStringOrEmpty(input.totalSalesToday) },
+    // Newer admin WhatsApp template field names (best-effort)
+    fieldActions.push({ action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber });
+    fieldActions.push({ action: "set_field_value", field_name: "customer_name", value: safeCustomerName });
+    fieldActions.push({ action: "set_field_value", field_name: "customer_phone", value: safeCustomerPhone });
+    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmount });
+    fieldActions.push({ action: "set_field_value", field_name: "created_by", value: safeCreatedBy });
+    fieldActions.push({ action: "set_field_value", field_name: "admin_items", value: safeAdminItems });
+    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_count", value: safePodPendingCount });
+    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_total", value: safePodPendingTotal });
+    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_list", value: safePodPendingList });
+  }
 
-    // POD stats used by admin/follow-up templates
-    { action: "set_field_value", field_name: "pod_pending_count", value: toNumberStringOrEmpty(input.podPendingCount) },
-    { action: "set_field_value", field_name: "pod_pending_total", value: toNumberStringOrEmpty(input.podPendingTotal) },
-    { action: "set_field_value", field_name: "pod_pending_list", value: (input.podPendingList ?? "").toString() },
-
-    ...(forceRetrigger ? [{ action: "remove_tag", tag_name: tagName }] : []),
-    { action: "add_tag", tag_name: tagName },
-  ];
+  const tagActions: any[] = [];
+  if (forceRetrigger) tagActions.push({ action: "remove_tag", tag_name: tagName });
+  tagActions.push({ action: "add_tag", tag_name: tagName });
 
   // IMPORTANT: prove what's being sent to Chatrace for auditing (fields + tag)
   try {
+    const phone = input.toPhone || env.adminPhone;
     console.info('[internal][adminAlert] outbound', {
-      phone: input.toPhone || env.adminPhone,
-      fields: actions.filter((a: any) => a.action === 'set_field_value').map((a: any) => a.field_name),
-      hasPdfUrl: Boolean((input as any).receiptPdfUrl),
-      hasLink: Boolean((input as any).receiptLink),
+      phone,
+      fields: fieldActions.map((a: any) => a.field_name),
       tag: tagName,
+      strict: isPodInternalTag,
     });
+    if (isPodInternalTag) {
+      const label = tagName === podAdminTag ? '[Chatrace POD Admin]' : '[Chatrace POD FollowUp]';
+      console.info(label, {
+        phone,
+        tag: tagName,
+        customer_name: safeCustomerName,
+        customer_phone: safeCustomerPhone,
+        receipt_number: safeReceiptNumber,
+        formatted_amount: safeFormattedAmount,
+        created_by: safeCreatedBy,
+        pod_pending_count: safePodPendingCount,
+        pod_pending_total: tagName === podAdminTag ? safePodPendingTotal : undefined,
+        pod_pending_list: tagName === podFollowupTag ? safePodPendingList : undefined,
+      });
+    }
   } catch (e) {
     console.warn('[internal][adminAlert] failed to log outbound_actions', String(e));
   }
 
   const toPhone = (input.toPhone || env.adminPhone || "").toString().trim();
   if (!toPhone) return { ok: false, debug: { ...debug, error: "missing_internal_recipient_phone" } };
-  const payload = { phone: normalizeRecipientPhone(toPhone), actions };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const step = await postJson(url, env.token, payload, { rid, accountId: env.accountId });
+  const phoneNormalized = normalizeRecipientPhone(toPhone);
+
+  // Step 1: upsert contact and update fields
+  const fieldsPayload = { phone: phoneNormalized, actions: fieldActions };
+  const fieldsStep = await postJson(url, env.token, fieldsPayload, { rid, accountId: env.accountId });
+  debug.steps.fields = fieldsStep;
+  if (fieldsStep.json && fieldsStep.json.success === false) {
+    console.error('[internal][adminAlert] fields step returned success=false', { rid, tagName, body: fieldsStep.json });
+  }
+
+  // Step 2: apply tag after fields are set (trigger flow)
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const delayRaw = process.env.CHATRACE_INTERNAL_TAG_DELAY_MS ? Number(process.env.CHATRACE_INTERNAL_TAG_DELAY_MS) : 800;
+  const delayMs = process.env.NODE_ENV === 'test' ? 0 : Number.isFinite(delayRaw) ? Math.max(0, Math.round(delayRaw)) : 800;
+  await sleep(delayMs);
+  const tagPayload = { phone: phoneNormalized, actions: tagActions };
+  const tagStep = await postJson(url, env.token, tagPayload, { rid, accountId: env.accountId });
+  debug.steps.tag = tagStep;
+  if (tagStep.json && tagStep.json.success === false) {
+    console.error('[internal][adminAlert] tag step returned success=false', { rid, tagName, body: tagStep.json });
+  }
+
   try {
     console.info('[internal][adminAlert] response', {
-      status: step.status,
-      ok: step.ok,
-      snippet: step.bodySnippet,
-      json: step.json ?? null,
-      rawHead: step.raw ? (step.raw.length > 500 ? step.raw.slice(0, 500) : step.raw) : null,
+      fields: { status: fieldsStep.status, ok: fieldsStep.ok, snippet: fieldsStep.bodySnippet, json: fieldsStep.json ?? null },
+      tag: { status: tagStep.status, ok: tagStep.ok, snippet: tagStep.bodySnippet, json: tagStep.json ?? null },
     });
   } catch (e) {
     console.warn('[internal][adminAlert] failed to log response', String(e));
   }
-  debug.steps.createOrUpdate = step;
-  debug.ok = step.ok;
+
+  debug.ok = Boolean(fieldsStep.ok && tagStep.ok);
   // persist debug to DB for later inspection
   try {
     await persistInternalDebug(input.receiptNumber, rid, debug);
   } catch (e) {
     console.error('[internal][adminAlert] persist debug failed', String(e));
   }
-  return { ok: step.ok, debug };
+  return { ok: debug.ok, debug };
 }
 
 async function persistInternalDebug(receiptNumber: string, rid: string, debug: any) {
