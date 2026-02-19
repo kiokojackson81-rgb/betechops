@@ -184,6 +184,11 @@ function buildWhatsAppMessage(params: WhatsAppMessageParams) {
 const PDF_MIN_BYTES = 5_000;
 const DEBUG_HTML_SIGNATURE = process.env.DEBUG_RECEIPT_HTML === '1';
 
+// Tags that indicate the WhatsApp send is a POD dispatch notification. Used for
+// dedupe and audit fields on `receipt.data.podDelivery`.
+const POD_DISPATCH_TAGS = new Set(['betech_dispatch_pay_on_delivery', 'pod_dispatch_speedaf']);
+const isPodDispatchTag = (tag?: string | null) => POD_DISPATCH_TAGS.has(String(tag || '').trim());
+
 function logHtmlSignature(label: string, html: string) {
   if (!DEBUG_HTML_SIGNATURE) return;
   console.info('[receiptSender] html signature', {
@@ -772,7 +777,7 @@ export async function sendReceiptChannels(
           ? { ...(baseData!.podDelivery as Record<string, unknown>) }
           : {};
       const existingContactId = (baseData?.chatrace as any)?.debug?.contactId;
-      const isPodTag = (opts?.chatraceTag || '').trim() === 'betech_dispatch_pay_on_delivery';
+      const isPodTag = isPodDispatchTag(opts?.chatraceTag);
       const shouldMarkPodSent = Boolean(opts?.markPodSent) || isPodTag;
       const shouldSkipBecauseAlreadySent = Boolean(shouldMarkPodSent && (existingPod?.sentAt || existingPod?.contactId || existingContactId));
 
@@ -856,6 +861,8 @@ export async function sendReceiptChannels(
       if (!shouldSkipBecauseAlreadySent) {
         result = await pushReceiptToChatrace({
           ...chitInput,
+          // For templates that require duplicate amount placeholders, provide a second field.
+          extraFields: isPodDispatchTag(finalTagName) ? { amount_2: resolvedAmount } : undefined,
           tagName: tagForPush,
           skipDefaultTags: skipDefaultChatraceTags,
         });
@@ -893,7 +900,7 @@ export async function sendReceiptChannels(
       // audit flag so downstream duplicate-detection and business logic
       // can rely on a single canonical timestamp.
       try {
-        const isPodTag = (opts?.chatraceTag || '').trim() === 'betech_dispatch_pay_on_delivery';
+        const isPodTag = isPodDispatchTag(opts?.chatraceTag);
         const shouldMarkPodSent = Boolean(opts?.markPodSent) || isPodTag;
 
         // When this is the creation-time POD send, record audit fields and manage retries/fallbacks

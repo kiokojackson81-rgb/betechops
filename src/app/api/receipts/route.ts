@@ -12,7 +12,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { getSiteUrl, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
+import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
@@ -1084,7 +1084,7 @@ export async function POST(req: NextRequest) {
       try {
         sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp'], {
           requestId,
-          chatraceTag: 'betech_dispatch_pay_on_delivery',
+          chatraceTag: 'pod_dispatch_speedaf',
           skipDefaultChatraceTags: true,
           markPodSent: true,
         });
@@ -1108,6 +1108,13 @@ export async function POST(req: NextRequest) {
         }
       } else {
         console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf (pod)`);
+      }
+
+      // Additional POD-specific internal notifications (admin + follow-up responsible).
+      try {
+        await notifyInternalPodAlerts(result.receiptId, { requestId });
+      } catch (e) {
+        console.error("[receipts] failed to send POD internal alerts", e);
       }
     }
 

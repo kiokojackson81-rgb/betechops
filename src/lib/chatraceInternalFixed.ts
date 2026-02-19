@@ -88,6 +88,11 @@ function makeDebug(rid: string, env: ReturnType<typeof getEnv>) {
 const CONTACTS_PATH = "/contacts";
 
 export async function pushInternalReceiptAlert(input: {
+  // Optional override: send to a different internal recipient (e.g. follow-up responsible).
+  // Value must be numeric-only (E.164 without +), e.g. "2547...".
+  toPhone?: string;
+  // Tag to trigger a specific Flow.
+  tagName?: string;
   receiptNumber: string;
   amount: string;
   paymentMethod: string;
@@ -100,6 +105,9 @@ export async function pushInternalReceiptAlert(input: {
   itemsSummary?: string;
   itemsCount?: number;
   totalSalesToday?: string | number;
+  podPendingCount?: string | number;
+  podPendingTotal?: string | number;
+  podPendingList?: string;
   receiptLink?: string; // kept for caller compatibility, ignored in payload
   receiptPdfUrl?: string | null; // kept for caller compatibility, ignored in payload
   requestId?: string;
@@ -118,6 +126,7 @@ export async function pushInternalReceiptAlert(input: {
     console.info('[internal][adminAlert] ignoring receiptPdfUrl for internal alert', { receiptNumber: input.receiptNumber });
   }
 
+  const tagName = (input.tagName || "receipt_admin_alert").trim();
   const itemsSummary = (input.itemsSummary ?? input.itemsText ?? '').toString();
 
   // Some Chatrace instances configure these custom fields as "Number".
@@ -155,23 +164,30 @@ export async function pushInternalReceiptAlert(input: {
     { action: "set_field_value", field_name: "items_summary", value: toNumberStringOrEmpty(input.itemsCount ?? '') },
     { action: "set_field_value", field_name: "total_sales_today", value: toNumberStringOrEmpty(input.totalSalesToday) },
 
-    { action: "add_tag", tag_name: "receipt_admin_alert" },
+    // POD stats used by admin/follow-up templates
+    { action: "set_field_value", field_name: "pod_pending_count", value: toNumberStringOrEmpty(input.podPendingCount) },
+    { action: "set_field_value", field_name: "pod_pending_total", value: toNumberStringOrEmpty(input.podPendingTotal) },
+    { action: "set_field_value", field_name: "pod_pending_list", value: (input.podPendingList ?? "").toString() },
+
+    { action: "add_tag", tag_name: tagName },
   ];
 
   // IMPORTANT: prove what's being sent to Chatrace for auditing (fields + tag)
   try {
     console.info('[internal][adminAlert] outbound', {
-      phone: env.adminPhone,
+      phone: input.toPhone || env.adminPhone,
       fields: actions.filter((a: any) => a.action === 'set_field_value').map((a: any) => a.field_name),
       hasPdfUrl: Boolean((input as any).receiptPdfUrl),
       hasLink: Boolean((input as any).receiptLink),
-      tag: 'receipt_admin_alert',
+      tag: tagName,
     });
   } catch (e) {
     console.warn('[internal][adminAlert] failed to log outbound_actions', String(e));
   }
 
-  const payload = { phone: env.adminPhone, actions };
+  const toPhone = (input.toPhone || env.adminPhone || "").toString().trim();
+  if (!toPhone) return { ok: false, debug: { ...debug, error: "missing_internal_recipient_phone" } };
+  const payload = { phone: toPhone, actions };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
   const step = await postJson(url, env.token, payload, rid);
   try {

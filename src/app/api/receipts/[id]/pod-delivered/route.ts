@@ -436,7 +436,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     } else if (desiredStatus === 'delivered') {
       sendResult = await sendReceiptChannels(receiptId, ['whatsapp'], {
         requestId,
-        chatraceTag: 'betech_dispatch_pay_on_delivery',
+        chatraceTag: 'pod_dispatch_speedaf',
         skipDefaultChatraceTags: true,
       });
     } else {

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractItemsShort, extractReceiptTotalKES } from '@/lib/receiptExtract';
 import { pushInternalReceiptAlert } from '@/lib/chatraceInternalFixed';
+import { getPodPendingStats } from '@/lib/podPendingStats';
 
 export function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ops.betech.co.ke';
@@ -179,5 +180,121 @@ export async function notifyInternalReceipt(
   }
   if (requestId) {
     console.info(`[receiptSender][${requestId}] INTERNAL:ok`);
+  }
+}
+
+export async function notifyInternalPodAlerts(receiptId: string, opts?: { requestId?: string }) {
+  const requestId = opts?.requestId ?? randomUUID();
+
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: {
+      issuedBy: { select: { name: true, email: true } },
+      order: {
+        select: {
+          orderNumber: true,
+          customerName: true,
+          customerPhone: true,
+          attendant: { select: { name: true } },
+          totalAmount: true,
+        },
+      },
+    },
+  });
+  if (!receipt) return;
+
+  const snapshot: any =
+    typeof receipt.data === 'object' && receipt.data
+      ? { ...(receipt.data as Record<string, unknown>) }
+      : { order: receipt.order, totals: receipt.totals };
+
+  const receiptNumberValue =
+    (typeof receipt.totals === 'object' && receipt.totals
+      ? (receipt.totals as Record<string, any>).receiptNumber
+      : null) ||
+    (typeof receipt.data === 'object' && receipt.data
+      ? (receipt.data as Record<string, any>).receiptNumber
+      : null) ||
+    receipt.order?.orderNumber;
+  const receiptNumber = String(receiptNumberValue || receipt.orderId || receipt.id);
+
+  const amountKES = extractReceiptTotalKES(receipt as any);
+  const invoiceAmount = Number.isFinite(amountKES) ? amountKES : 0;
+
+  if (!snapshot.attendantName) {
+    snapshot.attendantName =
+      receipt.order?.attendant?.name ??
+      receipt.issuedBy?.name ??
+      receipt.issuedBy?.email ??
+      '(unknown)';
+  }
+
+  const staffName = snapshot.attendantName ?? '(unknown)';
+  const itemsShort = extractItemsShort(receipt as any);
+  const itemsSummary = String(itemsShort || '').trim();
+  const itemsCount = itemsShort
+    ? String(itemsShort)
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean).length
+    : 0;
+
+  let pendingCount = 0;
+  let pendingTotal = 0;
+  let pendingList = '';
+  try {
+    const stats = await getPodPendingStats(10);
+    pendingCount = stats.pendingCount;
+    pendingTotal = stats.pendingTotal;
+    pendingList = stats.pendingList;
+  } catch (e) {
+    console.warn('[pod][internal] failed to compute pending stats', e instanceof Error ? e.message : String(e));
+  }
+
+  // ADMIN POD RECEIPT ALERT
+  try {
+    await pushInternalReceiptAlert({
+      requestId,
+      tagName: 'pod_receipt_admin_alert',
+      receiptNumber,
+      amount: String(Math.round(invoiceAmount)),
+      formattedAmount: Math.round(invoiceAmount),
+      paymentMethod: 'POD',
+      createdBy: staffName,
+      itemsText: itemsShort,
+      itemsSummary,
+      itemsCount,
+      customerName: (receipt.order as any)?.customerName ?? (snapshot.customerName as any) ?? 'Customer',
+      customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
+      podPendingCount: pendingCount,
+      podPendingTotal: pendingTotal,
+    });
+  } catch (e) {
+    console.error('[pod][internal] failed to push pod_receipt_admin_alert', e instanceof Error ? e.message : String(e));
+  }
+
+  // FOLLOW-UP RESPONSIBLE ALERT
+  try {
+    const followupPhone =
+      (process.env.CHATRACE_INTERNAL_FOLLOWUP_PHONE || '254716722601').toString().trim();
+    await pushInternalReceiptAlert({
+      requestId,
+      toPhone: followupPhone,
+      tagName: 'followup_responsible_alert',
+      receiptNumber,
+      amount: String(Math.round(invoiceAmount)),
+      formattedAmount: Math.round(invoiceAmount),
+      paymentMethod: 'POD',
+      createdBy: staffName,
+      itemsText: itemsShort,
+      itemsSummary,
+      itemsCount,
+      customerName: (receipt.order as any)?.customerName ?? (snapshot.customerName as any) ?? 'Customer',
+      customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
+      podPendingCount: pendingCount,
+      podPendingList: pendingList,
+    });
+  } catch (e) {
+    console.error('[pod][internal] failed to push followup_responsible_alert', e instanceof Error ? e.message : String(e));
   }
 }
