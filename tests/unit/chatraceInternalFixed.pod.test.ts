@@ -135,5 +135,27 @@ describe("chatraceInternalFixed POD internal tags", () => {
     );
     expect(fieldNames).not.toEqual(expect.arrayContaining(["pod_pending_total"]));
   });
-});
 
+  test("normal internal admin alert still works when CHATRACE_INTERNAL_ACCOUNT_ID is missing", async () => {
+    const fetchMock = mockFetchSuccess();
+
+    const res = await pushInternalReceiptAlert({
+      // no tagName => default receipt_admin_alert
+      receiptNumber: "BETECH20260220-0003",
+      amount: "10",
+      paymentMethod: "MPESA",
+      createdBy: "Jeniffer",
+      itemsText: "Item C x1",
+      customerName: "Customer C",
+      customerPhone: "0705663175",
+      requestId: "rid-3",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [fieldsCall] = fetchMock.mock.calls as any[];
+    const fieldsInit = fieldsCall[1];
+    // Fallback internal account id
+    expect(fieldsInit.headers["X-ACCOUNT-ID"]).toBe("1802145");
+  });
+});

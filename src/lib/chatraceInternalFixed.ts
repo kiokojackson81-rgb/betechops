@@ -164,9 +164,10 @@ export async function pushInternalReceiptAlert(input: {
   const podAdminTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
   const podFollowupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'pod_followup_alert').toString().trim();
   const isPodInternalTag = tagName === podAdminTag || tagName === podFollowupTag;
-  const accountIdForRequest = isPodInternalTag
-    ? (process.env.CHATRACE_INTERNAL_POD_ACCOUNT_ID || env.accountId || "1802145").toString().trim()
-    : env.accountId;
+  // Most deployments use a single internal Chatrace account. Fall back to the POD
+  // internal account id (or 1802145) when CHATRACE_INTERNAL_ACCOUNT_ID is missing
+  // so normal internal admin alerts keep working.
+  const accountIdForRequest = (env.accountId || process.env.CHATRACE_INTERNAL_POD_ACCOUNT_ID || "1802145").toString().trim();
   if (!accountIdForRequest) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
   // Some Chatrace instances configure these custom fields as "Number".

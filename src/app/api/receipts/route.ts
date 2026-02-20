@@ -1066,15 +1066,13 @@ export async function POST(req: NextRequest) {
         };
       }
 
+      // Internal admin notification should not be blocked by PDF generation/upload issues.
+      // The internal Chatrace template does not require a PDF/link parameter.
       const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
-      if (pdfForInternal) {
-        try {
-          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
-        } catch (internalErr) {
-          console.error("[receipts] failed to notify internal ops", internalErr);
-        }
-      } else {
-        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf`);
+      try {
+        await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
+      } catch (internalErr) {
+        console.error("[receipts] failed to notify internal ops", internalErr);
       }
     } else {
       // For POD receipts, still trigger an immediate WhatsApp via Chatrace at
