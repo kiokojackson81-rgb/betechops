@@ -49,6 +49,16 @@ export async function notifyInternalReceipt(
   receiptUrl?: string,
 ) {
   if (docType && docType !== 'RECEIPT') return;
+  // Allow disabling the normal (non-POD) internal admin receipt WhatsApp notification
+  // without affecting POD internal alerts (pod_receipt_admin_alert/pod_followup_alert).
+  if (process.env.CHATRACE_INTERNAL_NORMAL_RECEIPT_ALERT_ENABLED === '0') {
+    if (requestId) {
+      console.info(`[receiptSender][${requestId}] INTERNAL:skipped normal_admin_disabled`);
+    } else {
+      console.info('[receipts][internal] skipped normal admin alert: disabled');
+    }
+    return;
+  }
   if (requestId) {
     console.info(`[receiptSender][${requestId}] INTERNAL:begin`);
   }
