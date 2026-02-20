@@ -108,12 +108,20 @@ export async function notifyInternalReceipt(
   // For POD receipts we only want the dedicated POD internal alerts
   // (pod_receipt_admin_alert + pod_followup_alert). Skip the "normal"
   // internal admin receipt notification to avoid duplicate messages.
-  if (isPodPaymentMethod(paymentMethod)) {
+  const hasPodDelivery = Boolean(
+    receipt &&
+      typeof receipt.data === 'object' &&
+      receipt.data &&
+      (receipt.data as any).podDelivery &&
+      typeof (receipt.data as any).podDelivery === 'object'
+  );
+  if (hasPodDelivery || isPodPaymentMethod(paymentMethod)) {
     const ridSkip = requestId || randomUUID();
     console.info('[receipts][internal] skipping normal admin alert for POD receipt', {
       receiptId,
       rid: ridSkip,
       paymentMethod,
+      hasPodDelivery,
     });
     return;
   }
