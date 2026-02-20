@@ -9,14 +9,13 @@ type ChatraceInternalConfig = {
   enabled: boolean;
 };
 
-function getEnv(): ChatraceInternalConfig & { envOk: boolean } {
-  const baseUrl = process.env.CHATRACE_INTERNAL_BASE_URL || "https://api.chatrace.com";
+function getEnv(): ChatraceInternalConfig {
+  const baseUrl = process.env.CHATRACE_INTERNAL_BASE_URL || process.env.CHATRACE_BASE_URL || "https://api.chatrace.com";
   const accountId = process.env.CHATRACE_INTERNAL_ACCOUNT_ID || "";
   const token = process.env.CHATRACE_INTERNAL_API_TOKEN || "";
-  const adminPhone = process.env.CHATRACE_INTERNAL_ADMIN_PHONE || "";
+  const adminPhone = process.env.CHATRACE_INTERNAL_ADMIN_PHONE || process.env.ADMIN_PHONE || "";
   const enabled = process.env.CHATRACE_INTERNAL_ENABLED === "1";
-  const envOk = Boolean(baseUrl && accountId && token && adminPhone);
-  return { baseUrl, accountId, token, adminPhone, enabled, envOk };
+  return { baseUrl, accountId, token, adminPhone, enabled };
 }
 
 function snippet(text: string, max = 220) {
@@ -30,12 +29,15 @@ type ChatraceStep = { status: number; ok: boolean; bodySnippet: string; raw?: st
 function normalizeRecipientPhone(value: string) {
   const raw = (value ?? "").toString().trim();
   if (!raw) return "";
-  if (raw.startsWith("+")) return raw;
   const digits = raw.replace(/[^0-9]/g, "");
   if (!digits) return "";
-  if (digits.startsWith("254")) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length === 10) return `+254${digits.slice(1)}`;
-  return digits; // best-effort fallback
+  // Chatrace internal contacts are keyed by numeric-only E.164 without '+'
+  // (e.g. "2547..."). Keep this consistent to avoid duplicate contacts that
+  // fail to send WhatsApp because the "real" WhatsApp-enabled contact is
+  // stored under the digits-only phone.
+  if (digits.startsWith("254")) return digits;
+  if (digits.startsWith("0") && digits.length === 10) return `254${digits.slice(1)}`;
+  return digits;
 }
 
 async function postJson(
@@ -134,7 +136,7 @@ export async function pushInternalReceiptAlert(input: {
   const env = getEnv();
   const debug = makeDebug(rid, env);
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
-  if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+  if (!env.baseUrl || !env.token) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
   // Meta/WhatsApp template parameters cannot contain newlines/tabs or long runs
   // of spaces. Keep this sanitizer strict to prevent template send failures.
@@ -162,6 +164,10 @@ export async function pushInternalReceiptAlert(input: {
   const podAdminTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
   const podFollowupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'pod_followup_alert').toString().trim();
   const isPodInternalTag = tagName === podAdminTag || tagName === podFollowupTag;
+  const accountIdForRequest = isPodInternalTag
+    ? (process.env.CHATRACE_INTERNAL_POD_ACCOUNT_ID || env.accountId || "1802145").toString().trim()
+    : env.accountId;
+  if (!accountIdForRequest) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
   // Some Chatrace instances configure these custom fields as "Number".
   // If so, sending non-numeric strings may result in blank values.
@@ -248,45 +254,61 @@ export async function pushInternalReceiptAlert(input: {
   if (forceRetrigger) tagActions.push({ action: "remove_tag", tag_name: tagName });
   tagActions.push({ action: "add_tag", tag_name: tagName });
 
+  const toPhone = (input.toPhone || env.adminPhone || "").toString().trim();
+  if (!toPhone) return { ok: false, debug: { ...debug, error: "missing_internal_recipient_phone" } };
+  const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
+  const phoneNormalized = normalizeRecipientPhone(toPhone);
+  const firstName =
+    isPodInternalTag && tagName === podFollowupTag
+      ? "POD Follow-up"
+      : isPodInternalTag
+        ? "POD Admin"
+        : "Admin";
+
   // IMPORTANT: prove what's being sent to Chatrace for auditing (fields + tag)
   try {
-    const phone = input.toPhone || env.adminPhone;
     console.info('[internal][adminAlert] outbound', {
-      phone,
+      phone: phoneNormalized,
+      baseUrl: env.baseUrl,
+      accountId: accountIdForRequest,
       fields: fieldActions.map((a: any) => a.field_name),
       tag: tagName,
       strict: isPodInternalTag,
     });
     if (isPodInternalTag) {
-      const label = tagName === podAdminTag ? '[Chatrace POD Admin]' : '[Chatrace POD FollowUp]';
-      console.info(label, {
-        phone,
-        tag: tagName,
+      const payloadPreview = {
         customer_name: safeCustomerName,
         customer_phone: safeCustomerPhone,
         receipt_number: safeReceiptNumber,
         formatted_amount: safeFormattedAmount,
         created_by: safeCreatedBy,
+        admin_items: safeAdminItems,
         pod_pending_count: safePodPendingCount,
         pod_pending_total: tagName === podAdminTag ? safePodPendingTotal : undefined,
         pod_pending_list: tagName === podFollowupTag ? safePodPendingList : undefined,
-      });
+      };
+      if (tagName === podAdminTag) {
+        // Keep exact log format requested for debugging.
+        console.log("[POD INTERNAL ADMIN] tag=", tagName, "payload=", { phone: phoneNormalized, first_name: firstName, ...payloadPreview });
+      } else if (tagName === podFollowupTag) {
+        console.log("[POD INTERNAL FOLLOWUP] tag=", tagName, "payload=", { phone: phoneNormalized, first_name: firstName, ...payloadPreview });
+      }
     }
   } catch (e) {
     console.warn('[internal][adminAlert] failed to log outbound_actions', String(e));
   }
 
-  const toPhone = (input.toPhone || env.adminPhone || "").toString().trim();
-  if (!toPhone) return { ok: false, debug: { ...debug, error: "missing_internal_recipient_phone" } };
-  const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const phoneNormalized = normalizeRecipientPhone(toPhone);
-
   // Step 1: upsert contact and update fields
-  const fieldsPayload = { phone: phoneNormalized, actions: fieldActions };
-  const fieldsStep = await postJson(url, env.token, fieldsPayload, { rid, accountId: env.accountId });
+  const fieldsPayload = { phone: phoneNormalized, first_name: firstName, actions: fieldActions };
+  const fieldsStep = await postJson(url, env.token, fieldsPayload, { rid, accountId: accountIdForRequest });
   debug.steps.fields = fieldsStep;
   if (fieldsStep.json && fieldsStep.json.success === false) {
     console.error('[internal][adminAlert] fields step returned success=false', { rid, tagName, body: fieldsStep.json });
+  }
+  try {
+    console.log("[CHATRACE RESPONSE]", fieldsStep.status, fieldsStep.raw || "");
+  } catch {
+    // ignore logging failures
   }
 
   // Step 2: apply tag after fields are set (trigger flow)
@@ -294,11 +316,16 @@ export async function pushInternalReceiptAlert(input: {
   const delayRaw = process.env.CHATRACE_INTERNAL_TAG_DELAY_MS ? Number(process.env.CHATRACE_INTERNAL_TAG_DELAY_MS) : 800;
   const delayMs = process.env.NODE_ENV === 'test' ? 0 : Number.isFinite(delayRaw) ? Math.max(0, Math.round(delayRaw)) : 800;
   await sleep(delayMs);
-  const tagPayload = { phone: phoneNormalized, actions: tagActions };
-  const tagStep = await postJson(url, env.token, tagPayload, { rid, accountId: env.accountId });
+  const tagPayload = { phone: phoneNormalized, first_name: firstName, actions: tagActions };
+  const tagStep = await postJson(url, env.token, tagPayload, { rid, accountId: accountIdForRequest });
   debug.steps.tag = tagStep;
   if (tagStep.json && tagStep.json.success === false) {
     console.error('[internal][adminAlert] tag step returned success=false', { rid, tagName, body: tagStep.json });
+  }
+  try {
+    console.log("[CHATRACE RESPONSE]", tagStep.status, tagStep.raw || "");
+  } catch {
+    // ignore logging failures
   }
 
   try {
@@ -349,7 +376,7 @@ export async function pushInternalDailySummary(input: {
   const env = getEnv();
   const debug = makeDebug(rid, env);
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
-  if (!env.envOk) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+  if (!env.baseUrl || !env.accountId || !env.token || !env.adminPhone) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
   const payload = {
     phone: env.adminPhone,
@@ -364,7 +391,7 @@ export async function pushInternalDailySummary(input: {
     ],
   };
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const step = await postJson(url, env.token, payload);
+  const step = await postJson(url, env.token, payload, { rid, accountId: env.accountId });
   debug.steps.createOrUpdate = step;
   debug.ok = step.ok;
   return { ok: step.ok, debug };
