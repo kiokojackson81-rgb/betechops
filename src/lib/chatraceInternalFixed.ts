@@ -300,13 +300,26 @@ export async function pushInternalReceiptAlert(input: {
 
   // Step 1: upsert contact and update fields
   const fieldsPayload = { phone: phoneNormalized, first_name: firstName, actions: fieldActions };
+  // For POD admin alerts, log the full outbound payload for auditing
+  if (isPodInternalTag && tagName === podAdminTag) {
+    try {
+      console.info('[internal][adminAlert] fieldsPayload full', { payload: JSON.parse(JSON.stringify(fieldsPayload)), accountId: accountIdForRequest, rid });
+    } catch (e) {
+      console.warn('[internal][adminAlert] failed to stringify fieldsPayload', String(e));
+    }
+  }
   const fieldsStep = await postJson(url, env.token, fieldsPayload, { rid, accountId: accountIdForRequest });
   debug.steps.fields = fieldsStep;
   if (fieldsStep.json && fieldsStep.json.success === false) {
     console.error('[internal][adminAlert] fields step returned success=false', { rid, tagName, body: fieldsStep.json });
   }
   try {
-    console.log("[CHATRACE RESPONSE]", fieldsStep.status, fieldsStep.raw || "");
+    // Log full response body and parsed JSON for POD admin alerts
+    if (isPodInternalTag && tagName === podAdminTag) {
+      console.info('[internal][adminAlert] fields step response', { status: fieldsStep.status, raw: fieldsStep.raw, json: fieldsStep.json });
+    } else {
+      console.log('[CHATRACE RESPONSE]', fieldsStep.status, fieldsStep.raw || '');
+    }
   } catch {
     // ignore logging failures
   }
@@ -317,13 +330,25 @@ export async function pushInternalReceiptAlert(input: {
   const delayMs = process.env.NODE_ENV === 'test' ? 0 : Number.isFinite(delayRaw) ? Math.max(0, Math.round(delayRaw)) : 800;
   await sleep(delayMs);
   const tagPayload = { phone: phoneNormalized, first_name: firstName, actions: tagActions };
+  // For POD admin alerts, log the full tag payload before sending
+  if (isPodInternalTag && tagName === podAdminTag) {
+    try {
+      console.info('[internal][adminAlert] tagPayload full', { payload: JSON.parse(JSON.stringify(tagPayload)), accountId: accountIdForRequest, rid });
+    } catch (e) {
+      console.warn('[internal][adminAlert] failed to stringify tagPayload', String(e));
+    }
+  }
   const tagStep = await postJson(url, env.token, tagPayload, { rid, accountId: accountIdForRequest });
   debug.steps.tag = tagStep;
   if (tagStep.json && tagStep.json.success === false) {
     console.error('[internal][adminAlert] tag step returned success=false', { rid, tagName, body: tagStep.json });
   }
   try {
-    console.log("[CHATRACE RESPONSE]", tagStep.status, tagStep.raw || "");
+    if (isPodInternalTag && tagName === podAdminTag) {
+      console.info('[internal][adminAlert] tag step response', { status: tagStep.status, raw: tagStep.raw, json: tagStep.json });
+    } else {
+      console.log('[CHATRACE RESPONSE]', tagStep.status, tagStep.raw || '');
+    }
   } catch {
     // ignore logging failures
   }
