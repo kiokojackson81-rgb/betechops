@@ -197,7 +197,11 @@ export async function pushInternalReceiptAlert(input: {
   const safeCreatedBy = (input.createdBy ?? '').toString().trim() || '(unknown)';
   const safeAdminItemsRaw = itemsSummary.trim() || 'Items: (not available)';
   const safeAdminItems = sanitizeMetaParam(safeAdminItemsRaw, { list: true, maxLen: 800 });
-  const safeCustomerPhone = toDigitsOrEmpty((input.customerPhone ?? '').toString());
+  // Meta template parameters cannot be empty; empty strings can fail with
+  // "(#131008) Required parameter is missing". Ensure required params have a
+  // non-empty fallback even when upstream data is missing.
+  const safeCustomerPhoneRaw = toDigitsOrEmpty((input.customerPhone ?? '').toString());
+  const safeCustomerPhone = safeCustomerPhoneRaw || '0';
   const safeFormattedAmount = toNumberStringOrZero(input.formattedAmount ?? input.amount);
   const safePodPendingCount = toNumberStringOrZero(input.podPendingCount ?? 0);
   const safePodPendingTotal = toNumberStringOrZero(input.podPendingTotal ?? 0);
