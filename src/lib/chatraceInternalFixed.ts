@@ -182,6 +182,11 @@ export async function pushInternalReceiptAlert(input: {
     const n = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
     return Number.isFinite(n) ? String(Math.round(n)) : '0';
   };
+  const toNumberOrZero = (value?: string | number) => {
+    if (value == null) return 0;
+    const n = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) ? Math.round(n) : 0;
+  };
   const FORCE_RETRIGGER_TAGS = new Set([
     'pod_receipt_admin_alert',
     'pod_followup_alert',
@@ -195,23 +200,31 @@ export async function pushInternalReceiptAlert(input: {
   const safeCustomerName = (input.customerName ?? '').toString().trim() || 'Customer';
   const safeReceiptNumber = (input.receiptNumber ?? '').toString().trim();
   const safeCreatedBy = (input.createdBy ?? '').toString().trim() || '(unknown)';
-  const safeAdminItemsRaw = itemsSummary.trim() || 'Items: (not available)';
+  const safeAdminItemsRaw = itemsSummary.trim() || 'N/A';
   const safeAdminItems = sanitizeMetaParam(safeAdminItemsRaw, { list: true, maxLen: 800 });
   // Meta template parameters cannot be empty; empty strings can fail with
   // "(#131008) Required parameter is missing". Ensure required params have a
   // non-empty fallback even when upstream data is missing.
-  const safeCustomerPhoneRaw = toDigitsOrEmpty((input.customerPhone ?? '').toString());
-  const safeCustomerPhone = safeCustomerPhoneRaw || '0';
+  const safeCustomerPhoneRaw = sanitizeMetaParam((input.customerPhone ?? '').toString(), { list: false, maxLen: 60 });
+  const safeCustomerPhone = safeCustomerPhoneRaw || 'N/A';
+  const safeFormattedAmountNum = toNumberOrZero(input.formattedAmount ?? input.amount);
   const safeFormattedAmount = toNumberStringOrZero(input.formattedAmount ?? input.amount);
+  const safePodPendingCountNum = toNumberOrZero(input.podPendingCount ?? 0);
   const safePodPendingCount = toNumberStringOrZero(input.podPendingCount ?? 0);
+  const safePodPendingTotalNum = toNumberOrZero(input.podPendingTotal ?? 0);
   const safePodPendingTotal = toNumberStringOrZero(input.podPendingTotal ?? 0);
   const safePodPendingListRaw = (input.podPendingList ?? '').toString().trim() || 'None';
   const safePodPendingList = sanitizeMetaParam(safePodPendingListRaw, { list: true, maxLen: 900 });
 
   // Internal validation for POD flows: if key fields are missing, do not apply the tag.
   if (isPodInternalTag) {
-    if (!safeReceiptNumber) throw new Error('Missing required POD fields: receipt_number');
-    if (!safeCustomerName) throw new Error('Missing required POD fields: customer_name');
+    const missing: string[] = [];
+    if (!safeReceiptNumber) missing.push('receipt_number');
+    if (!safeCustomerName) missing.push('customer_name');
+    if (!safeCustomerPhone) missing.push('customer_phone');
+    if (!safeCreatedBy) missing.push('created_by');
+    if (!safeAdminItems) missing.push('admin_items');
+    if (missing.length) throw new Error(`Missing required POD fields: ${missing.join(', ')}`);
   }
 
   // Build actions in two phases:
@@ -224,12 +237,12 @@ export async function pushInternalReceiptAlert(input: {
     fieldActions.push({ action: "set_field_value", field_name: "customer_name", value: safeCustomerName });
     fieldActions.push({ action: "set_field_value", field_name: "customer_phone", value: safeCustomerPhone });
     fieldActions.push({ action: "set_field_value", field_name: "receipt_number", value: safeReceiptNumber });
-    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmount });
+    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmountNum });
     fieldActions.push({ action: "set_field_value", field_name: "created_by", value: safeCreatedBy });
     fieldActions.push({ action: "set_field_value", field_name: "admin_items", value: safeAdminItems });
-    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_count", value: safePodPendingCount });
+    fieldActions.push({ action: "set_field_value", field_name: "pod_pending_count", value: safePodPendingCountNum });
     if (tagName === podAdminTag) {
-      fieldActions.push({ action: "set_field_value", field_name: "pod_pending_total", value: safePodPendingTotal });
+      fieldActions.push({ action: "set_field_value", field_name: "pod_pending_total", value: safePodPendingTotalNum });
     }
     if (tagName === podFollowupTag) {
       fieldActions.push({ action: "set_field_value", field_name: "pod_pending_list", value: safePodPendingList });
@@ -330,7 +343,8 @@ export async function pushInternalReceiptAlert(input: {
 
   // Step 2: apply tag after fields are set (trigger flow)
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const delayRaw = process.env.CHATRACE_INTERNAL_TAG_DELAY_MS ? Number(process.env.CHATRACE_INTERNAL_TAG_DELAY_MS) : 800;
+  const delayDefault = isPodInternalTag ? 1500 : 800;
+  const delayRaw = process.env.CHATRACE_INTERNAL_TAG_DELAY_MS ? Number(process.env.CHATRACE_INTERNAL_TAG_DELAY_MS) : delayDefault;
   const delayMs = process.env.NODE_ENV === 'test' ? 0 : Number.isFinite(delayRaw) ? Math.max(0, Math.round(delayRaw)) : 800;
   await sleep(delayMs);
   const tagPayload = { phone: phoneNormalized, first_name: firstName, actions: tagActions };
@@ -357,6 +371,26 @@ export async function pushInternalReceiptAlert(input: {
     // ignore logging failures
   }
 
+  // If Meta rejects the send due to missing template params, retry once after a longer delay.
+  // This addresses eventual-consistency/race conditions where fields are set but not yet readable
+  // by the flow runner at the moment the tag is applied.
+  try {
+    const raw = (tagStep.raw ?? '').toString();
+    const isMetaMissingParam =
+      raw.includes('#131008') ||
+      raw.includes('131008') ||
+      raw.toLowerCase().includes('required parameter is missing') ||
+      raw.toLowerCase().includes('missing text value');
+    if (isPodInternalTag && tagName === podAdminTag && isMetaMissingParam) {
+      await sleep(process.env.NODE_ENV === 'test' ? 0 : 1500);
+      const retryStep = await postJson(url, env.token, tagPayload, { rid, accountId: accountIdForRequest });
+      (debug.steps as any).tagRetry = retryStep;
+      console.info('[internal][adminAlert] tag retry response', { status: retryStep.status, raw: retryStep.raw, json: retryStep.json });
+    }
+  } catch (e) {
+    console.warn('[internal][adminAlert] tag retry skipped/failed', String(e));
+  }
+
   try {
     console.info('[internal][adminAlert] response', {
       fields: { status: fieldsStep.status, ok: fieldsStep.ok, snippet: fieldsStep.bodySnippet, json: fieldsStep.json ?? null },
@@ -366,7 +400,8 @@ export async function pushInternalReceiptAlert(input: {
     console.warn('[internal][adminAlert] failed to log response', String(e));
   }
 
-  debug.ok = Boolean(fieldsStep.ok && tagStep.ok);
+  const retryOk = Boolean((debug.steps as any).tagRetry?.ok);
+  debug.ok = Boolean(fieldsStep.ok && (tagStep.ok || retryOk));
   // persist debug to DB for later inspection
   try {
     await persistInternalDebug(input.receiptNumber, rid, debug);
