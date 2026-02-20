@@ -1099,16 +1099,8 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
-      if (pdfForInternal) {
-        try {
-          await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
-        } catch (internalErr) {
-          console.error("[receipts] failed to notify internal ops (pod)", internalErr);
-        }
-      } else {
-        console.info(`[receiptSender][${requestId}] INTERNAL:skipped missing_pdf (pod)`);
-      }
+      // IMPORTANT: For POD receipts, do not send the "normal" internal admin receipt notification.
+      // POD has dedicated internal flows (admin + follow-up) handled below.
 
       // Additional POD-specific internal notifications (admin + follow-up responsible).
       try {
