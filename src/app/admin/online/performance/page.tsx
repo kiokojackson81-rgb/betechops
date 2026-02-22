@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPreviousTradingPeriod, getTradingPeriodFor, parseTradingPeriodKey, type TradingPeriod } from "@/lib/tradingPeriod";
@@ -43,26 +42,37 @@ export default async function OnlinePerformancePage({
     orderBy: [{ platform: "asc" }, { displayName: "asc" }],
   });
 
-  const [perWeekAgg, perWeekLossCount] = await Promise.all([
-    (prisma as any).marketplaceProfitEntry.groupBy({
-      by: ["weekStart"],
-      _sum: { netPayout: true, profit: true },
-      _avg: { commissionRatePct: true },
-      where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
-      orderBy: { weekStart: "asc" },
-    }),
-    (prisma as any).marketplaceProfitEntry.groupBy({
-      by: ["weekStart"],
-      _count: { _all: true },
-      where: {
-        weekStart: { in: weekStarts },
-        periodKey: period.key,
-        profit: { lt: new Prisma.Decimal(0) },
-        ...(accountId ? { accountId } : {}),
-      },
-      orderBy: { weekStart: "asc" },
-    }),
-  ]);
+  let perWeekAgg: any[] = [];
+  let perWeekLossCount: any[] = [];
+  let dbReady = true;
+  try {
+    [perWeekAgg, perWeekLossCount] = await Promise.all([
+      (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart"],
+        _sum: { netPayout: true, profit: true },
+        _avg: { commissionRatePct: true },
+        where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        orderBy: { weekStart: "asc" },
+      }),
+      (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart"],
+        _count: { _all: true },
+        where: {
+          weekStart: { in: weekStarts },
+          periodKey: period.key,
+          isLoss: true,
+          ...(accountId ? { accountId } : {}),
+        },
+        orderBy: { weekStart: "asc" },
+      }),
+    ]);
+  } catch (err: any) {
+    if (err?.code === "P2021") {
+      dbReady = false;
+    } else {
+      throw err;
+    }
+  }
 
   const lossMap = new Map(
     (perWeekLossCount as any[]).map((row) => [new Date(row.weekStart).toISOString(), Number(row._count?._all ?? 0)]),
@@ -126,13 +136,13 @@ export default async function OnlinePerformancePage({
               href={`/admin/online/performance?periodKey=${encodeURIComponent(previousPeriod.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
-              ← Previous period
+              Previous period
             </Link>
             <Link
               href={`/admin/online/performance?periodKey=${encodeURIComponent(nextPeriod.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
-              Next period →
+              Next period
             </Link>
             <Link
               href="/admin/online/performance/capture"
@@ -152,6 +162,12 @@ export default async function OnlinePerformancePage({
         <div className="mt-4">
           <PerformanceFiltersClient accounts={accounts} />
         </div>
+
+        {!dbReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Performance tables are not available yet (database migration pending). Redeploy to apply migrations, then refresh.
+          </div>
+        )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {weeks.map((wk) => {

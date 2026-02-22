@@ -5,7 +5,27 @@ import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
 import { Platform } from "@prisma/client";
-import { parseMarketplaceProfitTransaction } from "@/lib/marketplaceProfitParser";
+type PreviewPayload = {
+  account: { id: string; displayName: string; platform: Platform };
+  extracted: {
+    method: string;
+    confidence: number;
+    notes: string[];
+    date: string;
+    currency: "KES";
+    item_price_credit: { amount: number; txn: string };
+    commission: { amount: number; txn: string };
+    shipping_fee: { amount: number; txn: string };
+  };
+  computed: {
+    netPayout: number;
+    buyingPriceKes: number;
+    profit: number;
+    marginPct: number;
+    commissionRatePct: number;
+    isLoss: boolean;
+  };
+};
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -40,6 +60,8 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<CaptureResponse | null>(null);
   const [showMore, setShowMore] = useState(false);
+  const [preview, setPreview] = useState<PreviewPayload | null>(null);
+  const [previewError, setPreviewError] = useState<string>("");
 
   const buyingNum = useMemo(() => Number(buyingPriceKes), [buyingPriceKes]);
 
@@ -49,29 +71,36 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
     return props.accounts.filter((a) => (a.displayName || "").toLowerCase().includes(q) || a.platform.toLowerCase().includes(q));
   }, [props.accounts, shopSearch]);
 
-  const parsedPreview = useMemo(() => {
-    if (!transactionText.trim()) return { ok: false as const, error: "" };
+  const canPreview = Boolean(accountId) && transactionText.trim().length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
+
+  const runPreview = async () => {
+    if (!accountId) return showToast("Select a shop first", "error");
+    if (!transactionText.trim()) return showToast("Paste the transaction details first", "error");
+    if (!Number.isFinite(buyingNum) || buyingNum < 0) return showToast("Enter a valid buying price", "error");
+
+    setPreview(null);
+    setPreviewError("");
+    setSaving(true);
     try {
-      const parsed = parseMarketplaceProfitTransaction(transactionText);
-      const netPayout = parsed.itemCreditAmount + parsed.commissionAmount + parsed.shippingAmount;
-      const profit = netPayout - (Number.isFinite(buyingNum) ? buyingNum : 0);
-      const marginPct = netPayout !== 0 ? (profit / netPayout) * 100 : 0;
-      const commissionRatePct = parsed.itemCreditAmount !== 0 ? (Math.abs(parsed.commissionAmount) / parsed.itemCreditAmount) * 100 : 0;
-      return {
-        ok: true as const,
-        parsed,
-        netPayout,
-        profit,
-        marginPct,
-        commissionRatePct,
-      };
+      const res = await fetch("/api/admin/marketplace-profit-entry/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, buyingPriceKes: buyingNum, transactionText }),
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        throw new Error(data?.error || "Preview failed");
+      }
+      setPreview(data as PreviewPayload);
+      showToast("Preview ready", "success");
     } catch (err) {
-      return {
-        ok: false as const,
-        error: err instanceof Error ? err.message : "Could not parse transaction details",
-      };
+      console.error(err);
+      setPreviewError(err instanceof Error ? err.message : "Preview failed");
+      showToast(err instanceof Error ? err.message : "Preview failed", "error");
+    } finally {
+      setSaving(false);
     }
-  }, [buyingNum, transactionText]);
+  };
 
   const onSubmit = async () => {
     if (!accountId) {
@@ -86,8 +115,8 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       showToast("Enter a valid buying price", "error");
       return;
     }
-    if (!parsedPreview.ok) {
-      showToast("Could not parse transaction details. Please paste the full block.", "error");
+    if (!preview) {
+      showToast("Preview first, then save", "error");
       return;
     }
 
@@ -117,6 +146,8 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       setOrderId("");
       setSku("");
       setProductName("");
+      setPreview(null);
+      setPreviewError("");
     } catch (err) {
       console.error(err);
       showToast(err instanceof Error ? err.message : "Failed to save profit entry", "error");
@@ -133,7 +164,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-white">Capture entry</h2>
           <Link href="/admin/online/performance" className="text-sm font-semibold text-emerald-200 hover:text-emerald-100">
-            Back to performance →
+            Back to performance
           </Link>
         </div>
 
@@ -201,7 +232,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
             onClick={() => setShowMore((v) => !v)}
             className="text-sm font-semibold text-slate-200 hover:text-white"
           >
-            {showMore ? "Hide" : "More details"} →
+            {showMore ? "Hide" : "More details"}
           </button>
           {showMore && (
             <div className="mt-3 grid gap-4 lg:grid-cols-2">
@@ -240,51 +271,84 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
           <p className="text-xs uppercase tracking-wide text-slate-500">Preview</p>
           {!transactionText.trim() ? (
             <p className="mt-2 text-sm text-slate-400">Paste the transaction block to see extracted values.</p>
-          ) : parsedPreview.ok ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
-                <p className="mt-1 font-semibold text-white">{parsedPreview.parsed.date.toLocaleDateString()}</p>
-              </div>
-              <div className="sm:col-span-2">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Item credit</p>
-                <p className="mt-1 font-semibold text-white">
-                  {parsedPreview.parsed.itemCreditTxn} • {currency.format(parsedPreview.parsed.itemCreditAmount)}
+          ) : preview ? (
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p className="text-slate-300">
+                  Shop: <span className="font-semibold text-white">{preview.account.displayName}</span> —{" "}
+                  <span className="font-semibold text-white">{preview.account.platform}</span>
+                </p>
+                <p className="text-xs text-slate-400">
+                  Confidence: <span className="font-semibold text-slate-200">{(preview.extracted.confidence ?? 0).toFixed(2)}</span>{" "}
+                  • Method: <span className="font-semibold text-slate-200">{preview.extracted.method}</span>
                 </p>
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Commission %</p>
-                <p className="mt-1 font-semibold text-slate-100">{parsedPreview.commissionRatePct.toFixed(1)}%</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Commission</p>
-                <p className="mt-1 font-semibold text-slate-100">{currency.format(parsedPreview.parsed.commissionAmount)}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Shipping</p>
-                <p className="mt-1 font-semibold text-slate-100">{currency.format(parsedPreview.parsed.shippingAmount)}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Net payout</p>
-                <p className="mt-1 font-semibold text-emerald-300">{currency.format(parsedPreview.netPayout)}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Profit</p>
-                <p className={`mt-1 font-semibold ${parsedPreview.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                  {currency.format(parsedPreview.profit)} ({parsedPreview.marginPct.toFixed(1)}%)
-                </p>
+              {preview.extracted.notes?.length ? (
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Warnings</p>
+                  <ul className="mt-2 list-disc pl-5">
+                    {preview.extracted.notes.map((n, idx) => (
+                      <li key={`${idx}-${n}`}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
+                  <p className="mt-1 font-semibold text-white">{new Date(preview.extracted.date).toLocaleDateString()}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Item credit</p>
+                  <p className="mt-1 font-semibold text-white">
+                    {preview.extracted.item_price_credit.txn} • {currency.format(preview.extracted.item_price_credit.amount)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Commission %</p>
+                  <p className="mt-1 font-semibold text-slate-100">{preview.computed.commissionRatePct.toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Commission</p>
+                  <p className="mt-1 font-semibold text-slate-100">{currency.format(preview.extracted.commission.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Shipping</p>
+                  <p className="mt-1 font-semibold text-slate-100">{currency.format(preview.extracted.shipping_fee.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Net payout</p>
+                  <p className="mt-1 font-semibold text-emerald-300">{currency.format(preview.computed.netPayout)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Profit</p>
+                  <p className={`mt-1 font-semibold ${preview.computed.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                    {currency.format(preview.computed.profit)} ({preview.computed.marginPct.toFixed(1)}%)
+                  </p>
+                </div>
               </div>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-red-200">{parsedPreview.error}</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Click <span className="font-semibold text-slate-200">Preview</span> to extract values before saving.
+              {previewError ? <span className="block pt-2 text-red-200">{previewError}</span> : null}
+            </p>
           )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
+            onClick={runPreview}
+            disabled={saving || !canPreview}
+            className="rounded-full border border-white/15 bg-white/5 px-6 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60"
+          >
+            {saving ? "Working..." : "Preview"}
+          </button>
+          <button
+            type="button"
             onClick={onSubmit}
-            disabled={saving || !accountId || !Number.isFinite(buyingNum) || buyingNum < 0 || !parsedPreview.ok}
+            disabled={saving || !preview}
             className="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save profit entry"}

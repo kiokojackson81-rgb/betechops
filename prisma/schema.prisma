@@ -391,6 +391,7 @@ model MarketplaceProfitEntry {
   profit      Decimal @db.Decimal(12, 2)
   marginPct   Decimal @db.Decimal(8, 2)
   commissionRatePct Decimal @db.Decimal(8, 2)
+  isLoss      Boolean @default(false)
 
   orderId     String?
   sku         String?

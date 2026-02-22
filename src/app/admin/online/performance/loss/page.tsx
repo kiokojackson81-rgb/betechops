@@ -4,7 +4,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
-import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -31,16 +30,27 @@ export default async function OnlinePerformanceLossPage({
   const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, 4);
   const weekStarts = weeks.map((w) => w.weekStart);
 
-  const lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
-    where: {
-      periodKey: period.key,
-      weekStart: { in: weekStarts },
-      profit: { lt: new Prisma.Decimal(0) },
-      ...(accountId ? { accountId } : {}),
-    },
-    include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
-    orderBy: [{ profit: "asc" }, { date: "asc" }],
-  });
+  let lossEntries: any[] = [];
+  let dbReady = true;
+  try {
+    lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
+      where: {
+        periodKey: period.key,
+        weekStart: { in: weekStarts },
+        isLoss: true,
+        ...(accountId ? { accountId } : {}),
+      },
+      include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+      orderBy: [{ profit: "asc" }, { date: "asc" }],
+    });
+  } catch (err: any) {
+    if (err?.code === "P2021") {
+      dbReady = false;
+      lossEntries = [];
+    } else {
+      throw err;
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -83,6 +93,11 @@ export default async function OnlinePerformanceLossPage({
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Loss entries</h2>
         <p className="text-sm text-slate-400">Sorted by worst profit first.</p>
+        {!dbReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Performance tables are not available yet (database migration pending). Redeploy to apply migrations, then refresh.
+          </div>
+        )}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead>

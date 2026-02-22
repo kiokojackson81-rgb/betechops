@@ -36,7 +36,7 @@ export default async function OnlinePerformanceWeekPage({
         <h1 className="text-2xl font-semibold text-white">Week performance</h1>
         <p className="text-sm text-slate-400">Missing `weekStart` query parameter.</p>
         <Link href={`/admin/online/performance?periodKey=${encodeURIComponent(period.key)}`} className="text-emerald-200 hover:text-emerald-100">
-          Back to performance →
+          Back to performance
         </Link>
       </div>
     );
@@ -46,30 +46,49 @@ export default async function OnlinePerformanceWeekPage({
   const window = mondayToSundayNairobiWindow(canonicalStart);
   const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
 
-  const [entries, agg, lossCount, manualWeeklyAgg] = await Promise.all([
-    (prisma as any).marketplaceProfitEntry.findMany({
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
-      include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
-      orderBy: [{ profit: "asc" }, { date: "asc" }],
-    }),
-    (prisma as any).marketplaceProfitEntry.aggregate({
-      _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
-      _avg: { commissionRatePct: true, marginPct: true },
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
-    }),
-    (prisma as any).marketplaceProfitEntry.count({
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 }, ...(accountId ? { accountId } : {}) },
-    }),
-    prisma.weeklySale.aggregate({
-      _sum: { amount: true },
-      where: {
-        weekStart: window.weekStart,
-        weekEnd: window.weekEnd,
-        source: WeeklySaleSource.MANUAL,
-        status: { not: WeeklySaleStatus.REJECTED },
-      },
-    }),
-  ]);
+  const manualWeeklyAgg = await prisma.weeklySale.aggregate({
+    _sum: { amount: true },
+    where: {
+      weekStart: window.weekStart,
+      weekEnd: window.weekEnd,
+      source: WeeklySaleSource.MANUAL,
+      status: { not: WeeklySaleStatus.REJECTED },
+    },
+  });
+
+  let entries: any[] = [];
+  let agg: any = {};
+  let lossCount = 0;
+  let dbReady = true;
+  try {
+    const [e, a, lc] = await Promise.all([
+      (prisma as any).marketplaceProfitEntry.findMany({
+        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+        orderBy: [{ profit: "asc" }, { date: "asc" }],
+      }),
+      (prisma as any).marketplaceProfitEntry.aggregate({
+        _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
+        _avg: { commissionRatePct: true, marginPct: true },
+        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+      }),
+      (prisma as any).marketplaceProfitEntry.count({
+        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, isLoss: true, ...(accountId ? { accountId } : {}) },
+      }),
+    ]);
+    entries = e;
+    agg = a;
+    lossCount = Number(lc ?? 0);
+  } catch (err: any) {
+    if (err?.code === "P2021") {
+      dbReady = false;
+      entries = [];
+      agg = {};
+      lossCount = 0;
+    } else {
+      throw err;
+    }
+  }
 
   const typedAgg = agg as any;
   const totalRevenue = Number(typedAgg?._sum?.itemCreditAmount ?? 0);
@@ -81,6 +100,7 @@ export default async function OnlinePerformanceWeekPage({
   const manualWeeklyTotal = Number(manualWeeklyAgg._sum.amount ?? 0);
 
   const lossEntries = (entries as any[]).filter((e) => Number(e.profit ?? 0) < 0);
+  const lossEntriesFlagged = (entries as any[]).filter((e) => Boolean(e.isLoss));
 
   return (
     <div className="space-y-8">
@@ -151,6 +171,11 @@ export default async function OnlinePerformanceWeekPage({
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Loss entries</h2>
         <p className="text-sm text-slate-400">Profit &lt; 0.</p>
+        {!dbReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Performance tables are not available yet (database migration pending). Redeploy to apply migrations, then refresh.
+          </div>
+        )}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead>
@@ -165,7 +190,7 @@ export default async function OnlinePerformanceWeekPage({
               </tr>
             </thead>
             <tbody>
-              {lossEntries.map((e) => (
+              {(lossEntriesFlagged.length ? lossEntriesFlagged : lossEntries).map((e) => (
                 <tr key={e.id} className="border-t border-white/5">
                   <td className="py-3 pr-4 text-slate-200">{new Date(e.date).toLocaleDateString()}</td>
                   <td className="py-3 pr-4 text-slate-200">{e.platform}</td>
@@ -178,7 +203,7 @@ export default async function OnlinePerformanceWeekPage({
                   </td>
                 </tr>
               ))}
-              {!lossEntries.length && (
+              {!lossEntriesFlagged.length && !lossEntries.length && (
                 <tr>
                   <td className="py-6 text-center text-slate-500" colSpan={7}>
                     No loss entries for this week.
