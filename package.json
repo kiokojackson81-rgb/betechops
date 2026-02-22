@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
+    "vercel-build": "node scripts/vercel-build.js",
     "start": "next start",
     "lint": "eslint",
     "prisma:seed": "node prisma/seed.js",
