@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
   for (let i = 0; i < recipients.length; i++) {
     const toPhone = recipients[i]!;
     const rid = `simulate-${Date.now()}-${i + 1}`;
-    const res = await pushInternalReceiptAlert({
+    const res: any = await pushInternalReceiptAlert({
       requestId: rid,
       toPhone,
       tagName,
@@ -93,7 +93,13 @@ export async function GET(request: NextRequest) {
       customerPhone,
       totalSalesToday: Math.round(totalSalesTodayNum),
     });
-    results.push({ toPhone, ok: Boolean(res?.ok), rid: res?.debug?.rid ?? rid, error: res?.debug?.error ?? null, debug: res?.debug ?? null });
+    results.push({
+      toPhone,
+      ok: Boolean(res?.ok),
+      rid: res?.debug?.rid ?? rid,
+      error: res?.debug && typeof res.debug === 'object' ? (res.debug as any).error ?? null : null,
+      debug: res?.debug ?? null,
+    });
   }
 
   return noStoreJson({
