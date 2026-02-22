@@ -1,8 +1,14 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Platform } from "@prisma/client";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow } from "@/lib/weekWindow";
+import {
+  getPreviousTradingPeriod,
+  getRecentTradingPeriods,
+  getTradingPeriodFor,
+  parseTradingPeriodKey,
+  type TradingPeriod,
+} from "@/lib/tradingPeriod";
+import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -17,6 +23,11 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const NAIROBI_WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Nairobi", weekday: "short" });
 const isNairobiSunday = (date: Date) => NAIROBI_WEEKDAY.format(date).toLowerCase().startsWith("sun");
+
+type SearchParams = {
+  periodKey?: string;
+  weekStart?: string;
+};
 
 function getLast4FullWeeksForTradingPeriod(period: { start: Date; end: Date }, reference = new Date()) {
   const anchor = new Date(Math.min(period.end.getTime(), reference.getTime()));
@@ -39,31 +50,160 @@ function getLast4FullWeeksForTradingPeriod(period: { start: Date; end: Date }, r
   });
 }
 
-export default async function AdminOnlineSummaryPage() {
+function getNextTradingPeriod(period: TradingPeriod): TradingPeriod {
+  const nextDay = new Date(period.end.getTime() + MS_PER_DAY);
+  return getTradingPeriodFor(nextDay);
+}
+
+type AttendantInfo = { id: string; name: string | null; email: string | null };
+type ShopPayload = {
+  id: string;
+  shopName: string | null;
+  displayName: string | null;
+  platform: Platform;
+  attendants: AttendantInfo[];
+  primaryAttendant: AttendantInfo | null;
+  identifiers: { jumiaShopSid: string | null; kilimallShopCode: string | null };
+};
+
+async function loadOnlineShopsForSummary(): Promise<ShopPayload[]> {
+  const now = new Date();
+  const [accounts, shops] = await Promise.all([
+    prisma.marketplaceAccount.findMany({
+      where: { isActive: true },
+      orderBy: { displayName: "asc" },
+      include: {
+        assignments: {
+          where: {
+            OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+          },
+          orderBy: { startsAt: "desc" },
+          include: { attendant: { select: { id: true, name: true, email: true } } },
+        },
+      },
+    }),
+    prisma.shop.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, platform: true, apiConfig: { select: { apiKey: true } } },
+    }),
+  ]);
+
+  const shopsById = new Map(shops.map((shop) => [shop.id, shop]));
+  const shopsByName = new Map(
+    shops
+      .filter((shop) => Boolean(shop.name))
+      .map((shop) => [shop.name.trim().toLowerCase(), shop]),
+  );
+  const shopsByApiKey = new Map<string, (typeof shops)[number]>();
+  for (const shop of shops) {
+    const apiKey = (shop as any).apiConfig?.apiKey;
+    if (apiKey) shopsByApiKey.set(String(apiKey), shop);
+  }
+
+  const matchedAccountIds = new Set<string>();
+  const payload = accounts
+    .map((account) => {
+      const matchById = shopsById.get(account.id);
+      const matchByName = account.displayName ? shopsByName.get(account.displayName.trim().toLowerCase()) : undefined;
+      const matchByApiKey = account.jumiaShopSid ? shopsByApiKey.get(account.jumiaShopSid) : undefined;
+      const matchByApiKey2 = !matchByApiKey && account.kilimallShopCode ? shopsByApiKey.get(account.kilimallShopCode) : undefined;
+      const shopRecord = matchById ?? matchByName ?? matchByApiKey ?? matchByApiKey2;
+      if (!shopRecord) return null;
+      matchedAccountIds.add(account.id);
+
+      const attendants = account.assignments
+        .map((assignment) => assignment.attendant)
+        .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
+        .map<AttendantInfo>((attendant) => ({ id: attendant.id, name: attendant.name ?? null, email: attendant.email ?? null }));
+
+      return {
+        id: shopRecord.id,
+        shopName: shopRecord.name,
+        displayName: account.displayName,
+        platform: account.platform as Platform,
+        attendants,
+        primaryAttendant: attendants[0] ?? null,
+        identifiers: { jumiaShopSid: account.jumiaShopSid, kilimallShopCode: account.kilimallShopCode },
+      } as ShopPayload;
+    })
+    .filter((entry): entry is ShopPayload => Boolean(entry));
+
+  const payloadById = new Map<string, ShopPayload>(payload.map((p) => [p.id, p]));
+  for (const shop of shops) {
+    if (!payloadById.has(shop.id)) {
+      payloadById.set(shop.id, {
+        id: shop.id,
+        shopName: shop.name,
+        displayName: shop.name ?? shop.id,
+        platform: shop.platform as Platform,
+        attendants: [],
+        primaryAttendant: null,
+        identifiers: { jumiaShopSid: null, kilimallShopCode: null },
+      });
+    }
+  }
+
+  const typedEmptyAttendant: AttendantInfo | null = null;
+  for (const account of accounts) {
+    if (matchedAccountIds.has(account.id)) continue;
+    const attendants = account.assignments
+      .map((assignment) => assignment.attendant)
+      .filter((attendant): attendant is NonNullable<typeof attendant> => Boolean(attendant))
+      .map((attendant) => ({ id: attendant.id, name: attendant.name ?? null, email: attendant.email ?? null }));
+    payloadById.set(account.id, {
+      id: account.id,
+      shopName: account.displayName ?? account.id,
+      displayName: account.displayName,
+      platform: account.platform as Platform,
+      attendants,
+      primaryAttendant: attendants[0] ?? typedEmptyAttendant,
+      identifiers: { jumiaShopSid: account.jumiaShopSid, kilimallShopCode: account.kilimallShopCode },
+    } as ShopPayload);
+  }
+
+  return Array.from(payloadById.values())
+    .filter((entry) => entry.identifiers.jumiaShopSid || entry.identifiers.kilimallShopCode)
+    .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
+}
+
+export default async function AdminOnlineSummaryPage({ searchParams }: { searchParams?: Promise<SearchParams> | SearchParams }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
 
-  const period = getTradingPeriodFor(new Date());
+  const resolvedParams = await Promise.resolve(searchParams ?? {});
+  const period = parseTradingPeriodKey(resolvedParams.periodKey) ?? getTradingPeriodFor(new Date());
   const now = new Date();
   const last4Weeks = getLast4FullWeeksForTradingPeriod(period, now);
   const last4WeekStarts = last4Weeks.map((w) => w.weekStart);
   const last4WeekStartInputs = new Set(last4Weeks.map((w) => w.startInput));
+  const selectedWeekStartRaw = resolvedParams.weekStart?.trim() ?? "";
+  const selectedWeekStartDate = selectedWeekStartRaw ? parseDateOnlyUtc(selectedWeekStartRaw) : null;
+  const selectedWeekStart = selectedWeekStartDate ? canonicalNairobiWeekStartUtc(selectedWeekStartDate) : null;
+  const selectedWeekKey = selectedWeekStart ? selectedWeekStart.toISOString().slice(0, 10) : "";
+  const selectedWeekWindow = selectedWeekStart ? mondayToSundayNairobiWindow(selectedWeekStart) : null;
 
-  const manualWeeklyRows = await prisma.weeklySale.findMany({
-    where: {
-      source: "MANUAL",
-      status: { not: "REJECTED" },
-      weekStart: { in: last4WeekStarts },
-    },
-    include: {
-      shop: { select: { id: true, name: true, platform: true } },
-      user: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: [{ platform: "asc" }, { shopId: "asc" }, { userId: "asc" }, { weekStart: "desc" }],
-  });
+  const previousPeriod = getPreviousTradingPeriod(period);
+  const nextPeriod = getNextTradingPeriod(period);
+  const recentPeriods = getRecentTradingPeriods(8);
+
+  const [manualWeeklyRows, onlineShops] = await Promise.all([
+    prisma.weeklySale.findMany({
+      where: {
+        source: "MANUAL",
+        status: { not: "REJECTED" },
+        weekStart: { in: last4WeekStarts },
+      },
+      include: {
+        shop: { select: { id: true, name: true, platform: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: [{ platform: "asc" }, { shopId: "asc" }, { userId: "asc" }, { weekStart: "desc" }],
+    }),
+    loadOnlineShopsForSummary(),
+  ]);
 
   const manualAggMap = new Map<
     string,
@@ -122,6 +262,30 @@ export default async function AdminOnlineSummaryPage() {
 
   const attendantTotalRows = Array.from(attendantTotals.values()).sort((a, b) => b.total - a.total);
 
+  const weekRowsForSelectedWeek = selectedWeekWindow
+    ? await prisma.weeklySale.findMany({
+        where: {
+          source: "MANUAL",
+          status: { not: "REJECTED" },
+          weekStart: selectedWeekWindow.weekStart,
+          weekEnd: selectedWeekWindow.weekEnd,
+        },
+        include: {
+          shop: { select: { id: true, name: true, platform: true } },
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: [{ platform: "asc" }, { shopId: "asc" }],
+      })
+    : [];
+
+  const amountsByShopId = new Map<string, { amount: number; attendant: string; platform: Platform }>();
+  for (const row of weekRowsForSelectedWeek as any[]) {
+    if (!row.shopId) continue;
+    const amount = Number(row.amount ?? 0);
+    const attendant = (row.user?.name ?? row.user?.email ?? "—").toString();
+    amountsByShopId.set(row.shopId, { amount, attendant, platform: row.platform as Platform });
+  }
+
   return (
     <div className="space-y-8">
       <header className="space-y-2">
@@ -139,12 +303,43 @@ export default async function AdminOnlineSummaryPage() {
             <h2 className="text-lg font-semibold text-white">Summary (last 4 weeks)</h2>
             <p className="text-sm text-slate-400">Per shop and attendant totals for Jumia & Kilimall.</p>
           </div>
-          <Link
-            href="/admin/online/manual"
-            className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
-          >
-            Open manual sales desk
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/online/summary?periodKey=${encodeURIComponent(previousPeriod.key)}`}
+              className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              ← Previous period
+            </Link>
+            <Link
+              href={`/admin/online/summary?periodKey=${encodeURIComponent(nextPeriod.key)}`}
+              className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              Next period →
+            </Link>
+            <Link
+              href="/admin/online/manual"
+              className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
+            >
+              Open manual sales desk
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {recentPeriods.map((p) => (
+            <Link
+              key={p.key}
+              href={`/admin/online/summary?periodKey=${encodeURIComponent(p.key)}`}
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                p.key === period.key
+                  ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-100"
+                  : "border-white/10 bg-black/10 text-slate-200 hover:bg-white/5"
+              }`}
+            >
+              <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
+              <div className="mt-1 font-semibold text-white">{p.label}</div>
+            </Link>
+          ))}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -152,12 +347,28 @@ export default async function AdminOnlineSummaryPage() {
             <p className="text-xs uppercase tracking-wide text-slate-400">Weeks (last 4)</p>
             <div className="mt-3 space-y-2 text-sm text-slate-200">
               {last4Weeks.map((wk) => (
-                <div key={wk.key} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                <Link
+                  key={wk.key}
+                  href={`/admin/online/summary?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
+                  className={`block rounded-xl border px-3 py-2 hover:bg-white/5 ${
+                    wk.startInput === selectedWeekKey ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/10 bg-black/20"
+                  }`}
+                >
                   <div className="font-semibold text-white">{wk.label}</div>
                   <div className="text-xs text-slate-400">Week start: {wk.startInput}</div>
-                </div>
+                </Link>
               ))}
             </div>
+            {selectedWeekWindow && (
+              <div className="mt-4">
+                <Link
+                  href={`/admin/online/summary?periodKey=${encodeURIComponent(period.key)}`}
+                  className="text-sm font-semibold text-emerald-200 hover:text-emerald-100"
+                >
+                  Clear week selection →
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 lg:col-span-2">
@@ -231,8 +442,57 @@ export default async function AdminOnlineSummaryPage() {
             </div>
           </div>
         </div>
+
+        {selectedWeekWindow && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/30 p-5">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Week view</h3>
+                <p className="text-sm text-slate-400">
+                  Showing all shops for {formatNairobiDate(selectedWeekWindow.weekStart)} –{" "}
+                  {formatNairobiDate(new Date(selectedWeekWindow.weekEnd.getTime() - MS_PER_DAY))}.
+                </p>
+              </div>
+              <p className="text-xs text-slate-500">
+                Missing shops show as “Not entered”.
+              </p>
+            </div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wide text-slate-400">
+                    <th className="py-2 pr-4">Platform</th>
+                    <th className="py-2 pr-4">Shop</th>
+                    <th className="py-2 pr-4">Attendant</th>
+                    <th className="py-2 pr-4 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {onlineShops.map((shop) => {
+                    const record = amountsByShopId.get(shop.id) ?? null;
+                    const amount = record ? record.amount : null;
+                    const attendant = record?.attendant ?? shop.primaryAttendant?.name ?? shop.primaryAttendant?.email ?? "—";
+                    return (
+                      <tr key={shop.id} className="border-t border-white/5">
+                        <td className="py-3 pr-4 text-slate-200">{shop.platform}</td>
+                        <td className="py-3 pr-4 font-medium text-white">{shop.displayName ?? shop.shopName ?? shop.id}</td>
+                        <td className="py-3 pr-4 text-slate-200">{attendant}</td>
+                        <td className="py-3 pr-4 text-right font-semibold">
+                          {amount == null ? (
+                            <span className="text-amber-200">Not entered</span>
+                          ) : (
+                            <span className="text-emerald-300">{currencyFormatter.format(amount)}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
 }
-
