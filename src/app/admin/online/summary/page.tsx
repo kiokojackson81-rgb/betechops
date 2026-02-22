@@ -10,6 +10,7 @@ import {
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import ManualWeekViewClient from "@/app/admin/online/summary/_components/ManualWeekView.client";
 
 export const dynamic = "force-dynamic";
 
@@ -322,20 +323,21 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
           weekEnd: selectedWeekWindow.weekEnd,
         },
         include: {
-          shop: { select: { id: true, name: true, platform: true } },
           user: { select: { id: true, name: true, email: true } },
         },
         orderBy: [{ platform: "asc" }, { shopId: "asc" }],
       })
     : [];
 
-  const amountsByShopId = new Map<string, { amount: number; attendant: string; platform: Platform }>();
-  for (const row of weekRowsForSelectedWeek as any[]) {
-    if (!row.shopId) continue;
-    const amount = Number(row.amount ?? 0);
-    const attendant = (row.user?.name ?? row.user?.email ?? "—").toString();
-    amountsByShopId.set(row.shopId, { amount, attendant, platform: row.platform as Platform });
-  }
+  const weekEntries = (weekRowsForSelectedWeek as any[]).map((row) => ({
+    id: String(row.id),
+    shopId: row.shopId ? String(row.shopId) : null,
+    platform: row.platform as Platform,
+    amount: Number(row.amount ?? 0),
+    status: row.status as any,
+    source: row.source as any,
+    attendantName: (row.user?.name ?? row.user?.email ?? "—").toString(),
+  }));
 
   return (
     <div className="space-y-8">
@@ -500,53 +502,19 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
         </div>
 
         {selectedWeekWindow && (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/30 p-5">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Week view</h3>
-                <p className="text-sm text-slate-400">
-                  Showing all shops for {formatNairobiDate(selectedWeekWindow.weekStart)} –{" "}
-                  {formatNairobiDate(new Date(selectedWeekWindow.weekEnd.getTime() - MS_PER_DAY))}.
-                </p>
-              </div>
-              <p className="text-xs text-slate-500">
-                Missing shops show as “Not entered”.
-              </p>
-            </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-slate-400">
-                    <th className="py-2 pr-4">Platform</th>
-                    <th className="py-2 pr-4">Shop</th>
-                    <th className="py-2 pr-4">Attendant</th>
-                    <th className="py-2 pr-4 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {onlineShops.map((shop) => {
-                    const record = amountsByShopId.get(shop.id) ?? null;
-                    const amount = record ? record.amount : null;
-                    const attendant = record?.attendant ?? shop.primaryAttendant?.name ?? shop.primaryAttendant?.email ?? "—";
-                    return (
-                      <tr key={shop.id} className="border-t border-white/5">
-                        <td className="py-3 pr-4 text-slate-200">{shop.platform}</td>
-                        <td className="py-3 pr-4 font-medium text-white">{shop.displayName ?? shop.shopName ?? shop.id}</td>
-                        <td className="py-3 pr-4 text-slate-200">{attendant}</td>
-                        <td className="py-3 pr-4 text-right font-semibold">
-                          {amount == null ? (
-                            <span className="text-amber-200">Not entered</span>
-                          ) : (
-                            <span className="text-emerald-300">{currencyFormatter.format(amount)}</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ManualWeekViewClient
+            weekLabel={`${formatNairobiDate(selectedWeekWindow.weekStart)} – ${formatNairobiDate(
+              new Date(selectedWeekWindow.weekEnd.getTime() - MS_PER_DAY),
+            )}`}
+            shops={onlineShops.map((shop) => ({
+              id: shop.id,
+              shopName: shop.shopName,
+              displayName: shop.displayName,
+              platform: shop.platform,
+              primaryAttendant: shop.primaryAttendant,
+            }))}
+            entries={weekEntries}
+          />
         )}
       </section>
     </div>
