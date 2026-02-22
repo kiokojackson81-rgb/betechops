@@ -60,6 +60,7 @@ export default async function OnlinePerformanceWeekPage({
   let agg: any = {};
   let lossCount = 0;
   let dbReady = true;
+  let isLossColumnReady = true;
   try {
     const [e, a, lc] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.findMany({
@@ -85,6 +86,26 @@ export default async function OnlinePerformanceWeekPage({
       entries = [];
       agg = {};
       lossCount = 0;
+    } else if (err?.code === "P2022") {
+      isLossColumnReady = false;
+      const [e, a, lc] = await Promise.all([
+        (prisma as any).marketplaceProfitEntry.findMany({
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+          include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+          orderBy: [{ profit: "asc" }, { date: "asc" }],
+        }),
+        (prisma as any).marketplaceProfitEntry.aggregate({
+          _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
+          _avg: { commissionRatePct: true, marginPct: true },
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        }),
+        (prisma as any).marketplaceProfitEntry.count({
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 }, ...(accountId ? { accountId } : {}) },
+        }),
+      ]);
+      entries = e;
+      agg = a;
+      lossCount = Number(lc ?? 0);
     } else {
       throw err;
     }
@@ -174,6 +195,11 @@ export default async function OnlinePerformanceWeekPage({
         {!dbReady && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Performance tables are not available yet (database migration pending). Redeploy to apply migrations, then refresh.
+          </div>
+        )}
+        {dbReady && !isLossColumnReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Database is missing the `isLoss` column. Reports are using `profit &lt; 0` fallback until migrations are applied.
           </div>
         )}
         <div className="mt-4 overflow-x-auto">

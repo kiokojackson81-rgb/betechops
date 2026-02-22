@@ -87,33 +87,46 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const created = await (prisma as any).marketplaceProfitEntry.create({
-      data: {
-        platform,
-        date: extracted.date,
-        weekStart,
-        weekEnd,
-        periodKey: period.key,
-        accountId: account.id,
-        itemCreditTxn: extracted.itemPriceCredit.txn,
-        itemCreditAmount: extracted.itemPriceCredit.amount,
-        commissionTxn: extracted.commission.txn,
-        commissionAmount: extracted.commission.amount,
-        shippingTxn: extracted.shippingFee.txn,
-        shippingAmount: extracted.shippingFee.amount,
-        netPayout,
-        buyingPrice: buying,
-        profit,
-        marginPct,
-        commissionRatePct,
-        isLoss,
-        orderId: body.orderId?.trim() || null,
-        sku: body.sku?.trim() || null,
-        productName: body.productName?.trim() || null,
-        rawText,
-        enteredByAdminId: actorId,
-      },
-    });
+    const createDataBase = {
+      platform,
+      date: extracted.date,
+      weekStart,
+      weekEnd,
+      periodKey: period.key,
+      accountId: account.id,
+      itemCreditTxn: extracted.itemPriceCredit.txn,
+      itemCreditAmount: extracted.itemPriceCredit.amount,
+      commissionTxn: extracted.commission.txn,
+      commissionAmount: extracted.commission.amount,
+      shippingTxn: extracted.shippingFee.txn,
+      shippingAmount: extracted.shippingFee.amount,
+      netPayout,
+      buyingPrice: buying,
+      profit,
+      marginPct,
+      commissionRatePct,
+      orderId: body.orderId?.trim() || null,
+      sku: body.sku?.trim() || null,
+      productName: body.productName?.trim() || null,
+      rawText,
+      enteredByAdminId: actorId,
+    };
+
+    let created: any;
+    try {
+      created = await (prisma as any).marketplaceProfitEntry.create({
+        data: { ...createDataBase, isLoss },
+      });
+    } catch (err: any) {
+      // Backward compatible: database hasn't migrated to include `isLoss` yet.
+      if (err?.code === "P2022") {
+        created = await (prisma as any).marketplaceProfitEntry.create({
+          data: createDataBase,
+        });
+      } else {
+        throw err;
+      }
+    }
 
     return NextResponse.json(
       {
@@ -134,7 +147,7 @@ export async function POST(req: NextRequest) {
         profit: Number(created.profit),
         marginPct: Number(created.marginPct),
         commissionRatePct: Number(created.commissionRatePct),
-        isLoss: Boolean(created.isLoss),
+        isLoss: typeof created.isLoss === "boolean" ? Boolean(created.isLoss) : isLoss,
       },
       { status: 201 },
     );

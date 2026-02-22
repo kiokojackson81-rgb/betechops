@@ -32,6 +32,7 @@ export default async function OnlinePerformanceLossPage({
 
   let lossEntries: any[] = [];
   let dbReady = true;
+  let isLossColumnReady = true;
   try {
     lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
       where: {
@@ -47,6 +48,18 @@ export default async function OnlinePerformanceLossPage({
     if (err?.code === "P2021") {
       dbReady = false;
       lossEntries = [];
+    } else if (err?.code === "P2022") {
+      isLossColumnReady = false;
+      lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
+        where: {
+          periodKey: period.key,
+          weekStart: { in: weekStarts },
+          profit: { lt: 0 },
+          ...(accountId ? { accountId } : {}),
+        },
+        include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+        orderBy: [{ profit: "asc" }, { date: "asc" }],
+      });
     } else {
       throw err;
     }
@@ -96,6 +109,11 @@ export default async function OnlinePerformanceLossPage({
         {!dbReady && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Performance tables are not available yet (database migration pending). Redeploy to apply migrations, then refresh.
+          </div>
+        )}
+        {dbReady && !isLossColumnReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Database is missing the `isLoss` column. Reports are using `profit &lt; 0` fallback until migrations are applied.
           </div>
         )}
         <div className="mt-4 overflow-x-auto">
