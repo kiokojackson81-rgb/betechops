@@ -95,6 +95,56 @@ describe('receipts API', () => {
     expect(notifyInternalReceipt).not.toHaveBeenCalled();
   });
 
+  it('treats customerType=pod as POD delivery (sends POD internal alerts, skips normal internal)', async () => {
+    const receiptCreateCalls: any[] = [];
+
+    (prisma as any).$transaction.mockImplementation(async (fn: any) => {
+      const tx: any = {
+        shop: { findFirst: async () => ({ id: 'shop1' }) },
+        product: { findFirst: async () => null, create: async (d: any) => ({ id: 'p1', ...d }) },
+        order: {
+          upsert: async (d: any) => ({ id: 'o1', orderNumber: d.create.orderNumber }),
+          aggregate: async () => ({ _sum: { totalAmount: 0, paidAmount: 0 } }),
+        },
+        orderItem: { deleteMany: async () => {}, create: async () => ({}) },
+        receipt: {
+          findUnique: async () => null,
+          create: async (d: any) => {
+            receiptCreateCalls.push(d);
+            return { id: 'r_pod2', ...d };
+          },
+          update: async (d: any) => ({ id: d.where.id, ...d.data }),
+        },
+        commissionRecord: { create: async (d: any) => ({ id: 'c1', ...d }), update: async () => ({}) },
+      };
+      return fn(tx);
+    });
+
+    const req = {
+      json: async () => ({
+        items: [{ title: 'A', quantity: 1, unitPrice: 100 }],
+        attendantId: 'u1',
+        customerType: 'pod',
+      }),
+      url: 'http://localhost/api/receipts',
+    } as unknown as Request;
+
+    const res = await POST(req as any);
+    expect(res.status).toBe(200);
+
+    expect(receiptCreateCalls.length).toBeGreaterThan(0);
+    const createdReceiptPayload = receiptCreateCalls[0];
+    expect(createdReceiptPayload?.data?.data?.podDelivery?.status).toBe('pending');
+
+    expect(sendReceiptChannels).toHaveBeenCalledWith(
+      'r_pod2',
+      ['whatsapp'],
+      expect.objectContaining({ skipDefaultChatraceTags: true, markPodSent: true }),
+    );
+    expect(notifyInternalPodAlerts).toHaveBeenCalledWith('r_pod2', expect.anything());
+    expect(notifyInternalReceipt).not.toHaveBeenCalled();
+  });
+
   it('sends normal internal notification for non-POD receipts', async () => {
     (sendReceiptChannels as jest.Mock).mockClear();
     (notifyInternalPodAlerts as jest.Mock).mockClear();

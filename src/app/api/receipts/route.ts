@@ -356,7 +356,15 @@ export async function POST(req: NextRequest) {
     const compact = raw.replace(/[\s_-]+/g, "");
     return compact === "pod" || compact.includes("payondelivery");
   };
-  const isPodDelivery = Boolean(payload?.podDelivery) || isPodPaymentMethod(payload?.paymentMethod);
+  const normalizeCustomerType = (value: unknown) => {
+    const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (!raw) return "";
+    return raw.replace(/[\s_-]+/g, "");
+  };
+  const isPodDelivery =
+    Boolean(payload?.podDelivery) ||
+    isPodPaymentMethod(payload?.paymentMethod) ||
+    normalizeCustomerType(payload?.customerType) === "pod";
   const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber

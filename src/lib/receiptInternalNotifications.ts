@@ -155,6 +155,13 @@ export async function notifyInternalReceipt(
       .trim()
       .toLowerCase()
       .replace(/[\s_-]+/g, '');
+    if (compact === 'pod') {
+      console.info('[receipts][internal] skipping normal admin alert for customerType=pod', {
+        receiptId,
+        customerType: rawType,
+      });
+      return;
+    }
     if (compact && compact !== 'pod') {
       const allowed = new Set(['walkin', 'online', 'delivery']);
       if (!allowed.has(compact)) {
