@@ -348,6 +348,37 @@ export default function ManualWeeklySalesPage() {
     }
   };
 
+  const editEntry = async (sale: WeeklySaleRow) => {
+    if (sale.source !== WeeklySaleSource.MANUAL) {
+      showToast("Only manual entries can be edited", "error");
+      return;
+    }
+
+    const current = Number(sale.amount ?? 0);
+    const input = prompt("Enter new amount (KES)", String(current));
+    if (input == null) return;
+
+    const nextAmount = Number(input);
+    if (!Number.isFinite(nextAmount) || nextAmount < 0) {
+      showToast("Invalid amount", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/weekly-sale/${sale.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: nextAmount }),
+      });
+      if (!res.ok) throw new Error("Failed to update amount");
+      showToast("Entry updated", "success");
+      await loadSales();
+    } catch (err) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : "Failed to update entry", "error");
+    }
+  };
+
   const deleteEntry = async (id: string) => {
     if (!confirm("Delete this manual entry?")) return;
     try {
@@ -783,13 +814,22 @@ export default function ManualWeeklySalesPage() {
                           Reject
                         </button>
                         {sale.source === "MANUAL" && (
-                          <button
-                            type="button"
-                            className="rounded-full border border-red-400/50 px-3 py-1 font-semibold text-red-200 hover:bg-red-500/10"
-                            onClick={() => deleteEntry(sale.id)}
-                          >
-                            Delete
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
+                              onClick={() => editEntry(sale)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full border border-red-400/50 px-3 py-1 font-semibold text-red-200 hover:bg-red-500/10"
+                              onClick={() => deleteEntry(sale.id)}
+                            >
+                              Delete
+                            </button>
+                          </>
                         )}
                       </div>
                     )}
