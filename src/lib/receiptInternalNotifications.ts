@@ -436,22 +436,42 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
   // ADMIN POD RECEIPT ALERT
   try {
     const adminPodTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
-    await pushInternalReceiptAlert({
-      requestId,
-      tagName: adminPodTag,
-      receiptNumber,
-      amount: String(Math.round(invoiceAmount)),
-      formattedAmount: Math.round(invoiceAmount),
-      paymentMethod: 'POD',
-      createdBy: staffName,
-      itemsText: itemsShort,
-      itemsSummary,
-      itemsCount,
-      customerName: (receipt.order as any)?.customerName ?? (snapshot.customerName as any) ?? 'Customer',
-      customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
-      podPendingCount: pendingCount,
-      podPendingTotal: pendingTotal,
-    });
+    const recipientsRaw = (process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS || '').toString().trim();
+    const recipients = recipientsRaw
+      ? recipientsRaw
+          .split(/[,\s;]+/g)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((p) => normalizeRecipientPhone(p))
+          .filter(Boolean)
+      : [];
+
+    // Fallback to the configured internal admin phone if no explicit recipients.
+    const finalRecipients = recipients.length
+      ? recipients
+      : [normalizeRecipientPhone(process.env.CHATRACE_INTERNAL_ADMIN_PHONE || process.env.ADMIN_PHONE || '')].filter(Boolean);
+
+    for (let i = 0; i < finalRecipients.length; i++) {
+      const toPhone = finalRecipients[i]!;
+      const rid = `${requestId}-pod-admin-${i + 1}`;
+      await pushInternalReceiptAlert({
+        requestId: rid,
+        toPhone,
+        tagName: adminPodTag,
+        receiptNumber,
+        amount: String(Math.round(invoiceAmount)),
+        formattedAmount: Math.round(invoiceAmount),
+        paymentMethod: 'POD',
+        createdBy: staffName,
+        itemsText: itemsShort,
+        itemsSummary,
+        itemsCount,
+        customerName: (receipt.order as any)?.customerName ?? (snapshot.customerName as any) ?? 'Customer',
+        customerPhone: (receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? '',
+        podPendingCount: pendingCount,
+        podPendingTotal: pendingTotal,
+      });
+    }
   } catch (e) {
     console.error('[pod][internal] failed to push admin POD alert', e instanceof Error ? e.message : String(e));
   }
