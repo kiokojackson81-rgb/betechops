@@ -137,6 +137,27 @@ export async function notifyInternalReceipt(
     return;
   }
 
+  // Only notify admins for WALK IN / ONLINE / DELIVERY receipts. POD is handled separately.
+  try {
+    const rawType = (snapshot as any)?.customerType ?? (receipt.data as any)?.customerType ?? '';
+    const compact = String(rawType || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, '');
+    if (compact && compact !== 'pod') {
+      const allowed = new Set(['walkin', 'online', 'delivery']);
+      if (!allowed.has(compact)) {
+        console.info('[receipts][internal] skipping normal admin alert for non-notify customerType', {
+          receiptId,
+          customerType: rawType,
+        });
+        return;
+      }
+    }
+  } catch (e) {
+    // If parsing fails, fall back to existing behavior (best-effort).
+  }
+
   const staffName = receipt.issuedBy?.name || receipt.issuedBy?.email || '(unknown)';
 
   const itemsShort = extractItemsShort(receipt as any);
@@ -176,9 +197,7 @@ export async function notifyInternalReceipt(
     console.warn('[receipts][internal] failed to compute totalSalesToday', e instanceof Error ? e.message : String(e));
   }
 
-  console.info('[receipts][internal] attempting push', { receiptId, rid });
-  const result = await pushInternalReceiptAlert({
-    requestId: rid,
+  const basePayload = {
     receiptNumber,
     amount: String(Math.round(invoiceAmount)),
     // If the Chatrace field is configured as Number, send a numeric-only value.
@@ -194,27 +213,50 @@ export async function notifyInternalReceipt(
     customerPhone: digitsOnly((receipt.order as any)?.customerPhone ?? (snapshot.customerPhone as any) ?? ''),
     receiptLink: receiptLinkSafe,
     receiptPdfUrl: receiptUrl ?? null,
-  });
-  console.info('[receipts][internal] push result', {
-    ok: result?.ok,
-    rid: result?.debug?.rid ?? null,
-    enabled: result?.debug?.enabled ?? null,
-    env: result?.debug?.env ?? null,
-    status: result?.debug?.steps?.createOrUpdate?.status ?? null,
-    stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
-    snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
-    json: result?.debug?.steps?.createOrUpdate?.json ?? null,
-    rawHead: result?.debug?.steps?.createOrUpdate?.raw
-      ? result.debug.steps.createOrUpdate.raw.length > 400
-        ? result.debug.steps.createOrUpdate.raw.slice(0, 400)
-        : result.debug.steps.createOrUpdate.raw
-      : null,
-  });
-  if (!result?.ok) {
-    try {
-      console.error('[receipts][internal] push failed', result?.debug ?? result);
-    } catch (logErr) {
-      console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
+  };
+
+  const recipientsRaw = (process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS || '').toString().trim();
+  const recipients = recipientsRaw
+    ? recipientsRaw
+        .split(/[,\s;]+/g)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  console.info('[receipts][internal] attempting push', { receiptId, rid, recipients: recipients.length || '(default)' });
+  const results: any[] = [];
+  if (!recipients.length) {
+    results.push(await pushInternalReceiptAlert({ requestId: rid, ...basePayload }));
+  } else {
+    for (let i = 0; i < recipients.length; i++) {
+      const toPhone = recipients[i]!;
+      const ridPerRecipient = `${rid}-admin-${i + 1}`;
+      results.push(await pushInternalReceiptAlert({ requestId: ridPerRecipient, toPhone, ...basePayload }));
+    }
+  }
+
+  for (const result of results) {
+    console.info('[receipts][internal] push result', {
+      ok: result?.ok,
+      rid: result?.debug?.rid ?? null,
+      enabled: result?.debug?.enabled ?? null,
+      env: result?.debug?.env ?? null,
+      status: result?.debug?.steps?.createOrUpdate?.status ?? null,
+      stepOk: result?.debug?.steps?.createOrUpdate?.ok ?? null,
+      snippet: result?.debug?.steps?.createOrUpdate?.bodySnippet ?? null,
+      json: result?.debug?.steps?.createOrUpdate?.json ?? null,
+      rawHead: result?.debug?.steps?.createOrUpdate?.raw
+        ? result.debug.steps.createOrUpdate.raw.length > 400
+          ? result.debug.steps.createOrUpdate.raw.slice(0, 400)
+          : result.debug.steps.createOrUpdate.raw
+        : null,
+    });
+    if (!result?.ok) {
+      try {
+        console.error('[receipts][internal] push failed', result?.debug ?? result);
+      } catch (logErr) {
+        console.error('[receipts][internal] push failed (unable to serialize debug)', logErr);
+      }
     }
   }
   if (requestId) {

@@ -143,11 +143,13 @@ describe("chatraceInternalFixed POD internal tags", () => {
       // no tagName => default receipt_admin_alert
       receiptNumber: "BETECH20260220-0003",
       amount: "10",
+      formattedAmount: 10,
       paymentMethod: "MPESA",
       createdBy: "Jeniffer",
       itemsText: "Item C x1",
       customerName: "Customer C",
       customerPhone: "0705663175",
+      totalSalesToday: 12345,
       requestId: "rid-3",
     });
 
@@ -157,5 +159,9 @@ describe("chatraceInternalFixed POD internal tags", () => {
     const fieldsInit = fieldsCall[1];
     // Fallback internal account id
     expect(fieldsInit.headers["X-ACCOUNT-ID"]).toBe("1802145");
+
+    const fieldsBody = JSON.parse(fieldsInit.body);
+    const fieldNames = fieldsBody.actions.map((a: any) => a.field_name).filter(Boolean);
+    expect(fieldNames).toEqual(expect.arrayContaining(["payment_method", "total_sales_today"]));
   });
 });

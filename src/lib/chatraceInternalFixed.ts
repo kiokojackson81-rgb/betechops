@@ -228,6 +228,8 @@ export async function pushInternalReceiptAlert(input: {
   const safeCustomerPhone = safeCustomerPhoneRaw || 'N/A';
   const safeFormattedAmountNum = toNumberOrZero(input.formattedAmount ?? input.amount);
   const safeFormattedAmount = toNumberStringOrZero(input.formattedAmount ?? input.amount);
+  const safePaymentMethod = (input.paymentMethod ?? '').toString().trim() || 'N/A';
+  const safeTotalSalesTodayNum = toNumberOrZero(input.totalSalesToday ?? 0);
   const safePodPendingCountNum = toNumberOrZero(input.podPendingCount ?? 0);
   const safePodPendingCount = toNumberStringOrZero(input.podPendingCount ?? 0);
   const safePodPendingTotalNum = toNumberOrZero(input.podPendingTotal ?? 0);
@@ -278,9 +280,11 @@ export async function pushInternalReceiptAlert(input: {
     fieldActions.push({ action: "set_field_value", field_name: "receipt_number", value: input.receiptNumber });
     fieldActions.push({ action: "set_field_value", field_name: "customer_name", value: safeCustomerName });
     fieldActions.push({ action: "set_field_value", field_name: "customer_phone", value: safeCustomerPhone });
-    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmount });
+    fieldActions.push({ action: "set_field_value", field_name: "formatted_amount", value: safeFormattedAmountNum });
+    fieldActions.push({ action: "set_field_value", field_name: "payment_method", value: safePaymentMethod });
     fieldActions.push({ action: "set_field_value", field_name: "created_by", value: safeCreatedBy });
     fieldActions.push({ action: "set_field_value", field_name: "admin_items", value: safeAdminItems });
+    fieldActions.push({ action: "set_field_value", field_name: "total_sales_today", value: safeTotalSalesTodayNum });
     fieldActions.push({ action: "set_field_value", field_name: "pod_pending_count", value: safePodPendingCount });
     fieldActions.push({ action: "set_field_value", field_name: "pod_pending_total", value: safePodPendingTotal });
     fieldActions.push({ action: "set_field_value", field_name: "pod_pending_list", value: safePodPendingList });

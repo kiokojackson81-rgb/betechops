@@ -1053,9 +1053,17 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.warn("[receipts] failed to publish summary update", err);
     }
-
+ 
     let sendResult: any = null;
     if (!isPodDelivery) {
+      const internalPromise = (async () => {
+        try {
+          await notifyInternalReceipt(result.receiptId, docType, requestId);
+        } catch (internalErr) {
+          console.error("[receipts] failed to notify internal ops", internalErr);
+        }
+      })();
+
       console.info(`[receiptSender][${requestId}] START send pipeline`);
       try {
         sendResult = await sendReceiptChannels(result.receiptId, [], { requestId });
@@ -1071,15 +1079,10 @@ export async function POST(req: NextRequest) {
           channelStatus: {},
         };
       }
-
-      // Internal admin notification should not be blocked by PDF generation/upload issues.
-      // The internal Chatrace template does not require a PDF/link parameter.
-      const pdfForInternal = sendResult.pdfUrlCustomer ?? sendResult.pdfUrlFull;
-      try {
-        await notifyInternalReceipt(result.receiptId, docType, requestId, pdfForInternal);
-      } catch (internalErr) {
-        console.error("[receipts] failed to notify internal ops", internalErr);
-      }
+ 
+      // Ensure internal admin notification completes within the request lifecycle
+      // (important for serverless runtimes).
+      await internalPromise;
     } else {
       // For POD receipts, still trigger an immediate WhatsApp via Chatrace at
       // creation time (whatsapp-only). This sends using the POD dispatch tag and
