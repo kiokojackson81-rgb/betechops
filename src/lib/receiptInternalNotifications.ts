@@ -239,7 +239,7 @@ export async function notifyInternalReceipt(
       (process.env.CHATRACE_ACCOUNT_ID || '').toString().trim() &&
       (process.env.CHATRACE_API_TOKEN || '').toString().trim(),
   );
-  const adminChatraceAccountPrefRaw = (process.env.ADMIN_NOTIFICATION_CHATRACE_ACCOUNT || 'auto').toString();
+  const adminChatraceAccountPrefRaw = (process.env.ADMIN_NOTIFICATION_CHATRACE_ACCOUNT || 'internal').toString();
   const adminChatraceAccountPref = adminChatraceAccountPrefRaw
     .trim()
     .toLowerCase()
