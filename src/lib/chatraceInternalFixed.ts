@@ -181,7 +181,22 @@ export async function pushInternalReceiptAlert(input: {
   const itemsSummary = (input.itemsSummary ?? input.itemsText ?? '').toString();
   const podAdminTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
   const podFollowupTag = (process.env.CHATRACE_INTERNAL_POD_FOLLOWUP_TAG || 'pod_followup_alert').toString().trim();
-  const isPodInternalTag = tagName === podAdminTag || tagName === podFollowupTag;
+  // Guard against misconfiguration where POD tags are accidentally set to the
+  // normal admin tag. In that case we should still treat receipt_admin_alert as
+  // a non-POD/internal-normal alert so required fields (e.g. payment_method,
+  // total_sales_today) are populated correctly.
+  try {
+    if (podAdminTag === 'receipt_admin_alert' || podFollowupTag === 'receipt_admin_alert') {
+      console.warn('[internal][adminAlert] POD tag env collides with receipt_admin_alert; treating as non-POD', {
+        podAdminTag,
+        podFollowupTag,
+      });
+    }
+  } catch {
+    // ignore logging failures
+  }
+  const isPodInternalTag =
+    tagName !== 'receipt_admin_alert' && (tagName === podAdminTag || tagName === podFollowupTag);
   // Most deployments use a single internal Chatrace account. Fall back to the POD
   // internal account id (or 1802145) when CHATRACE_INTERNAL_ACCOUNT_ID is missing
   // so normal internal admin alerts keep working.
