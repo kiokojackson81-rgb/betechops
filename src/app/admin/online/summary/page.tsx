@@ -8,6 +8,7 @@ import {
   type TradingPeriod,
 } from "@/lib/tradingPeriod";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
+import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ManualWeekViewClient from "@/app/admin/online/summary/_components/ManualWeekView.client";
@@ -21,19 +22,6 @@ const currencyFormatter = new Intl.NumberFormat("en-KE", {
 });
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const NAIROBI_WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Nairobi", weekday: "short" });
-const isNairobiSunday = (date: Date) => NAIROBI_WEEKDAY.format(date).toLowerCase().startsWith("sun");
-const nairobiWeekdayIndex = (date: Date) => {
-  const key = NAIROBI_WEEKDAY.format(date).toLowerCase();
-  if (key.startsWith("sun")) return 0;
-  if (key.startsWith("mon")) return 1;
-  if (key.startsWith("tue")) return 2;
-  if (key.startsWith("wed")) return 3;
-  if (key.startsWith("thu")) return 4;
-  if (key.startsWith("fri")) return 5;
-  if (key.startsWith("sat")) return 6;
-  return 0;
-};
 
 type SearchParams = {
   periodKey?: string;
@@ -41,64 +29,14 @@ type SearchParams = {
 };
 
 function getLast4FullWeeksForTradingPeriod(period: { start: Date; end: Date }, reference = new Date()) {
-  const anchor = new Date(Math.min(period.end.getTime(), reference.getTime()));
-
-  // Build all Sundays that fall within this trading period (Nairobi-local).
-  const sundays: Date[] = [];
-  const startCursor = new Date(period.start);
-  const deltaToSunday = (7 - nairobiWeekdayIndex(startCursor)) % 7;
-  const firstSunday = new Date(startCursor.getTime() + deltaToSunday * MS_PER_DAY);
-  for (let cursor = firstSunday; cursor.getTime() <= period.end.getTime(); cursor = new Date(cursor.getTime() + 7 * MS_PER_DAY)) {
-    sundays.push(cursor);
-  }
-
-  // Fallback: if something odd happens, revert to the previous behaviour.
-  if (sundays.length === 0) {
-    let lastWeekStart = canonicalNairobiWeekStartUtc(anchor);
-    if (!isNairobiSunday(anchor)) {
-      lastWeekStart = new Date(lastWeekStart.getTime() - 7 * MS_PER_DAY);
-    }
-    return [3, 2, 1, 0].map((offset) => {
-      const start = new Date(lastWeekStart.getTime() - offset * 7 * MS_PER_DAY);
-      const window = mondayToSundayNairobiWindow(start);
-      const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
-      return {
-        weekStart: window.weekStart,
-        weekEndExclusive: window.weekEnd,
-        weekEndInclusive: endInclusive,
-        label: `${formatNairobiDate(window.weekStart)} – ${formatNairobiDate(endInclusive)}`,
-        key: window.weekStart.toISOString(),
-        startInput: window.weekStart.toISOString().slice(0, 10),
-      };
-    });
-  }
-
-  // Pick the last Sunday <= anchor; if none yet in this period, pick the first Sunday (upcoming).
-  let lastIndex = -1;
-  for (let i = 0; i < sundays.length; i += 1) {
-    if (sundays[i]!.getTime() <= anchor.getTime()) lastIndex = i;
-  }
-  if (lastIndex < 0) lastIndex = 0;
-
-  // If fewer than 4 Sundays completed so far, show the first 4 Sundays of the period (includes upcoming).
-  // Otherwise show the last 4 Sundays ending at lastIndex.
-  const startIndex = lastIndex >= 3 ? lastIndex - 3 : 0;
-  const slice = sundays.slice(startIndex, startIndex + 4);
-  const padded = slice.length < 4 ? [...slice, ...sundays.slice(startIndex + slice.length, startIndex + 4)] : slice;
-
-  return padded.slice(0, 4).map((sunday) => {
-    const weekStart = canonicalNairobiWeekStartUtc(sunday);
-    const window = mondayToSundayNairobiWindow(weekStart);
-    const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
-    return {
-      weekStart: window.weekStart,
-      weekEndExclusive: window.weekEnd,
-      weekEndInclusive: endInclusive,
-      label: `${formatNairobiDate(window.weekStart)} – ${formatNairobiDate(endInclusive)}`,
-      key: window.weekStart.toISOString(),
-      startInput: window.weekStart.toISOString().slice(0, 10),
-    };
-  });
+  return getOnlineOpsWeeksForTradingPeriod(period, reference, 4).map((wk) => ({
+    weekStart: wk.weekStart,
+    weekEndExclusive: wk.weekEndExclusive,
+    weekEndInclusive: wk.weekEndInclusive,
+    label: wk.label,
+    key: wk.key,
+    startInput: wk.startInput,
+  }));
 }
 
 function getNextTradingPeriod(period: TradingPeriod): TradingPeriod {

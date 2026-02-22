@@ -7,6 +7,7 @@ import { showToast } from "@/lib/ui/toast";
 import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { getRecentTradingPeriods, getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -60,8 +61,6 @@ const initialFilters: FilterState = { shopId: "", userId: "", platform: "", stat
 const MS_PER_DAY = 24 * 3600 * 1000;
 const toInputDate = (dateUtc: Date) => dateUtc.toISOString().slice(0, 10);
 const formatShort = (dateUtc: Date) => formatNairobiDate(dateUtc).replace(/\s\d{4}$/, "");
-const NAIROBI_WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Nairobi", weekday: "short" });
-const isNairobiSunday = (date: Date) => NAIROBI_WEEKDAY.format(date).toLowerCase().startsWith("sun");
 
 function buildWeekWindowFromDateOnly(dateOnly: string) {
   const parsed = parseDateOnlyUtc(dateOnly) ?? new Date(dateOnly);
@@ -77,26 +76,16 @@ function buildWeekWindowFromDateOnly(dateOnly: string) {
   };
 }
 
-function getLast4FullWeeksForPeriod(period: TradingPeriod, reference: Date = new Date()) {
-  const anchor = new Date(Math.min(period.end.getTime(), reference.getTime()));
-  let lastWeekStart = canonicalNairobiWeekStartUtc(anchor);
-  if (!isNairobiSunday(anchor)) {
-    lastWeekStart = new Date(lastWeekStart.getTime() - 7 * MS_PER_DAY);
-  }
-  const weeks = [3, 2, 1, 0].map((offset) => {
-    const start = new Date(lastWeekStart.getTime() - offset * 7 * MS_PER_DAY);
-    const window = mondayToSundayNairobiWindow(start);
-    const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
-    return {
-      start: window.weekStart,
-      endExclusive: window.weekEnd,
-      endInclusive,
-      startInput: toInputDate(window.weekStart),
-      endInput: toInputDate(endInclusive),
-      label: `${formatShort(window.weekStart)} - ${formatShort(endInclusive)}`,
-    };
-  });
-  return { anchor, weeks };
+function buildLast4WeeksForPeriod(period: TradingPeriod, reference = new Date()) {
+  const weeks = getOnlineOpsWeeksForTradingPeriod(period, reference, 4);
+  return weeks.map((wk) => ({
+    start: wk.weekStart,
+    endExclusive: wk.weekEndExclusive,
+    endInclusive: wk.weekEndInclusive,
+    startInput: wk.startInput,
+    endInput: toInputDate(wk.weekEndInclusive),
+    label: wk.label.replace(/–/g, "-"),
+  }));
 }
 
 const buildInitialForm = (week?: Pick<WeekOption, "startInput" | "endInput"> | null): FormState => ({
@@ -109,8 +98,8 @@ const buildInitialForm = (week?: Pick<WeekOption, "startInput" | "endInput"> | n
 export default function ManualWeeklySalesPage() {
   const tradingPeriods = useMemo(() => getRecentTradingPeriods(8), []);
   const defaultPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
-  const initialLast4 = useMemo(() => getLast4FullWeeksForPeriod(defaultPeriod, new Date()), [defaultPeriod]);
-  const initialWeek = (initialLast4.weeks.at(-1) ?? initialLast4.weeks[0] ?? null) as WeekOption | null;
+  const initialLast4 = useMemo(() => buildLast4WeeksForPeriod(defaultPeriod, new Date()), [defaultPeriod]);
+  const initialWeek = (initialLast4.at(-1) ?? initialLast4[0] ?? null) as WeekOption | null;
 
   const [sales, setSales] = useState<WeeklySaleRow[]>([]);
   const [shops, setShops] = useState<ShopOption[]>([]);
@@ -166,17 +155,17 @@ export default function ManualWeeklySalesPage() {
     return tradingPeriods.find((p) => p.key === selectedPeriodKey) ?? defaultPeriod;
   }, [defaultPeriod, selectedPeriodKey, tradingPeriods]);
 
-  const last4 = useMemo(() => getLast4FullWeeksForPeriod(selectedPeriod, new Date()), [selectedPeriod]);
+  const last4 = useMemo(() => buildLast4WeeksForPeriod(selectedPeriod, new Date()), [selectedPeriod]);
   const weekOptions = useMemo<WeekOption[]>(
-    () => last4.weeks.map((w) => ({ startInput: w.startInput, endInput: w.endInput, label: w.label })),
-    [last4.weeks],
+    () => last4.map((w) => ({ startInput: w.startInput, endInput: w.endInput, label: w.label })),
+    [last4],
   );
   const selectedWeek = useMemo(
     () => weekOptions.find((w) => w.startInput === selectedWeekStart) ?? weekOptions.at(-1) ?? weekOptions[0] ?? null,
     [selectedWeekStart, weekOptions],
   );
   const selectedWeekLabel = selectedWeek?.label ?? "this week";
-  const last4WeekStartSet = useMemo(() => new Set(last4.weeks.map((w) => w.startInput)), [last4.weeks]);
+  const last4WeekStartSet = useMemo(() => new Set(last4.map((w) => w.startInput)), [last4]);
 
   const selectWeek = useCallback((week: WeekOption | null) => {
     if (!week) return;
@@ -280,11 +269,11 @@ export default function ManualWeeklySalesPage() {
     });
     const captured = Array.from(shopWeeks.keys());
     const total = Array.from(shopWeeks.values()).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-    const missing = last4.weeks
+    const missing = last4
       .filter((wk) => !shopWeeks.has(wk.startInput))
       .map((wk) => ({ startInput: wk.startInput, label: wk.label }));
     return { total, capturedCount: captured.length, missing };
-  }, [form.shopId, last4.weeks, last4WeekStartSet, sales]);
+  }, [form.shopId, last4, last4WeekStartSet, sales]);
 
   useEffect(() => {
     if (form.shopId && takenShopSet.has(form.shopId)) {
@@ -470,7 +459,7 @@ export default function ManualWeeklySalesPage() {
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Last 4 full weeks</p>
             <div className="mt-3 space-y-2 text-sm text-slate-200">
-            {last4.weeks.map((wk) => (
+            {last4.map((wk) => (
               <button
                 key={wk.startInput}
                 type="button"

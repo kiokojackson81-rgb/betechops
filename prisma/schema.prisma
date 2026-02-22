@@ -48,6 +48,7 @@ model User {
   userShops                            UserShop[]
   weeklySalesApproved                  WeeklySale[]                   @relation("WeeklySaleApproval")
   weeklySales                          WeeklySale[]                   @relation("WeeklySaleAttendant")
+  marketplaceProfitEntries             MarketplaceProfitEntry[]       @relation("MarketplaceProfitEntryEnteredBy")
   managedShops                         Shop[]                         @relation("ManagedBy")
 }
 
@@ -358,6 +359,52 @@ model WeeklySale {
 
   @@unique([shopId, platform, weekStart, weekEnd])
   @@index([shopId, platform, weekStart, weekEnd])
+}
+
+/// MarketplaceProfitEntry stores per-transaction economics for marketplace sales (e.g. Jumia item credit + fees).
+/// These entries power Online Ops → Performance dashboards (profit, margin, loss monitoring) and are entered by admins.
+model MarketplaceProfitEntry {
+  id         String   @id @default(cuid())
+  platform   Platform
+  date       DateTime @db.Timestamptz(3)
+
+  /// Canonical Nairobi Mon→next Mon week window (exclusive weekEnd) for grouping.
+  weekStart  DateTime @db.Timestamptz(0)
+  weekEnd    DateTime @db.Timestamptz(3)
+
+  /// 25th→24th trading period key at the time of entry.
+  periodKey  String
+
+  itemCreditTxn    String @unique
+  itemCreditAmount Decimal @db.Decimal(12, 2)
+  commissionTxn    String?
+  commissionAmount Decimal @db.Decimal(12, 2)
+  shippingTxn      String?
+  shippingAmount   Decimal @db.Decimal(12, 2)
+
+  netPayout Decimal @db.Decimal(12, 2)
+
+  buyingPrice Decimal @db.Decimal(12, 2)
+  profit      Decimal @db.Decimal(12, 2)
+  marginPct   Decimal @db.Decimal(8, 2)
+  commissionRatePct Decimal @db.Decimal(8, 2)
+
+  orderId     String?
+  sku         String?
+  productName String?
+
+  rawText String
+
+  enteredByAdminId String
+  enteredByAdmin   User @relation("MarketplaceProfitEntryEnteredBy", fields: [enteredByAdminId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([platform, date])
+  @@index([weekStart, weekEnd])
+  @@index([periodKey])
+  @@index([enteredByAdminId, createdAt])
 }
 
 model JumiaAccount {
