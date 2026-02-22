@@ -5,6 +5,7 @@ import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
 import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -56,86 +57,47 @@ type TradingWeek = {
 
 const initialFilters: FilterState = { shopId: "", status: "", source: WeeklySaleSource.MANUAL };
 
-const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
-const toDateOnly = (value: string) => {
-  if (!value) return "";
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
-  const match = value.match(/^(\\d{4}-\\d{2}-\\d{2})/);
-  if (match?.[1]) return match[1];
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.valueOf())) return parsed.toISOString().slice(0, 10);
-  return "";
-};
-const formatShort = (date: Date) => date.toLocaleDateString("en-KE", { day: "2-digit", month: "short" });
+const MS_PER_DAY = 24 * 3600 * 1000;
+const toInputDate = (dateUtc: Date) => dateUtc.toISOString().slice(0, 10);
+const formatShort = (dateUtc: Date) => formatNairobiDate(dateUtc).replace(/\s\d{4}$/, "");
+
+function buildWeekWindowFromDateOnly(dateOnly: string) {
+  const parsed = parseDateOnlyUtc(dateOnly) ?? new Date(dateOnly);
+  const canonicalStart = canonicalNairobiWeekStartUtc(parsed);
+  const window = mondayToSundayNairobiWindow(canonicalStart);
+  const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
+  return {
+    weekStart: window.weekStart,
+    weekEndExclusive: window.weekEnd,
+    weekEndInclusive: endInclusive,
+    weekStartInput: toInputDate(window.weekStart),
+    weekEndInput: toInputDate(endInclusive),
+  };
+}
 
 function buildTradingWeeks(reference = new Date()) {
   const now = new Date(reference);
-  now.setHours(0, 0, 0, 0);
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
+  const currentWeekStart = canonicalNairobiWeekStartUtc(now);
 
-  const lastDayPrevMonth = new Date(currentYear, currentMonth, 0);
-  const prevMonthYear = lastDayPrevMonth.getFullYear();
-  const prevMonthIndex = lastDayPrevMonth.getMonth();
-  const prevMonthMaxDay = lastDayPrevMonth.getDate();
-  const clampPrevMonth = (day: number) => Math.min(day, prevMonthMaxDay);
+  const windowsCount = 10;
+  const weeks: TradingWeek[] = Array.from({ length: windowsCount }, (_, i) => {
+    const start = new Date(currentWeekStart.getTime() - i * 7 * MS_PER_DAY);
+    const endExclusive = new Date(start.getTime() + 7 * MS_PER_DAY);
+    const endInclusive = new Date(endExclusive.getTime() - MS_PER_DAY);
+    return {
+      key: `wk-${toInputDate(start)}`,
+      label: `Week ${i + 1}`,
+      display: `${formatShort(start)} - ${formatShort(endInclusive)}`,
+      startInput: toInputDate(start),
+      endInput: toInputDate(endInclusive),
+      start,
+      end: endInclusive,
+    };
+  });
 
-  const week1Start = new Date(prevMonthYear, prevMonthIndex, 24);
-  const week1End = new Date(prevMonthYear, prevMonthIndex, clampPrevMonth(30));
-  const week2Start = new Date(currentYear, currentMonth, 1);
-  const week2End = new Date(currentYear, currentMonth, 7);
-  const week3Start = new Date(currentYear, currentMonth, 8);
-  const week3End = new Date(currentYear, currentMonth, 14);
-  const week4Start = new Date(currentYear, currentMonth, 15);
-  const week4End = new Date(currentYear, currentMonth, 21);
-
-  const weeks: TradingWeek[] = [
-    {
-      key: `week1-${toInputDate(week1Start)}`,
-      label: "Week 1",
-      display: `${formatShort(week1Start)} - ${formatShort(week1End)}`,
-      startInput: toInputDate(week1Start),
-      endInput: toInputDate(week1End),
-      start: week1Start,
-      end: week1End,
-    },
-    {
-      key: `week2-${toInputDate(week2Start)}`,
-      label: "Week 2",
-      display: `${formatShort(week2Start)} - ${formatShort(week2End)}`,
-      startInput: toInputDate(week2Start),
-      endInput: toInputDate(week2End),
-      start: week2Start,
-      end: week2End,
-    },
-    {
-      key: `week3-${toInputDate(week3Start)}`,
-      label: "Week 3",
-      display: `${formatShort(week3Start)} - ${formatShort(week3End)}`,
-      startInput: toInputDate(week3Start),
-      endInput: toInputDate(week3End),
-      start: week3Start,
-      end: week3End,
-    },
-    {
-      key: `week4-${toInputDate(week4Start)}`,
-      label: "Week 4",
-      display: `${formatShort(week4Start)} - ${formatShort(week4End)}`,
-      startInput: toInputDate(week4Start),
-      endInput: toInputDate(week4End),
-      start: week4Start,
-      end: week4End,
-    },
-  ];
-
-  let defaultWeek = weeks[0];
-  for (const wk of weeks) {
-    if (wk.end.getTime() < now.getTime()) {
-      defaultWeek = wk;
-    }
-  }
-
-  return { weeks, defaultWeek: defaultWeek ?? weeks[0] };
+  // Default to the most recent completed trading week (Mon-Sun).
+  const defaultWeek = weeks[1] ?? weeks[0];
+  return { weeks, defaultWeek };
 }
 
 const buildInitialForm = (week?: TradingWeek): FormState => ({
@@ -206,16 +168,15 @@ export default function ManualWeeklySalesPage() {
 
   const takenShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
-    const activeWeekStart = toDateOnly(form.weekStart);
-    const activeWeekEnd = toDateOnly(form.weekEnd);
+    const activeWindow = buildWeekWindowFromDateOnly(form.weekStart);
     const manualSet = new Set<string>();
     sales.forEach((sale) => {
       if (!sale.shopId) return;
-      const saleWeekStart = toDateOnly(sale.weekStart);
-      const saleWeekEnd = toDateOnly(sale.weekEnd);
+      const saleStart = canonicalNairobiWeekStartUtc(new Date(sale.weekStart));
+      const saleWindow = mondayToSundayNairobiWindow(saleStart);
       if (
-        saleWeekStart === activeWeekStart &&
-        saleWeekEnd === activeWeekEnd &&
+        saleWindow.weekStart.getTime() === activeWindow.weekStart.getTime() &&
+        saleWindow.weekEnd.getTime() === activeWindow.weekEndExclusive.getTime() &&
         sale.source === WeeklySaleSource.MANUAL &&
         sale.status !== WeeklySaleStatus.REJECTED
       ) {
@@ -228,16 +189,15 @@ export default function ManualWeeklySalesPage() {
 
   const autoShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
-    const activeWeekStart = toDateOnly(form.weekStart);
-    const activeWeekEnd = toDateOnly(form.weekEnd);
+    const activeWindow = buildWeekWindowFromDateOnly(form.weekStart);
     const autoSet = new Set<string>();
     sales.forEach((sale) => {
       if (!sale.shopId) return;
-      const saleWeekStart = toDateOnly(sale.weekStart);
-      const saleWeekEnd = toDateOnly(sale.weekEnd);
+      const saleStart = canonicalNairobiWeekStartUtc(new Date(sale.weekStart));
+      const saleWindow = mondayToSundayNairobiWindow(saleStart);
       if (
-        saleWeekStart === activeWeekStart &&
-        saleWeekEnd === activeWeekEnd &&
+        saleWindow.weekStart.getTime() === activeWindow.weekStart.getTime() &&
+        saleWindow.weekEnd.getTime() === activeWindow.weekEndExclusive.getTime() &&
         sale.source === WeeklySaleSource.AUTOMATIC
       ) {
         autoSet.add(sale.shopId);
@@ -271,6 +231,23 @@ export default function ManualWeeklySalesPage() {
     if (!week) return;
     setSelectedWeekKey(key);
     setForm((prev) => ({ ...prev, shopId: "", weekStart: week.startInput, weekEnd: week.endInput }));
+  };
+
+  const handleWeekStartChange = (value: string) => {
+    if (!value) {
+      setSelectedWeekKey("custom");
+      setForm((prev) => ({ ...prev, shopId: "", weekStart: "", weekEnd: "" }));
+      return;
+    }
+
+    const window = buildWeekWindowFromDateOnly(value);
+    setSelectedWeekKey(`custom-${window.weekStartInput}`);
+    setForm((prev) => ({
+      ...prev,
+      shopId: takenShopSet.has(prev.shopId) ? "" : prev.shopId,
+      weekStart: window.weekStartInput,
+      weekEnd: window.weekEndInput,
+    }));
   };
 
   const createEntry = async () => {
@@ -407,7 +384,7 @@ export default function ManualWeeklySalesPage() {
               type="date"
               className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
               value={form.weekStart}
-              onChange={(e) => onFormChange("weekStart", e.target.value)}
+              onChange={(e) => handleWeekStartChange(e.target.value)}
             />
           </label>
           <label className="text-sm text-slate-300">
@@ -416,7 +393,7 @@ export default function ManualWeeklySalesPage() {
               type="date"
               className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
               value={form.weekEnd}
-              onChange={(e) => onFormChange("weekEnd", e.target.value)}
+              disabled
             />
           </label>
           <label className="text-sm text-slate-300">
@@ -551,7 +528,12 @@ export default function ManualWeeklySalesPage() {
                     <div className="text-xs text-slate-400">{sale.platform}</div>
                   </td>
                   <td className="py-3 text-sm text-slate-200">
-                    {new Date(sale.weekStart).toLocaleDateString()} - {new Date(sale.weekEnd).toLocaleDateString()}
+                    {(() => {
+                      const start = canonicalNairobiWeekStartUtc(new Date(sale.weekStart));
+                      const window = mondayToSundayNairobiWindow(start);
+                      const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
+                      return `${formatShort(window.weekStart)} - ${formatShort(endInclusive)}`;
+                    })()}
                   </td>
                   <td className="py-3 font-semibold text-emerald-300">{currency.format(Number(sale.amount ?? 0))}</td>
                   <td className="py-3 text-xs text-slate-400">{sale.source}</td>

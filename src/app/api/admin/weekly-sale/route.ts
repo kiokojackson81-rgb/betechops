@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, Platform, WeeklySaleSource, WeeklySaleStatus, PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
+import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid weekStart/weekEnd" }, { status: 400 });
   }
 
+  // Canonicalize to trading weeks (Mon-Sun Nairobi), storing weekEnd as exclusive (next Monday 00:00 UTC).
+  // This keeps manual entries aligned with automatic sync and commission recompute.
+  const canonicalWindow = mondayToSundayNairobiWindow(normalizedWeekStart);
+
   const amount = typeof body.amount === "string" ? Number(body.amount) : body.amount;
   if (typeof amount !== "number" || Number.isNaN(amount)) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -111,8 +116,8 @@ export async function POST(req: NextRequest) {
   const weekKey = {
     shopId: resolvedShopId,
     platform: resolvedPlatform,
-    weekStart: normalizedWeekStart,
-    weekEnd: normalizedWeekEnd,
+    weekStart: canonicalWindow.weekStart,
+    weekEnd: canonicalWindow.weekEnd,
   } as Prisma.WeeklySaleShopIdPlatformWeekStartWeekEndCompoundUniqueInput;
 
   const existing = await prisma.weeklySale.findUnique({
@@ -121,7 +126,7 @@ export async function POST(req: NextRequest) {
   const overridingAutomatic = existing?.source === WeeklySaleSource.AUTOMATIC;
   if (overridingAutomatic) {
     console.info(
-      `Manual override replacing automatic weekly sale ${existing.id} for shop ${resolvedShopId} (${normalizedWeekStart.toISOString()} - ${normalizedWeekEnd.toISOString()})`,
+      `Manual override replacing automatic weekly sale ${existing.id} for shop ${resolvedShopId} (${canonicalWindow.weekStart.toISOString()} - ${canonicalWindow.weekEnd.toISOString()})`,
     );
   }
 
@@ -132,8 +137,8 @@ export async function POST(req: NextRequest) {
     create: {
       shopId: resolvedShopId,
       platform: resolvedPlatform,
-      weekStart: normalizedWeekStart,
-      weekEnd: normalizedWeekEnd,
+      weekStart: canonicalWindow.weekStart,
+      weekEnd: canonicalWindow.weekEnd,
       amount,
       userId: userId ?? null,
       status: WeeklySaleStatus.PENDING,
@@ -153,7 +158,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const receiptNumber = `manual-weekly-${record.id}`;
-    const entryDate = normalizedWeekStart;
+    const entryDate = canonicalWindow.weekStart;
     const dayStart = new Date(entryDate);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(entryDate);
