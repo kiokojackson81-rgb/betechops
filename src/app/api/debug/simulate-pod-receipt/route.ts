@@ -63,9 +63,14 @@ export async function GET(request: NextRequest) {
   const podPendingCountNum = Number(String(podPendingCountRaw).replace(/[^0-9.-]/g, "")) || 0;
   const podPendingTotalNum = Number(String(podPendingTotalRaw).replace(/[^0-9.-]/g, "")) || 0;
 
-  const tagName = (url.searchParams.get("tag") || process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || "pod_receipt_admin_alert")
+  const tagRaw = (
+    url.searchParams.get("tag") ||
+    process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG ||
+    "pod_receipt_admin_alert"
+  )
     .toString()
     .trim();
+  const tagName = tagRaw === "receipt_admin_alert" ? "pod_receipt_admin_alert" : tagRaw;
 
   const results: any[] = [];
   for (let i = 0; i < recipients.length; i++) {
@@ -107,4 +112,3 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return GET(request);
 }
-

@@ -435,7 +435,14 @@ export async function notifyInternalPodAlerts(receiptId: string, opts?: { reques
 
   // ADMIN POD RECEIPT ALERT
   try {
-    const adminPodTag = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
+    const adminPodTagRaw = (process.env.CHATRACE_INTERNAL_POD_ADMIN_TAG || 'pod_receipt_admin_alert').toString().trim();
+    const adminPodTag = adminPodTagRaw === 'receipt_admin_alert' ? 'pod_receipt_admin_alert' : adminPodTagRaw;
+    if (adminPodTagRaw !== adminPodTag) {
+      console.warn('[pod][internal] CHATRACE_INTERNAL_POD_ADMIN_TAG misconfigured; overriding', {
+        from: adminPodTagRaw,
+        to: adminPodTag,
+      });
+    }
     const recipientsRaw = (process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS || '').toString().trim();
     const recipients = recipientsRaw
       ? recipientsRaw
