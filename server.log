@@ -1,0 +1,13 @@
+npm warn Unknown project config "node-linker". This will stop working in the next major version of npm.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+> betechops@0.1.0 start
+> next start
+
+   Γû▓ Next.js 16.0.7
+   - Local:         http://localhost:3000
+   - Network:       http://192.168.1.187:3000
+
+ Γ£ô Starting...
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+ Γ£ô Ready in 787ms
