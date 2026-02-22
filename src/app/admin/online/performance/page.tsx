@@ -5,12 +5,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPreviousTradingPeriod, getTradingPeriodFor, parseTradingPeriodKey, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import PerformanceFiltersClient from "@/app/admin/online/performance/_components/PerformanceFilters.client";
 
 export const dynamic = "force-dynamic";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
-type SearchParams = { periodKey?: string };
+type SearchParams = { periodKey?: string; accountId?: string };
 
 function getNextTradingPeriod(period: TradingPeriod): TradingPeriod {
   const nextDay = new Date(period.end.getTime() + 24 * 60 * 60 * 1000);
@@ -30,23 +31,35 @@ export default async function OnlinePerformancePage({
 
   const resolved = await Promise.resolve(searchParams ?? {});
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
+  const accountId = (resolved.accountId ?? "").trim();
   const now = new Date();
 
   const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, 4);
   const weekStarts = weeks.map((w) => w.weekStart);
+
+  const accounts = await prisma.marketplaceAccount.findMany({
+    where: { isActive: true },
+    select: { id: true, platform: true, displayName: true },
+    orderBy: [{ platform: "asc" }, { displayName: "asc" }],
+  });
 
   const [perWeekAgg, perWeekLossCount] = await Promise.all([
     (prisma as any).marketplaceProfitEntry.groupBy({
       by: ["weekStart"],
       _sum: { netPayout: true, profit: true },
       _avg: { commissionRatePct: true },
-      where: { weekStart: { in: weekStarts }, periodKey: period.key },
+      where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
       orderBy: { weekStart: "asc" },
     }),
     (prisma as any).marketplaceProfitEntry.groupBy({
       by: ["weekStart"],
       _count: { _all: true },
-      where: { weekStart: { in: weekStarts }, periodKey: period.key, profit: { lt: new Prisma.Decimal(0) } },
+      where: {
+        weekStart: { in: weekStarts },
+        periodKey: period.key,
+        profit: { lt: new Prisma.Decimal(0) },
+        ...(accountId ? { accountId } : {}),
+      },
       orderBy: { weekStart: "asc" },
     }),
   ]);
@@ -90,7 +103,7 @@ export default async function OnlinePerformancePage({
             Current period
           </Link>
           <Link
-            href={`/admin/online/performance?periodKey=${encodeURIComponent(lastPeriod.key)}`}
+            href={`/admin/online/performance?periodKey=${encodeURIComponent(lastPeriod.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
             className={`rounded-full border px-4 py-2 text-sm font-semibold ${
               period.key === lastPeriod.key
                 ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200"
@@ -110,13 +123,13 @@ export default async function OnlinePerformancePage({
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/admin/online/performance?periodKey=${encodeURIComponent(previousPeriod.key)}`}
+              href={`/admin/online/performance?periodKey=${encodeURIComponent(previousPeriod.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
               ← Previous period
             </Link>
             <Link
-              href={`/admin/online/performance?periodKey=${encodeURIComponent(nextPeriod.key)}`}
+              href={`/admin/online/performance?periodKey=${encodeURIComponent(nextPeriod.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
               Next period →
@@ -128,12 +141,16 @@ export default async function OnlinePerformancePage({
               Capture profit
             </Link>
             <Link
-              href={`/admin/online/performance/loss?periodKey=${encodeURIComponent(period.key)}`}
+              href={`/admin/online/performance/loss?periodKey=${encodeURIComponent(period.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="inline-flex items-center justify-center rounded-full border border-amber-400/50 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10"
             >
               Loss monitor
             </Link>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <PerformanceFiltersClient accounts={accounts} />
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -143,7 +160,7 @@ export default async function OnlinePerformancePage({
             return (
               <Link
                 key={wk.key}
-                href={`/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
+                href={`/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
                 className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
               >
                 <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>

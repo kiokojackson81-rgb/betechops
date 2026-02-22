@@ -14,9 +14,9 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
+        accountId?: string;
         transactionText?: string;
         buyingPriceKes?: number | string;
-        platform?: string;
         orderId?: string | null;
         sku?: string | null;
         productName?: string | null;
@@ -28,13 +28,21 @@ export async function POST(req: NextRequest) {
   const rawText = (body.transactionText ?? "").trim();
   if (!rawText) return NextResponse.json({ error: "transactionText is required" }, { status: 400 });
 
+  const accountId = (body.accountId ?? "").trim();
+  if (!accountId) return NextResponse.json({ error: "accountId is required" }, { status: 400 });
+
   const buying = typeof body.buyingPriceKes === "string" ? Number(body.buyingPriceKes) : body.buyingPriceKes;
   if (typeof buying !== "number" || !Number.isFinite(buying) || buying < 0) {
     return NextResponse.json({ error: "buyingPriceKes must be a non-negative number" }, { status: 400 });
   }
 
-  const platformRaw = (body.platform ?? Platform.JUMIA).toString().toUpperCase();
-  const platform = Object.values(Platform).includes(platformRaw as Platform) ? (platformRaw as Platform) : Platform.JUMIA;
+  const account = await prisma.marketplaceAccount.findUnique({
+    where: { id: accountId },
+    select: { id: true, platform: true, displayName: true, isActive: true },
+  });
+  if (!account) return NextResponse.json({ error: "Shop account not found" }, { status: 404 });
+  if (!account.isActive) return NextResponse.json({ error: "Shop account is inactive" }, { status: 400 });
+  const platform = account.platform as Platform;
 
   let parsed;
   try {
@@ -62,6 +70,7 @@ export async function POST(req: NextRequest) {
         weekStart,
         weekEnd,
         periodKey: period.key,
+        accountId: account.id,
         itemCreditTxn: parsed.itemCreditTxn,
         itemCreditAmount: parsed.itemCreditAmount,
         commissionTxn: parsed.commissionTxn,
@@ -89,6 +98,7 @@ export async function POST(req: NextRequest) {
         weekStart: created.weekStart,
         weekEnd: created.weekEnd,
         periodKey: created.periodKey,
+        accountId: created.accountId,
         itemCreditTxn: created.itemCreditTxn,
         itemCreditAmount: Number(created.itemCreditAmount),
         commissionAmount: Number(created.commissionAmount),

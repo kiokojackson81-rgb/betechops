@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
-type SearchParams = { periodKey?: string };
+type SearchParams = { periodKey?: string; accountId?: string };
 
 export default async function OnlinePerformanceLossPage({
   searchParams,
@@ -25,6 +25,7 @@ export default async function OnlinePerformanceLossPage({
 
   const resolved = await Promise.resolve(searchParams ?? {});
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
+  const accountId = (resolved.accountId ?? "").trim();
   const now = new Date();
 
   const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, 4);
@@ -35,6 +36,7 @@ export default async function OnlinePerformanceLossPage({
       periodKey: period.key,
       weekStart: { in: weekStarts },
       profit: { lt: new Prisma.Decimal(0) },
+      ...(accountId ? { accountId } : {}),
     },
     include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
     orderBy: [{ profit: "asc" }, { date: "asc" }],
@@ -50,7 +52,7 @@ export default async function OnlinePerformanceLossPage({
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           <Link
-            href={`/admin/online/performance?periodKey=${encodeURIComponent(period.key)}`}
+            href={`/admin/online/performance?periodKey=${encodeURIComponent(period.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
             className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
           >
             Back to performance
@@ -69,7 +71,7 @@ export default async function OnlinePerformanceLossPage({
           {weeks.map((wk) => (
             <Link
               key={wk.key}
-              href={`/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
+              href={`/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
               className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
               {wk.startInput}

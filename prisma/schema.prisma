@@ -375,7 +375,10 @@ model MarketplaceProfitEntry {
   /// 25th→24th trading period key at the time of entry.
   periodKey  String
 
-  itemCreditTxn    String @unique
+  accountId  String
+  account    MarketplaceAccount @relation(fields: [accountId], references: [id])
+
+  itemCreditTxn    String
   itemCreditAmount Decimal @db.Decimal(12, 2)
   commissionTxn    String?
   commissionAmount Decimal @db.Decimal(12, 2)
@@ -405,6 +408,7 @@ model MarketplaceProfitEntry {
   @@index([weekStart, weekEnd])
   @@index([periodKey])
   @@index([enteredByAdminId, createdAt])
+  @@unique([accountId, itemCreditTxn])
 }
 
 model JumiaAccount {
@@ -991,6 +995,7 @@ model MarketplaceAccount {
   orders           MarketplaceOrder[]
   payoutWeeks      MarketplacePayoutWeek[]
   returns          MarketplaceReturn[]
+  profitEntries    MarketplaceProfitEntry[]
 
   @@unique([platform, jumiaShopSid])
   @@unique([platform, kilimallShopCode])

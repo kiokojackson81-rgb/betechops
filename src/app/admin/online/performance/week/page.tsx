@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-type SearchParams = { weekStart?: string; periodKey?: string };
+type SearchParams = { weekStart?: string; periodKey?: string; accountId?: string };
 
 export default async function OnlinePerformanceWeekPage({
   searchParams,
@@ -26,6 +26,7 @@ export default async function OnlinePerformanceWeekPage({
 
   const resolved = await Promise.resolve(searchParams ?? {});
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
+  const accountId = (resolved.accountId ?? "").trim();
 
   const weekStartRaw = (resolved.weekStart ?? "").trim();
   const parsed = weekStartRaw ? parseDateOnlyUtc(weekStartRaw) : null;
@@ -47,17 +48,17 @@ export default async function OnlinePerformanceWeekPage({
 
   const [entries, agg, lossCount, manualWeeklyAgg] = await Promise.all([
     (prisma as any).marketplaceProfitEntry.findMany({
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key },
+      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
       include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
       orderBy: [{ profit: "asc" }, { date: "asc" }],
     }),
     (prisma as any).marketplaceProfitEntry.aggregate({
       _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
       _avg: { commissionRatePct: true, marginPct: true },
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key },
+      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
     }),
     (prisma as any).marketplaceProfitEntry.count({
-      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 } },
+      where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 }, ...(accountId ? { accountId } : {}) },
     }),
     prisma.weeklySale.aggregate({
       _sum: { amount: true },
@@ -91,7 +92,7 @@ export default async function OnlinePerformanceWeekPage({
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           <Link
-            href={`/admin/online/performance?periodKey=${encodeURIComponent(period.key)}`}
+            href={`/admin/online/performance?periodKey=${encodeURIComponent(period.key)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
             className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
           >
             Back to performance

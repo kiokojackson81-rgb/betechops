@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ProfitCaptureFormClient from "@/app/admin/online/performance/_components/ProfitCaptureForm.client";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,12 @@ export default async function OnlinePerformanceCapturePage() {
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
+
+  const accounts = await prisma.marketplaceAccount.findMany({
+    where: { isActive: true },
+    select: { id: true, platform: true, displayName: true },
+    orderBy: [{ platform: "asc" }, { displayName: "asc" }],
+  });
 
   return (
     <div className="space-y-8">
@@ -22,8 +29,7 @@ export default async function OnlinePerformanceCapturePage() {
         </p>
       </header>
 
-      <ProfitCaptureFormClient />
+      <ProfitCaptureFormClient accounts={accounts} />
     </div>
   );
 }
-
