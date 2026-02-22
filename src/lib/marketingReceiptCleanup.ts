@@ -61,13 +61,17 @@ export async function cleanupMarketingReceipts(
   receiptNumber?: string,
   receiptId?: string,
 ): Promise<EntryTotals[]> {
-  const normalized = canonicalReceiptNumber(receiptNumber ?? "");
-  const where = normalized
-    ? { receiptNumber: normalized }
-    : receiptId
-      ? { id: receiptId }
-      : null;
-  if (!where) return [];
+  const raw = typeof receiptNumber === "string" ? receiptNumber.trim() : "";
+  const normalized = canonicalReceiptNumber(raw);
+  const or: Prisma.MarketingReceiptWhereInput[] = [];
+  if (receiptId) or.push({ id: receiptId });
+  if (normalized) {
+    or.push({ receiptKey: normalized });
+    or.push({ receiptNumber: normalized });
+  }
+  if (raw) or.push({ receiptNumber: raw });
+  if (!or.length) return [];
+  const where: Prisma.MarketingReceiptWhereInput = { OR: or };
 
   const receipts = await tx.marketingReceipt.findMany({
     where,
@@ -101,13 +105,17 @@ export async function cleanupSupportReceipts(
   receiptNumber?: string,
   receiptId?: string,
 ): Promise<EntryTotals[]> {
-  const normalized = canonicalReceiptNumber(receiptNumber ?? "");
-  const where = normalized
-    ? { receiptNumber: normalized }
-    : receiptId
-      ? { id: receiptId }
-      : null;
-  if (!where) return [];
+  const raw = typeof receiptNumber === "string" ? receiptNumber.trim() : "";
+  const normalized = canonicalReceiptNumber(raw);
+  const or: Prisma.SupportReceiptWhereInput[] = [];
+  if (receiptId) or.push({ id: receiptId });
+  if (normalized) {
+    or.push({ receiptKey: normalized });
+    or.push({ receiptNumber: normalized });
+  }
+  if (raw) or.push({ receiptNumber: raw });
+  if (!or.length) return [];
+  const where: Prisma.SupportReceiptWhereInput = { OR: or };
 
   const receipts = await tx.supportReceipt.findMany({
     where,

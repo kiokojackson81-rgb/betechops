@@ -123,7 +123,8 @@ export async function notifyInternalReceipt(
       typeof receipt.data === 'object' &&
       receipt.data &&
       (receipt.data as any).podDelivery &&
-      typeof (receipt.data as any).podDelivery === 'object'
+      typeof (receipt.data as any).podDelivery === 'object' &&
+      Boolean((receipt.data as any).podDelivery?.status)
   );
   if (hasPodDelivery || isPodPaymentMethod(paymentMethod)) {
     const ridSkip = requestId || randomUUID();
