@@ -12,6 +12,10 @@ const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-ap
 const DEFAULT_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 70);
 const TIME_BUDGET_MS = 260_000;
 
+// Temporary ops toggle: when disabled, weekly sales totals must be entered manually by admins via
+// /admin/online/manual. Automatic sync will still ingest payout weeks/orders, but will not create/update WeeklySale.
+const AUTO_WEEKLY_SALES_ENABLED = (process.env.ONLINE_SYNC_AUTO_WEEKLY_SALES ?? "0") === "1";
+
 const dateOnlyISO = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Standard stats returned by per-account statement ingestion. */
@@ -897,6 +901,8 @@ export async function upsertWeeklySaleEntry(
   weekEnd: Date,
   amount: number,
 ) {
+  if (!AUTO_WEEKLY_SALES_ENABLED) return;
+
   const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = mondayToSundayNairobiWindow(weekStart);
   const key = { shopId, platform, weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd };
   const existing = await prisma.weeklySale.findUnique({
@@ -973,6 +979,8 @@ export async function ensureWeeklySalePlaceholder(
   weekStart: Date,
   _weekEnd: Date,
 ) {
+  if (!AUTO_WEEKLY_SALES_ENABLED) return;
+
   const { weekStart: normalizedWeekStart, weekEnd: normalizedWeekEnd } = mondayToSundayNairobiWindow(weekStart);
   const key = {
     shopId,

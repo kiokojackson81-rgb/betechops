@@ -54,7 +54,7 @@ type TradingWeek = {
   end: Date;
 };
 
-const initialFilters: FilterState = { shopId: "", status: "", source: "" };
+const initialFilters: FilterState = { shopId: "", status: "", source: WeeklySaleSource.MANUAL };
 
 const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
 const formatShort = (date: Date) => date.toLocaleDateString("en-KE", { day: "2-digit", month: "short" });
@@ -160,16 +160,10 @@ export default function ManualWeeklySalesPage() {
     }
   }, []);
 
-  const loadSales = useCallback(async (nextFilters?: FilterState) => {
-    const active = nextFilters ?? filters;
+  const loadSales = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      Object.entries(active).forEach(([key, value]) => {
-        if (value) params.set(key, value);
-      });
-      const query = params.size ? `?${params.toString()}` : "";
-      const res = await fetch(`/api/admin/weekly-sale${query}`, { cache: "no-store" });
+      const res = await fetch("/api/admin/weekly-sale", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load weekly sales");
       const data = (await res.json()) as WeeklySaleRow[];
       setSales(Array.isArray(data) ? data : []);
@@ -179,7 +173,7 @@ export default function ManualWeeklySalesPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
     loadShops();
@@ -187,9 +181,7 @@ export default function ManualWeeklySalesPage() {
   }, [loadShops, loadSales]);
 
   const onFilterChange = (key: keyof FilterState, value: string) => {
-    const next = { ...filters, [key]: value };
-    setFilters(next);
-    loadSales(next);
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const onFormChange = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -244,6 +236,15 @@ export default function ManualWeeklySalesPage() {
     () => shops.filter((shop) => !takenShopSet.has(shop.id)),
     [shops, takenShopSet],
   );
+
+  const visibleSales = useMemo(() => {
+    return sales.filter((sale) => {
+      if (filters.shopId && sale.shopId !== filters.shopId) return false;
+      if (filters.status && sale.status !== (filters.status as WeeklySaleStatus)) return false;
+      if (filters.source && sale.source !== (filters.source as WeeklySaleSource)) return false;
+      return true;
+    });
+  }, [sales, filters.shopId, filters.source, filters.status]);
 
   useEffect(() => {
     if (form.shopId && takenShopSet.has(form.shopId)) {
@@ -529,7 +530,7 @@ export default function ManualWeeklySalesPage() {
               </tr>
             </thead>
             <tbody>
-              {sales.map((sale) => (
+              {visibleSales.map((sale) => (
                 <tr key={sale.id} className="border-t border-white/5 text-slate-100">
                   <td className="py-3">
                     <div className="font-semibold">{sale.shop?.name ?? "Unassigned"}</div>
@@ -575,7 +576,7 @@ export default function ManualWeeklySalesPage() {
                   </td>
                 </tr>
               ))}
-              {!loading && sales.length === 0 && (
+              {!loading && visibleSales.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-sm text-slate-500">
                     No weekly sales found for the selected filters.
