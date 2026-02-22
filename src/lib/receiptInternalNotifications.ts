@@ -239,12 +239,26 @@ export async function notifyInternalReceipt(
       (process.env.CHATRACE_ACCOUNT_ID || '').toString().trim() &&
       (process.env.CHATRACE_API_TOKEN || '').toString().trim(),
   );
+  const adminChatraceAccountPrefRaw = (process.env.ADMIN_NOTIFICATION_CHATRACE_ACCOUNT || 'auto').toString();
+  const adminChatraceAccountPref = adminChatraceAccountPrefRaw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+  const adminAccountMode =
+    adminChatraceAccountPref === 'internal' || adminChatraceAccountPref === 'main' ? adminChatraceAccountPref : 'auto';
 
   console.info('[receipts][internal] attempting push', {
     receiptId,
     rid,
     recipients: recipients.length || '(default)',
-    mode: mainChatraceConfigured ? 'main_chatrace' : 'internal_chatrace',
+    mode:
+      adminAccountMode === 'main'
+        ? 'main_chatrace(forced)'
+        : adminAccountMode === 'internal'
+          ? 'internal_chatrace(forced)'
+          : mainChatraceConfigured
+            ? 'main_chatrace(auto)'
+            : 'internal_chatrace(auto)',
   });
   const results: any[] = [];
   const sendViaMainChatrace = async (toPhoneRaw: string, idx: number) => {
@@ -296,7 +310,7 @@ export async function notifyInternalReceipt(
   if (!recipients.length) {
     // Backwards-compatible fallback behavior (single internal admin recipient via envs).
     results.push(await pushInternalReceiptAlert({ requestId: rid, ...basePayload }));
-  } else if (mainChatraceConfigured) {
+  } else if (adminAccountMode === 'main' || (adminAccountMode === 'auto' && mainChatraceConfigured)) {
     for (let i = 0; i < recipients.length; i++) {
       try {
         results.push(await sendViaMainChatrace(recipients[i]!, i));
