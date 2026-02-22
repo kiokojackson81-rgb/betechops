@@ -135,8 +135,26 @@ export async function pushInternalReceiptAlert(input: {
   const rid = input.requestId || randomUUID();
   const env = getEnv();
   const debug = makeDebug(rid, env);
-  if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
-  if (!env.baseUrl || !env.token) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+  if (!env.enabled) {
+    const out = { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
+    try {
+      console.info("[internal][adminAlert] skipped: disabled", { rid, env: out.debug.env });
+    } catch {}
+    try {
+      await persistInternalDebug(input.receiptNumber, rid, out.debug);
+    } catch {}
+    return out;
+  }
+  if (!env.baseUrl || !env.token) {
+    const out = { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+    try {
+      console.error("[internal][adminAlert] missing env", { rid, env: out.debug.env });
+    } catch {}
+    try {
+      await persistInternalDebug(input.receiptNumber, rid, out.debug);
+    } catch {}
+    return out;
+  }
 
   // Meta/WhatsApp template parameters cannot contain newlines/tabs or long runs
   // of spaces. Keep this sanitizer strict to prevent template send failures.
