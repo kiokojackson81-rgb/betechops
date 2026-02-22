@@ -57,6 +57,15 @@ type TradingWeek = {
 const initialFilters: FilterState = { shopId: "", status: "", source: WeeklySaleSource.MANUAL };
 
 const toInputDate = (date: Date) => date.toISOString().slice(0, 10);
+const toDateOnly = (value: string) => {
+  if (!value) return "";
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\\d{4}-\\d{2}-\\d{2})/);
+  if (match?.[1]) return match[1];
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.valueOf())) return parsed.toISOString().slice(0, 10);
+  return "";
+};
 const formatShort = (date: Date) => date.toLocaleDateString("en-KE", { day: "2-digit", month: "short" });
 
 function buildTradingWeeks(reference = new Date()) {
@@ -197,15 +206,18 @@ export default function ManualWeeklySalesPage() {
 
   const takenShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
+    const activeWeekStart = toDateOnly(form.weekStart);
+    const activeWeekEnd = toDateOnly(form.weekEnd);
     const manualSet = new Set<string>();
     sales.forEach((sale) => {
       if (!sale.shopId) return;
-      const saleWeekStart = new Date(sale.weekStart).toISOString().slice(0, 10);
-      const saleWeekEnd = new Date(sale.weekEnd).toISOString().slice(0, 10);
+      const saleWeekStart = toDateOnly(sale.weekStart);
+      const saleWeekEnd = toDateOnly(sale.weekEnd);
       if (
-        saleWeekStart === form.weekStart &&
-        saleWeekEnd === form.weekEnd &&
-        sale.source === WeeklySaleSource.MANUAL
+        saleWeekStart === activeWeekStart &&
+        saleWeekEnd === activeWeekEnd &&
+        sale.source === WeeklySaleSource.MANUAL &&
+        sale.status !== WeeklySaleStatus.REJECTED
       ) {
         manualSet.add(sale.shopId);
       }
@@ -216,14 +228,16 @@ export default function ManualWeeklySalesPage() {
 
   const autoShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
+    const activeWeekStart = toDateOnly(form.weekStart);
+    const activeWeekEnd = toDateOnly(form.weekEnd);
     const autoSet = new Set<string>();
     sales.forEach((sale) => {
       if (!sale.shopId) return;
-      const saleWeekStart = new Date(sale.weekStart).toISOString().slice(0, 10);
-      const saleWeekEnd = new Date(sale.weekEnd).toISOString().slice(0, 10);
+      const saleWeekStart = toDateOnly(sale.weekStart);
+      const saleWeekEnd = toDateOnly(sale.weekEnd);
       if (
-        saleWeekStart === form.weekStart &&
-        saleWeekEnd === form.weekEnd &&
+        saleWeekStart === activeWeekStart &&
+        saleWeekEnd === activeWeekEnd &&
         sale.source === WeeklySaleSource.AUTOMATIC
       ) {
         autoSet.add(sale.shopId);
