@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
 
   const tagName = (process.env.CHATRACE_INTERNAL_ADMIN_TAG || "receipt_admin_alert").toString().trim();
 
-  const results = [];
+  const results: any[] = [];
   for (let i = 0; i < recipients.length; i++) {
     const toPhone = recipients[i]!;
     const rid = `simulate-${Date.now()}-${i + 1}`;
@@ -110,4 +110,3 @@ export async function POST(request: NextRequest) {
   // For convenience, POST just delegates to GET (query params).
   return GET(request);
 }
-
