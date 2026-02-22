@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { Platform } from "@prisma/client";
 import {
   getPreviousTradingPeriod,
-  getRecentTradingPeriods,
   getTradingPeriodFor,
   parseTradingPeriodKey,
   type TradingPeriod,
@@ -238,7 +237,6 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const nextPeriod = getNextTradingPeriod(period);
-  const recentPeriods = getRecentTradingPeriods(8);
   const currentPeriod = getTradingPeriodFor(new Date());
   const lastPeriod = getPreviousTradingPeriod(currentPeriod);
 
@@ -398,23 +396,6 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
               Open manual sales desk
             </Link>
           </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {recentPeriods.map((p) => (
-            <Link
-              key={p.key}
-              href={`/admin/online/summary?periodKey=${encodeURIComponent(p.key)}`}
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                p.key === period.key
-                  ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-100"
-                  : "border-white/10 bg-black/10 text-slate-200 hover:bg-white/5"
-              }`}
-            >
-              <div className="text-xs uppercase tracking-wide text-slate-400">Trading period</div>
-              <div className="mt-1 font-semibold text-white">{p.label}</div>
-            </Link>
-          ))}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
