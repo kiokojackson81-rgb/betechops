@@ -165,7 +165,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     action: 'set_field_value',
     field_name: fieldName,
     value: (() => {
-      const raw = value == null ? '' : String(value);
+      if (value == null) return '';
+      // Some Chatrace custom fields are configured as "Number". Preserve numeric
+      // values to avoid them being blanked out by strict type validation.
+      if (typeof value === 'number') {
+        const n = Number.isFinite(value) ? value : 0;
+        return Math.round(n);
+      }
+      const raw = String(value);
       // Chatrace/WhatsApp template params must not contain newlines/tabs
       // or excessive consecutive spaces. Replace newlines/tabs with a single
       // space and collapse multiple spaces to a single space.

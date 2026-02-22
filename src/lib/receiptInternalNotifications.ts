@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractItemsShort, extractReceiptTotalKES } from '@/lib/receiptExtract';
 import { pushInternalReceiptAlert } from '@/lib/chatraceInternalFixed';
+import { pushReceiptToChatrace } from '@/lib/integrations/chatrace';
 import { getPodPendingStats } from '@/lib/podPendingStats';
 
 export function getSiteUrl() {
@@ -21,6 +22,16 @@ function digitsOnly(value?: string) {
   const raw = (value ?? '').toString().trim();
   if (!raw) return '';
   return raw.replace(/[^0-9]/g, '');
+}
+
+function normalizeRecipientPhone(value?: string) {
+  const raw = (value ?? '').toString().trim();
+  if (!raw) return '';
+  const digits = raw.replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('254')) return digits;
+  if (digits.startsWith('0') && digits.length === 10) return `254${digits.slice(1)}`;
+  return digits;
 }
 
 function isPodPaymentMethod(value: string) {
@@ -223,16 +234,84 @@ export async function notifyInternalReceipt(
         .filter(Boolean)
     : [];
 
-  console.info('[receipts][internal] attempting push', { receiptId, rid, recipients: recipients.length || '(default)' });
+  const mainChatraceConfigured = Boolean(
+    (process.env.CHATRACE_BASE_URL || '').toString().trim() &&
+      (process.env.CHATRACE_ACCOUNT_ID || '').toString().trim() &&
+      (process.env.CHATRACE_API_TOKEN || '').toString().trim(),
+  );
+
+  console.info('[receipts][internal] attempting push', {
+    receiptId,
+    rid,
+    recipients: recipients.length || '(default)',
+    mode: mainChatraceConfigured ? 'main_chatrace' : 'internal_chatrace',
+  });
   const results: any[] = [];
-  if (!recipients.length) {
-    results.push(await pushInternalReceiptAlert({ requestId: rid, ...basePayload }));
-  } else {
-    for (let i = 0; i < recipients.length; i++) {
-      const toPhone = recipients[i]!;
-      const ridPerRecipient = `${rid}-admin-${i + 1}`;
-      results.push(await pushInternalReceiptAlert({ requestId: ridPerRecipient, toPhone, ...basePayload }));
+  const sendViaMainChatrace = async (toPhoneRaw: string, idx: number) => {
+    const phone = normalizeRecipientPhone(toPhoneRaw);
+    if (!phone) throw new Error(`Invalid admin recipient phone: ${toPhoneRaw}`);
+    return pushReceiptToChatrace({
+      phoneE164: phone,
+      // This value is only used as the contact's first_name; we override the actual
+      // receipt/customer fields via extraFields below.
+      customerName: 'Admin',
+      receiptNumber,
+      amount: String(Math.round(invoiceAmount)),
+      currency: 'KES',
+      receiptLink: receiptLinkSafe,
+      receiptUrl: undefined,
+      receiptId: receipt.id,
+      tagName: 'receipt_admin_alert',
+      skipDefaultTags: true,
+      extraFields: {
+        receipt_number: receiptNumber,
+        customer_name: basePayload.customerName,
+        customer_phone: basePayload.customerPhone,
+        formatted_amount: Math.round(invoiceAmount),
+        payment_method: paymentMethod || 'N/A',
+        created_by: basePayload.createdBy,
+        admin_items: basePayload.itemsSummary || basePayload.itemsText || 'N/A',
+        total_sales_today: Math.round(totalSalesToday),
+      },
+    });
+  };
+
+  const sendViaInternalChatrace = async (toPhoneRaw: string, idx: number) => {
+    const phone = normalizeRecipientPhone(toPhoneRaw);
+    if (!phone) throw new Error(`Invalid admin recipient phone: ${toPhoneRaw}`);
+    const ridPerRecipient = `${rid}-admin-${idx + 1}`;
+    return pushInternalReceiptAlert({ requestId: ridPerRecipient, toPhone: phone, ...basePayload });
+  };
+
+  const sendFallbackInternal = async () => {
+    if (!recipients.length) {
+      results.push(await pushInternalReceiptAlert({ requestId: rid, ...basePayload }));
+      return;
     }
+    for (let i = 0; i < recipients.length; i++) {
+      results.push(await sendViaInternalChatrace(recipients[i]!, i));
+    }
+  };
+
+  if (!recipients.length) {
+    // Backwards-compatible fallback behavior (single internal admin recipient via envs).
+    results.push(await pushInternalReceiptAlert({ requestId: rid, ...basePayload }));
+  } else if (mainChatraceConfigured) {
+    for (let i = 0; i < recipients.length; i++) {
+      try {
+        results.push(await sendViaMainChatrace(recipients[i]!, i));
+      } catch (e) {
+        console.error('[receipts][internal] main chatrace send failed; falling back to internal chatrace', {
+          receiptId,
+          rid,
+          idx: i + 1,
+          err: e instanceof Error ? e.message : String(e),
+        });
+        results.push(await sendViaInternalChatrace(recipients[i]!, i));
+      }
+    }
+  } else {
+    await sendFallbackInternal();
   }
 
   for (const result of results) {
