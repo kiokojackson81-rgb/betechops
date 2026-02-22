@@ -348,6 +348,16 @@ export default function ManualWeeklySalesPage() {
     }
   };
 
+  const voidEntry = async (sale: WeeklySaleRow) => {
+    if (sale.source !== WeeklySaleSource.MANUAL) {
+      showToast("Only manual entries can be voided", "error");
+      return;
+    }
+    if (sale.status === WeeklySaleStatus.REJECTED) return;
+    if (!confirm("Void this entry (mark as REJECTED) so it can be captured again?")) return;
+    await updateStatus(sale.id, WeeklySaleStatus.REJECTED);
+  };
+
   const editEntry = async (sale: WeeklySaleRow) => {
     if (sale.source !== WeeklySaleSource.MANUAL) {
       showToast("Only manual entries can be edited", "error");
@@ -797,31 +807,45 @@ export default function ManualWeeklySalesPage() {
                   </td>
                   <td className="py-3 text-sm text-slate-300">{sale.user?.name || sale.user?.email || "-"}</td>
                   <td className="py-3 text-right text-xs">
-                    {sale.status === "PENDING" && (
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          className="rounded-full bg-emerald-500/90 px-3 py-1 font-semibold text-black hover:brightness-95"
-                          onClick={() => updateStatus(sale.id, WeeklySaleStatus.APPROVED)}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
-                          onClick={() => updateStatus(sale.id, WeeklySaleStatus.REJECTED)}
-                        >
-                          Reject
-                        </button>
-                        {sale.source === "MANUAL" && (
-                          <>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {sale.status === "PENDING" && (
+                        <>
+                          <button
+                            type="button"
+                            className="rounded-full bg-emerald-500/90 px-3 py-1 font-semibold text-black hover:brightness-95"
+                            onClick={() => updateStatus(sale.id, WeeklySaleStatus.APPROVED)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
+                            onClick={() => updateStatus(sale.id, WeeklySaleStatus.REJECTED)}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {sale.source === "MANUAL" && (
+                        <>
+                          <button
+                            type="button"
+                            className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
+                            onClick={() => editEntry(sale)}
+                          >
+                            Edit
+                          </button>
+                          {sale.status !== "REJECTED" && (
                             <button
                               type="button"
-                              className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
-                              onClick={() => editEntry(sale)}
+                              className="rounded-full border border-amber-400/40 px-3 py-1 font-semibold text-amber-200 hover:bg-amber-500/10"
+                              onClick={() => voidEntry(sale)}
                             >
-                              Edit
+                              Void
                             </button>
+                          )}
+                          {sale.status === "PENDING" && (
                             <button
                               type="button"
                               className="rounded-full border border-red-400/50 px-3 py-1 font-semibold text-red-200 hover:bg-red-500/10"
@@ -829,10 +853,10 @@ export default function ManualWeeklySalesPage() {
                             >
                               Delete
                             </button>
-                          </>
-                        )}
-                      </div>
-                    )}
+                          )}
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

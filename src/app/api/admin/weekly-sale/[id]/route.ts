@@ -67,10 +67,7 @@ export async function PATCH(req: NextRequest, context: any) {
 
   // Automatically recompute the online commission ledger when manual totals change
   if (sale.userId && sale.source === WeeklySaleSource.MANUAL) {
-    const shouldRecompute =
-      updates.status === WeeklySaleStatus.APPROVED ||
-      updates.amount !== undefined ||
-      updates.status === WeeklySaleStatus.PENDING;
+    const shouldRecompute = updates.amount !== undefined || updates.status !== undefined;
     if (shouldRecompute) {
       try {
         const period = getTradingPeriodFor(sale.weekStart);
