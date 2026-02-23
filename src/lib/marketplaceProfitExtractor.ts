@@ -13,7 +13,7 @@ export type ProfitExtraction = {
   notes: string[];
 };
 
-const ExtractionSchema = z.object({
+export const ExtractionSchema = z.object({
   date: z.string().min(4),
   currency: z.literal("KES"),
   item_price_credit: z.object({
@@ -29,6 +29,12 @@ const ExtractionSchema = z.object({
     txn: z.string().min(1),
   }),
   confidence: z.number().min(0).max(1).optional(),
+  notes: z.array(z.string()).optional(),
+});
+
+const ImageBatchSchema = z.object({
+  extracted_text: z.string().optional(),
+  transactions: z.array(ExtractionSchema).min(1),
   notes: z.array(z.string()).optional(),
 });
 
@@ -78,6 +84,49 @@ export function tryRegexExtraction(transactionText: string): ProfitExtraction | 
   } catch {
     return null;
   }
+}
+
+function splitByDateMarkers(transactionText: string): string[] {
+  const text = transactionText.trim();
+  if (!text) return [];
+
+  const dateRe = /(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}/g;
+  const matches = [...text.matchAll(dateRe)];
+  if (matches.length <= 1) return [text];
+
+  const starts = matches.map((m) => m.index ?? 0).filter((v) => v >= 0);
+  const blocks: string[] = [];
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i];
+    const end = i + 1 < starts.length ? starts[i + 1] : text.length;
+    const chunk = text.slice(start, end).trim();
+    if (chunk) blocks.push(chunk);
+  }
+  return blocks.length ? blocks : [text];
+}
+
+function splitByItemCreditMarkers(transactionText: string): string[] {
+  const text = transactionText.trim();
+  if (!text) return [];
+  const marker = /(?:^|\n)\s*Item Price Credit\b/g;
+  const matches = [...text.matchAll(marker)];
+  if (matches.length <= 1) return [text];
+
+  const starts = matches.map((m) => (m.index ?? 0) + (m[0].startsWith("\n") ? 1 : 0)).filter((v) => v >= 0);
+  const blocks: string[] = [];
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i];
+    const end = i + 1 < starts.length ? starts[i + 1] : text.length;
+    const chunk = text.slice(start, end).trim();
+    if (chunk) blocks.push(chunk);
+  }
+  return blocks.length ? blocks : [text];
+}
+
+export function splitProfitTransactionBlocks(transactionText: string): string[] {
+  const byDate = splitByDateMarkers(transactionText);
+  if (byDate.length > 1) return byDate;
+  return splitByItemCreditMarkers(transactionText);
 }
 
 export async function extractProfitTransactionWithOpenAI(transactionText: string): Promise<ProfitExtraction> {
@@ -150,3 +199,98 @@ export async function extractProfitTransaction(transactionText: string): Promise
   return extractProfitTransactionWithOpenAI(transactionText);
 }
 
+export async function extractProfitTransactions(transactionText: string, opts?: { max?: number }): Promise<ProfitExtraction[]> {
+  const max = opts?.max ?? 25;
+  const blocks = splitProfitTransactionBlocks(transactionText).slice(0, max);
+  if (blocks.length === 0) return [];
+
+  const results: ProfitExtraction[] = [];
+  for (const block of blocks) {
+    // eslint-disable-next-line no-await-in-loop
+    const extracted = await extractProfitTransaction(block);
+    results.push(extracted);
+  }
+  return results;
+}
+
+export async function extractProfitTransactionsFromImage(input: {
+  dataUrl: string;
+}): Promise<{ extractedText: string; transactions: ProfitExtraction[]; notes: string[] }> {
+  const apiKey = process.env.OPENAI_API_KEY ?? "";
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
+  const client = new OpenAI({ apiKey });
+
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: "You extract transaction fields from marketplace transaction screenshots. Return JSON only.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: [
+              "From this image, extract one or more marketplace transaction blocks and return STRICT JSON only.",
+              "",
+              "Each transaction must include:",
+              "- date (ISO date)",
+              "- currency (KES)",
+              "- item_price_credit { amount, txn }",
+              "- commission { amount, txn }",
+              "- shipping_fee { amount, txn }",
+              "- confidence (0-1)",
+              "- notes (array of strings)",
+              "",
+              "Rules:",
+              "- If commission/shipping appear as positive in the image, return them as NEGATIVE numbers.",
+              "- Amounts are numbers in KES.",
+              "- Return JSON keys exactly: extracted_text, transactions, notes.",
+              "- extracted_text should contain the best-effort plain text transcription of the image.",
+            ].join("\n"),
+          },
+          { type: "image_url", image_url: { url: input.dataUrl } },
+        ] as any,
+      },
+    ],
+  });
+
+  const raw = completion.choices?.[0]?.message?.content ?? "";
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error("OpenAI returned invalid JSON");
+  }
+
+  const data = ImageBatchSchema.parse(json);
+  const extractedText = (data.extracted_text ?? "").trim();
+  const topNotes = Array.isArray(data.notes) ? data.notes : [];
+
+  const transactions: ProfitExtraction[] = data.transactions.map((t) => {
+    const date = parseDateISO(t.date);
+    if (!date) throw new Error("OpenAI could not extract a valid date");
+    const confidence = typeof t.confidence === "number" ? t.confidence : 0.5;
+    const notes = Array.isArray(t.notes) ? t.notes : [];
+
+    return {
+      method: "openai",
+      date,
+      currency: "KES",
+      itemPriceCredit: { amount: normalizePositive(t.item_price_credit.amount), txn: t.item_price_credit.txn },
+      commission: { amount: normalizeNegative(t.commission.amount), txn: t.commission.txn },
+      shippingFee: { amount: normalizeNegative(t.shipping_fee.amount), txn: t.shipping_fee.txn },
+      confidence,
+      notes,
+    };
+  });
+
+  return { extractedText, transactions, notes: topNotes };
+}

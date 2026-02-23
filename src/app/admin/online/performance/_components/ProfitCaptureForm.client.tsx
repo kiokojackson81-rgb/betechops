@@ -5,8 +5,7 @@ import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
 import { Platform } from "@prisma/client";
-type PreviewPayload = {
-  account: { id: string; displayName: string; platform: Platform };
+type PreviewItem = {
   extracted: {
     method: string;
     confidence: number;
@@ -24,6 +23,18 @@ type PreviewPayload = {
     marginPct: number;
     commissionRatePct: number;
     isLoss: boolean;
+  };
+};
+
+type PreviewPayload = {
+  account: { id: string; displayName: string; platform: Platform };
+  mode: "single" | "batch";
+  rawText: string;
+  items: PreviewItem[];
+  totals: {
+    netPayout: number;
+    profit: number;
+    lossCount: number;
   };
 };
 
@@ -47,18 +58,29 @@ type CaptureResponse = {
   commissionRatePct: number;
 };
 
+type CaptureBatchResponse = {
+  mode: "batch" | "single";
+  createdCount: number;
+  duplicateCount: number;
+  failedCount: number;
+  duplicates: string[];
+  failed: { txn?: string; error: string }[];
+  items: CaptureResponse[];
+};
+
 type AccountOption = { id: string; platform: Platform; displayName: string };
 
 export default function ProfitCaptureFormClient(props: { accounts: AccountOption[] }) {
   const [accountId, setAccountId] = useState<string>("");
   const [shopSearch, setShopSearch] = useState<string>("");
   const [transactionText, setTransactionText] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [buyingPriceKes, setBuyingPriceKes] = useState("");
   const [orderId, setOrderId] = useState("");
   const [sku, setSku] = useState("");
   const [productName, setProductName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<CaptureResponse | null>(null);
+  const [lastSaved, setLastSaved] = useState<CaptureResponse | CaptureBatchResponse | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [previewError, setPreviewError] = useState<string>("");
@@ -71,27 +93,48 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
     return props.accounts.filter((a) => (a.displayName || "").toLowerCase().includes(q) || a.platform.toLowerCase().includes(q));
   }, [props.accounts, shopSearch]);
 
-  const canPreview = Boolean(accountId) && transactionText.trim().length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
+  const canPreview =
+    Boolean(accountId) &&
+    Number.isFinite(buyingNum) &&
+    buyingNum >= 0 &&
+    (transactionText.trim().length > 0 || imageFile !== null);
 
   const runPreview = async () => {
     if (!accountId) return showToast("Select a shop first", "error");
-    if (!transactionText.trim()) return showToast("Paste the transaction details first", "error");
+    if (!transactionText.trim() && !imageFile) return showToast("Paste the transaction details or upload a screenshot first", "error");
     if (!Number.isFinite(buyingNum) || buyingNum < 0) return showToast("Enter a valid buying price", "error");
 
     setPreview(null);
     setPreviewError("");
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/marketplace-profit-entry/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId, buyingPriceKes: buyingNum, transactionText }),
-      });
+      const isImageMode = Boolean(imageFile) && !transactionText.trim();
+      const res = isImageMode
+        ? await fetch("/api/admin/marketplace-profit-entry/preview", {
+            method: "POST",
+            body: (() => {
+              const fd = new FormData();
+              fd.set("accountId", accountId);
+              fd.set("buyingPriceKes", String(buyingNum));
+              fd.set("transactionText", transactionText);
+              if (imageFile) fd.set("file", imageFile);
+              return fd;
+            })(),
+          })
+        : await fetch("/api/admin/marketplace-profit-entry/preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accountId, buyingPriceKes: buyingNum, transactionText }),
+          });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) {
         throw new Error(data?.error || "Preview failed");
       }
-      setPreview(data as PreviewPayload);
+      const payload = data as PreviewPayload;
+      setPreview(payload);
+      if (payload?.rawText && !transactionText.trim()) {
+        setTransactionText(payload.rawText);
+      }
       showToast("Preview ready", "success");
     } catch (err) {
       console.error(err);
@@ -128,7 +171,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
-          transactionText,
+          transactionText: preview.rawText || transactionText,
           buyingPriceKes: buyingNum,
           orderId: orderId.trim() || null,
           sku: sku.trim() || null,
@@ -139,9 +182,10 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       if (!res.ok) {
         throw new Error(data?.error || "Failed to save profit entry");
       }
-      setLastSaved(data as CaptureResponse);
+      setLastSaved(data as any);
       showToast("Profit entry saved", "success");
       setTransactionText("");
+      setImageFile(null);
       setBuyingPriceKes("");
       setOrderId("");
       setSku("");
@@ -224,6 +268,17 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
               placeholder="Paste the full transaction block here (Item Price Credit, Commission, Shipping Fee, Date...)"
             />
           </label>
+
+          <label className="text-sm text-slate-300 lg:col-span-2">
+            Or upload screenshot (optional)
+            <input
+              type="file"
+              accept="image/*"
+              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
+              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="mt-1 text-xs text-slate-500">Tip: leave the text box empty to preview using the screenshot.</p>
+          </label>
         </div>
 
         <div className="mt-4">
@@ -269,8 +324,8 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
 
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Preview</p>
-          {!transactionText.trim() ? (
-            <p className="mt-2 text-sm text-slate-400">Paste the transaction block to see extracted values.</p>
+          {!transactionText.trim() && !imageFile ? (
+            <p className="mt-2 text-sm text-slate-400">Paste the transaction block or upload a screenshot to see extracted values.</p>
           ) : preview ? (
             <div className="mt-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -279,53 +334,70 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
                   <span className="font-semibold text-white">{preview.account.platform}</span>
                 </p>
                 <p className="text-xs text-slate-400">
-                  Confidence: <span className="font-semibold text-slate-200">{(preview.extracted.confidence ?? 0).toFixed(2)}</span>{" "}
-                  • Method: <span className="font-semibold text-slate-200">{preview.extracted.method}</span>
+                  Transactions: <span className="font-semibold text-slate-200">{preview.items.length}</span>
                 </p>
               </div>
-              {preview.extracted.notes?.length ? (
+              {preview.items.some((i) => i.extracted.notes?.length) ? (
                 <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Warnings</p>
                   <ul className="mt-2 list-disc pl-5">
-                    {preview.extracted.notes.map((n, idx) => (
+                    {preview.items.flatMap((i) => i.extracted.notes ?? []).slice(0, 8).map((n, idx) => (
                       <li key={`${idx}-${n}`}>{n}</li>
                     ))}
                   </ul>
                 </div>
               ) : null}
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
-                  <p className="mt-1 font-semibold text-white">{new Date(preview.extracted.date).toLocaleDateString()}</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Total net payout</p>
+                  <p className="mt-1 font-semibold text-emerald-300">{currency.format(preview.totals.netPayout)}</p>
                 </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Item credit</p>
-                  <p className="mt-1 font-semibold text-white">
-                    {preview.extracted.item_price_credit.txn} • {currency.format(preview.extracted.item_price_credit.amount)}
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Total profit</p>
+                  <p className={`mt-1 font-semibold ${preview.totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                    {currency.format(preview.totals.profit)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Commission %</p>
-                  <p className="mt-1 font-semibold text-slate-100">{preview.computed.commissionRatePct.toFixed(1)}%</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Loss entries</p>
+                  <p className="mt-1 font-semibold text-amber-200">{preview.totals.lossCount}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Commission</p>
-                  <p className="mt-1 font-semibold text-slate-100">{currency.format(preview.extracted.commission.amount)}</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Buying price (each)</p>
+                  <p className="mt-1 font-semibold text-slate-100">{currency.format(buyingNum || 0)}</p>
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Shipping</p>
-                  <p className="mt-1 font-semibold text-slate-100">{currency.format(preview.extracted.shipping_fee.amount)}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Net payout</p>
-                  <p className="mt-1 font-semibold text-emerald-300">{currency.format(preview.computed.netPayout)}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Profit</p>
-                  <p className={`mt-1 font-semibold ${preview.computed.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                    {currency.format(preview.computed.profit)} ({preview.computed.marginPct.toFixed(1)}%)
-                  </p>
-                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/10">
+                <table className="w-full min-w-[980px] text-left text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-slate-400">
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Txn</th>
+                      <th className="px-3 py-2 text-right">Net payout</th>
+                      <th className="px-3 py-2 text-right">Profit</th>
+                      <th className="px-3 py-2 text-right">Commission %</th>
+                      <th className="px-3 py-2 text-right">Confidence</th>
+                      <th className="px-3 py-2">Method</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.items.map((it) => (
+                      <tr key={it.extracted.item_price_credit.txn} className="border-t border-white/5">
+                        <td className="px-3 py-2 text-slate-200">{new Date(it.extracted.date).toLocaleDateString()}</td>
+                        <td className="px-3 py-2 font-medium text-white">{it.extracted.item_price_credit.txn}</td>
+                        <td className="px-3 py-2 text-right text-slate-200">{currency.format(it.computed.netPayout)}</td>
+                        <td className={`px-3 py-2 text-right font-semibold ${it.computed.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                          {currency.format(it.computed.profit)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-200">{it.computed.commissionRatePct.toFixed(1)}%</td>
+                        <td className="px-3 py-2 text-right text-slate-200">{(it.extracted.confidence ?? 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-slate-300">{it.extracted.method}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : (
@@ -363,30 +435,53 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       {lastSaved && (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-6">
           <h3 className="text-lg font-semibold text-white">Saved</h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Txn</p>
-              <p className="mt-1 font-semibold text-white">{lastSaved.itemCreditTxn}</p>
+          {"items" in lastSaved ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Created</p>
+                <p className="mt-1 font-semibold text-white">{lastSaved.createdCount}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Duplicates</p>
+                <p className="mt-1 font-semibold text-slate-100">{lastSaved.duplicateCount}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Failed</p>
+                <p className="mt-1 font-semibold text-slate-100">{lastSaved.failedCount}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Tip</p>
+                <p className="mt-1 text-slate-300">Duplicates are skipped automatically.</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Net payout</p>
-              <p className="mt-1 font-semibold text-emerald-300">{currency.format(lastSaved.netPayout)}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Profit</p>
-              <p className={`mt-1 font-semibold ${lastSaved.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                {currency.format(lastSaved.profit)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Margin %</p>
-              <p className="mt-1 font-semibold text-slate-100">{Number(lastSaved.marginPct ?? 0).toFixed(1)}%</p>
-            </div>
-          </div>
-          <div className="mt-4 text-sm text-slate-300">
-            Week start: <span className="font-semibold text-white">{String(lastSaved.weekStart).slice(0, 10)}</span>{" "}
-            | Trading period key: <span className="font-semibold text-white">{lastSaved.periodKey}</span>
-          </div>
+          ) : (
+            <>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Txn</p>
+                  <p className="mt-1 font-semibold text-white">{lastSaved.itemCreditTxn}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Net payout</p>
+                  <p className="mt-1 font-semibold text-emerald-300">{currency.format(lastSaved.netPayout)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Profit</p>
+                  <p className={`mt-1 font-semibold ${lastSaved.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                    {currency.format(lastSaved.profit)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Margin %</p>
+                  <p className="mt-1 font-semibold text-slate-100">{Number(lastSaved.marginPct ?? 0).toFixed(1)}%</p>
+                </div>
+              </div>
+              <div className="mt-4 text-sm text-slate-300">
+                Week start: <span className="font-semibold text-white">{String(lastSaved.weekStart).slice(0, 10)}</span>{" "}
+                | Trading period key: <span className="font-semibold text-white">{lastSaved.periodKey}</span>
+              </div>
+            </>
+          )}
         </section>
       )}
     </div>
