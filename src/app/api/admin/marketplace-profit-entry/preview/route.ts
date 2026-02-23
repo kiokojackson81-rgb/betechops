@@ -60,15 +60,20 @@ export async function POST(req: NextRequest) {
 
   let extractedList = [] as Awaited<ReturnType<typeof extractProfitTransactions>>;
   let effectiveText = rawText;
-  if (!effectiveText && imageFile) {
-    const buf = Buffer.from(await imageFile.arrayBuffer());
-    const mime = imageFile.type || "image/png";
-    const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
-    const img = await extractProfitTransactionsFromImage({ dataUrl });
-    effectiveText = img.extractedText || effectiveText;
-    extractedList = img.transactions;
-  } else {
-    extractedList = await extractProfitTransactions(effectiveText, { max: 25 });
+  try {
+    if (!effectiveText && imageFile) {
+      const buf = Buffer.from(await imageFile.arrayBuffer());
+      const mime = imageFile.type || "image/png";
+      const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+      const img = await extractProfitTransactionsFromImage({ dataUrl });
+      effectiveText = img.extractedText || effectiveText;
+      extractedList = img.transactions;
+    } else {
+      extractedList = await extractProfitTransactions(effectiveText, { max: 25 });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Preview failed";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   if (extractedList.length === 0) return NextResponse.json({ error: "No transactions detected" }, { status: 400 });

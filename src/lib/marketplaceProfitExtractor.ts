@@ -32,10 +32,32 @@ export const ExtractionSchema = z.object({
   notes: z.array(z.string()).optional(),
 });
 
+const CoercibleExtractionSchema = z.object({
+  date: z.string().optional(),
+  currency: z.string().optional(),
+  item_price_credit: z.union([
+    ExtractionSchema.shape.item_price_credit,
+    z.number(),
+    z.string(),
+    z.null(),
+    z.undefined(),
+  ]),
+  commission: z.union([ExtractionSchema.shape.commission, z.number(), z.string(), z.null(), z.undefined()]),
+  shipping_fee: z.union([ExtractionSchema.shape.shipping_fee, z.number(), z.string(), z.null(), z.undefined()]),
+  confidence: z.union([z.number(), z.string()]).optional(),
+  notes: z.union([z.array(z.string()), z.string()]).optional(),
+});
+
 const ImageBatchSchema = z.object({
   extracted_text: z.string().optional(),
   transactions: z.array(ExtractionSchema).min(1),
   notes: z.array(z.string()).optional(),
+});
+
+const CoercibleImageBatchSchema = z.object({
+  extracted_text: z.string().optional(),
+  transactions: z.array(CoercibleExtractionSchema).min(1),
+  notes: z.union([z.array(z.string()), z.string()]).optional(),
 });
 
 function normalizePositive(amount: number): number {
@@ -53,6 +75,82 @@ function parseDateISO(value: string): Date | null {
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) return parsed;
   return null;
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function parseLooseNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/,/g, "").trim();
+    const n = Number(cleaned);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function safeRegexParsed(transactionText: string) {
+  try {
+    return parseMarketplaceProfitTransaction(transactionText);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeFromLooseJson(json: unknown, transactionText: string): ProfitExtraction {
+  const loose = CoercibleExtractionSchema.parse(json);
+  const fallback = safeRegexParsed(transactionText);
+
+  const dateStr = (loose.date ?? "").trim();
+  const date = (dateStr && parseDateISO(dateStr)) || fallback?.date || null;
+  if (!date) throw new Error("OpenAI could not extract a valid date");
+
+  const itemCredit =
+    typeof loose.item_price_credit === "object" && loose.item_price_credit
+      ? loose.item_price_credit
+      : {
+          amount: parseLooseNumber(loose.item_price_credit) ?? fallback?.itemCreditAmount ?? NaN,
+          txn: fallback?.itemCreditTxn ?? "",
+        };
+
+  const commission =
+    typeof loose.commission === "object" && loose.commission
+      ? loose.commission
+      : {
+          amount: parseLooseNumber(loose.commission) ?? fallback?.commissionAmount ?? NaN,
+          txn: fallback?.commissionTxn ?? "",
+        };
+
+  const shipping =
+    typeof loose.shipping_fee === "object" && loose.shipping_fee
+      ? loose.shipping_fee
+      : {
+          amount: parseLooseNumber(loose.shipping_fee) ?? fallback?.shippingAmount ?? NaN,
+          txn: fallback?.shippingTxn ?? "",
+        };
+
+  const confidenceRaw = parseLooseNumber(loose.confidence);
+  const confidence = clamp01(confidenceRaw ?? 0.5);
+
+  const notes = Array.isArray(loose.notes) ? loose.notes : typeof loose.notes === "string" && loose.notes.trim() ? [loose.notes.trim()] : [];
+
+  const currency: "KES" = "KES";
+
+  return {
+    method: "openai",
+    date,
+    currency,
+    itemPriceCredit: { amount: normalizePositive(Number(itemCredit.amount)), txn: String(itemCredit.txn ?? "").trim() },
+    commission: { amount: normalizeNegative(Number(commission.amount)), txn: String(commission.txn ?? "").trim() },
+    shippingFee: { amount: normalizeNegative(Number(shipping.amount)), txn: String(shipping.txn ?? "").trim() },
+    confidence,
+    notes,
+  };
 }
 
 export function tryRegexExtraction(transactionText: string): ProfitExtraction | null {
@@ -159,6 +257,21 @@ export async function extractProfitTransactionWithOpenAI(transactionText: string
           "Commission and shipping must be negative numbers.",
           "Return STRICT JSON only with keys: date,currency,shipping_fee,commission,item_price_credit,confidence,notes.",
           "",
+          "Example shape (do not include this example in output):",
+          JSON.stringify(
+            {
+              date: "2026-02-15",
+              currency: "KES",
+              item_price_credit: { amount: 12345, txn: "T260215XXXX" },
+              commission: { amount: -234, txn: "T260215YYYY" },
+              shipping_fee: { amount: -120, txn: "T260215ZZZZ" },
+              confidence: 0.9,
+              notes: ["..."],
+            },
+            null,
+            2,
+          ),
+          "",
           "Text:",
           transactionText,
         ].join("\n"),
@@ -174,23 +287,28 @@ export async function extractProfitTransactionWithOpenAI(transactionText: string
     throw new Error("OpenAI returned invalid JSON");
   }
 
-  const data = ExtractionSchema.parse(json);
-  const date = parseDateISO(data.date);
-  if (!date) throw new Error("OpenAI could not extract a valid date");
+  try {
+    const data = ExtractionSchema.parse(json);
+    const date = parseDateISO(data.date);
+    if (!date) throw new Error("OpenAI could not extract a valid date");
 
-  const confidence = typeof data.confidence === "number" ? data.confidence : 0.5;
-  const notes = Array.isArray(data.notes) ? data.notes : [];
+    const confidence = typeof data.confidence === "number" ? clamp01(data.confidence) : 0.5;
+    const notes = Array.isArray(data.notes) ? data.notes : [];
 
-  return {
-    method: "openai",
-    date,
-    currency: "KES",
-    itemPriceCredit: { amount: normalizePositive(data.item_price_credit.amount), txn: data.item_price_credit.txn },
-    commission: { amount: normalizeNegative(data.commission.amount), txn: data.commission.txn },
-    shippingFee: { amount: normalizeNegative(data.shipping_fee.amount), txn: data.shipping_fee.txn },
-    confidence,
-    notes,
-  };
+    return {
+      method: "openai",
+      date,
+      currency: "KES",
+      itemPriceCredit: { amount: normalizePositive(data.item_price_credit.amount), txn: data.item_price_credit.txn },
+      commission: { amount: normalizeNegative(data.commission.amount), txn: data.commission.txn },
+      shippingFee: { amount: normalizeNegative(data.shipping_fee.amount), txn: data.shipping_fee.txn },
+      confidence,
+      notes,
+    };
+  } catch {
+    // Some model outputs come back with incorrect types; coerce + rehydrate missing txns from regex where possible.
+    return normalizeFromLooseJson(json, transactionText);
+  }
 }
 
 export async function extractProfitTransaction(transactionText: string): Promise<ProfitExtraction> {
@@ -270,27 +388,35 @@ export async function extractProfitTransactionsFromImage(input: {
     throw new Error("OpenAI returned invalid JSON");
   }
 
-  const data = ImageBatchSchema.parse(json);
-  const extractedText = (data.extracted_text ?? "").trim();
-  const topNotes = Array.isArray(data.notes) ? data.notes : [];
+  try {
+    const data = ImageBatchSchema.parse(json);
+    const extractedText = (data.extracted_text ?? "").trim();
+    const topNotes = Array.isArray(data.notes) ? data.notes : [];
 
-  const transactions: ProfitExtraction[] = data.transactions.map((t) => {
-    const date = parseDateISO(t.date);
-    if (!date) throw new Error("OpenAI could not extract a valid date");
-    const confidence = typeof t.confidence === "number" ? t.confidence : 0.5;
-    const notes = Array.isArray(t.notes) ? t.notes : [];
+    const transactions: ProfitExtraction[] = data.transactions.map((t) => {
+      const date = parseDateISO(t.date);
+      if (!date) throw new Error("OpenAI could not extract a valid date");
+      const confidence = typeof t.confidence === "number" ? clamp01(t.confidence) : 0.5;
+      const notes = Array.isArray(t.notes) ? t.notes : [];
 
-    return {
-      method: "openai",
-      date,
-      currency: "KES",
-      itemPriceCredit: { amount: normalizePositive(t.item_price_credit.amount), txn: t.item_price_credit.txn },
-      commission: { amount: normalizeNegative(t.commission.amount), txn: t.commission.txn },
-      shippingFee: { amount: normalizeNegative(t.shipping_fee.amount), txn: t.shipping_fee.txn },
-      confidence,
-      notes,
-    };
-  });
+      return {
+        method: "openai",
+        date,
+        currency: "KES",
+        itemPriceCredit: { amount: normalizePositive(t.item_price_credit.amount), txn: t.item_price_credit.txn },
+        commission: { amount: normalizeNegative(t.commission.amount), txn: t.commission.txn },
+        shippingFee: { amount: normalizeNegative(t.shipping_fee.amount), txn: t.shipping_fee.txn },
+        confidence,
+        notes,
+      };
+    });
 
-  return { extractedText, transactions, notes: topNotes };
+    return { extractedText, transactions, notes: topNotes };
+  } catch {
+    const data = CoercibleImageBatchSchema.parse(json);
+    const extractedText = (data.extracted_text ?? "").trim();
+    const topNotes = Array.isArray(data.notes) ? data.notes : typeof data.notes === "string" && data.notes.trim() ? [data.notes.trim()] : [];
+    const transactions = data.transactions.map((t) => normalizeFromLooseJson(t, extractedText || ""));
+    return { extractedText, transactions, notes: topNotes };
+  }
 }
