@@ -118,6 +118,7 @@ type Props = {
   refreshSignal?: number;
   scope?: "mine" | "global";
   onlyPos?: boolean;
+  includeLedger?: boolean;
 };
 
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
@@ -329,12 +330,14 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
 };
 export default function ReceiptsAdminClient({
   initial = [],
-  allowEdit,
+  allowEdit = false,
   onSummaryChange,
   refreshSignal = 0,
   scope,
   onlyPos = false,
+  includeLedger = true,
 }: Props) {
+  const ledgerEnabled = onlyPos ? false : includeLedger;
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -478,6 +481,7 @@ export default function ReceiptsAdminClient({
         params.set("scope", scopeMode);
         if (onlyPos) params.set("onlyPos", "1");
         if (summaryView === "profit") params.set("summaryView", "profit");
+        if (!ledgerEnabled) params.set("includeLedger", "false");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -494,7 +498,7 @@ export default function ReceiptsAdminClient({
         if (!opts?.silent) setLoading(false);
       }
     },
-    [appliedFilters, scopeMode, onlyPos, summaryView],
+    [appliedFilters, scopeMode, onlyPos, ledgerEnabled, summaryView],
   );
 
   useEffect(() => {
@@ -536,6 +540,7 @@ export default function ReceiptsAdminClient({
       }
       params.set("scope", scopeMode);
       if (onlyPos) params.set("onlyPos", "1");
+      if (!ledgerEnabled) params.set("includeLedger", "false");
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -567,7 +572,7 @@ export default function ReceiptsAdminClient({
     } finally {
       setSummaryLoading(false);
     }
-  }, [appliedFilters, scopeMode, onlyPos]);
+  }, [appliedFilters, scopeMode, onlyPos, ledgerEnabled]);
 
   const handleTriggerSummary = useCallback(async () => {
     if (triggerSummaryLoading) return;
@@ -1158,6 +1163,7 @@ export default function ReceiptsAdminClient({
         base.set("scope", scopeMode);
         if (onlyPos) base.set("onlyPos", "1");
         base.set("customerType", "pod");
+        if (!ledgerEnabled) base.set("includeLedger", "false");
 
         const fetchOne = async (status?: string) => {
           const params = new URLSearchParams(base);
@@ -1199,6 +1205,7 @@ export default function ReceiptsAdminClient({
     appliedFilters.q,
     scopeMode,
     onlyPos,
+    ledgerEnabled,
   ]);
 
   const podStats = useMemo(() => {

@@ -35,9 +35,11 @@ describe('admin receipts summary', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const req: any = { url: `http://localhost/api/admin/receipts/summary?start=${encodeURIComponent(
-      start,
-    )}&end=${encodeURIComponent(end)}` };
+    const req: any = {
+      url: `http://localhost/api/admin/receipts/summary?start=${encodeURIComponent(start)}&end=${encodeURIComponent(
+        end,
+      )}&includeLedger=true`,
+    };
 
     const res = await GET(req as any);
     expect(res).toBeDefined();
@@ -57,11 +59,9 @@ describe('admin receipts summary', () => {
     const orderNumber = 'Betech-20260203-54502';
 
     (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
-    (prisma as any).supportReceipt.findMany
-      .mockResolvedValueOnce([]) // support receipts payload
-      .mockResolvedValueOnce([
-        { receiptKey: buildReceiptKey(orderNumber), buyingTotal: 2500 },
-      ]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValueOnce([
+      { receiptKey: buildReceiptKey(orderNumber), buyingTotal: 2500 },
+    ]);
 
     (prisma as any).receipt.findMany.mockResolvedValue([
       {

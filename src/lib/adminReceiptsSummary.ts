@@ -158,6 +158,7 @@ async function computePosOnlyReceiptSummary({
   paymentMethod,
   search,
   docType,
+  includeLedger = false,
   scope = "global",
   currentUserId,
   customerType,

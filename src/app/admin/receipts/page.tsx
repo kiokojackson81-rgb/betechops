@@ -18,7 +18,7 @@ export default async function AdminReceiptsPage() {
     const apiUrl = await absUrl("/api/receipts");
     const incomingHeaders = await headers();
     const cookieHeader = incomingHeaders.get("cookie") ?? undefined;
-    const res = await fetch(withParams(apiUrl, { includeItems: true, scope: "global", onlyPos: "1" }), {
+    const res = await fetch(withParams(apiUrl, { includeItems: true, scope: "global", onlyPos: "1", includeLedger: false }), {
       cache: "no-store",
       headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     });
@@ -27,7 +27,7 @@ export default async function AdminReceiptsPage() {
     return (
       <main className="min-h-screen w-full bg-slate-950 text-slate-100">
         <div className="w-full px-4 py-6 lg:px-8 xl:px-12">
-          <ReceiptsAdminClient initial={receipts} allowEdit scope="global" onlyPos />
+          <ReceiptsAdminClient initial={receipts} allowEdit scope="global" onlyPos includeLedger={false} />
         </div>
       </main>
     );

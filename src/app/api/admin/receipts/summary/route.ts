@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   const paymentMethod = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const docType = url.searchParams.get("docType") || undefined;
   const search = url.searchParams.get("q") || undefined;
+  const includeLedgerParam = url.searchParams.get("includeLedger");
+  const includeLedger = includeLedgerParam === null ? undefined : includeLedgerParam !== "false";
   const scopeParam = url.searchParams.get("scope");
   const scope = scopeParam === "global" ? "global" : "mine";
   const period = getTradingPeriodFor(new Date());
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
       paymentMethod,
       docType,
       search,
+      includeLedger,
       scope,
       currentUserId: userId,
       customerType,
