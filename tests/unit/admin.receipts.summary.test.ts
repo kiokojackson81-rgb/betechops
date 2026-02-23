@@ -72,6 +72,7 @@ describe('admin receipts summary', () => {
         order: {
           orderNumber,
           totalAmount: 5000,
+          paymentStatus: 'PAID',
           items: [],
         },
       },
