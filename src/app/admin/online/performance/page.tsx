@@ -46,6 +46,7 @@ export default async function OnlinePerformancePage({
   let perWeekLossCount: any[] = [];
   let dbReady = true;
   let isLossColumnReady = true;
+  let accountIdColumnReady = true;
   try {
     [perWeekAgg, perWeekLossCount] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.groupBy({
@@ -73,6 +74,7 @@ export default async function OnlinePerformancePage({
     } else if (err?.code === "P2022") {
       // Backward compatible: database hasn't migrated to include `isLoss` yet.
       isLossColumnReady = false;
+      if (accountId) accountIdColumnReady = false;
       perWeekAgg =
         perWeekAgg.length > 0
           ? perWeekAgg
@@ -80,7 +82,7 @@ export default async function OnlinePerformancePage({
               by: ["weekStart"],
               _sum: { netPayout: true, profit: true },
               _avg: { commissionRatePct: true },
-              where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+              where: { weekStart: { in: weekStarts }, periodKey: period.key },
               orderBy: { weekStart: "asc" },
             });
       perWeekLossCount = await (prisma as any).marketplaceProfitEntry.groupBy({
@@ -90,7 +92,6 @@ export default async function OnlinePerformancePage({
           weekStart: { in: weekStarts },
           periodKey: period.key,
           profit: { lt: 0 },
-          ...(accountId ? { accountId } : {}),
         },
         orderBy: { weekStart: "asc" },
       });
@@ -196,6 +197,11 @@ export default async function OnlinePerformancePage({
         {dbReady && !isLossColumnReady && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Database is missing the `isLoss` column. Reports are using `profit &lt; 0` fallback until migrations are applied.
+          </div>
+        )}
+        {dbReady && !accountIdColumnReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Database is missing the `accountId` column. Shop filtering is temporarily disabled until migrations are applied.
           </div>
         )}
 

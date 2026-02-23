@@ -1,7 +1,7 @@
 -- Add accountId FK to profit entries and make txn unique per account.
 
 ALTER TABLE "MarketplaceProfitEntry"
-ADD COLUMN "accountId" TEXT NOT NULL;
+ADD COLUMN "accountId" TEXT;
 
 -- Remove old unique index on itemCreditTxn and replace with composite unique.
 DROP INDEX IF EXISTS "MarketplaceProfitEntry_itemCreditTxn_key";

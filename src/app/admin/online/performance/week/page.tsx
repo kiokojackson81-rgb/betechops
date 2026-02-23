@@ -61,6 +61,7 @@ export default async function OnlinePerformanceWeekPage({
   let lossCount = 0;
   let dbReady = true;
   let isLossColumnReady = true;
+  let accountIdColumnReady = true;
   try {
     const [e, a, lc] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.findMany({
@@ -88,19 +89,20 @@ export default async function OnlinePerformanceWeekPage({
       lossCount = 0;
     } else if (err?.code === "P2022") {
       isLossColumnReady = false;
+      if (accountId) accountIdColumnReady = false;
       const [e, a, lc] = await Promise.all([
         (prisma as any).marketplaceProfitEntry.findMany({
-          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key },
           include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
           orderBy: [{ profit: "asc" }, { date: "asc" }],
         }),
         (prisma as any).marketplaceProfitEntry.aggregate({
           _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
           _avg: { commissionRatePct: true, marginPct: true },
-          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key },
         }),
         (prisma as any).marketplaceProfitEntry.count({
-          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 }, ...(accountId ? { accountId } : {}) },
+          where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, profit: { lt: 0 } },
         }),
       ]);
       entries = e;
@@ -200,6 +202,11 @@ export default async function OnlinePerformanceWeekPage({
         {dbReady && !isLossColumnReady && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Database is missing the `isLoss` column. Reports are using `profit &lt; 0` fallback until migrations are applied.
+          </div>
+        )}
+        {dbReady && !accountIdColumnReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Database is missing the `accountId` column. Shop filtering is temporarily disabled until migrations are applied.
           </div>
         )}
         <div className="mt-4 overflow-x-auto">

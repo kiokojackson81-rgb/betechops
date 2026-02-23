@@ -33,6 +33,7 @@ export default async function OnlinePerformanceLossPage({
   let lossEntries: any[] = [];
   let dbReady = true;
   let isLossColumnReady = true;
+  let accountIdColumnReady = true;
   try {
     lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
       where: {
@@ -50,12 +51,12 @@ export default async function OnlinePerformanceLossPage({
       lossEntries = [];
     } else if (err?.code === "P2022") {
       isLossColumnReady = false;
+      if (accountId) accountIdColumnReady = false;
       lossEntries = await (prisma as any).marketplaceProfitEntry.findMany({
         where: {
           periodKey: period.key,
           weekStart: { in: weekStarts },
           profit: { lt: 0 },
-          ...(accountId ? { accountId } : {}),
         },
         include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
         orderBy: [{ profit: "asc" }, { date: "asc" }],
@@ -114,6 +115,11 @@ export default async function OnlinePerformanceLossPage({
         {dbReady && !isLossColumnReady && (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             Database is missing the `isLoss` column. Reports are using `profit &lt; 0` fallback until migrations are applied.
+          </div>
+        )}
+        {dbReady && !accountIdColumnReady && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Database is missing the `accountId` column. Shop filtering is temporarily disabled until migrations are applied.
           </div>
         )}
         <div className="mt-4 overflow-x-auto">

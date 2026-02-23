@@ -120,9 +120,19 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       // Backward compatible: database hasn't migrated to include `isLoss` yet.
       if (err?.code === "P2022") {
-        created = await (prisma as any).marketplaceProfitEntry.create({
-          data: createDataBase,
-        });
+        try {
+          created = await (prisma as any).marketplaceProfitEntry.create({
+            data: createDataBase,
+          });
+        } catch (err2: any) {
+          if (err2?.code === "P2022") {
+            return NextResponse.json(
+              { error: "Profit capture schema is not ready (missing columns). Redeploy to apply migrations, then try again." },
+              { status: 503 },
+            );
+          }
+          throw err2;
+        }
       } else {
         throw err;
       }

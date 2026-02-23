@@ -375,8 +375,8 @@ model MarketplaceProfitEntry {
   /// 25th→24th trading period key at the time of entry.
   periodKey  String
 
-  accountId  String
-  account    MarketplaceAccount @relation(fields: [accountId], references: [id])
+  accountId  String?
+  account    MarketplaceAccount? @relation(fields: [accountId], references: [id])
 
   itemCreditTxn    String
   itemCreditAmount Decimal @db.Decimal(12, 2)
