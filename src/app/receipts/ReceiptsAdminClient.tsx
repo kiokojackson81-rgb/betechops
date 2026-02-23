@@ -1379,7 +1379,7 @@ export default function ReceiptsAdminClient({
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">POD receipts only</p>
-                <p className="text-sm text-slate-300">Dedicated panel for delivered PODs.</p>
+                <p className="text-sm text-slate-300">Paid PODs only (marked via “Mark POD paid”).</p>
               </div>
               <span className="text-xs text-emerald-300">
                 {podPanelLoading ? "Loading..." : podPanelStatus === "all" ? "All" : "Filtered"}
@@ -1400,7 +1400,7 @@ export default function ReceiptsAdminClient({
               <p className="text-2xl font-semibold text-white">{podStats.total}</p>
             </button>
             <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Value</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Paid value</p>
               <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
             </div>
             <button

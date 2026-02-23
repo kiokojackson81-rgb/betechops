@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   const search = url.searchParams.get("q") || undefined;
   const includeLedgerParam = url.searchParams.get("includeLedger");
   const includeLedger = includeLedgerParam === null ? undefined : includeLedgerParam !== "false";
+  const salesOnlyParam = url.searchParams.get("salesOnly");
+  const salesOnly = salesOnlyParam === null ? undefined : salesOnlyParam !== "false";
   const scopeParam = url.searchParams.get("scope");
   const scope = scopeParam === "global" ? "global" : "mine";
   const period = getTradingPeriodFor(new Date());
@@ -35,6 +37,7 @@ export async function GET(request: NextRequest) {
       docType,
       search,
       includeLedger,
+      salesOnly,
       scope,
       currentUserId: userId,
       customerType,

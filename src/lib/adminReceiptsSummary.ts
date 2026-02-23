@@ -159,6 +159,7 @@ async function computePosOnlyReceiptSummary({
   search,
   docType,
   includeLedger = false,
+  salesOnly = true,
   scope = "global",
   currentUserId,
   customerType,
@@ -775,7 +776,6 @@ export async function computeAdminReceiptSummary({
   };
 
   const posReceiptsFinal = (() => {
-
     if (normalizedCustomerType === "pod") {
       const onlyPods = (posReceipts as any[]).filter(isPodReceipt);
       const byStatus = normalizedPodStatus ? onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus) : onlyPods;
