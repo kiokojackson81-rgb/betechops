@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/api";
 import { getBranding } from "@/lib/branding";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { getOrCreateCommissionPeriod, computeJenifferProratedCommission, computeSalesCommissionFromTiers } from "@/lib/commission";
-import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
+import { deriveDefaultCommissionConfigFromUser, getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
@@ -75,7 +75,6 @@ function parseExplicitProfit(receipt: any): number | undefined {
   if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
   return undefined;
 }
-
 const FALLBACK_TIERS = [
   { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
   { minSales: 2_000_000, maxSales: 2_000_000, payoutFlat: 15_000 },
@@ -204,7 +203,7 @@ export async function GET(req: Request) {
 
   const attendant = await prisma.user.findUnique({
     where: { id: attendantId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, attendantCategory: true },
   });
   const attendantName = (attendant?.name ?? attendant?.email ?? attendantId).toString();
   const attendantEmail = attendant?.email ?? null;
@@ -496,8 +495,33 @@ export async function GET(req: Request) {
   const totalSales = rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0);
   const totalProfit = filteredReceipts.reduce((sum: number, r: any) => sum + computeReceiptProfitFromCosts(r).profit, 0);
 
-  const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
-  const { tiers } = await getOrCreateCommissionPeriod(startParam);
+  // `UserCommissionConfig` may not exist yet on some production databases.
+  // Fall back to derived defaults if the table is missing.
+  let commissionConfig: { salesCommissionMode: string } = { salesCommissionMode: "DEFAULT_TIERS" };
+  try {
+    commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
+  } catch (err: any) {
+    if (err?.code === "P2021") {
+      commissionConfig = deriveDefaultCommissionConfigFromUser({
+        email: attendantEmail,
+        attendantCategory: (attendant as any)?.attendantCategory ?? null,
+      }) as any;
+    } else {
+      throw err;
+    }
+  }
+
+  let tiers: Array<{ minSales: number; maxSales: number | null; payoutFlat: number }> = FALLBACK_TIERS;
+  try {
+    const res = await getOrCreateCommissionPeriod(startParam);
+    tiers = res.tiers.map((t) => ({
+      minSales: Number(t.minSales),
+      maxSales: t.maxSales == null ? null : Number(t.maxSales),
+      payoutFlat: Number(t.payoutFlat),
+    }));
+  } catch (err: any) {
+    if (err?.code !== "P2021") throw err;
+  }
 
   let commissionKes = 0;
   if (commissionConfig.salesCommissionMode === "BRENDAH_DIRECT") {
@@ -505,11 +529,7 @@ export async function GET(req: Request) {
   } else if (commissionConfig.salesCommissionMode === "JENIFFER_PRORATED") {
     const res = computeJenifferProratedCommission(
       totalSales,
-      tiers.map((t) => ({
-        minSales: Number(t.minSales),
-        maxSales: t.maxSales == null ? null : Number(t.maxSales),
-        payoutFlat: Number(t.payoutFlat),
-      })),
+      tiers,
     );
     commissionKes = Math.round(Number(res.commission ?? 0));
   } else {
