@@ -1157,8 +1157,7 @@ export default function ReceiptsAdminClient({
     qs.set("attendantId", attendantId);
     qs.set("start", startParam);
     qs.set("end", endParam);
-    // POS direct sales report defaults to RECEIPT; keep it explicit.
-    qs.set("docType", "RECEIPT");
+    if (appliedFilters.docType) qs.set("docType", appliedFilters.docType);
 
     const url = `/api/admin/receipts/pos-direct-sales-pdf?${qs.toString()}`;
     window.open(url, "_blank", "noopener,noreferrer");

@@ -166,9 +166,12 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const attendantId = (url.searchParams.get("attendantId") || "").trim();
-  const startParam = parseDateParam(url.searchParams.get("start"));
-  const endParam = parseDateParam(url.searchParams.get("end"));
-  const docType = (url.searchParams.get("docType") || "RECEIPT").toUpperCase();
+  const rawStart = url.searchParams.get("start");
+  const rawEnd = url.searchParams.get("end");
+  const startParam = parseDateParam(rawStart);
+  const endParam = parseDateParam(rawEnd);
+  const docTypeParam = (url.searchParams.get("docType") || "").trim();
+  const docType = docTypeParam ? docTypeParam.toUpperCase() : null;
 
   if (!attendantId) {
     return NextResponse.json({ error: "Missing attendantId" }, { status: 400 });
@@ -262,8 +265,8 @@ export async function GET(req: Request) {
       : null;
 
   const title = `${attendantName} POS direct sales report`;
-  const startIso = startParam.toISOString().slice(0, 10);
-  const endIso = endParam.toISOString().slice(0, 10);
+  const startIso = (rawStart && rawStart.length >= 10 ? rawStart.slice(0, 10) : startParam.toISOString().slice(0, 10));
+  const endIso = (rawEnd && rawEnd.length >= 10 ? rawEnd.slice(0, 10) : endParam.toISOString().slice(0, 10));
   const html = renderHtml({
     title,
     attendantName,
