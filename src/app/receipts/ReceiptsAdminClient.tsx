@@ -1138,6 +1138,31 @@ export default function ReceiptsAdminClient({
       setExporting(false);
     }
   };
+
+  const handleDownloadPosPdf = () => {
+    const attendantId = appliedFilters.attendantId?.trim();
+    if (!attendantId) {
+      showToast("Select staff first to download a POS report.", "warn");
+      return;
+    }
+
+    const startParam = buildDateParam(appliedFilters.start, false);
+    const endParam = buildDateParam(appliedFilters.end, true);
+    if (!startParam || !endParam) {
+      showToast("Select a valid date range first.", "warn");
+      return;
+    }
+
+    const qs = new URLSearchParams();
+    qs.set("attendantId", attendantId);
+    qs.set("start", startParam);
+    qs.set("end", endParam);
+    // POS direct sales report defaults to RECEIPT; keep it explicit.
+    qs.set("docType", "RECEIPT");
+
+    const url = `/api/admin/receipts/pos-direct-sales-pdf?${qs.toString()}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
   const [podPanelSummary, setPodPanelSummary] = useState<{
     all: { count: number; value: number };
     delivered: { count: number; value: number };
@@ -1586,6 +1611,15 @@ export default function ReceiptsAdminClient({
             disabled={exporting}
           >
             {exporting ? "Preparing CSV..." : "Export CSV"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPosPdf}
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-50"
+            disabled={!appliedFilters.attendantId}
+            title={!appliedFilters.attendantId ? "Select a staff member first" : "Download POS direct sales report (PDF)"}
+          >
+            Download POS PDF
           </button>
         </div>
       </section>
