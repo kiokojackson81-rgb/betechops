@@ -187,6 +187,27 @@ export async function GET(req: Request) {
   const attendantName = (attendant?.name ?? attendant?.email ?? attendantId).toString();
   const attendantEmail = attendant?.email ?? null;
 
+  const ownerOr: Prisma.ReceiptWhereInput[] = [
+    { issuedById: attendantId },
+    { order: { attendantId } },
+    { data: { path: ["attendantId"], equals: attendantId } as any },
+    { data: { path: ["servedBy"], equals: attendantId } as any },
+    { data: { path: ["servedById"], equals: attendantId } as any },
+    { data: { path: ["issuedById"], equals: attendantId } as any },
+    { order: { metadata: { path: ["attendantId"], equals: attendantId } as any } },
+    { order: { metadata: { path: ["servedBy"], equals: attendantId } as any } },
+    { order: { metadata: { path: ["servedById"], equals: attendantId } as any } },
+  ];
+  if (attendantEmail) {
+    ownerOr.push(
+      { issuedBy: { email: attendantEmail } },
+      { order: { attendant: { email: attendantEmail } } },
+      { data: { path: ["attendantEmail"], equals: attendantEmail } as any },
+      { data: { path: ["servedByEmail"], equals: attendantEmail } as any },
+      { data: { path: ["issuedByEmail"], equals: attendantEmail } as any },
+    );
+  }
+
   // Load receipts directly from POS Receipt table.
   const receipts = await prisma.receipt.findMany({
     where: {
@@ -194,11 +215,7 @@ export async function GET(req: Request) {
       ...(docType ? { docType: docType as any } : {}),
       AND: [
         {
-          OR: [
-            { issuedById: attendantId },
-            { order: { attendantId } },
-            { data: { path: ["attendantId"], equals: attendantId } },
-          ],
+          OR: ownerOr,
         },
       ],
       // Exclude POD-pending receipts.
