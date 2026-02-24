@@ -10,7 +10,13 @@ export default function QuickStats() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/reports/summary?scope=attendant", { cache: "no-store" });
+      let url = "/api/reports/summary?scope=attendant";
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const imp = params.get("impersonateId");
+        if (imp) url += `&impersonateId=${encodeURIComponent(imp)}`;
+      }
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load quick stats");
       const data = await res.json().catch(() => null);
       if (data?.quickStats) setStats(data.quickStats as QuickStatsPayload);
