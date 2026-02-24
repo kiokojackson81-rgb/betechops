@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getBranding } from "@/lib/branding";
+import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 
 export const runtime = "nodejs";
@@ -126,41 +127,25 @@ function renderHtml(opts: {
 }
 
 async function launchBrowser() {
-  // Prefer full puppeteer (local/dev). If unavailable, attempt serverless
-  // chrome-aws-lambda + puppeteer-core.
-  let puppeteer: any = null;
+  // Prefer full puppeteer for local/dev. If chromium isn't available (e.g. Vercel
+  // pnpm ignores install scripts), fall back to puppeteer-core + @sparticuz/chromium.
   try {
-    puppeteer = await import("puppeteer");
-  } catch {
-    puppeteer = null;
+    const mod = await import("puppeteer").catch(() => null);
+    const puppeteer = (mod && (mod as any).default) ? (mod as any).default : mod;
+    if (puppeteer) {
+      return await puppeteer.launch({
+        headless: true,
+        defaultViewport: { width: 1200, height: 800 },
+      });
+    }
+  } catch (err) {
+    console.warn("[attendant-performance-pdf] puppeteer launch failed; falling back", err);
   }
 
-  if (puppeteer) {
-    return puppeteer.launch({
-      headless: true,
-      defaultViewport: { width: 1200, height: 800 },
-    });
-  }
-
   try {
-    const chromeModuleName = "chrome-" + "aws" + "-lambda";
-    const puppeteerCoreName = "puppeteer-" + "core";
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const chromium = await (Function("m", "return import(m)"))(chromeModuleName);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const pcore = await (Function("m", "return import(m)"))(puppeteerCoreName);
-
-    const executablePathFn = chromium && chromium.executablePath ? chromium.executablePath : undefined;
-    const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
-    const execPath = executablePathFn ? await executablePathFn() : undefined;
-
-    return pcore.launch({
-      args,
-      defaultViewport: { width: 1200, height: 800 },
-      executablePath: execPath,
-      headless: true,
-    });
-  } catch {
+    return await launchChromiumBrowser();
+  } catch (err) {
+    console.error("[attendant-performance-pdf] chromium launch failed", err);
     return null;
   }
 }
@@ -270,4 +255,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }
-
