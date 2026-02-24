@@ -339,6 +339,26 @@ export default function DailyReportFinal() {
         }
         const data = await res.json().catch(() => null);
         if (!data) return null;
+
+        const meta = (data as any)?.meta;
+        const actorRole = meta?.actorRole;
+        const metaImpersonateId = meta?.impersonateId;
+        const actorId = meta?.actorId;
+        const resolvedUserId = meta?.resolvedUserId;
+        const isAdminViewingSelf =
+          actorRole === "ADMIN" &&
+          !metaImpersonateId &&
+          actorId &&
+          resolvedUserId &&
+          actorId === resolvedUserId;
+        if (isAdminViewingSelf && !earningsWarningShown.current) {
+          showToast(
+            "No impersonation selected. Use the 'Open dashboard' link from Admin → Attendants (should include ?impersonateId=...).",
+            "warn",
+          );
+          earningsWarningShown.current = true;
+        }
+
         setEarningsError(null);
         setEarningsSummary(data);
         const nextAttendantEmail =
