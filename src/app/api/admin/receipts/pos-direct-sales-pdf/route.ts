@@ -221,16 +221,24 @@ export async function GET(req: Request) {
         OR: ownerOr,
       },
     ],
-    // Exclude POD-pending receipts.
-    // Note: Use Prisma.JsonNull (not JS null) when querying JSON paths.
-    OR: [
-      { data: { path: ["podDelivery"], equals: Prisma.JsonNull } as any },
-      { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } as any },
-    ],
   } as any;
 
+  const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+  const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
+  const isPosPaid = (r: any) => {
+    const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
+    if (!paymentStatus) return false;
+    return paymentStatus === "PAID";
+  };
+  const shouldIncludeForSales = (r: any) => {
+    // Mirror the admin summary logic: only include paid receipts by default.
+    if (isPodReceipt(r)) return isPodPaid(r);
+    return isPosPaid(r);
+  };
+
   if (debug) {
-    const [count, sample] = await Promise.all([
+    const [rawCount, rawSample] = await Promise.all([
       prisma.receipt.count({ where: receiptWhere }),
       prisma.receipt.findMany({
         where: receiptWhere,
@@ -243,17 +251,27 @@ export async function GET(req: Request) {
           receiptNumber: true,
           issuedById: true,
           data: true,
-          order: { select: { orderNumber: true, attendantId: true } },
+          order: { select: { orderNumber: true, attendantId: true, paymentStatus: true, totalAmount: true } },
         },
       }),
     ]);
+    const filteredSample = rawSample.filter(shouldIncludeForSales);
     return NextResponse.json({
       ok: true,
       attendant: { id: attendantId, name: attendantName, email: attendantEmail },
       range: { start: startParam.toISOString(), end: endParam.toISOString() },
       docType,
-      count,
-      sample,
+      rawCount,
+      filteredCountInSample: filteredSample.length,
+      sample: rawSample,
+      filteredSample,
+      sampleBreakdown: {
+        pod: rawSample.filter(isPodReceipt).length,
+        podPending: rawSample.filter((r) => isPodReceipt(r) && podStatusOf(r) === "pending").length,
+        podPaid: rawSample.filter((r) => isPodReceipt(r) && isPodPaid(r)).length,
+        nonPod: rawSample.filter((r) => !isPodReceipt(r)).length,
+        nonPodPaid: rawSample.filter((r) => !isPodReceipt(r) && isPosPaid(r)).length,
+      },
     });
   }
 
@@ -262,12 +280,14 @@ export async function GET(req: Request) {
       ...receiptWhere,
     } as any,
     include: {
-      order: { select: { orderNumber: true, customerName: true, totalAmount: true } },
+      order: { select: { orderNumber: true, customerName: true, totalAmount: true, paymentStatus: true } },
     },
     orderBy: { generatedAt: "asc" },
   });
 
-  const rows = receipts.map((r: any) => {
+  const filteredReceipts = receipts.filter(shouldIncludeForSales);
+
+  const rows = filteredReceipts.map((r: any) => {
     const total = extractSales(r);
     const receiptNumber = (r.receiptNumber ?? r.order?.orderNumber ?? r.id).toString();
     const customerName = (r.order?.customerName ?? r.data?.customerName ?? "").toString() || "—";
@@ -285,7 +305,7 @@ export async function GET(req: Request) {
 
   const receiptCount = rows.length;
   const totalSales = rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0);
-  const totalProfit = receipts.reduce((sum: number, r: any) => sum + extractProfit(r, extractSales(r)), 0);
+  const totalProfit = filteredReceipts.reduce((sum: number, r: any) => sum + extractProfit(r, extractSales(r)), 0);
 
   const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
   const { tiers } = await getOrCreateCommissionPeriod(startParam);
