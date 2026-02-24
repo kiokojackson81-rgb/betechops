@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { getBranding } from "@/lib/branding";
@@ -197,9 +198,10 @@ export async function GET(req: Request) {
           ],
         },
       ],
+      // Exclude POD-pending receipts.
+      // Note: Use Prisma.JsonNull (not JS null) when querying JSON paths.
       OR: [
-        { data: { path: ["podDelivery"], equals: null } as any },
-        { data: { path: ["podDelivery"], equals: (prisma as any).JsonNull } as any },
+        { data: { path: ["podDelivery"], equals: Prisma.JsonNull } as any },
         { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } as any },
       ],
     } as any,
@@ -291,4 +293,3 @@ export async function GET(req: Request) {
     },
   });
 }
-
