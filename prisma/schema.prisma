@@ -25,6 +25,7 @@ model User {
   attendantCompPlan                    AttendantCompPlan?
   attendantPayrollAdjustments          AttendantPayrollAdjustment[]
   balance                              Balance?
+  commissionConfig                     UserCommissionConfig?
   commissionEarnings                   CommissionEarning[]
   commissionRecords                    CommissionRecord[]
   dailyReports                         DailyReport[]
@@ -96,6 +97,16 @@ model AttendantPayrollAdjustment {
   attendant      User                  @relation(fields: [attendantId], references: [id])
 
   @@index([attendantId, periodKey])
+}
+
+model UserCommissionConfig {
+  id                  String               @id @default(cuid())
+  userId              String               @unique
+  posTotalsMode       PosTotalsMode        @default(NONE)
+  salesCommissionMode SalesCommissionMode  @default(DEFAULT_TIERS)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyReport {
@@ -1402,6 +1413,18 @@ enum PayrollAdjustmentType {
 enum PayrollAdjustmentKind {
   ADDITION
   DEDUCTION
+}
+
+enum PosTotalsMode {
+  NONE
+  USER
+  GLOBAL
+}
+
+enum SalesCommissionMode {
+  DEFAULT_TIERS
+  JENIFFER_PRORATED
+  BRENDAH_DIRECT
 }
 
 enum AttendantCategory {

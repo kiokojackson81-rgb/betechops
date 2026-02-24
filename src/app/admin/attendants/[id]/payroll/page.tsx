@@ -9,6 +9,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,7 @@ export default async function PayrollPage({
   // back to the older marketing earnings helper if needed.
   let summary: any = null;
   try {
+    const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
     const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
     const ledgerDetail = currentLedgerRaw?.detail as Record<string, any> | undefined;
     const marketingCommissionValue =
@@ -72,7 +74,7 @@ export default async function PayrollPage({
     const supportCommissionValue =
       ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
 
-    const isJeniffer = (attendant?.email ?? "").toLowerCase() === "jeniffer@betech.co.ke";
+    const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
 
     // For Jeniffer we must prefer the computed `userSummary.salesCommission`
     // and not allow persisted ledger values to overwrite it. For other
@@ -116,10 +118,8 @@ export default async function PayrollPage({
       commission: grossCommission,
       sales: userSummary.totalSales,
     };
-    // expose jenifferProgress to client for UI display when applicable
-    if (isJeniffer) {
-      (summary as any).jenifferProgress = (userSummary as any).jenifferProgress ?? null;
-    }
+    // expose jenifferProgress to client for UI display when present
+    (summary as any).jenifferProgress = (userSummary as any).jenifferProgress ?? null;
   } catch (e) {
     // fallback to existing implementation if the new helper fails for any reason
     try {

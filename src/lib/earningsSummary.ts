@@ -5,6 +5,7 @@ import { computeDirectCommission, computeBrendahDirectCommission } from "./onlin
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -108,6 +109,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     select: { email: true, attendantCategory: true },
   });
   const normalizedEmail = (user?.email ?? "").toLowerCase();
+  const commissionConfig = await getUserCommissionConfigLike(opts.userId);
   const marketingSummary = await summarizeMarketingReportsForPeriod({
     userId: opts.userId,
     userEmail: user?.email ?? null,
@@ -146,26 +148,13 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     mergedItems += v.items ?? 0;
   }
 
-  const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
-  // Treat all DIRECT_SALES_OPS attendants like Jeniffer for sales source-of-truth:
-  // use POS receipts scoped to the user rather than self-reported marketing rows.
-  const isDirectSalesOps = user?.attendantCategory === "DIRECT_SALES_OPS";
-  const isBrendah = normalizedEmail === "brendah@betech.co.ke";
-  // POS receipts are the source-of-truth for DIRECT_SALES_OPS and for specific
-  // attendants. For Brendah, prefer POS receipts when present; otherwise fall
-  // back to merged marketing/support totals so the dashboard doesn't show 0
-  // when there are no POS receipts in the selected period.
-  const shouldFetchPosTotals = isJeniffer || isDirectSalesOps || isBrendah;
+  const usePosTotals = commissionConfig.posTotalsMode !== "NONE";
+  const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
+  const isBrendah = commissionConfig.salesCommissionMode === "BRENDAH_DIRECT";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
-  if (shouldFetchPosTotals) {
-    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: opts.userId });
-  }
-
-  const usePosTotals =
-    isJeniffer ||
-    isDirectSalesOps ||
-    (isBrendah && Number(posSummary?.totalSales ?? 0) > 0);
-
+  if (usePosTotals) {
+    const userIdForPos = commissionConfig.posTotalsMode === "GLOBAL" ? null : opts.userId;
+    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: userIdForPos });
   if (usePosTotals && posSummary) {
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;

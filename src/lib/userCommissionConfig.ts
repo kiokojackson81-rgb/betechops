@@ -18,9 +18,14 @@ export function deriveDefaultCommissionConfigFromUser(user: {
   attendantCategory?: string | null;
 }): UserCommissionConfigLike {
   const email = (user.email ?? "").toLowerCase().trim();
-  const attendantCategory = (user.attendantCategory ?? "").toString();
+  const attendantCategory = (user.attendantCategory ?? "").toString().trim();
 
-  const posTotalsMode: PosTotalsMode = attendantCategory ? "USER" : "NONE";
+  const posTotalsMode: PosTotalsMode =
+    email === "jeniffer@betech.co.ke"
+      ? "GLOBAL"
+      : attendantCategory === "DIRECT_SALES_OPS"
+        ? "USER"
+        : "NONE";
 
   const salesCommissionMode: SalesCommissionMode =
     email === "jeniffer@betech.co.ke"

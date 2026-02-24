@@ -9,7 +9,7 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from '@prisma/client';
+import { Prisma } from "@prisma/client";
 import { nowInNairobi } from "@/lib/timezone";
 import { type PosReceiptSummary } from "@/lib/posReceiptSummary";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";

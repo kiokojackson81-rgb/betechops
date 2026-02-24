@@ -3,9 +3,8 @@ import { requireRole, getActorId } from "@/lib/api";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
-import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { prisma } from "@/lib/prisma";
-import { nowInNairobi } from "@/lib/timezone";
+import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -43,24 +42,16 @@ export async function GET(req: Request) {
   try {
     const userSummary = await getEarningsSummaryForUser({ userId: attendantId });
 
-    // Load user email to detect Jeniffer special-case so we don't let persisted
-    // CommissionLedger values overwrite her computed sales commission.
-    const attendant = await prisma.user.findUnique({
-      where: { id: attendantId },
-      select: { email: true, attendantCategory: true },
-    });
-    const attendantEmail = (attendant?.email ?? "").toLowerCase().trim();
-    const isJeniffer = attendantEmail === "jeniffer@betech.co.ke";
-    const usePosTotals = isJeniffer || attendant?.attendantCategory === "DIRECT_SALES_OPS";
-    const today = nowInNairobi();
-    const { tiers } = await getOrCreateCommissionPeriod(today);
+    const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
+    const usePosTotals = commissionConfig.posTotalsMode !== "NONE";
     let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
     if (usePosTotals) {
-      posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId: attendantId });
+      const posUserId = commissionConfig.posTotalsMode === "GLOBAL" ? null : attendantId;
+      posSummary = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId: posUserId });
       userSummary.totalSales = posSummary.totalSales;
       userSummary.totalProfit = posSummary.totalProfit;
       // Do NOT override `userSummary.salesCommission` here — `getEarningsSummaryForUser`
-      // already applies Jeniffer's prorated-tier rule and provides `jenifferProgress`.
+      // already applies per-account commission mode and may provide `jenifferProgress`.
     }
 
     const ledger = await prisma.commissionLedger.findUnique({
@@ -73,9 +64,9 @@ export async function GET(req: Request) {
       },
     });
 
-    // If Jeniffer, prefer the computed `userSummary.salesCommission` and
-    // do not apply the CommissionLedger override. For everyone else, prefer
-    // persisted ledger values when present.
+    // If POS totals are in use, prefer the computed `userSummary.salesCommission`
+    // and do not apply the CommissionLedger override. Otherwise, prefer persisted
+    // ledger values when present.
     let salesCommission = 0;
     if (!usePosTotals) {
       const detail = ledger?.detail as Record<string, any> | undefined;

@@ -230,7 +230,7 @@ export default function PayrollClient({
 
   return (
     <div className="space-y-6">
-      {(attendant.email ?? "").toLowerCase() === "jeniffer@betech.co.ke" && summary?.jenifferProgress ? (
+      {summary?.jenifferProgress ? (
         <Card className="border-amber-600/20 bg-amber-900/5">
           <div className="flex items-center justify-between">
             <div>
