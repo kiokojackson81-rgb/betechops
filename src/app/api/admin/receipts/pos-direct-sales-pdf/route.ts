@@ -165,6 +165,7 @@ export async function GET(req: Request) {
   if (!authz.ok) return authz.res;
 
   const url = new URL(req.url);
+  const debug = url.searchParams.get("debug") === "1" || url.searchParams.get("debug") === "true";
   const attendantId = (url.searchParams.get("attendantId") || "").trim();
   const rawStart = url.searchParams.get("start");
   const rawEnd = url.searchParams.get("end");
@@ -197,6 +198,9 @@ export async function GET(req: Request) {
     { order: { metadata: { path: ["attendantId"], equals: attendantId } as any } },
     { order: { metadata: { path: ["servedBy"], equals: attendantId } as any } },
     { order: { metadata: { path: ["servedById"], equals: attendantId } as any } },
+    // Legacy/edge cases: some receipts store only the attendant's name in JSON.
+    { data: { path: ["attendantName"], equals: attendantName } as any },
+    { data: { path: ["issuedByName"], equals: attendantName } as any },
   ];
   if (attendantEmail) {
     ownerOr.push(
@@ -209,21 +213,53 @@ export async function GET(req: Request) {
   }
 
   // Load receipts directly from POS Receipt table.
+  const receiptWhere = {
+    generatedAt: { gte: startParam, lte: endParam },
+    ...(docType ? { docType: docType as any } : {}),
+    AND: [
+      {
+        OR: ownerOr,
+      },
+    ],
+    // Exclude POD-pending receipts.
+    // Note: Use Prisma.JsonNull (not JS null) when querying JSON paths.
+    OR: [
+      { data: { path: ["podDelivery"], equals: Prisma.JsonNull } as any },
+      { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } as any },
+    ],
+  } as any;
+
+  if (debug) {
+    const [count, sample] = await Promise.all([
+      prisma.receipt.count({ where: receiptWhere }),
+      prisma.receipt.findMany({
+        where: receiptWhere,
+        orderBy: { generatedAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          docType: true,
+          generatedAt: true,
+          receiptNumber: true,
+          issuedById: true,
+          data: true,
+          order: { select: { orderNumber: true, attendantId: true } },
+        },
+      }),
+    ]);
+    return NextResponse.json({
+      ok: true,
+      attendant: { id: attendantId, name: attendantName, email: attendantEmail },
+      range: { start: startParam.toISOString(), end: endParam.toISOString() },
+      docType,
+      count,
+      sample,
+    });
+  }
+
   const receipts = await prisma.receipt.findMany({
     where: {
-      generatedAt: { gte: startParam, lte: endParam },
-      ...(docType ? { docType: docType as any } : {}),
-      AND: [
-        {
-          OR: ownerOr,
-        },
-      ],
-      // Exclude POD-pending receipts.
-      // Note: Use Prisma.JsonNull (not JS null) when querying JSON paths.
-      OR: [
-        { data: { path: ["podDelivery"], equals: Prisma.JsonNull } as any },
-        { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } as any },
-      ],
+      ...receiptWhere,
     } as any,
     include: {
       order: { select: { orderNumber: true, customerName: true, totalAmount: true } },
