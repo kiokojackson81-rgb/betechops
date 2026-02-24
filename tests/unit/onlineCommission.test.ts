@@ -1,4 +1,5 @@
 import {
+  computeBrendahDirectCommission,
   computeDirectCommission,
   computeMarketplaceCommission,
   computeOnlinePeriodCommission,
@@ -15,6 +16,12 @@ describe("onlineCommission helpers", () => {
   test("direct progressive band", () => {
     expect(computeDirectCommission(750_000, 0).amount).toBe(5_000);
     expect(computeDirectCommission(1_000_000, 0).amount).toBe(10_000);
+  });
+
+  test("brendah proration 1M-2M", () => {
+    expect(computeBrendahDirectCommission(1_000_000, 0).amount).toBe(10_000);
+    expect(computeBrendahDirectCommission(1_500_000, 0).amount).toBe(17_500);
+    expect(computeBrendahDirectCommission(2_000_000, 0).amount).toBe(25_000);
   });
 
   test("progressiveAmount 3.2M", () => {
@@ -45,5 +52,23 @@ describe("onlineCommission helpers", () => {
     });
 
     expect(result.totalCommission).toBe(12_000);
+  });
+
+  test("period aggregator supports Brendah direct mode", () => {
+    const result = computeOnlinePeriodCommission(
+      {
+        attendantId: "brendah",
+        periodStart: new Date(),
+        periodEnd: new Date(),
+        directSales: 1_500_000,
+        directProfit: 0,
+        jumiaSales: 0,
+        kilimallSales: 0,
+      },
+      { directCommissionMode: "BRENDAH" },
+    );
+
+    expect(result.totalCommission).toBe(17_500);
+    expect(result.lines.find((l) => l.channel === "DIRECT")?.commission).toBe(17_500);
   });
 });

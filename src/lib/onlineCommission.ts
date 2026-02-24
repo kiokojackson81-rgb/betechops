@@ -226,6 +226,10 @@ export function computeOnlinePeriodCommission(
         ? computeDirectProfitShareCommission(inputs.directSales, inputs.directProfit, 0.1)
         : computeDirectCommission(inputs.directSales, inputs.directProfit);
   const sharedFlags = {
+      : directCommissionMode === "PROFIT_10"
+        ? computeDirectProfitShareCommission(inputs.directSales, inputs.directProfit, 0.1)
+        : computeDirectCommission(inputs.directSales, inputs.directProfit);
+  const sharedFlags = {
     abandonedDuties: inputs.abandonedDuties,
     grossMisconduct: inputs.grossMisconduct,
     resignedOrTerminated: inputs.resignedOrTerminated,
