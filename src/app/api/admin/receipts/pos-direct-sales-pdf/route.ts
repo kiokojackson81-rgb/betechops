@@ -7,6 +7,8 @@ import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { getOrCreateCommissionPeriod, computeJenifferProratedCommission, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
+import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { buildReceiptKey } from "@/lib/receiptKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +69,25 @@ function extractProfit(receipt: { totals?: any; data?: any }, sales: number) {
   return 0;
 }
 
+function parseExplicitProfit(receipt: any): number | undefined {
+  const p = receipt?.profit ?? receipt?.data?.profit ?? receipt?.totals?.profit;
+  if (typeof p === "number" && Number.isFinite(p)) return p;
+  if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
+  return undefined;
+}
+
+const FALLBACK_TIERS = [
+  { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
+  { minSales: 2_000_000, maxSales: 2_000_000, payoutFlat: 15_000 },
+  { minSales: 3_000_000, maxSales: 3_000_000, payoutFlat: 20_000 },
+  { minSales: 4_000_000, maxSales: 4_000_000, payoutFlat: 20_000 },
+  { minSales: 5_000_000, maxSales: 5_000_000, payoutFlat: 20_000 },
+  { minSales: 6_000_000, maxSales: 6_000_000, payoutFlat: 20_000 },
+  { minSales: 7_000_000, maxSales: 7_000_000, payoutFlat: 20_000 },
+  { minSales: 8_000_000, maxSales: 8_000_000, payoutFlat: 20_000 },
+  { minSales: 9_000_000, maxSales: 9_000_000, payoutFlat: 20_000 },
+  { minSales: 10_000_000, maxSales: 10_000_000, payoutFlat: 20_000 },
+];
 function renderHtml(opts: {
   title: string;
   attendantName: string;
@@ -280,12 +301,175 @@ export async function GET(req: Request) {
       ...receiptWhere,
     } as any,
     include: {
-      order: { select: { orderNumber: true, customerName: true, totalAmount: true, paymentStatus: true } },
+      order: {
+        select: {
+          orderNumber: true,
+          customerName: true,
+          totalAmount: true,
+          paymentStatus: true,
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+              orderCosts: { select: { unitCost: true } },
+              profitSnapshots: {
+                orderBy: { computedAt: "desc" },
+                take: 1,
+                select: { unitCost: true, profit: true, qty: true },
+              },
+              product: { select: { lastBuyingPrice: true } },
+            },
+          },
+        },
+      },
     },
     orderBy: { generatedAt: "asc" },
   });
 
   const filteredReceipts = receipts.filter(shouldIncludeForSales);
+
+  // Optional fallback costs: latest ProductCost per productId (for receipts missing orderCosts/profitSnapshots).
+  const productCostMap = new Map<string, number>();
+  try {
+    const productIds = new Set<string>();
+    for (const r of filteredReceipts as any[]) {
+      const items = (r?.order?.items ?? []) as any[];
+      for (const it of items) {
+        if (it?.productId) productIds.add(String(it.productId));
+      }
+    }
+    const ids = Array.from(productIds);
+    if (ids.length > 0) {
+      const costs = await prisma.productCost.findMany({
+        where: { productId: { in: ids } },
+        orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
+        distinct: ["productId"],
+        select: { productId: true, price: true },
+      });
+      for (const c of costs) {
+        const n = Number(c.price ?? 0);
+        if (c.productId && Number.isFinite(n) && n > 0) {
+          productCostMap.set(String(c.productId), n);
+        }
+      }
+    }
+  } catch {
+    // Best-effort: ignore productCost lookup failures.
+  }
+
+  // Optional fallback costs: support ledger buying totals (for receipts lacking order costs).
+  const supportBuyingTotals = new Map<string, number>();
+  try {
+    const candidates = new Set<string>();
+    for (const r of filteredReceipts as any[]) {
+      const orderRef = String(r?.order?.orderNumber ?? "");
+      const receiptNumber = String(r?.receiptNumber ?? "");
+      const key = buildReceiptKey(orderRef || receiptNumber, r.id);
+      const normalizedOrder = canonicalReceiptNumber(orderRef);
+      const normalizedReceipt = canonicalReceiptNumber(receiptNumber);
+      if (orderRef) candidates.add(orderRef);
+      if (receiptNumber) candidates.add(receiptNumber);
+      if (key) candidates.add(key);
+      if (normalizedOrder) candidates.add(normalizedOrder);
+      if (normalizedReceipt) candidates.add(normalizedReceipt);
+    }
+    const candidateArray = Array.from(candidates).filter((v) => v && v.length > 0);
+    if (candidateArray.length > 0) {
+      const ledgerEntries = await prisma.supportReceipt.findMany({
+        where: {
+          OR: [{ receiptNumber: { in: candidateArray } }, { receiptKey: { in: candidateArray } }],
+        },
+        select: {
+          receiptNumber: true,
+          receiptKey: true,
+          buyingTotal: true,
+          items: { select: { buyingPrice: true } },
+        },
+      });
+      for (const entry of ledgerEntries as any[]) {
+        const explicitBuyingTotal = Number(entry.buyingTotal ?? 0);
+        const itemsSum = Array.isArray(entry.items)
+          ? entry.items.reduce((sum: number, it: any) => sum + Number(it?.buyingPrice ?? 0), 0)
+          : 0;
+        const buyingTotal = explicitBuyingTotal > 0 ? explicitBuyingTotal : itemsSum;
+        if (!(Number.isFinite(buyingTotal) && buyingTotal > 0)) continue;
+
+        const keys = [entry.receiptNumber, entry.receiptKey]
+          .map((k: any) => (typeof k === "string" ? k : ""))
+          .filter((k) => k);
+        for (const k of keys) {
+          if (!supportBuyingTotals.has(k)) supportBuyingTotals.set(k, buyingTotal);
+          const normalized = canonicalReceiptNumber(k);
+          if (normalized && !supportBuyingTotals.has(normalized)) supportBuyingTotals.set(normalized, buyingTotal);
+        }
+      }
+    }
+  } catch {
+    // Best-effort: ignore support ledger lookup failures.
+  }
+
+  const computeReceiptProfitFromCosts = (receipt: any) => {
+    const selling = extractSales(receipt);
+    const orderRef = String(receipt?.order?.orderNumber ?? "");
+    const receiptNumber = String(receipt?.receiptNumber ?? "");
+    const keyCandidates = [
+      orderRef,
+      receiptNumber,
+      buildReceiptKey(orderRef || receiptNumber, receipt.id),
+      canonicalReceiptNumber(orderRef),
+      canonicalReceiptNumber(receiptNumber),
+    ].filter((v): v is string => Boolean(v));
+    let supportBuying: number | undefined;
+    for (const k of keyCandidates) {
+      const v = supportBuyingTotals.get(k);
+      if (typeof v === "number" && v > 0) {
+        supportBuying = v;
+        break;
+      }
+    }
+
+    const aggregateCostRaw = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
+    const aggregateCost = supportBuying && supportBuying > 0 ? supportBuying : aggregateCostRaw;
+
+    const items = (receipt?.order?.items ?? []) as any[];
+    const perItemUnitCosts = items.map((item: any) => {
+      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+      const buyingSum = costs.reduce((sum: number, c: any) => sum + Number(c?.unitCost ?? 0), 0);
+      const snap = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+      const snapUnitCost = snap ? Number(snap?.unitCost ?? 0) : 0;
+      const productLastBuying = Number(item?.product?.lastBuyingPrice ?? 0) || 0;
+      const productCost = productCostMap.get(String(item?.productId ?? "")) ?? 0;
+      const fallbackUnitCost =
+        snapUnitCost > 0
+          ? snapUnitCost
+          : productLastBuying > 0
+            ? productLastBuying
+            : productCost > 0
+              ? productCost
+              : 0;
+      return buyingSum > 0 ? buyingSum : fallbackUnitCost;
+    });
+
+    const costFromItems = items.reduce((sum: number, item: any, idx: number) => {
+      const qty = Math.max(1, Math.trunc(Number(item?.quantity ?? 1)));
+      const unit = Number(perItemUnitCosts[idx] ?? 0);
+      return sum + unit * qty;
+    }, 0);
+
+    const allItemsPriced = items.length > 0 && perItemUnitCosts.every((u: number) => Number(u) > 0);
+    const hasAggregateCost = Number.isFinite(aggregateCost) && aggregateCost > 0;
+    const explicitProfit = parseExplicitProfit(receipt);
+
+    if (hasAggregateCost || allItemsPriced) {
+      const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
+      return { profit: selling - buyingSum, hasCost: true };
+    }
+    if (explicitProfit !== undefined) {
+      return { profit: explicitProfit, hasCost: false };
+    }
+    // No cost/pricing info → profit unknown; treat as 0 for commission safety.
+    return { profit: 0, hasCost: false };
+  };
 
   const rows = filteredReceipts.map((r: any) => {
     const total = extractSales(r);
@@ -305,7 +489,7 @@ export async function GET(req: Request) {
 
   const receiptCount = rows.length;
   const totalSales = rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0);
-  const totalProfit = filteredReceipts.reduce((sum: number, r: any) => sum + extractProfit(r, extractSales(r)), 0);
+  const totalProfit = filteredReceipts.reduce((sum: number, r: any) => sum + computeReceiptProfitFromCosts(r).profit, 0);
 
   const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
   const { tiers } = await getOrCreateCommissionPeriod(startParam);
