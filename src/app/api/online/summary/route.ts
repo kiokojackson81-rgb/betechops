@@ -33,7 +33,10 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   if (url.searchParams.has("start") || url.searchParams.has("end")) {
-    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
+    return NextResponse.json(
+      { error: "This endpoint requires a server-resolved trading period; do not supply start/end." },
+      { status: 400 },
+    );
   }
   const periodKeyParam = url.searchParams.get("periodKey");
   const requestedPeriod = parseTradingPeriodKey(periodKeyParam ?? undefined);
@@ -69,7 +72,11 @@ export async function GET(req: Request) {
       period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
       totals: { orders: 0, sales: 0, commission: 0, marketplaceSales: 0, remainingToNextTier: 2000000 },
       platforms: [],
-      assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
+      assignedAccounts: assignments.map((a) => ({
+        id: a.accountId,
+        name: a.account?.displayName ?? null,
+        platform: a.account?.platform,
+      })),
       marketplace: {
         jumiaSales: 0,
         kilimallSales: 0,
@@ -137,7 +144,6 @@ export async function GET(req: Request) {
       .reduce((sum, line) => sum + Number(line.commission ?? 0), 0),
   );
 
-  // commission summary for marketplace totals (used for "To next tier")
   const commissionInfo = getCommissionSummaryForSales(marketplaceSalesOnly);
   const nextTarget = commissionInfo.nextTarget ?? null;
   const toNextTier = nextTarget ? Math.max(0, nextTarget - marketplaceSalesOnly) : 0;
@@ -151,7 +157,11 @@ export async function GET(req: Request) {
       commission: Number(commissionBreakdown.totalCommission ?? 0),
     },
     platforms,
-    assignedAccounts: assignments.map((a) => ({ id: a.accountId, name: a.account?.displayName ?? null, platform: a.account?.platform })),
+    assignedAccounts: assignments.map((a) => ({
+      id: a.accountId,
+      name: a.account?.displayName ?? null,
+      platform: a.account?.platform,
+    })),
     marketplace: {
       jumiaSales: marketplaceSalesSummary.totals.jumiaSales,
       kilimallSales: marketplaceSalesSummary.totals.kilimallSales,

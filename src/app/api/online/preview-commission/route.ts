@@ -3,7 +3,11 @@ import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
-import { computeOnlinePeriodCommission, resolveDirectCommissionMode, resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
+import {
+  computeOnlinePeriodCommission,
+  resolveDirectCommissionMode,
+  resolveOnlinePosOwnershipMode,
+} from "@/lib/onlineCommission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
@@ -39,7 +43,6 @@ export async function GET(req: Request) {
     : { start, end };
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
 
-  // direct sales from POS receipts created by this attendant
   const [posSummary, marketplaceTotals] = await Promise.all([
     summarizePosReceiptsForPeriod({
       start,

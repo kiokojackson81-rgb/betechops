@@ -45,19 +45,15 @@ const allocateCombinedMarketplaceCommission = <T extends { sales: number; charge
   let allocated = 0;
   return rows.map((row, index) => {
     const sales = Number(row.sales ?? 0);
-    const rawShare = index === rows.length - 1 ? totalCommission - allocated : Math.round((sales / totalSales) * totalCommission);
+    const rawShare =
+      index === rows.length - 1 ? totalCommission - allocated : Math.round((sales / totalSales) * totalCommission);
     allocated += index === rows.length - 1 ? totalCommission - allocated : rawShare;
     return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
   });
 };
 
 export async function GET(req: Request) {
-  const auth = await requireAttendant(req, [
-    "JUMIA_KILIMALL_OPS",
-    "BETECH_OPS",
-    "SUPERVISOR",
-    "ADMIN",
-  ]);
+  const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const identity = await resolveTargetUserId(req);
@@ -70,8 +66,7 @@ export async function GET(req: Request) {
     where: { id: targetUserId },
     select: { email: true },
   });
-  const useCombinedMarketplaceLadder =
-    resolveDirectCommissionMode(targetUser?.email) === "PROFIT_10";
+  const useCombinedMarketplaceLadder = resolveDirectCommissionMode(targetUser?.email) === "PROFIT_10";
 
   const url = new URL(req.url);
   const startParam = parseDateParam(url.searchParams.get("start"));
@@ -117,10 +112,7 @@ export async function GET(req: Request) {
   const rows = marketplaceSalesSummary.rows
     .map((account) => {
       const accountReturns = returns.filter((entry) => entry.accountId === account.accountId);
-      const chargedReturns = accountReturns.reduce(
-        (sum, entry) => sum + Number(entry.expectedAmount ?? 0),
-        0,
-      );
+      const chargedReturns = accountReturns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
 
       return {
         shopId: account.accountId,
