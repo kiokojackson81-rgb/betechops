@@ -155,6 +155,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   if (usePosTotals) {
     const userIdForPos = commissionConfig.posTotalsMode === "GLOBAL" ? null : opts.userId;
     posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: userIdForPos });
+  }
   if (usePosTotals && posSummary) {
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
