@@ -37,6 +37,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
         include: {
           items: {
             include: {
+              orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, costSource: true, createdAt: true } },
               product: {
                 select: {
                   id: true,
@@ -186,6 +187,22 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       if (existing.order?.items && existing.order.items.length) {
         const existingItemIds = existing.order.items.map((i) => i.id);
         await tx.commissionEarning.deleteMany({ where: { orderItemId: { in: existingItemIds } } });
+        // If we have persisted costs/snapshots, clear them before deleting order items.
+        // Some environments may not have these tables; best-effort only.
+        try {
+          if ((tx as any).orderCost) {
+            await (tx as any).orderCost.deleteMany({ where: { orderItemId: { in: existingItemIds } } });
+          }
+        } catch {
+          // ignore
+        }
+        try {
+          if ((tx as any).profitSnapshot) {
+            await (tx as any).profitSnapshot.deleteMany({ where: { orderItemId: { in: existingItemIds } } });
+          }
+        } catch {
+          // ignore
+        }
       }
       await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
       const createdOrderItems: any[] = [];
@@ -236,6 +253,23 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         try {
           const createdItem = await tx.orderItem.create({ data: createPayload });
           createdOrderItems.push(createdItem);
+          // Persist per-item unit cost overrides so profit/commission recomputes
+          // do not depend on support ledger rows.
+          if (costPrice > 0) {
+            try {
+              if ((tx as any).orderCost) {
+                await (tx as any).orderCost.create({
+                  data: {
+                    orderItemId: createdItem.id,
+                    unitCost: costPrice,
+                    costSource: "ADMIN_RECEIPT_EDIT",
+                  },
+                });
+              }
+            } catch {
+              // ignore (table may not exist on some DBs)
+            }
+          }
           createdItems.push({
             title,
             quantity,
@@ -336,8 +370,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             tax: taxAmount,
             total,
             balance: existing.order?.layawayPlan ? Math.max(0, total - Number(existing.order.layawayPlan.deposit || 0)) : 0,
+            buyingTotal: totalBuying,
+            profit: totalBuying > 0 ? total - totalBuying : 0,
           },
-          data: { ...(existing.data as any), ...body, totals: { subtotal, tax: taxAmount, total } },
+          data: { ...(existing.data as any), ...body, totals: { subtotal, tax: taxAmount, total, buyingTotal: totalBuying, profit: totalBuying > 0 ? total - totalBuying : 0 } },
         },
       });
 

@@ -297,9 +297,18 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
           unitPrice: Number(it.unitPrice ?? it.sellingPrice ?? it.price ?? 0),
           serial: it.serial ?? null,
           warranty: it.warranty ?? null,
-          buyingPrice: Number(
-            it.buyingPrice ?? supportCostMap.get((it.title || it.productName || it.name || "").trim().toLowerCase()) ?? 0,
-          ),
+          buyingPrice: (() => {
+            const explicit = Number(it.buyingPrice ?? 0);
+            if (Number.isFinite(explicit) && explicit > 0) return explicit;
+            const key = (it.title || it.productName || it.name || "").trim().toLowerCase();
+            const support = supportCostMap.get(key) ?? 0;
+            if (Number.isFinite(support) && support > 0) return support;
+            // orderItems can include persisted OrderCost overrides (admin edits)
+            const costs = Array.isArray(it.orderCosts) ? it.orderCosts : [];
+            const latest = costs[0];
+            const unit = Number(latest?.unitCost ?? 0);
+            return Number.isFinite(unit) && unit > 0 ? unit : 0;
+          })(),
         }))
       : [
         {
@@ -1064,11 +1073,20 @@ export default function ReceiptsAdminClient({
           : -1;
       const matched = matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
       const displayName = item.product?.name ?? matched?.productName ?? "Item";
-      const hasCost = matched?.buyingPrice !== null && Number(matched?.buyingPrice ?? 0) > 0;
+      const matchedPriceRaw = matched?.buyingPrice ?? null;
+      const matchedCost =
+        matchedPriceRaw !== null && Number(matchedPriceRaw ?? 0) > 0 ? Number(matchedPriceRaw) : 0;
+      // fallback to persisted OrderCost override (admin-edited POS costs)
+      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+      const latest = costs[0];
+      const overrideUnit = Number(latest?.unitCost ?? 0);
+      const overrideCost = Number.isFinite(overrideUnit) && overrideUnit > 0 ? overrideUnit : 0;
+      const resolvedCost = matchedCost > 0 ? matchedCost : overrideCost > 0 ? overrideCost : null;
+      const hasCost = resolvedCost !== null && Number(resolvedCost ?? 0) > 0;
       if (!hasCost) allItemCostsKnown = false;
       return {
         ...item,
-        buyingPrice: matched?.buyingPrice ?? null,
+        buyingPrice: resolvedCost,
         displayName,
       };
     });
