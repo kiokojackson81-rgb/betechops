@@ -1055,6 +1055,10 @@ export default function ReceiptsAdminClient({
     }
     // If the server provided a supportReceiptSummary with a stored buyingTotal,
     // prefer that authoritative DB value for the admin UI to match the DB.
+    const receiptBuyingTotalRaw = Number(
+      (detail?.receipt as any)?.totals?.buyingTotal ?? (detail?.receipt as any)?.data?.totals?.buyingTotal ?? 0,
+    );
+    const receiptBuyingTotal = Number.isFinite(receiptBuyingTotalRaw) && receiptBuyingTotalRaw > 0 ? receiptBuyingTotalRaw : null;
     const supportReceiptBuyingTotal =
       detail?.supportReceiptSummary && Number(detail.supportReceiptSummary.buyingTotal ?? 0) > 0
         ? Number(detail.supportReceiptSummary.buyingTotal ?? 0)
@@ -1097,7 +1101,8 @@ export default function ReceiptsAdminClient({
     const matchedCost = itemsWithCost.reduce((sum, item) => {
       // treat missing or non-positive buyingPrice as unknown (do not count)
       if (item.buyingPrice === null || Number(item.buyingPrice ?? 0) <= 0) return sum;
-      return sum + Number(item.buyingPrice ?? 0);
+      const qty = Math.max(1, Math.trunc(Number((item as any)?.quantity ?? 1)));
+      return sum + Number(item.buyingPrice ?? 0) * qty;
     }, 0);
     let supportCostSum = 0;
     let supportHasUnknown = false;
@@ -1111,7 +1116,12 @@ export default function ReceiptsAdminClient({
     const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
     return {
       itemsWithCost,
-      supportBuyingTotal: supportReceiptBuyingTotal !== null ? supportReceiptBuyingTotal : matchedCost + supportCostSum,
+      supportBuyingTotal:
+        receiptBuyingTotal !== null
+          ? receiptBuyingTotal
+          : supportReceiptBuyingTotal !== null
+            ? supportReceiptBuyingTotal
+            : matchedCost + supportCostSum,
       hasCompleteCosts,
     };
   }, [detail]);
