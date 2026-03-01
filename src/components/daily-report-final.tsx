@@ -320,39 +320,51 @@ export default function DailyReportFinal() {
     return () => controller.abort();
   }, [fetchPeriodSummary, selectedPeriodKey]);
 
+  const clamp0 = (value: unknown) => Math.max(0, Number(value ?? 0) || 0);
+
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
-    const totalReceipts = receipts.length;
+    let totalReceipts = 0;
     let totalSales = 0;
     let totalItems = 0;
 
     receipts.forEach((r) => {
-      totalSales += Number(r.sellingTotal || 0);
-      totalItems += r.products.length;
+      const receiptNumber = String(r.receiptNumber ?? "").trim();
+      const sellingTotal = clamp0(r.sellingTotal);
+      const hasAnyProduct = (r.products ?? []).some((p) => String(p?.name ?? "").trim().length > 0);
+
+      // Ignore the default empty receipt row so Quick Stats doesn't show
+      // 1 receipt / 0 sales when nothing has been entered yet.
+      const isMeaningful = receiptNumber.length > 0 || sellingTotal > 0 || hasAnyProduct;
+      if (!isMeaningful) return;
+
+      totalReceipts += 1;
+      totalSales += sellingTotal;
+      totalItems += (r.products ?? []).filter((p) => String(p?.name ?? "").trim().length > 0).length;
     });
 
-    const totalNewProducts = Number(productsUploaded || 0);
+    const totalNewProducts = clamp0(productsUploaded);
     return { totalReceipts, totalSales, totalItems, totalNewProducts };
   }, [receipts, productsUploaded]);
 
-  const totalEditedProducts = Number(productsEdited || 0);
-  const totalCopiedProducts = Number(productsCopied || 0);
+  const totalEditedProducts = clamp0(productsEdited);
+  const totalCopiedProducts = clamp0(productsCopied);
   const totalWalkinsServed = Number(walkinsServed || 0);
   const totalWalkinsPurchased = Number(walkinsPurchased || 0);
 
   const serverStats = serverQuickStats;
-  const displayedSalesKes = (serverStats?.totalSales ?? 0) + totalSales;
-  const displayedItems = (serverStats?.totalItems ?? 0) + totalItems;
-  const displayedReceipts = (serverStats?.totalReceipts ?? 0) + totalReceipts;
+  const displayedSalesKes = clamp0(serverStats?.totalSales) + totalSales;
+  const displayedItems = clamp0(serverStats?.totalItems) + totalItems;
+  const displayedReceipts = clamp0(serverStats?.totalReceipts) + totalReceipts;
   const displayedNewProducts =
-    (serverStats?.totalNewProducts ?? 0) + Number(productsUploaded || 0);
+    clamp0(serverStats?.totalNewProducts) + clamp0(productsUploaded);
   const displayedEditedProducts =
-    (serverStats?.totalEditedProducts ?? 0) + Number(productsEdited || 0);
+    clamp0(serverStats?.totalEditedProducts) + clamp0(productsEdited);
   const displayedCopiedProducts =
-    (serverStats?.totalCopiedProducts ?? 0) + Number(productsCopied || 0);
+    clamp0(serverStats?.totalCopiedProducts) + clamp0(productsCopied);
   const displayedWalkInsServed =
-    (serverStats?.walkInsServed ?? 0) + Number(walkinsServed || 0);
+    clamp0(serverStats?.walkInsServed) + clamp0(walkinsServed);
   const displayedWalkInsPurchased =
-    (serverStats?.walkInsPurchased ?? 0) + Number(walkinsPurchased || 0);
+    clamp0(serverStats?.walkInsPurchased) + clamp0(walkinsPurchased);
 
   // Build a public fallback earnings summary when the server restricts detailed
   // earnings data to authenticated attendants. This lets the UI show a card
@@ -1521,8 +1533,16 @@ function NumberRow(props: { label: string; value: number | ""; onChange: (v: num
       <span className="text-sm text-slate-100">{label}</span>
       <input
         type="number"
+        min={0}
         value={value}
-        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+        onChange={(e) => {
+          if (e.target.value === "") {
+            onChange("");
+            return;
+          }
+          const next = Number(e.target.value);
+          onChange(Number.isFinite(next) ? Math.max(0, next) : 0);
+        }}
         className="w-24 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-sm text-right text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
       />
     </div>
