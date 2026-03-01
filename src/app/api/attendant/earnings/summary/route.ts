@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
   await getOrCreateCommissionPeriod(period.start);
 
-  const summary = await getEarningsSummaryForUser({ userId });
+  const summary = await getEarningsSummaryForUser({ userId, asOf: period.start });
 
   // Best-effort: expose canonical per-receipt keys so clients can dedupe local receipts.
   // For Brendah/Jeniffer/DIRECT_SALES_OPS (POS source-of-truth), use POS receipt keys.

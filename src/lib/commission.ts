@@ -193,7 +193,10 @@ export function computeProductCommissions(args: {
   copiedProducts: number;
   editedProducts: number;
 }) {
-  const { newProducts, copiedProducts, editedProducts } = args;
+  const newProducts = Math.max(0, Number(args.newProducts ?? 0));
+  const copiedProducts = Math.max(0, Number(args.copiedProducts ?? 0));
+  const editedProducts = Math.max(0, Number(args.editedProducts ?? 0));
+
   const eligibleNew = Math.max(0, newProducts - 2_000);
   const newProductCommission = Math.min(eligibleNew * 3, 10_000);
   const copiedCommission = Math.floor(copiedProducts / 5);

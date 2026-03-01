@@ -104,7 +104,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
 
   const user = await prisma.user.findUnique({
     where: { id: opts.userId },
-    select: { email: true },
+    select: { email: true, attendantCategory: true },
   });
   const normalizedEmail = (user?.email ?? "").toLowerCase();
   const marketingSummary = await summarizeMarketingReportsForPeriod({
@@ -148,7 +148,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
   // Treat all DIRECT_SALES_OPS attendants like Jeniffer for sales source-of-truth:
   // use POS receipts scoped to the user rather than self-reported marketing rows.
-  const isDirectSalesOps = (opts as any)?.attendantCategory === "DIRECT_SALES_OPS";
+  const isDirectSalesOps = user?.attendantCategory === "DIRECT_SALES_OPS";
   const isBrendah = normalizedEmail === "brendah@betech.co.ke";
   // Brendah uses a direct-sales commission formula and should use POS receipts
   // as the sales source-of-truth (not marketing/support merged rows).
@@ -342,8 +342,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalNewProducts: newProducts,
     totalEditedProducts: editedProducts,
     totalCopiedProducts: copiedProducts,
-    totalItems: isJeniffer ? posSummary?.totalItems ?? 0 : mergedItems || 0,
-    totalReceipts: isJeniffer ? posSummary?.totalReceipts ?? 0 : merged.size || 0,
+    totalItems: usePosTotals ? posSummary?.totalItems ?? 0 : mergedItems || 0,
+    totalReceipts: usePosTotals ? posSummary?.totalReceipts ?? 0 : merged.size || 0,
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
