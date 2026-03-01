@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import type { Role } from "@prisma/client";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -24,109 +25,44 @@ export async function GET(req: Request) {
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
   await getOrCreateCommissionPeriod(period.start);
 
-  const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
-    getEarningsSummaryForUser({ userId }),
-    summarizeMarketingReportsForPeriod({ userId, userEmail: identity.actorEmail, period }),
-    getSupportPeriodAggregates({ userId, period }),
-    prisma.commissionLedger.findUnique({
-      where: {
-        userId_periodStart_periodEnd: {
-          userId,
-          periodStart: period.start,
-          periodEnd: period.end,
-        },
-      },
-    }),
-  ]);
-  // Merge per-receipt maps from marketing and support to avoid double-counting
-  const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
-  const supportPer = (supportSummary as any)?.perReceipts ?? {};
-  const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+  const summary = await getEarningsSummaryForUser({ userId });
 
-  for (const [k, v] of Object.entries(marketingPer) as [string, any][]) {
-    merged.set(k, { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 });
-  }
-  for (const [k, v] of Object.entries(supportPer) as [string, any][]) {
-    const supportObj = { sales: v.sales ?? 0, profit: v.profit ?? 0, items: v.items ?? 0, mpesa: v.mpesa ?? 0, cash: v.cash ?? 0 };
-    if (merged.has(k)) {
-      const existing = merged.get(k)!;
-      if ((existing.profit ?? 0) <= 0 && (supportObj.profit ?? 0) > 0) {
-        merged.set(k, supportObj);
-      }
-      continue; // marketing wins otherwise
-    }
-    merged.set(k, supportObj);
-  }
+  // Best-effort: expose canonical per-receipt keys so clients can dedupe local receipts.
+  // For Brendah/Jeniffer/DIRECT_SALES_OPS (POS source-of-truth), use POS receipt keys.
+  // Otherwise, fall back to marketing+support per-receipt keys.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, attendantCategory: true },
+  });
+  const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
+  const usePosTotals =
+    normalizedEmail === "jeniffer@betech.co.ke" ||
+    normalizedEmail === "brendah@betech.co.ke" ||
+    user?.attendantCategory === "DIRECT_SALES_OPS";
 
-  let combinedSales = 0;
-  let combinedProfit = 0;
-  let combinedItems = 0;
-  let combinedReceipts = 0;
-  const combinedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
-  for (const [, v] of merged) {
-    combinedSales += v.sales;
-    combinedProfit += v.profit;
-    combinedItems += v.items;
-    combinedPaymentStats.totalSalesMpesa += v.mpesa;
-    combinedPaymentStats.totalSalesCash += v.cash;
-    if (v.mpesa > 0) combinedPaymentStats.countMpesaReceipts += 1;
-    if (v.cash > 0) combinedPaymentStats.countCashReceipts += 1;
-  }
-  combinedReceipts = merged.size;
-
-  const detail = ledger?.detail as Record<string, any> | undefined;
-  const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
-  const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
-
-  let salesCommission = marketingCommission + supportCommission;
-  const ledgerPersisted = Number((ledger as any)?.commissionTotal ?? (ledger as any)?.commission_total ?? 0);
-  if (ledgerPersisted > 0) {
-    salesCommission = ledgerPersisted;
+  let perReceiptCanonicalKeys: string[] = [];
+  if (usePosTotals) {
+    const pos = await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId });
+    perReceiptCanonicalKeys = pos.receiptKeys ?? [];
   } else {
-    if (salesCommission === 0 && ledger) {
-      salesCommission = Number(ledger.grossCommission ?? 0);
+    const [marketingSummary, supportSummary] = await Promise.all([
+      summarizeMarketingReportsForPeriod({ userId, userEmail: identity.actorEmail, period }),
+      getSupportPeriodAggregates({ userId, period }),
+    ]);
+    const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
+    const supportPer = (supportSummary as any)?.perReceipts ?? {};
+    const merged = new Map<string, unknown>();
+
+    for (const k of Object.keys(marketingPer)) merged.set(k, true);
+    for (const k of Object.keys(supportPer)) {
+      if (!merged.has(k)) merged.set(k, true);
     }
-    if (salesCommission === 0) {
-      salesCommission = summary.salesCommission;
-    }
+    perReceiptCanonicalKeys = Array.from(merged.keys());
   }
-
-  const grossCommission = ledgerPersisted > 0
-    ? ledgerPersisted
-    : salesCommission + summary.newProductCommission + summary.copiedCommission + summary.editedCommission + summary.commissionTopUpTotal;
-
-  const totalEarnings = summary.baseSalary + summary.transportAllowance + grossCommission + summary.bonusTotal;
-  const totalDeductions =
-    summary.chamaTotal + summary.latenessTotal + summary.disciplineTotal + summary.otherDeductionsTotal;
-  const netPay = totalEarnings - totalDeductions;
 
   const payload = {
-    // expose canonical per-receipt keys for clients to dedupe local receipts
-    perReceiptCanonicalKeys: Array.from(merged.keys()),
+    perReceiptCanonicalKeys,
     ...summary,
-    totalSales: combinedSales,
-    totalProfit: combinedProfit,
-    totalNewProducts: marketingSummary.totals.totalNewProducts,
-    totalEditedProducts: marketingSummary.totals.totalEditedProducts,
-    totalCopiedProducts: marketingSummary.totals.totalCopiedProducts,
-    salesCommission,
-    grossCommission,
-    totalEarnings,
-    totalDeductions,
-    netPay,
-    totalItems: combinedItems,
-    totalReceipts: combinedReceipts,
-    walkInsServed: marketingSummary.totals.walkInsServed,
-    walkInsPurchased: marketingSummary.totals.walkInsPurchased,
-    commission: grossCommission,
-    ledger: ledger
-      ? {
-          grossCommission: Number(ledger.grossCommission),
-          netCommission: Number(ledger.netCommission),
-          penalties: Number(ledger.penalties),
-          detail: ledger.detail,
-        }
-      : null,
   };
 
   return NextResponse.json(composeIdentityResponse(meta, payload));

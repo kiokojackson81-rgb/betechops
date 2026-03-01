@@ -6,7 +6,10 @@ import {
   getOrCreateCommissionPeriod,
   computeSalesCommissionFromTiers,
   computeProductCommissions,
+  computeJenifferProratedCommission,
 } from "@/lib/commission";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +62,23 @@ export async function GET() {
     totalProfit += Number(row.profit ?? 0);
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, attendantCategory: true },
+  });
+  const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
+  const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
+  const isBrendah = normalizedEmail === "brendah@betech.co.ke";
+  const isDirectSalesOps = user?.attendantCategory === "DIRECT_SALES_OPS";
+  const usePosTotals = isJeniffer || isBrendah || isDirectSalesOps;
+
+  let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
+  if (usePosTotals) {
+    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId });
+    totalSales = posSummary.totalSales;
+    totalProfit = posSummary.totalProfit;
+  }
+
   const reports = await prisma.dailyReport.findMany({
     where: { userId, date: { gte: start, lte: end } },
     select: {
@@ -83,19 +103,32 @@ export async function GET() {
     walkInsPurchased += rep.purchasesMade ?? 0;
   }
 
-  const totalReceipts = reports.length;
-  const totalItems = await prisma.dailySale.count({
-    where: {
-      dailyReport: {
-        userId,
-        date: { gte: start, lte: end },
-      },
-    },
-  });
+  const totalReceipts = usePosTotals ? (posSummary?.totalReceipts ?? 0) : reports.length;
+  const totalItems = usePosTotals
+    ? (posSummary?.totalItems ?? 0)
+    : await prisma.dailySale.count({
+        where: {
+          dailyReport: {
+            userId,
+            date: { gte: start, lte: end },
+          },
+        },
+      });
 
-  // Use default profit fallback here so attendant endpoints keep previous
-  // commission behaviour (fallback percent configured in commission helper).
-  const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
+  let salesCommission = 0;
+  if (isBrendah) {
+    salesCommission = computeBrendahDirectCommission(totalSales, totalProfit).amount;
+  } else if (isJeniffer) {
+    const res = computeJenifferProratedCommission(
+      totalSales,
+      tiers.map((t: any) => ({ minSales: Number(t.minSales), maxSales: t.maxSales == null ? null : Number(t.maxSales), payoutFlat: Number(t.payoutFlat) })),
+    );
+    salesCommission = Number(res.commission ?? 0);
+  } else {
+    // Use default profit fallback here so attendant endpoints keep previous
+    // commission behaviour (fallback percent configured in commission helper).
+    salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
+  }
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts,
     copiedProducts,

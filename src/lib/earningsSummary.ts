@@ -149,24 +149,16 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // Treat all DIRECT_SALES_OPS attendants like Jeniffer for sales source-of-truth:
   // use POS receipts scoped to the user rather than self-reported marketing rows.
   const isDirectSalesOps = (opts as any)?.attendantCategory === "DIRECT_SALES_OPS";
-  const usePosTotals = isJeniffer || isDirectSalesOps;
   const isBrendah = normalizedEmail === "brendah@betech.co.ke";
+  // Brendah uses a direct-sales commission formula and should use POS receipts
+  // as the sales source-of-truth (not marketing/support merged rows).
+  const usePosTotals = isJeniffer || isDirectSalesOps || isBrendah;
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (usePosTotals) {
     posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: opts.userId });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   } else if (mergedSales > totalSales) {
-    totalSales = mergedSales;
-    totalProfit = mergedProfit;
-  }
-
-  // If Brendah, always prefer the deduped merged totals (marketing + support)
-  // and ensure unpriced receipts (which produce zero profit) are excluded by
-  // the upstream summarizers. We'll compute her commission using the
-  // direct-sales formula + product commissions and ignore persisted ledger
-  // overrides.
-  if (isBrendah) {
     totalSales = mergedSales;
     totalProfit = mergedProfit;
   }
