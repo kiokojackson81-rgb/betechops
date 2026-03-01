@@ -521,9 +521,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
       return updatedReceipt;
     });
-
     if (!updated) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    try {
+      const { recomputeOrderEconomics } = await import("@/lib/recomputeOrderEconomics");
+      await recomputeOrderEconomics((updated as any).orderId ?? (updated as any).order?.id);
+    } catch (e) {
+      console.error("[receipts PATCH] failed to recompute order economics", e);
     }
 
     // recompute support ledger if attendant is present
