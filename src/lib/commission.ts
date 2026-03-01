@@ -204,26 +204,78 @@ export function computeProductCommissions(args: {
   return { newProductCommission, copiedCommission, editedCommission };
 }
 
-// Special Jeniffer prorated commission: keep full payouts for completed tiers
-// and prorate the next tier payout based on progress within the band.
-export function computeJenifferProratedCommission(totalSales: number, tiers: { minSales: number; maxSales?: number | null; payoutFlat: number }[]) {
-  if (!tiers || tiers.length === 0) return { commission: 0, baseCommission: 0, prorated: 0, nextTarget: null, progressPercent: 0 };
-  const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
-  let nextIdx = sorted.findIndex((t) => t.minSales > totalSales);
-  if (nextIdx === -1) {
-    const total = sorted.reduce((s, t) => s + t.payoutFlat, 0);
-    return { commission: total, baseCommission: total, prorated: 0, nextTarget: null, progressPercent: 1 };
+// Special Jeniffer prorated commission:
+// - Pay out tier rewards in order.
+// - Within the *current* segment, prorate the current tier payout based on progress.
+// - After completing a segment, begin prorating the *next* tier payout between the
+//   previous segment end and the next tier milestone.
+//
+// This intentionally respects `maxSales` for the first tier (e.g., 500k–1M),
+// and for later tiers treats `maxSales ?? minSales` as the milestone.
+export function computeJenifferProratedCommission(
+  totalSales: number,
+  tiers: { minSales: number; maxSales?: number | null; payoutFlat: number }[],
+) {
+  if (!tiers || tiers.length === 0) {
+    return { commission: 0, baseCommission: 0, prorated: 0, nextTarget: null, progressPercent: 0 };
   }
+
+  const sorted = [...tiers]
+    .map((t) => ({
+      minSales: Number(t.minSales),
+      maxSales: t.maxSales == null ? null : Number(t.maxSales),
+      payoutFlat: Number(t.payoutFlat),
+    }))
+    .sort((a, b) => a.minSales - b.minSales);
+
+  type Segment = { start: number; end: number; payoutFlat: number };
+  const segments: Segment[] = [];
+
+  for (let i = 0; i < sorted.length; i += 1) {
+    const tier = sorted[i];
+    const milestoneRaw = tier.maxSales != null ? tier.maxSales : tier.minSales;
+    const milestone = Number.isFinite(milestoneRaw) ? milestoneRaw : tier.minSales;
+
+    if (i === 0) {
+      const start = tier.minSales;
+      const end = Math.max(start, milestone);
+      segments.push({ start, end, payoutFlat: tier.payoutFlat });
+      continue;
+    }
+
+    const prevEnd = segments[i - 1].end;
+    const end = Math.max(prevEnd, milestone);
+    segments.push({ start: prevEnd, end, payoutFlat: tier.payoutFlat });
+  }
+
+  const firstStart = segments[0].start;
+  if (totalSales < firstStart) {
+    const progress = firstStart > 0 ? Math.max(0, Math.min(1, totalSales / firstStart)) : 0;
+    return { commission: 0, baseCommission: 0, prorated: 0, nextTarget: firstStart, progressPercent: progress };
+  }
+
   let baseCommission = 0;
-  for (let i = 0; i < nextIdx; i++) baseCommission += sorted[i].payoutFlat;
-  if (nextIdx === 0) return { commission: baseCommission, baseCommission, prorated: 0, nextTarget: sorted[0].minSales, progressPercent: totalSales / sorted[0].minSales };
-  const prev = sorted[nextIdx - 1];
-  const next = sorted[nextIdx];
-  const bandWidth = Math.max(1, next.minSales - prev.minSales);
-  const progressInBand = Math.max(0, Math.min(1, (totalSales - prev.minSales) / bandWidth));
-  const prorated = next.payoutFlat * progressInBand;
-  const commission = baseCommission + prorated;
-  return { commission, baseCommission, prorated, nextTarget: next.minSales, progressPercent: progressInBand };
+  for (const seg of segments) {
+    if (totalSales >= seg.end) {
+      baseCommission += seg.payoutFlat;
+      continue;
+    }
+
+    const width = Math.max(1, seg.end - seg.start);
+    const progressInSeg = Math.max(0, Math.min(1, (totalSales - seg.start) / width));
+    const prorated = seg.payoutFlat * progressInSeg;
+    const commission = baseCommission + prorated;
+    return {
+      commission,
+      baseCommission,
+      prorated,
+      nextTarget: seg.end,
+      progressPercent: progressInSeg,
+    };
+  }
+
+  // Top reached
+  return { commission: baseCommission, baseCommission, prorated: 0, nextTarget: null, progressPercent: 1 };
 }
 
 // Commission ladder used by reporting code to compute progress and cumulative rewards.

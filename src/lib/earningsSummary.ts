@@ -322,7 +322,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // overrides). For others prefer a persisted `commissionTotal` when present.
   let finalGrossCommission: number;
   const ledgerPersistedCommission = ledger && (ledger as any).commissionTotal ? Number((ledger as any).commissionTotal) : 0;
-  if (isBrendah) {
+  if (isBrendah || isJeniffer) {
     finalGrossCommission = computedGrossCommission;
   } else if (ledgerPersistedCommission > 0) {
     finalGrossCommission = ledgerPersistedCommission;
@@ -366,6 +366,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalDeductions,
     netPay,
     ledger: ledger ? ledger : null,
+    jenifferProgress: jenifferProgress ?? null,
     adjustmentEntries,
   };
 }
