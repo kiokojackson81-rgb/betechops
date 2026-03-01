@@ -10,6 +10,7 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { nowInNairobi } from "@/lib/timezone";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
 import {
   computeJenifferProratedCommission,
   computeSalesCommissionFromTiers,
@@ -26,6 +27,15 @@ const currency = new Intl.NumberFormat("en-KE", {
   currency: "KES",
   maximumFractionDigits: 0,
 });
+
+type ReceiptListRow = {
+  createdAtIso: string;
+  receiptNumber: string;
+  paymentMethod: "MPESA" | "CASH";
+  itemsCount: number;
+  amountKes: number;
+  source: "POS" | "MARKETING" | "SUPPORT";
+};
 
 function sanitizeFilename(value: string) {
   return value
@@ -46,7 +56,6 @@ function renderHtml(opts: {
   attendantEmail: string;
   totals: {
     totalSales: number;
-    totalProfit: number;
     totalReceipts: number;
     totalItems: number;
     mpesaSales: number;
@@ -54,12 +63,34 @@ function renderHtml(opts: {
     commission: number;
   };
   config: { posTotalsMode: string; salesCommissionMode: string };
+  receipts: ReceiptListRow[];
+  receiptsTruncated: boolean;
 }) {
   const letterheadBlock = opts.letterheadUrl
     ? `<div class="letterhead"><img src="${opts.letterheadUrl}" alt="Letterhead" /></div>`
     : "";
 
   const t = opts.totals;
+
+  const receiptRows = (opts.receipts || [])
+    .map((r) => {
+      const date = r.createdAtIso ? r.createdAtIso.slice(0, 10) : "";
+      const receiptNo = String(r.receiptNumber ?? "");
+      const method = String(r.paymentMethod ?? "");
+      const items = Number(r.itemsCount ?? 0);
+      const amount = currency.format(Number(r.amountKes ?? 0));
+      const source = String(r.source ?? "");
+      return `
+          <tr>
+            <td>${date}</td>
+            <td>${receiptNo}</td>
+            <td>${method}</td>
+            <td class="right">${items.toLocaleString("en-KE")}</td>
+            <td class="right">${amount}</td>
+            <td>${source}</td>
+          </tr>`;
+    })
+    .join("\n");
 
   return `
   <html>
@@ -83,6 +114,7 @@ function renderHtml(opts: {
         .letterhead { margin-bottom: 10px; }
         .letterhead img { width: 100%; max-height: 120px; object-fit: contain; }
         .right { text-align: right; }
+        .note { margin-top: 6px; font-size: 11px; color: #64748b; }
       </style>
     </head>
     <body>
@@ -138,21 +170,23 @@ function renderHtml(opts: {
         </tbody>
       </table>
 
-      <h2>Profit</h2>
+      <h2>Receipts</h2>
       <table>
         <thead>
           <tr>
-            <th>Total profit</th>
-            <th class="right">Amount</th>
+            <th style="width: 90px">Date</th>
+            <th>Receipt #</th>
+            <th style="width: 70px">Method</th>
+            <th class="right" style="width: 80px">Items</th>
+            <th class="right" style="width: 120px">Amount</th>
+            <th style="width: 80px">Source</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>Profit</td>
-            <td class="right">${currency.format(t.totalProfit)}</td>
-          </tr>
+          ${receiptRows || `<tr><td colspan="6" class="muted">No receipts found for this period.</td></tr>`}
         </tbody>
       </table>
+      ${opts.receiptsTruncated ? `<div class="note">Note: receipt list truncated for PDF size. This report shows the most recent receipts in the period.</div>` : ""}
     </body>
   </html>
   `;
@@ -344,6 +378,182 @@ export async function GET(req: Request) {
     const attendantName = (user.name ?? user.email ?? user.id).toString();
     const attendantEmail = (user.email ?? "").toString();
 
+    const MAX_RECEIPTS_IN_PDF = 200;
+    let receiptsTruncated = false;
+    let receiptRows: ReceiptListRow[] = [];
+
+    if (usePosTotals) {
+      const ownerOr =
+        commissionConfig.posTotalsMode === "GLOBAL"
+          ? null
+          : [
+              { issuedById: targetUserId },
+              { order: { attendantId: targetUserId } },
+              { data: { path: ["attendantId"], equals: targetUserId } },
+            ];
+
+      const receipts = await prisma.receipt.findMany({
+        where: {
+          generatedAt: { gte: period.start, lte: period.end },
+          ...(ownerOr ? { AND: [{ OR: ownerOr }] } : {}),
+        },
+        include: {
+          order: {
+            select: {
+              orderNumber: true,
+              paymentStatus: true,
+              totalAmount: true,
+              items: { select: { quantity: true } },
+            },
+          },
+        },
+        orderBy: { generatedAt: "desc" },
+        take: MAX_RECEIPTS_IN_PDF * 3,
+      });
+
+      const isPodReceipt = (r: any) =>
+        Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+      const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+      const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
+      const isPosPaid = (r: any) => {
+        const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
+        if (!paymentStatus) return false;
+        return paymentStatus === "PAID";
+      };
+
+      const toNumber = (value: unknown): number => {
+        if (value === null || typeof value === "undefined") return 0;
+        const num = Number(value);
+        return Number.isFinite(num) ? num : 0;
+      };
+
+      const extractSales = (row: any) => {
+        const totals = (row?.totals ?? {}) as any;
+        const data = (row?.data ?? {}) as any;
+        return (
+          toNumber(totals.sellingTotal) ||
+          toNumber(totals.grandTotal) ||
+          toNumber(totals.total) ||
+          toNumber(totals.amount) ||
+          toNumber(totals.subtotal) ||
+          toNumber(data.total) ||
+          toNumber(data.amount) ||
+          toNumber(row?.order?.totalAmount) ||
+          0
+        );
+      };
+
+      const countItems = (row: any) => {
+        const items = (row?.order?.items ?? []) as any[];
+        return items.reduce((sum, item) => sum + Math.max(1, Math.trunc(Number(item?.quantity ?? 1))), 0);
+      };
+
+      const seen = new Set<string>();
+      for (const r of receipts as any[]) {
+        if (isPodReceipt(r)) {
+          if (podStatusOf(r) === "pending") continue;
+          if (!isPodPaid(r)) continue;
+        } else {
+          if (!isPosPaid(r)) continue;
+        }
+
+        const canonical =
+          normalizeReceiptNumber(r?.receiptNumber) ||
+          normalizeReceiptNumber(r?.order?.orderNumber) ||
+          `ID:${String(r.id)}`;
+        if (seen.has(canonical)) continue;
+        seen.add(canonical);
+
+        const amountKes = Math.round(extractSales(r));
+        const itemsCount = countItems(r);
+        const paymentMethod = normalizePaymentMethod(
+          (r?.data as any)?.paymentMethod ?? (r?.totals as any)?.paymentMethod ?? "MPESA",
+        );
+
+        receiptRows.push({
+          createdAtIso: (r?.generatedAt ?? r?.createdAt ?? new Date()).toISOString(),
+          receiptNumber: (r?.receiptNumber ?? r?.order?.orderNumber ?? r.id ?? "").toString(),
+          paymentMethod,
+          itemsCount,
+          amountKes,
+          source: "POS",
+        });
+
+        if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
+      }
+
+      receiptsTruncated = seen.size > receiptRows.length;
+    } else {
+      const [marketingReceipts, supportReceipts] = await Promise.all([
+        prisma.marketingReceipt.findMany({
+          where: {
+            dailyEntry: { submittedById: targetUserId, date: { gte: period.start, lte: period.end } },
+          },
+          select: {
+            id: true,
+            receiptNumber: true,
+            sellingTotal: true,
+            paymentMethod: true,
+            createdAt: true,
+            items: { select: { id: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: MAX_RECEIPTS_IN_PDF * 3,
+        }),
+        prisma.supportReceipt.findMany({
+          where: {
+            dailyEntry: { submittedById: targetUserId, date: { gte: period.start, lte: period.end } },
+          },
+          select: {
+            id: true,
+            receiptNumber: true,
+            sellingTotal: true,
+            paymentMethod: true,
+            createdAt: true,
+            items: { select: { id: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: MAX_RECEIPTS_IN_PDF * 3,
+        }),
+      ]);
+
+      const seen = new Set<string>();
+      const pushUnique = (row: ReceiptListRow) => {
+        const key = normalizeReceiptNumber(row.receiptNumber) || `ID:${row.receiptNumber}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        receiptRows.push(row);
+      };
+
+      for (const r of marketingReceipts as any[]) {
+        pushUnique({
+          createdAtIso: (r.createdAt ?? new Date()).toISOString(),
+          receiptNumber: (r.receiptNumber ?? r.id).toString(),
+          paymentMethod: normalizePaymentMethod(r.paymentMethod),
+          itemsCount: Array.isArray(r.items) ? r.items.length : 0,
+          amountKes: Math.round(Number(r.sellingTotal ?? 0)),
+          source: "MARKETING",
+        });
+        if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
+      }
+      if (receiptRows.length < MAX_RECEIPTS_IN_PDF) {
+        for (const r of supportReceipts as any[]) {
+          pushUnique({
+            createdAtIso: (r.createdAt ?? new Date()).toISOString(),
+            receiptNumber: (r.receiptNumber ?? r.id).toString(),
+            paymentMethod: normalizePaymentMethod(r.paymentMethod),
+            itemsCount: Array.isArray(r.items) ? r.items.length : 0,
+            amountKes: Math.round(Number(r.sellingTotal ?? 0)),
+            source: "SUPPORT",
+          });
+          if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
+        }
+      }
+
+      receiptRows.sort((a, b) => (b.createdAtIso || "").localeCompare(a.createdAtIso || ""));
+      receiptsTruncated = seen.size > receiptRows.length;
+    }
+
     const html = renderHtml({
       title,
       generatedAtIso: new Date().toISOString(),
@@ -355,7 +565,6 @@ export async function GET(req: Request) {
       attendantEmail,
       totals: {
         totalSales: Math.round(Number(totalSales ?? 0)),
-        totalProfit: Math.round(Number(totalProfit ?? 0)),
         totalReceipts: Math.round(Number(totalReceipts ?? 0)),
         totalItems: Math.round(Number(totalItems ?? 0)),
         mpesaSales: Math.round(Number((paymentStats as any)?.totalSalesMpesa ?? 0)),
@@ -366,6 +575,8 @@ export async function GET(req: Request) {
         posTotalsMode: String(commissionConfig.posTotalsMode),
         salesCommissionMode: String(commissionConfig.salesCommissionMode),
       },
+      receipts: receiptRows,
+      receiptsTruncated,
     });
 
     const browser = await launchBrowser();
@@ -395,4 +606,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }
-
