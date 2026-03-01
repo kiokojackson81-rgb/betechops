@@ -1493,6 +1493,26 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               )}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={downloadingPerformance}
+                onClick={() => {
+                  try {
+                    setDownloadingPerformance(true);
+                    const params = new URLSearchParams();
+                    if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
+                    const imp = impersonateIdFromWindow();
+                    if (imp) params.set("impersonateId", imp);
+                    const url = `/api/marketing/report/performance-export?${params.toString()}`;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  } finally {
+                    setTimeout(() => setDownloadingPerformance(false), 700);
+                  }
+                }}
+              >
+                {downloadingPerformance ? "Preparing…" : "Download performance CSV"}
+              </Button>
               <PeriodSwitcher
                 currentPeriod={currentPeriod}
                 selectedPeriod={selectedPeriod}
