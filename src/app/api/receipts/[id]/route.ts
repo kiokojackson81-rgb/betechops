@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       if (normalizedOrderNumber) {
         candidates.add(normalizedOrderNumber);
       }
-      if (candidates.size > 0) {
+        if (candidates.size > 0) {
         const supportReceipts = await prisma.supportReceipt.findMany({
           where: {
             OR: [
@@ -86,6 +86,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
               ...Array.from(candidates).map((value) => ({ receiptKey: value })),
             ],
           },
+          orderBy: { updatedAt: "desc" },
           include: { items: true },
         });
         if (supportReceipts.length > 0) {
