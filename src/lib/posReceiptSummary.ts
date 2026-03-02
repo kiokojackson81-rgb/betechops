@@ -96,14 +96,20 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
 
   const receipts = (await prisma.receipt.findMany({
     where: {
-      generatedAt: {
-        gte: period.start,
-        lte: period.end,
-      },
-      ...(ownerOr ? { AND: [{ OR: ownerOr }] } : {}),
-      OR: [
-        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
-        { NOT: { data: { path: ['podDelivery', 'status'], equals: 'pending' } } },
+      AND: [
+        {
+          OR: [
+            { generatedAt: { gte: period.start, lte: period.end } },
+            { createdAt: { gte: period.start, lte: period.end } },
+          ],
+        },
+        ...(ownerOr ? [{ OR: ownerOr }] : []),
+        {
+          OR: [
+            { data: { path: ["podDelivery"], equals: Prisma.JsonNull } },
+            { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } },
+          ],
+        },
       ],
     },
     include: {

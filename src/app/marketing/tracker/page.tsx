@@ -1461,6 +1461,15 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     }
   };
 
+  const downloadPerformancePdf = () => {
+    const periodKey = selectedPeriodKey || currentPeriod.key;
+    const params = new URLSearchParams({ periodKey });
+    const imp = impersonateIdFromWindow();
+    if (imp) params.set("impersonateId", imp);
+    const url = `/api/marketing/tracker/performance/pdf?${params.toString()}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <form
@@ -1475,6 +1484,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             </p>
           </div>
           <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
+              Download report (PDF)
+            </Button>
             <HeaderActions
               receiptsHref="/marketing/receipts"
               createHref={`/receipts?start=${form.date}&end=${form.date}`}

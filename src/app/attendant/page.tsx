@@ -13,6 +13,7 @@ import Button from "@/app/_components/Button";
 import Sparkline from "@/app/_components/Sparkline";
 import { attendantCategoryById } from "@/lib/attendants/definitions";
 import type { AttendantCategory } from "@prisma/client";
+import { withImpersonateId } from "@/lib/impersonation";
 
 type ProfileResponse = {
   user: {
@@ -220,7 +221,10 @@ export default function AttendantDashboard() {
         </div>
         <div className="w-full sm:w-auto sm:ml-auto">
           <Button
-            onClick={() => (window.location.href = "/attendant/daily-report")}
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              window.location.href = withImpersonateId("/attendant/daily-report", params.get("impersonateId"));
+            }}
             variant="primary"
             className="w-full text-center sm:w-auto"
           >

@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
 import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { getRecentTradingPeriods, getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { withImpersonateId } from "@/lib/impersonation";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -96,6 +98,9 @@ const buildInitialForm = (week?: Pick<WeekOption, "startInput" | "endInput"> | n
 });
 
 export default function ManualWeeklySalesPage() {
+  const searchParams = useSearchParams();
+  const impersonateId = searchParams.get("impersonateId");
+
   const tradingPeriods = useMemo(() => getRecentTradingPeriods(8), []);
   const defaultPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
   const initialLast4 = useMemo(() => buildLast4WeeksForPeriod(defaultPeriod, new Date()), [defaultPeriod]);
@@ -685,7 +690,10 @@ export default function ManualWeeklySalesPage() {
           >
             {saving ? "Saving." : "Save manual entry"}
           </button>
-          <Link href="/attendant/daily-report" className="text-sm text-emerald-400 hover:text-emerald-200">
+          <Link
+            href={withImpersonateId("/attendant/daily-report", impersonateId)}
+            className="text-sm text-emerald-400 hover:text-emerald-200"
+          >
             Need to record receipts? Open the daily report tool →
           </Link>
         </div>

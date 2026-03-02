@@ -10,6 +10,7 @@ import EarningsCard from "@/app/_components/EarningsCard";
 import PayrollTableClient from "@/app/admin/payroll/PayrollTableClient";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 import { mapPayrollToEarningsSummary as mapToEarnings, mapPayrollToPayrollRow as mapToPayrollRow } from "@/lib/payrollMapping";
+import { withImpersonateId } from "@/lib/impersonation";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -736,7 +737,10 @@ export default function AttendantOnlineOpsClient() {
               type="button"
               variant="secondary"
               className="px-5"
-              onClick={() => (window.location.href = "/attendant/daily-report")}
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                window.location.href = withImpersonateId("/attendant/daily-report", params.get("impersonateId"));
+              }}
             >
               Open Daily Report
             </Button>

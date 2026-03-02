@@ -14,6 +14,7 @@ import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
+import { withImpersonateId } from "@/lib/impersonation";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -707,7 +708,7 @@ export default function DailyReportFinal() {
               <p className="text-sm text-slate-300">Browse every receipt captured in the system. Use the range pills or custom dates to narrow the window.</p>
             </div>
             <Link
-              href="/attendant/daily-report"
+              href={withImpersonateId("/attendant/daily-report", impersonateId)}
               className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
             >
               Back to dashboard

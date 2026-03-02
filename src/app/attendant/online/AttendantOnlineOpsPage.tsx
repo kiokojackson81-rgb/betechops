@@ -7,6 +7,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { withImpersonateId } from "@/lib/impersonation";
 
 /**
  * Type definition for a single receipt entry.
@@ -19,6 +21,9 @@ type Receipt = {
 };
 
 export default function AttendantOnlineOpsPage() {
+  const searchParams = useSearchParams();
+  const impersonateId = searchParams.get("impersonateId");
+
   // Maintain an array of receipt entries. Start with one empty receipt so
   // attendants have a place to begin inputting data.
   const [receipts, setReceipts] = useState<Receipt[]>([
@@ -272,7 +277,7 @@ export default function AttendantOnlineOpsPage() {
         {/* Links to other tools for convenience */}
         <div className="mt-8 flex flex-wrap gap-2">
           <Link
-            href="/attendant/daily-report"
+            href={withImpersonateId("/attendant/daily-report", impersonateId)}
             className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95"
           >
             Open daily report
