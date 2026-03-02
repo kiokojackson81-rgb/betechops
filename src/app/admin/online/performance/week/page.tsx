@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,20 @@ export default async function OnlinePerformanceWeekPage({
     const [e, a, lc] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.findMany({
         where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
-        include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+        select: {
+          id: true,
+          date: true,
+          platform: true,
+          itemCreditTxn: true,
+          itemCreditAmount: true,
+          commissionAmount: true,
+          shippingAmount: true,
+          netPayout: true,
+          buyingPrice: true,
+          profit: true,
+          isLoss: true,
+          enteredByAdmin: { select: { id: true, name: true, email: true } },
+        },
         orderBy: [{ profit: "asc" }, { date: "asc" }],
       }),
       (prisma as any).marketplaceProfitEntry.aggregate({
@@ -93,7 +107,19 @@ export default async function OnlinePerformanceWeekPage({
       const [e, a, lc] = await Promise.all([
         (prisma as any).marketplaceProfitEntry.findMany({
           where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key },
-          include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+          select: {
+            id: true,
+            date: true,
+            platform: true,
+            itemCreditTxn: true,
+            itemCreditAmount: true,
+            commissionAmount: true,
+            shippingAmount: true,
+            netPayout: true,
+            buyingPrice: true,
+            profit: true,
+            enteredByAdmin: { select: { id: true, name: true, email: true } },
+          },
           orderBy: [{ profit: "asc" }, { date: "asc" }],
         }),
         (prisma as any).marketplaceProfitEntry.aggregate({
@@ -122,8 +148,23 @@ export default async function OnlinePerformanceWeekPage({
   const avgMargin = Number(typedAgg?._avg?.marginPct ?? 0);
   const manualWeeklyTotal = Number(manualWeeklyAgg._sum.amount ?? 0);
 
-  const lossEntries = (entries as any[]).filter((e) => Number(e.profit ?? 0) < 0);
-  const lossEntriesFlagged = (entries as any[]).filter((e) => Boolean(e.isLoss));
+  const rows = (entries as any[]).map((e) => ({
+    id: String(e.id),
+    date: e.date instanceof Date ? e.date.toISOString() : String(e.date),
+    platform: e.platform,
+    itemCreditTxn: String(e.itemCreditTxn ?? ""),
+    itemCreditAmount: Number(e.itemCreditAmount ?? 0),
+    commissionAmount: Number(e.commissionAmount ?? 0),
+    shippingAmount: Number(e.shippingAmount ?? 0),
+    netPayout: Number(e.netPayout ?? 0),
+    buyingPrice: Number(e.buyingPrice ?? 0),
+    profit: Number(e.profit ?? 0),
+    enteredBy: e.enteredByAdmin?.name || e.enteredByAdmin?.email || "-",
+    isLoss: Boolean(e.isLoss),
+  }));
+
+  const lossEntries = rows.filter((e) => Number(e.profit ?? 0) < 0);
+  const lossEntriesFlagged = rows.filter((e) => Boolean((e as any).isLoss));
 
   return (
     <div className="space-y-8">
@@ -209,91 +250,20 @@ export default async function OnlinePerformanceWeekPage({
             Database is missing the `accountId` column. Shop filtering is temporarily disabled until migrations are applied.
           </div>
         )}
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead>
-              <tr className="text-xs uppercase tracking-wide text-slate-400">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Platform</th>
-                <th className="py-2 pr-4">Txn</th>
-                <th className="py-2 pr-4 text-right">Net payout</th>
-                <th className="py-2 pr-4 text-right">Buying</th>
-                <th className="py-2 pr-4 text-right">Profit</th>
-                <th className="py-2 pr-4">Entered by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(lossEntriesFlagged.length ? lossEntriesFlagged : lossEntries).map((e) => (
-                <tr key={e.id} className="border-t border-white/5">
-                  <td className="py-3 pr-4 text-slate-200">{new Date(e.date).toLocaleDateString()}</td>
-                  <td className="py-3 pr-4 text-slate-200">{e.platform}</td>
-                  <td className="py-3 pr-4 font-medium text-white">{e.itemCreditTxn}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.netPayout ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.buyingPrice ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right font-semibold text-red-300">{currency.format(Number(e.profit ?? 0))}</td>
-                  <td className="py-3 pr-4 text-slate-300">
-                    {e.enteredByAdmin?.name || e.enteredByAdmin?.email || "-"}
-                  </td>
-                </tr>
-              ))}
-              {!lossEntriesFlagged.length && !lossEntries.length && (
-                <tr>
-                  <td className="py-6 text-center text-slate-500" colSpan={7}>
-                    No loss entries for this week.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+        <div className="mt-4">
+          <WeekProfitEntriesClient
+            rows={(lossEntriesFlagged.length ? lossEntriesFlagged : lossEntries) as any}
+            emptyText="No loss entries for this week."
+            variant="loss"
+          />
         </div>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">All entries</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead>
-              <tr className="text-xs uppercase tracking-wide text-slate-400">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Platform</th>
-                <th className="py-2 pr-4">Item credit txn</th>
-                <th className="py-2 pr-4 text-right">Credit</th>
-                <th className="py-2 pr-4 text-right">Commission</th>
-                <th className="py-2 pr-4 text-right">Shipping</th>
-                <th className="py-2 pr-4 text-right">Net payout</th>
-                <th className="py-2 pr-4 text-right">Buying</th>
-                <th className="py-2 pr-4 text-right">Profit</th>
-                <th className="py-2 pr-4">Entered by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-t border-white/5">
-                  <td className="py-3 pr-4 text-slate-200">{new Date(e.date).toLocaleDateString()}</td>
-                  <td className="py-3 pr-4 text-slate-200">{e.platform}</td>
-                  <td className="py-3 pr-4 font-medium text-white">{e.itemCreditTxn}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.itemCreditAmount ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.commissionAmount ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.shippingAmount ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.netPayout ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.buyingPrice ?? 0))}</td>
-                  <td className={`py-3 pr-4 text-right font-semibold ${Number(e.profit ?? 0) < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                    {currency.format(Number(e.profit ?? 0))}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-300">
-                    {e.enteredByAdmin?.name || e.enteredByAdmin?.email || "-"}
-                  </td>
-                </tr>
-              ))}
-              {!entries.length && (
-                <tr>
-                  <td className="py-6 text-center text-slate-500" colSpan={10}>
-                    No profit entries captured for this week.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <WeekProfitEntriesClient rows={rows as any} emptyText="No profit entries captured for this week." variant="all" enableBulkDelete />
         </div>
       </section>
     </div>
