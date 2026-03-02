@@ -4,6 +4,7 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import type { Role } from "@prisma/client";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,16 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const periodKeyParam = url.searchParams.get("periodKey");
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, attendantCategory: true },
+  });
+  const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
+  const usePosTotals =
+    normalizedEmail === "brendah@betech.co.ke" ||
+    normalizedEmail === "jeniffer@betech.co.ke" ||
+    user?.attendantCategory === "DIRECT_SALES_OPS";
 
   const [agg, salesRows] = await Promise.all([
     prisma.dailyReport.aggregate({
@@ -45,7 +56,7 @@ export async function GET(req: Request) {
     if (normalized) receiptSet.add(normalized);
   }
 
-  const summary = {
+  const dailySummary = {
     periodKey: period.key,
     periodLabel: period.label,
     totalSales: Number(agg._sum.totalSales ?? 0),
@@ -59,6 +70,24 @@ export async function GET(req: Request) {
     totalReports: Number((agg as any)?._count?._all ?? 0),
   };
 
-  return NextResponse.json(composeIdentityResponse(meta, summary));
-}
+  // POS receipts summary (paid-only), used for attendants whose source-of-truth is POS.
+  // We still return daily-report metrics so the UI can show task counts.
+  const posSummary = usePosTotals
+    ? await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId })
+    : null;
 
+  return NextResponse.json(
+    composeIdentityResponse(meta, {
+      ...dailySummary,
+      usePosTotals,
+      pos: posSummary
+        ? {
+            totalSales: Number(posSummary.totalSales ?? 0),
+            totalProfit: Number(posSummary.totalProfit ?? 0),
+            totalItems: Number(posSummary.totalItems ?? 0),
+            totalReceipts: Number(posSummary.totalReceipts ?? 0),
+          }
+        : null,
+    }),
+  );
+}

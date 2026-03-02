@@ -268,15 +268,19 @@ export default function DailyReportFinal() {
           });
           const qsData = await qsRes.json().catch(() => null);
           if (qsRes.ok && qsData) {
+            const usePosTotals = Boolean(qsData.usePosTotals);
+            const pos = (qsData.pos && typeof qsData.pos === "object") ? qsData.pos : null;
+            const hasPosSales = usePosTotals && pos && Number(pos.totalSales ?? 0) > 0;
+
             setServerQuickStats({
-              totalSales: Number(qsData.totalSales ?? 0),
-              totalItems: Number(qsData.totalItems ?? 0),
+              totalSales: hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0),
+              totalItems: hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0),
               totalNewProducts: Number(qsData.totalNewProducts ?? 0),
               totalEditedProducts: Number(qsData.totalEditedProducts ?? 0),
               totalCopiedProducts: Number(qsData.totalCopiedProducts ?? 0),
               walkInsServed: Number(qsData.walkInsServed ?? 0),
               walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
-              totalReceipts: Number(qsData.totalReceipts ?? 0),
+              totalReceipts: hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0),
             });
           } else {
             // fallback to earnings payload if daily-report summary isn't available
