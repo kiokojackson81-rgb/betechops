@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
 import { Platform } from "@prisma/client";
@@ -71,6 +72,7 @@ type CaptureBatchResponse = {
 type AccountOption = { id: string; platform: Platform; displayName: string };
 
 export default function ProfitCaptureFormClient(props: { accounts: AccountOption[] }) {
+  const router = useRouter();
   const [accountId, setAccountId] = useState<string>("");
   const [transactionText, setTransactionText] = useState("");
   const [buyingPriceKes, setBuyingPriceKes] = useState("");
@@ -82,8 +84,6 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
   const [showMore, setShowMore] = useState(false);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [previewError, setPreviewError] = useState<string>("");
-  const [existingTxns, setExistingTxns] = useState<string[]>([]);
-  const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
 
   const buyingNum = useMemo(() => Number(buyingPriceKes), [buyingPriceKes]);
 
@@ -92,6 +92,33 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
     Number.isFinite(buyingNum) &&
     buyingNum >= 0 &&
     transactionText.trim().length > 0;
+
+  const canSave =
+    Boolean(accountId) && Number.isFinite(buyingNum) && buyingNum >= 0 && transactionText.trim().length > 0;
+
+  const deleteEntry = async (id: string) => {
+    const ok = window.confirm("Delete this profit entry? This cannot be undone.");
+    if (!ok) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/marketplace-profit-entry/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
+      showToast("Deleted", "success");
+      setLastSaved((prev) => {
+        if (!prev) return prev;
+        if ("items" in prev) {
+          return { ...prev, items: prev.items.filter((x) => x.id !== id), createdCount: Math.max(0, prev.createdCount - 1) };
+        }
+        return prev.id === id ? null : prev;
+      });
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -117,8 +144,6 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
 
     setPreview(null);
     setPreviewError("");
-    setExistingTxns([]);
-    setDuplicateConfirmed(false);
     setSaving(true);
     try {
       const res = await fetch("/api/admin/marketplace-profit-entry/preview", {
@@ -132,23 +157,6 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       }
       const payload = data as PreviewPayload;
       setPreview(payload);
-
-      const txns = (payload.items ?? [])
-        .map((it) => String(it?.extracted?.item_price_credit?.txn ?? "").trim())
-        .filter(Boolean);
-      if (txns.length) {
-        fetch("/api/admin/marketplace-profit-entry/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accountId, txns }),
-        })
-          .then((r) => r.json().catch(() => null))
-          .then((j: any) => {
-            const existing = Array.isArray(j?.existingTxns) ? j.existingTxns.map((t: any) => String(t)) : [];
-            setExistingTxns(existing);
-          })
-          .catch(() => {});
-      }
 
       showToast("Preview ready", "success");
     } catch (err) {
@@ -173,43 +181,47 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       showToast("Enter a valid buying price", "error");
       return;
     }
-    if (!preview) {
-      showToast("Preview first, then save", "error");
-      return;
-    }
-
-    if (existingTxns.length > 0 && !duplicateConfirmed) {
-      const sample = existingTxns.slice(0, 3).join(", ");
-      const msg =
-        existingTxns.length === 1
-          ? `This unique number already exists for this shop: ${sample}. Continue anyway?`
-          : `Some unique numbers already exist for this shop (${existingTxns.length}): ${sample}${
-              existingTxns.length > 3 ? ", ..." : ""
-            }. Continue anyway?`;
-      const ok = window.confirm(msg);
-      if (!ok) return;
-      setDuplicateConfirmed(true);
-    }
 
     setSaving(true);
     setLastSaved(null);
     try {
-      const res = await fetch("/api/admin/marketplace-profit-entry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId,
-          transactionText: preview.rawText || transactionText,
-          buyingPriceKes: buyingNum,
-          orderId: orderId.trim() || null,
-          sku: sku.trim() || null,
-          productName: productName.trim() || null,
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as any;
+      const saveOnce = async (opts: { allowDuplicates?: boolean }) => {
+        const res = await fetch("/api/admin/marketplace-profit-entry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountId,
+            transactionText: preview?.rawText || transactionText,
+            buyingPriceKes: buyingNum,
+            orderId: orderId.trim() || null,
+            sku: sku.trim() || null,
+            productName: productName.trim() || null,
+            allowDuplicates: Boolean(opts.allowDuplicates),
+          }),
+        });
+        const data = (await res.json().catch(() => null)) as any;
+        return { res, data };
+      };
+
+      let { res, data } = await saveOnce({ allowDuplicates: false });
+      if (res.status === 409 && Array.isArray(data?.existingTxns) && data.existingTxns.length > 0) {
+        const existingTxns = data.existingTxns.map((t: any) => String(t)).filter(Boolean);
+        const sample = existingTxns.slice(0, 3).join(", ");
+        const msg =
+          existingTxns.length === 1
+            ? `This unique number already exists for this shop: ${sample}. Save anyway?`
+            : `Some unique numbers already exist for this shop (${existingTxns.length}): ${sample}${
+                existingTxns.length > 3 ? ", ..." : ""
+              }. Save anyway?`;
+        const ok = window.confirm(msg);
+        if (!ok) return;
+        ({ res, data } = await saveOnce({ allowDuplicates: true }));
+      }
+
       if (!res.ok) {
         throw new Error(data?.error || "Failed to save profit entry");
       }
+
       setLastSaved(data as any);
       showToast("Profit entry saved", "success");
       setTransactionText("");
@@ -219,8 +231,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       setProductName("");
       setPreview(null);
       setPreviewError("");
-      setExistingTxns([]);
-      setDuplicateConfirmed(false);
+      router.refresh();
     } catch (err) {
       console.error(err);
       showToast(err instanceof Error ? err.message : "Failed to save profit entry", "error");
@@ -288,14 +299,6 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
             />
           </label>
         </div>
-
-        {existingTxns.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            Duplicate unique number detected for this shop:{" "}
-            <span className="font-semibold">{existingTxns.slice(0, 6).join(", ")}{existingTxns.length > 6 ? ", ..." : ""}</span>.{" "}
-            Click <span className="font-semibold">Save</span> and confirm to continue (duplicates are skipped).
-          </div>
-        )}
 
         <div className="mt-4">
           <button
@@ -418,7 +421,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
             </div>
           ) : (
             <p className="mt-2 text-sm text-slate-400">
-              Click <span className="font-semibold text-slate-200">Preview</span> to extract values before saving.
+              Optional: click <span className="font-semibold text-slate-200">Preview</span> to verify extraction before saving.
               {previewError ? <span className="block pt-2 text-red-200">{previewError}</span> : null}
             </p>
           )}
@@ -436,7 +439,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
           <button
             type="button"
             onClick={onSubmit}
-            disabled={saving || !preview}
+            disabled={saving || !canSave}
             className="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save profit entry"}
@@ -452,24 +455,62 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-6">
           <h3 className="text-lg font-semibold text-white">Saved</h3>
           {"items" in lastSaved ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Created</p>
-                <p className="mt-1 font-semibold text-white">{lastSaved.createdCount}</p>
+            <>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Created</p>
+                  <p className="mt-1 font-semibold text-white">{lastSaved.createdCount}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Duplicates</p>
+                  <p className="mt-1 font-semibold text-slate-100">{lastSaved.duplicateCount}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Failed</p>
+                  <p className="mt-1 font-semibold text-slate-100">{lastSaved.failedCount}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Tip</p>
+                  <p className="mt-1 text-slate-300">Duplicates are skipped automatically.</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Duplicates</p>
-                <p className="mt-1 font-semibold text-slate-100">{lastSaved.duplicateCount}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Failed</p>
-                <p className="mt-1 font-semibold text-slate-100">{lastSaved.failedCount}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Tip</p>
-                <p className="mt-1 text-slate-300">Duplicates are skipped automatically.</p>
-              </div>
-            </div>
+
+              {lastSaved.items?.length ? (
+                <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">Txn</th>
+                        <th className="px-3 py-2">Net</th>
+                        <th className="px-3 py-2">Profit</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {lastSaved.items.slice(0, 25).map((it) => (
+                        <tr key={it.id} className="hover:bg-white/5">
+                          <td className="px-3 py-2 font-semibold text-slate-100">{it.itemCreditTxn}</td>
+                          <td className="px-3 py-2 text-emerald-300">{currency.format(it.netPayout)}</td>
+                          <td className={`px-3 py-2 ${it.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                            {currency.format(it.profit)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => deleteEntry(it.id)}
+                              className="rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-500/15 disabled:opacity-60"
+                              disabled={saving}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
@@ -495,6 +536,16 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
               <div className="mt-4 text-sm text-slate-300">
                 Week start: <span className="font-semibold text-white">{String(lastSaved.weekStart).slice(0, 10)}</span>{" "}
                 | Trading period key: <span className="font-semibold text-white">{lastSaved.periodKey}</span>
+              </div>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => deleteEntry(String(lastSaved.id))}
+                  disabled={saving}
+                  className="rounded-full border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/15 disabled:opacity-60"
+                >
+                  Delete entry
+                </button>
               </div>
             </>
           )}
