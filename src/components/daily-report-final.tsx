@@ -254,16 +254,55 @@ export default function DailyReportFinal() {
         setEarningsError(null);
         setEarningsSummary(data);
         setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
-        setServerQuickStats({
-          totalSales: Number(data.totalSales ?? 0),
-          totalItems: Number(data.totalItems ?? 0),
-          totalNewProducts: Number(data.totalNewProducts ?? 0),
-          totalEditedProducts: Number(data.totalEditedProducts ?? 0),
-          totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
-          walkInsServed: Number(data.walkInsServed ?? 0),
-          walkInsPurchased: Number(data.walkInsPurchased ?? 0),
-          totalReceipts: Number(data.totalReceipts ?? 0),
-        });
+
+        // Quick stats should reflect the daily-report submissions (the same page the user is on),
+        // not marketing/support ledgers or POS-only views.
+        try {
+          const qsParams = new URLSearchParams({ periodKey: selectedPeriodKey });
+          if (impersonateId) qsParams.set("impersonateId", impersonateId);
+          const qsRes = await fetch(`/api/attendant/daily-report/summary?${qsParams.toString()}`, {
+            method: "GET",
+            cache: "no-store",
+            credentials: "same-origin",
+            signal,
+          });
+          const qsData = await qsRes.json().catch(() => null);
+          if (qsRes.ok && qsData) {
+            setServerQuickStats({
+              totalSales: Number(qsData.totalSales ?? 0),
+              totalItems: Number(qsData.totalItems ?? 0),
+              totalNewProducts: Number(qsData.totalNewProducts ?? 0),
+              totalEditedProducts: Number(qsData.totalEditedProducts ?? 0),
+              totalCopiedProducts: Number(qsData.totalCopiedProducts ?? 0),
+              walkInsServed: Number(qsData.walkInsServed ?? 0),
+              walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
+              totalReceipts: Number(qsData.totalReceipts ?? 0),
+            });
+          } else {
+            // fallback to earnings payload if daily-report summary isn't available
+            setServerQuickStats({
+              totalSales: Number(data.totalSales ?? 0),
+              totalItems: Number(data.totalItems ?? 0),
+              totalNewProducts: Number(data.totalNewProducts ?? 0),
+              totalEditedProducts: Number(data.totalEditedProducts ?? 0),
+              totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
+              walkInsServed: Number(data.walkInsServed ?? 0),
+              walkInsPurchased: Number(data.walkInsPurchased ?? 0),
+              totalReceipts: Number(data.totalReceipts ?? 0),
+            });
+          }
+        } catch {
+          setServerQuickStats({
+            totalSales: Number(data.totalSales ?? 0),
+            totalItems: Number(data.totalItems ?? 0),
+            totalNewProducts: Number(data.totalNewProducts ?? 0),
+            totalEditedProducts: Number(data.totalEditedProducts ?? 0),
+            totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
+            walkInsServed: Number(data.walkInsServed ?? 0),
+            walkInsPurchased: Number(data.walkInsPurchased ?? 0),
+            totalReceipts: Number(data.totalReceipts ?? 0),
+          });
+        }
         return data;
       } catch (err) {
         if ((err as Error).name === "AbortError") return null;

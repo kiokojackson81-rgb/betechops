@@ -150,12 +150,22 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // use POS receipts scoped to the user rather than self-reported marketing rows.
   const isDirectSalesOps = user?.attendantCategory === "DIRECT_SALES_OPS";
   const isBrendah = normalizedEmail === "brendah@betech.co.ke";
-  // Brendah uses a direct-sales commission formula and should use POS receipts
-  // as the sales source-of-truth (not marketing/support merged rows).
-  const usePosTotals = isJeniffer || isDirectSalesOps || isBrendah;
+  // POS receipts are the source-of-truth for DIRECT_SALES_OPS and for specific
+  // attendants. For Brendah, prefer POS receipts when present; otherwise fall
+  // back to merged marketing/support totals so the dashboard doesn't show 0
+  // when there are no POS receipts in the selected period.
+  const shouldFetchPosTotals = isJeniffer || isDirectSalesOps || isBrendah;
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
-  if (usePosTotals) {
+  if (shouldFetchPosTotals) {
     posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: opts.userId });
+  }
+
+  const usePosTotals =
+    isJeniffer ||
+    isDirectSalesOps ||
+    (isBrendah && Number(posSummary?.totalSales ?? 0) > 0);
+
+  if (usePosTotals && posSummary) {
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   } else if (mergedSales > totalSales) {
