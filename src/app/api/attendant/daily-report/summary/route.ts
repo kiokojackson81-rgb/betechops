@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   const now = new Date();
   const url = new URL(req.url);
   const periodKeyParam = url.searchParams.get("periodKey");
+  const debug = url.searchParams.get("debug") === "1";
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
 
   const user = await prisma.user.findUnique({
@@ -76,18 +77,78 @@ export async function GET(req: Request) {
     ? await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId })
     : null;
 
-  return NextResponse.json(
-    composeIdentityResponse(meta, {
-      ...dailySummary,
-      usePosTotals,
-      pos: posSummary
-        ? {
-            totalSales: Number(posSummary.totalSales ?? 0),
-            totalProfit: Number(posSummary.totalProfit ?? 0),
-            totalItems: Number(posSummary.totalItems ?? 0),
-            totalReceipts: Number(posSummary.totalReceipts ?? 0),
-          }
-        : null,
-    }),
-  );
+  const basePayload: any = {
+    ...dailySummary,
+    usePosTotals,
+    pos: posSummary
+      ? {
+          totalSales: Number(posSummary.totalSales ?? 0),
+          totalProfit: Number(posSummary.totalProfit ?? 0),
+          totalItems: Number(posSummary.totalItems ?? 0),
+          totalReceipts: Number(posSummary.totalReceipts ?? 0),
+        }
+      : null,
+  };
+
+  if (debug && usePosTotals) {
+    const ownerOr = [
+      { issuedById: userId },
+      { order: { attendantId: userId } },
+      { data: { path: ["attendantId"], equals: userId } },
+    ];
+
+    const sampleByGeneratedAt = await prisma.receipt.findMany({
+      where: {
+        generatedAt: { gte: period.start, lte: period.end },
+        AND: [{ OR: ownerOr }],
+      },
+      select: {
+        id: true,
+        generatedAt: true,
+        createdAt: true,
+        receiptNumber: true,
+        totals: true,
+        issuedById: true,
+        data: true,
+        order: { select: { orderNumber: true, attendantId: true, paymentStatus: true, status: true, totalAmount: true } },
+      },
+      orderBy: { generatedAt: "desc" },
+      take: 20,
+    });
+
+    const sampleByCreatedAt =
+      sampleByGeneratedAt.length > 0
+        ? []
+        : await prisma.receipt.findMany({
+            where: {
+              createdAt: { gte: period.start, lte: period.end },
+              AND: [{ OR: ownerOr }],
+            },
+            select: {
+              id: true,
+              generatedAt: true,
+              createdAt: true,
+              receiptNumber: true,
+              totals: true,
+              issuedById: true,
+              data: true,
+              order: { select: { orderNumber: true, attendantId: true, paymentStatus: true, status: true, totalAmount: true } },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+          });
+
+    basePayload.debug = {
+      periodStartIso: period.start.toISOString(),
+      periodEndIso: period.end.toISOString(),
+      userId,
+      normalizedEmail,
+      sampleByGeneratedAtCount: sampleByGeneratedAt.length,
+      sampleByCreatedAtCount: sampleByCreatedAt.length,
+      sampleByGeneratedAt,
+      sampleByCreatedAt,
+    };
+  }
+
+  return NextResponse.json(composeIdentityResponse(meta, basePayload));
 }
