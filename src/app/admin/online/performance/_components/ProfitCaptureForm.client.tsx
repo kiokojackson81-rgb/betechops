@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
@@ -72,9 +72,7 @@ type AccountOption = { id: string; platform: Platform; displayName: string };
 
 export default function ProfitCaptureFormClient(props: { accounts: AccountOption[] }) {
   const [accountId, setAccountId] = useState<string>("");
-  const [shopSearch, setShopSearch] = useState<string>("");
   const [transactionText, setTransactionText] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [buyingPriceKes, setBuyingPriceKes] = useState("");
   const [orderId, setOrderId] = useState("");
   const [sku, setSku] = useState("");
@@ -84,57 +82,74 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
   const [showMore, setShowMore] = useState(false);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [previewError, setPreviewError] = useState<string>("");
+  const [existingTxns, setExistingTxns] = useState<string[]>([]);
+  const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
 
   const buyingNum = useMemo(() => Number(buyingPriceKes), [buyingPriceKes]);
-
-  const filteredAccounts = useMemo(() => {
-    const q = shopSearch.trim().toLowerCase();
-    if (!q) return props.accounts;
-    return props.accounts.filter((a) => (a.displayName || "").toLowerCase().includes(q) || a.platform.toLowerCase().includes(q));
-  }, [props.accounts, shopSearch]);
 
   const canPreview =
     Boolean(accountId) &&
     Number.isFinite(buyingNum) &&
     buyingNum >= 0 &&
-    (transactionText.trim().length > 0 || imageFile !== null);
+    transactionText.trim().length > 0;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("betechops:profit-capture:accountId") ?? "";
+      if (!saved) return;
+      if (props.accounts.some((a) => a.id === saved)) {
+        setAccountId(saved);
+      }
+    } catch {}
+  }, [props.accounts]);
+
+  useEffect(() => {
+    try {
+      if (accountId) localStorage.setItem("betechops:profit-capture:accountId", accountId);
+      else localStorage.removeItem("betechops:profit-capture:accountId");
+    } catch {}
+  }, [accountId]);
 
   const runPreview = async () => {
     if (!accountId) return showToast("Select a shop first", "error");
-    if (!transactionText.trim() && !imageFile) return showToast("Paste the transaction details or upload a screenshot first", "error");
+    if (!transactionText.trim()) return showToast("Paste the transaction details first", "error");
     if (!Number.isFinite(buyingNum) || buyingNum < 0) return showToast("Enter a valid buying price", "error");
 
     setPreview(null);
     setPreviewError("");
+    setExistingTxns([]);
+    setDuplicateConfirmed(false);
     setSaving(true);
     try {
-      const isImageMode = Boolean(imageFile) && !transactionText.trim();
-      const res = isImageMode
-        ? await fetch("/api/admin/marketplace-profit-entry/preview", {
-            method: "POST",
-            body: (() => {
-              const fd = new FormData();
-              fd.set("accountId", accountId);
-              fd.set("buyingPriceKes", String(buyingNum));
-              fd.set("transactionText", transactionText);
-              if (imageFile) fd.set("file", imageFile);
-              return fd;
-            })(),
-          })
-        : await fetch("/api/admin/marketplace-profit-entry/preview", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ accountId, buyingPriceKes: buyingNum, transactionText }),
-          });
+      const res = await fetch("/api/admin/marketplace-profit-entry/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, buyingPriceKes: buyingNum, transactionText }),
+      });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) {
         throw new Error(data?.error || "Preview failed");
       }
       const payload = data as PreviewPayload;
       setPreview(payload);
-      if (payload?.rawText && !transactionText.trim()) {
-        setTransactionText(payload.rawText);
+
+      const txns = (payload.items ?? [])
+        .map((it) => String(it?.extracted?.item_price_credit?.txn ?? "").trim())
+        .filter(Boolean);
+      if (txns.length) {
+        fetch("/api/admin/marketplace-profit-entry/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId, txns }),
+        })
+          .then((r) => r.json().catch(() => null))
+          .then((j: any) => {
+            const existing = Array.isArray(j?.existingTxns) ? j.existingTxns.map((t: any) => String(t)) : [];
+            setExistingTxns(existing);
+          })
+          .catch(() => {});
       }
+
       showToast("Preview ready", "success");
     } catch (err) {
       console.error(err);
@@ -163,6 +178,19 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       return;
     }
 
+    if (existingTxns.length > 0 && !duplicateConfirmed) {
+      const sample = existingTxns.slice(0, 3).join(", ");
+      const msg =
+        existingTxns.length === 1
+          ? `This unique number already exists for this shop: ${sample}. Continue anyway?`
+          : `Some unique numbers already exist for this shop (${existingTxns.length}): ${sample}${
+              existingTxns.length > 3 ? ", ..." : ""
+            }. Continue anyway?`;
+      const ok = window.confirm(msg);
+      if (!ok) return;
+      setDuplicateConfirmed(true);
+    }
+
     setSaving(true);
     setLastSaved(null);
     try {
@@ -185,13 +213,14 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       setLastSaved(data as any);
       showToast("Profit entry saved", "success");
       setTransactionText("");
-      setImageFile(null);
       setBuyingPriceKes("");
       setOrderId("");
       setSku("");
       setProductName("");
       setPreview(null);
       setPreviewError("");
+      setExistingTxns([]);
+      setDuplicateConfirmed(false);
     } catch (err) {
       console.error(err);
       showToast(err instanceof Error ? err.message : "Failed to save profit entry", "error");
@@ -214,16 +243,6 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <label className="text-sm text-slate-300">
-            Shop search
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={shopSearch}
-              onChange={(e) => setShopSearch(e.target.value)}
-              placeholder="Search shop name or platform..."
-            />
-          </label>
-
-          <label className="text-sm text-slate-300">
             Shop
             <select
               className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
@@ -232,7 +251,7 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
             >
               <option value="">Select shop...</option>
               {(["JUMIA", "KILIMALL"] as Platform[]).map((platform) => {
-                const items = filteredAccounts.filter((a) => a.platform === platform);
+                const items = props.accounts.filter((a) => a.platform === platform);
                 if (items.length === 0) return null;
                 return (
                   <optgroup key={platform} label={platform}>
@@ -268,18 +287,15 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
               placeholder="Paste the full transaction block here (Item Price Credit, Commission, Shipping Fee, Date...)"
             />
           </label>
-
-          <label className="text-sm text-slate-300 lg:col-span-2">
-            Or upload screenshot (optional)
-            <input
-              type="file"
-              accept="image/*"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-            />
-            <p className="mt-1 text-xs text-slate-500">Tip: leave the text box empty to preview using the screenshot.</p>
-          </label>
         </div>
+
+        {existingTxns.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Duplicate unique number detected for this shop:{" "}
+            <span className="font-semibold">{existingTxns.slice(0, 6).join(", ")}{existingTxns.length > 6 ? ", ..." : ""}</span>.{" "}
+            Click <span className="font-semibold">Save</span> and confirm to continue (duplicates are skipped).
+          </div>
+        )}
 
         <div className="mt-4">
           <button
@@ -324,8 +340,8 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
 
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Preview</p>
-          {!transactionText.trim() && !imageFile ? (
-            <p className="mt-2 text-sm text-slate-400">Paste the transaction block or upload a screenshot to see extracted values.</p>
+          {!transactionText.trim() ? (
+            <p className="mt-2 text-sm text-slate-400">Paste the transaction block to see extracted values.</p>
           ) : preview ? (
             <div className="mt-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
