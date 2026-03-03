@@ -46,20 +46,13 @@ type FilterState = {
   source: string;
 };
 
-type FormState = {
-  shopId: string;
-  weekStart: string;
-  weekEnd: string;
-  amount: string;
-};
-
 type WeekOption = {
   startInput: string;
   endInput: string;
   label: string;
 };
 
-const initialFilters: FilterState = { shopId: "", userId: "", platform: "", status: "", source: WeeklySaleSource.MANUAL };
+const initialFilters: FilterState = { shopId: "", userId: "", platform: "", status: "", source: "" };
 
 const MS_PER_DAY = 24 * 3600 * 1000;
 const toInputDate = (dateUtc: Date) => dateUtc.toISOString().slice(0, 10);
@@ -91,13 +84,6 @@ function buildLast4WeeksForPeriod(period: TradingPeriod, reference: Date = perio
   }));
 }
 
-const buildInitialForm = (week?: Pick<WeekOption, "startInput" | "endInput"> | null): FormState => ({
-  shopId: "",
-  weekStart: week?.startInput ?? "",
-  weekEnd: week?.endInput ?? "",
-  amount: "",
-});
-
 export default function ManualWeeklySalesPage() {
   const searchParams = useSearchParams();
   const impersonateId = searchParams.get("impersonateId");
@@ -113,9 +99,7 @@ export default function ManualWeeklySalesPage() {
   const [timeScope, setTimeScope] = useState<"ALL" | "SELECTED_WEEK" | "PERIOD_LAST4">("PERIOD_LAST4");
   const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>(defaultPeriod.key);
   const [selectedWeekStart, setSelectedWeekStart] = useState<string>(initialWeek?.startInput ?? "");
-  const [form, setForm] = useState<FormState>(() => buildInitialForm(initialWeek));
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const loadShops = useCallback(async () => {
     try {
@@ -153,10 +137,6 @@ export default function ManualWeeklySalesPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const onFormChange = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
-  const selectedShop = useMemo(() => shops.find((shop) => shop.id === form.shopId) || null, [shops, form.shopId]);
-  const selectedAssignee = selectedShop?.primaryAttendant ?? null;
-
   const selectedPeriod = useMemo(() => {
     return tradingPeriods.find((p) => p.key === selectedPeriodKey) ?? defaultPeriod;
   }, [defaultPeriod, selectedPeriodKey, tradingPeriods]);
@@ -176,7 +156,6 @@ export default function ManualWeeklySalesPage() {
   const selectWeek = useCallback((week: WeekOption | null) => {
     if (!week) return;
     setSelectedWeekStart(week.startInput);
-    setForm((prev) => ({ ...prev, shopId: "", weekStart: week.startInput, weekEnd: week.endInput }));
   }, []);
 
   const attendantOptions = useMemo(() => {
@@ -207,51 +186,6 @@ export default function ManualWeeklySalesPage() {
     [shops],
   );
 
-  const takenShopIdsForWeek = useMemo(() => {
-    if (!form.weekStart || !form.weekEnd) return [] as string[];
-    const activeWindow = buildWeekWindowFromDateOnly(form.weekStart);
-    const manualSet = new Set<string>();
-    sales.forEach((sale) => {
-      if (!sale.shopId) return;
-      const saleStart = canonicalNairobiWeekStartUtc(new Date(sale.weekStart));
-      const saleWindow = mondayToSundayNairobiWindow(saleStart);
-      if (
-        saleWindow.weekStart.getTime() === activeWindow.weekStart.getTime() &&
-        saleWindow.weekEnd.getTime() === activeWindow.weekEndExclusive.getTime() &&
-        sale.source === WeeklySaleSource.MANUAL &&
-        sale.status !== WeeklySaleStatus.REJECTED
-      ) {
-        manualSet.add(sale.shopId);
-      }
-    });
-    return Array.from(manualSet);
-  }, [sales, form.weekStart, form.weekEnd]);
-  const takenShopSet = useMemo(() => new Set(takenShopIdsForWeek), [takenShopIdsForWeek]);
-
-  const autoShopIdsForWeek = useMemo(() => {
-    if (!form.weekStart || !form.weekEnd) return [] as string[];
-    const activeWindow = buildWeekWindowFromDateOnly(form.weekStart);
-    const autoSet = new Set<string>();
-    sales.forEach((sale) => {
-      if (!sale.shopId) return;
-      const saleStart = canonicalNairobiWeekStartUtc(new Date(sale.weekStart));
-      const saleWindow = mondayToSundayNairobiWindow(saleStart);
-      if (
-        saleWindow.weekStart.getTime() === activeWindow.weekStart.getTime() &&
-        saleWindow.weekEnd.getTime() === activeWindow.weekEndExclusive.getTime() &&
-        sale.source === WeeklySaleSource.AUTOMATIC
-      ) {
-        autoSet.add(sale.shopId);
-      }
-    });
-    return Array.from(autoSet);
-  }, [sales, form.weekStart, form.weekEnd]);
-  const autoShopSet = useMemo(() => new Set(autoShopIdsForWeek), [autoShopIdsForWeek]);
-  const availableShops = useMemo(
-    () => shops.filter((shop) => !takenShopSet.has(shop.id)),
-    [shops, takenShopSet],
-  );
-
   const visibleSales = useMemo(() => {
     return sales.filter((sale) => {
       if (filters.shopId && sale.shopId !== filters.shopId) return false;
@@ -262,7 +196,7 @@ export default function ManualWeeklySalesPage() {
 
       if (timeScope === "SELECTED_WEEK") {
         const window = mondayToSundayNairobiWindow(new Date(sale.weekStart));
-        return window.weekStart.toISOString().slice(0, 10) === form.weekStart;
+        return window.weekStart.toISOString().slice(0, 10) === selectedWeekStart;
       }
       if (timeScope === "PERIOD_LAST4") {
         const window = mondayToSundayNairobiWindow(new Date(sale.weekStart));
@@ -271,73 +205,17 @@ export default function ManualWeeklySalesPage() {
       }
       return true;
     });
-  }, [sales, filters.platform, filters.shopId, filters.source, filters.status, filters.userId, form.weekStart, last4WeekStartSet, timeScope]);
-
-  const selectedShopLast4Summary = useMemo(() => {
-    if (!form.shopId) return null;
-    const shopWeeks = new Map<string, WeeklySaleRow>();
-    sales.forEach((sale) => {
-      if (sale.shopId !== form.shopId) return;
-      if (sale.source !== WeeklySaleSource.MANUAL) return;
-      if (sale.status === WeeklySaleStatus.REJECTED) return;
-      const window = mondayToSundayNairobiWindow(new Date(sale.weekStart));
-      const weekStartInput = window.weekStart.toISOString().slice(0, 10);
-      if (!last4WeekStartSet.has(weekStartInput)) return;
-      shopWeeks.set(weekStartInput, sale);
-    });
-    const captured = Array.from(shopWeeks.keys());
-    const total = Array.from(shopWeeks.values()).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-    const missing = last4
-      .filter((wk) => !shopWeeks.has(wk.startInput))
-      .map((wk) => ({ startInput: wk.startInput, label: wk.label }));
-    return { total, capturedCount: captured.length, missing };
-  }, [form.shopId, last4, last4WeekStartSet, sales]);
-
-  useEffect(() => {
-    if (form.shopId && takenShopSet.has(form.shopId)) {
-      setForm((prev) => ({ ...prev, shopId: "" }));
-    }
-  }, [form.shopId, takenShopSet]);
-
-  const handleWeekSelect = (startInput: string) => {
-    const week = weekOptions.find((w) => w.startInput === startInput) ?? null;
-    selectWeek(week);
-  };
-
-  const createEntry = async () => {
-    if (!form.shopId || !form.weekStart || !form.weekEnd || !form.amount) {
-      showToast("Please provide shop, week range and amount", "error");
-      return;
-    }
-    const assignedUserId = selectedAssignee?.id ?? null;
-    setSaving(true);
-    try {
-      const payload = {
-        shopId: form.shopId,
-        weekStart: form.weekStart,
-        weekEnd: form.weekEnd,
-        amount: Number(form.amount),
-        userId: assignedUserId,
-      };
-      const res = await fetch("/api/admin/weekly-sale", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Failed to create entry");
-      }
-      showToast("Manual weekly sale saved", "success");
-      setForm(buildInitialForm(selectedWeek ?? initialWeek));
-      await loadSales();
-    } catch (err) {
-      console.error(err);
-      showToast(err instanceof Error ? err.message : "Failed to create entry", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [
+    sales,
+    filters.platform,
+    filters.shopId,
+    filters.source,
+    filters.status,
+    filters.userId,
+    last4WeekStartSet,
+    selectedWeekStart,
+    timeScope,
+  ]);
 
   const updateStatus = async (id: string, status: WeeklySaleStatus) => {
     try {
@@ -483,7 +361,7 @@ export default function ManualWeeklySalesPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Last 4 full weeks</p>
             <div className="mt-3 space-y-2 text-sm text-slate-200">
@@ -500,48 +378,8 @@ export default function ManualWeeklySalesPage() {
                 <div className="text-xs text-slate-400">Week start: {wk.startInput}</div>
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Selected shop (last 4 weeks)</p>
-            {selectedShopLast4Summary ? (
-              <div className="mt-3 space-y-2 text-sm text-slate-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Captured weeks</span>
-                  <span className="font-semibold text-white">{selectedShopLast4Summary.capturedCount}/4</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Total (manual)</span>
-                  <span className="font-semibold text-emerald-300">{currency.format(selectedShopLast4Summary.total)}</span>
-                </div>
-                {selectedShopLast4Summary.missing.length > 0 ? (
-                  <div className="pt-2">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Missing weeks</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedShopLast4Summary.missing.map((wk) => (
-                        <button
-                          key={wk.startInput}
-                          type="button"
-                          onClick={() => {
-                            const window = buildWeekWindowFromDateOnly(wk.startInput);
-                            selectWeek({ startInput: window.weekStartInput, endInput: window.weekEndInput, label: wk.label });
-                          }}
-                          className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-500/15"
-                        >
-                          {wk.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="pt-2 text-xs text-emerald-300">All 4 weeks captured for this shop.</p>
-                )}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-400">Select a shop to see its period totals and missing weeks.</p>
-            )}
-          </div>
+             </div>
+           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Filters</p>
@@ -578,147 +416,6 @@ export default function ManualWeeklySalesPage() {
               </label>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-5">
-        <h2 className="text-lg font-semibold text-white">Add manual entry</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-4">
-          <label className="text-sm text-slate-300">
-            Shop
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={form.shopId}
-              onChange={(e) => onFormChange("shopId", e.target.value)}
-              disabled={availableShops.length === 0}
-            >
-              <option value="">
-                {availableShops.length === 0 ? "All shops captured for this week" : "Select shop"}
-              </option>
-              {availableShops.map((shop) => (
-                <option key={shop.id} value={shop.id}>
-                  {shop.displayName} ({shop.platform})
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              {shops.length === 0
-                ? "Loading shop assignments…"
-                : `${availableShops.length} of ${shops.length} shops still open for ${selectedWeekLabel}.`}
-            </p>
-            {autoShopSet.size > 0 && (
-              <p className="mt-1 text-xs text-amber-300">
-                {autoShopSet.size === 1
-                  ? "1 shop already has an automatic entry this week; saving will overwrite it."
-                  : `${autoShopSet.size} shops already have automatic entries this week; saving will overwrite them.`}
-              </p>
-            )}
-            {selectedShop && autoShopSet.has(selectedShop.id) && (
-              <p className="mt-1 text-xs text-amber-300">
-                Manual entry will overwrite the automatic record for this shop.
-              </p>
-            )}
-          </label>
-          <label className="text-sm text-slate-300">
-            Trading week
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={selectedWeekStart}
-              onChange={(e) => handleWeekSelect(e.target.value)}
-            >
-              {weekOptions.map((week) => (
-                <option key={week.startInput} value={week.startInput}>
-                  {week.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-slate-300">
-            Week start
-            <input
-              type="date"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={form.weekStart}
-              disabled
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Week end
-            <input
-              type="date"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={form.weekEnd}
-              disabled
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Amount (KES)
-            <input
-              type="number"
-              min="0"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={form.amount}
-              onChange={(e) => onFormChange("amount", e.target.value)}
-            />
-          </label>
-        </div>
-        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
-          {selectedShop ? (
-            <div className="grid gap-3 md:grid-cols-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Attendant on file</p>
-                <p className="mt-1 font-semibold text-white">
-                  {selectedAssignee?.name || selectedAssignee?.email || "Unassigned"}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Shop platform</p>
-                <p className="mt-1 font-semibold text-white">{selectedShop.platform}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Marketplace codes</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {selectedShop.identifiers?.jumiaShopSid
-                    ? `SID: ${selectedShop.identifiers.jumiaShopSid}`
-                    : selectedShop.identifiers?.kilimallShopCode
-                      ? `Code: ${selectedShop.identifiers.kilimallShopCode}`
-                      : "—"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p>Select a shop to view the assigned attendant and identifiers for this trading period.</p>
-          )}
-        </div>
-        <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Trading weeks</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {weekOptions.map((week) => (
-              <div
-                key={week.startInput}
-                className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-slate-200"
-              >
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Trading week</p>
-                <p className="text-base text-white">{week.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={createEntry}
-            disabled={saving}
-            className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
-          >
-            {saving ? "Saving." : "Save manual entry"}
-          </button>
-          <Link
-            href={withImpersonateId("/attendant/daily-report", impersonateId)}
-            className="text-sm text-emerald-400 hover:text-emerald-200"
-          >
-            Need to record receipts? Open the daily report tool →
-          </Link>
         </div>
       </section>
 
