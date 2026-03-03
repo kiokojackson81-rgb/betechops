@@ -44,11 +44,7 @@ export default function AttendantManualWeeklyPage() {
   const [salesLoading, setSalesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [shopId, setShopId] = useState("");
   const [weekStart, setWeekStart] = useState("");
-  const [weekEnd, setWeekEnd] = useState("");
-  const [amount, setAmount] = useState("");
-  const [userId, setUserId] = useState<string>("");
 
   const period = useMemo(() => getTradingPeriodFor(new Date()), []);
   const weeks = useMemo(() => getOnlineOpsWeeksForTradingPeriod(period, period.end, 4), [period]);
@@ -57,7 +53,6 @@ export default function AttendantManualWeeklyPage() {
     const last = weeks.at(-1);
     if (!last) return;
     setWeekStart(last.startInput);
-    setWeekEnd(last.weekEndInclusive.toISOString().slice(0, 10));
   }, [weeks]);
 
   useEffect(() => {
@@ -106,14 +101,6 @@ export default function AttendantManualWeeklyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBenjamin]);
 
-  useEffect(() => {
-    if (!shopId) return;
-    const shop = shops.find((s) => s.id === shopId);
-    if (!shop) return;
-    const defaultUser = shop.primaryAttendant?.id ?? shop.attendants?.[0]?.id ?? "";
-    if (defaultUser) setUserId(defaultUser);
-  }, [shopId, shops]);
-
   const weekOptions = useMemo(() => {
     return weeks.map((w) => ({
       key: w.key,
@@ -140,22 +127,6 @@ export default function AttendantManualWeeklyPage() {
     [shops],
   );
 
-  const selectedShop = useMemo(() => shops.find((s) => s.id === shopId) ?? null, [shops, shopId]);
-  const attendantOptions = useMemo(() => {
-    if (!selectedShop) return [];
-    const all = [selectedShop.primaryAttendant, ...(selectedShop.attendants ?? [])].filter(Boolean) as Array<{
-      id: string;
-      name: string | null;
-      email: string | null;
-    }>;
-    const map = new Map<string, { id: string; label: string }>();
-    for (const u of all) {
-      const label = u.name || u.email || u.id;
-      map.set(u.id, { id: u.id, label });
-    }
-    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [selectedShop]);
-
   const mySales = useMemo(() => {
     return sales
       .filter((s) => String(s.source) === String(WeeklySaleSource.MANUAL))
@@ -173,31 +144,6 @@ export default function AttendantManualWeeklyPage() {
       </div>
     );
   }
-
-  const submit = async () => {
-    if (!shopId) return showToast("Select a shop", "error");
-    if (!weekStart || !weekEnd) return showToast("Select a week", "error");
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt < 0) return showToast("Enter a valid amount", "error");
-
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/weekly-sale", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shopId, weekStart, weekEnd, amount: amt, userId: userId || null }),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) throw new Error(data?.error || "Failed to save");
-      showToast("Saved", "success");
-      setAmount("");
-      await loadSales();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const editAmount = async (row: WeeklySaleRow) => {
     const raw = window.prompt("New amount (KES)", String(row.amount ?? 0));
@@ -258,8 +204,10 @@ export default function AttendantManualWeeklyPage() {
         </header>
 
         <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-          <h2 className="text-lg font-semibold text-white">New entry</h2>
-          <p className="text-sm text-slate-400">Trading period: {period.label}</p>
+          <h2 className="text-lg font-semibold text-white">CSV weekly upload</h2>
+          <p className="text-sm text-slate-400">
+            Trading period: {period.label}. Manual amount entry is disabled for speed—use CSV upload.
+          </p>
 
           <div className="mt-4">
             <MarketplaceWeeklyCsvUpload
@@ -274,97 +222,19 @@ export default function AttendantManualWeeklyPage() {
             />
           </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <label className="text-sm text-slate-300">
-            Shop
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={shopId}
-              onChange={(e) => setShopId(e.target.value)}
-              disabled={shopsLoading || saving}
-            >
-              <option value="">{shopsLoading ? "Loading..." : "Select shop..."}</option>
-              {shops.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName || s.shopName || s.id} — {s.platform}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-300">
-            Week
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={weekStart}
-              onChange={(e) => {
-                const start = e.target.value;
-                const opt = weekOptions.find((w) => w.startInput === start);
-                setWeekStart(start);
-                setWeekEnd(opt?.endInput ?? "");
-              }}
-              disabled={saving}
-            >
-              {weekOptions.map((w) => (
-                <option key={w.key} value={w.startInput}>
-                  {w.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-300">
-            Attendant (optional)
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              disabled={saving || !selectedShop}
-            >
-              <option value="">Unassigned</option>
-              {attendantOptions.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-300">
-            Amount (KES)
-            <input
-              type="number"
-              min="0"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 120000"
-              disabled={saving}
-            />
-          </label>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-          <button
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
             type="button"
             onClick={() => {
               void loadShops();
               void loadSales();
             }}
-            disabled={saving}
+            disabled={saving || shopsLoading || salesLoading}
             className="rounded-full border border-white/15 bg-white/5 px-6 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60"
           >
-            Refresh
-          </button>
-        </div>
+              Refresh
+            </button>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
