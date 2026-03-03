@@ -95,41 +95,7 @@ export default async function OnlinePerformanceCapturePage() {
       {limitedView ? (
         <ProfitCaptureFormClient accounts={accounts} limitedView />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <ProfitCaptureFormClient accounts={accounts} />
-          </div>
-
-          <aside className="lg:col-span-1">
-            <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-6 lg:sticky lg:top-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Totals (current period)</p>
-              <p className="mt-1 text-sm font-semibold text-white">{period.label}</p>
-
-              {!dbReady ? (
-                <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Summary not available yet (database migration pending).
-                </div>
-              ) : (
-                <div className="mt-4 grid gap-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Sales (net payout)</span>
-                    <span className="font-semibold text-emerald-300">{currency.format(totals.netPayout)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Profit</span>
-                    <span className={`font-semibold ${totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                      {currency.format(totals.profit)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Entries</span>
-                    <span className="font-semibold text-slate-100">{totals.count}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
-        </div>
+        <ProfitCaptureFormClient accounts={accounts} />
       )}
 
       {!limitedView && dbReady && perAccountRows.length > 0 && (

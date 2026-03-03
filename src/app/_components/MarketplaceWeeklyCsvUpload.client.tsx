@@ -68,7 +68,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [saving, setSaving] = useState(false);
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
   const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [buyingPriceKes, setBuyingPriceKes] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"orders" | "profit">("orders");
+  const [buyingByTxn, setBuyingByTxn] = useState<Record<string, string>>({});
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
@@ -77,18 +78,17 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     const netPayout = rows.reduce((sum, r) => sum + Number(r.netPayout ?? 0), 0);
     const grossSale = rows.reduce((sum, r) => sum + Number(r.grossSale ?? 0), 0);
     const duplicates = rows.filter((r) => existingTxns.includes(r.itemCreditTxn)).length;
-    return { netPayout, grossSale, duplicates };
-  }, [rows, existingTxns]);
-
-  const buyingNum = useMemo(() => {
-    const raw = String(buyingPriceKes ?? "").trim();
-    if (!raw) return 0;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? n : 0;
-  }, [buyingPriceKes]);
+    const profit = rows.reduce((sum, r) => {
+      const buying = Number(buyingByTxn[r.itemCreditTxn] ?? 0);
+      return sum + (Number(r.netPayout ?? 0) - (Number.isFinite(buying) ? buying : 0));
+    }, 0);
+    return { netPayout, grossSale, duplicates, profit };
+  }, [rows, existingTxns, buyingByTxn]);
 
   const buildPayloadRows = () => {
     return rows.map((r) => {
+      const buyingRaw = buyingByTxn[r.itemCreditTxn];
+      const buyingPriceKes = buyingRaw === undefined || buyingRaw === null || String(buyingRaw).trim() === "" ? null : Number(buyingRaw);
       return {
         dateUtc: r.dateUtc,
         orderNo: r.orderNo,
@@ -104,7 +104,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         commission: r.commission,
         shippingFee: r.shippingFee,
         otherFees: r.otherFees,
-        buyingPriceKes: buyingNum,
+        buyingPriceKes,
         statementNumber: r.statementNumber,
         paidStatus: r.paidStatus,
         orderItemStatus: r.orderItemStatus,
@@ -146,7 +146,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       const items = Array.isArray(data?.items) ? (data.items as PreviewRow[]) : [];
       setRows(items);
       setExistingTxns(Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : []);
-      setBuyingPriceKes("");
+      setBuyingByTxn({});
+      setActiveTab("orders");
       if (data?.aggregated?.errors?.length) {
         showToast(String(data.aggregated.errors[0] ?? "Preview warning"), "warn");
       }
@@ -208,10 +209,18 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const perRowProfit = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of rows) {
-      map.set(r.itemCreditTxn, Number(r.netPayout ?? 0) - buyingNum);
+      const buying = Number(buyingByTxn[r.itemCreditTxn] ?? 0);
+      map.set(r.itemCreditTxn, Number(r.netPayout ?? 0) - (Number.isFinite(buying) ? buying : 0));
     }
     return map;
-  }, [rows, buyingNum]);
+  }, [rows, buyingByTxn]);
+
+  const updateBuying = (txn: string, next: string) => {
+    setBuyingByTxn((prev) => ({ ...prev, [txn]: next }));
+    if (activeTab === "orders") return;
+    // keep profit tab live as values change
+    setActiveTab("profit");
+  };
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -315,24 +324,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
       {rows.length ? (
         <div className="mt-4">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <label className="block">
-              <div className="mb-1 text-xs text-slate-400">Buying price (KES) — applies to all rows</div>
-              <input
-                className="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                inputMode="decimal"
-                placeholder="e.g. 2500"
-                value={buyingPriceKes}
-                onChange={(e) => setBuyingPriceKes(e.target.value)}
-              />
-            </label>
-            <div className="text-xs text-slate-500">
-              Tip: if items have different buying prices, import with 0 then edit per-order in Performance.
-            </div>
-          </div>
-
           {!props.hideSummaryTotals ? (
-            <div className="mb-3 grid gap-2 sm:grid-cols-3">
+            <div className="mb-3 grid gap-2 sm:grid-cols-4">
               <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">Rows</div>
                 <div className="text-base font-semibold text-slate-100">{rows.length}</div>
@@ -345,8 +338,35 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 <div className="text-xs text-slate-400">Duplicates</div>
                 <div className="text-base font-semibold text-slate-100">{totals.duplicates}</div>
               </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <div className="text-xs text-slate-400">Profit total</div>
+                <div className={totals.profit < 0 ? "text-base font-semibold text-rose-300" : "text-base font-semibold text-emerald-300"}>
+                  {currency.format(totals.profit)}
+                </div>
+              </div>
             </div>
           ) : null}
+
+          <div className="mb-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("orders")}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                activeTab === "orders" ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-700 text-slate-200 hover:bg-white/5"
+              }`}
+            >
+              Orders
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("profit")}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                activeTab === "profit" ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-700 text-slate-200 hover:bg-white/5"
+              }`}
+            >
+              Profit
+            </button>
+          </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800">
             <table className="min-w-[1100px] w-full text-left text-sm">
@@ -357,8 +377,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   <th className="px-3 py-2">Item</th>
                   <th className="px-3 py-2">SKU</th>
                   <th className="px-3 py-2">Net</th>
+                  <th className="px-3 py-2">Buying</th>
                   <th className="px-3 py-2">Profit</th>
-                  <th className="px-3 py-2">Unique #</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/20">
@@ -381,12 +401,17 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                         </div>
                       </td>
                       <td className="px-3 py-2 font-medium text-slate-100">{currency.format(Number(r.netPayout ?? 0))}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={buyingByTxn[r.itemCreditTxn] ?? ""}
+                          onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
+                        />
+                      </td>
                       <td className={profit < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
                         {currency.format(profit)}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-300">
-                        {r.itemCreditTxn}
-                        {isDup ? <div className="text-[11px] text-amber-300">Duplicate</div> : null}
                       </td>
                     </tr>
                   );
