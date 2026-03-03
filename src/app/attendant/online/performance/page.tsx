@@ -43,57 +43,58 @@ export default async function AttendantPerformancePage() {
   const lossMap = new Map(lossCounts.map((r) => [r.weekStart, r.count]));
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
-        <h1 className="text-2xl font-semibold text-white">Performance</h1>
-        <p className="text-sm text-slate-400">Review your captured entries per order (no totals).</p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Link
-            href="/attendant/online"
-            className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
-          >
-            Back to dashboard
-          </Link>
-          <Link
-            href="/attendant/online/performance/capture"
-            className="rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
-          >
-            Capture profit
-          </Link>
-        </div>
-      </header>
-
-      {!dbReady ? (
-        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Performance is not available yet (database migration pending).
-        </div>
-      ) : (
-        <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-          <h2 className="text-lg font-semibold text-white">Weeks (current period)</h2>
-          <p className="text-sm text-slate-400">{period.label}</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {weeks.map((wk) => {
-              const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
-              return (
-                <Link
-                  key={wk.key}
-                  href={`/attendant/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
-                  className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
-                >
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{wk.label}</p>
-                  <div className="mt-4 flex items-center justify-between text-sm">
-                    <span className="text-slate-400">Loss entries</span>
-                    <span className="font-semibold text-amber-200">{lossCount}</span>
-                  </div>
-                </Link>
-              );
-            })}
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-6xl space-y-6 p-6">
+        <header className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
+          <h1 className="text-3xl font-semibold text-white">Performance</h1>
+          <p className="text-sm text-slate-300">Review your captured entries per order (no totals).</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              href="/attendant/online"
+              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              Back to dashboard
+            </Link>
+            <Link
+              href="/attendant/online/performance/capture"
+              className="rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
+            >
+              Capture profit
+            </Link>
           </div>
-        </section>
-      )}
+        </header>
+
+        {!dbReady ? (
+          <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Performance is not available yet (database migration pending).
+          </div>
+        ) : (
+          <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+            <h2 className="text-lg font-semibold text-white">Weeks (current period)</h2>
+            <p className="text-sm text-slate-400">{period.label}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {weeks.map((wk) => {
+                const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
+                return (
+                  <Link
+                    key={wk.key}
+                    href={`/attendant/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
+                    className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
+                  >
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{wk.label}</p>
+                    <div className="mt-4 flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Loss entries</span>
+                      <span className="font-semibold text-amber-200">{lossCount}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   );
 }
-

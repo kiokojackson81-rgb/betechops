@@ -147,9 +147,11 @@ export default function AttendantManualWeeklyPage() {
 
   if (!isBenjamin) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-white">Manual weekly</h1>
-        <p className="text-sm text-slate-400">Not authorized.</p>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-6xl space-y-6 p-6">
+          <h1 className="text-2xl font-semibold text-white">Manual weekly</h1>
+          <p className="text-sm text-slate-400">Not authorized.</p>
+        </main>
       </div>
     );
   }
@@ -220,26 +222,26 @@ export default function AttendantManualWeeklyPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       <ToastContainer />
+      <main className="mx-auto max-w-6xl space-y-6 p-6">
+        <header className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
+          <h1 className="text-3xl font-semibold text-white">Manual weekly</h1>
+          <p className="text-sm text-slate-300">Enter manual weekly totals (admin can approve/analyze later).</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              href="/attendant/online"
+              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              Back to dashboard
+            </Link>
+          </div>
+        </header>
 
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
-        <h1 className="text-2xl font-semibold text-white">Manual weekly</h1>
-        <p className="text-sm text-slate-400">Enter manual weekly totals (admin can approve/analyze later).</p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Link
-            href="/attendant/online"
-            className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
-          >
-            Back to dashboard
-          </Link>
-        </div>
-      </header>
-
-      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-        <h2 className="text-lg font-semibold text-white">New entry</h2>
-        <p className="text-sm text-slate-400">Trading period: {period.label}</p>
+        <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+          <h2 className="text-lg font-semibold text-white">New entry</h2>
+          <p className="text-sm text-slate-400">Trading period: {period.label}</p>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <label className="text-sm text-slate-300">
@@ -332,13 +334,13 @@ export default function AttendantManualWeeklyPage() {
             Refresh
           </button>
         </div>
-      </section>
+        </section>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-white">My recent entries</h2>
-          <span className="text-sm text-slate-400">{salesLoading ? "Loading..." : `${mySales.length} shown`}</span>
-        </div>
+        <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">My recent entries</h2>
+            <span className="text-sm text-slate-400">{salesLoading ? "Loading..." : `${mySales.length} shown`}</span>
+          </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-[980px] w-full text-left text-sm">
@@ -392,8 +394,8 @@ export default function AttendantManualWeeklyPage() {
             </tbody>
           </table>
         </div>
-      </section>
+        </section>
+      </main>
     </div>
   );
 }
-
