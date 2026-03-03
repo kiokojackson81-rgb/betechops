@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { withImpersonateId } from "@/lib/impersonation";
 
@@ -45,6 +45,15 @@ type PreviewRow = {
   countryCode: string;
 };
 
+type DraftState = {
+  version: 1;
+  savedAt: string;
+  shopId: string;
+  weekStart: string;
+  rows: PreviewRow[];
+  buyingByTxn: Record<string, string>;
+};
+
 export default function MarketplaceWeeklyCsvUpload(props: {
   title?: string;
   shops: MarketplaceShopOption[];
@@ -70,9 +79,27 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [activeTab, setActiveTab] = useState<"orders" | "profit">("orders");
   const [buyingByTxn, setBuyingByTxn] = useState<Record<string, string>>({});
+  const [bulkBuying, setBulkBuying] = useState<string>("");
+  const [submitted, setSubmitted] = useState(false);
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
+
+  const draftKey = useMemo(() => {
+    if (!shopId || !weekStart) return "";
+    return `betechops:csv-draft:v1:${shopId}:${weekStart}`;
+  }, [shopId, weekStart]);
+
+  const canSubmit = useMemo(() => {
+    if (!rows.length) return false;
+    // Require buying price for every row to avoid showing profit as net payout.
+    return rows.every((r) => {
+      const raw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
+      if (!raw) return false;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0;
+    });
+  }, [rows, buyingByTxn]);
 
   const totals = useMemo(() => {
     const netPayout = rows.reduce((sum, r) => sum + Number(r.netPayout ?? 0), 0);
@@ -115,7 +142,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     });
   };
 
-  const preview = async () => {
+  const loadStatement = async () => {
     if (!shopId) {
       showToast("Select a shop first", "error");
       return;
@@ -148,6 +175,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       setExistingTxns(Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : []);
       setBuyingByTxn({});
       setActiveTab("orders");
+      setSubmitted(false);
       if (data?.aggregated?.errors?.length) {
         showToast(String(data.aggregated.errors[0] ?? "Preview warning"), "warn");
       }
@@ -160,7 +188,11 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const importNow = async (allowDuplicates: boolean) => {
     if (!shopId || !weekStart || !rows.length) {
-      showToast("Preview the CSV first", "error");
+      showToast("Load the statement first", "error");
+      return;
+    }
+    if (!canSubmit) {
+      showToast("Enter buying price for all rows before submitting", "error");
       return;
     }
 
@@ -198,6 +230,12 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         )}`,
         "success",
       );
+      setSubmitted(true);
+      setActiveTab("profit");
+      // Clear draft so reload doesn't bring back already-submitted rows.
+      try {
+        if (draftKey) localStorage.removeItem(draftKey);
+      } catch {}
       props.onImported?.();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Import failed", "error");
@@ -217,36 +255,86 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const updateBuying = (txn: string, next: string) => {
     setBuyingByTxn((prev) => ({ ...prev, [txn]: next }));
-    if (activeTab === "orders") return;
-    // keep profit tab live as values change
-    setActiveTab("profit");
   };
+
+  const applyBulkBuying = () => {
+    const raw = String(bulkBuying ?? "").trim();
+    const n = Number(raw);
+    if (!raw || !Number.isFinite(n) || n < 0) {
+      showToast("Enter a valid bulk buying price", "error");
+      return;
+    }
+    setBuyingByTxn((prev) => {
+      const next = { ...prev };
+      for (const r of rows) {
+        if (!String(next[r.itemCreditTxn] ?? "").trim()) {
+          next[r.itemCreditTxn] = raw;
+        }
+      }
+      return next;
+    });
+  };
+
+  // Restore draft after reload (client-only).
+  useEffect(() => {
+    if (!draftKey) return;
+    if (rows.length) return;
+    if (submitted) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as DraftState;
+      if (!parsed || parsed.version !== 1) return;
+      if (parsed.shopId !== shopId || parsed.weekStart !== weekStart) return;
+      setRows(Array.isArray(parsed.rows) ? parsed.rows : []);
+      setBuyingByTxn(parsed.buyingByTxn && typeof parsed.buyingByTxn === "object" ? parsed.buyingByTxn : {});
+      setSubmitted(false);
+      setActiveTab("orders");
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // Persist draft while editing so refresh doesn't lose work.
+  useEffect(() => {
+    if (!draftKey) return;
+    if (!rows.length) return;
+    if (submitted) return;
+    const draft: DraftState = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      shopId,
+      weekStart,
+      rows,
+      buyingByTxn,
+    };
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {}
+  }, [draftKey, rows, buyingByTxn, submitted, shopId, weekStart]);
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">{props.title ?? "CSV weekly upload"}</h2>
-          <p className="text-sm text-slate-300">
-            Upload a statement CSV, edit buying prices (optional), then import to create profit entries and weekly totals.
-          </p>
+          <p className="text-sm text-slate-300">Load a statement file, enter buying prices, then submit to save.</p>
         </div>
         <div className="flex gap-2">
           <button
             className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-50"
-            onClick={() => void preview()}
+            onClick={() => void loadStatement()}
             disabled={loading || saving}
             type="button"
           >
-            {loading ? "Previewing..." : "Preview"}
+            {loading ? "Loading..." : "Load statement"}
           </button>
           <button
             className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
             onClick={() => void importNow(false)}
-            disabled={saving || loading || !rows.length}
+            disabled={saving || loading || !rows.length || !canSubmit}
             type="button"
           >
-            {saving ? "Importing..." : "Import"}
+            {saving ? "Submitting..." : "Submit"}
           </button>
         </div>
       </div>
@@ -297,7 +385,13 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             type="file"
             accept=".csv,text/csv"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setRows([]);
+              setBuyingByTxn({});
+              setSubmitted(false);
+              setActiveTab("orders");
+            }}
           />
         </label>
 
@@ -325,7 +419,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       {rows.length ? (
         <div className="mt-4">
           {!props.hideSummaryTotals ? (
-            <div className="mb-3 grid gap-2 sm:grid-cols-4">
+            <div className="mb-3 grid gap-2 sm:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">Rows</div>
                 <div className="text-base font-semibold text-slate-100">{rows.length}</div>
@@ -338,34 +432,70 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 <div className="text-xs text-slate-400">Duplicates</div>
                 <div className="text-base font-semibold text-slate-100">{totals.duplicates}</div>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Profit total</div>
-                <div className={totals.profit < 0 ? "text-base font-semibold text-rose-300" : "text-base font-semibold text-emerald-300"}>
-                  {currency.format(totals.profit)}
-                </div>
-              </div>
             </div>
           ) : null}
 
-          <div className="mb-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("orders")}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                activeTab === "orders" ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-700 text-slate-200 hover:bg-white/5"
-              }`}
-            >
-              Orders
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("profit")}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                activeTab === "profit" ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200" : "border-slate-700 text-slate-200 hover:bg-white/5"
-              }`}
-            >
-              Profit
-            </button>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("orders")}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  activeTab === "orders"
+                    ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
+                    : "border-slate-700 text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Orders
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!submitted) return;
+                  setActiveTab("profit");
+                }}
+                disabled={!submitted}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+                  activeTab === "profit"
+                    ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
+                    : "border-slate-700 text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Profit
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="block">
+                <div className="mb-1 text-xs text-slate-400">Bulk buying price (KES)</div>
+                <div className="flex gap-2">
+                  <input
+                    className="w-40 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                    inputMode="decimal"
+                    placeholder="e.g. 2500"
+                    value={bulkBuying}
+                    onChange={(e) => setBulkBuying(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={applyBulkBuying}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900"
+                    disabled={!rows.length}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </label>
+
+              {submitted && !props.hideSummaryTotals ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Profit total</div>
+                  <div className={totals.profit < 0 ? "text-base font-semibold text-rose-300" : "text-base font-semibold text-emerald-300"}>
+                    {currency.format(totals.profit)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -378,7 +508,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   <th className="px-3 py-2">SKU</th>
                   <th className="px-3 py-2">Net</th>
                   <th className="px-3 py-2">Buying</th>
-                  <th className="px-3 py-2">Profit</th>
+                  {submitted ? <th className="px-3 py-2">Profit</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/20">
@@ -410,9 +540,11 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                           onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
                         />
                       </td>
-                      <td className={profit < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
-                        {currency.format(profit)}
-                      </td>
+                      {submitted ? (
+                        <td className={profit < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
+                          {currency.format(profit)}
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -421,7 +553,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           </div>
 
           <div className="mt-2 text-xs text-slate-400">
-            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Buying price is optional; you can edit later in Performance.
+            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Profit appears after you click Submit.
           </div>
         </div>
       ) : (
