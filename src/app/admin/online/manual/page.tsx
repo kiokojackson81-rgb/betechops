@@ -10,6 +10,7 @@ import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiW
 import { getRecentTradingPeriods, getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { withImpersonateId } from "@/lib/impersonation";
+import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -193,6 +194,18 @@ export default function ManualWeeklySalesPage() {
     });
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [shops]);
+
+  const csvShops = useMemo(
+    () =>
+      shops.map((s) => ({
+        id: s.id,
+        displayName: s.displayName,
+        shopName: s.shopName,
+        platform: s.platform,
+        primaryAttendantId: s.primaryAttendant?.id ?? null,
+      })),
+    [shops],
+  );
 
   const takenShopIdsForWeek = useMemo(() => {
     if (!form.weekStart || !form.weekEnd) return [] as string[];
@@ -406,6 +419,16 @@ export default function ManualWeeklySalesPage() {
           Capture overrides when Jumia/Kilimall statements fail to sync, approve pending entries, and keep commissions aligned with the source of truth.
         </p>
       </header>
+
+      <MarketplaceWeeklyCsvUpload
+        title="CSV weekly upload (recommended)"
+        shops={csvShops}
+        weeks={weekOptions}
+        defaultWeekStart={selectedWeek?.startInput ?? selectedWeekStart}
+        assignees={attendantOptions}
+        impersonateId={impersonateId}
+        onImported={() => void loadSales()}
+      />
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">

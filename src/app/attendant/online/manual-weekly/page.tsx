@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ToastContainer from "@/app/_components/ToastContainer";
+import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
@@ -121,6 +122,23 @@ export default function AttendantManualWeeklyPage() {
       label: w.label,
     }));
   }, [weeks]);
+
+  const csvWeeks = useMemo(
+    () => weekOptions.map((w) => ({ startInput: w.startInput, endInput: w.endInput, label: w.label.replace(/–/g, "-") })),
+    [weekOptions],
+  );
+
+  const csvShops = useMemo(
+    () =>
+      shops.map((s) => ({
+        id: s.id,
+        displayName: s.displayName,
+        shopName: s.shopName,
+        platform: s.platform,
+        primaryAttendantId: s.primaryAttendant?.id ?? null,
+      })),
+    [shops],
+  );
 
   const selectedShop = useMemo(() => shops.find((s) => s.id === shopId) ?? null, [shops, shopId]);
   const attendantOptions = useMemo(() => {
@@ -242,6 +260,19 @@ export default function AttendantManualWeeklyPage() {
         <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
           <h2 className="text-lg font-semibold text-white">New entry</h2>
           <p className="text-sm text-slate-400">Trading period: {period.label}</p>
+
+          <div className="mt-4">
+            <MarketplaceWeeklyCsvUpload
+              title="CSV weekly upload"
+              shops={csvShops}
+              weeks={csvWeeks}
+              defaultWeekStart={weekStart}
+              disableAssigneeSelect
+              defaultAssigneeId={meId}
+              hideSummaryTotals
+              onImported={() => void loadSales()}
+            />
+          </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <label className="text-sm text-slate-300">
