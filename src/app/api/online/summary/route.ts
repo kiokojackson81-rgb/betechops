@@ -110,8 +110,10 @@ export async function GET(req: Request) {
 
   const platforms = Array.from(platformBuckets.values());
 
-  // include marketplace payout weeks and weekly manual sales in marketplace totals
-  // Use grouped aggregates (one row per account/week) to avoid counting duplicate rows
+  // Marketplace payout summaries can be useful for ops, but the attendant-facing
+  // quick stats should reflect what has been recorded for the period (orders +
+  // manual weekly entries). Keep payoutSales separate so it doesn't inflate
+  // quick stats when no manual/order data has been captured.
   let payoutSales = 0;
   if (accountIds.length) {
     const aggs = await recomputeWeeklySummary(start, end);
@@ -137,10 +139,10 @@ export async function GET(req: Request) {
     .reduce((s, r) => s + Number(r._sum?.amount ?? 0), 0);
   const weeklyManualSales = manualJumiaSales + manualKilimallSales;
 
-  const marketplaceSales = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
-  const totalSalesWithMarketplace = totalSales + weeklyManualSales + payoutSales;
+  const marketplaceSales = weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
+  const totalSalesWithMarketplace = totalSales + weeklyManualSales;
   // marketplace-only sales (exclude direct/receipts) used to compute ladder progress
-  const marketplaceSalesOnly = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
+  const marketplaceSalesOnly = weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
 
   // commission summary for marketplace totals (used for "To next tier")
   const commissionInfo = getCommissionSummaryForSales(marketplaceSalesOnly);
