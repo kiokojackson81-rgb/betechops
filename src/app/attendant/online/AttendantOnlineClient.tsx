@@ -108,7 +108,7 @@ export default function AttendantOnlineClient() {
   const selectedPeriodKey = selectedPeriod.key;
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);
   const [impersonated, setImpersonated] = useState<boolean>(false);
   const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
@@ -205,7 +205,7 @@ export default function AttendantOnlineClient() {
       if (!payload) return;
       if (payload?.user?.id) setUserId(payload.user.id);
       if (payload?.user?.role) setUserRole(payload.user.role);
-      if (payload?.user?.email) setUserEmail(payload.user.email);
+      setSupervisorPerformanceTools(Boolean(payload?.flags?.supervisorPerformanceTools));
       // capture impersonation metadata when present so UI can surface it
       if (payload?.impersonated) {
         setImpersonated(true);
@@ -219,9 +219,7 @@ export default function AttendantOnlineClient() {
     }
   }, [appendImpersonateParam]);
 
-  const isBenjaminSupervisor = useMemo(() => {
-    return String(userRole ?? "").toUpperCase() === "SUPERVISOR" && String(userEmail ?? "").toLowerCase() === "benjamin@betech.co.ke";
-  }, [userRole, userEmail]);
+  const isBenjaminSupervisor = supervisorPerformanceTools;
 
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
