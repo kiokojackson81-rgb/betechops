@@ -9,6 +9,46 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+async function resolveAccountAndShopId(inputId: string) {
+  const asAccount = await prisma.marketplaceAccount.findUnique({
+    where: { id: inputId },
+    select: { id: true, platform: true, displayName: true, isActive: true, jumiaShopSid: true, kilimallShopCode: true },
+  });
+  if (asAccount) {
+    const shop = await prisma.shop.findUnique({ where: { id: inputId }, select: { id: true } });
+    return { account: asAccount, shopId: shop?.id ?? inputId };
+  }
+
+  const shop = await prisma.shop.findUnique({
+    where: { id: inputId },
+    select: { id: true, name: true, platform: true, apiConfig: { select: { apiKey: true } } },
+  });
+  if (!shop) return { account: null as any, shopId: null as any };
+
+  const apiKey = (shop as any).apiConfig?.apiKey ? String((shop as any).apiConfig.apiKey) : null;
+  const name = shop.name?.trim() ?? "";
+
+  const account =
+    (apiKey
+      ? await prisma.marketplaceAccount.findFirst({
+          where: {
+            isActive: true,
+            platform: shop.platform as any,
+            OR: [{ jumiaShopSid: apiKey }, { kilimallShopCode: apiKey }],
+          },
+          select: { id: true, platform: true, displayName: true, isActive: true },
+        })
+      : null) ??
+    (name
+      ? await prisma.marketplaceAccount.findFirst({
+          where: { isActive: true, platform: shop.platform as any, displayName: { equals: name, mode: "insensitive" } as any },
+          select: { id: true, platform: true, displayName: true, isActive: true },
+        })
+      : null);
+
+  return { account, shopId: shop.id };
+}
+
 type CsvImportRow = {
   dateUtc: string;
   orderNo?: string;
@@ -63,11 +103,14 @@ export async function POST(req: NextRequest) {
   if (!rows.length) return NextResponse.json({ error: "rows are required" }, { status: 400 });
   if (rows.length > 2000) return NextResponse.json({ error: "Too many rows (max 2000)" }, { status: 400 });
 
-  const account = await prisma.marketplaceAccount.findUnique({
-    where: { id: accountId },
-    select: { id: true, platform: true, displayName: true, isActive: true },
-  });
-  if (!account) return NextResponse.json({ error: "Shop account not found" }, { status: 404 });
+  const resolved = await resolveAccountAndShopId(accountId);
+  const account = resolved.account;
+  if (!account) {
+    return NextResponse.json(
+      { error: "Shop account not found. Select a marketplace shop that has Jumia SID / Kilimall code configured." },
+      { status: 404 },
+    );
+  }
   if (!account.isActive) return NextResponse.json({ error: "Shop account is inactive" }, { status: 400 });
 
   const platform = account.platform as Platform;
@@ -218,7 +261,7 @@ export async function POST(req: NextRequest) {
   let weeklySale: any = null;
   try {
     weeklySale = await upsertManualWeeklySale({
-      shopId: account.id,
+      shopId: resolved.shopId ?? account.id,
       weekStart,
       weekEnd,
       amount: totalNetPayout,
@@ -233,6 +276,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       account: { id: account.id, displayName: account.displayName, platform: account.platform },
+      resolvedShopId: resolved.shopId,
       week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
       weeklySale,
       createdCount: createdItems.length,
