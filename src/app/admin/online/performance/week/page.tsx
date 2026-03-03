@@ -21,6 +21,8 @@ export default async function OnlinePerformanceWeekPage({
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
+  const email = String((session?.user as any)?.email ?? "").toLowerCase();
+  const limitedView = role === "SUPERVISOR" && email === "benjamin@betech.co.ke";
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
@@ -190,47 +192,54 @@ export default async function OnlinePerformanceWeekPage({
         </div>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
-        <h2 className="text-lg font-semibold text-white">KPIs</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Revenue (item credit)</p>
-            <p className="mt-2 text-xl font-semibold text-white">{currency.format(totalRevenue)}</p>
+      {!limitedView ? (
+        <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+          <h2 className="text-lg font-semibold text-white">KPIs</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Revenue (item credit)</p>
+              <p className="mt-2 text-xl font-semibold text-white">{currency.format(totalRevenue)}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Net payout</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(totalNet)}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Profit</p>
+              <p className={`mt-2 text-xl font-semibold ${totalProfit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                {currency.format(totalProfit)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Loss entries</p>
+              <p className="mt-2 text-xl font-semibold text-amber-200">{lossCount}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Net payout</p>
-            <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(totalNet)}</p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Buying total</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(totalBuying)}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Avg margin %</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{avgMargin.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Avg commission %</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{avgCommission.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Manual weekly sales (if entered)</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Profit</p>
-            <p className={`mt-2 text-xl font-semibold ${totalProfit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-              {currency.format(totalProfit)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Loss entries</p>
-            <p className="mt-2 text-xl font-semibold text-amber-200">{lossCount}</p>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Buying total</p>
-            <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(totalBuying)}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Avg margin %</p>
-            <p className="mt-2 text-xl font-semibold text-slate-100">{avgMargin.toFixed(1)}%</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Avg commission %</p>
-            <p className="mt-2 text-xl font-semibold text-slate-100">{avgCommission.toFixed(1)}%</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Manual weekly sales (if entered)</p>
-            <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+          <h2 className="text-lg font-semibold text-white">Entries</h2>
+          <p className="text-sm text-slate-400">Totals hidden for supervisor view. Review profit per order below.</p>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Loss entries</h2>

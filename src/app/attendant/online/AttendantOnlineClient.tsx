@@ -108,6 +108,7 @@ export default function AttendantOnlineClient() {
   const selectedPeriodKey = selectedPeriod.key;
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [impersonated, setImpersonated] = useState<boolean>(false);
   const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
@@ -204,6 +205,7 @@ export default function AttendantOnlineClient() {
       if (!payload) return;
       if (payload?.user?.id) setUserId(payload.user.id);
       if (payload?.user?.role) setUserRole(payload.user.role);
+      if (payload?.user?.email) setUserEmail(payload.user.email);
       // capture impersonation metadata when present so UI can surface it
       if (payload?.impersonated) {
         setImpersonated(true);
@@ -216,6 +218,10 @@ export default function AttendantOnlineClient() {
       console.warn("[attendant/online] failed to load user", err);
     }
   }, [appendImpersonateParam]);
+
+  const isBenjaminSupervisor = useMemo(() => {
+    return String(userRole ?? "").toUpperCase() === "SUPERVISOR" && String(userEmail ?? "").toLowerCase() === "benjamin@betech.co.ke";
+  }, [userRole, userEmail]);
 
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
@@ -588,6 +594,28 @@ export default function AttendantOnlineClient() {
             >
               Receipts
             </Link>
+            {isBenjaminSupervisor ? (
+              <>
+                <Link
+                  href="/admin/online/performance"
+                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+                >
+                  Performance
+                </Link>
+                <Link
+                  href="/admin/online/performance/capture"
+                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+                >
+                  Capture profit
+                </Link>
+                <Link
+                  href="/admin/online/manual"
+                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+                >
+                  Manual weekly
+                </Link>
+              </>
+            ) : null}
             <Link
               href="/receipts"
               className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-emerald-200 transition hover:bg-emerald-500/30"

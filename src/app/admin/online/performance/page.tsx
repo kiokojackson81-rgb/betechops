@@ -24,6 +24,8 @@ export default async function OnlinePerformancePage({
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
+  const email = String((session?.user as any)?.email ?? "").toLowerCase();
+  const limitedView = role === "SUPERVISOR" && email === "benjamin@betech.co.ke";
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
@@ -217,26 +219,36 @@ export default async function OnlinePerformancePage({
               >
                 <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
                 <p className="mt-1 text-sm font-semibold text-white">{wk.label}</p>
-                <div className="mt-4 grid gap-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Net payout</span>
-                    <span className="font-semibold text-emerald-300">{currency.format(agg.netPayout)}</span>
+                {limitedView ? (
+                  <div className="mt-4 grid gap-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Loss entries</span>
+                      <span className="font-semibold text-amber-200">{lossCount}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">Totals hidden for supervisor view. Open week to see per-order profit/loss.</div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Profit</span>
-                    <span className={`font-semibold ${agg.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                      {currency.format(agg.profit)}
-                    </span>
+                ) : (
+                  <div className="mt-4 grid gap-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Net payout</span>
+                      <span className="font-semibold text-emerald-300">{currency.format(agg.netPayout)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Profit</span>
+                      <span className={`font-semibold ${agg.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                        {currency.format(agg.profit)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Loss entries</span>
+                      <span className="font-semibold text-amber-200">{lossCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Avg commission %</span>
+                      <span className="font-semibold text-slate-200">{agg.avgCommissionRate.toFixed(1)}%</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Loss entries</span>
-                    <span className="font-semibold text-amber-200">{lossCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Avg commission %</span>
-                    <span className="font-semibold text-slate-200">{agg.avgCommissionRate.toFixed(1)}%</span>
-                  </div>
-                </div>
+                )}
               </Link>
             );
           })}

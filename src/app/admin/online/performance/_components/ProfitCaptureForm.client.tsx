@@ -71,7 +71,7 @@ type CaptureBatchResponse = {
 
 type AccountOption = { id: string; platform: Platform; displayName: string };
 
-export default function ProfitCaptureFormClient(props: { accounts: AccountOption[] }) {
+export default function ProfitCaptureFormClient(props: { accounts: AccountOption[]; limitedView?: boolean }) {
   const router = useRouter();
   const [accountId, setAccountId] = useState<string>("");
   const [transactionText, setTransactionText] = useState("");
@@ -367,26 +367,32 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
                 </div>
               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Total net payout</p>
-                  <p className="mt-1 font-semibold text-emerald-300">{currency.format(preview.totals.netPayout)}</p>
+              {!props.limitedView ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Total net payout</p>
+                    <p className="mt-1 font-semibold text-emerald-300">{currency.format(preview.totals.netPayout)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Total profit</p>
+                    <p className={`mt-1 font-semibold ${preview.totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                      {currency.format(preview.totals.profit)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Loss entries</p>
+                    <p className="mt-1 font-semibold text-amber-200">{preview.totals.lossCount}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Buying price (each)</p>
+                    <p className="mt-1 font-semibold text-slate-100">{currency.format(buyingNum || 0)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Total profit</p>
-                  <p className={`mt-1 font-semibold ${preview.totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                    {currency.format(preview.totals.profit)}
-                  </p>
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
+                  Totals hidden for supervisor view. Review profit per item below.
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Loss entries</p>
-                  <p className="mt-1 font-semibold text-amber-200">{preview.totals.lossCount}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Buying price (each)</p>
-                  <p className="mt-1 font-semibold text-slate-100">{currency.format(buyingNum || 0)}</p>
-                </div>
-              </div>
+              )}
 
               <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/10">
                 <table className="w-full min-w-[980px] text-left text-sm">

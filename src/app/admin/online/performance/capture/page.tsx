@@ -12,6 +12,8 @@ const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "
 export default async function OnlinePerformanceCapturePage() {
   const session = await auth();
   const role = (session?.user as any)?.role;
+  const email = String((session?.user as any)?.email ?? "").toLowerCase();
+  const limitedView = role === "SUPERVISOR" && email === "benjamin@betech.co.ke";
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
@@ -25,50 +27,58 @@ export default async function OnlinePerformanceCapturePage() {
   });
 
   let dbReady = true;
-  let perAccountAgg: { accountId: string; netPayout: number; profit: number; count: number }[] = [];
+  let perAccountRows: Array<{
+    accountId: string;
+    netPayout: number;
+    profit: number;
+    count: number;
+    account?: { id: string; platform: any; displayName: string } | undefined;
+  }> = [];
   let totals = { netPayout: 0, profit: 0, count: 0 };
 
-  try {
-    const rows = await (prisma as any).marketplaceProfitEntry.groupBy({
-      by: ["accountId"],
-      _sum: { netPayout: true, profit: true },
-      _count: { _all: true },
-      where: { periodKey: period.key },
-      orderBy: { accountId: "asc" },
-    });
+  if (!limitedView) {
+    try {
+      const rows = await (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["accountId"],
+        _sum: { netPayout: true, profit: true },
+        _count: { _all: true },
+        where: { periodKey: period.key },
+        orderBy: { accountId: "asc" },
+      });
 
-    perAccountAgg = (rows as any[]).map((row) => ({
-      accountId: String(row.accountId),
-      netPayout: Number(row._sum?.netPayout ?? 0),
-      profit: Number(row._sum?.profit ?? 0),
-      count: Number(row._count?._all ?? 0),
-    }));
+      const perAccountAgg = (rows as any[]).map((row) => ({
+        accountId: String(row.accountId),
+        netPayout: Number(row._sum?.netPayout ?? 0),
+        profit: Number(row._sum?.profit ?? 0),
+        count: Number(row._count?._all ?? 0),
+      }));
 
-    totals = perAccountAgg.reduce(
-      (acc, r) => {
-        acc.netPayout += r.netPayout;
-        acc.profit += r.profit;
-        acc.count += r.count;
-        return acc;
-      },
-      { netPayout: 0, profit: 0, count: 0 },
-    );
-  } catch (err: any) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
-      dbReady = false;
-    } else {
-      throw err;
+      totals = perAccountAgg.reduce(
+        (acc, r) => {
+          acc.netPayout += r.netPayout;
+          acc.profit += r.profit;
+          acc.count += r.count;
+          return acc;
+        },
+        { netPayout: 0, profit: 0, count: 0 },
+      );
+
+      const accountMap = new Map(accounts.map((a) => [a.id, a]));
+      perAccountRows = perAccountAgg
+        .map((r) => ({
+          ...r,
+          account: accountMap.get(r.accountId),
+        }))
+        .filter((r) => Boolean(r.account))
+        .sort((a, b) => (b.profit || 0) - (a.profit || 0));
+    } catch (err: any) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
+        dbReady = false;
+      } else {
+        throw err;
+      }
     }
   }
-
-  const accountMap = new Map(accounts.map((a) => [a.id, a]));
-  const perAccountRows = perAccountAgg
-    .map((r) => ({
-      ...r,
-      account: accountMap.get(r.accountId),
-    }))
-    .filter((r) => Boolean(r.account))
-    .sort((a, b) => (b.profit || 0) - (a.profit || 0));
 
   return (
     <div className="space-y-8">
@@ -81,43 +91,47 @@ export default async function OnlinePerformanceCapturePage() {
         </p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <ProfitCaptureFormClient accounts={accounts} />
-        </div>
-
-        <aside className="lg:col-span-1">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-6 lg:sticky lg:top-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Totals (current period)</p>
-            <p className="mt-1 text-sm font-semibold text-white">{period.label}</p>
-
-            {!dbReady ? (
-              <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                Summary not available yet (database migration pending).
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Sales (net payout)</span>
-                  <span className="font-semibold text-emerald-300">{currency.format(totals.netPayout)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Profit</span>
-                  <span className={`font-semibold ${totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                    {currency.format(totals.profit)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Entries</span>
-                  <span className="font-semibold text-slate-100">{totals.count}</span>
-                </div>
-              </div>
-            )}
+      {limitedView ? (
+        <ProfitCaptureFormClient accounts={accounts} limitedView />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <ProfitCaptureFormClient accounts={accounts} />
           </div>
-        </aside>
-      </div>
 
-      {dbReady && perAccountRows.length > 0 && (
+          <aside className="lg:col-span-1">
+            <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-6 lg:sticky lg:top-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Totals (current period)</p>
+              <p className="mt-1 text-sm font-semibold text-white">{period.label}</p>
+
+              {!dbReady ? (
+                <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  Summary not available yet (database migration pending).
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Sales (net payout)</span>
+                    <span className="font-semibold text-emerald-300">{currency.format(totals.netPayout)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Profit</span>
+                    <span className={`font-semibold ${totals.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                      {currency.format(totals.profit)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Entries</span>
+                    <span className="font-semibold text-slate-100">{totals.count}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {!limitedView && dbReady && perAccountRows.length > 0 && (
         <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
           <h2 className="text-lg font-semibold text-white">Per shop (current period)</h2>
           <div className="mt-4 overflow-x-auto">
