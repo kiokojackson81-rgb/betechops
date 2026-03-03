@@ -71,7 +71,11 @@ type CaptureBatchResponse = {
 
 type AccountOption = { id: string; platform: Platform; displayName: string };
 
-export default function ProfitCaptureFormClient(props: { accounts: AccountOption[]; limitedView?: boolean }) {
+export default function ProfitCaptureFormClient(props: {
+  accounts: AccountOption[];
+  limitedView?: boolean;
+  backHref?: string;
+}) {
   const router = useRouter();
   const [accountId, setAccountId] = useState<string>("");
   const [transactionText, setTransactionText] = useState("");
@@ -247,7 +251,10 @@ export default function ProfitCaptureFormClient(props: { accounts: AccountOption
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-white">Capture entry</h2>
-          <Link href="/admin/online/performance" className="text-sm font-semibold text-emerald-200 hover:text-emerald-100">
+          <Link
+            href={props.backHref ?? "/admin/online/performance"}
+            className="text-sm font-semibold text-emerald-200 hover:text-emerald-100"
+          >
             Back to performance
           </Link>
         </div>

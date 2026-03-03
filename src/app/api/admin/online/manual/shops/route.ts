@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Platform } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBenjamin } from "@/lib/api";
 import { MarketplaceAssignmentRoleValues } from "@/lib/marketplaceAssignment";
 
 type AttendantInfo = { id: string; name: string | null; email: string | null };
@@ -19,7 +19,7 @@ type ShopPayload = {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const guard = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!guard.ok) return guard.res;
 
   const now = new Date();

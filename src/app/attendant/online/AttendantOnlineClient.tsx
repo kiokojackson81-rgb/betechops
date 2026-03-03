@@ -10,6 +10,7 @@ import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 // Marketplace trading weeks anchor (kept in sync with other clients)
 const MARKETPLACE_ANCHOR_START = new Date("2025-11-24T00:00:00+03:00");
@@ -102,6 +103,7 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
 };
 
 export default function AttendantOnlineClient() {
+  const router = useRouter();
   const currentPeriod = getTradingPeriodFor(new Date());
   const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
   const period = selectedPeriod;
@@ -594,24 +596,27 @@ export default function AttendantOnlineClient() {
             </Link>
             {isBenjaminSupervisor ? (
               <>
-                <Link
-                  href="/admin/online/performance"
+                <button
+                  type="button"
+                  onClick={() => router.push("/attendant/online/performance")}
                   className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
                 >
                   Performance
-                </Link>
-                <Link
-                  href="/admin/online/performance/capture"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/attendant/online/performance/capture")}
                   className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
                 >
                   Capture profit
-                </Link>
-                <Link
-                  href="/admin/online/manual"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/attendant/online/manual-weekly")}
                   className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
                 >
                   Manual weekly
-                </Link>
+                </button>
               </>
             ) : null}
             <Link
