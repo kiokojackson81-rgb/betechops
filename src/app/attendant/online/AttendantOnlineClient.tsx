@@ -8,51 +8,12 @@ import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-// Marketplace trading weeks anchor (kept in sync with other clients)
-const MARKETPLACE_ANCHOR_START = new Date("2025-11-24T00:00:00+03:00");
-
-function endOfWeekSunday(start: Date) {
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return end;
-}
-
-function formatWeekLabel(start: Date, end: Date) {
-  const fmt = (value: Date) => value.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-  return `${fmt(start)} - ${fmt(end)}`;
-}
-
-function buildTradingWeeks(periodStart: Date) {
-  const weeks: { key: string; label: string; start: Date; end: Date }[] = [];
-  for (let i = 0; i < 4; i += 1) {
-    const start = new Date(periodStart);
-    start.setDate(periodStart.getDate() + i * 7);
-    start.setHours(0, 0, 0, 0);
-    const end = endOfWeekSunday(start);
-    weeks.push({ key: `${start.toISOString().slice(0, 10)}`, label: `Week ${i + 1} (${formatWeekLabel(start, end)})`, start, end });
-  }
-  return weeks;
-}
-
-function getMarketplaceTradingPeriodFor(date: Date) {
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  const anchor = new Date(MARKETPLACE_ANCHOR_START);
-  anchor.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((target.getTime() - anchor.getTime()) / DAY_MS);
-  const periodIndex = diffDays >= 0 ? Math.floor(diffDays / 28) : 0;
-  const start = new Date(anchor.getTime() + periodIndex * 28 * DAY_MS);
-  const end = new Date(start.getTime() + 27 * DAY_MS);
-  end.setHours(23, 59, 59, 999);
-  const label = `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
-  return { start, end, label, key: `MP_${periodIndex}` };
-}
+type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
 
 type ReceiptStatsRow = {
   id: string;
@@ -172,17 +133,15 @@ export default function AttendantOnlineClient() {
   const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
-  const [marketplacePeriodIndex, setMarketplacePeriodIndex] = useState(0);
-  const marketplacePeriod = useMemo(() => {
-    const reference = new Date();
-    reference.setHours(0, 0, 0, 0);
-    reference.setDate(reference.getDate() + marketplacePeriodIndex * 28);
-    return getMarketplaceTradingPeriodFor(reference);
-  }, [marketplacePeriodIndex]);
-  const [tradingWeeks, setTradingWeeks] = useState(() => buildTradingWeeks(marketplacePeriod.start));
-  useEffect(() => {
-    setTradingWeeks(buildTradingWeeks(marketplacePeriod.start));
-  }, [marketplacePeriod]);
+  const tradingWeeks = useMemo<TradingWeekChip[]>(() => {
+    const weeks = getOnlineOpsWeeksForTradingPeriod(period, period.end, 4);
+    return weeks.map((wk) => ({
+      key: wk.startInput,
+      label: wk.label.replace(/–/g, "-"),
+      start: wk.weekStart,
+      end: wk.weekEndInclusive,
+    }));
+  }, [period]);
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -226,16 +185,16 @@ export default function AttendantOnlineClient() {
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
     if (keys.includes("period")) {
-      return { start: marketplacePeriod.start, end: marketplacePeriod.end };
+      return { start: period.start, end: period.end };
     }
     const selectedWeeks = tradingWeeks.filter((week) => keys.includes(week.key));
     if (!selectedWeeks.length) {
-      return { start: marketplacePeriod.start, end: marketplacePeriod.end };
+      return { start: period.start, end: period.end };
     }
     const start = new Date(Math.min(...selectedWeeks.map((week) => week.start.getTime())));
     const end = new Date(Math.max(...selectedWeeks.map((week) => week.end.getTime())));
     return { start, end };
-  }, [activeWeekKeys, tradingWeeks, marketplacePeriod]);
+  }, [activeWeekKeys, tradingWeeks, period]);
 
   const loadWeeklyEarnings = useCallback(async () => {
     if (!userId) return;
@@ -483,11 +442,7 @@ export default function AttendantOnlineClient() {
 
   useEffect(() => {
     fetchUser();
-    // choose default week: previous week to the one containing today (if available)
-    const today = new Date();
-    const idx = tradingWeeks.findIndex((w) => today >= w.start && today <= w.end);
-    const defaultIdx = idx > 0 ? idx - 1 : idx >= 0 ? idx : 0;
-    const defaultKey = tradingWeeks[defaultIdx]?.key ?? tradingWeeks[0]?.key ?? "period";
+    const defaultKey = tradingWeeks.at(-1)?.key ?? tradingWeeks[0]?.key ?? "period";
     setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
   }, [fetchUser, tradingWeeks]);
 
@@ -728,29 +683,11 @@ export default function AttendantOnlineClient() {
                           : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
                       ].join(" ")}
                         >
-                          This marketplace period
+                          Full period
                         </button>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <span className="text-[11px] uppercase tracking-wide text-slate-400">
-                      Marketplace window:
-                    </span>
-                    <span className="text-sm text-emerald-300">{marketplacePeriod.label}</span>
-                    <Button
-                      variant="secondary"
-                      className="px-3"
-                      onClick={() => setMarketplacePeriodIndex((prev) => Math.max(prev - 1, -12))}
-                    >
-                      Previous marketplace period
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3"
-                      onClick={() => setMarketplacePeriodIndex(0)}
-                      disabled={marketplacePeriodIndex === 0}
-                    >
-                      This marketplace period
-                    </Button>
+                  <div className="mt-3 text-xs text-slate-400">
+                    Weeks shown are the last 4 full weeks in the selected trading period.
                   </div>
                 </div>
                 <div className="border-t border-slate-800 px-4 pt-3">

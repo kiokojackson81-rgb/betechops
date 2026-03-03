@@ -50,7 +50,7 @@ export default function AttendantManualWeeklyPage() {
   const [userId, setUserId] = useState<string>("");
 
   const period = useMemo(() => getTradingPeriodFor(new Date()), []);
-  const weeks = useMemo(() => getOnlineOpsWeeksForTradingPeriod(period, new Date(), 4), [period]);
+  const weeks = useMemo(() => getOnlineOpsWeeksForTradingPeriod(period, period.end, 4), [period]);
 
   useEffect(() => {
     const last = weeks.at(-1);

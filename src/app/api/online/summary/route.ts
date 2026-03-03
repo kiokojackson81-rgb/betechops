@@ -119,11 +119,23 @@ export async function GET(req: Request) {
     payoutSales = filtered.reduce((s, a) => s + Number(a.totalGross ?? 0), 0);
   }
 
-  const manualSummary = await prisma.weeklySale.aggregate({
+  const manualAgg = await prisma.weeklySale.groupBy({
+    by: ["platform"],
     _sum: { amount: true },
-    where: { userId: targetUserId, status: "APPROVED", AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }] },
+    where: {
+      userId: targetUserId,
+      source: "MANUAL",
+      status: { not: "REJECTED" },
+      AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
+    },
   });
-  const weeklyManualSales = Number(manualSummary._sum?.amount ?? 0);
+  const manualJumiaSales = manualAgg
+    .filter((r) => String(r.platform).toUpperCase() === "JUMIA")
+    .reduce((s, r) => s + Number(r._sum?.amount ?? 0), 0);
+  const manualKilimallSales = manualAgg
+    .filter((r) => String(r.platform).toUpperCase() === "KILIMALL")
+    .reduce((s, r) => s + Number(r._sum?.amount ?? 0), 0);
+  const weeklyManualSales = manualJumiaSales + manualKilimallSales;
 
   const marketplaceSales = payoutSales + weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
   const totalSalesWithMarketplace = totalSales + weeklyManualSales + payoutSales;
@@ -144,10 +156,10 @@ export async function GET(req: Request) {
     marketplace: {
       jumiaSales: platforms
         .filter((p) => (p.key ?? "").toUpperCase().includes("JUMIA"))
-        .reduce((s, p) => s + Number(p.sales || 0), 0),
+        .reduce((s, p) => s + Number(p.sales || 0), 0) + manualJumiaSales,
       kilimallSales: platforms
         .filter((p) => (p.key ?? "").toUpperCase().includes("KILIMALL"))
-        .reduce((s, p) => s + Number(p.sales || 0), 0),
+        .reduce((s, p) => s + Number(p.sales || 0), 0) + manualKilimallSales,
       payoutSales,
       weeklyManualSales,
       marketplaceSalesOnly,

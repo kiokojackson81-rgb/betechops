@@ -78,7 +78,7 @@ function buildWeekWindowFromDateOnly(dateOnly: string) {
   };
 }
 
-function buildLast4WeeksForPeriod(period: TradingPeriod, reference = new Date()) {
+function buildLast4WeeksForPeriod(period: TradingPeriod, reference: Date = period.end) {
   const weeks = getOnlineOpsWeeksForTradingPeriod(period, reference, 4);
   return weeks.map((wk) => ({
     start: wk.weekStart,
@@ -103,7 +103,7 @@ export default function ManualWeeklySalesPage() {
 
   const tradingPeriods = useMemo(() => getRecentTradingPeriods(8), []);
   const defaultPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
-  const initialLast4 = useMemo(() => buildLast4WeeksForPeriod(defaultPeriod, new Date()), [defaultPeriod]);
+  const initialLast4 = useMemo(() => buildLast4WeeksForPeriod(defaultPeriod), [defaultPeriod]);
   const initialWeek = (initialLast4.at(-1) ?? initialLast4[0] ?? null) as WeekOption | null;
 
   const [sales, setSales] = useState<WeeklySaleRow[]>([]);
@@ -160,7 +160,7 @@ export default function ManualWeeklySalesPage() {
     return tradingPeriods.find((p) => p.key === selectedPeriodKey) ?? defaultPeriod;
   }, [defaultPeriod, selectedPeriodKey, tradingPeriods]);
 
-  const last4 = useMemo(() => buildLast4WeeksForPeriod(selectedPeriod, new Date()), [selectedPeriod]);
+  const last4 = useMemo(() => buildLast4WeeksForPeriod(selectedPeriod), [selectedPeriod]);
   const weekOptions = useMemo<WeekOption[]>(
     () => last4.map((w) => ({ startInput: w.startInput, endInput: w.endInput, label: w.label })),
     [last4],
