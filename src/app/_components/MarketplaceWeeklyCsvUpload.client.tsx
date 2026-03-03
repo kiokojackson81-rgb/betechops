@@ -45,15 +45,6 @@ type PreviewRow = {
   countryCode: string;
 };
 
-type DraftState = {
-  version: 1;
-  savedAt: string;
-  shopId: string;
-  weekStart: string;
-  rows: PreviewRow[];
-  buyingByTxn: Record<string, string>;
-};
-
 export default function MarketplaceWeeklyCsvUpload(props: {
   title?: string;
   shops: MarketplaceShopOption[];
@@ -74,13 +65,14 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [assigneeId, setAssigneeId] = useState(props.defaultAssigneeId ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
   const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [activeTab, setActiveTab] = useState<"orders" | "profit">("orders");
   const [buyingByTxn, setBuyingByTxn] = useState<Record<string, string>>({});
   const [bulkBuying, setBulkBuying] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
+  const [draftId, setDraftId] = useState<string>("");
+  const [submittingTxn, setSubmittingTxn] = useState<string>("");
+  const [submittedByTxn, setSubmittedByTxn] = useState<Record<string, string>>({});
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
@@ -90,57 +82,18 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     return `betechops:csv-draft:v1:${shopId}:${weekStart}`;
   }, [shopId, weekStart]);
 
-  const canSubmit = useMemo(() => {
-    if (!rows.length) return false;
-    // Require buying price for every row to avoid showing profit as net payout.
-    return rows.every((r) => {
-      const raw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
-      if (!raw) return false;
-      const n = Number(raw);
-      return Number.isFinite(n) && n >= 0;
-    });
-  }, [rows, buyingByTxn]);
-
   const totals = useMemo(() => {
     const netPayout = rows.reduce((sum, r) => sum + Number(r.netPayout ?? 0), 0);
     const grossSale = rows.reduce((sum, r) => sum + Number(r.grossSale ?? 0), 0);
     const duplicates = rows.filter((r) => existingTxns.includes(r.itemCreditTxn)).length;
     const profit = rows.reduce((sum, r) => {
+      if (!submittedByTxn[r.itemCreditTxn]) return sum;
       const buying = Number(buyingByTxn[r.itemCreditTxn] ?? 0);
       return sum + (Number(r.netPayout ?? 0) - (Number.isFinite(buying) ? buying : 0));
     }, 0);
-    return { netPayout, grossSale, duplicates, profit };
-  }, [rows, existingTxns, buyingByTxn]);
-
-  const buildPayloadRows = () => {
-    return rows.map((r) => {
-      const buyingRaw = buyingByTxn[r.itemCreditTxn];
-      const buyingPriceKes = buyingRaw === undefined || buyingRaw === null || String(buyingRaw).trim() === "" ? null : Number(buyingRaw);
-      return {
-        dateUtc: r.dateUtc,
-        orderNo: r.orderNo,
-        orderItemNo: r.orderItemNo,
-        details: r.details,
-        sellerSku: r.sellerSku,
-        jumiaSku: r.jumiaSku,
-        itemCreditTxn: r.itemCreditTxn,
-        commissionTxn: r.commissionTxn,
-        shippingTxn: r.shippingTxn,
-        otherTxn: r.otherTxn,
-        grossSale: r.grossSale,
-        commission: r.commission,
-        shippingFee: r.shippingFee,
-        otherFees: r.otherFees,
-        buyingPriceKes,
-        statementNumber: r.statementNumber,
-        paidStatus: r.paidStatus,
-        orderItemStatus: r.orderItemStatus,
-        shippingProvider: r.shippingProvider,
-        trackingNumber: r.trackingNumber,
-        countryCode: r.countryCode,
-      };
-    });
-  };
+    const submittedCount = Object.keys(submittedByTxn).length;
+    return { netPayout, grossSale, duplicates, profit, submittedCount };
+  }, [rows, existingTxns, buyingByTxn, submittedByTxn]);
 
   const loadStatement = async () => {
     if (!shopId) {
@@ -161,6 +114,11 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       const form = new FormData();
       form.set("accountId", shopId);
       form.set("weekStart", weekStart);
+      if (props.disableAssigneeSelect) {
+        if (props.defaultAssigneeId) form.set("userId", props.defaultAssigneeId);
+      } else if (assigneeId) {
+        form.set("userId", assigneeId);
+      }
       form.set("file", file);
 
       const res = await fetch(withImpersonateId("/api/admin/marketplace-profit-entry/csv/preview", props.impersonateId ?? null), {
@@ -174,8 +132,15 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       setRows(items);
       setExistingTxns(Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : []);
       setBuyingByTxn({});
-      setActiveTab("orders");
       setSubmitted(false);
+      setSubmittedByTxn({});
+      const did = String(data?.draftId ?? "").trim();
+      if (did) {
+        setDraftId(did);
+        try {
+          localStorage.setItem(draftKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
+        } catch {}
+      }
       if (data?.aggregated?.errors?.length) {
         showToast(String(data.aggregated.errors[0] ?? "Preview warning"), "warn");
       }
@@ -186,75 +151,77 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     }
   };
 
-  const importNow = async (allowDuplicates: boolean) => {
-    if (!shopId || !weekStart || !rows.length) {
-      showToast("Load the statement first", "error");
-      return;
-    }
-    if (!canSubmit) {
-      showToast("Enter buying price for all rows before submitting", "error");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch(withImpersonateId("/api/admin/marketplace-profit-entry/csv", props.impersonateId ?? null), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId: shopId,
-          weekStart,
-          userId: props.disableAssigneeSelect ? (props.defaultAssigneeId ?? null) : (assigneeId || null),
-          allowDuplicates,
-          rows: buildPayloadRows(),
-        }),
-      });
-
-      const data = (await res.json().catch(() => null)) as any;
-      if (res.status === 409) {
-        const existing = Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : [];
-        const ok = window.confirm(
-          `Duplicate unique numbers detected (${existing.length}). Do you want to continue and import anyway?`,
-        );
-        if (ok) {
-          await importNow(true);
-        }
-        return;
-      }
-
-      if (!res.ok) throw new Error(data?.error || "Import failed");
-
-      showToast(
-        `Imported: ${Number(data?.createdCount ?? 0)} | Duplicates: ${Number(data?.duplicateCount ?? 0)} | Failed: ${Number(
-          data?.failedCount ?? 0,
-        )}`,
-        "success",
-      );
-      setSubmitted(true);
-      setActiveTab("profit");
-      // Clear draft so reload doesn't bring back already-submitted rows.
-      try {
-        if (draftKey) localStorage.removeItem(draftKey);
-      } catch {}
-      props.onImported?.();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Import failed", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const perRowProfit = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of rows) {
+      if (!submittedByTxn[r.itemCreditTxn]) continue;
       const buying = Number(buyingByTxn[r.itemCreditTxn] ?? 0);
       map.set(r.itemCreditTxn, Number(r.netPayout ?? 0) - (Number.isFinite(buying) ? buying : 0));
     }
     return map;
-  }, [rows, buyingByTxn]);
+  }, [rows, buyingByTxn, submittedByTxn]);
 
   const updateBuying = (txn: string, next: string) => {
     setBuyingByTxn((prev) => ({ ...prev, [txn]: next }));
+  };
+
+  const submitRow = async (txn: string) => {
+    if (!draftId) {
+      showToast("Load the statement first", "error");
+      return;
+    }
+    const raw = String(buyingByTxn[txn] ?? "").trim();
+    const buying = Number(raw);
+    if (!raw || !Number.isFinite(buying) || buying < 0) {
+      showToast("Enter a valid buying price", "error");
+      return;
+    }
+
+    setSubmittingTxn(txn);
+    try {
+      const doSubmit = async (allowDuplicates: boolean) => {
+        const res = await fetch(
+          withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}/submit-row`, props.impersonateId ?? null),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ itemCreditTxn: txn, buyingPriceKes: buying, allowDuplicates }),
+          },
+        );
+        const data = (await res.json().catch(() => null)) as any;
+        return { res, data };
+      };
+
+      let { res, data } = await doSubmit(false);
+      if (res.status === 409) {
+        const ok = window.confirm("This unique number already exists. Submit anyway?");
+        if (!ok) return;
+        ({ res, data } = await doSubmit(true));
+      }
+      if (!res.ok) throw new Error(data?.error || "Submit failed");
+
+      const entryId = String(data?.entry?.id ?? data?.entryId ?? "").trim();
+      if (entryId) {
+        setSubmittedByTxn((prev) => ({ ...prev, [txn]: entryId }));
+        setSubmitted(true);
+      }
+      showToast("Saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Submit failed", "error");
+    } finally {
+      setSubmittingTxn("");
+    }
+  };
+
+  const copySku = async (sku: string) => {
+    const value = String(sku ?? "").trim();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast("SKU copied", "success");
+    } catch {
+      showToast("Copy failed", "error");
+    }
   };
 
   const applyBulkBuying = () => {
@@ -283,34 +250,41 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     try {
       const raw = localStorage.getItem(draftKey);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as DraftState;
-      if (!parsed || parsed.version !== 1) return;
-      if (parsed.shopId !== shopId || parsed.weekStart !== weekStart) return;
-      setRows(Array.isArray(parsed.rows) ? parsed.rows : []);
-      setBuyingByTxn(parsed.buyingByTxn && typeof parsed.buyingByTxn === "object" ? parsed.buyingByTxn : {});
-      setSubmitted(false);
-      setActiveTab("orders");
+      const parsed = JSON.parse(raw) as { id?: string } | null;
+      const did = String(parsed?.id ?? "").trim();
+      if (!did) return;
+      setDraftId(did);
+      void (async () => {
+        const res = await fetch(
+          withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(did)}`, props.impersonateId ?? null),
+          { cache: "no-store" },
+        );
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) return;
+        const draftRows = Array.isArray(data?.rows) ? (data.rows as PreviewRow[]) : [];
+        const buying = data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
+        const submittedMap = data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
+        setRows(draftRows);
+        setBuyingByTxn(Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)])));
+        setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
+        setSubmitted(Object.keys(submittedMap).length > 0);
+      })();
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
-  // Persist draft while editing so refresh doesn't lose work.
-  useEffect(() => {
-    if (!draftKey) return;
-    if (!rows.length) return;
-    if (submitted) return;
-    const draft: DraftState = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      shopId,
-      weekStart,
-      rows,
-      buyingByTxn,
-    };
+  const clearDraft = () => {
+    setRows([]);
+    setBuyingByTxn({});
+    setExistingTxns([]);
+    setSubmittedByTxn({});
+    setSubmitted(false);
+    setDraftId("");
+    setFile(null);
     try {
-      localStorage.setItem(draftKey, JSON.stringify(draft));
+      if (draftKey) localStorage.removeItem(draftKey);
     } catch {}
-  }, [draftKey, rows, buyingByTxn, submitted, shopId, weekStart]);
+  };
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -323,18 +297,18 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           <button
             className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-50"
             onClick={() => void loadStatement()}
-            disabled={loading || saving}
+            disabled={loading || Boolean(rows.length)}
             type="button"
           >
             {loading ? "Loading..." : "Load statement"}
           </button>
           <button
-            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-            onClick={() => void importNow(false)}
-            disabled={saving || loading || !rows.length || !canSubmit}
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-50"
+            onClick={clearDraft}
+            disabled={loading || (!rows.length && !draftId)}
             type="button"
           >
-            {saving ? "Submitting..." : "Submit"}
+            Clear
           </button>
         </div>
       </div>
@@ -354,6 +328,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 if (primary) setAssigneeId(primary);
               }
             }}
+            disabled={Boolean(rows.length)}
           >
             <option value="">Select shop...</option>
             {props.shops.map((s) => (
@@ -370,6 +345,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             value={weekStart}
             onChange={(e) => setWeekStart(e.target.value)}
+            disabled={Boolean(rows.length)}
           >
             {weeks.map((w) => (
               <option key={w.startInput} value={w.startInput}>
@@ -390,8 +366,10 @@ export default function MarketplaceWeeklyCsvUpload(props: {
               setRows([]);
               setBuyingByTxn({});
               setSubmitted(false);
-              setActiveTab("orders");
+              setDraftId("");
+              setSubmittedByTxn({});
             }}
+            disabled={Boolean(rows.length)}
           />
         </label>
 
@@ -436,34 +414,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           ) : null}
 
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("orders")}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                  activeTab === "orders"
-                    ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
-                    : "border-slate-700 text-slate-200 hover:bg-white/5"
-                }`}
-              >
-                Orders
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!submitted) return;
-                  setActiveTab("profit");
-                }}
-                disabled={!submitted}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-                  activeTab === "profit"
-                    ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-200"
-                    : "border-slate-700 text-slate-200 hover:bg-white/5"
-                }`}
-              >
-                Profit
-              </button>
-            </div>
+            <div className="text-xs text-slate-500">Profit appears only after you submit each order.</div>
 
             <div className="flex flex-wrap items-end gap-2">
               <label className="block">
@@ -495,6 +446,12 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   </div>
                 </div>
               ) : null}
+              {!props.hideSummaryTotals ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Submitted</div>
+                  <div className="text-base font-semibold text-slate-100">{totals.submittedCount}</div>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -509,12 +466,19 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   <th className="px-3 py-2">Net</th>
                   <th className="px-3 py-2">Buying</th>
                   {submitted ? <th className="px-3 py-2">Profit</th> : null}
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/20">
                 {rows.map((r) => {
-                  const profit = perRowProfit.get(r.itemCreditTxn) ?? 0;
+                  const profitValue = perRowProfit.get(r.itemCreditTxn);
                   const isDup = existingTxns.includes(r.itemCreditTxn);
+                  const isSubmitted = Boolean(submittedByTxn[r.itemCreditTxn]);
+                  const buyingRaw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
+                  const buyingNum = Number(buyingRaw);
+                  const canSubmitRow = !isSubmitted && buyingRaw.length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
+                  const skuLabel = String(r.jumiaSku || r.sellerSku || "-");
+                  const skuShort = skuLabel.length > 18 ? `${skuLabel.slice(0, 10)}…${skuLabel.slice(-6)}` : skuLabel;
                   return (
                     <tr key={r.key} className={isDup ? "bg-amber-950/20" : ""}>
                       <td className="px-3 py-2 text-slate-200">{new Date(r.dateUtc).toLocaleDateString("en-KE")}</td>
@@ -526,8 +490,19 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                         <div className="text-xs text-slate-400">{r.orderItemNo || ""}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-200">
-                        <div className="max-w-[240px] truncate" title={`${r.jumiaSku || ""} ${r.sellerSku || ""}`.trim()}>
-                          {r.jumiaSku || r.sellerSku || "-"}
+                        <div className="flex items-center gap-2">
+                          <span className="max-w-[180px] truncate" title={skuLabel}>
+                            {skuShort}
+                          </span>
+                          {skuLabel !== "-" ? (
+                            <button
+                              type="button"
+                              onClick={() => void copySku(skuLabel)}
+                              className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 hover:bg-slate-900"
+                            >
+                              Copy
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-2 font-medium text-slate-100">{currency.format(Number(r.netPayout ?? 0))}</td>
@@ -538,13 +513,24 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                           placeholder="0"
                           value={buyingByTxn[r.itemCreditTxn] ?? ""}
                           onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
+                          disabled={isSubmitted}
                         />
                       </td>
                       {submitted ? (
-                        <td className={profit < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
-                          {currency.format(profit)}
+                        <td className={profitValue !== undefined && profitValue < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
+                          {isSubmitted && profitValue !== undefined ? currency.format(profitValue) : "—"}
                         </td>
                       ) : null}
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void submitRow(r.itemCreditTxn)}
+                          disabled={!canSubmitRow || submittingTxn === r.itemCreditTxn}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          {isSubmitted ? "Saved" : submittingTxn === r.itemCreditTxn ? "Saving..." : "Submit"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

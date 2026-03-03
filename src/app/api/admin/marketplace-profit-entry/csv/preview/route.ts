@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from "@/lib/weekWindow";
 import { aggregateMarketplaceStatementRows, parseMarketplaceStatementCsv } from "@/lib/marketplaceStatementCsv";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
+import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,6 +55,9 @@ export async function POST(req: NextRequest) {
   const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
+  const actorId = (auth.session?.user as { id?: string } | undefined)?.id;
+  if (!actorId) return NextResponse.json({ error: "Missing actor id" }, { status: 401 });
+
   const contentType = req.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
@@ -62,6 +68,7 @@ export async function POST(req: NextRequest) {
 
   const accountId = String(form.get("accountId") ?? "").trim();
   const weekStartRaw = String(form.get("weekStart") ?? "").trim();
+  const userIdRaw = String(form.get("userId") ?? "").trim();
   const file = form.get("file");
 
   if (!accountId) return NextResponse.json({ error: "accountId is required" }, { status: 400 });
@@ -111,9 +118,120 @@ export async function POST(req: NextRequest) {
     { netPayout: 0, grossSale: 0, lossCandidates: 0 },
   );
 
+  const statementNumberCounts = new Map<string, number>();
+  for (const r of aggregated.aggregates) {
+    const n = String(r.statementNumber ?? "").trim();
+    if (!n) continue;
+    statementNumberCounts.set(n, (statementNumberCounts.get(n) ?? 0) + 1);
+  }
+  const statementNumber =
+    Array.from(statementNumberCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  const hash = createHash("sha1").update(csvText).digest("hex").slice(0, 12);
+  const weekKey = weekStart.toISOString().slice(0, 10);
+  const draftKey = `csv:${resolved.shopId}:${weekKey}:${hash}`;
+  const periodKey = getTradingPeriodFor(weekStart).key;
+
+  let draftId: string | null = null;
+  try {
+    const draft = await prisma.marketplaceStatementDraft.upsert({
+      where: { draftKey },
+      create: {
+        draftKey,
+        platform: account.platform as Platform,
+        shopId: resolved.shopId,
+        accountId: account.id,
+        weekStart,
+        weekEnd,
+        periodKey,
+        statementNumber,
+        fileName: (file as File).name || null,
+        rowCount: aggregated.aggregates.length,
+        totalNetPayout: totals.netPayout,
+        rows: aggregated.aggregates.map((r) => ({
+          key: r.key,
+          dateUtc: r.dateUtc.toISOString(),
+          orderNo: r.orderNo,
+          orderItemNo: r.orderItemNo,
+          details: r.details,
+          sellerSku: r.sellerSku,
+          jumiaSku: r.jumiaSku,
+          itemCreditTxn: r.itemCreditTxn,
+          commissionTxn: r.commissionTxn,
+          shippingTxn: r.shippingTxn,
+          otherTxn: r.otherTxn,
+          grossSale: r.grossSale,
+          commission: r.commission,
+          shippingFee: r.shippingFee,
+          otherFees: r.otherFees,
+          netPayout: r.netPayout,
+          statementNumber: r.statementNumber,
+          paidStatus: r.paidStatus,
+          orderItemStatus: r.orderItemStatus,
+          shippingProvider: r.shippingProvider,
+          trackingNumber: r.trackingNumber,
+          countryCode: r.countryCode,
+        })),
+        buyingByTxn: {},
+        submittedByTxn: {},
+        createdById: actorId,
+      },
+      update: {
+        // refresh rows (same key) in case statement changes slightly
+        rowCount: aggregated.aggregates.length,
+        totalNetPayout: totals.netPayout,
+        rows: aggregated.aggregates.map((r) => ({
+          key: r.key,
+          dateUtc: r.dateUtc.toISOString(),
+          orderNo: r.orderNo,
+          orderItemNo: r.orderItemNo,
+          details: r.details,
+          sellerSku: r.sellerSku,
+          jumiaSku: r.jumiaSku,
+          itemCreditTxn: r.itemCreditTxn,
+          commissionTxn: r.commissionTxn,
+          shippingTxn: r.shippingTxn,
+          otherTxn: r.otherTxn,
+          grossSale: r.grossSale,
+          commission: r.commission,
+          shippingFee: r.shippingFee,
+          otherFees: r.otherFees,
+          netPayout: r.netPayout,
+          statementNumber: r.statementNumber,
+          paidStatus: r.paidStatus,
+          orderItemStatus: r.orderItemStatus,
+          shippingProvider: r.shippingProvider,
+          trackingNumber: r.trackingNumber,
+          countryCode: r.countryCode,
+        })),
+      },
+      select: { id: true },
+    });
+    draftId = draft.id;
+  } catch (err) {
+    // Draft persistence shouldn't block preview; still return parsed rows.
+    console.error("[csv-preview] failed to persist draft", err);
+  }
+
+  // Mirror to WeeklySale (manual) immediately so admin doesn't have to re-enter in manual weekly.
+  try {
+    const effectiveUserId = userIdRaw ? userIdRaw : null;
+    await upsertManualWeeklySale({
+      shopId: resolved.shopId,
+      weekStart,
+      weekEnd,
+      amount: totals.netPayout,
+      userId: effectiveUserId,
+      actorId,
+    });
+  } catch (err) {
+    console.error("[csv-preview] weekly sale upsert failed", err);
+  }
+
   return NextResponse.json({
     account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
     resolvedShopId: resolved.shopId,
+    draftId,
     week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
     parsed: { rows: parsed.rows.length, errors: parsed.errors },
     aggregated: { rows: aggregated.aggregates.length, skipped: aggregated.skipped, errors: aggregated.errors },

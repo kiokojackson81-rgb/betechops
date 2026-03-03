@@ -49,6 +49,7 @@ model User {
   weeklySalesApproved                  WeeklySale[]                   @relation("WeeklySaleApproval")
   weeklySales                          WeeklySale[]                   @relation("WeeklySaleAttendant")
   marketplaceProfitEntries             MarketplaceProfitEntry[]       @relation("MarketplaceProfitEntryEnteredBy")
+  marketplaceStatementDraftsCreated    MarketplaceStatementDraft[]    @relation("MarketplaceStatementDraftCreatedBy")
   managedShops                         Shop[]                         @relation("ManagedBy")
 }
 
@@ -331,6 +332,7 @@ model Shop {
   assignments          ShopAssignment[]
   userAssignments      UserShop[]
   weeklySales          WeeklySale[]
+  marketplaceStatementDrafts MarketplaceStatementDraft[]
   jumiaShopSid         String?
   managers             User[]                @relation("ManagedBy")
 
@@ -410,6 +412,47 @@ model MarketplaceProfitEntry {
   @@index([periodKey])
   @@index([enteredByAdminId, createdAt])
   @@unique([accountId, itemCreditTxn])
+}
+
+/// MarketplaceStatementDraft stores a parsed statement "work-in-progress" for a specific shop + week.
+/// It allows admins/supervisors to load a CSV once, then submit buying prices per order incrementally.
+model MarketplaceStatementDraft {
+  id        String   @id @default(cuid())
+  draftKey  String   @unique
+  platform  Platform
+
+  /// Shop is used for WeeklySale linkage and manual weekly views.
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id])
+
+  /// Marketplace account powers profit entry linkage.
+  accountId String
+  account   MarketplaceAccount @relation(fields: [accountId], references: [id])
+
+  weekStart DateTime @db.Timestamptz(0)
+  weekEnd   DateTime @db.Timestamptz(3)
+  periodKey String
+
+  statementNumber String?
+  fileName        String?
+  rowCount        Int
+  totalNetPayout  Decimal @db.Decimal(14, 2)
+
+  /// Aggregated order rows (JSON array).
+  rows Json
+  /// Buying price map keyed by itemCreditTxn.
+  buyingByTxn Json?
+  /// Submitted profit-entry ids keyed by itemCreditTxn.
+  submittedByTxn Json?
+
+  createdById String
+  createdBy   User @relation("MarketplaceStatementDraftCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([shopId, weekStart])
+  @@index([accountId, weekStart])
 }
 
 model JumiaAccount {
@@ -997,6 +1040,7 @@ model MarketplaceAccount {
   payoutWeeks      MarketplacePayoutWeek[]
   returns          MarketplaceReturn[]
   profitEntries    MarketplaceProfitEntry[]
+  statementDrafts  MarketplaceStatementDraft[]
 
   @@unique([platform, jumiaShopSid])
   @@unique([platform, kilimallShopCode])
