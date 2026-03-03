@@ -18,7 +18,10 @@ export default async function OnlinePerformanceLossPage({
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
-  if (role !== "ADMIN" && role !== "SUPERVISOR") {
+  const email = String((session?.user as any)?.email ?? "").toLowerCase();
+  const isBenjamin = email === "benjamin@betech.co.ke";
+  const limitedView = isBenjamin && role !== "ADMIN";
+  if (role !== "ADMIN" && role !== "SUPERVISOR" && !isBenjamin) {
     return redirect("/not-authorized");
   }
 
@@ -41,6 +44,7 @@ export default async function OnlinePerformanceLossPage({
         weekStart: { in: weekStarts },
         isLoss: true,
         ...(accountId ? { accountId } : {}),
+        ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
       },
       include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
       orderBy: [{ profit: "asc" }, { date: "asc" }],
@@ -57,6 +61,7 @@ export default async function OnlinePerformanceLossPage({
           periodKey: period.key,
           weekStart: { in: weekStarts },
           profit: { lt: 0 },
+          ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
         },
         include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
         orderBy: [{ profit: "asc" }, { date: "asc" }],

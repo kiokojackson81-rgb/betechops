@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBenjamin } from "@/lib/api";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> | { id: string } }) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const { id } = await Promise.resolve(ctx.params);
@@ -37,11 +37,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   try {
+    const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
     const existing = await (prisma as any).marketplaceProfitEntry.findUnique({
       where: { id: entryId },
-      select: { id: true, netPayout: true, buyingPrice: true },
+      select: { id: true, netPayout: true, buyingPrice: true, enteredByAdminId: true },
     });
     if (!existing) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    if ((auth as any).isBenjamin && actorId && String(existing.enteredByAdminId) !== actorId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const nextBuying = buying !== undefined ? buying : Number(existing.buyingPrice ?? 0);
     const netPayout = Number(existing.netPayout ?? 0);
@@ -82,7 +86,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> | { id: string } }) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const { id } = await Promise.resolve(ctx.params);
@@ -90,6 +94,15 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   if (!entryId) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   try {
+    const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
+    if ((auth as any).isBenjamin && actorId) {
+      const existing = await (prisma as any).marketplaceProfitEntry.findUnique({
+        where: { id: entryId },
+        select: { id: true, enteredByAdminId: true },
+      });
+      if (!existing) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+      if (String(existing.enteredByAdminId) !== actorId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     await (prisma as any).marketplaceProfitEntry.delete({ where: { id: entryId } });
     return NextResponse.json({ ok: true });
   } catch (err: any) {

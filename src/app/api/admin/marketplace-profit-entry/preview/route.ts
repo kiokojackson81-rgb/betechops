@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBenjamin } from "@/lib/api";
 import { extractProfitTransactions, extractProfitTransactionsFromImage } from "@/lib/marketplaceProfitExtractor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const contentType = req.headers.get("content-type") ?? "";

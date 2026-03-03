@@ -13,8 +13,9 @@ export default async function OnlinePerformanceCapturePage() {
   const session = await auth();
   const role = (session?.user as any)?.role;
   const email = String((session?.user as any)?.email ?? "").toLowerCase();
-  const limitedView = role === "SUPERVISOR" && email === "benjamin@betech.co.ke";
-  if (role !== "ADMIN" && role !== "SUPERVISOR") {
+  const isBenjamin = email === "benjamin@betech.co.ke";
+  const limitedView = isBenjamin && role !== "ADMIN";
+  if (role !== "ADMIN" && role !== "SUPERVISOR" && !isBenjamin) {
     return redirect("/not-authorized");
   }
 

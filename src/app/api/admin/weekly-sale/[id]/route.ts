@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBenjamin } from "@/lib/api";
 import { recomputeWeeklySalesCommission } from "@/lib/weeklySales";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -18,12 +18,16 @@ async function resolveParams(context: ParamsContext): Promise<{ id: string }> {
 }
 
 export async function PATCH(req: NextRequest, context: any) {
-  const auth = await requireRole("ADMIN");
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
   const { id } = await resolveParams(context);
 
   const body = (await req.json().catch(() => null)) as { status?: string; amount?: number | string } | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+
+  if ((auth as any).isBenjamin && body.status) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const updates: Prisma.WeeklySaleUpdateInput = {};
   if (body.amount !== undefined) {
@@ -55,6 +59,22 @@ export async function PATCH(req: NextRequest, context: any) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  if ((auth as any).isBenjamin) {
+    const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
+    if (!actorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const sale = await prisma.weeklySale.findUnique({
+      where: { id },
+      select: { id: true, source: true, status: true, createdBy: true },
+    });
+    if (!sale) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (sale.source !== WeeklySaleSource.MANUAL || sale.status !== WeeklySaleStatus.PENDING) {
+      return NextResponse.json({ error: "Only pending manual entries can be edited" }, { status: 400 });
+    }
+    if (String(sale.createdBy ?? "") !== actorId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   const sale = await prisma.weeklySale.update({
     where: { id },
     data: updates,
@@ -82,17 +102,22 @@ export async function PATCH(req: NextRequest, context: any) {
 }
 
 export async function DELETE(_req: NextRequest, context: any) {
-  const auth = await requireRole("ADMIN");
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
   const { id } = await resolveParams(context as ParamsContext);
 
   const sale = await prisma.weeklySale.findUnique({
     where: { id },
-    select: { id: true, source: true, status: true },
+    select: { id: true, source: true, status: true, createdBy: true },
   });
   if (!sale) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (sale.source !== WeeklySaleSource.MANUAL || sale.status !== WeeklySaleStatus.PENDING) {
     return NextResponse.json({ error: "Only pending manual entries can be deleted" }, { status: 400 });
+  }
+  if ((auth as any).isBenjamin) {
+    const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
+    if (!actorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (String(sale.createdBy ?? "") !== actorId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   await prisma.weeklySale.delete({ where: { id } });

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBenjamin } from "@/lib/api";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const body = (await req.json().catch(() => null)) as
@@ -23,6 +23,21 @@ export async function POST(req: NextRequest) {
   if (uniqueIds.length === 0) return NextResponse.json({ error: "ids is required" }, { status: 400 });
 
   try {
+    if ((auth as any).isBenjamin) {
+      const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;
+      if (!actorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const mine = await (prisma as any).marketplaceProfitEntry.findMany({
+        where: { id: { in: uniqueIds }, enteredByAdminId: actorId },
+        select: { id: true },
+      });
+      const mineIds = mine.map((r: any) => String(r.id));
+      if (mineIds.length === 0) return NextResponse.json({ ok: true, deletedCount: 0 });
+      const result = await (prisma as any).marketplaceProfitEntry.deleteMany({
+        where: { id: { in: mineIds } },
+      });
+      return NextResponse.json({ ok: true, deletedCount: Number(result?.count ?? 0) });
+    }
+
     const result = await (prisma as any).marketplaceProfitEntry.deleteMany({
       where: { id: { in: uniqueIds } },
     });
@@ -37,4 +52,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Bulk delete failed" }, { status: 500 });
   }
 }
-

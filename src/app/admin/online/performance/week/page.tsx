@@ -22,8 +22,9 @@ export default async function OnlinePerformanceWeekPage({
   const session = await auth();
   const role = (session?.user as any)?.role;
   const email = String((session?.user as any)?.email ?? "").toLowerCase();
-  const limitedView = role === "SUPERVISOR" && email === "benjamin@betech.co.ke";
-  if (role !== "ADMIN" && role !== "SUPERVISOR") {
+  const isBenjamin = email === "benjamin@betech.co.ke";
+  const limitedView = isBenjamin && role !== "ADMIN";
+  if (role !== "ADMIN" && role !== "SUPERVISOR" && !isBenjamin) {
     return redirect("/not-authorized");
   }
 
@@ -68,7 +69,13 @@ export default async function OnlinePerformanceWeekPage({
   try {
     const [e, a, lc] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.findMany({
-        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        where: {
+          weekStart: window.weekStart,
+          weekEnd: window.weekEnd,
+          periodKey: period.key,
+          ...(accountId ? { accountId } : {}),
+          ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
+        },
         select: {
           id: true,
           date: true,
@@ -88,10 +95,23 @@ export default async function OnlinePerformanceWeekPage({
       (prisma as any).marketplaceProfitEntry.aggregate({
         _sum: { itemCreditAmount: true, netPayout: true, buyingPrice: true, profit: true },
         _avg: { commissionRatePct: true, marginPct: true },
-        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        where: {
+          weekStart: window.weekStart,
+          weekEnd: window.weekEnd,
+          periodKey: period.key,
+          ...(accountId ? { accountId } : {}),
+          ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
+        },
       }),
       (prisma as any).marketplaceProfitEntry.count({
-        where: { weekStart: window.weekStart, weekEnd: window.weekEnd, periodKey: period.key, isLoss: true, ...(accountId ? { accountId } : {}) },
+        where: {
+          weekStart: window.weekStart,
+          weekEnd: window.weekEnd,
+          periodKey: period.key,
+          isLoss: true,
+          ...(accountId ? { accountId } : {}),
+          ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
+        },
       }),
     ]);
     entries = e;

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   const { categoryAssignments, ...rest } = user;
   const impersonated = Boolean(identity.impersonateId && identity.resolvedUserId === identity.impersonateId);
   const email = typeof rest.email === "string" ? rest.email.toLowerCase() : "";
-  const supervisorPerformanceTools = String(rest.role ?? "").toUpperCase() === "SUPERVISOR" && email === "benjamin@betech.co.ke";
+  const supervisorPerformanceTools = email === "benjamin@betech.co.ke";
   const payload = {
     user: { ...rest, categories: categoryAssignments.map((c) => c.category) },
     impersonated,
