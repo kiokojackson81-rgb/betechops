@@ -73,6 +73,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [draftId, setDraftId] = useState<string>("");
   const [submittingTxn, setSubmittingTxn] = useState<string>("");
   const [submittedByTxn, setSubmittedByTxn] = useState<Record<string, string>>({});
+  const [resolvedAccountId, setResolvedAccountId] = useState<string>("");
+  const [localOnlyDraft, setLocalOnlyDraft] = useState(false);
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
@@ -134,12 +136,34 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       setBuyingByTxn({});
       setSubmitted(false);
       setSubmittedByTxn({});
+      setResolvedAccountId(String(data?.account?.id ?? "").trim());
+      setLocalOnlyDraft(false);
       const did = String(data?.draftId ?? "").trim();
       if (did) {
         setDraftId(did);
         try {
           localStorage.setItem(draftKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
         } catch {}
+      } else {
+        setDraftId("");
+        setLocalOnlyDraft(true);
+        try {
+          localStorage.setItem(
+            draftKey,
+            JSON.stringify({
+              mode: "local",
+              savedAt: new Date().toISOString(),
+              shopId,
+              weekStart,
+              accountId: String(data?.account?.id ?? "").trim(),
+              existingTxns: Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : [],
+              rows: items,
+              buyingByTxn: {},
+              submittedByTxn: {},
+            }),
+          );
+        } catch {}
+        showToast("Draft saved locally (DB update pending). You can still submit rows.", "warn");
       }
       if (data?.aggregated?.errors?.length) {
         showToast(String(data.aggregated.errors[0] ?? "Preview warning"), "warn");
@@ -166,10 +190,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   };
 
   const submitRow = async (txn: string) => {
-    if (!draftId) {
-      showToast("Load the statement first", "error");
-      return;
-    }
     const raw = String(buyingByTxn[txn] ?? "").trim();
     const buying = Number(raw);
     if (!raw || !Number.isFinite(buying) || buying < 0) {
@@ -179,15 +199,31 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
     setSubmittingTxn(txn);
     try {
+      const row = rows.find((r) => r.itemCreditTxn === txn) ?? null;
+      if (!row) throw new Error("Row not found");
+
       const doSubmit = async (allowDuplicates: boolean) => {
-        const res = await fetch(
-          withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}/submit-row`, props.impersonateId ?? null),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ itemCreditTxn: txn, buyingPriceKes: buying, allowDuplicates }),
-          },
-        );
+        const endpoint = draftId
+          ? withImpersonateId(
+              `/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}/submit-row`,
+              props.impersonateId ?? null,
+            )
+          : withImpersonateId("/api/admin/marketplace-profit-entry/csv/submit-row", props.impersonateId ?? null);
+
+        const payload = draftId
+          ? { itemCreditTxn: txn, buyingPriceKes: buying, allowDuplicates }
+          : {
+              accountId: resolvedAccountId || shopId,
+              row,
+              buyingPriceKes: buying,
+              allowDuplicates,
+            };
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
         const data = (await res.json().catch(() => null)) as any;
         return { res, data };
       };
@@ -204,6 +240,17 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       if (entryId) {
         setSubmittedByTxn((prev) => ({ ...prev, [txn]: entryId }));
         setSubmitted(true);
+        if (localOnlyDraft) {
+          try {
+            const rawDraft = localStorage.getItem(draftKey);
+            const parsed = rawDraft ? (JSON.parse(rawDraft) as any) : null;
+            if (parsed && parsed.mode === "local") {
+              parsed.buyingByTxn = { ...(parsed.buyingByTxn ?? {}), [txn]: String(buying) };
+              parsed.submittedByTxn = { ...(parsed.submittedByTxn ?? {}), [txn]: entryId };
+              localStorage.setItem(draftKey, JSON.stringify(parsed));
+            }
+          } catch {}
+        }
       }
       showToast("Saved", "success");
     } catch (err) {
@@ -250,10 +297,26 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     try {
       const raw = localStorage.getItem(draftKey);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as { id?: string } | null;
+      const parsed = JSON.parse(raw) as any;
+      if (parsed?.mode === "local") {
+        const localRows = Array.isArray(parsed?.rows) ? (parsed.rows as PreviewRow[]) : [];
+        setRows(localRows);
+        setExistingTxns(Array.isArray(parsed?.existingTxns) ? (parsed.existingTxns as string[]) : []);
+        setBuyingByTxn(parsed?.buyingByTxn && typeof parsed.buyingByTxn === "object" ? (parsed.buyingByTxn as Record<string, string>) : {});
+        setSubmittedByTxn(
+          parsed?.submittedByTxn && typeof parsed.submittedByTxn === "object" ? (parsed.submittedByTxn as Record<string, string>) : {},
+        );
+        setSubmitted(Object.keys(parsed?.submittedByTxn ?? {}).length > 0);
+        setResolvedAccountId(String(parsed?.accountId ?? "").trim());
+        setDraftId("");
+        setLocalOnlyDraft(true);
+        return;
+      }
+
       const did = String(parsed?.id ?? "").trim();
       if (!did) return;
       setDraftId(did);
+      setLocalOnlyDraft(false);
       void (async () => {
         const res = await fetch(
           withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(did)}`, props.impersonateId ?? null),
@@ -262,8 +325,10 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         const data = (await res.json().catch(() => null)) as any;
         if (!res.ok) return;
         const draftRows = Array.isArray(data?.rows) ? (data.rows as PreviewRow[]) : [];
-        const buying = data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
-        const submittedMap = data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
+        const buying =
+          data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
+        const submittedMap =
+          data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
         setRows(draftRows);
         setBuyingByTxn(Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)])));
         setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
@@ -280,6 +345,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     setSubmittedByTxn({});
     setSubmitted(false);
     setDraftId("");
+    setResolvedAccountId("");
+    setLocalOnlyDraft(false);
     setFile(null);
     try {
       if (draftKey) localStorage.removeItem(draftKey);
@@ -414,7 +481,10 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           ) : null}
 
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div className="text-xs text-slate-500">Profit appears only after you submit each order.</div>
+            <div className="text-xs text-slate-500">
+              Profit appears only after you submit each order.
+              {localOnlyDraft ? " (Draft is stored in this browser only.)" : ""}
+            </div>
 
             <div className="flex flex-wrap items-end gap-2">
               <label className="block">
