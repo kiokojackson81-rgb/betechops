@@ -245,6 +245,28 @@ export async function POST(req: NextRequest) {
   const periodKey = getTradingPeriodFor(weekStart).key;
 
   let draftId: string | null = null;
+  // Prevent statement duplication: if this shop+week already has a draft for the same statement number, resume it instead of creating a new one.
+  if (statementNumber) {
+    try {
+      const existingSameStatement = await prisma.marketplaceStatementDraft.findFirst({
+        where: { shopId: resolved.shopId, weekStart, statementNumber },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, draftKey: true },
+      });
+      if (existingSameStatement && String(existingSameStatement.draftKey) !== draftKey) {
+        return NextResponse.json({
+          alreadyUploaded: true,
+          account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
+          resolvedShopId: resolved.shopId,
+          draftId: existingSameStatement.id,
+          week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
+          statementNumber,
+        });
+      }
+    } catch (err) {
+      console.error("[csv-preview] statement duplication check failed", err);
+    }
+  }
   try {
     const rowPayload = aggregated.aggregates.map((r) => ({
       key: r.key,

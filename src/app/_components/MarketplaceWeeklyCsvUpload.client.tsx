@@ -325,6 +325,19 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Preview failed");
 
+      if (data?.alreadyUploaded && String(data?.draftId ?? "").trim()) {
+        const did = String(data.draftId).trim();
+        const detectedWeekStartIso = String(data?.week?.weekStart ?? "").trim();
+        const detectedInput = detectedWeekStartIso ? new Date(detectedWeekStartIso).toISOString().slice(0, 10) : "";
+        if (detectedInput) setWeekStart(detectedInput);
+        setDraftId(did);
+        setLocalOnlyDraft(false);
+        setFile(null);
+        showToast("Statement already uploaded for this week. Resuming saved draft.", "warn");
+        await loadDraftById(did);
+        return;
+      }
+
       const items = Array.isArray(data?.items) ? (data.items as PreviewRow[]) : [];
       const suggested =
         data?.suggestedBuyingByTxn && typeof data.suggestedBuyingByTxn === "object"
