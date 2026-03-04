@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Platform } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
-import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from "@/lib/weekWindow";
+import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { aggregateMarketplaceStatementRows, parseMarketplaceStatementCsv } from "@/lib/marketplaceStatementCsv";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
@@ -67,7 +67,6 @@ export async function POST(req: NextRequest) {
   if (!form) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
 
   const accountId = String(form.get("accountId") ?? "").trim();
-  const weekStartRaw = String(form.get("weekStart") ?? "").trim();
   const userIdRaw = String(form.get("userId") ?? "").trim();
   const file = form.get("file");
 
@@ -75,10 +74,6 @@ export async function POST(req: NextRequest) {
   if (!file || typeof file !== "object" || !("arrayBuffer" in (file as any))) {
     return NextResponse.json({ error: "CSV file is required" }, { status: 400 });
   }
-
-  const weekStartParsed = weekStartRaw ? normalizeWeekStartFromParam(weekStartRaw) : null;
-  if (!weekStartParsed) return NextResponse.json({ error: "weekStart is required" }, { status: 400 });
-  const { weekStart, weekEnd } = mondayToSundayNairobiWindow(weekStartParsed);
 
   const resolved = await resolveAccountAndShopId(accountId);
   const account = resolved.account;
@@ -92,6 +87,26 @@ export async function POST(req: NextRequest) {
 
   const csvText = await (file as File).text();
   const parsed = parseMarketplaceStatementCsv(csvText);
+
+  // Infer week from CSV if weekStart was not supplied.
+  // Choose the most common Nairobi Mon→Sun week among statement rows.
+  const candidateWeekCounts = new Map<string, { weekStart: Date; weekEnd: Date; count: number }>();
+  for (const r of parsed.rows as any[]) {
+    const date = (r as any)?.transactionDateUtc instanceof Date ? ((r as any).transactionDateUtc as Date) : null;
+    if (!date || Number.isNaN(date.getTime())) continue;
+    const w = mondayToSundayNairobiWindow(date);
+    const key = w.weekStart.toISOString();
+    const prev = candidateWeekCounts.get(key);
+    candidateWeekCounts.set(key, { weekStart: w.weekStart, weekEnd: w.weekEnd, count: (prev?.count ?? 0) + 1 });
+  }
+  const detected = Array.from(candidateWeekCounts.values()).sort((a, b) => b.count - a.count)[0] ?? null;
+  if (!detected) {
+    return NextResponse.json({ error: "Unable to detect week from CSV. Ensure it includes transaction dates." }, { status: 400 });
+  }
+
+  const weekStart = detected.weekStart;
+  const weekEnd = detected.weekEnd;
+
   const aggregated = aggregateMarketplaceStatementRows({
     rows: parsed.rows,
     weekStartUtc: weekStart,
@@ -215,7 +230,15 @@ export async function POST(req: NextRequest) {
 
   // Mirror to WeeklySale (manual) immediately so admin doesn't have to re-enter in manual weekly.
   try {
-    const effectiveUserId = userIdRaw ? userIdRaw : null;
+    let effectiveUserId = userIdRaw ? userIdRaw : null;
+    if (!effectiveUserId) {
+      const primary = await prisma.marketplaceAccountAssignment.findFirst({
+        where: { accountId: account.id, endsAt: null },
+        orderBy: { startsAt: "desc" },
+        select: { attendantId: true },
+      });
+      effectiveUserId = primary?.attendantId ?? null;
+    }
     await upsertManualWeeklySale({
       shopId: resolved.shopId,
       weekStart,

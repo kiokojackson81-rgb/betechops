@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { withImpersonateId } from "@/lib/impersonation";
 
@@ -61,8 +61,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const defaultWeekStart = props.defaultWeekStart ?? weeks.at(-1)?.startInput ?? weeks[0]?.startInput ?? "";
 
   const [shopId, setShopId] = useState("");
-  const [weekStart, setWeekStart] = useState(defaultWeekStart);
-  const [assigneeId, setAssigneeId] = useState(props.defaultAssigneeId ?? "");
+  const [weekStart, setWeekStart] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
@@ -79,10 +78,55 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
 
+  const buildDraftKey = useCallback((sid: string, weekStartInput: string) => {
+    const s = String(sid ?? "").trim();
+    const w = String(weekStartInput ?? "").trim();
+    if (!s || !w) return "";
+    return `betechops:csv-draft:v1:${s}:${w}`;
+  }, []);
+
   const draftKey = useMemo(() => {
     if (!shopId || !weekStart) return "";
     return `betechops:csv-draft:v1:${shopId}:${weekStart}`;
   }, [shopId, weekStart]);
+
+  const lastDraftPointerKey = useMemo(() => {
+    if (!shopId) return "";
+    return `betechops:csv-draft:last-week:${shopId}`;
+  }, [shopId]);
+
+  // Restore last selected shop for faster data entry.
+  useEffect(() => {
+    if (shopId) return;
+    if (!props.shops.length) return;
+    try {
+      const saved = String(localStorage.getItem("betechops:csv:last-shop") ?? "").trim();
+      if (saved && props.shops.some((s) => s.id === saved)) {
+        setShopId(saved);
+        return;
+      }
+    } catch {}
+    // Default to first shop if nothing saved yet.
+    setShopId(props.shops[0]?.id ?? "");
+  }, [props.shops, shopId]);
+
+  useEffect(() => {
+    if (!shopId) return;
+    try {
+      localStorage.setItem("betechops:csv:last-shop", shopId);
+    } catch {}
+  }, [shopId]);
+
+  // Restore last used week (auto-detected) for this shop so reload resumes where you left off.
+  useEffect(() => {
+    if (!shopId) return;
+    if (weekStart) return;
+    try {
+      const w = String(localStorage.getItem(lastDraftPointerKey) ?? "").trim();
+      if (w) setWeekStart(w);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId, lastDraftPointerKey]);
 
   const totals = useMemo(() => {
     const netPayout = rows.reduce((sum, r) => sum + Number(r.netPayout ?? 0), 0);
@@ -102,10 +146,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       showToast("Select a shop first", "error");
       return;
     }
-    if (!weekStart) {
-      showToast("Select a week first", "error");
-      return;
-    }
     if (!file) {
       showToast("Upload a CSV file first", "error");
       return;
@@ -115,12 +155,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     try {
       const form = new FormData();
       form.set("accountId", shopId);
-      form.set("weekStart", weekStart);
-      if (props.disableAssigneeSelect) {
-        if (props.defaultAssigneeId) form.set("userId", props.defaultAssigneeId);
-      } else if (assigneeId) {
-        form.set("userId", assigneeId);
-      }
+      // weekStart is inferred from the CSV on the server (most common Nairobi Mon→Sun week).
+      // userId is inferred from the shop's primary attendant unless explicitly provided in server-side rules.
       form.set("file", file);
 
       const res = await fetch(withImpersonateId("/api/admin/marketplace-profit-entry/csv/preview", props.impersonateId ?? null), {
@@ -138,23 +174,33 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       setSubmittedByTxn({});
       setResolvedAccountId(String(data?.account?.id ?? "").trim());
       setLocalOnlyDraft(false);
+
+      const detectedWeekStartIso = String(data?.week?.weekStart ?? "").trim();
+      const detectedInput = detectedWeekStartIso ? new Date(detectedWeekStartIso).toISOString().slice(0, 10) : "";
+      if (detectedWeekStartIso) {
+        setWeekStart(detectedInput);
+      }
+
+      const storageKey = buildDraftKey(shopId, detectedInput || defaultWeekStart);
+
       const did = String(data?.draftId ?? "").trim();
       if (did) {
         setDraftId(did);
         try {
-          localStorage.setItem(draftKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
+          localStorage.setItem(storageKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
+          if (lastDraftPointerKey) localStorage.setItem(lastDraftPointerKey, detectedInput || defaultWeekStart);
         } catch {}
       } else {
         setDraftId("");
         setLocalOnlyDraft(true);
         try {
           localStorage.setItem(
-            draftKey,
+            storageKey,
             JSON.stringify({
               mode: "local",
               savedAt: new Date().toISOString(),
               shopId,
-              weekStart,
+              weekStart: detectedWeekStartIso ? new Date(detectedWeekStartIso).toISOString().slice(0, 10) : weekStart,
               accountId: String(data?.account?.id ?? "").trim(),
               existingTxns: Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : [],
               rows: items,
@@ -162,6 +208,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
               submittedByTxn: {},
             }),
           );
+          if (lastDraftPointerKey) localStorage.setItem(lastDraftPointerKey, detectedInput || defaultWeekStart);
         } catch {}
         showToast("Draft saved locally (DB update pending). You can still submit rows.", "warn");
       }
@@ -351,6 +398,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     setFile(null);
     try {
       if (draftKey) localStorage.removeItem(draftKey);
+      if (lastDraftPointerKey) localStorage.removeItem(lastDraftPointerKey);
     } catch {}
   };
 
@@ -390,11 +438,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             onChange={(e) => {
               const next = e.target.value;
               setShopId(next);
-              if (!props.disableAssigneeSelect && !assigneeId) {
-                const shop = props.shops.find((s) => s.id === next) ?? null;
-                const primary = shop?.primaryAttendantId ?? "";
-                if (primary) setAssigneeId(primary);
-              }
             }}
             disabled={Boolean(rows.length)}
           >
@@ -408,19 +451,10 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         </label>
 
         <label className="block">
-          <div className="mb-1 text-xs text-slate-400">Week</div>
-          <select
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-            value={weekStart}
-            onChange={(e) => setWeekStart(e.target.value)}
-            disabled={Boolean(rows.length)}
-          >
-            {weeks.map((w) => (
-              <option key={w.startInput} value={w.startInput}>
-                {w.label}
-              </option>
-            ))}
-          </select>
+          <div className="mb-1 text-xs text-slate-400">Week (auto)</div>
+          <div className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
+            {selectedWeek?.label ?? "Load statement to detect week"}
+          </div>
         </label>
 
         <label className="block">
@@ -441,25 +475,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           />
         </label>
 
-        <label className="block">
-          <div className="mb-1 text-xs text-slate-400">Assign to</div>
-          <select
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
-            value={props.disableAssigneeSelect ? (props.defaultAssigneeId ?? "") : assigneeId}
-            disabled={props.disableAssigneeSelect || !props.assignees?.length}
-            onChange={(e) => setAssigneeId(e.target.value)}
-          >
-            <option value="">(Optional)</option>
-            {(props.assignees ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          {selectedShop?.primaryAttendantId && !props.disableAssigneeSelect ? (
-            <div className="mt-1 text-xs text-slate-500">Default assignee comes from shop primary attendant.</div>
-          ) : null}
-        </label>
+        <div className="hidden" aria-hidden="true" />
       </div>
 
       {rows.length ? (
