@@ -126,3 +126,14 @@ export function filterOrdersToCurrentWeek(orders: KilimallXlsxOrder[], now: Date
   const excluded = orders.length - inWeek.length;
   return { weekStart, weekEnd, inWeek, excluded };
 }
+
+// "Last 4 full weeks" behavior: on a Wednesday, we want the previous Mon–Sun window (already completed),
+// not the in-progress week.
+export function filterOrdersToLastFullWeek(orders: KilimallXlsxOrder[], now: Date) {
+  const base = new Date(now);
+  base.setDate(base.getDate() - 7);
+  const { weekStart, weekEnd } = mondayToSundayNairobiWindow(base);
+  const inWeek = orders.filter((o) => o.orderDate >= weekStart && o.orderDate <= weekEnd);
+  const excluded = orders.length - inWeek.length;
+  return { weekStart, weekEnd, inWeek, excluded };
+}

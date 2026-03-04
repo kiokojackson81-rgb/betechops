@@ -421,6 +421,9 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       if (typeof data?.excluded === "number" && data.excluded > 0) {
         showToast(`Filtered out ${data.excluded} orders outside the current week`, "warn");
       }
+      if (data?.noOrdersInWeek) {
+        showToast("No orders in the selected week. Recorded payout as Ksh 0.", "warn");
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Preview failed", "error");
     } finally {

@@ -5,7 +5,7 @@ import { requireRoleOrBenjamin } from "@/lib/api";
 import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
-import { parseKilimallOrdersXlsx, filterOrdersToCurrentWeek } from "@/lib/kilimallOrdersXlsx";
+import { parseKilimallOrdersXlsx, filterOrdersToLastFullWeek } from "@/lib/kilimallOrdersXlsx";
 import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -130,7 +130,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { weekStart, weekEnd, inWeek, excluded } = filterOrdersToCurrentWeek(orders, new Date());
+  // Use the most recent *completed* Mon–Sun week ("last full week"), which matches the UI's last-4-full-weeks behavior.
+  const { weekStart, weekEnd, inWeek, excluded } = filterOrdersToLastFullWeek(orders, new Date());
   const weekKey = weekStart.toISOString().slice(0, 10);
 
   // Stable content hash (prevents duplication even if the file bytes differ).
@@ -312,6 +313,7 @@ export async function POST(req: NextRequest) {
     totals,
     items,
     excluded,
+    noOrdersInWeek: items.length === 0,
     draftTableAvailable,
   });
 }
