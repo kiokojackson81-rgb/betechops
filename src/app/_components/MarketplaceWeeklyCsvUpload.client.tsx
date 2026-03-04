@@ -933,7 +933,13 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   const buyingRaw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
                   const buyingNum = Number(buyingRaw);
                   const net = Number(r.netPayout ?? 0);
-                  const isReturn = Number.isFinite(net) && net < 0;
+                  const gross = Number(r.grossSale ?? 0);
+                  const status = String(r.orderItemStatus ?? "").toLowerCase();
+                  const isReturn =
+                    status.includes("return") ||
+                    status.includes("refund") ||
+                    (Number.isFinite(net) && net < 0) ||
+                    (Number.isFinite(gross) && gross < 0);
                   const savedRaw = String(savedBuyingByTxn[r.itemCreditTxn] ?? "").trim();
                   const hasValidBuying = buyingRaw.length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
                   const canSubmitRow = !isSubmitted && !isReturn && hasValidBuying;
@@ -1031,7 +1037,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           </div>
 
           <div className="mt-2 text-xs text-slate-400">
-            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Returns (negative payout) are excluded from buying price.
+            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Returns/refunds are excluded from buying price.
           </div>
         </div>
       ) : (

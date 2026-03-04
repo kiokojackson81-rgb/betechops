@@ -6,6 +6,7 @@ import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { aggregateMarketplaceStatementRows, parseMarketplaceStatementCsv } from "@/lib/marketplaceStatementCsv";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
+import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -243,10 +244,11 @@ export async function POST(req: NextRequest) {
   const weekKey = weekStart.toISOString().slice(0, 10);
   const draftKey = `csv:${resolved.shopId}:${weekKey}:${hash}`;
   const periodKey = getTradingPeriodFor(weekStart).key;
+  const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
 
   let draftId: string | null = null;
   // Prevent statement duplication: if this shop+week already has a draft for the same statement number, resume it instead of creating a new one.
-  if (statementNumber) {
+  if (statementNumber && draftTableAvailable) {
     try {
       const existingSameStatement = await prisma.marketplaceStatementDraft.findFirst({
         where: { shopId: resolved.shopId, weekStart, statementNumber },
@@ -267,8 +269,9 @@ export async function POST(req: NextRequest) {
       console.error("[csv-preview] statement duplication check failed", err);
     }
   }
-  try {
-    const rowPayload = aggregated.aggregates.map((r) => ({
+  if (draftTableAvailable) {
+    try {
+      const rowPayload = aggregated.aggregates.map((r) => ({
       key: r.key,
       dateUtc: r.dateUtc.toISOString(),
       orderNo: r.orderNo,
@@ -341,9 +344,10 @@ export async function POST(req: NextRequest) {
       });
       draftId = draft.id;
     }
-  } catch (err) {
-    // Draft persistence shouldn't block preview; still return parsed rows.
-    console.error("[csv-preview] failed to persist draft", err);
+    } catch (err) {
+      // Draft persistence shouldn't block preview; still return parsed rows.
+      console.error("[csv-preview] failed to persist draft", err);
+    }
   }
 
   // Mirror to WeeklySale (manual) immediately so admin doesn't have to re-enter in manual weekly.
@@ -373,6 +377,7 @@ export async function POST(req: NextRequest) {
     account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
     resolvedShopId: resolved.shopId,
     draftId,
+    draftTableAvailable,
     week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
     parsed: { rows: parsed.rows.length, errors: parsed.errors },
     aggregated: { rows: aggregated.aggregates.length, skipped: aggregated.skipped, errors: aggregated.errors },

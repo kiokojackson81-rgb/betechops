@@ -12,6 +12,8 @@ export type KilimallXlsxOrder = {
   shippingFee: number;
   totalDeduction: number;
   payableAmount: number;
+  commissionAmount?: number | null;
+  settlementAmount?: number | null;
 };
 
 function normalizeHeader(value: unknown) {
@@ -55,7 +57,8 @@ function parseDateCell(value: unknown): Date | null {
 
 export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxOrder[]; headers: string[] } {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const sheetName = workbook.SheetNames[0];
+  const sheetName =
+    workbook.SheetNames.find((n) => normalizeHeader(n) === "bill details") ?? workbook.SheetNames[0] ?? "";
   if (!sheetName) return { orders: [], headers: [] };
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return { orders: [], headers: [] };
@@ -75,33 +78,37 @@ export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxO
 
   const orders: KilimallXlsxOrder[] = [];
   for (const row of rows) {
-    const orderNo = String(get(row, ["order no", "order number", "orderno", "order", "order number "] )).trim();
+    const orderNoRaw = String(get(row, ["order sn", "order no", "order number", "orderno", "order"])).trim();
+    const orderNo = orderNoRaw.replace(/^,+/, "").trim();
     if (!orderNo) continue;
 
     // Kilimall "order-sku-list" exports often use Order Time / Complete Time rather than Order Date.
-    const orderDateCell = get(row, ["complete time", "order date", "order time", "payment time", "date", "created at"]);
+    const orderDateCell = get(row, ["finnshed time", "finished time", "complete time", "order date", "order time", "payment time", "date"]);
     const orderDate = parseDateCell(orderDateCell);
     if (!orderDate) continue;
 
-    const productId = String(get(row, ["product id", "productid", "sku id", "sku", "item id"])).trim() || null;
-    const productName = String(get(row, ["product name", "item name", "sku title", "name", "product"])).trim() || null;
-    const trackingNo = String(get(row, ["tracking no", "tracking number", "trackingno"])).trim() || null;
+    const productId = String(get(row, ["goods id", "product id", "productid", "sku id", "sku", "item id"])).trim() || null;
+    const productName = String(get(row, ["goods name", "product name", "item name", "sku title", "name", "product"])).trim() || null;
+    const trackingNo = String(get(row, ["tracking no", "tracking number", "trackingno", "shipment no"])).trim() || null;
 
-    const qtyRaw = Number(String(get(row, ["sold qty", "qty", "quantity"])).trim());
+    const qtyRaw = Number(String(get(row, ["goods num", "sold qty", "qty", "quantity"])).trim());
     const qty = Number.isFinite(qtyRaw) ? qtyRaw : null;
 
     // Some exports include "Deal Price" and "Discount" but not payable totals.
     const dealPrice = parseMoney(get(row, ["deal price", "price", "unit price"]));
     const discount = parseMoney(get(row, ["discount"]));
 
-    const productAmount = parseMoney(get(row, ["product amount", "productamount", "amount"])) || (dealPrice && qty ? dealPrice * qty : dealPrice);
+    const completeAmount = parseMoney(get(row, ["complete amount"]));
+    const productAmount =
+      parseMoney(get(row, ["product amount", "productamount", "amount"])) ||
+      (completeAmount ? completeAmount : dealPrice && qty ? dealPrice * qty : dealPrice);
     const shippingFee = parseMoney(get(row, ["shipping fee", "shippingfee", "shipping"])) || 0;
     const totalDeduction = parseMoney(get(row, ["total deduction", "totaldeduction", "deduction"])) || 0;
     const payableAmountRaw = parseMoney(get(row, ["payable amount", "payableamount", "payout", "payable"]));
+    const settlement = parseMoney(get(row, ["settlement", "settlement payable"]));
+    const commission = parseMoney(get(row, ["commission"]));
     const payableAmount =
-      payableAmountRaw ||
-      Math.max(0, (dealPrice && qty ? dealPrice * qty : dealPrice) - discount) ||
-      Math.max(0, productAmount + shippingFee - totalDeduction);
+      payableAmountRaw || settlement || Math.max(0, (dealPrice && qty ? dealPrice * qty : dealPrice) - discount) || Math.max(0, productAmount + shippingFee - totalDeduction);
 
     orders.push({
       orderNo,
@@ -114,6 +121,8 @@ export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxO
       shippingFee,
       totalDeduction,
       payableAmount,
+      commissionAmount: commission == null ? null : Number(commission),
+      settlementAmount: settlement == null ? null : Number(settlement),
     });
   }
 

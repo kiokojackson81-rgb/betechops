@@ -6,6 +6,7 @@ import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
 import { parseKilimallOrdersXlsx, filterOrdersToLastFullWeek } from "@/lib/kilimallOrdersXlsx";
+import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -134,11 +135,17 @@ export async function POST(req: NextRequest) {
   const { weekStart, weekEnd, inWeek, excluded } = filterOrdersToLastFullWeek(orders, new Date());
   const weekKey = weekStart.toISOString().slice(0, 10);
 
+  const txnFor = (o: any) => {
+    const orderNo = String(o?.orderNo ?? "").trim();
+    const sku = String(o?.productId ?? "").trim();
+    return sku ? `${orderNo}:${sku}` : orderNo;
+  };
+
   // Stable content hash (prevents duplication even if the file bytes differ).
   const contentHash = createHash("sha1")
     .update(
       inWeek
-        .map((o) => `${o.orderNo}|${o.orderDate.toISOString()}|${o.payableAmount}|${o.productId ?? ""}|${o.productName ?? ""}`)
+        .map((o) => `${txnFor(o)}|${o.orderDate.toISOString()}|${o.payableAmount}|${o.productName ?? ""}`)
         .sort()
         .join("\n"),
     )
@@ -180,7 +187,7 @@ export async function POST(req: NextRequest) {
       for (const o of inWeek) {
         const key = `${normalizeSku(o.productId)}|${normalizeText(o.productName)}|${moneyKey(Number(o.payableAmount ?? 0))}`;
         const match = bestSameAccount.get(key) ?? bestAny.get(key) ?? null;
-        if (match) suggestedBuyingByTxn[o.orderNo] = match.buyingPrice;
+        if (match) suggestedBuyingByTxn[txnFor(o)] = match.buyingPrice;
       }
     }
   } catch (err) {
@@ -190,7 +197,7 @@ export async function POST(req: NextRequest) {
   // Existing profit entries by orderNo (unique number).
   const existing = inWeek.length
     ? await (prisma as any).marketplaceProfitEntry.findMany({
-        where: { accountId: account.id, itemCreditTxn: { in: inWeek.map((o) => o.orderNo) } },
+        where: { accountId: account.id, itemCreditTxn: { in: inWeek.map((o) => txnFor(o)) } },
         select: { itemCreditTxn: true },
         take: 500,
       })
@@ -198,25 +205,34 @@ export async function POST(req: NextRequest) {
   const existingTxns = existing.map((r: any) => String(r.itemCreditTxn));
 
   const items = inWeek.map((o) => ({
-    key: `kilimall:${o.orderNo}`,
+    key: `kilimall:${txnFor(o)}`,
     dateUtc: o.orderDate.toISOString(),
     orderNo: o.orderNo,
     orderItemNo: "",
     details: o.productName ?? "",
     sellerSku: o.productId ?? "",
     jumiaSku: "",
-    itemCreditTxn: o.orderNo,
+    itemCreditTxn: txnFor(o),
     commissionTxn: null,
     shippingTxn: null,
     otherTxn: [],
-    grossSale: Number(o.payableAmount ?? 0),
-    commission: 0,
+    grossSale: Number(o.productAmount ?? o.payableAmount ?? 0),
+    commission: Number(o.commissionAmount ?? 0),
     shippingFee: 0,
-    otherFees: 0,
-    netPayout: Number(o.payableAmount ?? 0),
+    // Returns/refunds: if qty is negative or settlement is negative, treat payout as 0 (but keep negative economics in otherFees).
+    otherFees:
+      (Number(o.qty ?? 0) < 0 || Number(o.settlementAmount ?? 0) < 0 || Number(o.payableAmount ?? 0) < 0) &&
+      Number(o.settlementAmount ?? o.payableAmount ?? 0)
+        ? Number(o.settlementAmount ?? o.payableAmount ?? 0)
+        : 0,
+    netPayout:
+      Number(o.qty ?? 0) < 0 || Number(o.settlementAmount ?? 0) < 0 || Number(o.payableAmount ?? 0) < 0
+        ? 0
+        : Number(o.settlementAmount ?? o.payableAmount ?? 0),
     statementNumber: "",
     paidStatus: "",
-    orderItemStatus: "",
+    orderItemStatus:
+      Number(o.qty ?? 0) < 0 || Number(o.settlementAmount ?? 0) < 0 || Number(o.payableAmount ?? 0) < 0 ? "RETURN" : "",
     shippingProvider: "",
     trackingNumber: o.trackingNo ?? "",
     countryCode: "KE",
@@ -233,26 +249,22 @@ export async function POST(req: NextRequest) {
 
   // Persist draft if table exists (optional).
   let draftId: string | null = null;
-  let draftTableAvailable = true;
-  try {
-    const existingDraft = await prisma.marketplaceStatementDraft.findUnique({ where: { draftKey }, select: { id: true } });
-    if (existingDraft) {
-      return NextResponse.json({
-        alreadyUploaded: true,
-        account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
-        resolvedShopId: resolved.shopId,
-        draftId: existingDraft.id,
-        week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
-        excluded,
-      });
-    }
-  } catch (err: any) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") draftTableAvailable = false;
-    else throw err;
-  }
+  let draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
 
   if (draftTableAvailable) {
     try {
+      const existingDraft = await prisma.marketplaceStatementDraft.findUnique({ where: { draftKey }, select: { id: true } });
+      if (existingDraft) {
+        return NextResponse.json({
+          alreadyUploaded: true,
+          account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
+          resolvedShopId: resolved.shopId,
+          draftId: existingDraft.id,
+          week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
+          excluded,
+        });
+      }
+
       const draft = await prisma.marketplaceStatementDraft.create({
         data: {
           draftKey,
