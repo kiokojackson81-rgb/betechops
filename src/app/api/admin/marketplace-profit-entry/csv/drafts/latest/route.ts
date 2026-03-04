@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.res;
 
   const { searchParams } = new URL(req.url);
-  const shopId = String(searchParams.get("shopId") ?? "").trim();
-  if (!shopId) return NextResponse.json({ error: "shopId is required" }, { status: 400 });
+  const id = String(searchParams.get("shopId") ?? "").trim();
+  if (!id) return NextResponse.json({ error: "shopId is required" }, { status: 400 });
 
   const draft = await prisma.marketplaceStatementDraft.findFirst({
-    where: { shopId },
+    where: { OR: [{ shopId: id }, { accountId: id }] },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -48,4 +48,3 @@ export async function GET(req: NextRequest) {
     updatedAt: draft.updatedAt.toISOString(),
   });
 }
-
