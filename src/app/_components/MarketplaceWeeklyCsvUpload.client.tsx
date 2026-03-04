@@ -167,9 +167,19 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       if (!res.ok) throw new Error(data?.error || "Preview failed");
 
       const items = Array.isArray(data?.items) ? (data.items as PreviewRow[]) : [];
+      const suggested =
+        data?.suggestedBuyingByTxn && typeof data.suggestedBuyingByTxn === "object"
+          ? (data.suggestedBuyingByTxn as Record<string, any>)
+          : {};
       setRows(items);
       setExistingTxns(Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : []);
-      setBuyingByTxn({});
+      setBuyingByTxn(
+        Object.fromEntries(
+          Object.entries(suggested)
+            .map(([k, v]) => [String(k), String(v)] as const)
+            .filter(([k, v]) => k.trim() && v.trim()),
+        ),
+      );
       setSubmitted(false);
       setSubmittedByTxn({});
       setResolvedAccountId(String(data?.account?.id ?? "").trim());
@@ -204,7 +214,11 @@ export default function MarketplaceWeeklyCsvUpload(props: {
               accountId: String(data?.account?.id ?? "").trim(),
               existingTxns: Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : [],
               rows: items,
-              buyingByTxn: {},
+              buyingByTxn: Object.fromEntries(
+                Object.entries(suggested)
+                  .map(([k, v]) => [String(k), String(v)] as const)
+                  .filter(([k, v]) => k.trim() && v.trim()),
+              ),
               submittedByTxn: {},
             }),
           );

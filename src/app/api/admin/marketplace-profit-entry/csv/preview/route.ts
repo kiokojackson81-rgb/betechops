@@ -11,6 +11,24 @@ import { createHash } from "node:crypto";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function normalizeText(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s._-]+/gu, "");
+}
+
+function normalizeSku(value: unknown): string {
+  return normalizeText(value).replace(/\s+/g, "");
+}
+
+function moneyKey(value: number): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "0.00";
+  return n.toFixed(2);
+}
+
 async function resolveAccountAndShopId(inputId: string) {
   const asAccount = await prisma.marketplaceAccount.findUnique({
     where: { id: inputId },
@@ -113,6 +131,69 @@ export async function POST(req: NextRequest) {
     weekEndUtc: weekEnd,
   });
 
+  // Prefill buying prices from the most recent matching SKU+name+price in prior profit entries.
+  const suggestedBuyingByTxn: Record<string, number> = {};
+  try {
+    const skus = Array.from(
+      new Set(
+        aggregated.aggregates
+          .map((r) => String(r.jumiaSku || r.sellerSku || "").trim())
+          .filter(Boolean)
+          .slice(0, 2000),
+      ),
+    );
+
+    if (skus.length) {
+      const since = new Date();
+      since.setDate(since.getDate() - 180);
+
+      const recent = await (prisma as any).marketplaceProfitEntry.findMany({
+        where: { platform: account.platform as any, sku: { in: skus }, date: { gte: since } },
+        select: { accountId: true, sku: true, productName: true, itemCreditAmount: true, buyingPrice: true, date: true, createdAt: true },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        take: 2000,
+      });
+
+      const keyForEntry = (e: any) => {
+        const skuNorm = normalizeSku(e?.sku);
+        const nameNorm = normalizeText(e?.productName);
+        const price = moneyKey(Number(e?.itemCreditAmount ?? 0));
+        return `${skuNorm}|${nameNorm}|${price}`;
+      };
+
+      const bestSameAccount = new Map<string, { buyingPrice: number; ts: number }>();
+      const bestAny = new Map<string, { buyingPrice: number; ts: number }>();
+      for (const e of recent as any[]) {
+        const key = keyForEntry(e);
+        if (!key || key.startsWith("|")) continue;
+        const buying = Number(e?.buyingPrice ?? 0);
+        if (!Number.isFinite(buying) || buying <= 0) continue;
+        const ts = new Date(e?.date ?? e?.createdAt ?? 0).getTime();
+        if (e?.accountId === account.id) {
+          if (!bestSameAccount.has(key) || (bestSameAccount.get(key)?.ts ?? 0) < ts) {
+            bestSameAccount.set(key, { buyingPrice: buying, ts });
+          }
+        }
+        if (!bestAny.has(key) || (bestAny.get(key)?.ts ?? 0) < ts) {
+          bestAny.set(key, { buyingPrice: buying, ts });
+        }
+      }
+
+      for (const r of aggregated.aggregates) {
+        const sku = normalizeSku(r.jumiaSku || r.sellerSku || "");
+        const name = normalizeText(r.details || "");
+        const price = moneyKey(Number(r.grossSale ?? 0));
+        const key = `${sku}|${name}|${price}`;
+        const match = bestSameAccount.get(key) ?? bestAny.get(key) ?? null;
+        if (match && r.itemCreditTxn) {
+          suggestedBuyingByTxn[r.itemCreditTxn] = match.buyingPrice;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[csv-preview] buying prefill failed", err);
+  }
+
   const itemTxns = aggregated.aggregates.map((a) => a.itemCreditTxn).filter(Boolean);
   const existing = itemTxns.length
     ? await (prisma as any).marketplaceProfitEntry.findMany({
@@ -149,80 +230,79 @@ export async function POST(req: NextRequest) {
 
   let draftId: string | null = null;
   try {
-    const draft = await prisma.marketplaceStatementDraft.upsert({
+    const rowPayload = aggregated.aggregates.map((r) => ({
+      key: r.key,
+      dateUtc: r.dateUtc.toISOString(),
+      orderNo: r.orderNo,
+      orderItemNo: r.orderItemNo,
+      details: r.details,
+      sellerSku: r.sellerSku,
+      jumiaSku: r.jumiaSku,
+      itemCreditTxn: r.itemCreditTxn,
+      commissionTxn: r.commissionTxn,
+      shippingTxn: r.shippingTxn,
+      otherTxn: r.otherTxn,
+      grossSale: r.grossSale,
+      commission: r.commission,
+      shippingFee: r.shippingFee,
+      otherFees: r.otherFees,
+      netPayout: r.netPayout,
+      statementNumber: r.statementNumber,
+      paidStatus: r.paidStatus,
+      orderItemStatus: r.orderItemStatus,
+      shippingProvider: r.shippingProvider,
+      trackingNumber: r.trackingNumber,
+      countryCode: r.countryCode,
+    }));
+
+    const existingDraft = await prisma.marketplaceStatementDraft.findUnique({
       where: { draftKey },
-      create: {
-        draftKey,
-        platform: account.platform as Platform,
-        shopId: resolved.shopId,
-        accountId: account.id,
-        weekStart,
-        weekEnd,
-        periodKey,
-        statementNumber,
-        fileName: (file as File).name || null,
-        rowCount: aggregated.aggregates.length,
-        totalNetPayout: totals.netPayout,
-        rows: aggregated.aggregates.map((r) => ({
-          key: r.key,
-          dateUtc: r.dateUtc.toISOString(),
-          orderNo: r.orderNo,
-          orderItemNo: r.orderItemNo,
-          details: r.details,
-          sellerSku: r.sellerSku,
-          jumiaSku: r.jumiaSku,
-          itemCreditTxn: r.itemCreditTxn,
-          commissionTxn: r.commissionTxn,
-          shippingTxn: r.shippingTxn,
-          otherTxn: r.otherTxn,
-          grossSale: r.grossSale,
-          commission: r.commission,
-          shippingFee: r.shippingFee,
-          otherFees: r.otherFees,
-          netPayout: r.netPayout,
-          statementNumber: r.statementNumber,
-          paidStatus: r.paidStatus,
-          orderItemStatus: r.orderItemStatus,
-          shippingProvider: r.shippingProvider,
-          trackingNumber: r.trackingNumber,
-          countryCode: r.countryCode,
-        })),
-        buyingByTxn: {},
-        submittedByTxn: {},
-        createdById: actorId,
-      },
-      update: {
-        // refresh rows (same key) in case statement changes slightly
-        rowCount: aggregated.aggregates.length,
-        totalNetPayout: totals.netPayout,
-        rows: aggregated.aggregates.map((r) => ({
-          key: r.key,
-          dateUtc: r.dateUtc.toISOString(),
-          orderNo: r.orderNo,
-          orderItemNo: r.orderItemNo,
-          details: r.details,
-          sellerSku: r.sellerSku,
-          jumiaSku: r.jumiaSku,
-          itemCreditTxn: r.itemCreditTxn,
-          commissionTxn: r.commissionTxn,
-          shippingTxn: r.shippingTxn,
-          otherTxn: r.otherTxn,
-          grossSale: r.grossSale,
-          commission: r.commission,
-          shippingFee: r.shippingFee,
-          otherFees: r.otherFees,
-          netPayout: r.netPayout,
-          statementNumber: r.statementNumber,
-          paidStatus: r.paidStatus,
-          orderItemStatus: r.orderItemStatus,
-          shippingProvider: r.shippingProvider,
-          trackingNumber: r.trackingNumber,
-          countryCode: r.countryCode,
-        })),
-      },
-      select: { id: true },
+      select: { id: true, buyingByTxn: true, submittedByTxn: true },
     });
-    draftId = draft.id;
+
+    if (!existingDraft) {
+      const draft = await prisma.marketplaceStatementDraft.create({
+        data: {
+          draftKey,
+          platform: account.platform as Platform,
+          shopId: resolved.shopId,
+          accountId: account.id,
+          weekStart,
+          weekEnd,
+          periodKey,
+          statementNumber,
+          fileName: (file as File).name || null,
+          rowCount: aggregated.aggregates.length,
+          totalNetPayout: totals.netPayout,
+          rows: rowPayload as any,
+          buyingByTxn: suggestedBuyingByTxn as any,
+          submittedByTxn: {},
+          createdById: actorId,
+        },
+        select: { id: true },
+      });
+      draftId = draft.id;
+    } else {
+      const existingBuying = (existingDraft.buyingByTxn && typeof existingDraft.buyingByTxn === "object"
+        ? (existingDraft.buyingByTxn as any)
+        : {}) as Record<string, any>;
+      const mergedBuying: Record<string, any> = { ...suggestedBuyingByTxn };
+      for (const [k, v] of Object.entries(existingBuying)) {
+        mergedBuying[k] = v;
+      }
+
+      const draft = await prisma.marketplaceStatementDraft.update({
+        where: { id: existingDraft.id },
+        data: {
+          rowCount: aggregated.aggregates.length,
+          totalNetPayout: totals.netPayout,
+          rows: rowPayload as any,
+          buyingByTxn: mergedBuying as any,
+        },
+        select: { id: true },
+      });
+      draftId = draft.id;
+    }
   } catch (err) {
     // Draft persistence shouldn't block preview; still return parsed rows.
     console.error("[csv-preview] failed to persist draft", err);
@@ -259,6 +339,7 @@ export async function POST(req: NextRequest) {
     parsed: { rows: parsed.rows.length, errors: parsed.errors },
     aggregated: { rows: aggregated.aggregates.length, skipped: aggregated.skipped, errors: aggregated.errors },
     existingTxns,
+    suggestedBuyingByTxn,
     totals,
     items: aggregated.aggregates,
   });
