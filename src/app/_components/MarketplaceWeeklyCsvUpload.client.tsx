@@ -729,6 +729,37 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const clearDraft = () => resetView({ preserveStorage: false });
 
+  const deleteStatement = async () => {
+    if (!draftId || localOnlyDraft) {
+      showToast("This statement is only saved locally. Use Clear.", "warn");
+      return;
+    }
+
+    const ok = window.confirm("Delete this statement? This removes the saved draft and resets the week's payout to 0.");
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}`, props.impersonateId ?? null), {
+        method: "DELETE",
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        showToast(String(data?.error ?? "Failed to delete statement"), "error");
+        return;
+      }
+
+      resetView({ preserveStorage: false });
+      setWeekStart("");
+      showToast("Statement deleted.", "success");
+      await loadOpenDrafts();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to delete statement", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resumeDraft = async (did: string) => {
     const target = String(did ?? "").trim();
     if (!target) return;
@@ -765,6 +796,15 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             type="button"
           >
             {loading ? "Loading..." : "Load statement"}
+          </button>
+          <button
+            className="rounded-lg border border-rose-700/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-100 hover:bg-rose-900/30 disabled:opacity-50"
+            onClick={() => void deleteStatement()}
+            disabled={loading || !draftId || localOnlyDraft}
+            type="button"
+            title={localOnlyDraft ? "Saved locally only" : "Delete saved statement"}
+          >
+            Delete
           </button>
           <button
             className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-50"
