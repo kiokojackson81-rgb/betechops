@@ -140,6 +140,74 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     return { netPayout, grossSale, duplicates, profit, submittedCount };
   }, [rows, existingTxns, buyingByTxn, submittedByTxn]);
 
+  const loadDraftById = useCallback(
+    async (did: string) => {
+      const res = await fetch(
+        withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(did)}`, props.impersonateId ?? null),
+        { cache: "no-store" },
+      );
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Failed to load draft");
+      const draftRows = Array.isArray(data?.rows) ? (data.rows as PreviewRow[]) : [];
+      const buying = data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
+      const submittedMap =
+        data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
+      setRows(draftRows);
+      setBuyingByTxn(Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)])));
+      setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
+      setSubmitted(Object.keys(submittedMap).length > 0);
+      setDraftId(did);
+      setLocalOnlyDraft(false);
+    },
+    [props.impersonateId],
+  );
+
+  // Cross-user sync: if admin already loaded a statement for this shop, resume the latest server draft automatically.
+  useEffect(() => {
+    if (!shopId) return;
+    if (rows.length) return;
+    if (draftId) return;
+    if (file) return;
+    if (loading) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          withImpersonateId(
+            `/api/admin/marketplace-profit-entry/csv/drafts/latest?shopId=${encodeURIComponent(shopId)}`,
+            props.impersonateId ?? null,
+          ),
+          { cache: "no-store" },
+        );
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) return;
+        const did = String(data?.draftId ?? "").trim();
+        if (!did) return;
+        const wsIso = String(data?.week?.weekStart ?? "").trim();
+        const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
+        if (wsInput) setWeekStart(wsInput);
+        if (lastDraftPointerKey && wsInput) {
+          try {
+            localStorage.setItem(lastDraftPointerKey, wsInput);
+          } catch {}
+        }
+        const storageKey = buildDraftKey(shopId, wsInput);
+        if (storageKey) {
+          try {
+            localStorage.setItem(storageKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
+          } catch {}
+        }
+        if (cancelled) return;
+        await loadDraftById(did);
+      } catch {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildDraftKey, draftId, file, lastDraftPointerKey, loadDraftById, loading, props.impersonateId, rows.length, shopId]);
+
   const loadStatement = async () => {
     if (!shopId) {
       showToast("Select a shop first", "error");
@@ -403,28 +471,10 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
       const did = String(parsed?.id ?? "").trim();
       if (!did) return;
-      setDraftId(did);
-      setLocalOnlyDraft(false);
-      void (async () => {
-        const res = await fetch(
-          withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(did)}`, props.impersonateId ?? null),
-          { cache: "no-store" },
-        );
-        const data = (await res.json().catch(() => null)) as any;
-        if (!res.ok) return;
-        const draftRows = Array.isArray(data?.rows) ? (data.rows as PreviewRow[]) : [];
-        const buying =
-          data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
-        const submittedMap =
-          data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
-        setRows(draftRows);
-        setBuyingByTxn(Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)])));
-        setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
-        setSubmitted(Object.keys(submittedMap).length > 0);
-      })();
+      void loadDraftById(did);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftKey]);
+  }, [draftKey, loadDraftById]);
 
   const resetView = (opts: { preserveStorage: boolean }) => {
     setRows([]);

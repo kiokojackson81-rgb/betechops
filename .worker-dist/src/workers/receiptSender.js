@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateReceiptPdf = generateReceiptPdf;
 exports.sendReceiptChannels = sendReceiptChannels;
 const crypto_1 = require("crypto");
-const prisma_1 = require("../../../src/lib/prisma.cjs");
+const prisma_1 = require("@/lib/prisma");
 const mail_1 = __importDefault(require("@sendgrid/mail"));
 const twilio_1 = __importDefault(require("twilio"));
 const api_1 = require("@/lib/api");

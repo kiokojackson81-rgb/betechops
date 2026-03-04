@@ -498,44 +498,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // clear dependent child records first to avoid foreign-key constraint violations
-      try {
-        await tx.orderCost.deleteMany({ where: { orderItem: { orderId: orderUpsert.id } } });
-      } catch (e) {
-        // best-effort: some tx mocks or older DBs may not support relation filters
-        try {
-          await tx.orderCost.deleteMany({ where: { orderItemId: orderUpsert.id } });
-        } catch (ee) {
-          // ignore - will surface on actual DB transactions if problematic
-        }
-      }
-      try {
-        await tx.profitSnapshot.deleteMany({ where: { orderItem: { orderId: orderUpsert.id } } });
-      } catch (e) {
-        try {
-          await tx.profitSnapshot.deleteMany({ where: { orderItemId: orderUpsert.id } });
-        } catch (ee) {}
-      }
-      try {
-        await tx.returnAdjustment.deleteMany({ where: { orderItem: { orderId: orderUpsert.id } } });
-      } catch (e) {
-        try {
-          await tx.returnAdjustment.deleteMany({ where: { orderItemId: orderUpsert.id } });
-        } catch (ee) {}
-      }
-      try {
-        await tx.returnCase.deleteMany({ where: { orderItem: { orderId: orderUpsert.id } } });
-      } catch (e) {
-        try {
-          await tx.returnCase.deleteMany({ where: { orderItemId: orderUpsert.id } });
-        } catch (ee) {}
-      }
-      // settlementRow stores orderItemId directly
-      try {
-        await tx.settlementRow.deleteMany({ where: { orderItemId: orderUpsert.id } });
-      } catch (e) {}
-
-      // now safe to remove order items
+      // clear existing order items for update case (simple approach)
       await tx.orderItem.deleteMany({ where: { orderId: orderUpsert.id } });
 
       const createdOrderItems: any[] = [];
