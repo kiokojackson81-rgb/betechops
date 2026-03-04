@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { withImpersonateId } from "@/lib/impersonation";
 
-const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 2 });
+const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
 export type MarketplaceShopOption = {
   id: string;
@@ -526,16 +526,16 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800">
-            <table className="min-w-[1100px] w-full text-left text-sm">
+            <table className="min-w-[980px] w-full text-left text-sm">
               <thead className="bg-slate-950/60 text-xs uppercase tracking-wide text-slate-400">
                 <tr>
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Order</th>
                   <th className="px-3 py-2">Item</th>
                   <th className="px-3 py-2">SKU</th>
-                  <th className="px-3 py-2">Net</th>
-                  <th className="px-3 py-2">Buying</th>
-                  {submitted ? <th className="px-3 py-2">Profit</th> : null}
+                  <th className="px-3 py-2 whitespace-nowrap">Net</th>
+                  <th className="px-3 py-2 whitespace-nowrap">Buying</th>
+                  {submitted ? <th className="px-3 py-2 whitespace-nowrap">Profit</th> : null}
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -548,7 +548,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   const buyingNum = Number(buyingRaw);
                   const canSubmitRow = !isSubmitted && buyingRaw.length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
                   const skuLabel = String(r.jumiaSku || r.sellerSku || "-");
-                  const skuShort = skuLabel.length > 18 ? `${skuLabel.slice(0, 10)}…${skuLabel.slice(-6)}` : skuLabel;
                   return (
                     <tr key={r.key} className={isDup ? "bg-amber-950/20" : ""}>
                       <td className="px-3 py-2 text-slate-200">{new Date(r.dateUtc).toLocaleDateString("en-KE")}</td>
@@ -560,22 +559,22 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                         <div className="text-xs text-slate-400">{r.orderItemNo || ""}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-200">
-                        <div className="flex items-center gap-2">
-                          <span className="max-w-[180px] truncate" title={skuLabel}>
-                            {skuShort}
-                          </span>
-                          {skuLabel !== "-" ? (
-                            <button
-                              type="button"
-                              onClick={() => void copySku(skuLabel)}
-                              className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 hover:bg-slate-900"
-                            >
-                              Copy
-                            </button>
-                          ) : null}
-                        </div>
+                        {skuLabel !== "-" ? (
+                          <button
+                            type="button"
+                            onClick={() => void copySku(skuLabel)}
+                            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900"
+                            title={skuLabel}
+                          >
+                            Copy SKU
+                          </button>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
                       </td>
-                      <td className="px-3 py-2 font-medium text-slate-100">{currency.format(Number(r.netPayout ?? 0))}</td>
+                      <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-100">
+                        {currency.format(Number(r.netPayout ?? 0))}
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
@@ -587,7 +586,13 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                         />
                       </td>
                       {submitted ? (
-                        <td className={profitValue !== undefined && profitValue < 0 ? "px-3 py-2 font-semibold text-rose-300" : "px-3 py-2 font-semibold text-emerald-300"}>
+                        <td
+                          className={
+                            profitValue !== undefined && profitValue < 0
+                              ? "px-3 py-2 whitespace-nowrap font-semibold text-rose-300"
+                              : "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300"
+                          }
+                        >
                           {isSubmitted && profitValue !== undefined ? currency.format(profitValue) : "—"}
                         </td>
                       ) : null}
