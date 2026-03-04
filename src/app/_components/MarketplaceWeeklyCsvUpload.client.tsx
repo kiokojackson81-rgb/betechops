@@ -306,7 +306,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       return;
     }
     if (!file) {
-      showToast("Upload a CSV file first", "error");
+      showToast("Upload a statement file first", "error");
       return;
     }
 
@@ -318,7 +318,18 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       // userId is inferred from the shop's primary attendant unless explicitly provided in server-side rules.
       form.set("file", file);
 
-      const res = await fetch(withImpersonateId("/api/admin/marketplace-profit-entry/csv/preview", props.impersonateId ?? null), {
+      const isPdf = String(file.name || "").toLowerCase().endsWith(".pdf");
+      const platform = selectedShop?.platform;
+      if (isPdf && platform !== "KILIMALL") {
+        throw new Error("PDF upload is only supported for Kilimall shops.");
+      }
+      if (!isPdf && platform === "KILIMALL") {
+        // Allow CSV for Kilimall only if we add support later; for now, keep the flow simple.
+        throw new Error("For Kilimall, upload the PDF receipt/export.");
+      }
+      const previewEndpoint = isPdf ? "/api/admin/marketplace-profit-entry/pdf/preview" : "/api/admin/marketplace-profit-entry/csv/preview";
+
+      const res = await fetch(withImpersonateId(previewEndpoint, props.impersonateId ?? null), {
         method: "POST",
         body: form,
       });
@@ -401,6 +412,9 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       }
       if (data?.aggregated?.errors?.length) {
         showToast(String(data.aggregated.errors[0] ?? "Preview warning"), "warn");
+      }
+      if (typeof data?.excluded === "number" && data.excluded > 0) {
+        showToast(`Filtered out ${data.excluded} orders outside the current week`, "warn");
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Preview failed", "error");
@@ -792,11 +806,11 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         </label>
 
         <label className="block">
-          <div className="mb-1 text-xs text-slate-400">CSV file</div>
+          <div className="mb-1 text-xs text-slate-400">Statement file</div>
           <input
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.pdf,text/csv,application/pdf"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               setRows([]);
