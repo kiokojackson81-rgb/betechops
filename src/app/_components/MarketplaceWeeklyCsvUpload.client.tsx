@@ -67,7 +67,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [buyingByTxn, setBuyingByTxn] = useState<Record<string, string>>({});
-  const [bulkBuying, setBulkBuying] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
   const [draftId, setDraftId] = useState<string>("");
   const [submittingTxn, setSubmittingTxn] = useState<string>("");
@@ -378,24 +377,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     }
   };
 
-  const applyBulkBuying = () => {
-    const raw = String(bulkBuying ?? "").trim();
-    const n = Number(raw);
-    if (!raw || !Number.isFinite(n) || n < 0) {
-      showToast("Enter a valid bulk buying price", "error");
-      return;
-    }
-    setBuyingByTxn((prev) => {
-      const next = { ...prev };
-      for (const r of rows) {
-        if (!String(next[r.itemCreditTxn] ?? "").trim()) {
-          next[r.itemCreditTxn] = raw;
-        }
-      }
-      return next;
-    });
-  };
-
   // Restore draft after reload (client-only).
   useEffect(() => {
     if (!draftKey) return;
@@ -575,26 +556,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             </div>
 
             <div className="flex flex-wrap items-end gap-2">
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Bulk buying price (KES)</div>
-                <div className="flex gap-2">
-                  <input
-                    className="w-40 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                    inputMode="decimal"
-                    placeholder="e.g. 2500"
-                    value={bulkBuying}
-                    onChange={(e) => setBulkBuying(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={applyBulkBuying}
-                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900"
-                    disabled={!rows.length}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </label>
 
               {submitted && !props.hideSummaryTotals ? (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
