@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,50 +75,58 @@ export async function GET(req: NextRequest) {
   const id = String(searchParams.get("shopId") ?? "").trim();
   if (!id) return NextResponse.json({ error: "shopId is required" }, { status: 400 });
 
-  const resolved = await resolveDraftLookupIds(id);
-  const candidates = Array.from(new Set([resolved.shopId, resolved.accountId, resolved.legacyShopId].filter(Boolean))) as string[];
-  if (!candidates.length) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
+  try {
+    const resolved = await resolveDraftLookupIds(id);
+    const candidates = Array.from(new Set([resolved.shopId, resolved.accountId, resolved.legacyShopId].filter(Boolean))) as string[];
+    if (!candidates.length) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
 
-  const drafts = await prisma.marketplaceStatementDraft.findMany({
-    where: { OR: candidates.flatMap((cid) => [{ shopId: cid }, { accountId: cid }]) },
-    orderBy: { updatedAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      shopId: true,
-      accountId: true,
-      platform: true,
-      weekStart: true,
-      weekEnd: true,
-      periodKey: true,
-      statementNumber: true,
-      fileName: true,
-      rowCount: true,
-      totalNetPayout: true,
-      submittedByTxn: true,
-      updatedAt: true,
-    },
-  });
+    const drafts = await prisma.marketplaceStatementDraft.findMany({
+      where: { OR: candidates.flatMap((cid) => [{ shopId: cid }, { accountId: cid }]) },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        shopId: true,
+        accountId: true,
+        platform: true,
+        weekStart: true,
+        weekEnd: true,
+        periodKey: true,
+        statementNumber: true,
+        fileName: true,
+        rowCount: true,
+        totalNetPayout: true,
+        submittedByTxn: true,
+        updatedAt: true,
+      },
+    });
 
-  const draft =
-    drafts.find((d) => {
-      const submitted = d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
-      return submitted < (d.rowCount ?? 0);
-    }) ?? drafts[0];
+    const draft =
+      drafts.find((d) => {
+        const submitted = d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
+        return submitted < (d.rowCount ?? 0);
+      }) ?? drafts[0];
 
-  if (!draft) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
+    if (!draft) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
 
-  return NextResponse.json({
-    draftId: draft.id,
-    shopId: draft.shopId,
-    accountId: draft.accountId,
-    platform: draft.platform,
-    week: { weekStart: draft.weekStart.toISOString(), weekEnd: draft.weekEnd.toISOString() },
-    periodKey: draft.periodKey,
-    statementNumber: draft.statementNumber,
-    fileName: draft.fileName,
-    rowCount: draft.rowCount,
-    totalNetPayout: Number(draft.totalNetPayout),
-    updatedAt: draft.updatedAt.toISOString(),
-  });
+    return NextResponse.json({
+      draftId: draft.id,
+      shopId: draft.shopId,
+      accountId: draft.accountId,
+      platform: draft.platform,
+      week: { weekStart: draft.weekStart.toISOString(), weekEnd: draft.weekEnd.toISOString() },
+      periodKey: draft.periodKey,
+      statementNumber: draft.statementNumber,
+      fileName: draft.fileName,
+      rowCount: draft.rowCount,
+      totalNetPayout: Number(draft.totalNetPayout),
+      updatedAt: draft.updatedAt.toISOString(),
+    });
+  } catch (err: any) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
+      // DB migration pending: disable cross-user drafts instead of failing the whole UI.
+      return NextResponse.json({ error: "Drafts not available yet (migration pending).", migrationPending: true }, { status: 200 });
+    }
+    throw err;
+  }
 }

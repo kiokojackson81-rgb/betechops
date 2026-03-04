@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,52 +73,58 @@ export async function GET(req: NextRequest) {
   const id = String(searchParams.get("shopId") ?? "").trim();
   if (!id) return NextResponse.json({ error: "shopId is required" }, { status: 400 });
 
-  const resolved = await resolveDraftLookupIds(id);
-  const candidates = Array.from(new Set([resolved.shopId, resolved.accountId, resolved.legacyShopId].filter(Boolean))) as string[];
-  if (!candidates.length) return NextResponse.json({ items: [] });
+  try {
+    const resolved = await resolveDraftLookupIds(id);
+    const candidates = Array.from(new Set([resolved.shopId, resolved.accountId, resolved.legacyShopId].filter(Boolean))) as string[];
+    if (!candidates.length) return NextResponse.json({ items: [], open: [] });
 
-  const drafts = await prisma.marketplaceStatementDraft.findMany({
-    where: { OR: candidates.flatMap((cid) => [{ shopId: cid }, { accountId: cid }]) },
-    orderBy: { updatedAt: "desc" },
-    take: 24,
-    select: {
-      id: true,
-      shopId: true,
-      accountId: true,
-      platform: true,
-      weekStart: true,
-      weekEnd: true,
-      periodKey: true,
-      statementNumber: true,
-      fileName: true,
-      rowCount: true,
-      totalNetPayout: true,
-      submittedByTxn: true,
-      updatedAt: true,
-    },
-  });
+    const drafts = await prisma.marketplaceStatementDraft.findMany({
+      where: { OR: candidates.flatMap((cid) => [{ shopId: cid }, { accountId: cid }]) },
+      orderBy: { updatedAt: "desc" },
+      take: 24,
+      select: {
+        id: true,
+        shopId: true,
+        accountId: true,
+        platform: true,
+        weekStart: true,
+        weekEnd: true,
+        periodKey: true,
+        statementNumber: true,
+        fileName: true,
+        rowCount: true,
+        totalNetPayout: true,
+        submittedByTxn: true,
+        updatedAt: true,
+      },
+    });
 
-  const items = drafts.map((d) => {
-    const submitted =
-      d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
-    return {
-      id: d.id,
-      shopId: d.shopId,
-      accountId: d.accountId,
-      platform: d.platform,
-      week: { weekStart: d.weekStart.toISOString(), weekEnd: d.weekEnd.toISOString() },
-      periodKey: d.periodKey,
-      statementNumber: d.statementNumber,
-      fileName: d.fileName,
-      rowCount: d.rowCount,
-      submittedCount: submitted,
-      totalNetPayout: Number(d.totalNetPayout),
-      updatedAt: d.updatedAt.toISOString(),
-      isComplete: submitted >= (d.rowCount ?? 0),
-    };
-  });
+    const items = drafts.map((d) => {
+      const submitted =
+        d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
+      return {
+        id: d.id,
+        shopId: d.shopId,
+        accountId: d.accountId,
+        platform: d.platform,
+        week: { weekStart: d.weekStart.toISOString(), weekEnd: d.weekEnd.toISOString() },
+        periodKey: d.periodKey,
+        statementNumber: d.statementNumber,
+        fileName: d.fileName,
+        rowCount: d.rowCount,
+        submittedCount: submitted,
+        totalNetPayout: Number(d.totalNetPayout),
+        updatedAt: d.updatedAt.toISOString(),
+        isComplete: submitted >= (d.rowCount ?? 0),
+      };
+    });
 
-  const open = items.filter((i) => !i.isComplete);
-  return NextResponse.json({ items, open });
+    const open = items.filter((i) => !i.isComplete);
+    return NextResponse.json({ items, open });
+  } catch (err: any) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
+      return NextResponse.json({ items: [], open: [], migrationPending: true }, { status: 200 });
+    }
+    throw err;
+  }
 }
-

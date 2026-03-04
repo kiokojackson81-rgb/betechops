@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Platform } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { aggregateMarketplaceStatementRows } from "@/lib/marketplaceStatementCsv";
@@ -127,19 +127,28 @@ export async function POST(req: NextRequest) {
   const draftKey = `pdf:${resolved.shopId}:${weekKey}:${hash}`;
   const periodKey = getTradingPeriodFor(weekStart).key;
 
-  const existingDraft = await prisma.marketplaceStatementDraft.findUnique({
-    where: { draftKey },
-    select: { id: true },
-  });
-  if (existingDraft) {
-    return NextResponse.json({
-      alreadyUploaded: true,
-      account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
-      resolvedShopId: resolved.shopId,
-      draftId: existingDraft.id,
-      week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
-      excluded,
+  let draftTableAvailable = true;
+  try {
+    const existingDraft = await prisma.marketplaceStatementDraft.findUnique({
+      where: { draftKey },
+      select: { id: true },
     });
+    if (existingDraft) {
+      return NextResponse.json({
+        alreadyUploaded: true,
+        account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
+        resolvedShopId: resolved.shopId,
+        draftId: existingDraft.id,
+        week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
+        excluded,
+      });
+    }
+  } catch (err: any) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
+      draftTableAvailable = false;
+    } else {
+      throw err;
+    }
   }
 
   // Convert to the same aggregate row structure used by the existing statement tools.
@@ -279,26 +288,38 @@ export async function POST(req: NextRequest) {
     countryCode: r.countryCode,
   }));
 
-  const draft = await prisma.marketplaceStatementDraft.create({
-    data: {
-      draftKey,
-      platform: account.platform as Platform,
-      shopId: resolved.shopId,
-      accountId: account.id,
-      weekStart,
-      weekEnd,
-      periodKey,
-      statementNumber: null,
-      fileName: (file as File).name || null,
-      rowCount: aggregated.aggregates.length,
-      totalNetPayout: totals.netPayout,
-      rows: rowPayload as any,
-      buyingByTxn: suggestedBuyingByTxn as any,
-      submittedByTxn: {},
-      createdById: actorId,
-    },
-    select: { id: true },
-  });
+  let draftId: string | null = null;
+  if (draftTableAvailable) {
+    try {
+      const draft = await prisma.marketplaceStatementDraft.create({
+        data: {
+          draftKey,
+          platform: account.platform as Platform,
+          shopId: resolved.shopId,
+          accountId: account.id,
+          weekStart,
+          weekEnd,
+          periodKey,
+          statementNumber: null,
+          fileName: (file as File).name || null,
+          rowCount: aggregated.aggregates.length,
+          totalNetPayout: totals.netPayout,
+          rows: rowPayload as any,
+          buyingByTxn: suggestedBuyingByTxn as any,
+          submittedByTxn: {},
+          createdById: actorId,
+        },
+        select: { id: true },
+      });
+      draftId = draft.id;
+    } catch (err: any) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021") {
+        draftTableAvailable = false;
+      } else {
+        throw err;
+      }
+    }
+  }
 
   // Mirror WeeklySale immediately for quick stats/manual weekly pages.
   try {
@@ -326,12 +347,13 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
     resolvedShopId: resolved.shopId,
-    draftId: draft.id,
+    draftId,
     week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
     existingTxns,
     suggestedBuyingByTxn,
     totals,
     items: aggregated.aggregates,
     excluded,
+    draftTableAvailable,
   });
 }
