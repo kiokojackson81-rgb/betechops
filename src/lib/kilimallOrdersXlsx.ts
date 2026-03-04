@@ -75,24 +75,33 @@ export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxO
 
   const orders: KilimallXlsxOrder[] = [];
   for (const row of rows) {
-    const orderNo = String(get(row, ["order no", "order number", "orderno"])).trim();
+    const orderNo = String(get(row, ["order no", "order number", "orderno", "order", "order number "] )).trim();
     if (!orderNo) continue;
 
-    const orderDateCell = get(row, ["order date", "date", "created at"]);
+    // Kilimall "order-sku-list" exports often use Order Time / Complete Time rather than Order Date.
+    const orderDateCell = get(row, ["complete time", "order date", "order time", "payment time", "date", "created at"]);
     const orderDate = parseDateCell(orderDateCell);
     if (!orderDate) continue;
 
-    const productId = String(get(row, ["product id", "sku", "productid"])).trim() || null;
-    const productName = String(get(row, ["product name", "item name", "name", "product"])).trim() || null;
+    const productId = String(get(row, ["product id", "productid", "sku id", "sku", "item id"])).trim() || null;
+    const productName = String(get(row, ["product name", "item name", "sku title", "name", "product"])).trim() || null;
     const trackingNo = String(get(row, ["tracking no", "tracking number", "trackingno"])).trim() || null;
 
-    const qtyRaw = Number(String(get(row, ["qty", "quantity"])).trim());
+    const qtyRaw = Number(String(get(row, ["sold qty", "qty", "quantity"])).trim());
     const qty = Number.isFinite(qtyRaw) ? qtyRaw : null;
 
-    const productAmount = parseMoney(get(row, ["product amount", "productamount", "amount"]));
-    const shippingFee = parseMoney(get(row, ["shipping fee", "shippingfee", "shipping"]));
-    const totalDeduction = parseMoney(get(row, ["total deduction", "totaldeduction", "deduction"]));
-    const payableAmount = parseMoney(get(row, ["payable amount", "payableamount", "payout", "payable"]));
+    // Some exports include "Deal Price" and "Discount" but not payable totals.
+    const dealPrice = parseMoney(get(row, ["deal price", "price", "unit price"]));
+    const discount = parseMoney(get(row, ["discount"]));
+
+    const productAmount = parseMoney(get(row, ["product amount", "productamount", "amount"])) || (dealPrice && qty ? dealPrice * qty : dealPrice);
+    const shippingFee = parseMoney(get(row, ["shipping fee", "shippingfee", "shipping"])) || 0;
+    const totalDeduction = parseMoney(get(row, ["total deduction", "totaldeduction", "deduction"])) || 0;
+    const payableAmountRaw = parseMoney(get(row, ["payable amount", "payableamount", "payout", "payable"]));
+    const payableAmount =
+      payableAmountRaw ||
+      Math.max(0, (dealPrice && qty ? dealPrice * qty : dealPrice) - discount) ||
+      Math.max(0, productAmount + shippingFee - totalDeduction);
 
     orders.push({
       orderNo,
@@ -117,4 +126,3 @@ export function filterOrdersToCurrentWeek(orders: KilimallXlsxOrder[], now: Date
   const excluded = orders.length - inWeek.length;
   return { weekStart, weekEnd, inWeek, excluded };
 }
-

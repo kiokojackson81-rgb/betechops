@@ -123,8 +123,7 @@ export async function POST(req: NextRequest) {
   if (!orders.length) {
     return NextResponse.json(
       {
-        error:
-          "No orders detected in this XLSX. Ensure it includes columns like Order No, Order Date, Product ID, Product Name, and Payable amount.",
+        error: `No orders detected in this XLSX. Detected columns: ${headers.slice(0, 12).join(", ")}${headers.length > 12 ? "..." : ""}`,
         headers,
       },
       { status: 400 },
@@ -316,4 +315,3 @@ export async function POST(req: NextRequest) {
     draftTableAvailable,
   });
 }
-
