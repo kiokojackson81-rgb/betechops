@@ -386,7 +386,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
-  const clearDraft = () => {
+  const resetView = (opts: { preserveStorage: boolean }) => {
     setRows([]);
     setBuyingByTxn({});
     setExistingTxns([]);
@@ -396,11 +396,15 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     setResolvedAccountId("");
     setLocalOnlyDraft(false);
     setFile(null);
-    try {
-      if (draftKey) localStorage.removeItem(draftKey);
-      if (lastDraftPointerKey) localStorage.removeItem(lastDraftPointerKey);
-    } catch {}
+    if (!opts.preserveStorage) {
+      try {
+        if (draftKey) localStorage.removeItem(draftKey);
+        if (lastDraftPointerKey) localStorage.removeItem(lastDraftPointerKey);
+      } catch {}
+    }
   };
+
+  const clearDraft = () => resetView({ preserveStorage: false });
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -437,9 +441,17 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             value={shopId}
             onChange={(e) => {
               const next = e.target.value;
+              if (next === shopId) return;
+              const hasWork = Boolean(rows.length || draftId || Object.keys(submittedByTxn).length);
+              if (hasWork) {
+                const ok = window.confirm("Switch shop? This will clear the current view. Your loaded statement remains saved.");
+                if (!ok) return;
+                resetView({ preserveStorage: true });
+                setWeekStart("");
+              }
               setShopId(next);
             }}
-            disabled={Boolean(rows.length)}
+            disabled={loading}
           >
             <option value="">Select shop...</option>
             {props.shops.map((s) => (
