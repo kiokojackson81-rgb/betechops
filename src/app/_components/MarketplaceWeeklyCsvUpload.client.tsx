@@ -318,16 +318,21 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       // userId is inferred from the shop's primary attendant unless explicitly provided in server-side rules.
       form.set("file", file);
 
-      const isPdf = String(file.name || "").toLowerCase().endsWith(".pdf");
+      const fileName = String(file.name || "").toLowerCase();
+      const isPdf = fileName.endsWith(".pdf");
+      const isXlsx = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
       const platform = selectedShop?.platform;
       if (isPdf && platform !== "KILIMALL") {
         throw new Error("PDF upload is only supported for Kilimall shops.");
       }
-      if (!isPdf && platform === "KILIMALL") {
-        // Allow CSV for Kilimall only if we add support later; for now, keep the flow simple.
-        throw new Error("For Kilimall, upload the PDF receipt/export.");
+      if (platform === "KILIMALL" && !isXlsx) {
+        throw new Error("For Kilimall, upload the Seller Center Excel (.xlsx) export.");
       }
-      const previewEndpoint = isPdf ? "/api/admin/marketplace-profit-entry/pdf/preview" : "/api/admin/marketplace-profit-entry/csv/preview";
+      const previewEndpoint = isXlsx
+        ? "/api/admin/marketplace-profit-entry/xlsx/preview"
+        : isPdf
+          ? "/api/admin/marketplace-profit-entry/pdf/preview"
+          : "/api/admin/marketplace-profit-entry/csv/preview";
 
       const res = await fetch(withImpersonateId(previewEndpoint, props.impersonateId ?? null), {
         method: "POST",
@@ -807,22 +812,22 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
         <label className="block">
           <div className="mb-1 text-xs text-slate-400">Statement file</div>
-          <input
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-            type="file"
-            accept=".csv,.pdf,text/csv,application/pdf"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setRows([]);
-              setBuyingByTxn({});
-              setSavedBuyingByTxn({});
-              setAutofilledByTxn({});
-              setSubmitted(false);
-              setDraftId("");
-              setSubmittedByTxn({});
-            }}
-            disabled={Boolean(rows.length)}
-          />
+            <input
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              type="file"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setRows([]);
+                setBuyingByTxn({});
+                setSavedBuyingByTxn({});
+                setAutofilledByTxn({});
+                setSubmitted(false);
+                setDraftId("");
+                setSubmittedByTxn({});
+              }}
+              disabled={Boolean(rows.length)}
+            />
         </label>
 
         <div className="hidden" aria-hidden="true" />
