@@ -45,6 +45,16 @@ type PreviewRow = {
   countryCode: string;
 };
 
+type DraftSummary = {
+  id: string;
+  week: { weekStart: string; weekEnd: string };
+  rowCount: number;
+  submittedCount: number;
+  totalNetPayout: number;
+  updatedAt: string;
+  isComplete: boolean;
+};
+
 export default function MarketplaceWeeklyCsvUpload(props: {
   title?: string;
   shops: MarketplaceShopOption[];
@@ -73,6 +83,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [submittedByTxn, setSubmittedByTxn] = useState<Record<string, string>>({});
   const [resolvedAccountId, setResolvedAccountId] = useState<string>("");
   const [localOnlyDraft, setLocalOnlyDraft] = useState(false);
+  const [openDrafts, setOpenDrafts] = useState<DraftSummary[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
@@ -162,6 +174,37 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     [props.impersonateId],
   );
 
+  const loadOpenDrafts = useCallback(async () => {
+    if (!shopId) return;
+    setLoadingDrafts(true);
+    try {
+      const res = await fetch(
+        withImpersonateId(
+          `/api/admin/marketplace-profit-entry/csv/drafts/open?shopId=${encodeURIComponent(shopId)}`,
+          props.impersonateId ?? null,
+        ),
+        { cache: "no-store" },
+      );
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Failed to load drafts");
+      const items = Array.isArray(data?.open)
+        ? (data.open as DraftSummary[])
+        : Array.isArray(data?.items)
+          ? (data.items as DraftSummary[])
+          : [];
+      setOpenDrafts(items);
+    } catch {
+      setOpenDrafts([]);
+    } finally {
+      setLoadingDrafts(false);
+    }
+  }, [props.impersonateId, shopId]);
+
+  useEffect(() => {
+    if (!shopId) return;
+    void loadOpenDrafts();
+  }, [loadOpenDrafts, shopId]);
+
   // Cross-user sync: if admin already loaded a statement for this shop, resume the latest server draft automatically.
   useEffect(() => {
     if (!shopId) return;
@@ -169,10 +212,33 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     if (draftId) return;
     if (file) return;
     if (loading) return;
+    if (loadingDrafts) return;
 
     let cancelled = false;
     void (async () => {
       try {
+        // Prefer any open week draft if available.
+        const preferred = openDrafts[0]?.id ? openDrafts[0] : null;
+        if (preferred?.id) {
+          const wsIso = String(preferred.week?.weekStart ?? "").trim();
+          const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
+          if (wsInput) setWeekStart(wsInput);
+          if (lastDraftPointerKey && wsInput) {
+            try {
+              localStorage.setItem(lastDraftPointerKey, wsInput);
+            } catch {}
+          }
+          const storageKey = buildDraftKey(shopId, wsInput);
+          if (storageKey) {
+            try {
+              localStorage.setItem(storageKey, JSON.stringify({ id: preferred.id, savedAt: new Date().toISOString() }));
+            } catch {}
+          }
+          if (cancelled) return;
+          await loadDraftById(preferred.id);
+          return;
+        }
+
         const res = await fetch(
           withImpersonateId(
             `/api/admin/marketplace-profit-entry/csv/drafts/latest?shopId=${encodeURIComponent(shopId)}`,
@@ -206,7 +272,19 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     return () => {
       cancelled = true;
     };
-  }, [buildDraftKey, draftId, file, lastDraftPointerKey, loadDraftById, loading, props.impersonateId, rows.length, shopId]);
+  }, [
+    buildDraftKey,
+    draftId,
+    file,
+    lastDraftPointerKey,
+    loadDraftById,
+    loading,
+    loadingDrafts,
+    openDrafts,
+    props.impersonateId,
+    rows.length,
+    shopId,
+  ]);
 
   const loadStatement = async () => {
     if (!shopId) {
@@ -496,6 +574,27 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const clearDraft = () => resetView({ preserveStorage: false });
 
+  const resumeDraft = async (did: string) => {
+    const target = String(did ?? "").trim();
+    if (!target) return;
+    try {
+      setLoading(true);
+      await loadDraftById(target);
+      await loadOpenDrafts();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to resume week", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatWeekLabel = (weekStartIso: string, weekEndIso: string) => {
+    const start = new Date(weekStartIso);
+    const end = new Date(weekEndIso);
+    const f = new Intl.DateTimeFormat("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+    return `${f.format(start)} - ${f.format(end)}`;
+  };
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -579,6 +678,37 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
         <div className="hidden" aria-hidden="true" />
       </div>
+
+      {!rows.length && !file && shopId && openDrafts.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-100">Open weeks (not fully submitted)</div>
+              <div className="text-xs text-slate-400">
+                {loadingDrafts ? "Loading..." : "Pick a week to continue pricing without re-uploading the statement."}
+              </div>
+            </div>
+            <select
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 md:w-[360px]"
+              defaultValue=""
+              onChange={(e) => {
+                const did = String(e.target.value ?? "").trim();
+                if (did) void resumeDraft(did);
+              }}
+              disabled={loading || loadingDrafts}
+            >
+              <option value="" disabled>
+                Select week…
+              </option>
+              {openDrafts.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {formatWeekLabel(d.week.weekStart, d.week.weekEnd)} ({d.submittedCount}/{d.rowCount} submitted)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ) : null}
 
       {rows.length ? (
         <div className="mt-4">

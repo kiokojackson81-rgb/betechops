@@ -9,7 +9,6 @@ async function resolveDraftLookupIds(inputId: string) {
   const id = String(inputId ?? "").trim();
   if (!id) return { shopId: null as string | null, accountId: null as string | null, legacyShopId: null as string | null };
 
-  // If it's a Shop id, resolve a matching marketplace account.
   const shop = await prisma.shop.findUnique({
     where: { id },
     select: { id: true, name: true, platform: true, apiConfig: { select: { apiKey: true } } },
@@ -38,7 +37,6 @@ async function resolveDraftLookupIds(inputId: string) {
     return { shopId: shop.id, accountId: account?.id ?? null, legacyShopId: account?.id ?? null };
   }
 
-  // If it's an account id, resolve a matching Shop id (preferred canonical linkage).
   const account = await prisma.marketplaceAccount.findUnique({
     where: { id },
     select: { id: true, platform: true, displayName: true, jumiaShopSid: true, kilimallShopCode: true },
@@ -76,12 +74,12 @@ export async function GET(req: NextRequest) {
 
   const resolved = await resolveDraftLookupIds(id);
   const candidates = Array.from(new Set([resolved.shopId, resolved.accountId, resolved.legacyShopId].filter(Boolean))) as string[];
-  if (!candidates.length) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
+  if (!candidates.length) return NextResponse.json({ items: [] });
 
   const drafts = await prisma.marketplaceStatementDraft.findMany({
     where: { OR: candidates.flatMap((cid) => [{ shopId: cid }, { accountId: cid }]) },
     orderBy: { updatedAt: "desc" },
-    take: 20,
+    take: 24,
     select: {
       id: true,
       shopId: true,
@@ -99,25 +97,27 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const draft =
-    drafts.find((d) => {
-      const submitted = d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
-      return submitted < (d.rowCount ?? 0);
-    }) ?? drafts[0];
-
-  if (!draft) return NextResponse.json({ error: "No draft found for this shop" }, { status: 404 });
-
-  return NextResponse.json({
-    draftId: draft.id,
-    shopId: draft.shopId,
-    accountId: draft.accountId,
-    platform: draft.platform,
-    week: { weekStart: draft.weekStart.toISOString(), weekEnd: draft.weekEnd.toISOString() },
-    periodKey: draft.periodKey,
-    statementNumber: draft.statementNumber,
-    fileName: draft.fileName,
-    rowCount: draft.rowCount,
-    totalNetPayout: Number(draft.totalNetPayout),
-    updatedAt: draft.updatedAt.toISOString(),
+  const items = drafts.map((d) => {
+    const submitted =
+      d.submittedByTxn && typeof d.submittedByTxn === "object" ? Object.keys(d.submittedByTxn as any).length : 0;
+    return {
+      id: d.id,
+      shopId: d.shopId,
+      accountId: d.accountId,
+      platform: d.platform,
+      week: { weekStart: d.weekStart.toISOString(), weekEnd: d.weekEnd.toISOString() },
+      periodKey: d.periodKey,
+      statementNumber: d.statementNumber,
+      fileName: d.fileName,
+      rowCount: d.rowCount,
+      submittedCount: submitted,
+      totalNetPayout: Number(d.totalNetPayout),
+      updatedAt: d.updatedAt.toISOString(),
+      isComplete: submitted >= (d.rowCount ?? 0),
+    };
   });
+
+  const open = items.filter((i) => !i.isComplete);
+  return NextResponse.json({ items, open });
 }
+

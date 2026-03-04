@@ -35,7 +35,23 @@ async function resolveAccountAndShopId(inputId: string) {
     select: { id: true, platform: true, displayName: true, isActive: true, jumiaShopSid: true, kilimallShopCode: true },
   });
   if (asAccount) {
-    const shop = await prisma.shop.findUnique({ where: { id: inputId }, select: { id: true } });
+    // Try to resolve the canonical Shop id for cross-user sync (admin + supervisor) and manual-weekly linkage.
+    const key = String(asAccount.jumiaShopSid ?? asAccount.kilimallShopCode ?? "").trim();
+    const name = String(asAccount.displayName ?? "").trim();
+    const shop =
+      (key
+        ? await prisma.shop.findFirst({
+            where: { platform: asAccount.platform as any, apiConfig: { is: { apiKey: key } } as any },
+            select: { id: true },
+          })
+        : null) ??
+      (name
+        ? await prisma.shop.findFirst({
+            where: { platform: asAccount.platform as any, name: { equals: name, mode: "insensitive" } as any },
+            select: { id: true },
+          })
+        : null);
+
     return { account: asAccount, shopId: shop?.id ?? inputId };
   }
 
