@@ -82,11 +82,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!row) return NextResponse.json({ error: "Row not found in draft" }, { status: 404 });
 
   const submittedByTxn = isRecord(draft.submittedByTxn) ? { ...draft.submittedByTxn } : {};
-  if (submittedByTxn[txn]) {
-    return NextResponse.json({ ok: true, alreadySubmitted: true, entryId: String(submittedByTxn[txn]) }, { status: 200 });
-  }
+  const existingEntryId = submittedByTxn[txn] ? String(submittedByTxn[txn]) : null;
 
-  if (!body.allowDuplicates) {
+  if (!existingEntryId && !body.allowDuplicates) {
     const existing = await (prisma as any).marketplaceProfitEntry.findFirst({
       where: { accountId: draft.accountId, itemCreditTxn: txn },
       select: { id: true, itemCreditTxn: true },
@@ -107,6 +105,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const shippingFee = Number(row.shippingFee ?? 0);
   const otherFees = Number(row.otherFees ?? 0);
   const netPayout = grossSale + commission + shippingFee + otherFees;
+  if (netPayout < 0) {
+    return NextResponse.json({ error: "Return detected (negative payout). Buying price is not required for this row." }, { status: 400 });
+  }
 
   const profit = netPayout - buying;
   const marginPct = netPayout !== 0 ? (profit / netPayout) * 100 : 0;
@@ -139,35 +140,54 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     amounts: { grossSale, commission, shippingFee, otherFees, netPayout },
   });
 
-  let created: any;
+  let createdOrUpdated: any;
   try {
-    created = await (prisma as any).marketplaceProfitEntry.create({
-      data: {
-        platform: draft.platform as Platform,
-        date,
-        weekStart,
-        weekEnd,
-        periodKey,
-        accountId: draft.accountId,
-        itemCreditTxn: txn,
-        itemCreditAmount: grossSale,
-        commissionTxn: row.commissionTxn ? String(row.commissionTxn) : null,
-        commissionAmount: commission,
-        shippingTxn: row.shippingTxn ? String(row.shippingTxn) : null,
-        shippingAmount: shippingFee,
-        netPayout,
-        buyingPrice: buying,
-        profit,
-        marginPct,
-        commissionRatePct,
-        isLoss,
-        orderId: row.orderNo?.trim() || null,
-        sku: row.jumiaSku?.trim() || row.sellerSku?.trim() || null,
-        productName: row.details?.trim() || null,
-        rawText,
-        enteredByAdminId: actorId,
-      },
-    });
+    if (existingEntryId) {
+      createdOrUpdated = await (prisma as any).marketplaceProfitEntry.update({
+        where: { id: existingEntryId },
+        data: {
+          buyingPrice: buying,
+          profit,
+          marginPct,
+          commissionRatePct,
+          isLoss,
+          orderId: row.orderNo?.trim() || null,
+          sku: row.jumiaSku?.trim() || row.sellerSku?.trim() || null,
+          productName: row.details?.trim() || null,
+        },
+        select: { id: true, netPayout: true, buyingPrice: true, profit: true, isLoss: true },
+      });
+    } else {
+      createdOrUpdated = await (prisma as any).marketplaceProfitEntry.create({
+        data: {
+          platform: draft.platform as Platform,
+          date,
+          weekStart,
+          weekEnd,
+          periodKey,
+          accountId: draft.accountId,
+          itemCreditTxn: txn,
+          itemCreditAmount: grossSale,
+          commissionTxn: row.commissionTxn ? String(row.commissionTxn) : null,
+          commissionAmount: commission,
+          shippingTxn: row.shippingTxn ? String(row.shippingTxn) : null,
+          shippingAmount: shippingFee,
+          netPayout,
+          buyingPrice: buying,
+          profit,
+          marginPct,
+          commissionRatePct,
+          isLoss,
+          orderId: row.orderNo?.trim() || null,
+          sku: row.jumiaSku?.trim() || row.sellerSku?.trim() || null,
+          productName: row.details?.trim() || null,
+          rawText,
+          enteredByAdminId: actorId,
+        },
+        select: { id: true, netPayout: true, buyingPrice: true, profit: true, isLoss: true },
+      });
+      submittedByTxn[txn] = createdOrUpdated.id;
+    }
   } catch (err: any) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json(
@@ -175,12 +195,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         { status: 409 },
       );
     }
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to create profit entry" }, { status: 400 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to save profit entry" }, { status: 400 });
   }
 
   const buyingByTxn = isRecord(draft.buyingByTxn) ? { ...draft.buyingByTxn } : {};
   buyingByTxn[txn] = buying;
-  submittedByTxn[txn] = created.id;
 
   await prisma.marketplaceStatementDraft.update({
     where: { id: draft.id },
@@ -190,13 +209,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   return NextResponse.json({
     ok: true,
     entry: {
-      id: created.id,
+      id: createdOrUpdated.id,
       itemCreditTxn: txn,
-      netPayout: Number(created.netPayout),
-      buyingPrice: Number(created.buyingPrice),
-      profit: Number(created.profit),
-      isLoss: Boolean(created.isLoss),
+      netPayout: Number(createdOrUpdated.netPayout),
+      buyingPrice: Number(createdOrUpdated.buyingPrice),
+      profit: Number(createdOrUpdated.profit),
+      isLoss: Boolean(createdOrUpdated.isLoss),
     },
   });
 }
-

@@ -77,6 +77,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [buyingByTxn, setBuyingByTxn] = useState<Record<string, string>>({});
+  const [savedBuyingByTxn, setSavedBuyingByTxn] = useState<Record<string, string>>({});
+  const [autofilledByTxn, setAutofilledByTxn] = useState<Record<string, true>>({});
   const [submitted, setSubmitted] = useState(false);
   const [draftId, setDraftId] = useState<string>("");
   const [submittingTxn, setSubmittingTxn] = useState<string>("");
@@ -85,6 +87,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [localOnlyDraft, setLocalOnlyDraft] = useState(false);
   const [openDrafts, setOpenDrafts] = useState<DraftSummary[]>([]);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [autoSubmitting, setAutoSubmitting] = useState(false);
+  const [autoSubmitDoneKey, setAutoSubmitDoneKey] = useState<string>("");
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
@@ -165,8 +169,18 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       const submittedMap =
         data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
       setRows(draftRows);
-      setBuyingByTxn(Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)])));
+      const buyingMap = Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)]));
+      setBuyingByTxn(buyingMap);
       setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
+      setSavedBuyingByTxn((prev) => {
+        const next = { ...prev };
+        for (const [txn, entryId] of Object.entries(submittedMap)) {
+          if (!entryId) continue;
+          const raw = String(buyingMap[String(txn)] ?? "").trim();
+          if (raw) next[String(txn)] = raw;
+        }
+        return next;
+      });
       setSubmitted(Object.keys(submittedMap).length > 0);
       setDraftId(did);
       setLocalOnlyDraft(false);
@@ -318,13 +332,14 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           : {};
       setRows(items);
       setExistingTxns(Array.isArray(data?.existingTxns) ? (data.existingTxns as string[]) : []);
-      setBuyingByTxn(
-        Object.fromEntries(
-          Object.entries(suggested)
-            .map(([k, v]) => [String(k), String(v)] as const)
-            .filter(([k, v]) => k.trim() && v.trim()),
-        ),
+      const suggestedMap = Object.fromEntries(
+        Object.entries(suggested)
+          .map(([k, v]) => [String(k), String(v)] as const)
+          .filter(([k, v]) => k.trim() && v.trim()),
       );
+      setBuyingByTxn(suggestedMap);
+      setAutofilledByTxn(Object.fromEntries(Object.keys(suggestedMap).map((k) => [k, true] as const)));
+      setSavedBuyingByTxn({});
       setSubmitted(false);
       setSubmittedByTxn({});
       setResolvedAccountId(String(data?.account?.id ?? "").trim());
@@ -384,12 +399,15 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const perRowProfit = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of rows) {
-      if (!submittedByTxn[r.itemCreditTxn]) continue;
-      const buying = Number(buyingByTxn[r.itemCreditTxn] ?? 0);
-      map.set(r.itemCreditTxn, Number(r.netPayout ?? 0) - (Number.isFinite(buying) ? buying : 0));
+      const net = Number(r.netPayout ?? 0);
+      if (!Number.isFinite(net) || net < 0) continue;
+      const buyingRaw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
+      const buying = Number(buyingRaw);
+      if (!buyingRaw || !Number.isFinite(buying) || buying < 0) continue;
+      map.set(r.itemCreditTxn, net - buying);
     }
     return map;
-  }, [rows, buyingByTxn, submittedByTxn]);
+  }, [rows, buyingByTxn]);
 
   const matchKeyByTxn = useMemo(() => {
     const normalizeText = (value: unknown) =>
@@ -431,6 +449,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       for (const r of rows) {
         if (r.itemCreditTxn === txn) continue;
         if ((matchKeyByTxn.get(r.itemCreditTxn) ?? "") !== key) continue;
+        const net = Number(r.netPayout ?? 0);
+        if (Number.isFinite(net) && net < 0) continue;
         if (submittedByTxn[r.itemCreditTxn]) continue;
         const existing = String(next[r.itemCreditTxn] ?? "").trim();
         if (existing) continue;
@@ -440,18 +460,48 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     });
   };
 
-  const submitRow = async (txn: string) => {
+  const submitRow = async (txn: string, opts?: { auto?: boolean; silent?: boolean }) => {
     const raw = String(buyingByTxn[txn] ?? "").trim();
     const buying = Number(raw);
     if (!raw || !Number.isFinite(buying) || buying < 0) {
-      showToast("Enter a valid buying price", "error");
+      if (!opts?.silent) showToast("Enter a valid buying price", "error");
+      return;
+    }
+
+    const row = rows.find((r) => r.itemCreditTxn === txn) ?? null;
+    if (!row) {
+      showToast("Row not found", "error");
+      return;
+    }
+    const net = Number(row.netPayout ?? 0);
+    if (Number.isFinite(net) && net < 0) {
+      if (!opts?.silent) showToast("Return detected (negative payout). Skip buying price for this row.", "warn");
       return;
     }
 
     setSubmittingTxn(txn);
     try {
-      const row = rows.find((r) => r.itemCreditTxn === txn) ?? null;
-      if (!row) throw new Error("Row not found");
+      const existingEntryId = String(submittedByTxn[txn] ?? "").trim();
+      const isSubmitted = Boolean(existingEntryId);
+      const lastSaved = String(savedBuyingByTxn[txn] ?? "").trim();
+      if (isSubmitted && lastSaved && lastSaved === raw) {
+        if (!opts?.silent) showToast("No changes", "warn");
+        return;
+      }
+
+      if (isSubmitted && existingEntryId && !draftId) {
+        const res = await fetch(withImpersonateId(`/api/admin/marketplace-profit-entry/${encodeURIComponent(existingEntryId)}`, props.impersonateId ?? null), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ buyingPriceKes: buying }),
+        });
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) throw new Error(data?.error || "Update failed");
+        setSavedBuyingByTxn((prev) => ({ ...prev, [txn]: raw }));
+        if (!opts?.silent) showToast("Updated", "success");
+        props.onImported?.();
+        return;
+      }
 
       const doSubmit = async (allowDuplicates: boolean) => {
         const endpoint = draftId
@@ -481,6 +531,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
       let { res, data } = await doSubmit(false);
       if (res.status === 409) {
+        if (opts?.auto) return;
         const ok = window.confirm("This unique number already exists. Submit anyway?");
         if (!ok) return;
         ({ res, data } = await doSubmit(true));
@@ -491,6 +542,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       if (entryId) {
         setSubmittedByTxn((prev) => ({ ...prev, [txn]: entryId }));
         setSubmitted(true);
+        setSavedBuyingByTxn((prev) => ({ ...prev, [txn]: raw }));
         props.onImported?.();
         if (localOnlyDraft) {
           try {
@@ -504,13 +556,79 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           } catch {}
         }
       }
-      showToast("Saved", "success");
+      if (!opts?.silent) showToast(isSubmitted ? "Updated" : "Saved", "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Submit failed", "error");
+      if (!opts?.silent) showToast(err instanceof Error ? err.message : "Submit failed", "error");
     } finally {
       setSubmittingTxn("");
     }
   };
+
+  const autoSubmitKey = useMemo(() => {
+    if (!shopId) return "";
+    const ws = String(weekStart ?? "").trim();
+    const did = String(draftId ?? "").trim();
+    return `${shopId}:${ws || "no-week"}:${did || "no-draft"}:${rows.length}`;
+  }, [draftId, rows.length, shopId, weekStart]);
+
+  // Auto-save autofilled rows in the background so admin doesn't have to click Submit for each suggested buying price.
+  useEffect(() => {
+    if (!rows.length) return;
+    if (!autoSubmitKey) return;
+    if (autoSubmitDoneKey === autoSubmitKey) return;
+    if (autoSubmitting) return;
+
+    const candidates = rows
+      .filter((r) => {
+        const txn = String(r.itemCreditTxn ?? "").trim();
+        if (!txn) return false;
+        if (!autofilledByTxn[txn]) return false;
+        if (submittedByTxn[txn]) return false;
+        if (existingTxns.includes(txn)) return false;
+        const net = Number(r.netPayout ?? 0);
+        if (Number.isFinite(net) && net < 0) return false;
+        const raw = String(buyingByTxn[txn] ?? "").trim();
+        const buying = Number(raw);
+        if (!raw || !Number.isFinite(buying) || buying < 0) return false;
+        return true;
+      })
+      .map((r) => r.itemCreditTxn);
+
+    if (!candidates.length) {
+      setAutoSubmitDoneKey(autoSubmitKey);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setAutoSubmitting(true);
+      if (!cancelled) showToast(`Auto-saving ${candidates.length} autofilled orders...`, "warn");
+      for (const txn of candidates) {
+        if (cancelled) break;
+        // eslint-disable-next-line no-await-in-loop
+        await submitRow(txn, { auto: true, silent: true });
+      }
+      if (!cancelled) {
+        setAutoSubmitDoneKey(autoSubmitKey);
+        showToast("Autofilled rows saved", "success");
+      }
+      setAutoSubmitting(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    autoSubmitDoneKey,
+    autoSubmitKey,
+    autoSubmitting,
+    autofilledByTxn,
+    buyingByTxn,
+    existingTxns,
+    rows,
+    submitRow,
+    submittedByTxn,
+  ]);
 
   const copySku = async (sku: string) => {
     const value = String(sku ?? "").trim();
@@ -557,6 +675,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const resetView = (opts: { preserveStorage: boolean }) => {
     setRows([]);
     setBuyingByTxn({});
+    setSavedBuyingByTxn({});
+    setAutofilledByTxn({});
     setExistingTxns([]);
     setSubmittedByTxn({});
     setSubmitted(false);
@@ -668,6 +788,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
               setFile(e.target.files?.[0] ?? null);
               setRows([]);
               setBuyingByTxn({});
+              setSavedBuyingByTxn({});
+              setAutofilledByTxn({});
               setSubmitted(false);
               setDraftId("");
               setSubmittedByTxn({});
@@ -731,7 +853,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div className="text-xs text-slate-500">
-              Profit appears only after you submit each order.
+              Enter buying price to see profit. Use Submit/Update to save.
               {localOnlyDraft ? " (Draft is stored in this browser only.)" : ""}
             </div>
 
@@ -764,7 +886,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   <th className="px-3 py-2">SKU</th>
                   <th className="px-3 py-2 whitespace-nowrap">Net</th>
                   <th className="px-3 py-2 whitespace-nowrap">Buying</th>
-                  {submitted ? <th className="px-3 py-2 whitespace-nowrap">Profit</th> : null}
+                  <th className="px-3 py-2 whitespace-nowrap">Profit</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -775,8 +897,14 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   const isSubmitted = Boolean(submittedByTxn[r.itemCreditTxn]);
                   const buyingRaw = String(buyingByTxn[r.itemCreditTxn] ?? "").trim();
                   const buyingNum = Number(buyingRaw);
-                  const canSubmitRow = !isSubmitted && buyingRaw.length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
+                  const net = Number(r.netPayout ?? 0);
+                  const isReturn = Number.isFinite(net) && net < 0;
+                  const savedRaw = String(savedBuyingByTxn[r.itemCreditTxn] ?? "").trim();
+                  const hasValidBuying = buyingRaw.length > 0 && Number.isFinite(buyingNum) && buyingNum >= 0;
+                  const canSubmitRow = !isSubmitted && !isReturn && hasValidBuying;
+                  const canUpdateRow = isSubmitted && !isReturn && hasValidBuying && buyingRaw !== savedRaw;
                   const skuLabel = String(r.jumiaSku || r.sellerSku || "-");
+                  const isAutofilled = Boolean(autofilledByTxn[r.itemCreditTxn]);
                   return (
                     <tr key={r.key} className={isDup ? "bg-amber-950/20" : ""}>
                       <td className="px-3 py-2 text-slate-200">{new Date(r.dateUtc).toLocaleDateString("en-KE")}</td>
@@ -805,35 +933,59 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                         {currency.format(Number(r.netPayout ?? 0))}
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
-                          inputMode="decimal"
-                          placeholder="0"
-                          value={buyingByTxn[r.itemCreditTxn] ?? ""}
-                          onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
-                          onBlur={() => propagateBuyingToMatches(r.itemCreditTxn)}
-                          disabled={isSubmitted}
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 disabled:opacity-60"
+                            inputMode="decimal"
+                            placeholder={isReturn ? "Return" : "0"}
+                            value={buyingByTxn[r.itemCreditTxn] ?? ""}
+                            onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
+                            onBlur={() => propagateBuyingToMatches(r.itemCreditTxn)}
+                            disabled={isReturn}
+                          />
+                          {isAutofilled && !isReturn ? (
+                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                              Autofilled
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                      {submitted ? (
-                        <td
-                          className={
-                            profitValue !== undefined && profitValue < 0
-                              ? "px-3 py-2 whitespace-nowrap font-semibold text-rose-300"
-                              : "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300"
-                          }
-                        >
-                          {isSubmitted && profitValue !== undefined ? currency.format(profitValue) : "—"}
-                        </td>
-                      ) : null}
+                      <td
+                        className={
+                          isReturn
+                            ? "px-3 py-2 whitespace-nowrap font-semibold text-slate-500"
+                            : profitValue !== undefined && profitValue < 0
+                              ? isSubmitted
+                                ? "px-3 py-2 whitespace-nowrap font-semibold text-rose-300"
+                                : "px-3 py-2 whitespace-nowrap font-semibold text-rose-300/80"
+                              : isSubmitted
+                                ? "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300"
+                                : "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300/80"
+                        }
+                      >
+                        {isReturn ? "—" : profitValue !== undefined ? currency.format(profitValue) : "—"}
+                        {!isReturn && profitValue !== undefined && !isSubmitted ? (
+                          <span className="ml-2 text-[10px] font-semibold text-slate-400">(pending)</span>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <button
                           type="button"
                           onClick={() => void submitRow(r.itemCreditTxn)}
-                          disabled={!canSubmitRow || submittingTxn === r.itemCreditTxn}
+                          disabled={!(canSubmitRow || canUpdateRow) || submittingTxn === r.itemCreditTxn || isReturn}
                           className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                         >
-                          {isSubmitted ? "Saved" : submittingTxn === r.itemCreditTxn ? "Saving..." : "Submit"}
+                          {submittingTxn === r.itemCreditTxn
+                            ? isSubmitted
+                              ? "Updating..."
+                              : "Saving..."
+                            : isReturn
+                              ? "Return"
+                              : isSubmitted
+                                ? canUpdateRow
+                                  ? "Update"
+                                  : "Saved"
+                                : "Submit"}
                         </button>
                       </td>
                     </tr>
@@ -844,7 +996,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           </div>
 
           <div className="mt-2 text-xs text-slate-400">
-            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Profit appears after you click Submit.
+            {selectedWeek ? `Selected week: ${selectedWeek.label}` : null} — Returns (negative payout) are excluded from buying price.
           </div>
         </div>
       ) : (
