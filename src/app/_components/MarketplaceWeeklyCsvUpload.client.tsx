@@ -246,8 +246,53 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     return map;
   }, [rows, buyingByTxn, submittedByTxn]);
 
+  const matchKeyByTxn = useMemo(() => {
+    const normalizeText = (value: unknown) =>
+      String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/[^\p{L}\p{N}\s._-]+/gu, "");
+    const normalizeSku = (value: unknown) => normalizeText(value).replace(/\s+/g, "");
+    const moneyKey = (value: number) => {
+      const n = Number(value ?? 0);
+      return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+    };
+
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const sku = normalizeSku(r.jumiaSku || r.sellerSku || "");
+      const name = normalizeText(r.details || "");
+      const price = moneyKey(Number(r.grossSale ?? 0));
+      map.set(r.itemCreditTxn, `${sku}|${name}|${price}`);
+    }
+    return map;
+  }, [rows]);
+
   const updateBuying = (txn: string, next: string) => {
     setBuyingByTxn((prev) => ({ ...prev, [txn]: next }));
+  };
+
+  const propagateBuyingToMatches = (txn: string) => {
+    const raw = String(buyingByTxn[txn] ?? "").trim();
+    const buying = Number(raw);
+    if (!raw || !Number.isFinite(buying) || buying < 0) return;
+
+    const key = matchKeyByTxn.get(txn) ?? "";
+    if (!key) return;
+
+    setBuyingByTxn((prev) => {
+      const next = { ...prev };
+      for (const r of rows) {
+        if (r.itemCreditTxn === txn) continue;
+        if ((matchKeyByTxn.get(r.itemCreditTxn) ?? "") !== key) continue;
+        if (submittedByTxn[r.itemCreditTxn]) continue;
+        const existing = String(next[r.itemCreditTxn] ?? "").trim();
+        if (existing) continue;
+        next[r.itemCreditTxn] = raw;
+      }
+      return next;
+    });
   };
 
   const submitRow = async (txn: string) => {
@@ -625,6 +670,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                           placeholder="0"
                           value={buyingByTxn[r.itemCreditTxn] ?? ""}
                           onChange={(e) => updateBuying(r.itemCreditTxn, e.target.value)}
+                          onBlur={() => propagateBuyingToMatches(r.itemCreditTxn)}
                           disabled={isSubmitted}
                         />
                       </td>
