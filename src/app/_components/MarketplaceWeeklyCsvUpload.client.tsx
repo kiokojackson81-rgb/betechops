@@ -240,6 +240,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       if (entryId) {
         setSubmittedByTxn((prev) => ({ ...prev, [txn]: entryId }));
         setSubmitted(true);
+        props.onImported?.();
         if (localOnlyDraft) {
           try {
             const rawDraft = localStorage.getItem(draftKey);

@@ -6,6 +6,7 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
+import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ export default async function OnlinePerformanceWeekPage({
   const window = mondayToSundayNairobiWindow(canonicalStart);
   const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
 
+  const shopIdsForWeeklySales = accountId ? await resolveShopIdsForMarketplaceAccount(accountId) : [];
+
   const manualWeeklyAgg = await prisma.weeklySale.aggregate({
     _sum: { amount: true },
     where: {
@@ -57,6 +60,7 @@ export default async function OnlinePerformanceWeekPage({
       weekEnd: window.weekEnd,
       source: WeeklySaleSource.MANUAL,
       status: { not: WeeklySaleStatus.REJECTED },
+      ...(accountId ? { shopId: { in: shopIdsForWeeklySales.length ? shopIdsForWeeklySales : ["__none__"] } } : {}),
     },
   });
 
@@ -169,6 +173,7 @@ export default async function OnlinePerformanceWeekPage({
   const avgCommission = Number(typedAgg?._avg?.commissionRatePct ?? 0);
   const avgMargin = Number(typedAgg?._avg?.marginPct ?? 0);
   const manualWeeklyTotal = Number(manualWeeklyAgg._sum.amount ?? 0);
+  const netToShow = manualWeeklyTotal !== 0 ? manualWeeklyTotal : totalNet;
 
   const rows = (entries as any[]).map((e) => ({
     id: String(e.id),
@@ -222,7 +227,7 @@ export default async function OnlinePerformanceWeekPage({
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Net payout</p>
-              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(totalNet)}</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(netToShow)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Profit</p>
@@ -249,7 +254,7 @@ export default async function OnlinePerformanceWeekPage({
               <p className="mt-2 text-xl font-semibold text-slate-100">{avgCommission.toFixed(1)}%</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Manual weekly sales (if entered)</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Statement net payout</p>
               <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
             </div>
           </div>

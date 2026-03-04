@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { getPreviousTradingPeriod, getTradingPeriodFor, parseTradingPeriodKey, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import PerformanceFiltersClient from "@/app/admin/online/performance/_components/PerformanceFilters.client";
+import { WeeklySaleStatus } from "@prisma/client";
+import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +49,14 @@ export default async function OnlinePerformancePage({
 
   let perWeekAgg: any[] = [];
   let perWeekLossCount: any[] = [];
+  let perWeekWeeklySales: any[] = [];
   let dbReady = true;
   let isLossColumnReady = true;
   let accountIdColumnReady = true;
   try {
-    [perWeekAgg, perWeekLossCount] = await Promise.all([
+    const shopIdsForWeeklySales = accountId ? await resolveShopIdsForMarketplaceAccount(accountId) : [];
+
+    [perWeekAgg, perWeekLossCount, perWeekWeeklySales] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
         _sum: { netPayout: true, profit: true },
@@ -67,6 +72,18 @@ export default async function OnlinePerformancePage({
           periodKey: period.key,
           isLoss: true,
           ...(accountId ? { accountId } : {}),
+        },
+        orderBy: { weekStart: "asc" },
+      }),
+      (prisma as any).weeklySale.groupBy({
+        by: ["weekStart"],
+        _sum: { amount: true },
+        where: {
+          weekStart: { in: weekStarts },
+          status: { not: WeeklySaleStatus.REJECTED },
+          ...(accountId
+            ? { shopId: { in: shopIdsForWeeklySales.length ? shopIdsForWeeklySales : ["__none__"] } }
+            : {}),
         },
         orderBy: { weekStart: "asc" },
       }),
@@ -98,6 +115,16 @@ export default async function OnlinePerformancePage({
         },
         orderBy: { weekStart: "asc" },
       });
+
+      perWeekWeeklySales = await (prisma as any).weeklySale.groupBy({
+        by: ["weekStart"],
+        _sum: { amount: true },
+        where: {
+          weekStart: { in: weekStarts },
+          status: { not: WeeklySaleStatus.REJECTED },
+        },
+        orderBy: { weekStart: "asc" },
+      });
     } else {
       throw err;
     }
@@ -115,6 +142,9 @@ export default async function OnlinePerformancePage({
         avgCommissionRate: Number(row._avg?.commissionRatePct ?? 0),
       },
     ]),
+  );
+  const weeklySaleMap = new Map(
+    (perWeekWeeklySales as any[]).map((row) => [new Date(row.weekStart).toISOString(), Number(row._sum?.amount ?? 0)]),
   );
 
   const previousPeriod = getPreviousTradingPeriod(period);
@@ -158,7 +188,10 @@ export default async function OnlinePerformancePage({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Trading period dashboard</h2>
-            <p className="text-sm text-slate-400">Profit, net payout, and loss monitoring based on captured profit entries.</p>
+            <p className="text-sm text-slate-400">
+              Net payout comes from loaded weekly statements (CSV/manual weekly). Profit, loss entries, and commission rates update as buying
+              prices are submitted.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -211,6 +244,8 @@ export default async function OnlinePerformancePage({
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {weeks.map((wk) => {
             const agg = aggMap.get(wk.weekStart.toISOString()) ?? { netPayout: 0, profit: 0, avgCommissionRate: 0 };
+            const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
+            const netToShow = typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
             const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
             return (
               <Link
@@ -232,7 +267,7 @@ export default async function OnlinePerformancePage({
                   <div className="mt-4 grid gap-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Net payout</span>
-                      <span className="font-semibold text-emerald-300">{currency.format(agg.netPayout)}</span>
+                      <span className="font-semibold text-emerald-300">{currency.format(netToShow)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Profit</span>
@@ -259,7 +294,7 @@ export default async function OnlinePerformancePage({
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Notes</h2>
         <ul className="mt-2 space-y-1 text-sm text-slate-400">
-          <li>- Profit entries are captured from pasted marketplace transaction blocks.</li>
+          <li>- Net payout is loaded via weekly statements (CSV) or manual weekly totals.</li>
           <li>- Net payout = item credit + commission + shipping (commission/shipping stored as negative).</li>
           <li>- Profit = net payout - buying price.</li>
         </ul>
