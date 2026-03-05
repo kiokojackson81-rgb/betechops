@@ -34,6 +34,17 @@ function parseMoney(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function parseMoneyOptional(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const raw = String(value ?? "")
+    .replace(/KSh/gi, "")
+    .replace(/,/g, "")
+    .trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function parseDateCell(value: unknown): Date | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
   if (typeof value === "number") {
@@ -99,17 +110,17 @@ export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxO
     const dealPrice = parseMoney(get(row, ["deal price", "price", "unit price"]));
     const discount = parseMoney(get(row, ["discount"]));
 
-    const completeAmount = parseMoney(get(row, ["complete amount"]));
-    const productAmount =
-      parseMoney(get(row, ["product amount", "productamount", "amount"])) ||
-      (completeAmount ? completeAmount : dealPrice && qty ? dealPrice * qty : dealPrice);
+    const completeAmount = parseMoneyOptional(get(row, ["complete amount"]));
+    const explicitAmount = parseMoneyOptional(get(row, ["product amount", "productamount", "amount"]));
+    const productAmount = explicitAmount ?? (completeAmount ?? (dealPrice && qty ? dealPrice * qty : dealPrice));
     const shippingFee = parseMoney(get(row, ["shipping fee", "shippingfee", "shipping"])) || 0;
     const totalDeduction = parseMoney(get(row, ["total deduction", "totaldeduction", "deduction"])) || 0;
-    const payableAmountRaw = parseMoney(get(row, ["payable amount", "payableamount", "payout", "payable"]));
-    const settlement = parseMoney(get(row, ["settlement", "settlement payable"]));
-    const commission = parseMoney(get(row, ["commission"]));
-    const payableAmount =
-      payableAmountRaw || settlement || Math.max(0, (dealPrice && qty ? dealPrice * qty : dealPrice) - discount) || Math.max(0, productAmount + shippingFee - totalDeduction);
+    const payableAmountRaw = parseMoneyOptional(get(row, ["payable amount", "payableamount", "payout", "payable"]));
+    const settlement = parseMoneyOptional(get(row, ["settlement", "settlement payable"]));
+    const commission = parseMoneyOptional(get(row, ["commission"]));
+    const computedFromDeal = Math.max(0, (dealPrice && qty ? dealPrice * qty : dealPrice) - discount);
+    const computedFromAmounts = Math.max(0, productAmount + shippingFee - totalDeduction);
+    const payableAmount = payableAmountRaw ?? settlement ?? computedFromDeal ?? computedFromAmounts;
 
     orders.push({
       orderNo,
@@ -122,8 +133,8 @@ export function parseKilimallOrdersXlsx(buffer: Buffer): { orders: KilimallXlsxO
       shippingFee,
       totalDeduction,
       payableAmount,
-      commissionAmount: commission == null ? null : Number(commission),
-      settlementAmount: settlement == null ? null : Number(settlement),
+      commissionAmount: commission,
+      settlementAmount: settlement,
     });
   }
 
