@@ -55,6 +55,20 @@ type DraftSummary = {
   isComplete: boolean;
 };
 
+type WeekStatus = {
+  weeklySale: { amount: number; updatedAt: string; source: string; status: string } | null;
+  draft:
+    | {
+        id: string;
+        platform: string;
+        rowCount: number;
+        submittedCount: number;
+        isComplete: boolean;
+        updatedAt?: string;
+      }
+    | null;
+};
+
 export default function MarketplaceWeeklyCsvUpload(props: {
   title?: string;
   shops: MarketplaceShopOption[];
@@ -89,9 +103,42 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
   const [autoSubmitDoneKey, setAutoSubmitDoneKey] = useState<string>("");
+  const [weekStatusByShopId, setWeekStatusByShopId] = useState<Record<string, WeekStatus>>({});
+
+  const effectiveWeekStart = weekStart || defaultWeekStart;
 
   const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
+
+  const refreshWeekStatus = useCallback(async () => {
+    const ws = String(effectiveWeekStart ?? "").trim();
+    if (!ws) return;
+    if (!props.shops.length) return;
+
+    try {
+      const res = await fetch(withImpersonateId("/api/admin/marketplace-profit-entry/week-status", props.impersonateId ?? null), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStart: ws, shopIds: props.shops.map((s) => s.id) }),
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) return;
+      const next: Record<string, WeekStatus> = {};
+      const items = Array.isArray(data?.items) ? (data.items as any[]) : [];
+      for (const it of items) {
+        const id = String(it?.shopId ?? "").trim();
+        if (!id) continue;
+        next[id] = { weeklySale: (it?.weeklySale as any) ?? null, draft: (it?.draft as any) ?? null };
+      }
+      setWeekStatusByShopId(next);
+    } catch {
+      // Ignore; status is a nice-to-have.
+    }
+  }, [effectiveWeekStart, props.shops, props.impersonateId]);
+
+  useEffect(() => {
+    void refreshWeekStatus();
+  }, [refreshWeekStatus]);
 
   const buildDraftKey = useCallback((sid: string, weekStartInput: string) => {
     const s = String(sid ?? "").trim();
@@ -729,6 +776,41 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const clearDraft = () => resetView({ preserveStorage: false });
 
+  const markWeekZero = async () => {
+    if (!shopId) return;
+    const ws = String(effectiveWeekStart || "").trim();
+    if (!ws) return;
+
+    const ok = window.confirm("Mark this shop as ZERO sales for this week? This records payout as Ksh 0.");
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(
+        withImpersonateId("/api/admin/marketplace-profit-entry/reset-weekly-sale", props.impersonateId ?? null),
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ shopId, weekStart: ws, accountId: resolvedAccountId || undefined }),
+        },
+      );
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        showToast(String(data?.error ?? "Failed to mark week as zero"), "error");
+        return;
+      }
+
+      resetView({ preserveStorage: false });
+      setWeekStart(ws);
+      showToast("Recorded as Ksh 0 for this week.", "success");
+      await refreshWeekStatus();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to mark week as zero", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteStatement = async () => {
     const ok = window.confirm(
       "Delete this statement? This removes the saved draft (if available) and resets the week's payout to 0.",
@@ -778,6 +860,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       setWeekStart("");
       showToast("Statement deleted.", "success");
       await loadOpenDrafts();
+      await refreshWeekStatus();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to delete statement", "error");
     } finally {
@@ -823,6 +906,15 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             {loading ? "Loading..." : "Load statement"}
           </button>
           <button
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-50"
+            onClick={() => void markWeekZero()}
+            disabled={loading || !shopId}
+            type="button"
+            title="Use when statement is not available for this shop/week"
+          >
+            Mark zero
+          </button>
+          <button
             className="rounded-lg border border-rose-700/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-100 hover:bg-rose-900/30 disabled:opacity-50"
             onClick={() => void deleteStatement()}
             disabled={loading || !shopId || (!draftId && !localOnlyDraft)}
@@ -863,12 +955,27 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             disabled={loading}
           >
             <option value="">Select shop...</option>
-            {props.shops.map((s) => (
-              <option key={s.id} value={s.id}>
-                {(s.displayName || s.shopName || s.id).trim()} ({s.platform})
-              </option>
-            ))}
+            {props.shops.map((s) => {
+              const st = weekStatusByShopId[s.id];
+              const draft = st?.draft ?? null;
+              const sale = st?.weeklySale ?? null;
+              const saleAmount = sale ? Number(sale.amount ?? 0) : null;
+              const loaded = Boolean(draft) || (saleAmount !== null && saleAmount > 0);
+              const zero = saleAmount !== null && saleAmount === 0;
+              const done = Boolean(draft && draft.rowCount > 0 && draft.isComplete);
+              const tag = done ? "DONE" : loaded ? "LOADED" : zero ? "ZERO" : "";
+              return (
+                <option key={s.id} value={s.id}>
+                  {(s.displayName || s.shopName || s.id).trim()} ({s.platform}){tag ? ` — ${tag}` : ""}
+                </option>
+              );
+            })}
           </select>
+          <div className="mt-1 text-[11px] text-slate-400">
+            Status legend: <span className="text-slate-200">WHITE</span>=not loaded,{" "}
+            <span className="text-sky-200">LOADED</span>=statement loaded, <span className="text-emerald-200">DONE</span>=all rows submitted,{" "}
+            <span className="text-slate-300">ZERO</span>=recorded Ksh 0.
+          </div>
         </label>
 
         <label className="block">
