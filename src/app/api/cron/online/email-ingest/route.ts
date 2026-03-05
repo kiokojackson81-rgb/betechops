@@ -6,13 +6,26 @@ async function handle(request: Request) {
   const cronSecretHeader = request.headers.get("x-cron-secret") || "";
   const vercelCronHeader = request.headers.get("x-vercel-cron") || "";
   const cronSecretQuery = (url.searchParams.get("cronSecret") || "").trim();
+  const authHeader = request.headers.get("authorization") || "";
 
   const envSecret = (process.env.ONLINE_EMAIL_CRON_SECRET || process.env.CRON_SECRET || "").trim();
   const isCronBySecret = !!envSecret && (cronSecretHeader === envSecret || cronSecretQuery === envSecret);
+  const isCronByAuthorization =
+    !!envSecret && (authHeader === envSecret || authHeader === `Bearer ${envSecret}` || authHeader === `bearer ${envSecret}`);
   const isCronByVercelHeader = vercelCronHeader !== "";
-  const isCron = isCronBySecret || isCronByVercelHeader;
+  const isCron = isCronBySecret || isCronByAuthorization || isCronByVercelHeader;
 
   if (!isCron) {
+    // Avoid logging secrets; just enough detail to debug missing headers.
+    console.warn("[cron][onlineEmailIngest] forbidden", {
+      hasVercelCronHeader: vercelCronHeader !== "",
+      hasAuthorizationHeader: authHeader !== "",
+      hasCronSecretHeader: cronSecretHeader !== "",
+      hasCronSecretQuery: cronSecretQuery !== "",
+      hasEnvSecret: envSecret !== "",
+      method: request.method,
+      path: url.pathname,
+    });
     return noStoreJson({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -40,4 +53,3 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   return handle(request);
 }
-
