@@ -39,6 +39,12 @@ export default async function AdminOnlineEmailIntelligencePage() {
   const emailWindow = nairobiDayWindowUtc(now);
   const todayDateOnlyUtc = parseDateOnlyUtc(emailWindow.dayIso);
 
+  const mailboxes = await prisma.marketplaceMailbox.findMany({
+    where: { isActive: true },
+    orderBy: { email: "asc" },
+    include: { oauth: { select: { id: true, updatedAt: true, scope: true, tokenSource: true } } },
+  });
+
   const stats = await (async () => {
     if (!todayDateOnlyUtc) {
       return { ok: false as const, error: "Could not determine Nairobi date window" };
@@ -160,6 +166,58 @@ export default async function AdminOnlineEmailIntelligencePage() {
           <EmailSyncButtonClient />
         </div>
       </header>
+
+      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Mailboxes</p>
+            <h2 className="mt-1 text-sm font-semibold text-white">Connected inboxes</h2>
+          </div>
+          <Link
+            className="text-sm font-semibold text-emerald-200 hover:text-emerald-100"
+            href="/api/admin/online/mailboxes"
+          >
+            View JSON →
+          </Link>
+        </div>
+
+        {!mailboxes.length ? (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            No active mailboxes configured. Add one via <span className="font-semibold">POST /api/admin/online/mailboxes</span>{" "}
+            with a Gmail refresh token, then sync again.
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-4 py-3">Mailbox</th>
+                  <th className="px-4 py-3">OAuth</th>
+                  <th className="px-4 py-3">Updated</th>
+                  <th className="px-4 py-3">Scope</th>
+                  <th className="px-4 py-3">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mailboxes.map((m) => (
+                  <tr key={m.id} className="border-t border-white/5">
+                    <td className="px-4 py-4">
+                      <div className="font-medium text-white">{m.displayName ?? m.email}</div>
+                      <div className="text-xs text-slate-400">{m.email}</div>
+                    </td>
+                    <td className="px-4 py-4 text-slate-200">{m.oauth ? "✅ Configured" : "—"}</td>
+                    <td className="px-4 py-4 text-slate-200">
+                      {m.oauth?.updatedAt ? formatNairobiDate(new Date(m.oauth.updatedAt)) : "—"}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-slate-300">{m.oauth?.scope ?? "—"}</td>
+                    <td className="px-4 py-4 text-xs text-slate-300">{m.oauth?.tokenSource ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {!stats.ok ? (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-sm text-amber-100">
@@ -368,4 +426,3 @@ export default async function AdminOnlineEmailIntelligencePage() {
     </div>
   );
 }
-

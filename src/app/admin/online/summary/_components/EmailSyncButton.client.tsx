@@ -14,7 +14,9 @@ export default function EmailSyncButtonClient() {
       const res = await fetch("/api/admin/online/sync/emails", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ? String(json.error) : `Sync failed (${res.status})`);
+        const mailboxErrors = Array.isArray(json?.mailboxErrors) ? json.mailboxErrors.join("; ") : "";
+        const reason = json?.error ? String(json.error) : `Sync failed (${res.status})`;
+        throw new Error(mailboxErrors ? `${reason}: ${mailboxErrors}` : reason);
       }
       startTransition(() => router.refresh());
     } catch (e) {
@@ -36,4 +38,3 @@ export default function EmailSyncButtonClient() {
     </div>
   );
 }
-
