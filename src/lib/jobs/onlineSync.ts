@@ -147,7 +147,19 @@ type JumiaOrderItem = {
 };
 
 type MarketplaceAccountWithAssignments = Prisma.MarketplaceAccountGetPayload<{
-  include: { assignments: true };
+  select: {
+    id: true;
+    platform: true;
+    displayName: true;
+    countryCode: true;
+    currency: true;
+    jumiaShopSid: true;
+    kilimallShopCode: true;
+    isActive: true;
+    createdAt: true;
+    updatedAt: true;
+    assignments: true;
+  };
 }>;
 
 type SyncOnlineMarketplaceOptions = {
@@ -352,7 +364,19 @@ export async function syncOnlineMarketplaceData(opts?: SyncOnlineMarketplaceOpti
 
   const jumiaAccounts: MarketplaceAccountWithAssignments[] = await prisma.marketplaceAccount.findMany({
     where: { platform: Platform.JUMIA, isActive: true },
-    include: { assignments: { where: activeAssignmentsWhere, orderBy: { startsAt: "desc" } } },
+    select: {
+      id: true,
+      platform: true,
+      displayName: true,
+      countryCode: true,
+      currency: true,
+      jumiaShopSid: true,
+      kilimallShopCode: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      assignments: { where: activeAssignmentsWhere, orderBy: { startsAt: "desc" } },
+    },
   });
 
   const jumiaShops = await prisma.shop.findMany({

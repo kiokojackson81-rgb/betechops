@@ -194,10 +194,27 @@ async function mapAccountForEmail(opts: {
   const forwardedFromEmail = normalizeKey(opts.forwardedFromEmail);
   const shopLabel = normalizeKey(opts.shopLabel);
 
-  const accounts = await prisma.marketplaceAccount.findMany({
-    where: { isActive: true, platform },
-    select: { id: true, displayName: true, platform: true, primaryInboxEmail: true, forwarderEmails: true },
-  });
+  let accounts: Array<{
+    id: string;
+    displayName: string;
+    platform: Platform;
+    primaryInboxEmail?: string | null;
+    forwarderEmails?: string[];
+  }> = [];
+
+  try {
+    accounts = await prisma.marketplaceAccount.findMany({
+      where: { isActive: true, platform },
+      select: { id: true, displayName: true, platform: true, primaryInboxEmail: true, forwarderEmails: true },
+    });
+  } catch {
+    // Backward-compatible: DB not migrated yet (missing primaryInboxEmail/forwarderEmails columns)
+    const fallback = await prisma.marketplaceAccount.findMany({
+      where: { isActive: true, platform },
+      select: { id: true, displayName: true, platform: true },
+    });
+    accounts = fallback.map((a) => ({ ...a, primaryInboxEmail: null, forwarderEmails: [] }));
+  }
 
   const byForwarder = (email: string) =>
     accounts.find((a) => (a.forwarderEmails ?? []).map((e) => normalizeKey(e)).includes(email)) ?? null;

@@ -48,7 +48,7 @@ export default async function WeekDetailPage({ params }: { params: { weekStart: 
       weekStart: { lte: weekWindow.weekEnd },
       weekEnd: { gte: weekWindow.weekStart },
     },
-    include: { account: true },
+    include: { account: { select: { id: true, displayName: true, platform: true } } },
     orderBy: { payoutAmount: 'desc' },
   });
 

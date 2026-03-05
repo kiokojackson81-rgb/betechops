@@ -26,7 +26,17 @@ export async function GET() {
 
   const accounts = await prisma.marketplaceAccount.findMany({
     orderBy: [{ createdAt: "desc" }],
-    include: {
+    select: {
+      id: true,
+      displayName: true,
+      platform: true,
+      countryCode: true,
+      currency: true,
+      jumiaShopSid: true,
+      kilimallShopCode: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
       assignments: {
         include: {
           attendant: {

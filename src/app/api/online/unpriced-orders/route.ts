@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 
   const orders = await prisma.marketplaceOrder.findMany({
     where: whereBase,
-    include: { account: true },
+    include: { account: { select: { id: true, displayName: true, platform: true } } },
     orderBy: { orderedAt: "desc" },
     take,
   });

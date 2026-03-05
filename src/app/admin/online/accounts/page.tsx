@@ -54,7 +54,15 @@ export default async function AdminOnlineAccountsPage() {
   try {
     const accounts = (await prisma.marketplaceAccount.findMany({
       orderBy: [{ createdAt: "desc" }],
-      include: {
+      select: {
+        id: true,
+        displayName: true,
+        platform: true,
+        countryCode: true,
+        currency: true,
+        jumiaShopSid: true,
+        kilimallShopCode: true,
+        isActive: true,
         assignments: {
           include: {
             attendant: {

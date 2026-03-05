@@ -19,7 +19,7 @@ export default async function UnpricedOrdersClient({ period }: Props) {
         lte: period.end,
       },
     },
-    include: { account: true },
+    include: { account: { select: { id: true, displayName: true, platform: true } } },
     orderBy: { orderedAt: "desc" },
   });
 

@@ -159,7 +159,20 @@ export async function getMarketplaceAssignmentsForUser(attendantId: string): Pro
       OR: [{ endsAt: null }, { endsAt: { gt: now } }],
     },
     orderBy: [{ createdAt: "asc" }],
-    include: { account: true },
+    include: {
+      account: {
+        select: {
+          id: true,
+          platform: true,
+          displayName: true,
+          countryCode: true,
+          currency: true,
+          jumiaShopSid: true,
+          kilimallShopCode: true,
+          isActive: true,
+        },
+      },
+    },
   });
   return {
     assignments,

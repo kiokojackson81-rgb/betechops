@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
   const order = await prisma.marketplaceOrder.findFirst({
     where: { orderItemId: payload.orderItemId },
-    include: { account: true },
+    include: { account: { select: { id: true, displayName: true, platform: true } } },
   });
 
   if (!order) {

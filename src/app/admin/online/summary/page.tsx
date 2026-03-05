@@ -83,13 +83,21 @@ async function loadOnlineShopsForSummary(): Promise<ShopPayload[]> {
     prisma.marketplaceAccount.findMany({
       where: { isActive: true },
       orderBy: { displayName: "asc" },
-      include: {
+      select: {
+        id: true,
+        platform: true,
+        displayName: true,
+        jumiaShopSid: true,
+        kilimallShopCode: true,
         assignments: {
           where: {
             OR: [{ endsAt: null }, { endsAt: { gt: now } }],
           },
           orderBy: { startsAt: "desc" },
-          include: { attendant: { select: { id: true, name: true, email: true } } },
+          select: {
+            attendantId: true,
+            attendant: { select: { id: true, name: true, email: true } },
+          },
         },
       },
     }),
