@@ -20,6 +20,7 @@ function normalizeHeader(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase()
+    .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[^a-z0-9 ]+/g, "");
 }

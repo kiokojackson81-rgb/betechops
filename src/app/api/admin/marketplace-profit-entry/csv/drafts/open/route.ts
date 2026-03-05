@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { Prisma } from "@prisma/client";
+import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,6 +73,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = String(searchParams.get("shopId") ?? "").trim();
   if (!id) return NextResponse.json({ error: "shopId is required" }, { status: 400 });
+
+  const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
+  if (!draftTableAvailable) {
+    return NextResponse.json({ items: [], open: [], migrationPending: true }, { status: 200 });
+  }
 
   try {
     const resolved = await resolveDraftLookupIds(id);
