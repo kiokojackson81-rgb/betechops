@@ -8,8 +8,9 @@ export async function isMarketplaceStatementDraftTableAvailable(): Promise<boole
 
   cached = (async () => {
     try {
+      // Cast regclass -> text so Prisma can deserialize reliably.
       const rows = await prisma.$queryRaw<{ name: string | null }[]>(
-        Prisma.sql`select to_regclass('public."MarketplaceStatementDraft"') as name`,
+        Prisma.sql`select to_regclass('public."MarketplaceStatementDraft"')::text as name`,
       );
       return Boolean(rows?.[0]?.name);
     } catch {
@@ -20,4 +21,3 @@ export async function isMarketplaceStatementDraftTableAvailable(): Promise<boole
 
   return cached;
 }
-

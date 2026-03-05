@@ -339,40 +339,42 @@ export async function GET(req: NextRequest) {
       letterheadDataUrl,
     });
 
-    // Prefer puppeteer (local/dev). Fallback to serverless chromium + puppeteer-core (@sparticuz/chromium).
-    let puppeteer: any = null;
-    let chromium: any = null;
+    // On Vercel/serverless, full `puppeteer` often installs without a Chromium binary.
+    // Prefer puppeteer-core + @sparticuz/chromium there. Locally, prefer full puppeteer.
+    const isServerless = Boolean(process.env.VERCEL) || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
     let browser: any = null;
-
-    try {
-      puppeteer = await import("puppeteer");
-    } catch {
-      puppeteer = null;
-    }
-
-    if (puppeteer) {
-      browser = await puppeteer.launch({ headless: true, defaultViewport: { width: 1200, height: 800 } });
-    } else {
+    if (isServerless) {
       try {
         const pcoreName = "puppeteer-" + "core";
         const chromiumName = "@sparticuz/" + "chromium";
-        chromium = await (Function("m", "return import(m)"))(chromiumName);
+        const chromium = await (Function("m", "return import(m)"))(chromiumName);
         const pcore = await (Function("m", "return import(m)"))(pcoreName);
 
         const execPath = chromium && chromium.executablePath ? await chromium.executablePath() : undefined;
+        if (!execPath) {
+          return NextResponse.json({ error: "PDF export not available: Chromium executable path not found." }, { status: 501 });
+        }
         const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
 
         browser = await pcore.launch({
           args,
           defaultViewport: { width: 1200, height: 800 },
           executablePath: execPath,
-          headless: true,
+          headless: "new",
         });
       } catch (e) {
         return NextResponse.json(
-          { error: "PDF export not available: missing optional browser dependencies (puppeteer or puppeteer-core + @sparticuz/chromium)." },
+          { error: "PDF export not available: missing serverless browser deps (puppeteer-core + @sparticuz/chromium)." },
           { status: 501 },
         );
+      }
+    } else {
+      try {
+        const puppeteer = await import("puppeteer");
+        browser = await puppeteer.launch({ headless: "new", defaultViewport: { width: 1200, height: 800 } });
+      } catch (e) {
+        return NextResponse.json({ error: "PDF export not available: missing local browser deps (puppeteer)." }, { status: 501 });
       }
     }
 
@@ -395,4 +397,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }
-
