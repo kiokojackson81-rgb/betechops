@@ -730,23 +730,48 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const clearDraft = () => resetView({ preserveStorage: false });
 
   const deleteStatement = async () => {
-    if (!draftId || localOnlyDraft) {
-      showToast("This statement is only saved locally. Use Clear.", "warn");
-      return;
-    }
-
-    const ok = window.confirm("Delete this statement? This removes the saved draft and resets the week's payout to 0.");
+    const ok = window.confirm(
+      "Delete this statement? This removes the saved draft (if available) and resets the week's payout to 0.",
+    );
     if (!ok) return;
 
     try {
       setLoading(true);
-      const res = await fetch(withImpersonateId(`/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}`, props.impersonateId ?? null), {
-        method: "DELETE",
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        showToast(String(data?.error ?? "Failed to delete statement"), "error");
-        return;
+
+      if (draftId && !localOnlyDraft) {
+        const res = await fetch(
+          withImpersonateId(
+            `/api/admin/marketplace-profit-entry/csv/draft/${encodeURIComponent(draftId)}`,
+            props.impersonateId ?? null,
+          ),
+          { method: "DELETE" },
+        );
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) {
+          showToast(String(data?.error ?? "Failed to delete statement"), "error");
+          return;
+        }
+      } else {
+        // Local-only draft (or no draft id): still reset weekly payout in DB to avoid wrong dashboards.
+        const ws = String(weekStart || defaultWeekStart || "").trim();
+        if (!ws) {
+          showToast("Cannot determine week to reset.", "error");
+          return;
+        }
+
+        const res = await fetch(
+          withImpersonateId("/api/admin/marketplace-profit-entry/reset-weekly-sale", props.impersonateId ?? null),
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ shopId, weekStart: ws, accountId: resolvedAccountId || undefined }),
+          },
+        );
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) {
+          showToast(String(data?.error ?? "Failed to reset weekly payout"), "error");
+          return;
+        }
       }
 
       resetView({ preserveStorage: false });
@@ -800,7 +825,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           <button
             className="rounded-lg border border-rose-700/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-100 hover:bg-rose-900/30 disabled:opacity-50"
             onClick={() => void deleteStatement()}
-            disabled={loading || !draftId || localOnlyDraft}
+            disabled={loading || !shopId || (!draftId && !localOnlyDraft)}
             type="button"
             title={localOnlyDraft ? "Saved locally only" : "Delete saved statement"}
           >
