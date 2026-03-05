@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 type GmailTokenResponse = {
   access_token: string;
@@ -148,4 +148,3 @@ export async function gmailGetMessage(opts: { accessToken: string; messageId: st
   }
   return (await res.json()) as GmailMessage;
 }
-
