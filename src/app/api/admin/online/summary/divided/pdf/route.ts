@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { canonicalNairobiWeekStartUtc, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
-import { Platform, Prisma } from "@prisma/client";
+import { Platform } from "@prisma/client";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -280,6 +281,137 @@ function renderHtml(input: {
   </html>`;
 }
 
+function formatKes(n: number) {
+  return new Intl.NumberFormat("en-KE", { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+
+async function buildPdf(opts: {
+  weekStartInput: string;
+  weekEnd: Date;
+  accounts: any[];
+  totals: any;
+  deductions: { expenses: number; lowSellerScore: number; dividendRatePct: number; coopLoan: number; otherDeduction: number; mpesaTo0722: number };
+  letterheadJpg: Uint8Array | null;
+}) {
+  const d = opts.deductions;
+  const baseProfit = opts.totals.profit - d.expenses - d.lowSellerScore;
+  const dividend = Math.max(0, (baseProfit * d.dividendRatePct) / 100);
+  const balance = baseProfit - dividend - d.coopLoan - d.otherDeduction;
+  const hitech = opts.accounts.find((a) => a.key === "hitech-power") ?? null;
+  const hitechPayout = hitech ? Number(hitech.salesNetPayout ?? 0) : 0;
+  const equity = hitechPayout - dividend - d.mpesaTo0722 - d.coopLoan - d.otherDeduction;
+
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595.28, 841.89]); // A4 portrait
+  const { width, height } = page.getSize();
+
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  let cursorY = height - 28;
+  const marginX = 36;
+
+  if (opts.letterheadJpg) {
+    try {
+      const img = await pdf.embedJpg(opts.letterheadJpg);
+      const targetW = width - marginX * 2;
+      const scale = targetW / img.width;
+      const targetH = img.height * scale;
+      page.drawImage(img, { x: marginX, y: cursorY - targetH, width: targetW, height: targetH });
+      cursorY = cursorY - targetH - 16;
+    } catch {
+      // ignore
+    }
+  }
+
+  const weekEndInput = new Date(opts.weekEnd.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  page.drawText("Divided summary", { x: marginX, y: cursorY, size: 16, font: fontBold, color: rgb(0.05, 0.09, 0.17) });
+  cursorY -= 18;
+  page.drawText(`Week: ${opts.weekStartInput} - ${weekEndInput}`, {
+    x: marginX,
+    y: cursorY,
+    size: 10,
+    font,
+    color: rgb(0.29, 0.35, 0.45),
+  });
+  cursorY -= 18;
+
+  // Table
+  const col = {
+    account: marginX,
+    sales: width - marginX - 220,
+    returns: width - marginX - 160,
+    gross: width - marginX - 100,
+    profit: width - marginX - 40,
+  };
+
+  const headerY = cursorY;
+  page.drawLine({ start: { x: marginX, y: headerY - 6 }, end: { x: width - marginX, y: headerY - 6 }, thickness: 1, color: rgb(0.88, 0.91, 0.94) });
+  page.drawText("Account", { x: col.account, y: headerY, size: 9, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+  page.drawText("Sales", { x: col.sales, y: headerY, size: 9, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+  page.drawText("Returns", { x: col.returns, y: headerY, size: 9, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+  page.drawText("Gross", { x: col.gross, y: headerY, size: 9, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+  page.drawText("Profit", { x: col.profit, y: headerY, size: 9, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+  cursorY -= 20;
+
+  const rowH = 16;
+  for (const a of opts.accounts) {
+    page.drawText(String(a.label ?? ""), { x: col.account, y: cursorY, size: 10, font: fontBold, color: rgb(0.05, 0.09, 0.17) });
+    page.drawText(formatKes(Number(a.salesNetPayout ?? 0)), { x: col.sales, y: cursorY, size: 10, font, color: rgb(0.05, 0.45, 0.34) });
+    page.drawText(formatKes(Number(a.returns ?? 0)), { x: col.returns, y: cursorY, size: 10, font, color: rgb(0.05, 0.09, 0.17) });
+    page.drawText(formatKes(Number(a.grossProfit ?? 0)), { x: col.gross, y: cursorY, size: 10, font, color: rgb(0.05, 0.09, 0.17) });
+    page.drawText(formatKes(Number(a.profit ?? 0)), { x: col.profit, y: cursorY, size: 10, font, color: rgb(0.05, 0.09, 0.17) });
+    cursorY -= rowH;
+  }
+
+  cursorY -= 4;
+  page.drawLine({ start: { x: marginX, y: cursorY + 10 }, end: { x: width - marginX, y: cursorY + 10 }, thickness: 1, color: rgb(0.88, 0.91, 0.94) });
+  page.drawText("Totals", { x: col.account, y: cursorY, size: 10, font: fontBold, color: rgb(0.05, 0.09, 0.17) });
+  page.drawText(formatKes(Number(opts.totals.sales ?? 0)), { x: col.sales, y: cursorY, size: 10, font: fontBold, color: rgb(0.05, 0.45, 0.34) });
+  page.drawText(formatKes(Number(opts.totals.returns ?? 0)), { x: col.returns, y: cursorY, size: 10, font, color: rgb(0.05, 0.09, 0.17) });
+  page.drawText(formatKes(Number(opts.totals.grossProfit ?? 0)), { x: col.gross, y: cursorY, size: 10, font, color: rgb(0.05, 0.09, 0.17) });
+  page.drawText(formatKes(Number(opts.totals.profit ?? 0)), { x: col.profit, y: cursorY, size: 10, font: fontBold, color: rgb(0.05, 0.09, 0.17) });
+  cursorY -= 28;
+
+  // Cards
+  const cardW = (width - marginX * 2 - 12) / 2;
+  const cardH = 160;
+  const cardY = cursorY - cardH;
+
+  const drawCard = (x: number, title: string, lines: Array<[string, string, "pos" | "neg" | "normal"]>) => {
+    page.drawRectangle({ x, y: cardY, width: cardW, height: cardH, borderColor: rgb(0.88, 0.91, 0.94), borderWidth: 1 });
+    page.drawText(title, { x: x + 10, y: cardY + cardH - 18, size: 10, font: fontBold, color: rgb(0.39, 0.45, 0.55) });
+    let y = cardY + cardH - 36;
+    for (const [k, v, tone] of lines) {
+      page.drawText(k, { x: x + 10, y, size: 10, font, color: rgb(0.29, 0.35, 0.45) });
+      const c = tone === "pos" ? rgb(0.05, 0.45, 0.34) : tone === "neg" ? rgb(0.74, 0.07, 0.23) : rgb(0.05, 0.09, 0.17);
+      page.drawText(v, { x: x + cardW - 10 - font.widthOfTextAtSize(v, 10), y, size: 10, font: tone === "pos" ? fontBold : font, color: c });
+      y -= 16;
+    }
+  };
+
+  drawCard(marginX, "Divided", [
+    ["Expenses", formatKes(d.expenses), "normal"],
+    ["Low seller score", formatKes(d.lowSellerScore), "normal"],
+    ["Base profit", formatKes(baseProfit), "normal"],
+    [`Divided (${d.dividendRatePct}%)`, formatKes(dividend), "pos"],
+    ["Coop loan", formatKes(d.coopLoan), "normal"],
+    ["Other deduction", formatKes(d.otherDeduction), "normal"],
+    ["Balance", formatKes(balance), "normal"],
+  ]);
+
+  drawCard(marginX + cardW + 12, "Hitech payout instruction", [
+    ["Hitech payout", formatKes(hitechPayout), "normal"],
+    ["Less divided", `- ${formatKes(dividend)}`, "neg"],
+    ["Send to 0722151083", `- ${formatKes(d.mpesaTo0722)}`, "neg"],
+    ["Less other deductions", `- ${formatKes(d.coopLoan + d.otherDeduction)}`, "neg"],
+    ["Send to Equity", formatKes(equity), "pos"],
+  ]);
+
+  return pdf.save();
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
@@ -321,70 +453,26 @@ export async function GET(req: NextRequest) {
 
     const data = await getDividedData(weekStartRaw);
 
-    let letterheadDataUrl: string | null = null;
+    let letterheadBuf: Uint8Array | null = null;
     try {
       const filePath = path.join(process.cwd(), "public", "letterhead.jpg");
       const buf = await readFile(filePath);
-      letterheadDataUrl = `data:image/jpeg;base64,${buf.toString("base64")}`;
+      letterheadBuf = new Uint8Array(buf);
     } catch {
-      letterheadDataUrl = null;
+      letterheadBuf = null;
     }
 
-    const html = renderHtml({
+    const pdfBytes = await buildPdf({
       weekStartInput: weekStartRaw,
       weekEnd,
       accounts: data.accounts,
       totals: data.totals,
       deductions,
-      letterheadDataUrl,
+      letterheadJpg: letterheadBuf,
     });
 
-    // On Vercel/serverless, full `puppeteer` often installs without a Chromium binary.
-    // Prefer puppeteer-core + @sparticuz/chromium there. Locally, prefer full puppeteer.
-    const isServerless = Boolean(process.env.VERCEL) || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
-
-    let browser: any = null;
-    if (isServerless) {
-      try {
-        const pcoreName = "puppeteer-" + "core";
-        const chromiumName = "@sparticuz/" + "chromium";
-        const chromium = await (Function("m", "return import(m)"))(chromiumName);
-        const pcore = await (Function("m", "return import(m)"))(pcoreName);
-
-        const execPath = chromium && chromium.executablePath ? await chromium.executablePath() : undefined;
-        if (!execPath) {
-          return NextResponse.json({ error: "PDF export not available: Chromium executable path not found." }, { status: 501 });
-        }
-        const args = (chromium && chromium.args) || ["--no-sandbox", "--disable-setuid-sandbox"];
-
-        browser = await pcore.launch({
-          args,
-          defaultViewport: { width: 1200, height: 800 },
-          executablePath: execPath,
-          headless: "new",
-        });
-      } catch (e) {
-        return NextResponse.json(
-          { error: "PDF export not available: missing serverless browser deps (puppeteer-core + @sparticuz/chromium)." },
-          { status: 501 },
-        );
-      }
-    } else {
-      try {
-        const puppeteer = await import("puppeteer");
-        browser = await puppeteer.launch({ headless: "new", defaultViewport: { width: 1200, height: 800 } });
-      } catch (e) {
-        return NextResponse.json({ error: "PDF export not available: missing local browser deps (puppeteer)." }, { status: 501 });
-      }
-    }
-
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
-    await browser.close();
-
     const fileName = `divided-${weekStartRaw}.pdf`;
-    return new Response(pdfBuffer, {
+    return new Response(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
