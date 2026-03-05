@@ -83,7 +83,7 @@ CREATE INDEX IF NOT EXISTS "MarketplaceEmailMessage_parserType_parseStatus_idx" 
 -- 4) Daily order digests (Jumia counts)
 CREATE TABLE IF NOT EXISTS "MarketplaceDailyOrderDigest" (
   "id" TEXT NOT NULL,
-  "accountId" UUID NOT NULL,
+  "accountId" TEXT NOT NULL,
   "platform" "Platform" NOT NULL,
   "digestDate" TIMESTAMP(3) NOT NULL,
   "newOrders" INTEGER NOT NULL DEFAULT 0,
@@ -126,7 +126,7 @@ CREATE INDEX IF NOT EXISTS "MarketplaceOrderEvent_marketplaceOrderId_occurredAt_
 -- 6) After-sales threads (Kilimall)
 CREATE TABLE IF NOT EXISTS "MarketplaceAfterSalesThread" (
   "id" TEXT NOT NULL,
-  "accountId" UUID,
+  "accountId" TEXT,
   "platform" "Platform" NOT NULL DEFAULT 'KILIMALL',
   "mailboxId" TEXT NOT NULL,
   "sourceMessageId" TEXT NOT NULL,
@@ -165,4 +165,3 @@ EXCEPTION
 END $$;
 
 CREATE INDEX IF NOT EXISTS "MarketplaceReturn_sourceEmailMessageId_idx" ON "MarketplaceReturn"("sourceEmailMessageId");
-

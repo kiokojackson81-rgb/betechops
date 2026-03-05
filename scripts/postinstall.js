@@ -9,6 +9,12 @@ function run(cmd, args) {
   }
 }
 
+function runResult(cmd, args) {
+  console.log('> ' + [cmd].concat(args).join(' '));
+  const res = spawnSync(cmd, args, { stdio: 'inherit', shell: true });
+  return res.status || 0;
+}
+
 function isVercelProduction() {
   return process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production';
 }
@@ -38,7 +44,19 @@ async function tryChromiumDownload() {
     // Vercel may be configured to run `next build` directly, bypassing scripts/vercel-build.js.
     // Running migrations here ensures the Prisma client and Server Components don't crash on schema drift.
     if (isVercelProduction()) {
-      run('npx', ['prisma', 'migrate', 'deploy']);
+      const code = runResult('npx', ['prisma', 'migrate', 'deploy']);
+      if (code !== 0) {
+        // If a migration previously failed on the production database, Prisma will refuse to proceed
+        // until it is resolved. We auto-resolve the known migration for marketplace email intelligence
+        // and retry once. The migration SQL itself is written to be idempotent on re-apply.
+        console.warn('[postinstall] prisma migrate deploy failed; attempting migrate resolve and retry once');
+        runResult('npx', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260305_marketplace_email_intelligence']);
+        const retry = runResult('npx', ['prisma', 'migrate', 'deploy']);
+        if (retry !== 0) {
+          console.error('[postinstall] prisma migrate deploy still failing after resolve');
+          process.exit(retry);
+        }
+      }
     }
 
     // 1) Generate Prisma client
