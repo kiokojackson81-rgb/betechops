@@ -104,6 +104,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const [autoSubmitting, setAutoSubmitting] = useState(false);
   const [autoSubmitDoneKey, setAutoSubmitDoneKey] = useState<string>("");
   const [weekStatusByShopId, setWeekStatusByShopId] = useState<Record<string, WeekStatus>>({});
+  const [showOnlyUnpriced, setShowOnlyUnpriced] = useState(false);
 
   const effectiveWeekStart = weekStart || defaultWeekStart;
 
@@ -491,6 +492,52 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     return map;
   }, [rows, buyingByTxn]);
 
+  const unpricedCounts = useMemo(() => {
+    let returns = 0;
+    let submittedCount = 0;
+    let unpriced = 0;
+
+    for (const r of rows) {
+      const net = Number(r.netPayout ?? 0);
+      const gross = Number(r.grossSale ?? 0);
+      const status = String(r.orderItemStatus ?? "").toLowerCase();
+      const isReturn =
+        status.includes("return") ||
+        status.includes("refund") ||
+        (Number.isFinite(net) && net < 0) ||
+        (Number.isFinite(gross) && gross < 0);
+
+      if (isReturn) {
+        returns += 1;
+        continue;
+      }
+
+      if (submittedByTxn[r.itemCreditTxn]) submittedCount += 1;
+      else unpriced += 1;
+    }
+
+    return { returns, submittedCount, unpriced };
+  }, [rows, submittedByTxn]);
+
+  const visibleRows = useMemo(() => {
+    if (!showOnlyUnpriced) return rows;
+
+    return rows.filter((r) => {
+      const net = Number(r.netPayout ?? 0);
+      const gross = Number(r.grossSale ?? 0);
+      const status = String(r.orderItemStatus ?? "").toLowerCase();
+      const isReturn =
+        status.includes("return") ||
+        status.includes("refund") ||
+        (Number.isFinite(net) && net < 0) ||
+        (Number.isFinite(gross) && gross < 0);
+      if (isReturn) return false;
+      if (existingTxns.includes(r.itemCreditTxn)) return false;
+      if (submittedByTxn[r.itemCreditTxn]) return false;
+      return true;
+    });
+  }, [rows, showOnlyUnpriced, existingTxns, submittedByTxn]);
+
   const matchKeyByTxn = useMemo(() => {
     const normalizeText = (value: unknown) =>
       String(value ?? "")
@@ -766,6 +813,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     setResolvedAccountId("");
     setLocalOnlyDraft(false);
     setFile(null);
+    setShowOnlyUnpriced(false);
     if (!opts.preserveStorage) {
       try {
         if (draftKey) localStorage.removeItem(draftKey);
@@ -1042,7 +1090,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       {rows.length ? (
         <div className="mt-4">
           {!props.hideSummaryTotals ? (
-            <div className="mb-3 grid gap-2 sm:grid-cols-3">
+            <div className="mb-3 grid gap-2 sm:grid-cols-4">
               <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">Rows</div>
                 <div className="text-base font-semibold text-slate-100">{rows.length}</div>
@@ -1055,6 +1103,20 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 <div className="text-xs text-slate-400">Duplicates</div>
                 <div className="text-base font-semibold text-slate-100">{totals.duplicates}</div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowOnlyUnpriced((v) => !v)}
+                className={
+                  showOnlyUnpriced
+                    ? "rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-left"
+                    : "rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left hover:bg-slate-950/55"
+                }
+                title="Show orders not yet priced"
+              >
+                <div className="text-xs text-slate-400">Unpriced orders</div>
+                <div className="text-base font-semibold text-slate-100">{unpricedCounts.unpriced}</div>
+                <div className="mt-1 text-[11px] text-slate-400">{showOnlyUnpriced ? "Showing unpriced only" : "Click to filter list"}</div>
+              </button>
             </div>
           ) : null}
 
@@ -1066,6 +1128,12 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
             <div className="flex flex-wrap items-end gap-2">
 
+              {unpricedCounts.returns > 0 && !props.hideSummaryTotals ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Returns/refunds</div>
+                  <div className="text-base font-semibold text-slate-100">{unpricedCounts.returns}</div>
+                </div>
+              ) : null}
               {submitted && !props.hideSummaryTotals ? (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                   <div className="text-xs text-slate-400">Profit total</div>
@@ -1098,7 +1166,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/20">
-                {rows.map((r) => {
+                {visibleRows.map((r) => {
                   const profitValue = perRowProfit.get(r.itemCreditTxn);
                   const isDup = existingTxns.includes(r.itemCreditTxn);
                   const isSubmitted = Boolean(submittedByTxn[r.itemCreditTxn]);
