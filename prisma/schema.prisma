@@ -1032,6 +1032,10 @@ model MarketplaceAccount {
   currency         String                         @default("KES")
   jumiaShopSid     String?
   kilimallShopCode String?
+  /// Primary Gmail inbox used to ingest marketplace emails for this account (optional).
+  primaryInboxEmail String?
+  /// Optional list of Gmail addresses that forward marketplace emails into the primary inbox.
+  forwarderEmails   String[]                       @default([])
   isActive         Boolean                        @default(true)
   createdAt        DateTime                       @default(now())
   updatedAt        DateTime                       @updatedAt
@@ -1039,6 +1043,8 @@ model MarketplaceAccount {
   orders           MarketplaceOrder[]
   payoutWeeks      MarketplacePayoutWeek[]
   returns          MarketplaceReturn[]
+  dailyOrderDigests MarketplaceDailyOrderDigest[]
+  afterSalesThreads MarketplaceAfterSalesThread[]
   profitEntries    MarketplaceProfitEntry[]
   statementDrafts  MarketplaceStatementDraft[]
 
@@ -1108,6 +1114,7 @@ model MarketplaceOrder {
   account      MarketplaceAccount  @relation(fields: [accountId], references: [id])
   pricedBy     User?               @relation("MarketplaceOrder_pricedBy", fields: [pricedById], references: [id])
   returns      MarketplaceReturn[] @relation("MarketplaceOrder_returns")
+  events       MarketplaceOrderEvent[]
 
   @@unique([platform, orderItemId])
   @@index([accountId, orderedAt])
@@ -1153,15 +1160,19 @@ model MarketplaceReturn {
   processedById      String?
   processedAt        DateTime?
   notes              String?
+  rawPayload         Json?
+  sourceEmailMessageId String?
   account            MarketplaceAccount            @relation(fields: [accountId], references: [id])
   attendant          User?                         @relation("MarketplaceReturn_attendant", fields: [attendantId], references: [id])
   marketplaceOrder   MarketplaceOrder?             @relation("MarketplaceOrder_returns", fields: [marketplaceOrderId], references: [id])
   processedBy        User?                         @relation("MarketplaceReturn_processedBy", fields: [processedById], references: [id])
+  sourceEmailMessage MarketplaceEmailMessage?      @relation("MarketplaceReturn_sourceEmailMessage", fields: [sourceEmailMessageId], references: [id])
   attachments        MarketplaceReturnAttachment[]
 
   @@unique([platform, orderItemId])
   @@index([attendantId, status])
   @@index([dueAt, status])
+  @@index([sourceEmailMessageId])
 }
 
 model MarketplaceReturnAttachment {
@@ -1174,6 +1185,143 @@ model MarketplaceReturnAttachment {
   uploadedBy   User              @relation("MarketplaceReturnAttachment_uploadedBy", fields: [uploadedById], references: [id])
 
   @@index([returnId])
+}
+
+model MarketplaceMailbox {
+  id          String                  @id @default(cuid())
+  email       String                  @unique
+  displayName String?
+  isActive    Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  oauth       MarketplaceMailboxOAuth?
+  messages    MarketplaceEmailMessage[]
+  afterSalesThreads MarketplaceAfterSalesThread[]
+}
+
+model MarketplaceMailboxOAuth {
+  id          String             @id @default(cuid())
+  mailboxId   String             @unique
+  refreshToken String
+  scope       String?
+  tokenSource String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  mailbox     MarketplaceMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+}
+
+enum MarketplaceEmailParserType {
+  UNKNOWN
+  JUMIA_DAILY_REPORT
+  JUMIA_RETURN_PICKUP
+  KILIMALL_NEW_ORDER
+  KILIMALL_AFTERSALES
+}
+
+enum MarketplaceEmailParseStatus {
+  SKIPPED
+  PARSED
+  FAILED
+}
+
+model MarketplaceEmailMessage {
+  id            String                     @id @default(cuid())
+  mailboxId     String
+  /// Provider message id (Gmail message id). Used for global de-dupe.
+  providerMsgId String                     @unique
+  gmailMessageId String
+  threadId      String?
+  fromEmail     String?
+  subject       String?
+  receivedAt    DateTime
+  snippet       String?
+  rawHeaders    Json?
+  rawBodyHtml   String?
+  rawBodyText   String?
+  parserType    MarketplaceEmailParserType @default(UNKNOWN)
+  parseStatus   MarketplaceEmailParseStatus @default(SKIPPED)
+  parseError    String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  mailbox       MarketplaceMailbox         @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  dailyDigests  MarketplaceDailyOrderDigest[] @relation("DailyDigest_sourceMessage")
+  orderEvents   MarketplaceOrderEvent[]    @relation("OrderEvent_sourceMessage")
+  afterSales    MarketplaceAfterSalesThread[] @relation("AfterSales_sourceMessage")
+  returns       MarketplaceReturn[]        @relation("MarketplaceReturn_sourceEmailMessage")
+
+  @@unique([mailboxId, gmailMessageId])
+  @@index([mailboxId, receivedAt])
+  @@index([parserType, parseStatus])
+}
+
+model MarketplaceDailyOrderDigest {
+  id              String                 @id @default(cuid())
+  accountId        String
+  platform         Platform
+  /// Date-only stored as DateTime at 00:00:00Z.
+  digestDate       DateTime
+  newOrders        Int                    @default(0)
+  pendingToday     Int                    @default(0)
+  readyToShip      Int                    @default(0)
+  returnedToday    Int                    @default(0)
+  cancelledToday   Int                    @default(0)
+  deliveredToday   Int                    @default(0)
+  deliveryFailed   Int                    @default(0)
+  sourceMessageId  String?
+  lastReceivedAt   DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  account          MarketplaceAccount     @relation(fields: [accountId], references: [id])
+  sourceMessage    MarketplaceEmailMessage? @relation("DailyDigest_sourceMessage", fields: [sourceMessageId], references: [id])
+
+  @@unique([accountId, platform, digestDate])
+  @@index([platform, digestDate])
+}
+
+model MarketplaceOrderEvent {
+  id                String                @id @default(cuid())
+  marketplaceOrderId String
+  platform          Platform
+  status            String
+  occurredAt        DateTime              @default(now())
+  sourceMessageId   String?
+  rawPayload        Json?
+  createdAt         DateTime              @default(now())
+
+  marketplaceOrder  MarketplaceOrder      @relation(fields: [marketplaceOrderId], references: [id], onDelete: Cascade)
+  sourceMessage     MarketplaceEmailMessage? @relation("OrderEvent_sourceMessage", fields: [sourceMessageId], references: [id])
+
+  @@unique([marketplaceOrderId, status])
+  @@index([marketplaceOrderId, occurredAt])
+}
+
+enum MarketplaceAfterSalesStatus {
+  OPEN
+  RESOLVED
+}
+
+model MarketplaceAfterSalesThread {
+  id              String                    @id @default(cuid())
+  accountId        String?
+  platform         Platform                 @default(KILIMALL)
+  mailboxId        String
+  sourceMessageId  String                   @unique
+  subject          String?
+  fromEmail        String?
+  receivedAt       DateTime
+  status           MarketplaceAfterSalesStatus @default(OPEN)
+  keywords         String[]                 @default([])
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  account          MarketplaceAccount?      @relation(fields: [accountId], references: [id])
+  mailbox          MarketplaceMailbox       @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  sourceMessage    MarketplaceEmailMessage  @relation("AfterSales_sourceMessage", fields: [sourceMessageId], references: [id], onDelete: Cascade)
+
+  @@index([platform, status, receivedAt])
+  @@index([accountId, status])
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
