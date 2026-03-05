@@ -12,6 +12,7 @@ import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ManualWeekViewClient from "@/app/admin/online/summary/_components/ManualWeekView.client";
+import DividedViewClient from "@/app/admin/online/summary/_components/DividedView.client";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 type SearchParams = {
   periodKey?: string;
   weekStart?: string;
+  view?: string;
 };
 
 function getLast4FullWeeksForTradingPeriod(period: { start: Date; end: Date }, reference = new Date()) {
@@ -173,6 +175,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
   const selectedWeekStart = selectedWeekStartDate ? canonicalNairobiWeekStartUtc(selectedWeekStartDate) : null;
   const selectedWeekKey = selectedWeekStart ? selectedWeekStart.toISOString().slice(0, 10) : "";
   const selectedWeekWindow = selectedWeekStart ? mondayToSundayNairobiWindow(selectedWeekStart) : null;
+  const view = (resolvedParams.view ?? "manual").toString();
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const nextPeriod = getNextTradingPeriod(period);
@@ -281,7 +284,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
     <div className="space-y-8">
       <header className="space-y-2">
         <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
-        <h1 className="text-2xl font-semibold text-white">Manual weekly sales</h1>
+        <h1 className="text-2xl font-semibold text-white">Online summary</h1>
         <p className="text-sm text-slate-400">
           Current trading period: {period.label}. Snapshot below uses the last 4 full Monday–Sunday weeks within this
           period.
@@ -308,7 +311,41 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
             Previous period
           </Link>
         </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Link
+            href={`/admin/online/summary?periodKey=${encodeURIComponent(period.key)}${selectedWeekKey ? `&weekStart=${encodeURIComponent(selectedWeekKey)}` : ""}&view=manual`}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              view === "manual"
+                ? "border-sky-500/50 bg-sky-500/10 text-sky-200"
+                : "border-white/10 text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            Manual weekly
+          </Link>
+          <Link
+            href={`/admin/online/summary?periodKey=${encodeURIComponent(period.key)}${selectedWeekKey ? `&weekStart=${encodeURIComponent(selectedWeekKey)}` : ""}&view=divided`}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              view === "divided"
+                ? "border-sky-500/50 bg-sky-500/10 text-sky-200"
+                : "border-white/10 text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            Divided
+          </Link>
+        </div>
       </header>
+
+      {view === "divided" ? (
+        selectedWeekKey ? (
+          <DividedViewClient weekStart={selectedWeekKey} periodKey={period.key} />
+        ) : (
+          <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+            <h2 className="text-lg font-semibold text-white">Divided</h2>
+            <p className="mt-1 text-sm text-slate-400">Select a week from the left panel to view divided calculations.</p>
+          </section>
+        )
+      ) : null}
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
