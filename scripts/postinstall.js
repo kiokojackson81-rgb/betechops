@@ -9,6 +9,10 @@ function run(cmd, args) {
   }
 }
 
+function isVercelProduction() {
+  return process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production';
+}
+
 async function tryChromiumDownload() {
   try {
     // Attempt to require the Vercel-friendly chromium package and resolve
@@ -30,6 +34,13 @@ async function tryChromiumDownload() {
 
 (async function main() {
   try {
+    // 0) Ensure production DB is migrated before building on Vercel.
+    // Vercel may be configured to run `next build` directly, bypassing scripts/vercel-build.js.
+    // Running migrations here ensures the Prisma client and Server Components don't crash on schema drift.
+    if (isVercelProduction()) {
+      run('npx', ['prisma', 'migrate', 'deploy']);
+    }
+
     // 1) Generate Prisma client
     run('npm', ['run', 'prisma:generate']);
     // 2) Setup git hooks
