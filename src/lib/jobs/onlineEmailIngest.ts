@@ -317,6 +317,72 @@ function extractReceivedAt(headers: GmailHeader[] | undefined, internalDate: str
   return new Date();
 }
 
+async function upsertDailyDigestPreferLatest(opts: {
+  accountId: string;
+  platform: Platform;
+  digestDate: Date;
+  receivedAt: Date;
+  sourceMessageId: string;
+  values: {
+    newOrders: number;
+    pendingToday: number;
+    readyToShip: number;
+    returnedToday: number;
+    cancelledToday: number;
+    deliveredToday: number;
+    deliveryFailed: number;
+  };
+}): Promise<{ wrote: boolean }> {
+  const key = { accountId: opts.accountId, platform: opts.platform, digestDate: opts.digestDate };
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.marketplaceDailyOrderDigest.findUnique({
+      where: { accountId_platform_digestDate: key },
+      select: { id: true, lastReceivedAt: true },
+    });
+
+    const shouldWrite = !existing?.lastReceivedAt || existing.lastReceivedAt.getTime() <= opts.receivedAt.getTime();
+    if (!existing) {
+      try {
+        await tx.marketplaceDailyOrderDigest.create({
+          data: {
+            ...key,
+            ...opts.values,
+            sourceMessageId: opts.sourceMessageId,
+            lastReceivedAt: opts.receivedAt,
+          },
+          select: { id: true },
+        });
+        return { wrote: true };
+      } catch (e: any) {
+        // Race / already exists: re-check and apply update rules.
+        const code = e?.code ?? e?.meta?.code;
+        if (code !== "P2002") throw e;
+      }
+    }
+
+    const existing2 = await tx.marketplaceDailyOrderDigest.findUnique({
+      where: { accountId_platform_digestDate: key },
+      select: { id: true, lastReceivedAt: true },
+    });
+
+    const shouldWrite2 = !existing2?.lastReceivedAt || existing2.lastReceivedAt.getTime() <= opts.receivedAt.getTime();
+    if (!shouldWrite2 || !existing2) return { wrote: false };
+
+    await tx.marketplaceDailyOrderDigest.update({
+      where: { id: existing2.id },
+      data: {
+        ...opts.values,
+        sourceMessageId: opts.sourceMessageId,
+        lastReceivedAt: opts.receivedAt,
+      },
+      select: { id: true },
+    });
+
+    return { wrote: true };
+  });
+}
+
 export type OnlineEmailIngestMailboxResult = {
   mailboxId: string;
   email: string;
@@ -463,21 +529,23 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
           const digest = parseJumiaDailyDigest(bodyText, subject);
           if (!digest) throw new Error("JUMIA_DAILY_DIGEST_NOT_MATCHED");
 
+          const shopLabel = extractJumiaShopLabel(subject, bodyText);
           const account = await mapAccountForEmail({
             platform,
             mailboxEmail: mailbox.email,
             fromEmail,
             forwardedFromEmail,
-            shopLabel: null,
+            shopLabel,
           });
           if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
 
-          await prisma.marketplaceDailyOrderDigest.upsert({
-            where: { accountId_platform_digestDate: { accountId: account.id, platform, digestDate: digest.digestDate } },
-            create: {
-              accountId: account.id,
-              platform,
-              digestDate: digest.digestDate,
+          await upsertDailyDigestPreferLatest({
+            accountId: account.id,
+            platform,
+            digestDate: digest.digestDate,
+            receivedAt,
+            sourceMessageId: emailRow.id,
+            values: {
               newOrders: digest.newOrders,
               pendingToday: digest.pendingToday,
               readyToShip: digest.readyToShip,
@@ -485,31 +553,19 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
               cancelledToday: digest.cancelledToday,
               deliveredToday: digest.deliveredToday,
               deliveryFailed: digest.deliveryFailed,
-              sourceMessageId: emailRow.id,
-              lastReceivedAt: receivedAt,
-            },
-            update: {
-              newOrders: digest.newOrders,
-              pendingToday: digest.pendingToday,
-              readyToShip: digest.readyToShip,
-              returnedToday: digest.returnedToday,
-              cancelledToday: digest.cancelledToday,
-              deliveredToday: digest.deliveredToday,
-              deliveryFailed: digest.deliveryFailed,
-              sourceMessageId: emailRow.id,
-              lastReceivedAt: receivedAt,
             },
           });
         } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
           const pickup = parseJumiaReturnPickup(bodyText);
           if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
 
+          const shopLabel = extractJumiaShopLabel(subject, bodyText);
           const account = await mapAccountForEmail({
             platform,
             mailboxEmail: mailbox.email,
             fromEmail,
             forwardedFromEmail,
-            shopLabel: null,
+            shopLabel,
           });
           if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
 
@@ -772,12 +828,13 @@ async function applyParsedMarketplaceEmail(opts: {
       });
       if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
 
-      await prisma.marketplaceDailyOrderDigest.upsert({
-        where: { accountId_platform_digestDate: { accountId: account.id, platform, digestDate: digest.digestDate } },
-        create: {
-          accountId: account.id,
-          platform,
-          digestDate: digest.digestDate,
+      const wrote = await upsertDailyDigestPreferLatest({
+        accountId: account.id,
+        platform,
+        digestDate: digest.digestDate,
+        receivedAt: opts.message.receivedAt,
+        sourceMessageId: opts.message.id,
+        values: {
           newOrders: digest.newOrders,
           pendingToday: digest.pendingToday,
           readyToShip: digest.readyToShip,
@@ -785,22 +842,9 @@ async function applyParsedMarketplaceEmail(opts: {
           cancelledToday: digest.cancelledToday,
           deliveredToday: digest.deliveredToday,
           deliveryFailed: digest.deliveryFailed,
-          sourceMessageId: opts.message.id,
-          lastReceivedAt: opts.message.receivedAt,
-        },
-        update: {
-          newOrders: digest.newOrders,
-          pendingToday: digest.pendingToday,
-          readyToShip: digest.readyToShip,
-          returnedToday: digest.returnedToday,
-          cancelledToday: digest.cancelledToday,
-          deliveredToday: digest.deliveredToday,
-          deliveryFailed: digest.deliveryFailed,
-          sourceMessageId: opts.message.id,
-          lastReceivedAt: opts.message.receivedAt,
         },
       });
-      updatedDigests += 1;
+      if (wrote.wrote) updatedDigests += 1;
     } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
       const pickup = parseJumiaReturnPickup(bodyText);
       if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
