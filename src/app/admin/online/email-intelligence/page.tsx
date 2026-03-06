@@ -70,7 +70,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
     }
 
     try {
-      const [statusCounts, lastMessage, todaysDigests, openReturnsByAccount, pendingKilimallByAccount, openAfterSales] =
+      const [statusCounts, lastMessage, todaysDigests, digestSnapshots, openReturnsByAccount, pendingKilimallByAccount, openAfterSales] =
         await Promise.all([
           prisma.marketplaceEmailMessage.groupBy({
             by: ["parseStatus"],
@@ -85,6 +85,11 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
             where: { platform: "JUMIA", digestDate: todayDateOnlyUtc },
             include: { account: { select: { id: true, displayName: true, platform: true } } },
             orderBy: { account: { displayName: "asc" } },
+          }),
+          prisma.marketplaceDailyOrderDigestSnapshot.findMany({
+            where: { platform: "JUMIA", digestDate: todayDateOnlyUtc },
+            include: { account: { select: { id: true, displayName: true, platform: true } } },
+            orderBy: [{ bucket: "asc" }, { account: { displayName: "asc" } }],
           }),
           prisma.marketplaceReturn.groupBy({
             by: ["accountId"],
@@ -148,6 +153,21 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         { newOrders: 0, pending: 0, delivered: 0, returned: 0 },
       );
 
+      const digestSnapshotTotals = digestSnapshots.reduce(
+        (acc, s) => {
+          const key = s.bucket === "MORNING" ? "morning" : "midday";
+          acc[key].newOrders += s.newOrders ?? 0;
+          acc[key].pending += s.pendingToday ?? 0;
+          acc[key].delivered += s.deliveredToday ?? 0;
+          acc[key].returned += s.returnedToday ?? 0;
+          return acc;
+        },
+        {
+          morning: { newOrders: 0, pending: 0, delivered: 0, returned: 0 },
+          midday: { newOrders: 0, pending: 0, delivered: 0, returned: 0 },
+        },
+      );
+
       const returnsWaitingPickup = openReturnsRows.reduce((sum, r) => sum + r.count, 0);
       const kilimallPendingTotal = pendingKilimallRows.reduce((sum, r) => sum + r.count, 0);
 
@@ -159,6 +179,8 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         failedToday,
         digestTotals,
         todaysDigests,
+        digestSnapshots,
+        digestSnapshotTotals,
         openReturnsRows,
         returnsWaitingPickup,
         pendingKilimallRows,
@@ -298,12 +320,16 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Jumia new orders</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.digestTotals.newOrders}</p>
-                <p className="text-xs text-slate-400">Today</p>
+                <p className="text-xs text-slate-400">
+                  7am: {stats.digestSnapshotTotals.morning.newOrders} · 1pm: {stats.digestSnapshotTotals.midday.newOrders}
+                </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Jumia pending</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.digestTotals.pending}</p>
-                <p className="text-xs text-slate-400">Today</p>
+                <p className="text-xs text-slate-400">
+                  7am: {stats.digestSnapshotTotals.morning.pending} · 1pm: {stats.digestSnapshotTotals.midday.pending}
+                </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Returns waiting pickup</p>
@@ -333,7 +359,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
           <section className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white">Today’s Jumia digest (per account)</h2>
+                <h2 className="text-sm font-semibold text-white">Jumia digest (latest per account)</h2>
                 <span className="text-xs text-slate-400">{stats.dayIso}</span>
               </div>
               <div className="mt-3 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
@@ -370,6 +396,48 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                     ) : null}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Jumia digest snapshots (7am + 1pm)</h3>
+                  <span className="text-xs text-slate-400">{stats.dayIso}</span>
+                </div>
+                <div className="mt-3 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
+                  <table className="w-full min-w-[820px] text-left text-sm">
+                    <thead>
+                      <tr className="text-xs uppercase tracking-wide text-slate-400">
+                        <th className="px-4 py-3">Account</th>
+                        <th className="px-4 py-3">Time</th>
+                        <th className="px-4 py-3 text-right">New</th>
+                        <th className="px-4 py-3 text-right">Pending</th>
+                        <th className="px-4 py-3 text-right">Delivered</th>
+                        <th className="px-4 py-3 text-right">Returned</th>
+                        <th className="px-4 py-3">Received</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.digestSnapshots.map((s) => (
+                        <tr key={s.id} className="border-t border-white/5">
+                          <td className="px-4 py-4 font-medium text-white">{s.account.displayName}</td>
+                          <td className="px-4 py-4 text-slate-200">{s.bucket === "MORNING" ? "7am" : "1pm"}</td>
+                          <td className="px-4 py-4 text-right text-slate-200">{s.newOrders}</td>
+                          <td className="px-4 py-4 text-right text-slate-200">{s.pendingToday}</td>
+                          <td className="px-4 py-4 text-right text-slate-200">{s.deliveredToday}</td>
+                          <td className="px-4 py-4 text-right text-slate-200">{s.returnedToday}</td>
+                          <td className="px-4 py-4 text-slate-200">{formatNairobiDate(new Date(s.receivedAt))}</td>
+                        </tr>
+                      ))}
+                      {!stats.digestSnapshots.length ? (
+                        <tr>
+                          <td className="px-4 py-6 text-slate-400" colSpan={7}>
+                            No Jumia digest snapshots stored yet for this day.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 

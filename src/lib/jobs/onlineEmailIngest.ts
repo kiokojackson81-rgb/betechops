@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { MarketplaceEmailParseStatus, MarketplaceEmailParserType, Platform } from "@prisma/client";
+import { MarketplaceDigestBucket, MarketplaceEmailParseStatus, MarketplaceEmailParserType, Platform } from "@prisma/client";
 import {
   decodeMaybeQuotedPrintable,
   extractBodyParts,
@@ -28,6 +28,9 @@ const afterSalesKeywords = [
   "refund request",
 ];
 
+const NAIROBI_TZ = "Africa/Nairobi";
+const NAIROBI_HOUR_FORMATTER = new Intl.DateTimeFormat("en-GB", { timeZone: NAIROBI_TZ, hour: "2-digit", hour12: false });
+
 function normalizeKey(input: string | null | undefined): string {
   return (input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -40,6 +43,14 @@ function normalizeBodyText(input: string): string {
     // Common mojibake seen in some exports/encodings.
     .replace(/â€™/g, "'")
     .replace(/â€“/g, "-");
+}
+
+function getDigestBucket(receivedAt: Date): MarketplaceDigestBucket {
+  const parts = NAIROBI_HOUR_FORMATTER.formatToParts(receivedAt);
+  const hourStr = parts.find((p) => p.type === "hour")?.value ?? "";
+  const hour = Number.parseInt(hourStr, 10);
+  if (Number.isFinite(hour) && hour < 12) return MarketplaceDigestBucket.MORNING;
+  return MarketplaceDigestBucket.MIDDAY;
 }
 
 function addDays(d: Date, days: number): Date {
@@ -383,6 +394,71 @@ async function upsertDailyDigestPreferLatest(opts: {
   });
 }
 
+async function upsertDailyDigestSnapshotPreferLatest(opts: {
+  accountId: string;
+  platform: Platform;
+  digestDate: Date;
+  bucket: MarketplaceDigestBucket;
+  receivedAt: Date;
+  sourceMessageId: string;
+  values: {
+    newOrders: number;
+    pendingToday: number;
+    readyToShip: number;
+    returnedToday: number;
+    cancelledToday: number;
+    deliveredToday: number;
+    deliveryFailed: number;
+  };
+}): Promise<{ wrote: boolean }> {
+  const key = { accountId: opts.accountId, platform: opts.platform, digestDate: opts.digestDate, bucket: opts.bucket };
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.marketplaceDailyOrderDigestSnapshot.findUnique({
+      where: { accountId_platform_digestDate_bucket: key },
+      select: { id: true, receivedAt: true },
+    });
+
+    if (!existing) {
+      try {
+        await tx.marketplaceDailyOrderDigestSnapshot.create({
+          data: {
+            ...key,
+            ...opts.values,
+            sourceMessageId: opts.sourceMessageId,
+            receivedAt: opts.receivedAt,
+          },
+          select: { id: true },
+        });
+        return { wrote: true };
+      } catch (e: any) {
+        const code = e?.code ?? e?.meta?.code;
+        if (code !== "P2002") throw e;
+      }
+    }
+
+    const existing2 = await tx.marketplaceDailyOrderDigestSnapshot.findUnique({
+      where: { accountId_platform_digestDate_bucket: key },
+      select: { id: true, receivedAt: true },
+    });
+
+    const shouldWrite = !existing2?.receivedAt || existing2.receivedAt.getTime() <= opts.receivedAt.getTime();
+    if (!shouldWrite || !existing2) return { wrote: false };
+
+    await tx.marketplaceDailyOrderDigestSnapshot.update({
+      where: { id: existing2.id },
+      data: {
+        ...opts.values,
+        sourceMessageId: opts.sourceMessageId,
+        receivedAt: opts.receivedAt,
+      },
+      select: { id: true },
+    });
+
+    return { wrote: true };
+  });
+}
+
 export type OnlineEmailIngestMailboxResult = {
   mailboxId: string;
   email: string;
@@ -543,6 +619,25 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
             accountId: account.id,
             platform,
             digestDate: digest.digestDate,
+            receivedAt,
+            sourceMessageId: emailRow.id,
+            values: {
+              newOrders: digest.newOrders,
+              pendingToday: digest.pendingToday,
+              readyToShip: digest.readyToShip,
+              returnedToday: digest.returnedToday,
+              cancelledToday: digest.cancelledToday,
+              deliveredToday: digest.deliveredToday,
+              deliveryFailed: digest.deliveryFailed,
+            },
+          });
+
+          const bucket = getDigestBucket(receivedAt);
+          await upsertDailyDigestSnapshotPreferLatest({
+            accountId: account.id,
+            platform,
+            digestDate: digest.digestDate,
+            bucket,
             receivedAt,
             sourceMessageId: emailRow.id,
             values: {
@@ -770,6 +865,7 @@ async function applyParsedMarketplaceEmail(opts: {
   parsed: number;
   failed: number;
   updatedDigests: number;
+  updatedDigestSnapshots: number;
   updatedReturns: number;
   updatedOrders: number;
   updatedAfterSales: number;
@@ -785,6 +881,7 @@ async function applyParsedMarketplaceEmail(opts: {
   const parsedKilimall = parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER ? parseKilimallNewOrder(bodyText) : null;
 
   let updatedDigests = 0;
+  let updatedDigestSnapshots = 0;
   let updatedReturns = 0;
   let updatedOrders = 0;
   let updatedAfterSales = 0;
@@ -801,6 +898,7 @@ async function applyParsedMarketplaceEmail(opts: {
       parsed: 0,
       failed: 0,
       updatedDigests,
+      updatedDigestSnapshots,
       updatedReturns,
       updatedOrders,
       updatedAfterSales,
@@ -845,6 +943,26 @@ async function applyParsedMarketplaceEmail(opts: {
         },
       });
       if (wrote.wrote) updatedDigests += 1;
+
+      const bucket = getDigestBucket(opts.message.receivedAt);
+      const wroteSnapshot = await upsertDailyDigestSnapshotPreferLatest({
+        accountId: account.id,
+        platform,
+        digestDate: digest.digestDate,
+        bucket,
+        receivedAt: opts.message.receivedAt,
+        sourceMessageId: opts.message.id,
+        values: {
+          newOrders: digest.newOrders,
+          pendingToday: digest.pendingToday,
+          readyToShip: digest.readyToShip,
+          returnedToday: digest.returnedToday,
+          cancelledToday: digest.cancelledToday,
+          deliveredToday: digest.deliveredToday,
+          deliveryFailed: digest.deliveryFailed,
+        },
+      });
+      if (wroteSnapshot.wrote) updatedDigestSnapshots += 1;
     } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
       const pickup = parseJumiaReturnPickup(bodyText);
       if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
@@ -1015,6 +1133,7 @@ async function applyParsedMarketplaceEmail(opts: {
     parsed: parseStatus === MarketplaceEmailParseStatus.PARSED ? 1 : 0,
     failed: parseStatus === MarketplaceEmailParseStatus.FAILED ? 1 : 0,
     updatedDigests,
+    updatedDigestSnapshots,
     updatedReturns,
     updatedOrders,
     updatedAfterSales,
@@ -1036,6 +1155,7 @@ export async function reprocessStoredMarketplaceEmailsForMailbox(opts: {
   parsed: number;
   failed: number;
   updatedDigests: number;
+  updatedDigestSnapshots: number;
   updatedReturns: number;
   updatedOrders: number;
   updatedAfterSales: number;
@@ -1061,6 +1181,7 @@ export async function reprocessStoredMarketplaceEmailsForMailbox(opts: {
   let parsed = 0;
   let failed = 0;
   let updatedDigests = 0;
+  let updatedDigestSnapshots = 0;
   let updatedReturns = 0;
   let updatedOrders = 0;
   let updatedAfterSales = 0;
@@ -1090,6 +1211,7 @@ export async function reprocessStoredMarketplaceEmailsForMailbox(opts: {
         parsed += r.parsed;
         failed += r.failed;
         updatedDigests += r.updatedDigests;
+        updatedDigestSnapshots += r.updatedDigestSnapshots;
         updatedReturns += r.updatedReturns;
         updatedOrders += r.updatedOrders;
         updatedAfterSales += r.updatedAfterSales;
@@ -1105,6 +1227,7 @@ export async function reprocessStoredMarketplaceEmailsForMailbox(opts: {
     parsed,
     failed,
     updatedDigests,
+    updatedDigestSnapshots,
     updatedReturns,
     updatedOrders,
     updatedAfterSales,
