@@ -36,6 +36,27 @@ export type GmailMessage = {
 const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
+// Gmail bodies are base64url-encoded. The decoded bytes may still contain
+// quoted-printable escapes (e.g., =3D for "=") depending on message encoding.
+export function decodeQuotedPrintable(input: string): string {
+  // Remove soft line breaks
+  let s = input.replace(/=\r?\n/g, "");
+  // Decode =XX hex escapes
+  s = s.replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => {
+    const code = Number.parseInt(hex, 16);
+    return Number.isFinite(code) ? String.fromCharCode(code) : _;
+  });
+  return s;
+}
+
+export function decodeMaybeQuotedPrintable(input: string): string {
+  // Heuristic: common QP markers
+  if (input.includes("=3D") || input.includes("=\r\n") || input.includes("=\n")) {
+    return decodeQuotedPrintable(input);
+  }
+  return input;
+}
+
 export function decodeBase64Url(input: string): Buffer {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
@@ -76,9 +97,11 @@ export function extractBodyParts(message: GmailMessage): { html: string | null; 
     const mime = (p.mimeType ?? "").toLowerCase();
     const data = p.body?.data;
     if (!data) continue;
-    const decoded = decodeBase64Url(data).toString("utf8");
-    if (!html && mime.includes("text/html")) html = decoded;
-    if (!text && mime.includes("text/plain")) text = decoded;
+    const decodedRaw = decodeBase64Url(data).toString("utf8");
+    const decoded = decodeMaybeQuotedPrintable(decodedRaw);
+    // Prefer the first matching part, but if we find a larger one later, use it.
+    if (mime.includes("text/html") && (!html || decoded.length > html.length)) html = decoded;
+    if (mime.includes("text/plain") && (!text || decoded.length > text.length)) text = decoded;
   }
 
   return { html, text };

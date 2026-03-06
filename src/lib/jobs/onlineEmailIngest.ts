@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { MarketplaceEmailParseStatus, MarketplaceEmailParserType, Platform } from "@prisma/client";
 import {
+  decodeMaybeQuotedPrintable,
   extractBodyParts,
   extractEmailAddress,
   getHeader,
@@ -29,6 +30,16 @@ const afterSalesKeywords = [
 
 function normalizeKey(input: string | null | undefined): string {
   return (input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeBodyText(input: string): string {
+  return input
+    .replace(/\u00a0/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/[’‘]/g, "'")
+    // Common mojibake seen in some exports/encodings.
+    .replace(/â€™/g, "'")
+    .replace(/â€“/g, "-");
 }
 
 function addDays(d: Date, days: number): Date {
@@ -60,7 +71,7 @@ function htmlToText(html: string): string {
 }
 
 function inferPlatform(fromEmail: string | null, subject: string | null, bodyText: string): Platform | null {
-  const hay = `${fromEmail ?? ""}\n${subject ?? ""}\n${bodyText}`.toLowerCase();
+  const hay = normalizeBodyText(`${fromEmail ?? ""}\n${subject ?? ""}\n${bodyText}`).toLowerCase();
   if (hay.includes("jumia")) return Platform.JUMIA;
   if (hay.includes("kilimall")) return Platform.KILIMALL;
   if (hay.includes("ordersn")) return Platform.KILIMALL;
@@ -70,10 +81,27 @@ function inferPlatform(fromEmail: string | null, subject: string | null, bodyTex
 
 function inferParserType(subject: string | null, bodyText: string, platform: Platform | null): MarketplaceEmailParserType {
   const s = (subject ?? "").toLowerCase();
-  const t = bodyText.toLowerCase();
-  if (s.includes("daily order report") || t.includes("today's order summary")) return MarketplaceEmailParserType.JUMIA_DAILY_REPORT;
-  if (t.includes("ready for pickup") && t.includes("package / tracking number")) return MarketplaceEmailParserType.JUMIA_RETURN_PICKUP;
+  const t = normalizeBodyText(bodyText).toLowerCase();
+
+  const hasTodaysSummary = t.includes("today's order summary") || t.includes("todays order summary");
+  const kpiLabels = [
+    "new orders",
+    "pending today",
+    "ready to ship",
+    "returned today",
+    "cancelled today",
+    "delivered today",
+    "delivery failed",
+  ];
+  const kpiHits = kpiLabels.reduce((acc, k) => acc + (t.includes(k) ? 1 : 0), 0);
+  if ((s.includes("daily order report") || hasTodaysSummary) && kpiHits >= 3) return MarketplaceEmailParserType.JUMIA_DAILY_REPORT;
+
+  const isPickup = s.includes("ready for pickup") || t.includes("ready for pickup");
+  const hasTrackingTable = t.includes("package / tracking number") || (t.includes("tracking number") && t.includes("remaining days"));
+  if (isPickup && hasTrackingTable) return MarketplaceEmailParserType.JUMIA_RETURN_PICKUP;
+
   if (t.includes("your store") && t.includes("ordersn")) return MarketplaceEmailParserType.KILIMALL_NEW_ORDER;
+
   if ((platform === Platform.KILIMALL || t.includes("kilimall")) && afterSalesKeywords.some((k) => t.includes(k))) {
     return MarketplaceEmailParserType.KILIMALL_AFTERSALES;
   }
@@ -102,17 +130,20 @@ function parseJumiaDailyDigest(bodyText: string, subject: string | null): {
   deliveredToday: number;
   deliveryFailed: number;
 } | null {
-  const s = `${subject ?? ""}\n${bodyText}`;
+  const s = normalizeBodyText(`${subject ?? ""}\n${bodyText}`);
   const dateMatch =
     s.match(/Daily Order Report\s*-\s*(\d{4}-\d{2}-\d{2})/i) ??
     s.match(/Today's Order Summary\s*(\d{4}-\d{2}-\d{2})/i) ??
+    s.match(/Todays Order Summary\s*(\d{4}-\d{2}-\d{2})/i) ??
     s.match(/\b(\d{4}-\d{2}-\d{2})\b/);
   const dateStr = dateMatch?.[1];
   const digestDate = dateStr ? parseDateOnlyUtc(dateStr) : null;
   if (!digestDate) return null;
 
+  const escapeRe = (input: string) => input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const labelRe = (label: string) => escapeRe(label).replace(/\s+/g, "\\s+");
   const getInt = (label: string) => {
-    const re = new RegExp(String.raw`(\d+)\s+${label}`, "i");
+    const re = new RegExp(String.raw`(?:^|\b)(\d+)\s+${labelRe(label)}\b`, "i");
     const m = s.match(re);
     return m?.[1] ? Number.parseInt(m[1], 10) : 0;
   };
@@ -164,11 +195,14 @@ function parseKilimallNewOrder(bodyText: string): { shopLabel: string | null; or
   const orderNumber = orderMatch?.[1]?.trim();
   if (!orderNumber) return null;
 
-  const shopMatch = bodyText.match(/Your store\s*【([^】]+)】/i);
+  const t = normalizeBodyText(bodyText);
+  const shopMatch =
+    t.match(/Your store\s*(?:【|\[|\()?\s*([^】\]\)]+?)\s*(?:】|\]|\))\s+has received/i) ??
+    t.match(/Your store\s*(?:【|\[|\()?\s*([^】\]\)]+?)\s*(?:】|\]|\))?/i);
   const shopLabel = shopMatch?.[1]?.trim() || null;
 
   let itemTitle: string | null = null;
-  const productSection = bodyText.split(/\bProduct information\b/i);
+  const productSection = t.split(/\bProduct information\b/i);
   if (productSection.length > 1) {
     const after = productSection[1];
     const line = after
@@ -324,7 +358,13 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
     result.scanned = messageIds.length;
 
     for (const messageId of messageIds) {
-      const exists = await prisma.marketplaceEmailMessage.findUnique({ where: { providerMsgId: messageId }, select: { id: true } });
+      const exists =
+        (await prisma.marketplaceEmailMessage.findUnique({
+          where: { mailboxId_gmailMessageId: { mailboxId: mailbox.id, gmailMessageId: messageId } },
+          select: { id: true },
+        })) ??
+        // Backward-compatible (older rows stored providerMsgId=gmailMessageId)
+        (await prisma.marketplaceEmailMessage.findUnique({ where: { providerMsgId: messageId }, select: { id: true } }));
       if (exists) {
         result.skippedExisting += 1;
         continue;
@@ -347,7 +387,8 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
       const receivedAt = extractReceivedAt(headers, full?.internalDate);
 
       const { html, text } = extractBodyParts(full);
-      const bodyText = (text && text.trim()) ? text : (html ? htmlToText(html) : "");
+      const bodyTextRaw = (text && text.trim()) ? text : (html ? htmlToText(html) : "");
+      const bodyText = normalizeBodyText(decodeMaybeQuotedPrintable(bodyTextRaw));
 
       const forwardedFromEmail = extractForwardedFromEmail(bodyText);
 
@@ -360,7 +401,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
       const emailRow = await prisma.marketplaceEmailMessage.create({
         data: {
           mailboxId: mailbox.id,
-          providerMsgId: messageId,
+          providerMsgId: `${mailbox.id}:${messageId}`,
           gmailMessageId: messageId,
           threadId: full?.threadId ?? null,
           fromEmail,
@@ -587,10 +628,10 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
 }
 
 function getStoredBodyText(message: { rawBodyText?: string | null; rawBodyHtml?: string | null }): string {
-  const rawText = (message.rawBodyText ?? "").trim();
-  if (rawText) return rawText;
-  const rawHtml = (message.rawBodyHtml ?? "").trim();
-  if (rawHtml) return htmlToText(rawHtml);
+  const rawText = decodeMaybeQuotedPrintable((message.rawBodyText ?? "").trim());
+  if (rawText) return normalizeBodyText(rawText);
+  const rawHtml = decodeMaybeQuotedPrintable((message.rawBodyHtml ?? "").trim());
+  if (rawHtml) return normalizeBodyText(htmlToText(rawHtml));
   return "";
 }
 
