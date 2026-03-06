@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import EmailSyncButtonClient from "@/app/admin/online/summary/_components/EmailSyncButton.client";
 import { formatNairobiDate, parseDateOnlyUtc } from "@/lib/weekWindow";
+import ReprocessEmailsButtonClient from "@/app/admin/online/email-intelligence/_components/ReprocessEmailsButton.client";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function AdminOnlineEmailIntelligencePage() {
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
     return redirect("/not-authorized");
   }
+  const isAdmin = role === "ADMIN";
 
   const now = new Date();
   const emailWindow = nairobiDayWindowUtc(now);
@@ -196,6 +198,7 @@ export default async function AdminOnlineEmailIntelligencePage() {
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3">Scope</th>
                   <th className="px-4 py-3">Source</th>
+                  {isAdmin ? <th className="px-4 py-3 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -211,6 +214,19 @@ export default async function AdminOnlineEmailIntelligencePage() {
                     </td>
                     <td className="px-4 py-4 text-xs text-slate-300">{m.oauth?.scope ?? "—"}</td>
                     <td className="px-4 py-4 text-xs text-slate-300">{m.oauth?.tokenSource ?? "—"}</td>
+                    {isAdmin ? (
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex flex-col items-end gap-2">
+                          <Link
+                            className="text-xs font-semibold text-emerald-200 hover:text-emerald-100"
+                            href={`/api/admin/online/email-messages?mailbox=${encodeURIComponent(m.email)}`}
+                          >
+                            List messages →
+                          </Link>
+                          <ReprocessEmailsButtonClient mailboxId={m.id} mailboxEmail={m.email} />
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

@@ -585,3 +585,400 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
 
   return overall;
 }
+
+function getStoredBodyText(message: { rawBodyText?: string | null; rawBodyHtml?: string | null }): string {
+  const rawText = (message.rawBodyText ?? "").trim();
+  if (rawText) return rawText;
+  const rawHtml = (message.rawBodyHtml ?? "").trim();
+  if (rawHtml) return htmlToText(rawHtml);
+  return "";
+}
+
+function extractJumiaShopLabel(subject: string | null, bodyText: string): string | null {
+  const s = (subject ?? "").toString();
+  // e.g. "Jumia Kenya :: Daily Order Report - 2026-03-05 - Betech Store Today's Order Summary"
+  const m = s.match(/Daily Order Report\s*-\s*\d{4}-\d{2}-\d{2}\s*-\s*([^–-]+?)\s*(?:Today|Today's|Todays|$)/i);
+  if (m?.[1]) return m[1].trim();
+  // Sometimes the shop name appears near the top as a standalone heading.
+  const lines = bodyText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const idx = lines.findIndex((l) => /today'?s order summary/i.test(l));
+  if (idx >= 0) {
+    const candidate = lines.slice(0, idx).reverse().find((l) => l.length <= 60 && !/jumia/i.test(l));
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+async function applyParsedMarketplaceEmail(opts: {
+  mailboxId: string;
+  mailboxEmail: string;
+  message: {
+    id: string;
+    providerMsgId: string;
+    gmailMessageId: string;
+    fromEmail: string | null;
+    subject: string | null;
+    receivedAt: Date;
+    rawBodyText?: string | null;
+    rawBodyHtml?: string | null;
+  };
+}): Promise<{
+  reprocessed: number;
+  parsed: number;
+  failed: number;
+  updatedDigests: number;
+  updatedReturns: number;
+  updatedOrders: number;
+  updatedAfterSales: number;
+  parserType: MarketplaceEmailParserType;
+  parseStatus: MarketplaceEmailParseStatus;
+  parseError: string | null;
+}> {
+  const bodyText = getStoredBodyText(opts.message);
+  const forwardedFromEmail = extractForwardedFromEmail(bodyText);
+
+  const platform = inferPlatform(opts.message.fromEmail, opts.message.subject, bodyText);
+  const parserType = inferParserType(opts.message.subject, bodyText, platform);
+  const parsedKilimall = parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER ? parseKilimallNewOrder(bodyText) : null;
+
+  let updatedDigests = 0;
+  let updatedReturns = 0;
+  let updatedOrders = 0;
+  let updatedAfterSales = 0;
+
+  if (!platform || parserType === MarketplaceEmailParserType.UNKNOWN) {
+    const parseStatus = MarketplaceEmailParseStatus.SKIPPED;
+    const parseError = null;
+    await prisma.marketplaceEmailMessage.update({
+      where: { id: opts.message.id },
+      data: { parserType, parseStatus, parseError },
+    });
+    return {
+      reprocessed: 1,
+      parsed: 0,
+      failed: 0,
+      updatedDigests,
+      updatedReturns,
+      updatedOrders,
+      updatedAfterSales,
+      parserType,
+      parseStatus,
+      parseError,
+    };
+  }
+
+  let parseStatus: MarketplaceEmailParseStatus = MarketplaceEmailParseStatus.PARSED;
+  let parseError: string | null = null;
+
+  try {
+    if (parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT) {
+      const digest = parseJumiaDailyDigest(bodyText, opts.message.subject);
+      if (!digest) throw new Error("JUMIA_DAILY_DIGEST_NOT_MATCHED");
+
+      const shopLabel = extractJumiaShopLabel(opts.message.subject, bodyText);
+      const account = await mapAccountForEmail({
+        platform,
+        mailboxEmail: opts.mailboxEmail,
+        fromEmail: opts.message.fromEmail,
+        forwardedFromEmail,
+        shopLabel,
+      });
+      if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
+
+      await prisma.marketplaceDailyOrderDigest.upsert({
+        where: { accountId_platform_digestDate: { accountId: account.id, platform, digestDate: digest.digestDate } },
+        create: {
+          accountId: account.id,
+          platform,
+          digestDate: digest.digestDate,
+          newOrders: digest.newOrders,
+          pendingToday: digest.pendingToday,
+          readyToShip: digest.readyToShip,
+          returnedToday: digest.returnedToday,
+          cancelledToday: digest.cancelledToday,
+          deliveredToday: digest.deliveredToday,
+          deliveryFailed: digest.deliveryFailed,
+          sourceMessageId: opts.message.id,
+          lastReceivedAt: opts.message.receivedAt,
+        },
+        update: {
+          newOrders: digest.newOrders,
+          pendingToday: digest.pendingToday,
+          readyToShip: digest.readyToShip,
+          returnedToday: digest.returnedToday,
+          cancelledToday: digest.cancelledToday,
+          deliveredToday: digest.deliveredToday,
+          deliveryFailed: digest.deliveryFailed,
+          sourceMessageId: opts.message.id,
+          lastReceivedAt: opts.message.receivedAt,
+        },
+      });
+      updatedDigests += 1;
+    } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
+      const pickup = parseJumiaReturnPickup(bodyText);
+      if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
+
+      const shopLabel = extractJumiaShopLabel(opts.message.subject, bodyText);
+      const account = await mapAccountForEmail({
+        platform,
+        mailboxEmail: opts.mailboxEmail,
+        fromEmail: opts.message.fromEmail,
+        forwardedFromEmail,
+        shopLabel,
+      });
+      if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
+
+      for (const row of pickup.rows) {
+        const dueAt = addDays(opts.message.receivedAt, Math.max(0, row.remainingDays));
+        const rawPayload = {
+          stationName: pickup.stationName,
+          totalItems: pickup.totalItems,
+          totalPackages: pickup.totalPackages,
+          trackingNumber: row.trackingNumber,
+          orderNumber: row.orderNumber,
+          itemDescription: row.itemDescription,
+          remainingDays: row.remainingDays,
+          gmailMessageId: opts.message.gmailMessageId,
+          mailbox: opts.mailboxEmail,
+          receivedAt: opts.message.receivedAt.toISOString(),
+        };
+
+        await prisma.marketplaceReturn.upsert({
+          where: { platform_orderItemId: { platform: "JUMIA", orderItemId: row.trackingNumber } },
+          create: {
+            accountId: account.id,
+            platform: "JUMIA",
+            marketplaceOrderId: null,
+            orderItemId: row.trackingNumber,
+            expectedAmount: 0,
+            dueAt,
+            status: "WAITING_AT_HUB",
+            notes: pickup.stationName ? `Pickup at ${pickup.stationName}` : null,
+            rawPayload,
+            sourceEmailMessageId: opts.message.id,
+          },
+          update: {
+            accountId: account.id,
+            dueAt,
+            status: "WAITING_AT_HUB",
+            notes: pickup.stationName ? `Pickup at ${pickup.stationName}` : null,
+            rawPayload,
+            sourceEmailMessageId: opts.message.id,
+          },
+        });
+        updatedReturns += 1;
+      }
+    } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
+      const parsed = parsedKilimall ?? parseKilimallNewOrder(bodyText);
+      if (!parsed) throw new Error("KILIMALL_NEW_ORDER_NOT_MATCHED");
+
+      const account = await mapAccountForEmail({
+        platform,
+        mailboxEmail: opts.mailboxEmail,
+        fromEmail: opts.message.fromEmail,
+        forwardedFromEmail,
+        shopLabel: parsed.shopLabel,
+      });
+      if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
+
+      const order = await prisma.marketplaceOrder.upsert({
+        where: { platform_orderItemId: { platform: "KILIMALL", orderItemId: parsed.orderNumber } },
+        create: {
+          accountId: account.id,
+          platform: "KILIMALL",
+          orderId: parsed.orderNumber,
+          orderItemId: parsed.orderNumber,
+          status: "PENDING",
+          orderedAt: opts.message.receivedAt,
+          productName: parsed.itemTitle ?? `Order ${parsed.orderNumber}`,
+          sellingPrice: 0,
+          rawPayload: {
+            kind: "KILIMALL_NEW_ORDER_EMAIL",
+            shopLabel: parsed.shopLabel,
+            orderNumber: parsed.orderNumber,
+            itemTitle: parsed.itemTitle,
+            gmailMessageId: opts.message.gmailMessageId,
+            mailbox: opts.mailboxEmail,
+            receivedAt: opts.message.receivedAt.toISOString(),
+          },
+        },
+        update: {
+          status: "PENDING",
+          productName: parsed.itemTitle ?? undefined,
+          rawPayload: {
+            kind: "KILIMALL_NEW_ORDER_EMAIL",
+            shopLabel: parsed.shopLabel,
+            orderNumber: parsed.orderNumber,
+            itemTitle: parsed.itemTitle,
+            gmailMessageId: opts.message.gmailMessageId,
+            mailbox: opts.mailboxEmail,
+            receivedAt: opts.message.receivedAt.toISOString(),
+          },
+        },
+        select: { id: true },
+      });
+
+      await prisma.marketplaceOrderEvent.upsert({
+        where: { marketplaceOrderId_status: { marketplaceOrderId: order.id, status: "PENDING" } },
+        create: {
+          marketplaceOrderId: order.id,
+          platform: "KILIMALL",
+          status: "PENDING",
+          occurredAt: opts.message.receivedAt,
+          sourceMessageId: opts.message.id,
+          rawPayload: { gmailMessageId: opts.message.gmailMessageId, mailbox: opts.mailboxEmail },
+        },
+        update: {
+          occurredAt: opts.message.receivedAt,
+          sourceMessageId: opts.message.id,
+          rawPayload: { gmailMessageId: opts.message.gmailMessageId, mailbox: opts.mailboxEmail },
+        },
+      });
+      updatedOrders += 1;
+    } else if (parserType === MarketplaceEmailParserType.KILIMALL_AFTERSALES) {
+      const keywordsFound = afterSalesKeywords.filter((k) => bodyText.toLowerCase().includes(k));
+
+      const account = await mapAccountForEmail({
+        platform,
+        mailboxEmail: opts.mailboxEmail,
+        fromEmail: opts.message.fromEmail,
+        forwardedFromEmail,
+        shopLabel: null,
+      });
+
+      await prisma.marketplaceAfterSalesThread.upsert({
+        where: { sourceMessageId: opts.message.id },
+        create: {
+          accountId: account?.id ?? null,
+          platform: "KILIMALL",
+          mailboxId: opts.mailboxId,
+          sourceMessageId: opts.message.id,
+          subject: opts.message.subject,
+          fromEmail: opts.message.fromEmail,
+          receivedAt: opts.message.receivedAt,
+          status: "OPEN",
+          keywords: keywordsFound,
+        },
+        update: {
+          accountId: account?.id ?? null,
+          subject: opts.message.subject,
+          fromEmail: opts.message.fromEmail,
+          receivedAt: opts.message.receivedAt,
+          keywords: keywordsFound,
+        },
+      });
+      updatedAfterSales += 1;
+    }
+  } catch (e) {
+    parseStatus = MarketplaceEmailParseStatus.FAILED;
+    parseError = e instanceof Error ? e.message : String(e);
+  }
+
+  await prisma.marketplaceEmailMessage.update({
+    where: { id: opts.message.id },
+    data: { parserType, parseStatus, parseError },
+  });
+
+  return {
+    reprocessed: 1,
+    parsed: parseStatus === MarketplaceEmailParseStatus.PARSED ? 1 : 0,
+    failed: parseStatus === MarketplaceEmailParseStatus.FAILED ? 1 : 0,
+    updatedDigests,
+    updatedReturns,
+    updatedOrders,
+    updatedAfterSales,
+    parserType,
+    parseStatus,
+    parseError,
+  };
+}
+
+export async function reprocessStoredMarketplaceEmailsForMailbox(opts: {
+  mailboxId: string;
+  mailboxEmail: string;
+  take?: number;
+}): Promise<{
+  mailboxId: string;
+  mailboxEmail: string;
+  scanned: number;
+  reprocessed: number;
+  parsed: number;
+  failed: number;
+  updatedDigests: number;
+  updatedReturns: number;
+  updatedOrders: number;
+  updatedAfterSales: number;
+}> {
+  const take = Math.min(2000, Math.max(1, opts.take ?? 500));
+  const messages = await prisma.marketplaceEmailMessage.findMany({
+    where: { mailboxId: opts.mailboxId },
+    orderBy: { receivedAt: "desc" },
+    take,
+    select: {
+      id: true,
+      providerMsgId: true,
+      gmailMessageId: true,
+      fromEmail: true,
+      subject: true,
+      receivedAt: true,
+      rawBodyText: true,
+      rawBodyHtml: true,
+    },
+  });
+
+  let reprocessed = 0;
+  let parsed = 0;
+  let failed = 0;
+  let updatedDigests = 0;
+  let updatedReturns = 0;
+  let updatedOrders = 0;
+  let updatedAfterSales = 0;
+
+  // Keep concurrency low to avoid DB contention (Vercel/Neon pooler).
+  const pLimit = (await import("p-limit")).default;
+  const limit = pLimit(4);
+
+  await Promise.all(
+    messages.map((m) =>
+      limit(async () => {
+        const r = await applyParsedMarketplaceEmail({
+          mailboxId: opts.mailboxId,
+          mailboxEmail: opts.mailboxEmail,
+          message: {
+            id: m.id,
+            providerMsgId: m.providerMsgId,
+            gmailMessageId: m.gmailMessageId,
+            fromEmail: m.fromEmail ?? null,
+            subject: m.subject ?? null,
+            receivedAt: m.receivedAt,
+            rawBodyText: m.rawBodyText ?? null,
+            rawBodyHtml: m.rawBodyHtml ?? null,
+          },
+        });
+        reprocessed += r.reprocessed;
+        parsed += r.parsed;
+        failed += r.failed;
+        updatedDigests += r.updatedDigests;
+        updatedReturns += r.updatedReturns;
+        updatedOrders += r.updatedOrders;
+        updatedAfterSales += r.updatedAfterSales;
+      }),
+    ),
+  );
+
+  return {
+    mailboxId: opts.mailboxId,
+    mailboxEmail: opts.mailboxEmail,
+    scanned: messages.length,
+    reprocessed,
+    parsed,
+    failed,
+    updatedDigests,
+    updatedReturns,
+    updatedOrders,
+    updatedAfterSales,
+  };
+}
