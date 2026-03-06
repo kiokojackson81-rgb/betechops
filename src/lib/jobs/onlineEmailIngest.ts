@@ -170,14 +170,17 @@ function parseJumiaReturnPickup(bodyText: string): {
   totalPackages: number | null;
   rows: { trackingNumber: string; orderNumber: string | null; itemDescription: string; remainingDays: number }[];
 } | null {
-  const t = bodyText;
+  const t = normalizeBodyText(bodyText);
   const totals = t.match(/total\s+of\s+(\d+)\s+item\(s\)\s+in\s+(\d+)\s+package\(s\)/i);
   const totalItems = totals?.[1] ? Number.parseInt(totals[1], 10) : null;
   const totalPackages = totals?.[2] ? Number.parseInt(totals[2], 10) : null;
   const station = t.match(/pick\s*up\s*in\s+([^\n\r]+)/i);
-  const stationName = station?.[1]?.trim() ? station[1].trim() : null;
+  const stationNameRaw = station?.[1]?.trim() ? station[1].trim() : null;
+  const stationName = stationNameRaw ? stationNameRaw.replace(/[.。]\s*$/, "") : null;
 
   const rows: { trackingNumber: string; orderNumber: string | null; itemDescription: string; remainingDays: number }[] = [];
+
+  // Variant A (labelled blocks, as in earlier sample exports)
   const rowRegex =
     /Package\s*\/\s*Tracking\s*Number\s*([A-Z0-9-]+)[\s\S]*?Order\s*Number\s*([A-Z0-9-]+)?[\s\S]*?Item\s*Description\s*([\s\S]*?)\s*Remaining\s*Days\s*(\d+)\s*day\(s\)/gi;
   let m: RegExpExecArray | null;
@@ -188,6 +191,33 @@ function parseJumiaReturnPickup(bodyText: string): {
     const remainingDays = m[4] ? Number.parseInt(m[4], 10) : 0;
     if (!trackingNumber) continue;
     rows.push({ trackingNumber, orderNumber, itemDescription, remainingDays });
+  }
+
+  // Variant B (table-style rows)
+  if (!rows.length) {
+    const lines = t
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const headerIdx = lines.findIndex((l) =>
+      /Package\s*\/\s*Tracking\s*Number/i.test(l) &&
+      /Order\s*Number/i.test(l) &&
+      /Item\s*Description/i.test(l) &&
+      /Remaining\s*Days/i.test(l),
+    );
+    if (headerIdx >= 0) {
+      for (const line of lines.slice(headerIdx + 1)) {
+        if (/^note:/i.test(line) || /^these are some important/i.test(line)) break;
+        const mm = line.match(/^([A-Z0-9-]+)\s+([A-Z0-9-]+)\s+(.+?)\s+(\d+)\s*day\(s\)\b/i);
+        if (!mm) continue;
+        const trackingNumber = mm[1].trim();
+        const orderNumber = mm[2].trim() || null;
+        const itemDescription = mm[3].replace(/^Item\s*Description\s*/i, "").replace(/\s+/g, " ").trim();
+        const remainingDays = Number.parseInt(mm[4], 10);
+        if (!trackingNumber) continue;
+        rows.push({ trackingNumber, orderNumber, itemDescription, remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0 });
+      }
+    }
   }
 
   if (!rows.length && !stationName && totalItems == null && totalPackages == null) return null;
