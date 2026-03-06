@@ -58,8 +58,12 @@ function htmlToText(html: string): string {
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<\/div>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<\/table>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -640,6 +644,12 @@ function extractJumiaShopLabel(subject: string | null, bodyText: string): string
   // e.g. "Jumia Kenya :: Daily Order Report - 2026-03-05 - Betech Store Today's Order Summary"
   const m = s.match(/Daily Order Report\s*-\s*\d{4}-\d{2}-\d{2}\s*-\s*([^–-]+?)\s*(?:Today|Today's|Todays|$)/i);
   if (m?.[1]) return m[1].trim();
+
+  // Body may start with: "Sky Store Ke Today's Order Summary 2026-03-05"
+  // (shop and summary on same line or same heading block).
+  const inline = normalizeBodyText(bodyText).match(/^\s*([^\n]{2,80}?)\s+today'?s\s+order\s+summary\b/im);
+  if (inline?.[1] && !/jumia/i.test(inline[1])) return inline[1].trim();
+
   // Sometimes the shop name appears near the top as a standalone heading.
   const lines = bodyText
     .split(/\r?\n/)
@@ -647,6 +657,9 @@ function extractJumiaShopLabel(subject: string | null, bodyText: string): string
     .filter(Boolean);
   const idx = lines.findIndex((l) => /today'?s order summary/i.test(l));
   if (idx >= 0) {
+    // If the same line contains both shop + summary, extract from it.
+    const sameLine = lines[idx].match(/^(.+?)\s+today'?s\s+order\s+summary/i);
+    if (sameLine?.[1] && !/jumia/i.test(sameLine[1])) return sameLine[1].trim();
     const candidate = lines.slice(0, idx).reverse().find((l) => l.length <= 60 && !/jumia/i.test(l));
     if (candidate) return candidate;
   }
