@@ -29,7 +29,12 @@ const afterSalesKeywords = [
 ];
 
 const NAIROBI_TZ = "Africa/Nairobi";
-const NAIROBI_HOUR_FORMATTER = new Intl.DateTimeFormat("en-GB", { timeZone: NAIROBI_TZ, hour: "2-digit", hour12: false });
+const NAIROBI_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: NAIROBI_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function normalizeKey(input: string | null | undefined): string {
   return (input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -46,11 +51,19 @@ function normalizeBodyText(input: string): string {
 }
 
 function getDigestBucket(receivedAt: Date): MarketplaceDigestBucket {
-  const parts = NAIROBI_HOUR_FORMATTER.formatToParts(receivedAt);
-  const hourStr = parts.find((p) => p.type === "hour")?.value ?? "";
-  const hour = Number.parseInt(hourStr, 10);
-  if (Number.isFinite(hour) && hour < 12) return MarketplaceDigestBucket.MORNING;
-  return MarketplaceDigestBucket.MIDDAY;
+  // Bucket by closest expected send time in Nairobi: ~07:30 and ~13:30.
+  // This is robust to slight delivery delays (e.g., 07:42 still counts as "morning").
+  const parts = NAIROBI_TIME_FORMATTER.formatToParts(receivedAt);
+  const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "", 10);
+  const minute = Number.parseInt(parts.find((p) => p.type === "minute")?.value ?? "", 10);
+  const totalMinutes = (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0);
+
+  const MORNING_TARGET = 7 * 60 + 30;
+  const MIDDAY_TARGET = 13 * 60 + 30;
+  const diffMorning = Math.abs(totalMinutes - MORNING_TARGET);
+  const diffMidday = Math.abs(totalMinutes - MIDDAY_TARGET);
+
+  return diffMorning <= diffMidday ? MarketplaceDigestBucket.MORNING : MarketplaceDigestBucket.MIDDAY;
 }
 
 function addDays(d: Date, days: number): Date {

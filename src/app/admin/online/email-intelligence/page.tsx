@@ -321,14 +321,14 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                 <p className="text-xs uppercase tracking-wide text-slate-400">Jumia new orders</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.digestTotals.newOrders}</p>
                 <p className="text-xs text-slate-400">
-                  7am: {stats.digestSnapshotTotals.morning.newOrders} · 1pm: {stats.digestSnapshotTotals.midday.newOrders}
+                  By 7:30am: {stats.digestSnapshotTotals.morning.newOrders} · By 1:30pm: {stats.digestSnapshotTotals.midday.newOrders}
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Jumia pending</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.digestTotals.pending}</p>
                 <p className="text-xs text-slate-400">
-                  7am: {stats.digestSnapshotTotals.morning.pending} · 1pm: {stats.digestSnapshotTotals.midday.pending}
+                  By 7:30am: {stats.digestSnapshotTotals.morning.pending} · By 1:30pm: {stats.digestSnapshotTotals.midday.pending}
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -400,7 +400,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
 
               <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Jumia digest snapshots (7am + 1pm)</h3>
+                  <h3 className="text-sm font-semibold text-white">Jumia digest snapshots (by 7:30am + by 1:30pm)</h3>
                   <span className="text-xs text-slate-400">{stats.dayIso}</span>
                 </div>
                 <div className="mt-3 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
@@ -408,7 +408,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                     <thead>
                       <tr className="text-xs uppercase tracking-wide text-slate-400">
                         <th className="px-4 py-3">Account</th>
-                        <th className="px-4 py-3">Time</th>
+                        <th className="px-4 py-3">Cutoff</th>
                         <th className="px-4 py-3 text-right">New</th>
                         <th className="px-4 py-3 text-right">Pending</th>
                         <th className="px-4 py-3 text-right">Delivered</th>
@@ -420,7 +420,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                       {stats.digestSnapshots.map((s) => (
                         <tr key={s.id} className="border-t border-white/5">
                           <td className="px-4 py-4 font-medium text-white">{s.account.displayName}</td>
-                          <td className="px-4 py-4 text-slate-200">{s.bucket === "MORNING" ? "7am" : "1pm"}</td>
+                          <td className="px-4 py-4 text-slate-200">{s.bucket === "MORNING" ? "By 7:30am" : "By 1:30pm"}</td>
                           <td className="px-4 py-4 text-right text-slate-200">{s.newOrders}</td>
                           <td className="px-4 py-4 text-right text-slate-200">{s.pendingToday}</td>
                           <td className="px-4 py-4 text-right text-slate-200">{s.deliveredToday}</td>
