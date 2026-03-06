@@ -29,7 +29,19 @@ function nairobiDayWindowUtc(reference = new Date()): { dayIso: string; startUtc
   return { dayIso, startUtc, endUtc };
 }
 
-export default async function AdminOnlineEmailIntelligencePage() {
+function nairobiDayWindowUtcFromIso(dayIso: string): { dayIso: string; startUtc: Date; endUtc: Date } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayIso)) return null;
+  const d = parseDateOnlyUtc(dayIso);
+  if (!d) return null;
+  // parseDateOnlyUtc returns 00:00Z; Nairobi midnight is 21:00Z previous day.
+  const startUtc = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+  const endUtc = new Date(startUtc.getTime() + MS_PER_DAY);
+  return { dayIso, startUtc, endUtc };
+}
+
+export default async function AdminOnlineEmailIntelligencePage(props: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   const role = (session?.user as any)?.role;
   if (role !== "ADMIN" && role !== "SUPERVISOR") {
@@ -38,8 +50,13 @@ export default async function AdminOnlineEmailIntelligencePage() {
   const isAdmin = role === "ADMIN";
 
   const now = new Date();
-  const emailWindow = nairobiDayWindowUtc(now);
-  const todayDateOnlyUtc = parseDateOnlyUtc(emailWindow.dayIso);
+  const todayWindow = nairobiDayWindowUtc(now);
+  const yesterdayWindow = nairobiDayWindowUtc(new Date(now.getTime() - MS_PER_DAY));
+
+  const sp = (await props.searchParams) ?? {};
+  const dayParam = Array.isArray(sp.day) ? sp.day[0] : sp.day;
+  const selectedWindow = (dayParam ? nairobiDayWindowUtcFromIso(dayParam) : null) ?? todayWindow;
+  const todayDateOnlyUtc = parseDateOnlyUtc(selectedWindow.dayIso);
 
   const mailboxes = await prisma.marketplaceMailbox.findMany({
     where: { isActive: true },
@@ -57,7 +74,7 @@ export default async function AdminOnlineEmailIntelligencePage() {
         await Promise.all([
           prisma.marketplaceEmailMessage.groupBy({
             by: ["parseStatus"],
-            where: { receivedAt: { gte: emailWindow.startUtc, lt: emailWindow.endUtc } },
+            where: { receivedAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc } },
             _count: { _all: true },
           }),
           prisma.marketplaceEmailMessage.findFirst({
@@ -136,7 +153,7 @@ export default async function AdminOnlineEmailIntelligencePage() {
 
       return {
         ok: true as const,
-        dayIso: emailWindow.dayIso,
+        dayIso: selectedWindow.dayIso,
         lastMessageAt: lastMessage?.receivedAt ?? null,
         parsedToday,
         failedToday,
@@ -162,12 +179,47 @@ export default async function AdminOnlineEmailIntelligencePage() {
             <h1 className="text-2xl font-semibold text-white">Marketplace Email Intelligence</h1>
             <p className="text-sm text-slate-400">
               Daily digests, returns awaiting pickup and Kilimall pending/after-sales emails. Nairobi day:{" "}
-              <span className="font-semibold text-slate-200">{emailWindow.dayIso}</span>.
+              <span className="font-semibold text-slate-200">{selectedWindow.dayIso}</span>.
             </p>
           </div>
           <EmailSyncButtonClient />
         </div>
       </header>
+
+      <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/40 px-4 py-3">
+        <p className="text-xs uppercase tracking-wide text-slate-400">View day</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            className={`rounded-lg px-3 py-1.5 text-sm ${
+              selectedWindow.dayIso === todayWindow.dayIso ? "bg-slate-800 text-white" : "text-slate-200 hover:bg-slate-950/30"
+            }`}
+            href="/admin/online/email-intelligence"
+          >
+            Today
+          </Link>
+          <Link
+            className={`rounded-lg px-3 py-1.5 text-sm ${
+              selectedWindow.dayIso === yesterdayWindow.dayIso
+                ? "bg-slate-800 text-white"
+                : "text-slate-200 hover:bg-slate-950/30"
+            }`}
+            href={`/admin/online/email-intelligence?day=${encodeURIComponent(yesterdayWindow.dayIso)}`}
+          >
+            Yesterday
+          </Link>
+          <form className="flex items-center gap-2" method="GET" action="/admin/online/email-intelligence">
+            <input
+              className="rounded-lg border border-white/10 bg-slate-950/30 px-2 py-1.5 text-sm text-slate-200"
+              type="date"
+              name="day"
+              defaultValue={selectedWindow.dayIso}
+            />
+            <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700" type="submit">
+              Go
+            </button>
+          </form>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <div className="flex items-center justify-between">
