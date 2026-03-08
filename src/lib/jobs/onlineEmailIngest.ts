@@ -269,6 +269,39 @@ function parseJumiaReturnPickup(bodyText: string): {
     pushRow({ trackingNumber, orderNumber, itemDescription, remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0 });
   }
 
+  // Variant D (segment by tracking number; resilient when table flattening is inconsistent)
+  const trackingRegex = /([A-Z]{2,}(?:-[A-Z0-9]+)+)/g;
+  const trackingHits: Array<{ tracking: string; index: number }> = [];
+  while ((m = trackingRegex.exec(t))) {
+    const tracking = (m[1] ?? "").trim();
+    if (!tracking) continue;
+    trackingHits.push({ tracking, index: m.index });
+  }
+  for (let i = 0; i < trackingHits.length; i += 1) {
+    const cur = trackingHits[i];
+    const next = trackingHits[i + 1];
+    const segment = t.slice(cur.index, next ? next.index : t.length);
+    const orderMatch = segment.match(new RegExp(`^${cur.tracking}\\s+([A-Z0-9-]{6,})`, "i"));
+    const orderNumber = orderMatch?.[1]?.trim() || null;
+    const remainingMatch = segment.match(/(\d+)\s*day\(s\)/i);
+    const remainingDays = remainingMatch?.[1] ? Number.parseInt(remainingMatch[1], 10) : null;
+    let itemDescription = segment
+      .replace(new RegExp(`^${cur.tracking}\\s+${orderNumber ?? ""}\\s*`, "i"), "")
+      .replace(/\bItem\s*Description\b/gi, "")
+      .replace(/\bRemaining\s*Days\b/gi, "")
+      .replace(/(\d+)\s*day\(s\)/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/^(package|order|note:)/i.test(itemDescription)) itemDescription = "";
+    if (remainingDays == null) continue;
+    pushRow({
+      trackingNumber: cur.tracking,
+      orderNumber,
+      itemDescription,
+      remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0,
+    });
+  }
+
   if (!rows.length && !stationName && totalItems == null && totalPackages == null) return null;
   return { stationName, totalItems, totalPackages, rows };
 }
