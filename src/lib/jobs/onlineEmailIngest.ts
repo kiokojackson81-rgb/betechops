@@ -887,6 +887,11 @@ function extractJumiaReturnShopLabel(subject: string | null, bodyText: string): 
   if (fromSubject?.[1]) return fromSubject[1].trim();
 
   const t = normalizeBodyText(bodyText);
+  // Forwarded emails often keep the original subject in-body:
+  // "Subject: 08-03-2026: Hitech Power, your Jumia return item(s) are ready for pickup ..."
+  const fromForwardedSubject = t.match(/subject:\s*\d{2}-\d{2}-\d{4}:\s*([^,\n\r]+?),\s*your\s+jumia\s+return\s+item/i);
+  if (fromForwardedSubject?.[1]) return fromForwardedSubject[1].trim();
+
   // e.g. "Dear Betech Store,"
   const fromDear = t.match(/\bDear\s+([^,\n\r]{2,80})\s*,/i);
   if (fromDear?.[1] && !/vendor team|jumia/i.test(fromDear[1])) return fromDear[1].trim();
