@@ -98,6 +98,14 @@ function htmlToText(html: string): string {
   return stripped.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function pickRicherBodyText(text: string | null | undefined, html: string | null | undefined): string {
+  const textNorm = normalizeBodyText(decodeMaybeQuotedPrintable((text ?? "").trim()));
+  const htmlNorm = normalizeBodyText(htmlToText(decodeMaybeQuotedPrintable((html ?? "").trim())));
+  if (!textNorm) return htmlNorm;
+  if (!htmlNorm) return textNorm;
+  return htmlNorm.length >= textNorm.length ? htmlNorm : textNorm;
+}
+
 function inferPlatform(fromEmail: string | null, subject: string | null, bodyText: string): Platform | null {
   const hay = normalizeBodyText(`${fromEmail ?? ""}\n${subject ?? ""}\n${bodyText}`).toLowerCase();
   if (hay.includes("jumia")) return Platform.JUMIA;
@@ -593,8 +601,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
       const receivedAt = extractReceivedAt(headers, full?.internalDate);
 
       const { html, text } = extractBodyParts(full);
-      const bodyTextRaw = (text && text.trim()) ? text : (html ? htmlToText(html) : "");
-      const bodyText = normalizeBodyText(decodeMaybeQuotedPrintable(bodyTextRaw));
+      const bodyText = pickRicherBodyText(text, html);
 
       const forwardedFromEmail = extractForwardedFromEmail(bodyText);
 
@@ -843,11 +850,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
 }
 
 function getStoredBodyText(message: { rawBodyText?: string | null; rawBodyHtml?: string | null }): string {
-  const rawText = decodeMaybeQuotedPrintable((message.rawBodyText ?? "").trim());
-  if (rawText) return normalizeBodyText(rawText);
-  const rawHtml = decodeMaybeQuotedPrintable((message.rawBodyHtml ?? "").trim());
-  if (rawHtml) return normalizeBodyText(htmlToText(rawHtml));
-  return "";
+  return pickRicherBodyText(message.rawBodyText ?? null, message.rawBodyHtml ?? null);
 }
 
 function extractJumiaShopLabel(subject: string | null, bodyText: string): string | null {
