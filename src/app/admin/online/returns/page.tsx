@@ -111,6 +111,11 @@ export default async function AdminOnlineReturnsPage(props: any) {
     attendantName: string | null;
     attendantEmail: string | null;
     sourceReceivedAt: Date | null;
+    stationName: string | null;
+    trackingNumber: string;
+    orderNumber: string | null;
+    itemDescription: string | null;
+    remainingDays: number | null;
   };
   let counts: ReturnGroup[] | null = null;
   let returns: ReturnRow[] | null = null;
@@ -136,6 +141,15 @@ export default async function AdminOnlineReturnsPage(props: any) {
     ]);
     counts = groupCounts;
     returns = returnEntries.map((entry: any) => ({
+      ...(function () {
+        const payload = entry.rawPayload && typeof entry.rawPayload === "object" ? entry.rawPayload : {};
+        const stationName = typeof payload.stationName === "string" ? payload.stationName : null;
+        const trackingNumber = typeof payload.trackingNumber === "string" ? payload.trackingNumber : entry.orderItemId;
+        const orderNumber = typeof payload.orderNumber === "string" ? payload.orderNumber : null;
+        const itemDescription = typeof payload.itemDescription === "string" ? payload.itemDescription : null;
+        const remainingDays = Number.isFinite(Number(payload.remainingDays)) ? Number(payload.remainingDays) : null;
+        return { stationName, trackingNumber, orderNumber, itemDescription, remainingDays };
+      })(),
       id: entry.id,
       status: entry.status,
       orderItemId: entry.orderItemId,
@@ -240,12 +254,46 @@ export default async function AdminOnlineReturnsPage(props: any) {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/30">
+        <table className="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+              <th className="px-4 py-3">Account</th>
+              <th className="px-4 py-3 text-right">Returns</th>
+              <th className="px-4 py-3">Earliest due</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from(
+              returns.reduce((map, item) => {
+                const key = item.accountName;
+                const current = map.get(key) ?? { accountName: item.accountName, count: 0, earliestDueAt: item.dueAt };
+                current.count += 1;
+                if (item.dueAt.getTime() < current.earliestDueAt.getTime()) current.earliestDueAt = item.dueAt;
+                map.set(key, current);
+                return map;
+              }, new Map<string, { accountName: string; count: number; earliestDueAt: Date }>()),
+            )
+              .map(([, v]) => v)
+              .sort((a, b) => b.count - a.count)
+              .map((row) => (
+                <tr key={row.accountName} className="border-t border-white/5">
+                  <td className="px-4 py-3 font-semibold text-white">{row.accountName}</td>
+                  <td className="px-4 py-3 text-right text-slate-200">{row.count}</td>
+                  <td className="px-4 py-3 text-slate-200">{row.earliestDueAt.toLocaleDateString()}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/30">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
               <th className="px-4 py-3">Return</th>
               <th className="px-4 py-3">Account</th>
-              <th className="px-4 py-3">Attendant</th>
+              <th className="px-4 py-3">Details</th>
+              <th className="px-4 py-3 text-right">Remaining</th>
               <th className="px-4 py-3 text-right">Expected amount</th>
               <th className="px-4 py-3">Due date</th>
               <th className="px-4 py-3">Email received</th>
@@ -263,16 +311,13 @@ export default async function AdminOnlineReturnsPage(props: any) {
                   <div className="text-xs text-slate-400 capitalize">{entry.accountPlatform.toLowerCase()}</div>
                 </td>
                 <td className="px-4 py-4">
-                  {entry.attendantName || entry.attendantEmail ? (
-                    <>
-                      <div className="font-semibold text-white">
-                        {entry.attendantName ?? entry.attendantEmail ?? "Unassigned"}
-                      </div>
-                      <div className="text-xs text-slate-400">{entry.attendantEmail}</div>
-                    </>
-                  ) : (
-                    <span className="text-xs text-slate-500">Unassigned</span>
-                  )}
+                  <div className="font-semibold text-white">{entry.trackingNumber}</div>
+                  <div className="text-xs text-slate-400">Order #{entry.orderNumber ?? "—"}</div>
+                  <div className="text-xs text-slate-400">{entry.stationName ?? "—"}</div>
+                  <div className="text-xs text-slate-300">{entry.itemDescription ?? "—"}</div>
+                </td>
+                <td className="px-4 py-4 text-right text-slate-200">
+                  {entry.remainingDays != null ? `${entry.remainingDays} day(s)` : "—"}
                 </td>
                 <td className="px-4 py-4 text-right font-semibold text-emerald-200">
                   KES {Number(entry.expectedAmount).toLocaleString()}
@@ -288,7 +333,7 @@ export default async function AdminOnlineReturnsPage(props: any) {
             ))}
             {returns.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={6}>
+                <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={7}>
                   No return cases found for the selected filter.
                 </td>
               </tr>

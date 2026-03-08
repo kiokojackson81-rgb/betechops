@@ -371,6 +371,11 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         </div>
       ) : (
         <>
+          {(() => {
+            const periodParam =
+              selectedWindow.dayIso === todayWindow.dayIso ? "today" : selectedWindow.dayIso === yesterdayWindow.dayIso ? "yesterday" : "day";
+            const returnsHref = `/admin/online/returns?status=WAITING_AT_HUB&period=${encodeURIComponent(periodParam)}&day=${encodeURIComponent(selectedWindow.dayIso)}`;
+            return (
           <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
             <div className="grid gap-4 lg:grid-cols-6">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -387,11 +392,11 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                   By 7:30am: {stats.digestSnapshotTotals.morning.pending} · By 1:30pm: {stats.digestSnapshotTotals.midday.pending}
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <Link className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 hover:border-emerald-400/60" href={returnsHref}>
                 <p className="text-xs uppercase tracking-wide text-slate-400">Returns waiting pickup</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.returnsWaitingPickup}</p>
                 <p className="text-xs text-slate-400">Waiting at hub (selected day)</p>
-              </div>
+              </Link>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Kilimall pending</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.kilimallPendingTotal}</p>
@@ -411,6 +416,8 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
               </div>
             </div>
           </section>
+            );
+          })()}
 
           <section className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
