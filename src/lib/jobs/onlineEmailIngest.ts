@@ -203,6 +203,13 @@ function parseJumiaReturnPickup(bodyText: string): {
   const stationName = stationNameRaw ? stationNameRaw.replace(/[.。]\s*$/, "") : null;
 
   const rows: { trackingNumber: string; orderNumber: string | null; itemDescription: string; remainingDays: number }[] = [];
+  const seen = new Set<string>();
+  const pushRow = (row: { trackingNumber: string; orderNumber: string | null; itemDescription: string; remainingDays: number }) => {
+    const trackingNumber = row.trackingNumber.trim();
+    if (!trackingNumber || seen.has(trackingNumber)) return;
+    seen.add(trackingNumber);
+    rows.push({ ...row, trackingNumber });
+  };
 
   // Variant A (labelled blocks, as in earlier sample exports)
   const rowRegex =
@@ -213,12 +220,11 @@ function parseJumiaReturnPickup(bodyText: string): {
     const orderNumber = (m[2] ?? "").trim() || null;
     const itemDescription = (m[3] ?? "").replace(/\s+/g, " ").trim();
     const remainingDays = m[4] ? Number.parseInt(m[4], 10) : 0;
-    if (!trackingNumber) continue;
-    rows.push({ trackingNumber, orderNumber, itemDescription, remainingDays });
+    pushRow({ trackingNumber, orderNumber, itemDescription, remainingDays });
   }
 
-  // Variant B (table-style rows)
-  if (!rows.length) {
+  // Variant B (table-style single-line rows)
+  {
     const lines = t
       .split(/\n+/)
       .map((l) => l.trim())
@@ -238,10 +244,21 @@ function parseJumiaReturnPickup(bodyText: string): {
         const orderNumber = mm[2].trim() || null;
         const itemDescription = mm[3].replace(/^Item\s*Description\s*/i, "").replace(/\s+/g, " ").trim();
         const remainingDays = Number.parseInt(mm[4], 10);
-        if (!trackingNumber) continue;
-        rows.push({ trackingNumber, orderNumber, itemDescription, remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0 });
+        pushRow({ trackingNumber, orderNumber, itemDescription, remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0 });
       }
     }
+  }
+
+  // Variant C (wrapped/multi-line table rows in flattened text)
+  // Captures sequences like:
+  // <TRACKING> <ORDER> Item Description<...possibly wrapped...> <N> day(s)
+  const rowRegexC = /([A-Z]{2,}(?:-[A-Z0-9]+)+)\s+([A-Z0-9-]{6,})\s+Item\s*Description\s*([\s\S]*?)\s+(\d+)\s*day\(s\)/gi;
+  while ((m = rowRegexC.exec(t))) {
+    const trackingNumber = (m[1] ?? "").trim();
+    const orderNumber = (m[2] ?? "").trim() || null;
+    const itemDescription = (m[3] ?? "").replace(/\s+/g, " ").trim();
+    const remainingDays = m[4] ? Number.parseInt(m[4], 10) : 0;
+    pushRow({ trackingNumber, orderNumber, itemDescription, remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0 });
   }
 
   if (!rows.length && !stationName && totalItems == null && totalPackages == null) return null;
