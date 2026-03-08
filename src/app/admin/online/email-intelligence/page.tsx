@@ -56,8 +56,6 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
   const sp = (await props.searchParams) ?? {};
   const dayParam = Array.isArray(sp.day) ? sp.day[0] : sp.day;
   const selectedWindow = (dayParam ? nairobiDayWindowUtcFromIso(dayParam) : null) ?? todayWindow;
-  const todayDateOnlyUtc = parseDateOnlyUtc(selectedWindow.dayIso);
-
   const mailboxes = await prisma.marketplaceMailbox.findMany({
     where: { isActive: true },
     orderBy: { email: "asc" },
@@ -65,12 +63,8 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
   });
 
   const stats = await (async () => {
-    if (!todayDateOnlyUtc) {
-      return { ok: false as const, error: "Could not determine Nairobi date window" };
-    }
-
     try {
-      const [statusCounts, lastMessage, todaysDigests, digestSnapshots, openReturnsByAccount, pendingKilimallByAccount, openAfterSales] =
+      const [statusCounts, lastMessage, digestSnapshots, openReturnsByAccount, pendingKilimallByAccount, openAfterSales] =
         await Promise.all([
           prisma.marketplaceEmailMessage.groupBy({
             by: ["parseStatus"],
@@ -81,15 +75,10 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
             orderBy: { receivedAt: "desc" },
             select: { receivedAt: true },
           }),
-          prisma.marketplaceDailyOrderDigest.findMany({
-            where: { platform: "JUMIA", digestDate: todayDateOnlyUtc },
-            include: { account: { select: { id: true, displayName: true, platform: true } } },
-            orderBy: { account: { displayName: "asc" } },
-          }),
           prisma.marketplaceDailyOrderDigestSnapshot.findMany({
-            where: { platform: "JUMIA", digestDate: todayDateOnlyUtc },
+            where: { platform: "JUMIA", receivedAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc } },
             include: { account: { select: { id: true, displayName: true, platform: true } } },
-            orderBy: [{ bucket: "asc" }, { account: { displayName: "asc" } }],
+            orderBy: [{ receivedAt: "desc" }, { account: { displayName: "asc" } }],
           }),
           prisma.marketplaceReturn.groupBy({
             by: ["accountId"],
@@ -143,6 +132,17 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         }))
         .sort((a, b) => b.count - a.count);
 
+      const latestDigestByAccount = new Map<string, (typeof digestSnapshots)[number]>();
+      for (const snapshot of digestSnapshots) {
+        const prev = latestDigestByAccount.get(snapshot.accountId);
+        if (!prev || snapshot.receivedAt.getTime() > prev.receivedAt.getTime()) {
+          latestDigestByAccount.set(snapshot.accountId, snapshot);
+        }
+      }
+      const todaysDigests = Array.from(latestDigestByAccount.values()).sort((a, b) =>
+        a.account.displayName.localeCompare(b.account.displayName),
+      );
+
       const digestTotals = todaysDigests.reduce(
         (acc, d) => ({
           newOrders: acc.newOrders + (d.newOrders ?? 0),
@@ -179,7 +179,9 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         failedToday,
         digestTotals,
         todaysDigests,
-        digestSnapshots,
+        digestSnapshots: digestSnapshots
+          .slice()
+          .sort((a, b) => (a.bucket === b.bucket ? a.account.displayName.localeCompare(b.account.displayName) : a.bucket.localeCompare(b.bucket))),
         digestSnapshotTotals,
         openReturnsRows,
         returnsWaitingPickup,
@@ -382,9 +384,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                         <td className="px-4 py-4 text-right text-slate-200">{d.pendingToday}</td>
                         <td className="px-4 py-4 text-right text-slate-200">{d.deliveredToday}</td>
                         <td className="px-4 py-4 text-right text-slate-200">{d.returnedToday}</td>
-                        <td className="px-4 py-4 text-slate-200">
-                          {d.lastReceivedAt ? formatNairobiDate(new Date(d.lastReceivedAt)) : "—"}
-                        </td>
+                        <td className="px-4 py-4 text-slate-200">{formatNairobiDate(new Date(d.receivedAt))}</td>
                       </tr>
                     ))}
                     {!stats.todaysDigests.length ? (
