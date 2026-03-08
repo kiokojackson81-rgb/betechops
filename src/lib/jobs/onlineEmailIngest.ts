@@ -202,6 +202,7 @@ function parseJumiaReturnPickup(bodyText: string): {
   totalPackages: number | null;
   rows: { trackingNumber: string; orderNumber: string | null; itemDescription: string; remainingDays: number }[];
 } | null {
+  const TRACKING_TOKEN_RE = /\b[A-Z0-9]{2,}(?:-[A-Z0-9]+)+\b/g;
   const t = normalizeBodyText(bodyText);
   const totals = t.match(/total\s+of\s+(\d+)\s+item\(s\)\s+in\s+(\d+)\s+package\(s\)/i);
   const totalItems = totals?.[1] ? Number.parseInt(totals[1], 10) : null;
@@ -260,7 +261,7 @@ function parseJumiaReturnPickup(bodyText: string): {
   // Variant C (wrapped/multi-line table rows in flattened text)
   // Captures sequences like:
   // <TRACKING> <ORDER> Item Description<...possibly wrapped...> <N> day(s)
-  const rowRegexC = /([A-Z]{2,}(?:-[A-Z0-9]+)+)\s+([A-Z0-9-]{6,})\s+Item\s*Description\s*([\s\S]*?)\s+(\d+)\s*day\(s\)/gi;
+  const rowRegexC = /([A-Z0-9]{2,}(?:-[A-Z0-9]+)+)\s+([A-Z0-9-]{6,})\s+Item\s*Description\s*([\s\S]*?)\s+(\d+)\s*day\(s\)/gi;
   while ((m = rowRegexC.exec(t))) {
     const trackingNumber = (m[1] ?? "").trim();
     const orderNumber = (m[2] ?? "").trim() || null;
@@ -270,7 +271,7 @@ function parseJumiaReturnPickup(bodyText: string): {
   }
 
   // Variant D (segment by tracking number; resilient when table flattening is inconsistent)
-  const trackingRegex = /([A-Z]{2,}(?:-[A-Z0-9]+)+)/g;
+  const trackingRegex = /([A-Z0-9]{2,}(?:-[A-Z0-9]+)+)/g;
   const trackingHits: Array<{ tracking: string; index: number }> = [];
   while ((m = trackingRegex.exec(t))) {
     const tracking = (m[1] ?? "").trim();
@@ -300,6 +301,37 @@ function parseJumiaReturnPickup(bodyText: string): {
       itemDescription,
       remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0,
     });
+  }
+
+  // Variant E: if still missing rows vs email totals, capture each tracking token block.
+  if (totalItems != null && rows.length < totalItems) {
+    const allTracking = Array.from(t.matchAll(TRACKING_TOKEN_RE)).map((x) => x[0]);
+    const uniqueTracking = Array.from(new Set(allTracking));
+    for (const tracking of uniqueTracking) {
+      if (seen.has(tracking)) continue;
+      const idx = t.indexOf(tracking);
+      if (idx < 0) continue;
+      const seg = t.slice(idx, Math.min(t.length, idx + 450));
+      const afterTracking = seg.replace(new RegExp(`^${tracking}\\s*`, "i"), "");
+      const orderMatch = afterTracking.match(/^([A-Z0-9-]{6,})\b/i);
+      const remainingMatch = seg.match(/(\d+)\s*day\(s\)/i);
+      if (!remainingMatch?.[1]) continue;
+      const orderNumber = orderMatch?.[1] ?? null;
+      const itemDescription = seg
+        .replace(new RegExp(`^${tracking}\\s*${orderNumber ?? ""}\\s*`, "i"), "")
+        .replace(/\bItem\s*Description\b/gi, "")
+        .replace(/\bRemaining\s*Days\b/gi, "")
+        .replace(/(\d+)\s*day\(s\)/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const remainingDays = Number.parseInt(remainingMatch[1], 10);
+      pushRow({
+        trackingNumber: tracking,
+        orderNumber,
+        itemDescription,
+        remainingDays: Number.isFinite(remainingDays) ? remainingDays : 0,
+      });
+    }
   }
 
   if (!rows.length && !stationName && totalItems == null && totalPackages == null) return null;
