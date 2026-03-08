@@ -132,15 +132,45 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         }))
         .sort((a, b) => b.count - a.count);
 
+      const jumiaAccounts = accounts.filter((a) => a.platform === "JUMIA");
+      const snapshotByKey = new Map<string, (typeof digestSnapshots)[number]>();
       const latestDigestByAccount = new Map<string, (typeof digestSnapshots)[number]>();
+
       for (const snapshot of digestSnapshots) {
+        snapshotByKey.set(`${snapshot.accountId}:${snapshot.bucket}`, snapshot);
         const prev = latestDigestByAccount.get(snapshot.accountId);
         if (!prev || snapshot.receivedAt.getTime() > prev.receivedAt.getTime()) {
           latestDigestByAccount.set(snapshot.accountId, snapshot);
         }
       }
-      const todaysDigests = Array.from(latestDigestByAccount.values()).sort((a, b) =>
-        a.account.displayName.localeCompare(b.account.displayName),
+
+      const todaysDigests = jumiaAccounts.map((account) => {
+        const latest = latestDigestByAccount.get(account.id);
+        return {
+          id: latest?.id ?? `${account.id}:latest`,
+          account,
+          newOrders: latest?.newOrders ?? 0,
+          pendingToday: latest?.pendingToday ?? 0,
+          deliveredToday: latest?.deliveredToday ?? 0,
+          returnedToday: latest?.returnedToday ?? 0,
+          receivedAt: latest?.receivedAt ?? null,
+        };
+      });
+
+      const digestSnapshotRows = jumiaAccounts.flatMap((account) =>
+        (["MORNING", "MIDDAY"] as const).map((bucket) => {
+          const found = snapshotByKey.get(`${account.id}:${bucket}`);
+          return {
+            id: found?.id ?? `${account.id}:${bucket}`,
+            account,
+            bucket,
+            newOrders: found?.newOrders ?? 0,
+            pendingToday: found?.pendingToday ?? 0,
+            deliveredToday: found?.deliveredToday ?? 0,
+            returnedToday: found?.returnedToday ?? 0,
+            receivedAt: found?.receivedAt ?? null,
+          };
+        }),
       );
 
       const digestTotals = todaysDigests.reduce(
@@ -153,7 +183,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         { newOrders: 0, pending: 0, delivered: 0, returned: 0 },
       );
 
-      const digestSnapshotTotals = digestSnapshots.reduce(
+      const digestSnapshotTotals = digestSnapshotRows.reduce(
         (acc, s) => {
           const key = s.bucket === "MORNING" ? "morning" : "midday";
           acc[key].newOrders += s.newOrders ?? 0;
@@ -179,9 +209,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         failedToday,
         digestTotals,
         todaysDigests,
-        digestSnapshots: digestSnapshots
-          .slice()
-          .sort((a, b) => (a.bucket === b.bucket ? a.account.displayName.localeCompare(b.account.displayName) : a.bucket.localeCompare(b.bucket))),
+        digestSnapshots: digestSnapshotRows,
         digestSnapshotTotals,
         openReturnsRows,
         returnsWaitingPickup,
@@ -384,7 +412,9 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                         <td className="px-4 py-4 text-right text-slate-200">{d.pendingToday}</td>
                         <td className="px-4 py-4 text-right text-slate-200">{d.deliveredToday}</td>
                         <td className="px-4 py-4 text-right text-slate-200">{d.returnedToday}</td>
-                        <td className="px-4 py-4 text-slate-200">{formatNairobiDate(new Date(d.receivedAt))}</td>
+                        <td className="px-4 py-4 text-slate-200">
+                          {d.receivedAt ? formatNairobiDate(new Date(d.receivedAt)) : "—"}
+                        </td>
                       </tr>
                     ))}
                     {!stats.todaysDigests.length ? (
@@ -425,7 +455,9 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                           <td className="px-4 py-4 text-right text-slate-200">{s.pendingToday}</td>
                           <td className="px-4 py-4 text-right text-slate-200">{s.deliveredToday}</td>
                           <td className="px-4 py-4 text-right text-slate-200">{s.returnedToday}</td>
-                          <td className="px-4 py-4 text-slate-200">{formatNairobiDate(new Date(s.receivedAt))}</td>
+                          <td className="px-4 py-4 text-slate-200">
+                            {s.receivedAt ? formatNairobiDate(new Date(s.receivedAt)) : "—"}
+                          </td>
                         </tr>
                       ))}
                       {!stats.digestSnapshots.length ? (
