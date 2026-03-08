@@ -667,7 +667,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
           const pickup = parseJumiaReturnPickup(bodyText);
           if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
 
-          const shopLabel = extractJumiaShopLabel(subject, bodyText);
+          const shopLabel = extractJumiaReturnShopLabel(subject, bodyText);
           const account = await mapAccountForEmail({
             platform,
             mailboxEmail: mailbox.email,
@@ -860,6 +860,20 @@ function extractJumiaShopLabel(subject: string | null, bodyText: string): string
   return null;
 }
 
+function extractJumiaReturnShopLabel(subject: string | null, bodyText: string): string | null {
+  const s = (subject ?? "").trim();
+  // e.g. "08-03-2026: Sky Store Ke, your Jumia return item(s) are ready for pickup ..."
+  const fromSubject = s.match(/^\d{2}-\d{2}-\d{4}:\s*([^,]+?),\s*your\s+jumia\s+return\s+item/i);
+  if (fromSubject?.[1]) return fromSubject[1].trim();
+
+  const t = normalizeBodyText(bodyText);
+  // e.g. "Dear Betech Store,"
+  const fromDear = t.match(/\bDear\s+([^,\n\r]{2,80})\s*,/i);
+  if (fromDear?.[1] && !/vendor team|jumia/i.test(fromDear[1])) return fromDear[1].trim();
+
+  return null;
+}
+
 async function applyParsedMarketplaceEmail(opts: {
   mailboxId: string;
   mailboxEmail: string;
@@ -980,7 +994,7 @@ async function applyParsedMarketplaceEmail(opts: {
       const pickup = parseJumiaReturnPickup(bodyText);
       if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
 
-      const shopLabel = extractJumiaShopLabel(opts.message.subject, bodyText);
+      const shopLabel = extractJumiaReturnShopLabel(opts.message.subject, bodyText);
       const account = await mapAccountForEmail({
         platform,
         mailboxEmail: opts.mailboxEmail,
