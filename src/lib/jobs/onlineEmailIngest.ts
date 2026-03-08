@@ -28,6 +28,17 @@ const afterSalesKeywords = [
   "refund request",
 ];
 
+const JUMIA_ACCOUNT_ALIASES: Record<string, string[]> = {
+  "betech store": ["betech store", "bstore", "bstore3600"],
+  "hitech power": ["hitech power", "hitechpower", "hitechpower3600"],
+  "sky store ke": ["sky store ke", "sky store", "skystore", "skystore981"],
+  "betech solar solution": ["betech solar solution", "betech solar", "betechsolar"],
+  "jm latest collections": ["jm latest collections", "jm collections", "jm collection", "jmcollection3600"],
+  "labtech kenya": ["labtech kenya", "labtech", "labtech425"],
+  "maxton enterprise": ["maxton enterprise", "maxton", "maxaccess56"],
+  "jude collection": ["jude collection", "kiokojackson88"],
+};
+
 const NAIROBI_TZ = "Africa/Nairobi";
 const NAIROBI_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: NAIROBI_TZ,
@@ -38,6 +49,16 @@ const NAIROBI_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 
 function normalizeKey(input: string | null | undefined): string {
   return (input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeLoose(input: string | null | undefined): string {
+  return (input ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function localPart(email: string | null | undefined): string {
+  const s = normalizeKey(email);
+  const i = s.indexOf("@");
+  return i >= 0 ? s.slice(0, i) : s;
 }
 
 function normalizeBodyText(input: string): string {
@@ -401,20 +422,45 @@ async function mapAccountForEmail(opts: {
   const byForwarder = (email: string) =>
     accounts.find((a) => (a.forwarderEmails ?? []).map((e) => normalizeKey(e)).includes(email)) ?? null;
 
+  const byDisplayLoose = (label: string) => {
+    const target = normalizeLoose(label);
+    if (!target) return null;
+    return (
+      accounts.find((a) => normalizeLoose(a.displayName) === target) ??
+      accounts.find((a) => normalizeLoose(a.displayName).includes(target) || target.includes(normalizeLoose(a.displayName))) ??
+      null
+    );
+  };
+
+  const byAlias = (raw: string) => {
+    const key = normalizeKey(raw);
+    if (!key) return null;
+    const aliasMatch = Object.entries(JUMIA_ACCOUNT_ALIASES).find(([, aliases]) => aliases.some((a) => key.includes(a) || a.includes(key)));
+    if (!aliasMatch) return null;
+    const canonical = aliasMatch[0];
+    return accounts.find((a) => normalizeKey(a.displayName) === canonical) ?? byDisplayLoose(canonical);
+  };
+
   const byPrimary = accounts.find((a) => normalizeKey(a.primaryInboxEmail) === mailboxEmail) ?? null;
   if (forwardedFromEmail) {
     const match = byForwarder(forwardedFromEmail);
     if (match) return { id: match.id, displayName: match.displayName, platform: match.platform };
+    const alias = byAlias(forwardedFromEmail) ?? byAlias(localPart(forwardedFromEmail));
+    if (alias) return { id: alias.id, displayName: alias.displayName, platform: alias.platform };
   }
   if (fromEmail) {
     const match = byForwarder(fromEmail);
     if (match) return { id: match.id, displayName: match.displayName, platform: match.platform };
+    const alias = byAlias(fromEmail) ?? byAlias(localPart(fromEmail));
+    if (alias) return { id: alias.id, displayName: alias.displayName, platform: alias.platform };
   }
   if (shopLabel) {
     const match = accounts.find((a) => normalizeKey(a.displayName) === shopLabel) ?? null;
     if (match) return { id: match.id, displayName: match.displayName, platform: match.platform };
     const loose = accounts.find((a) => normalizeKey(a.displayName).includes(shopLabel) || shopLabel.includes(normalizeKey(a.displayName)));
     if (loose) return { id: loose.id, displayName: loose.displayName, platform: loose.platform };
+    const alias = byAlias(shopLabel) ?? byDisplayLoose(shopLabel);
+    if (alias) return { id: alias.id, displayName: alias.displayName, platform: alias.platform };
   }
   if (byPrimary) return { id: byPrimary.id, displayName: byPrimary.displayName, platform: byPrimary.platform };
   return null;
