@@ -64,10 +64,15 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
 
   const stats = await (async () => {
     try {
-      const [statusCounts, lastMessage, digestSnapshots, openReturns, pendingKilimallByAccount, openAfterSales] =
+      const [statusCounts, parseSourceCounts, lastMessage, digestSnapshots, openReturns, pendingKilimallByAccount, openAfterSales] =
         await Promise.all([
           prisma.marketplaceEmailMessage.groupBy({
             by: ["parseStatus"],
+            where: { receivedAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc } },
+            _count: { _all: true },
+          }),
+          prisma.marketplaceEmailMessage.groupBy({
+            by: ["parseSource"],
             where: { receivedAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc } },
             _count: { _all: true },
           }),
@@ -117,6 +122,12 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
       const statusCountMap = new Map(statusCounts.map((r) => [r.parseStatus, r._count._all]));
       const parsedToday = statusCountMap.get("PARSED") ?? 0;
       const failedToday = statusCountMap.get("FAILED") ?? 0;
+      const parseSourceCountMap = new Map(parseSourceCounts.map((r) => [r.parseSource, r._count._all]));
+      const parseSourceBreakdown = {
+        ruleBased: parseSourceCountMap.get("RULE_BASED") ?? 0,
+        aiFallback: parseSourceCountMap.get("AI_FALLBACK") ?? 0,
+        aiFallbackFailed: parseSourceCountMap.get("AI_FALLBACK_FAILED") ?? 0,
+      };
 
       const accounts = await prisma.marketplaceAccount.findMany({
         where: { isActive: true },
@@ -233,6 +244,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
         lastMessageAt: lastMessage?.receivedAt ?? null,
         parsedToday,
         failedToday,
+        parseSourceBreakdown,
         digestTotals,
         todaysDigests,
         digestSnapshots: digestSnapshotRows,
@@ -414,6 +426,17 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
                   Last received {stats.lastMessageAt ? formatNairobiDate(new Date(stats.lastMessageAt)) : "—"}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full border border-white/10 bg-slate-950/50 px-2.5 py-1 text-slate-300">
+                Rule-based: <span className="font-semibold text-slate-100">{stats.parseSourceBreakdown.ruleBased}</span>
+              </span>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                AI fallback: <span className="font-semibold">{stats.parseSourceBreakdown.aiFallback}</span>
+              </span>
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+                AI fallback failed: <span className="font-semibold">{stats.parseSourceBreakdown.aiFallbackFailed}</span>
+              </span>
             </div>
           </section>
             );
