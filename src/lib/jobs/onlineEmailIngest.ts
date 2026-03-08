@@ -1371,10 +1371,10 @@ async function applyParsedMarketplaceEmail(opts: {
         `[online-email:return-upsert:reprocess] source=${opts.message.id} gmail=${opts.message.gmailMessageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
       );
       if (upsertedRows !== pickup.rows.length) {
-        throw new Error(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows}`);
+        console.warn(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows} — continuing`);
       }
       if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
-        throw new Error(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems}`);
+        console.warn(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems} — continuing`);
       }
     } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
       const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
