@@ -173,6 +173,18 @@ function inferParserType(subject: string | null, bodyText: string, platform: Pla
   return MarketplaceEmailParserType.UNKNOWN;
 }
 
+function validateJumiaReturnPickupExtraction(pickup: ReturnType<typeof parseJumiaReturnPickup>): { ok: boolean; reason: string | null } {
+  if (!pickup) return { ok: false, reason: "JUMIA_RETURN_PICKUP_NOT_MATCHED" };
+  if (!pickup.rows.length) return { ok: false, reason: "JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED" };
+  if (pickup.totalItems != null && pickup.rows.length < pickup.totalItems) {
+    return {
+      ok: false,
+      reason: `JUMIA_RETURN_PICKUP_PARTIAL_ROWS rows=${pickup.rows.length} totalItems=${pickup.totalItems}`,
+    };
+  }
+  return { ok: true, reason: null };
+}
+
 function isMarketplaceLookingEmail(opts: { subject: string | null; fromEmail: string | null; bodyText: string; platform: Platform | null }): boolean {
   if (opts.platform) return true;
   const hay = normalizeBodyText(`${opts.fromEmail ?? ""}\n${opts.subject ?? ""}\n${opts.bodyText}`).toLowerCase();
@@ -224,7 +236,7 @@ async function resolveMarketplaceParse(opts: {
   });
   const ruleWeak =
     (parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT && !digest) ||
-    (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP && (!pickup || pickup.rows.length === 0)) ||
+    (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP && !validateJumiaReturnPickupExtraction(pickup).ok) ||
     (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER && !kilimall);
   const unknownButMarketplace = parserType === MarketplaceEmailParserType.UNKNOWN && marketplaceLooking && opts.bodyText.trim().length > 0;
   const shouldAttemptAi = AI_FALLBACK_ENABLED && (ruleWeak || unknownButMarketplace);
@@ -942,10 +954,16 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
             },
           });
         } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
-          const pickup = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
-          if (!pickup || pickup.rows.length === 0) throw new Error("JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED");
-
+          const pickupCandidate = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
           const shopLabel = extractJumiaReturnShopLabel(subject, bodyText);
+          const pickupValidation = validateJumiaReturnPickupExtraction(pickupCandidate);
+          const extractedTrackings = (pickupCandidate?.rows ?? []).map((r) => r.trackingNumber);
+          console.info(
+            `[online-email:return-parse] source=${emailRow.id} gmail=${messageId} shopLabel="${shopLabel ?? ""}" station="${pickupCandidate?.stationName ?? ""}" totalItems=${pickupCandidate?.totalItems ?? "null"} totalPackages=${pickupCandidate?.totalPackages ?? "null"} rows=${pickupCandidate?.rows.length ?? 0} trackings=${JSON.stringify(extractedTrackings)}`,
+          );
+          if (!pickupValidation.ok) throw new Error(pickupValidation.reason ?? "JUMIA_RETURN_PICKUP_VALIDATION_FAILED");
+          const pickup = pickupCandidate!;
+
           const account = await mapAccountForEmail({
             platform,
             mailboxEmail: mailbox.email,
@@ -955,6 +973,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
           });
           if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
 
+          let upsertedRows = 0;
           for (const row of pickup.rows) {
             const dueAt = addDays(receivedAt, Math.max(0, row.remainingDays));
             const rawPayload = {
@@ -993,6 +1012,17 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
                 sourceEmailMessageId: emailRow.id,
               },
             });
+            upsertedRows += 1;
+          }
+
+          console.info(
+            `[online-email:return-upsert] source=${emailRow.id} gmail=${messageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
+          );
+          if (upsertedRows !== pickup.rows.length) {
+            throw new Error(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows}`);
+          }
+          if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
+            throw new Error(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems}`);
           }
         } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
           const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
@@ -1273,10 +1303,16 @@ async function applyParsedMarketplaceEmail(opts: {
       });
       if (wroteSnapshot.wrote) updatedDigestSnapshots += 1;
     } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
-      const pickup = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
-      if (!pickup || pickup.rows.length === 0) throw new Error("JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED");
-
+      const pickupCandidate = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
       const shopLabel = extractJumiaReturnShopLabel(opts.message.subject, bodyText);
+      const pickupValidation = validateJumiaReturnPickupExtraction(pickupCandidate);
+      const extractedTrackings = (pickupCandidate?.rows ?? []).map((r) => r.trackingNumber);
+      console.info(
+        `[online-email:return-parse:reprocess] source=${opts.message.id} gmail=${opts.message.gmailMessageId} shopLabel="${shopLabel ?? ""}" station="${pickupCandidate?.stationName ?? ""}" totalItems=${pickupCandidate?.totalItems ?? "null"} totalPackages=${pickupCandidate?.totalPackages ?? "null"} rows=${pickupCandidate?.rows.length ?? 0} trackings=${JSON.stringify(extractedTrackings)}`,
+      );
+      if (!pickupValidation.ok) throw new Error(pickupValidation.reason ?? "JUMIA_RETURN_PICKUP_VALIDATION_FAILED");
+      const pickup = pickupCandidate!;
+
       const account = await mapAccountForEmail({
         platform,
         mailboxEmail: opts.mailboxEmail,
@@ -1286,6 +1322,7 @@ async function applyParsedMarketplaceEmail(opts: {
       });
       if (!account) throw new Error("ACCOUNT_MAPPING_FAILED");
 
+      let upsertedRows = 0;
       for (const row of pickup.rows) {
         const dueAt = addDays(opts.message.receivedAt, Math.max(0, row.remainingDays));
         const rawPayload = {
@@ -1325,6 +1362,16 @@ async function applyParsedMarketplaceEmail(opts: {
           },
         });
         updatedReturns += 1;
+        upsertedRows += 1;
+      }
+      console.info(
+        `[online-email:return-upsert:reprocess] source=${opts.message.id} gmail=${opts.message.gmailMessageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
+      );
+      if (upsertedRows !== pickup.rows.length) {
+        throw new Error(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows}`);
+      }
+      if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
+        throw new Error(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems}`);
       }
     } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
       const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
