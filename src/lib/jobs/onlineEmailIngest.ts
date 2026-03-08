@@ -183,14 +183,15 @@ function validateJumiaReturnPickupExtraction(pickup: ReturnType<typeof parseJumi
     // Accept partial parses (some emails/table formats omit rows or are hard to parse).
     // Downstream code will still upsert whatever rows were extracted.
     return { ok: true, reason: `JUMIA_RETURN_PICKUP_PARTIAL_ROWS rows=${pickup.rows.length} totalItems=${pickup.totalItems}` };
-            `[online-email:return-upsert] source=${opts.message.id} gmail=${opts.message.gmailMessageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
+  }
   return { ok: true, reason: null };
-        if (upsertedRows !== pickup.rows.length) {
-          console.warn(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows} — continuing`);
-        }
-        if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
-          console.warn(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems} — continuing`);
-        }
+}
+
+function isMarketplaceLookingEmail(opts: { subject: string | null; fromEmail: string | null; bodyText: string; platform: Platform | null }): boolean {
+  if (opts.platform) return true;
+  const hay = normalizeBodyText(`${opts.fromEmail ?? ""}\n${opts.subject ?? ""}\n${opts.bodyText}`).toLowerCase();
+  const from = normalizeKey(opts.fromEmail);
+
   const senderLooks =
     from.endsWith("@jumia.com") ||
     from.endsWith("@jumia.co.ke") ||
