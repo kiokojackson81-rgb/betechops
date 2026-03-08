@@ -64,7 +64,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
 
   const stats = await (async () => {
     try {
-      const [statusCounts, lastMessage, digestSnapshots, openReturnsByAccount, pendingKilimallByAccount, openAfterSales] =
+      const [statusCounts, lastMessage, digestSnapshots, openReturns, pendingKilimallByAccount, openAfterSales] =
         await Promise.all([
           prisma.marketplaceEmailMessage.groupBy({
             by: ["parseStatus"],
@@ -80,11 +80,23 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
             include: { account: { select: { id: true, displayName: true, platform: true } } },
             orderBy: [{ receivedAt: "desc" }, { account: { displayName: "asc" } }],
           }),
-          prisma.marketplaceReturn.groupBy({
-            by: ["accountId"],
-            where: { status: "WAITING_AT_HUB" },
-            _count: { _all: true },
-            _min: { dueAt: true },
+          prisma.marketplaceReturn.findMany({
+            where: {
+              status: "WAITING_AT_HUB",
+              OR: [
+                { sourceEmailMessage: { receivedAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc } } },
+                {
+                  sourceEmailMessageId: null,
+                  createdAt: { gte: selectedWindow.startUtc, lt: selectedWindow.endUtc },
+                },
+              ],
+            },
+            include: {
+              account: { select: { id: true, displayName: true, platform: true } },
+              sourceEmailMessage: { select: { receivedAt: true } },
+            },
+            orderBy: { dueAt: "asc" },
+            take: 500,
           }),
           prisma.marketplaceOrder.groupBy({
             by: ["accountId"],
@@ -113,15 +125,29 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
       });
       const accountsById = new Map(accounts.map((a) => [a.id, a]));
 
-      const openReturnsRows = openReturnsByAccount
-        .map((r) => ({
-          accountId: r.accountId,
-          accountName: accountsById.get(r.accountId)?.displayName ?? r.accountId,
-          platform: accountsById.get(r.accountId)?.platform ?? "JUMIA",
-          count: r._count._all,
-          earliestDueAt: r._min.dueAt ?? null,
-        }))
-        .sort((a, b) => b.count - a.count);
+      const openReturnsMap = new Map<
+        string,
+        { accountId: string; accountName: string; platform: string; count: number; earliestDueAt: Date | null }
+      >();
+      for (const row of openReturns) {
+        const key = row.account.id;
+        const existing = openReturnsMap.get(key);
+        if (!existing) {
+          openReturnsMap.set(key, {
+            accountId: row.account.id,
+            accountName: row.account.displayName,
+            platform: row.account.platform,
+            count: 1,
+            earliestDueAt: row.dueAt ?? null,
+          });
+          continue;
+        }
+        existing.count += 1;
+        if (!existing.earliestDueAt || (row.dueAt && row.dueAt.getTime() < existing.earliestDueAt.getTime())) {
+          existing.earliestDueAt = row.dueAt ?? existing.earliestDueAt;
+        }
+      }
+      const openReturnsRows = Array.from(openReturnsMap.values()).sort((a, b) => b.count - a.count);
 
       const pendingKilimallRows = pendingKilimallByAccount
         .map((r) => ({
@@ -364,7 +390,7 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Returns waiting pickup</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{stats.returnsWaitingPickup}</p>
-                <p className="text-xs text-slate-400">Waiting at hub</p>
+                <p className="text-xs text-slate-400">Waiting at hub (selected day)</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Kilimall pending</p>
@@ -506,7 +532,10 @@ export default async function AdminOnlineEmailIntelligencePage(props: {
               </div>
               <div className="mt-3 text-xs text-slate-400">
                 See full list on{" "}
-                <Link className="font-semibold text-emerald-200 hover:text-emerald-100" href="/admin/online/returns">
+                <Link
+                  className="font-semibold text-emerald-200 hover:text-emerald-100"
+                  href={`/admin/online/returns?status=WAITING_AT_HUB&period=${encodeURIComponent(selectedWindow.dayIso === todayWindow.dayIso ? "today" : selectedWindow.dayIso === yesterdayWindow.dayIso ? "yesterday" : "day")}&day=${encodeURIComponent(selectedWindow.dayIso)}`}
+                >
                   Returns
                 </Link>
                 .
