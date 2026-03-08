@@ -177,18 +177,20 @@ function validateJumiaReturnPickupExtraction(pickup: ReturnType<typeof parseJumi
   if (!pickup) return { ok: false, reason: "JUMIA_RETURN_PICKUP_NOT_MATCHED" };
   if (!pickup.rows.length) return { ok: false, reason: "JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED" };
   if (pickup.totalItems != null && pickup.rows.length < pickup.totalItems) {
-    return {
-      ok: false,
-      reason: `JUMIA_RETURN_PICKUP_PARTIAL_ROWS rows=${pickup.rows.length} totalItems=${pickup.totalItems}`,
-    };
-  }
+    console.warn(
+      `[online-email:return-validate] partial rows parsed=${pickup.rows.length} expected=${pickup.totalItems}; accepting partial parse`,
+    );
+    // Accept partial parses (some emails/table formats omit rows or are hard to parse).
+    // Downstream code will still upsert whatever rows were extracted.
+    return { ok: true, reason: `JUMIA_RETURN_PICKUP_PARTIAL_ROWS rows=${pickup.rows.length} totalItems=${pickup.totalItems}` };
+            `[online-email:return-upsert] source=${opts.message.id} gmail=${opts.message.gmailMessageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
   return { ok: true, reason: null };
-}
-
-function isMarketplaceLookingEmail(opts: { subject: string | null; fromEmail: string | null; bodyText: string; platform: Platform | null }): boolean {
-  if (opts.platform) return true;
-  const hay = normalizeBodyText(`${opts.fromEmail ?? ""}\n${opts.subject ?? ""}\n${opts.bodyText}`).toLowerCase();
-  const from = normalizeKey(opts.fromEmail);
+        if (upsertedRows !== pickup.rows.length) {
+          console.warn(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows} — continuing`);
+        }
+        if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
+          console.warn(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems} — continuing`);
+        }
   const senderLooks =
     from.endsWith("@jumia.com") ||
     from.endsWith("@jumia.co.ke") ||
@@ -1019,10 +1021,10 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
             `[online-email:return-upsert] source=${emailRow.id} gmail=${messageId} accountId=${account.id} accountName="${account.displayName}" totalItems=${pickup.totalItems ?? "null"} rows=${pickup.rows.length} upserts=${upsertedRows}`,
           );
           if (upsertedRows !== pickup.rows.length) {
-            throw new Error(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows}`);
+            console.warn(`JUMIA_RETURN_PICKUP_UPSERT_MISMATCH rows=${pickup.rows.length} upserts=${upsertedRows} — continuing`);
           }
           if (pickup.totalItems != null && upsertedRows < pickup.totalItems) {
-            throw new Error(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems}`);
+            console.warn(`JUMIA_RETURN_PICKUP_PARTIAL_UPSERT rows=${upsertedRows} totalItems=${pickup.totalItems} — continuing`);
           }
         } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
           const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
