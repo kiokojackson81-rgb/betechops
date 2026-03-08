@@ -1,7 +1,13 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { MarketplaceDigestBucket, MarketplaceEmailParseStatus, MarketplaceEmailParserType, Platform } from "@prisma/client";
+import {
+  MarketplaceDigestBucket,
+  MarketplaceEmailParseSource,
+  MarketplaceEmailParseStatus,
+  MarketplaceEmailParserType,
+  Platform,
+} from "@prisma/client";
 import {
   decodeMaybeQuotedPrintable,
   extractBodyParts,
@@ -12,9 +18,11 @@ import {
   refreshGmailAccessToken,
   type GmailHeader,
 } from "@/lib/integrations/gmail";
+import { extractMarketplaceEmailWithAI } from "@/lib/jobs/marketplaceEmailAiFallback";
 
 const DEFAULT_LOOKBACK_DAYS = Number.parseInt(process.env.ONLINE_EMAIL_LOOKBACK_DAYS || "", 10) || 2;
 const DEFAULT_MAX_MESSAGES = Number.parseInt(process.env.ONLINE_EMAIL_MAX_MESSAGES || "", 10) || 250;
+const AI_FALLBACK_ENABLED = String(process.env.MARKETPLACE_EMAIL_AI_FALLBACK || "").toLowerCase() === "true";
 
 const afterSalesKeywords = [
   "after sales",
@@ -163,6 +171,132 @@ function inferParserType(subject: string | null, bodyText: string, platform: Pla
     return MarketplaceEmailParserType.KILIMALL_AFTERSALES;
   }
   return MarketplaceEmailParserType.UNKNOWN;
+}
+
+function isMarketplaceLookingEmail(opts: { subject: string | null; fromEmail: string | null; bodyText: string; platform: Platform | null }): boolean {
+  if (opts.platform) return true;
+  const hay = normalizeBodyText(`${opts.fromEmail ?? ""}\n${opts.subject ?? ""}\n${opts.bodyText}`).toLowerCase();
+  const from = normalizeKey(opts.fromEmail);
+  const senderLooks =
+    from.endsWith("@jumia.com") ||
+    from.endsWith("@jumia.co.ke") ||
+    from.endsWith("@kilimall.com") ||
+    from.includes("jumia") ||
+    from.includes("kilimall");
+  if (senderLooks) return true;
+  return (
+    hay.includes("jumia") ||
+    hay.includes("kilimall") ||
+    hay.includes("ordersn") ||
+    hay.includes("today's order summary") ||
+    hay.includes("daily order report") ||
+    hay.includes("ready for pickup")
+  );
+}
+
+async function resolveMarketplaceParse(opts: {
+  subject: string | null;
+  fromEmail: string | null;
+  bodyText: string;
+}): Promise<{
+  platform: Platform | null;
+  parserType: MarketplaceEmailParserType;
+  parseSource: MarketplaceEmailParseSource;
+  aiFailureReason: string | null;
+  digest: ReturnType<typeof parseJumiaDailyDigest>;
+  pickup: ReturnType<typeof parseJumiaReturnPickup>;
+  kilimall: ReturnType<typeof parseKilimallNewOrder>;
+}> {
+  const platform = inferPlatform(opts.fromEmail, opts.subject, opts.bodyText);
+  let parserType = inferParserType(opts.subject, opts.bodyText, platform);
+  let digest = parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT ? parseJumiaDailyDigest(opts.bodyText, opts.subject) : null;
+  let pickup = parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP ? parseJumiaReturnPickup(opts.bodyText) : null;
+  let kilimall = parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER ? parseKilimallNewOrder(opts.bodyText) : null;
+
+  let parseSource: MarketplaceEmailParseSource = MarketplaceEmailParseSource.RULE_BASED;
+  let aiFailureReason: string | null = null;
+
+  const marketplaceLooking = isMarketplaceLookingEmail({
+    subject: opts.subject,
+    fromEmail: opts.fromEmail,
+    bodyText: opts.bodyText,
+    platform,
+  });
+  const ruleWeak =
+    (parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT && !digest) ||
+    (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP && (!pickup || pickup.rows.length === 0)) ||
+    (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER && !kilimall);
+  const unknownButMarketplace = parserType === MarketplaceEmailParserType.UNKNOWN && marketplaceLooking && opts.bodyText.trim().length > 0;
+  const shouldAttemptAi = AI_FALLBACK_ENABLED && (ruleWeak || unknownButMarketplace);
+
+  if (shouldAttemptAi) {
+    const trigger = unknownButMarketplace ? "UNKNOWN_MARKETPLACE" : "INCOMPLETE_RULE_PARSE";
+    console.info(`[online-email-ai] fallback triggered (${trigger}) subject="${opts.subject ?? ""}" from="${opts.fromEmail ?? ""}"`);
+    const ai = await extractMarketplaceEmailWithAI({
+      subject: opts.subject,
+      fromEmail: opts.fromEmail,
+      bodyText: opts.bodyText,
+      parserHint: parserType,
+    });
+    if (ai.ok && ai.data) {
+      if (ai.data.type === "JUMIA_DAILY_REPORT") {
+        const d = parseDateOnlyUtc(ai.data.reportDate);
+        if (d) {
+          parserType = MarketplaceEmailParserType.JUMIA_DAILY_REPORT;
+          digest = {
+            digestDate: d,
+            newOrders: ai.data.newOrders,
+            pendingToday: ai.data.pendingToday,
+            readyToShip: ai.data.readyToShip,
+            returnedToday: ai.data.returnedToday,
+            cancelledToday: ai.data.cancelledToday,
+            deliveredToday: ai.data.deliveredToday,
+            deliveryFailed: ai.data.deliveryFailed,
+          };
+          parseSource = MarketplaceEmailParseSource.AI_FALLBACK;
+        } else {
+          aiFailureReason = "AI_DAILY_DATE_INVALID";
+          parseSource = MarketplaceEmailParseSource.AI_FALLBACK_FAILED;
+        }
+      } else if (ai.data.type === "JUMIA_RETURN_PICKUP") {
+        parserType = MarketplaceEmailParserType.JUMIA_RETURN_PICKUP;
+        pickup = {
+          stationName: ai.data.stationName,
+          totalItems: ai.data.totalItems,
+          totalPackages: ai.data.totalPackages,
+          rows: ai.data.rows.map((row) => ({
+            trackingNumber: row.trackingNumber,
+            orderNumber: row.orderNumber ?? null,
+            itemDescription: row.itemDescription ?? "",
+            remainingDays: Math.max(0, Number.isFinite(row.remainingDays ?? NaN) ? Number(row.remainingDays) : 0),
+          })),
+        };
+        parseSource = MarketplaceEmailParseSource.AI_FALLBACK;
+      } else if (ai.data.type === "KILIMALL_NEW_ORDER") {
+        parserType = MarketplaceEmailParserType.KILIMALL_NEW_ORDER;
+        kilimall = {
+          shopLabel: ai.data.shopLabel,
+          orderNumber: ai.data.orderNumber,
+          itemTitle: ai.data.itemTitle,
+        };
+        parseSource = MarketplaceEmailParseSource.AI_FALLBACK;
+      } else {
+        aiFailureReason = ai.data.reason ? `AI_UNKNOWN:${ai.data.reason}` : "AI_UNKNOWN_MARKETPLACE_EMAIL";
+        parseSource = MarketplaceEmailParseSource.AI_FALLBACK_FAILED;
+      }
+    } else {
+      aiFailureReason = ai.error ?? "AI_FALLBACK_FAILED";
+      parseSource = MarketplaceEmailParseSource.AI_FALLBACK_FAILED;
+    }
+
+    if (parseSource === MarketplaceEmailParseSource.AI_FALLBACK_FAILED) {
+      console.warn(`[online-email-ai] fallback failed subject="${opts.subject ?? ""}" reason="${aiFailureReason ?? "unknown"}"`);
+    } else {
+      console.info(`[online-email-ai] fallback parsed type=${parserType}`);
+    }
+  }
+
+  return { platform, parserType, parseSource, aiFailureReason, digest, pickup, kilimall };
 }
 
 function extractForwardedFromEmail(bodyText: string): string | null {
@@ -715,11 +849,9 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
       const bodyText = pickRicherBodyText(text, html);
 
       const forwardedFromEmail = extractForwardedFromEmail(bodyText);
-
-      const platform = inferPlatform(fromEmail, subject, bodyText);
-      const parserType = inferParserType(subject, bodyText, platform);
-
-      const parsedKilimall = parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER ? parseKilimallNewOrder(bodyText) : null;
+      const resolved = await resolveMarketplaceParse({ subject, fromEmail, bodyText });
+      const platform = resolved.platform;
+      const parserType = resolved.parserType;
 
       // Persist raw email first (never lose the record)
       const emailRow = await prisma.marketplaceEmailMessage.create({
@@ -737,20 +869,31 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
           rawBodyText: bodyText || null,
           parserType,
           parseStatus: MarketplaceEmailParseStatus.SKIPPED,
+          parseSource: resolved.parseSource,
+          parseError: resolved.aiFailureReason,
         },
         select: { id: true },
       });
       result.createdMessages += 1;
 
       if (!platform || parserType === MarketplaceEmailParserType.UNKNOWN) {
+        await prisma.marketplaceEmailMessage.update({
+          where: { id: emailRow.id },
+          data: {
+            parserType,
+            parseStatus: MarketplaceEmailParseStatus.SKIPPED,
+            parseSource: resolved.parseSource,
+            parseError: resolved.aiFailureReason,
+          },
+        });
         continue;
       }
 
       let parseStatus: MarketplaceEmailParseStatus = MarketplaceEmailParseStatus.PARSED;
-      let parseError: string | null = null;
+      let parseError: string | null = resolved.aiFailureReason;
       try {
         if (parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT) {
-          const digest = parseJumiaDailyDigest(bodyText, subject);
+          const digest = resolved.digest ?? parseJumiaDailyDigest(bodyText, subject);
           if (!digest) throw new Error("JUMIA_DAILY_DIGEST_NOT_MATCHED");
 
           const shopLabel = extractJumiaShopLabel(subject, bodyText);
@@ -799,8 +942,8 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
             },
           });
         } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
-          const pickup = parseJumiaReturnPickup(bodyText);
-          if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
+          const pickup = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
+          if (!pickup || pickup.rows.length === 0) throw new Error("JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED");
 
           const shopLabel = extractJumiaReturnShopLabel(subject, bodyText);
           const account = await mapAccountForEmail({
@@ -852,7 +995,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
             });
           }
         } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
-          const parsed = parsedKilimall ?? parseKilimallNewOrder(bodyText);
+          const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
           if (!parsed) throw new Error("KILIMALL_NEW_ORDER_NOT_MATCHED");
 
           const account = await mapAccountForEmail({
@@ -952,7 +1095,7 @@ export async function ingestOnlineMarketplaceEmails(opts?: { lookbackDays?: numb
 
       await prisma.marketplaceEmailMessage.update({
         where: { id: emailRow.id },
-        data: { parseStatus, parseError },
+        data: { parserType, parseStatus, parseSource: resolved.parseSource, parseError },
       });
     }
   }
@@ -1038,10 +1181,13 @@ async function applyParsedMarketplaceEmail(opts: {
 }> {
   const bodyText = getStoredBodyText(opts.message);
   const forwardedFromEmail = extractForwardedFromEmail(bodyText);
-
-  const platform = inferPlatform(opts.message.fromEmail, opts.message.subject, bodyText);
-  const parserType = inferParserType(opts.message.subject, bodyText, platform);
-  const parsedKilimall = parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER ? parseKilimallNewOrder(bodyText) : null;
+  const resolved = await resolveMarketplaceParse({
+    subject: opts.message.subject,
+    fromEmail: opts.message.fromEmail,
+    bodyText,
+  });
+  const platform = resolved.platform;
+  const parserType = resolved.parserType;
 
   let updatedDigests = 0;
   let updatedDigestSnapshots = 0;
@@ -1051,10 +1197,10 @@ async function applyParsedMarketplaceEmail(opts: {
 
   if (!platform || parserType === MarketplaceEmailParserType.UNKNOWN) {
     const parseStatus = MarketplaceEmailParseStatus.SKIPPED;
-    const parseError = null;
+    const parseError = resolved.aiFailureReason;
     await prisma.marketplaceEmailMessage.update({
       where: { id: opts.message.id },
-      data: { parserType, parseStatus, parseError },
+      data: { parserType, parseStatus, parseSource: resolved.parseSource, parseError },
     });
     return {
       reprocessed: 1,
@@ -1072,11 +1218,11 @@ async function applyParsedMarketplaceEmail(opts: {
   }
 
   let parseStatus: MarketplaceEmailParseStatus = MarketplaceEmailParseStatus.PARSED;
-  let parseError: string | null = null;
+  let parseError: string | null = resolved.aiFailureReason;
 
   try {
     if (parserType === MarketplaceEmailParserType.JUMIA_DAILY_REPORT) {
-      const digest = parseJumiaDailyDigest(bodyText, opts.message.subject);
+      const digest = resolved.digest ?? parseJumiaDailyDigest(bodyText, opts.message.subject);
       if (!digest) throw new Error("JUMIA_DAILY_DIGEST_NOT_MATCHED");
 
       const shopLabel = extractJumiaShopLabel(opts.message.subject, bodyText);
@@ -1127,8 +1273,8 @@ async function applyParsedMarketplaceEmail(opts: {
       });
       if (wroteSnapshot.wrote) updatedDigestSnapshots += 1;
     } else if (parserType === MarketplaceEmailParserType.JUMIA_RETURN_PICKUP) {
-      const pickup = parseJumiaReturnPickup(bodyText);
-      if (!pickup) throw new Error("JUMIA_RETURN_PICKUP_NOT_MATCHED");
+      const pickup = resolved.pickup ?? parseJumiaReturnPickup(bodyText);
+      if (!pickup || pickup.rows.length === 0) throw new Error("JUMIA_RETURN_PICKUP_ROWS_NOT_MATCHED");
 
       const shopLabel = extractJumiaReturnShopLabel(opts.message.subject, bodyText);
       const account = await mapAccountForEmail({
@@ -1181,7 +1327,7 @@ async function applyParsedMarketplaceEmail(opts: {
         updatedReturns += 1;
       }
     } else if (parserType === MarketplaceEmailParserType.KILIMALL_NEW_ORDER) {
-      const parsed = parsedKilimall ?? parseKilimallNewOrder(bodyText);
+      const parsed = resolved.kilimall ?? parseKilimallNewOrder(bodyText);
       if (!parsed) throw new Error("KILIMALL_NEW_ORDER_NOT_MATCHED");
 
       const account = await mapAccountForEmail({
@@ -1288,7 +1434,7 @@ async function applyParsedMarketplaceEmail(opts: {
 
   await prisma.marketplaceEmailMessage.update({
     where: { id: opts.message.id },
-    data: { parserType, parseStatus, parseError },
+    data: { parserType, parseStatus, parseSource: resolved.parseSource, parseError },
   });
 
   return {

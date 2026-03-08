@@ -29,10 +29,10 @@ export async function GET(request: Request) {
       receivedAt: true,
       parserType: true,
       parseStatus: true,
+      parseSource: true,
       parseError: true,
     },
   });
 
   return noStoreJson({ ok: true, mailboxEmail, mailboxId: mailbox.id, messages });
 }
-

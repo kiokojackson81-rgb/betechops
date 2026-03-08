@@ -1223,6 +1223,12 @@ enum MarketplaceEmailParseStatus {
   FAILED
 }
 
+enum MarketplaceEmailParseSource {
+  RULE_BASED
+  AI_FALLBACK
+  AI_FALLBACK_FAILED
+}
+
 model MarketplaceEmailMessage {
   id             String                      @id @default(cuid())
   mailboxId      String
@@ -1239,6 +1245,7 @@ model MarketplaceEmailMessage {
   rawBodyText    String?
   parserType     MarketplaceEmailParserType  @default(UNKNOWN)
   parseStatus    MarketplaceEmailParseStatus @default(SKIPPED)
+  parseSource    MarketplaceEmailParseSource @default(RULE_BASED)
   parseError     String?
   createdAt      DateTime                    @default(now())
   updatedAt      DateTime                    @updatedAt
