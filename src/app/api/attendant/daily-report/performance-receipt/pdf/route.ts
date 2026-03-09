@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import type { Role } from "@prisma/client";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { resolveTargetUserId } from "@/lib/resolveTargetUser";
@@ -26,6 +28,15 @@ type PosReceiptRow = {
   } | null;
 };
 
+type LedgerReceiptRow = {
+  id: string;
+  createdAt: Date;
+  receiptNumber: string | null;
+  receiptKey?: string | null;
+  sellingTotal: number;
+  paymentMethod: "MPESA" | "CASH";
+};
+
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -42,6 +53,29 @@ const toNumber = (value: unknown): number => {
 
 const formatKes = (value: number) =>
   `KES ${Math.round(value).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+
+async function resolveLetterheadDataUri(): Promise<string | null> {
+  const candidates = [
+    path.join(process.cwd(), "public", "letterhead.jpg"),
+    path.join(process.cwd(), "letterhead.jpg"),
+    path.join(process.cwd(), "public", "letterhead.jpeg"),
+    path.join(process.cwd(), "letterhead.jpeg"),
+    path.join(process.cwd(), "public", "letterhead.png"),
+    path.join(process.cwd(), "letterhead.png"),
+  ];
+
+  for (const absPath of candidates) {
+    try {
+      const buf = await fs.readFile(absPath);
+      const ext = path.extname(absPath).toLowerCase();
+      const mime = ext === ".png" ? "image/png" : "image/jpeg";
+      return `data:${mime};base64,${buf.toString("base64")}`;
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
 
 const extractReceiptAmount = (row: PosReceiptRow) => {
   const totals = row.totals ?? {};
@@ -62,6 +96,7 @@ const extractReceiptAmount = (row: PosReceiptRow) => {
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
+  letterheadDataUri: string | null;
   periodLabel: string;
   periodStartIso: string;
   periodEndIso: string;
@@ -117,6 +152,11 @@ function renderHtml(args: {
       </style>
     </head>
     <body>
+      ${
+        args.letterheadDataUri
+          ? `<div style="margin-bottom:12px;"><img src="${args.letterheadDataUri}" alt="Betech letterhead" style="width:100%; max-height:160px; object-fit:contain; object-position:left center;" /></div>`
+          : ""
+      }
       <div style="display:flex; justify-content:space-between; align-items:baseline; gap:16px;">
         <div>
           <h1>Performance receipt</h1>
@@ -199,7 +239,7 @@ export async function GET(req: Request) {
   const periodKeyParam = url.searchParams.get("periodKey") || url.searchParams.get("tradingPeriodKey");
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(new Date());
 
-  const [user, earnings, reportAgg] = await Promise.all([
+  const [user, earnings, reportAgg, letterheadDataUri] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
@@ -215,6 +255,7 @@ export async function GET(req: Request) {
         purchasesMade: true,
       },
     }),
+    resolveLetterheadDataUri(),
   ]);
 
   const ownerOr = [
@@ -275,9 +316,6 @@ export async function GET(req: Request) {
       normalizeReceiptNumber(row.receiptNumber) ||
       normalizeReceiptNumber(row.order?.orderNumber) ||
       row.id;
-    if (seen.has(canonical)) continue;
-    seen.add(canonical);
-
     const date = row.generatedAt ?? row.createdAt;
     const dateIso = new Date(date).toISOString().slice(0, 10);
     const receiptNumber = row.receiptNumber || row.order?.orderNumber || canonical;
@@ -285,10 +323,77 @@ export async function GET(req: Request) {
     const paymentMethod = normalizePaymentMethod(
       (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
     );
+    const dedupeKey = `${canonical}|${paymentMethod}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
     const status =
       (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN";
 
     rows.push({ dateIso, receiptNumber, amount, paymentMethod, status });
+  }
+
+  // Include marketing/support ledger receipts for attendants whose authoritative
+  // totals are sourced from those ledgers (e.g. Brendah).
+  const [marketingRows, supportRows] = await Promise.all([
+    prisma.marketingReceipt.findMany({
+      where: {
+        createdAt: { gte: period.start, lte: period.end },
+        dailyEntry: { submittedById: userId },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        receiptNumber: true,
+        receiptKey: true,
+        sellingTotal: true,
+        paymentMethod: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 1200,
+    }) as unknown as Promise<LedgerReceiptRow[]>,
+    prisma.supportReceipt.findMany({
+      where: {
+        createdAt: { gte: period.start, lte: period.end },
+        dailyEntry: { submittedById: userId },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        receiptNumber: true,
+        receiptKey: true,
+        sellingTotal: true,
+        paymentMethod: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 1200,
+    }) as unknown as Promise<LedgerReceiptRow[]>,
+  ]);
+
+  const appendLedgerRows = (entries: LedgerReceiptRow[], status: string) => {
+    for (const entry of entries) {
+      const canonical =
+        normalizeReceiptNumber(entry.receiptNumber) ||
+        normalizeReceiptNumber(entry.receiptKey || "") ||
+        entry.id;
+      const method = normalizePaymentMethod(entry.paymentMethod ?? "MPESA");
+      const dedupeKey = `${canonical}|${method}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      rows.push({
+        dateIso: entry.createdAt.toISOString().slice(0, 10),
+        receiptNumber: entry.receiptNumber || entry.receiptKey || canonical,
+        amount: Number(entry.sellingTotal ?? 0),
+        paymentMethod: method,
+        status,
+      });
+    }
+  };
+
+  appendLedgerRows(marketingRows, "MARKETING");
+  appendLedgerRows(supportRows, "SUPPORT");
+
+  if (rows.length > 0) {
+    rows.sort((a, b) => (a.dateIso < b.dateIso ? 1 : -1));
   }
 
   if (rows.length === 0) {
@@ -328,6 +433,7 @@ export async function GET(req: Request) {
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
     attendantEmail: user?.email ?? "",
+    letterheadDataUri,
     periodLabel: period.label,
     periodStartIso: period.start.toISOString().slice(0, 10),
     periodEndIso: period.end.toISOString().slice(0, 10),
