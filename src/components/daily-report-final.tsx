@@ -255,6 +255,9 @@ export default function DailyReportFinal() {
         setEarningsError(null);
         setEarningsSummary(data);
         setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
+        const payrollSales = Number(data.totalSales ?? 0);
+        const payrollItems = Number(data.totalItems ?? 0);
+        const payrollReceipts = Number(data.totalReceipts ?? 0);
 
         // Quick stats should reflect the daily-report submissions (the same page the user is on),
         // not marketing/support ledgers or POS-only views.
@@ -272,16 +275,19 @@ export default function DailyReportFinal() {
             const usePosTotals = Boolean(qsData.usePosTotals);
             const pos = (qsData.pos && typeof qsData.pos === "object") ? qsData.pos : null;
             const hasPosSales = usePosTotals && pos && Number(pos.totalSales ?? 0) > 0;
+            const summarySales = hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0);
+            const summaryItems = hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0);
+            const summaryReceipts = hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0);
 
             setServerQuickStats({
-              totalSales: hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0),
-              totalItems: hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0),
+              totalSales: Math.max(summarySales, payrollSales),
+              totalItems: Math.max(summaryItems, payrollItems),
               totalNewProducts: Number(qsData.totalNewProducts ?? 0),
               totalEditedProducts: Number(qsData.totalEditedProducts ?? 0),
               totalCopiedProducts: Number(qsData.totalCopiedProducts ?? 0),
               walkInsServed: Number(qsData.walkInsServed ?? 0),
               walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
-              totalReceipts: hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0),
+              totalReceipts: Math.max(summaryReceipts, payrollReceipts),
             });
           } else {
             // fallback to earnings payload if daily-report summary isn't available
