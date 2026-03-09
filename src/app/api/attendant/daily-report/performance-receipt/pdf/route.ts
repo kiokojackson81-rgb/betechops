@@ -354,7 +354,20 @@ export async function GET(req: Request) {
     }
 
     if (puppeteer) {
-      browser = await puppeteer.launch({ headless: true, defaultViewport: { width: 1280, height: 900 } });
+      try {
+        browser = await puppeteer.launch({
+          headless: "new",
+          defaultViewport: { width: 1280, height: 900 },
+        });
+      } catch (puppeteerErr: any) {
+        const msg = String(puppeteerErr?.message ?? puppeteerErr ?? "");
+        const missingBrowser =
+          /no executable was found/i.test(msg) ||
+          /configured path/i.test(msg) ||
+          /could not find chrome/i.test(msg);
+        if (!missingBrowser) throw puppeteerErr;
+        browser = await launchChromiumBrowser();
+      }
     } else {
       browser = await launchChromiumBrowser();
     }
