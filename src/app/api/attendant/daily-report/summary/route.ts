@@ -27,10 +27,10 @@ export async function GET(req: Request) {
     select: { email: true, attendantCategory: true },
   });
   const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
-  const usePosTotals =
-    normalizedEmail === "brendah@betech.co.ke" ||
-    normalizedEmail === "jeniffer@betech.co.ke" ||
-    user?.attendantCategory === "DIRECT_SALES_OPS";
+  const isBrendah = normalizedEmail === "brendah@betech.co.ke";
+  const isJeniffer = normalizedEmail === "jeniffer@betech.co.ke";
+  const isDirectSalesOps = user?.attendantCategory === "DIRECT_SALES_OPS";
+  const shouldFetchPosTotals = isBrendah || isJeniffer || isDirectSalesOps;
 
   const [agg, salesRows] = await Promise.all([
     prisma.dailyReport.aggregate({
@@ -47,20 +47,25 @@ export async function GET(req: Request) {
     }),
     prisma.dailySale.findMany({
       where: { dailyReport: { userId, date: { gte: period.start, lte: period.end } } },
-      select: { receiptNumber: true },
+      select: { receiptNumber: true, price: true },
     }),
   ]);
 
   const receiptSet = new Set<string>();
+  let dailySalesTotal = 0;
   for (const row of salesRows) {
     const normalized = canonicalReceiptNumber(row.receiptNumber ?? "");
     if (normalized) receiptSet.add(normalized);
+    dailySalesTotal += Number(row.price ?? 0);
   }
+
+  const aggregateSalesTotal = Number(agg._sum.totalSales ?? 0);
+  const totalSales = Math.max(aggregateSalesTotal, dailySalesTotal);
 
   const dailySummary = {
     periodKey: period.key,
     periodLabel: period.label,
-    totalSales: Number(agg._sum.totalSales ?? 0),
+    totalSales,
     totalItems: salesRows.length,
     totalReceipts: receiptSet.size,
     totalNewProducts: Number(agg._sum.newProducts ?? 0),
@@ -73,9 +78,13 @@ export async function GET(req: Request) {
 
   // POS receipts summary (paid-only), used for attendants whose source-of-truth is POS.
   // We still return daily-report metrics so the UI can show task counts.
-  const posSummary = usePosTotals
+  const posSummary = shouldFetchPosTotals
     ? await summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId })
     : null;
+  const usePosTotals =
+    isJeniffer ||
+    isDirectSalesOps ||
+    (isBrendah && Number(posSummary?.totalSales ?? 0) > 0);
 
   const basePayload: any = {
     ...dailySummary,
