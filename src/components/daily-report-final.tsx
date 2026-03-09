@@ -363,6 +363,14 @@ export default function DailyReportFinal() {
     [date, impersonateId, selectedPeriodKey],
   );
 
+  const downloadPerformanceReceiptPdf = useCallback(() => {
+    const periodKey = selectedPeriodKey || currentPeriod.key;
+    const params = new URLSearchParams({ periodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [currentPeriod.key, impersonateId, selectedPeriodKey]);
+
   useEffect(() => {
     if (!selectedPeriodKey) return;
     const controller = new AbortController();
@@ -796,7 +804,14 @@ export default function DailyReportFinal() {
                 Daily tracker for uploads, engagement, walk-ins and live sessions.
               </p>
             </div>
-            <div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={downloadPerformanceReceiptPdf}
+                className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+              >
+                Download performance receipt (PDF)
+              </button>
               {/* Header actions extracted to shared component */}
               <HeaderActions
                 receiptsHref="#my-receipts"
@@ -805,9 +820,9 @@ export default function DailyReportFinal() {
                 onReceiptsClick={() => setShowMyReceipts(true)}
                 showDot={true}
               />
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
         <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
