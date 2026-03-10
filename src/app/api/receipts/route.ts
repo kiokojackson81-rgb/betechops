@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
   const includeItems = url.searchParams.get("includeItems") === "true";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
+  const customerType = url.searchParams.get("customerType") || undefined;
+  const podStatus = url.searchParams.get("status") || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   const identity = await resolveTargetUserId(req);
   const meta = identity;
   const attendantId = identity.resolvedUserId;
@@ -111,7 +113,10 @@ export async function GET(req: NextRequest) {
   const wantsGlobal = requestedScope === "global";
   const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
   const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
-  const allowGlobalScope = specialGlobalViewer || (wantsGlobal && canGlobal);
+  const brendahPodGlobalViewer =
+    identity.actorEmail === "brendah@betech.co.ke" && customerType === "pod";
+  const allowGlobalScope =
+    specialGlobalViewer || (wantsGlobal && (canGlobal || brendahPodGlobalViewer));
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
@@ -132,8 +137,6 @@ export async function GET(req: NextRequest) {
   }
 
   // Optional filter: customerType=pod to show POD receipts only, with optional status filter
-  const customerType = url.searchParams.get('customerType') || undefined;
-  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
     if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });

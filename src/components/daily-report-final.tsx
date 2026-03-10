@@ -225,6 +225,10 @@ export default function DailyReportFinal() {
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
+  const actorEmail = ((session?.user as { email?: string } | undefined)?.email ?? "").toLowerCase().trim();
+  const actorRole = ((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
+  const allowGlobalPodScope =
+    actorEmail === "brendah@betech.co.ke" || actorRole === "ADMIN" || actorRole === "SUPERVISOR";
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -850,6 +854,7 @@ export default function DailyReportFinal() {
                 podFilter={podFilter}
                 onPodFilterChange={setPodFilter}
                 hidePodMenu
+                podGlobalScope={allowGlobalPodScope}
                 onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
               />
             </div>

@@ -30,6 +30,7 @@ type Props = {
   podFilter?: "all" | "pod" | "pod_pending";
   onPodFilterChange?: (next: "all" | "pod" | "pod_pending") => void;
   hidePodMenu?: boolean;
+  podGlobalScope?: boolean;
 };
 
 const formatKES = (value?: number | null) =>
@@ -103,6 +104,7 @@ export default function DailyReportReceiptsPanel({
   podFilter,
   onPodFilterChange,
   hidePodMenu,
+  podGlobalScope,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,6 +116,14 @@ export default function DailyReportReceiptsPanel({
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
   const [localAttendantId, setLocalAttendantId] = useState<string | null | undefined>(attendantId);
+  const effectivePodFilter = podFilter ?? localPodFilter;
+  const setEffectivePodFilter = (next: "all" | "pod" | "pod_pending") => {
+    if (onPodFilterChange) {
+      onPodFilterChange(next);
+      return;
+    }
+    setLocalPodFilter(next);
+  };
 
   // sync localAttendantId when the prop changes
   useEffect(() => {
@@ -148,9 +158,14 @@ export default function DailyReportReceiptsPanel({
           const endIso = toEndOfDayIso(end ?? undefined);
           if (startIso) params.set("start", startIso);
           if (endIso) params.set("end", endIso);
-          if (q) params.set("q", q);
+        if (q) params.set("q", q);
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
+        if (effectivePodFilter === "all" || effectivePodFilter === "pod" || effectivePodFilter === "pod_pending") {
+          params.set("customerType", "pod");
+          if (effectivePodFilter === "pod_pending") params.set("status", "pending");
+          if (podGlobalScope) params.set("scope", "global");
+        }
         let url = `/api/receipts?${params.toString()}`;
         // If the developer adds `?useMockReceipts=1` to the URL, use a
         // local mock endpoint to verify UI/summary behavior without needing
@@ -193,7 +208,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [start, end, q, localAttendantId, refreshTick]);
+  }, [start, end, q, localAttendantId, refreshTick, effectivePodFilter, podGlobalScope]);
 
   const markPodDelivered = async (receipt: DailyReportReceiptRow) => {
     if (!receipt?.id || receipt.source !== "pos") return;
@@ -238,20 +253,6 @@ export default function DailyReportReceiptsPanel({
     };
   }, [localAttendantId]);
 
-  const summary = useMemo(() => {
-    const totalSales = receipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
-    return { totalSales, count: receipts.length };
-  }, [receipts]);
-
-  const effectivePodFilter = podFilter ?? localPodFilter;
-  const setEffectivePodFilter = (next: "all" | "pod" | "pod_pending") => {
-    if (onPodFilterChange) {
-      onPodFilterChange(next);
-      return;
-    }
-    setLocalPodFilter(next);
-  };
-
   const filteredReceipts = useMemo(() => {
     if (effectivePodFilter === "all") return receipts;
     if (effectivePodFilter === "pod") return receipts.filter((r) => Boolean(r.isPodDelivery));
@@ -261,6 +262,15 @@ export default function DailyReportReceiptsPanel({
         (String(r.podDeliveryStatus || "pending").toLowerCase() === "pending"),
     );
   }, [effectivePodFilter, receipts]);
+
+  const summary = useMemo(() => {
+    const totalSales = filteredReceipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
+    return { totalSales, count: filteredReceipts.length };
+  }, [filteredReceipts]);
+
+  useEffect(() => {
+    if (onSummary) onSummary(summary);
+  }, [onSummary, summary]);
 
   const displayDate = (() => {
     if (start && end) {
