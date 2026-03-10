@@ -4,12 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 
 type DailyReportReceiptRow = {
   id: string;
+  source?: "pos" | "marketing" | "support";
   orderRef?: string | null;
   docType?: string | null;
   customerName?: string | null;
   attendantName?: string | null;
   total?: number | null;
   createdAt: string;
+  status?: string | null;
+  paymentStatus?: string | null;
+  isPodDelivery?: boolean;
+  podDeliveryStatus?: string | null;
+  podDeliveryNote?: string | null;
+  detailUrl?: string | null;
 };
 
 type Props = {
@@ -87,6 +94,8 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
@@ -170,7 +179,28 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
       cancelled = true;
       controller.abort();
     };
-  }, [start, end, q, localAttendantId]);
+  }, [start, end, q, localAttendantId, refreshTick]);
+
+  const markPodDelivered = async (receipt: DailyReportReceiptRow) => {
+    if (!receipt?.id || receipt.source !== "pos") return;
+    setActionLoadingId(receipt.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/receipts/${encodeURIComponent(receipt.id)}/pod-delivered`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ status: "delivered" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to mark POD as delivered");
+      setRefreshTick((x) => x + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark POD as delivered");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
@@ -283,13 +313,31 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
                       <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
                       <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
                       <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
+                      {receipt.isPodDelivery && (
+                        <p className="mt-1 text-[12px] text-amber-300">
+                          POD: {(receipt.podDeliveryStatus || "pending").toString().toUpperCase()}
+                          {receipt.podDeliveryNote ? ` · ${receipt.podDeliveryNote}` : ""}
+                        </p>
+                      )}
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
-                  {receipt.id ? (
+                  {receipt.detailUrl ? (
+                    <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                  ) : receipt.source === "pos" && receipt.id ? (
                     <a href={`/receipts/print/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
                   ) : (
                     <span className="text-xs text-slate-500">Unavailable</span>
+                  )}
+                  {receipt.source === "pos" && receipt.isPodDelivery && (receipt.podDeliveryStatus || "pending").toLowerCase() === "pending" && (
+                    <button
+                      type="button"
+                      disabled={actionLoadingId === receipt.id}
+                      onClick={() => markPodDelivered(receipt)}
+                      className="mt-2 block w-full rounded-lg border border-amber-500/60 px-3 py-1 text-xs font-semibold uppercase text-amber-200 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {actionLoadingId === receipt.id ? "Marking..." : "Mark delivered"}
+                    </button>
                   )}
                 </div>
               </div>
