@@ -44,8 +44,29 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const NAIROBI_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+03:00
+
+const toNairobiDayBoundaryIso = (value: string, boundary: "start" | "end") => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+  // Build Nairobi-local day boundaries, then convert to UTC ISO.
+  const h = boundary === "start" ? 0 : 23;
+  const min = boundary === "start" ? 0 : 59;
+  const s = boundary === "start" ? 0 : 59;
+  const ms = boundary === "start" ? 0 : 999;
+  const utcMillis = Date.UTC(year, month - 1, day, h, min, s, ms) - NAIROBI_OFFSET_MS;
+  return new Date(utcMillis).toISOString();
+};
+
 const toStartOfDayIso = (value?: string) => {
   if (!value) return null;
+  const nrb = toNairobiDayBoundaryIso(value, "start");
+  if (nrb) return nrb;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   date.setUTCHours(0, 0, 0, 0);
@@ -54,6 +75,8 @@ const toStartOfDayIso = (value?: string) => {
 
 const toEndOfDayIso = (value?: string) => {
   if (!value) return null;
+  const nrb = toNairobiDayBoundaryIso(value, "end");
+  if (nrb) return nrb;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   date.setUTCHours(23, 59, 59, 999);
