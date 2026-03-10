@@ -44,6 +44,13 @@ const kenyaTimeZone = "Africa/Nairobi";
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
+const toLocalIsoDate = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const cardClasses =
   "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
 const inputClasses =
@@ -112,7 +119,12 @@ export default function DailyReportFinal() {
       setEndDate(isoEnd);
       return;
     }
-    // period: leave as-is for manual selection
+    if (range === "period") {
+      const period = getTradingPeriodFor(now);
+      setStartDate(toLocalIsoDate(period.start));
+      setEndDate(toLocalIsoDate(period.end));
+      return;
+    }
   };
 
   useEffect(() => {
