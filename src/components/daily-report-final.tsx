@@ -90,6 +90,12 @@ export default function DailyReportFinal() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  const applyThisTradingPeriodRange = useCallback(() => {
+    const period = getTradingPeriodFor(new Date());
+    setStartDate(toLocalIsoDate(period.start));
+    setEndDate(toLocalIsoDate(period.end));
+  }, []);
+
   const setRange = (range: "today" | "yesterday" | "thisWeek" | "period") => {
     const now = new Date();
     if (range === "today") {
@@ -120,9 +126,7 @@ export default function DailyReportFinal() {
       return;
     }
     if (range === "period") {
-      const period = getTradingPeriodFor(now);
-      setStartDate(toLocalIsoDate(period.start));
-      setEndDate(toLocalIsoDate(period.end));
+      applyThisTradingPeriodRange();
       return;
     }
   };
@@ -758,7 +762,23 @@ export default function DailyReportFinal() {
                 <button onClick={() => setRange("thisWeek")} className={`rounded-full border px-4 py-1 transition ${(() => { const now=new Date(); const day=now.getDay(); const diffToMonday = day===0?-6:1-day; const monday=new Date(now); monday.setDate(now.getDate()+diffToMonday); const isoMonday=monday.toISOString().split("T")[0]; const isoToday=new Date().toISOString().split("T")[0]; return startDate===isoMonday && endDate===isoToday ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white" })()}`}>
                   This week
                 </button>
-                <button onClick={() => setRange("period")} className="rounded-full border px-4 py-1 transition border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white">This period</button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    applyThisTradingPeriodRange();
+                  }}
+                  className={`rounded-full border px-4 py-1 transition ${(() => {
+                    const p = getTradingPeriodFor(new Date());
+                    const s = toLocalIsoDate(p.start);
+                    const en = toLocalIsoDate(p.end);
+                    return startDate === s && endDate === en
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                      : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white";
+                  })()}`}
+                >
+                  This period
+                </button>
               </div>
             </div>
 
