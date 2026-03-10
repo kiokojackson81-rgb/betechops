@@ -96,6 +96,7 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [podFilter, setPodFilter] = useState<"all" | "pod" | "pod_pending">("all");
   const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
@@ -229,6 +230,16 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
     return { totalSales, count: receipts.length };
   }, [receipts]);
 
+  const filteredReceipts = useMemo(() => {
+    if (podFilter === "all") return receipts;
+    if (podFilter === "pod") return receipts.filter((r) => Boolean(r.isPodDelivery));
+    return receipts.filter(
+      (r) =>
+        Boolean(r.isPodDelivery) &&
+        (String(r.podDeliveryStatus || "pending").toLowerCase() === "pending"),
+    );
+  }, [podFilter, receipts]);
+
   const displayDate = (() => {
     if (start && end) {
       try {
@@ -295,16 +306,52 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
       )}
 
       <div className="mt-5 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPodFilter("all")}
+            className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
+              podFilter === "all"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+            }`}
+          >
+            All receipts
+          </button>
+          <button
+            type="button"
+            onClick={() => setPodFilter("pod")}
+            className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
+              podFilter === "pod"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+            }`}
+          >
+            POD receipts
+          </button>
+          <button
+            type="button"
+            onClick={() => setPodFilter("pod_pending")}
+            className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
+              podFilter === "pod_pending"
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+            }`}
+          >
+            POD pending
+          </button>
+        </div>
+
         {loading && <p className="text-xs text-slate-400">Loading receipts…</p>}
         {error && <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{error}</div>}
 
-        {!loading && !error && receipts.length === 0 && (
+        {!loading && !error && filteredReceipts.length === 0 && (
           <p className="text-sm text-slate-400">No receipts found for this date.</p>
         )}
 
-        {!!receipts.length && (
+        {!!filteredReceipts.length && (
           <div className="space-y-2">
-            {receipts.map((receipt) => (
+            {filteredReceipts.map((receipt) => (
               <div
                 key={receipt.id}
                 className="flex items-center justify-between rounded-3xl border border-white/5 bg-slate-900/60 px-6 py-4 shadow-md"
