@@ -113,22 +113,10 @@ export async function GET(req: NextRequest) {
   const wantsGlobal = requestedScope === "global";
   const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
   const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
-  const brendahPodGlobalViewer =
-    identity.actorEmail === "brendah@betech.co.ke" && customerType === "pod";
-  const allowPodGlobalWhileImpersonating =
-    wantsGlobal && customerType === "pod" && (canGlobal || brendahPodGlobalViewer);
   const allowGlobalScope =
-    specialGlobalViewer || (wantsGlobal && (canGlobal || brendahPodGlobalViewer));
-  // Rules:
-  // - impersonating normally forces mine
-  // - exception: POD global view is allowed while impersonating for admins/supervisors
-  const scope = isImpersonating
-    ? allowPodGlobalWhileImpersonating
-      ? "global"
-      : "mine"
-    : allowGlobalScope
-      ? "global"
-      : "mine";
+    specialGlobalViewer || (wantsGlobal && canGlobal);
+  // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
+  const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {

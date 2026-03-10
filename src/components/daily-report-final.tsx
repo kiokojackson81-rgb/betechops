@@ -83,7 +83,6 @@ export default function DailyReportFinal() {
   const [endDate, setEndDate] = useState<string>(todayIso);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
-  const [podFilter, setPodFilter] = useState<"all" | "pod" | "pod_pending">("all");
   const [receiptsSummary, setReceiptsSummary] = useState<{ count: number; totalSales: number }>({ count: 0, totalSales: 0 });
 
   useEffect(() => {
@@ -225,10 +224,6 @@ export default function DailyReportFinal() {
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
-  const actorEmail = ((session?.user as { email?: string } | undefined)?.email ?? "").toLowerCase().trim();
-  const actorRole = ((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
-  const allowGlobalPodScope =
-    actorEmail === "brendah@betech.co.ke" || actorRole === "ADMIN" || actorRole === "SUPERVISOR";
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -785,29 +780,6 @@ export default function DailyReportFinal() {
                   This period
                 </button>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                <button
-                  type="button"
-                  onClick={() => setPodFilter("all")}
-                  className={`rounded-full border px-4 py-1 transition ${podFilter === "all" ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}
-                >
-                  All receipts
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPodFilter("pod")}
-                  className={`rounded-full border px-4 py-1 transition ${podFilter === "pod" ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}
-                >
-                  POD receipts
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPodFilter("pod_pending")}
-                  className={`rounded-full border px-4 py-1 transition ${podFilter === "pod_pending" ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}
-                >
-                  POD pending
-                </button>
-              </div>
             </div>
 
             <div className="grid gap-3 lg:grid-cols-4">
@@ -845,18 +817,7 @@ export default function DailyReportFinal() {
 
             <div>
               {/* Include the receipts list - hide the small header inside the panel */}
-              <DailyReportReceiptsPanel
-                start={startDate}
-                end={endDate}
-                q={debouncedSearch}
-                attendantId={attendantId}
-                hideHeader
-                podFilter={podFilter}
-                onPodFilterChange={setPodFilter}
-                hidePodMenu
-                podGlobalScope={allowGlobalPodScope}
-                onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
-              />
+              <DailyReportReceiptsPanel start={startDate} end={endDate} q={debouncedSearch} attendantId={attendantId} hideHeader onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })} />
             </div>
           </Card>
         </main>
