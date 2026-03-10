@@ -154,17 +154,25 @@ export default function DailyReportReceiptsPanel({
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "80");
+        const isPodMode =
+          effectivePodFilter === "all" ||
+          effectivePodFilter === "pod" ||
+          effectivePodFilter === "pod_pending";
+        // POD views are global/system-wide operational queues; don't constrain
+        // them to the current date-range picker window.
+        if (!isPodMode) {
           const startIso = toStartOfDayIso(start ?? undefined);
           const endIso = toEndOfDayIso(end ?? undefined);
           if (startIso) params.set("start", startIso);
           if (endIso) params.set("end", endIso);
+        }
         if (q) params.set("q", q);
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
-        if (effectivePodFilter === "all" || effectivePodFilter === "pod" || effectivePodFilter === "pod_pending") {
+        if (isPodMode) {
           params.set("customerType", "pod");
           if (effectivePodFilter === "pod_pending") params.set("status", "pending");
-          if (podGlobalScope) params.set("scope", "global");
+          params.set("scope", "global");
         }
         let url = `/api/receipts?${params.toString()}`;
         // If the developer adds `?useMockReceipts=1` to the URL, use a
