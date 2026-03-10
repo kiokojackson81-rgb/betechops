@@ -27,6 +27,9 @@ type Props = {
   attendantId: string | null | undefined;
   hideHeader?: boolean;
   onSummary?: (s: { totalSales: number; count: number }) => void;
+  podFilter?: "all" | "pod" | "pod_pending";
+  onPodFilterChange?: (next: "all" | "pod" | "pod_pending") => void;
+  hidePodMenu?: boolean;
 };
 
 const formatKES = (value?: number | null) =>
@@ -90,13 +93,23 @@ const toEndOfDayIso = (value?: string) => {
   return date.toISOString();
 };
 
-export default function DailyReportReceiptsPanel({ start, end, q, attendantId, hideHeader, onSummary }: Props) {
+export default function DailyReportReceiptsPanel({
+  start,
+  end,
+  q,
+  attendantId,
+  hideHeader,
+  onSummary,
+  podFilter,
+  onPodFilterChange,
+  hidePodMenu,
+}: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [podFilter, setPodFilter] = useState<"all" | "pod" | "pod_pending">("all");
+  const [localPodFilter, setLocalPodFilter] = useState<"all" | "pod" | "pod_pending">("all");
   const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
@@ -230,15 +243,24 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
     return { totalSales, count: receipts.length };
   }, [receipts]);
 
+  const effectivePodFilter = podFilter ?? localPodFilter;
+  const setEffectivePodFilter = (next: "all" | "pod" | "pod_pending") => {
+    if (onPodFilterChange) {
+      onPodFilterChange(next);
+      return;
+    }
+    setLocalPodFilter(next);
+  };
+
   const filteredReceipts = useMemo(() => {
-    if (podFilter === "all") return receipts;
-    if (podFilter === "pod") return receipts.filter((r) => Boolean(r.isPodDelivery));
+    if (effectivePodFilter === "all") return receipts;
+    if (effectivePodFilter === "pod") return receipts.filter((r) => Boolean(r.isPodDelivery));
     return receipts.filter(
       (r) =>
         Boolean(r.isPodDelivery) &&
         (String(r.podDeliveryStatus || "pending").toLowerCase() === "pending"),
     );
-  }, [podFilter, receipts]);
+  }, [effectivePodFilter, receipts]);
 
   const displayDate = (() => {
     if (start && end) {
@@ -306,12 +328,13 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
       )}
 
       <div className="mt-5 space-y-3">
-        <div className="flex flex-wrap gap-2">
+        {!hidePodMenu && (
+          <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setPodFilter("all")}
+            onClick={() => setEffectivePodFilter("all")}
             className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
-              podFilter === "all"
+              effectivePodFilter === "all"
                 ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
                 : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
             }`}
@@ -320,9 +343,9 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
           </button>
           <button
             type="button"
-            onClick={() => setPodFilter("pod")}
+            onClick={() => setEffectivePodFilter("pod")}
             className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
-              podFilter === "pod"
+              effectivePodFilter === "pod"
                 ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
                 : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
             }`}
@@ -331,16 +354,17 @@ export default function DailyReportReceiptsPanel({ start, end, q, attendantId, h
           </button>
           <button
             type="button"
-            onClick={() => setPodFilter("pod_pending")}
+            onClick={() => setEffectivePodFilter("pod_pending")}
             className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
-              podFilter === "pod_pending"
+              effectivePodFilter === "pod_pending"
                 ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
                 : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
             }`}
           >
             POD pending
           </button>
-        </div>
+          </div>
+        )}
 
         {loading && <p className="text-xs text-slate-400">Loading receipts…</p>}
         {error && <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{error}</div>}
