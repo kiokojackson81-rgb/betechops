@@ -158,3 +158,10 @@ export function filterOrdersToLastFullWeek(orders: KilimallXlsxOrder[], now: Dat
   const excluded = orders.length - inWeek.length;
   return { weekStart, weekEnd, inWeek, excluded };
 }
+
+export function filterOrdersToWeekStart(orders: KilimallXlsxOrder[], selectedWeekStart: Date) {
+  const { weekStart, weekEnd } = mondayToSundayNairobiWindow(selectedWeekStart);
+  const inWeek = orders.filter((o) => o.orderDate >= weekStart && o.orderDate < weekEnd);
+  const excluded = orders.length - inWeek.length;
+  return { weekStart, weekEnd, inWeek, excluded };
+}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Platform } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
-import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
+import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from "@/lib/weekWindow";
 import { aggregateMarketplaceStatementRows, parseMarketplaceStatementCsv } from "@/lib/marketplaceStatementCsv";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
   if (!form) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
 
   const accountId = String(form.get("accountId") ?? "").trim();
+  const weekStartParam = String(form.get("weekStart") ?? "").trim();
   const userIdRaw = String(form.get("userId") ?? "").trim();
   const file = form.get("file");
 
@@ -123,24 +124,36 @@ export async function POST(req: NextRequest) {
   const csvText = await (file as File).text();
   const parsed = parseMarketplaceStatementCsv(csvText);
 
-  // Infer week from CSV if weekStart was not supplied.
-  // Choose the most common Nairobi Mon→Sun week among statement rows.
-  const candidateWeekCounts = new Map<string, { weekStart: Date; weekEnd: Date; count: number }>();
-  for (const r of parsed.rows as any[]) {
-    const date = (r as any)?.transactionDateUtc instanceof Date ? ((r as any).transactionDateUtc as Date) : null;
-    if (!date || Number.isNaN(date.getTime())) continue;
-    const w = mondayToSundayNairobiWindow(date);
-    const key = w.weekStart.toISOString();
-    const prev = candidateWeekCounts.get(key);
-    candidateWeekCounts.set(key, { weekStart: w.weekStart, weekEnd: w.weekEnd, count: (prev?.count ?? 0) + 1 });
-  }
-  const detected = Array.from(candidateWeekCounts.values()).sort((a, b) => b.count - a.count)[0] ?? null;
-  if (!detected) {
-    return NextResponse.json({ error: "Unable to detect week from CSV. Ensure it includes transaction dates." }, { status: 400 });
+  let weekStart: Date;
+  let weekEnd: Date;
+  const selectedWeekStart = normalizeWeekStartFromParam(weekStartParam);
+  if (weekStartParam && !selectedWeekStart) {
+    return NextResponse.json({ error: "Invalid weekStart" }, { status: 400 });
   }
 
-  const weekStart = detected.weekStart;
-  const weekEnd = detected.weekEnd;
+  if (selectedWeekStart) {
+    const window = mondayToSundayNairobiWindow(selectedWeekStart);
+    weekStart = window.weekStart;
+    weekEnd = window.weekEnd;
+  } else {
+    // Infer week from CSV when weekStart was not supplied.
+    // Choose the most common Nairobi Mon→Sun week among statement rows.
+    const candidateWeekCounts = new Map<string, { weekStart: Date; weekEnd: Date; count: number }>();
+    for (const r of parsed.rows as any[]) {
+      const date = (r as any)?.transactionDateUtc instanceof Date ? ((r as any).transactionDateUtc as Date) : null;
+      if (!date || Number.isNaN(date.getTime())) continue;
+      const w = mondayToSundayNairobiWindow(date);
+      const key = w.weekStart.toISOString();
+      const prev = candidateWeekCounts.get(key);
+      candidateWeekCounts.set(key, { weekStart: w.weekStart, weekEnd: w.weekEnd, count: (prev?.count ?? 0) + 1 });
+    }
+    const detected = Array.from(candidateWeekCounts.values()).sort((a, b) => b.count - a.count)[0] ?? null;
+    if (!detected) {
+      return NextResponse.json({ error: "Unable to detect week from CSV. Ensure it includes transaction dates." }, { status: 400 });
+    }
+    weekStart = detected.weekStart;
+    weekEnd = detected.weekEnd;
+  }
 
   const aggregated = aggregateMarketplaceStatementRows({
     rows: parsed.rows,

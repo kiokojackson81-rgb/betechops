@@ -39,13 +39,17 @@ export default function ProfitCaptureFormClient(props: {
 
   const csvWeeks = useMemo(() => {
     const period = getTradingPeriodFor(new Date());
-    const weeks = getOnlineOpsWeeksForTradingPeriod(period, period.end, 4);
-    return weeks.map((w) => ({
+    const now = new Date();
+    const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, 8);
+    const completedWeeks = weeks.filter((w) => w.weekEndInclusive.getTime() <= now.getTime());
+    const sourceWeeks = completedWeeks.length ? completedWeeks : weeks;
+    return sourceWeeks.map((w) => ({
       startInput: w.startInput,
       endInput: w.weekEndInclusive.toISOString().slice(0, 10),
       label: w.label.replace(/–/g, "-"),
     }));
   }, []);
+  const defaultWeekStart = useMemo(() => csvWeeks.at(-1)?.startInput ?? "", [csvWeeks]);
 
   useEffect(() => {
     (async () => {
@@ -106,6 +110,7 @@ export default function ProfitCaptureFormClient(props: {
                   }))
             }
             weeks={csvWeeks}
+            defaultWeekStart={defaultWeekStart}
             disableAssigneeSelect={Boolean(props.limitedView)}
             assignees={csvAssignees}
             hideSummaryTotals={Boolean(props.limitedView)}

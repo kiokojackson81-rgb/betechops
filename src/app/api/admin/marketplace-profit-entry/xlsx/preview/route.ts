@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
-import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
+import { normalizeWeekStartFromParam } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
-import { parseKilimallOrdersXlsx, filterOrdersToLastFullWeek } from "@/lib/kilimallOrdersXlsx";
+import { parseKilimallOrdersXlsx, filterOrdersToLastFullWeek, filterOrdersToWeekStart } from "@/lib/kilimallOrdersXlsx";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { createHash } from "node:crypto";
 
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
   if (!form) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
 
   const accountId = String(form.get("accountId") ?? "").trim();
+  const weekStartParam = String(form.get("weekStart") ?? "").trim();
   const userIdRaw = String(form.get("userId") ?? "").trim();
   const file = form.get("file");
 
@@ -131,8 +132,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the most recent *completed* Mon–Sun week ("last full week"), which matches the UI's last-4-full-weeks behavior.
-  const { weekStart, weekEnd, inWeek, excluded } = filterOrdersToLastFullWeek(orders, new Date());
+  const selectedWeekStart = normalizeWeekStartFromParam(weekStartParam);
+  if (weekStartParam && !selectedWeekStart) {
+    return NextResponse.json({ error: "Invalid weekStart" }, { status: 400 });
+  }
+
+  // Use selected week when provided; otherwise use most recent completed Mon–Sun week.
+  const { weekStart, weekEnd, inWeek, excluded } = selectedWeekStart
+    ? filterOrdersToWeekStart(orders, selectedWeekStart)
+    : filterOrdersToLastFullWeek(orders, new Date());
   const weekKey = weekStart.toISOString().slice(0, 10);
 
   const txnFor = (o: any) => {

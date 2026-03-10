@@ -85,7 +85,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const defaultWeekStart = props.defaultWeekStart ?? weeks.at(-1)?.startInput ?? weeks[0]?.startInput ?? "";
 
   const [shopId, setShopId] = useState("");
-  const [weekStart, setWeekStart] = useState<string>("");
+  const [weekStart, setWeekStart] = useState<string>(defaultWeekStart);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [existingTxns, setExistingTxns] = useState<string[]>([]);
@@ -108,7 +108,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
   const effectiveWeekStart = weekStart || defaultWeekStart;
 
-  const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === weekStart) ?? null, [weeks, weekStart]);
+  const selectedWeek = useMemo(() => weeks.find((w) => w.startInput === effectiveWeekStart) ?? null, [weeks, effectiveWeekStart]);
   const selectedShop = useMemo(() => props.shops.find((s) => s.id === shopId) ?? null, [props.shops, shopId]);
 
   const refreshWeekStatus = useCallback(async () => {
@@ -213,10 +213,13 @@ export default function MarketplaceWeeklyCsvUpload(props: {
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Failed to load draft");
       const draftRows = Array.isArray(data?.rows) ? (data.rows as PreviewRow[]) : [];
+      const wsIso = String(data?.weekStart ?? data?.week?.weekStart ?? "").trim();
+      const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
       const buying = data?.buyingByTxn && typeof data.buyingByTxn === "object" ? (data.buyingByTxn as Record<string, any>) : {};
       const submittedMap =
         data?.submittedByTxn && typeof data.submittedByTxn === "object" ? (data.submittedByTxn as Record<string, any>) : {};
       setRows(draftRows);
+      if (wsInput) setWeekStart(wsInput);
       const buyingMap = Object.fromEntries(Object.entries(buying).map(([k, v]) => [k, String(v)]));
       setBuyingByTxn(buyingMap);
       setSubmittedByTxn(Object.fromEntries(Object.entries(submittedMap).map(([k, v]) => [k, String(v)])));
@@ -267,87 +270,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     void loadOpenDrafts();
   }, [loadOpenDrafts, shopId]);
 
-  // Cross-user sync: if admin already loaded a statement for this shop, resume the latest server draft automatically.
-  useEffect(() => {
-    if (!shopId) return;
-    if (rows.length) return;
-    if (draftId) return;
-    if (file) return;
-    if (loading) return;
-    if (loadingDrafts) return;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        // Prefer any open week draft if available.
-        const preferred = openDrafts[0]?.id ? openDrafts[0] : null;
-        if (preferred?.id) {
-          const wsIso = String(preferred.week?.weekStart ?? "").trim();
-          const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
-          if (wsInput) setWeekStart(wsInput);
-          if (lastDraftPointerKey && wsInput) {
-            try {
-              localStorage.setItem(lastDraftPointerKey, wsInput);
-            } catch {}
-          }
-          const storageKey = buildDraftKey(shopId, wsInput);
-          if (storageKey) {
-            try {
-              localStorage.setItem(storageKey, JSON.stringify({ id: preferred.id, savedAt: new Date().toISOString() }));
-            } catch {}
-          }
-          if (cancelled) return;
-          await loadDraftById(preferred.id);
-          return;
-        }
-
-        const res = await fetch(
-          withImpersonateId(
-            `/api/admin/marketplace-profit-entry/csv/drafts/latest?shopId=${encodeURIComponent(shopId)}`,
-            props.impersonateId ?? null,
-          ),
-          { cache: "no-store" },
-        );
-        const data = (await res.json().catch(() => null)) as any;
-        if (!res.ok) return;
-        const did = String(data?.draftId ?? "").trim();
-        if (!did) return;
-        const wsIso = String(data?.week?.weekStart ?? "").trim();
-        const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
-        if (wsInput) setWeekStart(wsInput);
-        if (lastDraftPointerKey && wsInput) {
-          try {
-            localStorage.setItem(lastDraftPointerKey, wsInput);
-          } catch {}
-        }
-        const storageKey = buildDraftKey(shopId, wsInput);
-        if (storageKey) {
-          try {
-            localStorage.setItem(storageKey, JSON.stringify({ id: did, savedAt: new Date().toISOString() }));
-          } catch {}
-        }
-        if (cancelled) return;
-        await loadDraftById(did);
-      } catch {}
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    buildDraftKey,
-    draftId,
-    file,
-    lastDraftPointerKey,
-    loadDraftById,
-    loading,
-    loadingDrafts,
-    openDrafts,
-    props.impersonateId,
-    rows.length,
-    shopId,
-  ]);
-
   const loadStatement = async () => {
     if (!shopId) {
       showToast("Select a shop first", "error");
@@ -362,7 +284,8 @@ export default function MarketplaceWeeklyCsvUpload(props: {
     try {
       const form = new FormData();
       form.set("accountId", shopId);
-      // weekStart is inferred from the CSV on the server (most common Nairobi Mon→Sun week).
+      if (effectiveWeekStart) form.set("weekStart", effectiveWeekStart);
+      // weekStart defaults to server detection when not supplied.
       // userId is inferred from the shop's primary attendant unless explicitly provided in server-side rules.
       form.set("file", file);
 
@@ -1027,10 +950,31 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         </label>
 
         <label className="block">
-          <div className="mb-1 text-xs text-slate-400">Week (auto)</div>
-          <div className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
-            {selectedWeek?.label ?? "Load statement to detect week"}
-          </div>
+          <div className="mb-1 text-xs text-slate-400">Week</div>
+          <select
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            value={effectiveWeekStart}
+            onChange={(e) => {
+              const next = String(e.target.value ?? "").trim();
+              if (!next || next === effectiveWeekStart) return;
+              const hasWork = Boolean(rows.length || draftId || Object.keys(submittedByTxn).length || file);
+              if (hasWork) {
+                const ok = window.confirm("Switch week? This will clear the current view. Saved statements remain available.");
+                if (!ok) return;
+                resetView({ preserveStorage: true });
+              }
+              setWeekStart(next);
+            }}
+            disabled={loading || !weeks.length}
+          >
+            {!weeks.length ? <option value="">No weeks available</option> : null}
+            {weeks.map((w) => (
+              <option key={w.startInput} value={w.startInput}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+          <div className="mt-1 text-[11px] text-slate-400">Week start: {effectiveWeekStart || "N/A"}</div>
         </label>
 
         <label className="block">
@@ -1070,7 +1014,12 @@ export default function MarketplaceWeeklyCsvUpload(props: {
               defaultValue=""
               onChange={(e) => {
                 const did = String(e.target.value ?? "").trim();
-                if (did) void resumeDraft(did);
+                if (!did) return;
+                const selected = openDrafts.find((d) => d.id === did) ?? null;
+                const wsIso = String(selected?.week?.weekStart ?? "").trim();
+                const wsInput = wsIso ? new Date(wsIso).toISOString().slice(0, 10) : "";
+                if (wsInput) setWeekStart(wsInput);
+                void resumeDraft(did);
               }}
               disabled={loading || loadingDrafts}
             >
