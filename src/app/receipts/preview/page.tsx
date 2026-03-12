@@ -60,21 +60,22 @@ export default function ReceiptPreviewPage() {
   if (err) return <div className="p-6">{err}</div>;
   if (!html) return <div className="p-6">Loading preview.</div>;
 
-  return (
-    <div className="receipt-screen receipt-print-area p-4 bg-white min-h-screen flex justify-center items-start">
-      <div className="bg-white max-w-4xl w-full p-8">
-        <div className="no-print flex justify-end mb-4">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-full border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
-          >
-            Print Receipt
-          </button>
-        </div>
+  const printableHtml = html
+    .replace(/<!doctype[^>]*>/gi, "")
+    .replace(/<\/?(html|head|body)[^>]*>/gi, "");
 
-        <div dangerouslySetInnerHTML={{ __html: html }} />
+  return (
+    <div className="receipt-preview-host bg-white">
+      <div className="no-print flex justify-end p-4">
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="rounded-full border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+        >
+          Print Receipt
+        </button>
       </div>
+      <div dangerouslySetInnerHTML={{ __html: printableHtml }} />
     </div>
   );
 }
