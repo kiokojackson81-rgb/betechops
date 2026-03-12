@@ -203,12 +203,12 @@ export async function GET(req: NextRequest) {
   const allShopIds = [...new Set(targetResolved.flatMap((t) => t.shopIds))];
 
   const profitRows = allAccountIds.length
-      ? (prisma as any).marketplaceProfitEntry.findMany({
-          where: { platform: "JUMIA", accountId: { in: allAccountIds }, weekStart, weekEnd },
-          select: { accountId: true, itemCreditTxn: true, netPayout: true, buyingPrice: true, profit: true },
-          take: 15000,
-        })
-      : Promise.resolve([]);
+    ? await (prisma as any).marketplaceProfitEntry.findMany({
+        where: { platform: "JUMIA", accountId: { in: allAccountIds }, weekStart, weekEnd },
+        select: { accountId: true, itemCreditTxn: true, netPayout: true, buyingPrice: true, profit: true },
+        take: 15000,
+      })
+    : [];
 
   const profitRowsByAccountId = new Map<string, Array<{ itemCreditTxn: string; netPayout: number; buyingPrice: number; profit: number }>>();
   for (const row of profitRows as any[]) {
