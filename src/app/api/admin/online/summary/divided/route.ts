@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TARGETS = [
-  { key: "betech-store", label: "Betech Store", match: ["Betech Store"] },
-  { key: "jude-collection", label: "Jude Collection", match: ["Jude Collection"] },
-  { key: "hitech-power", label: "Hitech Power", match: ["Hitech Power"] },
-  { key: "jm-latest", label: "JM Latest Collections", match: ["JM Latest Collections", "JM Collection", "JM Collections"] },
+  { key: "betech-store", label: "Betech Store", primary: "Betech Store", fallback: ["Betech"] },
+  { key: "jude-collection", label: "Jude Collection", primary: "Jude Collection", fallback: ["Jude"] },
+  { key: "hitech-power", label: "Hitech Power", primary: "Hitech Power", fallback: ["Hitech"] },
+  { key: "jm-latest", label: "JM Latest Collections", primary: "JM Latest Collections", fallback: ["JM Collection", "JM Collections"] },
 ];
 
 type AccountCandidate = {
@@ -45,6 +45,12 @@ function normalizeNameForMatch(value: unknown): string {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function containsNormalized(haystack: unknown, needle: unknown): boolean {
+  const h = normalizeNameForMatch(haystack);
+  const n = normalizeNameForMatch(needle);
+  return Boolean(h && n && h.includes(n));
 }
 
 function draftTxn(row: any): string {
@@ -175,27 +181,43 @@ export async function GET(req: NextRequest) {
     where: {
       isActive: true,
       platform: "JUMIA",
-      OR: TARGETS.flatMap((t) => t.match.map((m) => ({ displayName: { contains: m, mode: "insensitive" } as any }))),
+      OR: TARGETS.flatMap((t) => [
+        { displayName: { contains: t.primary, mode: "insensitive" } as any },
+        ...t.fallback.map((m) => ({ displayName: { contains: m, mode: "insensitive" } as any })),
+      ]),
     },
     select: { id: true, displayName: true, platform: true, jumiaShopSid: true },
   });
 
+  const shops = await prisma.shop.findMany({
+    where: { platform: "JUMIA" as any },
+    select: { id: true, name: true },
+    take: 400,
+  });
+
   const targetResolved: TargetResolved[] = [];
   for (const t of TARGETS) {
-    const candidates: AccountCandidate[] = accounts.filter((x) =>
-      t.match.some((m) => normalize(x.displayName).toLowerCase().includes(m.toLowerCase())),
-    );
+    const primaryCandidates: AccountCandidate[] = accounts.filter((x) => containsNormalized(x.displayName, t.primary));
+    const fallbackCandidates: AccountCandidate[] =
+      primaryCandidates.length > 0
+        ? primaryCandidates
+        : accounts.filter((x) => t.fallback.some((m) => containsNormalized(x.displayName, m)));
+    const candidates = fallbackCandidates;
     const accountIds = [...new Set(candidates.map((c) => c.id))];
-    const shopIds: string[] = [];
+    const shopIdsSet = new Set<string>();
     for (const candidate of candidates) {
       const shop = await resolveShopForAccount(candidate);
-      if (shop?.id) shopIds.push(shop.id);
+      if (shop?.id) shopIdsSet.add(shop.id);
     }
+    // Also map directly from shop names so divided follows capture uploads by shop.
+    const primaryShops = shops.filter((s) => containsNormalized(s.name, t.primary));
+    const fallbackShops = primaryShops.length > 0 ? primaryShops : shops.filter((s) => t.fallback.some((m) => containsNormalized(s.name, m)));
+    for (const s of fallbackShops) shopIdsSet.add(s.id);
     targetResolved.push({
       key: t.key,
       label: t.label,
       accountIds,
-      shopIds: [...new Set(shopIds)],
+      shopIds: [...shopIdsSet],
     });
   }
 
