@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
       })
     : [];
   const salesByShopId = new Map(weeklySales.map((r) => [String(r.shopId), money(r.amount)]));
+  const salesShopIdSet = new Set(weeklySales.map((r) => String(r.shopId)));
 
   const profitRows = accountIds.length
     ? await (prisma as any).marketplaceProfitEntry.findMany({
@@ -195,8 +196,11 @@ export async function GET(req: NextRequest) {
   }
 
   const perAccount = chosen.map((c) => {
-    const sales = c.shopId ? salesByShopId.get(c.shopId) ?? 0 : 0;
     const prof = c.accountId ? profitAggByAccountId.get(c.accountId) ?? { net: 0, buying: 0, profit: 0 } : { net: 0, buying: 0, profit: 0 };
+    const salesFromWeekly = c.shopId ? salesByShopId.get(c.shopId) ?? 0 : 0;
+    // If weeklySale row is missing for a mapped shop/account, fall back to
+    // captured statement net payouts so divided stays accurate.
+    const sales = c.shopId && salesShopIdSet.has(c.shopId) ? salesFromWeekly : prof.net;
     const returns = c.shopId ? returnsByShopId.get(c.shopId) ?? 0 : 0;
     return {
       key: c.key,
