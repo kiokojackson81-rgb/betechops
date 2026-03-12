@@ -97,10 +97,17 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     const browser = await launchChromiumBrowser();
     try {
       const page = await browser.newPage();
+      await page.emulateMediaType('screen');
       await page.setContent(html, { waitUntil: 'networkidle0' });
       const pdf = await page.pdf({
+        format: 'A4',
         printBackground: true,
-        preferCSSPageSize: true,
+        margin: {
+          top: '8mm',
+          right: '8mm',
+          bottom: '10mm',
+          left: '8mm',
+        },
       });
       const headers = new Headers();
       headers.set('Content-Type', 'application/pdf');
