@@ -849,7 +849,7 @@ export default function ReceiptsAdminClient({
     async (row: ReceiptRow) => {
       if (!row?.id) return;
       try {
-        const res = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/pdf`, { cache: "no-store" });
+        const res = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/pdf?download=1&fresh=1`, { cache: "no-store" });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data?.error || "Failed to download receipt PDF");
