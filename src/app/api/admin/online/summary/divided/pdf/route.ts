@@ -12,18 +12,24 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TARGETS = [
-  { key: "betech-store", label: "Betech Store", match: ["Betech Store"] },
-  { key: "jude-collection", label: "Jude Collection", match: ["Jude Collection"] },
-  { key: "hitech-power", label: "Hitech Power", match: ["Hitech Power"] },
-  { key: "jm-latest", label: "JM Latest Collections", match: ["JM Latest Collections", "JM Collection", "JM Collections"] },
+  { key: "betech-store", label: "Betech Store", primary: "Betech Store", fallback: ["Betech"] },
+  { key: "jude-collection", label: "Jude Collection", primary: "Jude Collection", fallback: ["Jude"] },
+  { key: "hitech-power", label: "Hitech Power", primary: "Hitech Power", fallback: ["Hitech"] },
+  { key: "jm-latest", label: "JM Latest Collections", primary: "JM Latest Collections", fallback: ["JM Collection", "JM Collections"] },
 ];
 
-type CandidateAccount = {
+type AccountCandidate = {
   id: string;
   displayName: string | null;
   platform: Platform;
   jumiaShopSid: string | null;
-  updatedAt: Date;
+};
+
+type TargetResolved = {
+  key: string;
+  label: string;
+  accountIds: string[];
+  shopIds: string[];
 };
 
 function money(value: unknown): number {
@@ -42,6 +48,12 @@ function normalizeNameForMatch(value: unknown): string {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function containsNormalized(haystack: unknown, needle: unknown): boolean {
+  const h = normalizeNameForMatch(haystack);
+  const n = normalizeNameForMatch(needle);
+  return Boolean(h && n && h.includes(n));
 }
 
 async function resolveShopForAccount(account: { platform: Platform; displayName: string | null; jumiaShopSid: string | null }) {
@@ -130,15 +142,26 @@ function summarizeDraftRows(rows: any[]): { dedupNet: number; returns: number; d
   return { dedupNet, returns, duplicateCount };
 }
 
-function pickBestAccount(candidates: CandidateAccount[], countByAccountId: Map<string, number>): CandidateAccount | null {
-  if (!candidates.length) return null;
-  return [...candidates].sort((a, b) => {
-    const diffCount = (countByAccountId.get(b.id) ?? 0) - (countByAccountId.get(a.id) ?? 0);
-    if (diffCount !== 0) return diffCount;
-    const diffUpdated = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    if (diffUpdated !== 0) return diffUpdated;
-    return String(a.displayName ?? a.id).localeCompare(String(b.displayName ?? b.id));
-  })[0];
+function summarizeProfitRows(rows: Array<{ itemCreditTxn: string; netPayout: number; buyingPrice: number; profit: number }>) {
+  let net = 0;
+  let buying = 0;
+  let profit = 0;
+  let duplicateCount = 0;
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const txn = normalize(row.itemCreditTxn).toLowerCase();
+    if (txn) {
+      if (seen.has(txn)) {
+        duplicateCount += 1;
+        continue;
+      }
+      seen.add(txn);
+    }
+    net += money(row.netPayout);
+    buying += money(row.buyingPrice);
+    profit += money(row.profit);
+  }
+  return { net, buying, profit, duplicateCount };
 }
 
 async function getDividedData(weekStartRaw: string) {
@@ -151,80 +174,74 @@ async function getDividedData(weekStartRaw: string) {
     where: {
       isActive: true,
       platform: "JUMIA",
-      OR: TARGETS.flatMap((t) => t.match.map((m) => ({ displayName: { contains: m, mode: "insensitive" } as any }))),
+      OR: TARGETS.flatMap((t) => [
+        { displayName: { contains: t.primary, mode: "insensitive" } as any },
+        ...t.fallback.map((m) => ({ displayName: { contains: m, mode: "insensitive" } as any })),
+      ]),
     },
-    select: { id: true, displayName: true, platform: true, jumiaShopSid: true, updatedAt: true },
+    select: { id: true, displayName: true, platform: true, jumiaShopSid: true },
+  });
+  const shops = await prisma.shop.findMany({
+    where: { platform: "JUMIA" as any },
+    select: { id: true, name: true },
+    take: 400,
   });
 
-  const accountIdsAll = accounts.map((a) => a.id);
-  const accountTxnCounts = accountIdsAll.length
-    ? await (prisma as any).marketplaceProfitEntry.groupBy({
-        by: ["accountId"],
-        _count: { _all: true },
-        where: { platform: "JUMIA", weekStart, weekEnd, accountId: { in: accountIdsAll } },
-      })
-    : [];
-  const txCountByAccountId = new Map<string, number>(
-    accountTxnCounts.map((row: any) => [String(row.accountId), Number(row._count?._all ?? 0)]),
-  );
-
-  const chosen: Array<{
-    key: string;
-    label: string;
-    accountId: string;
-    displayName: string;
-    shopId: string | null;
-    shopName: string | null;
-  }> = [];
-
+  const targetResolved: TargetResolved[] = [];
   for (const t of TARGETS) {
-    const candidates = accounts.filter((x) =>
-      t.match.some((m) => (x.displayName ?? "").toLowerCase().includes(m.toLowerCase())),
-    );
-    const a = pickBestAccount(candidates as CandidateAccount[], txCountByAccountId);
-    if (!a) {
-      chosen.push({ key: t.key, label: t.label, accountId: "", displayName: t.label, shopId: null, shopName: null });
-      continue;
+    const primaryCandidates: AccountCandidate[] = accounts.filter((x) => containsNormalized(x.displayName, t.primary));
+    const fallbackCandidates: AccountCandidate[] =
+      primaryCandidates.length > 0
+        ? primaryCandidates
+        : accounts.filter((x) => t.fallback.some((m) => containsNormalized(x.displayName, m)));
+    const candidates = fallbackCandidates;
+    const accountIds = [...new Set(candidates.map((c) => c.id))];
+    const shopIdsSet = new Set<string>();
+    for (const candidate of candidates) {
+      const shop = await resolveShopForAccount(candidate);
+      if (shop?.id) shopIdsSet.add(shop.id);
     }
-    const shop = await resolveShopForAccount(a as any);
-    chosen.push({
+    const primaryShops = shops.filter((s) => containsNormalized(s.name, t.primary));
+    const fallbackShops = primaryShops.length > 0 ? primaryShops : shops.filter((s) => t.fallback.some((m) => containsNormalized(s.name, m)));
+    for (const s of fallbackShops) shopIdsSet.add(s.id);
+    targetResolved.push({
       key: t.key,
       label: t.label,
-      accountId: a.id,
-      displayName: a.displayName ?? t.label,
-      shopId: shop?.id ?? null,
-      shopName: shop?.name ?? null,
+      accountIds,
+      shopIds: [...shopIdsSet],
     });
   }
 
-  const shopIds = chosen.map((c) => c.shopId).filter(Boolean) as string[];
-  const accountIds = chosen.map((c) => c.accountId).filter(Boolean) as string[];
+  const allAccountIds = [...new Set(targetResolved.flatMap((t) => t.accountIds))];
+  const allShopIds = [...new Set(targetResolved.flatMap((t) => t.shopIds))];
 
-  const profitRows = accountIds.length
+  const profitRows = allAccountIds.length
     ? await (prisma as any).marketplaceProfitEntry.findMany({
-        where: { platform: "JUMIA", accountId: { in: accountIds }, weekStart, weekEnd },
-        select: { accountId: true, netPayout: true, buyingPrice: true, profit: true },
-        take: 5000,
+        where: { platform: "JUMIA", accountId: { in: allAccountIds }, weekStart, weekEnd },
+        select: { accountId: true, itemCreditTxn: true, netPayout: true, buyingPrice: true, profit: true },
+        take: 15000,
       })
     : [];
-  const profitAggByAccountId = new Map<string, { net: number; buying: number; profit: number }>();
+  const profitRowsByAccountId = new Map<string, Array<{ itemCreditTxn: string; netPayout: number; buyingPrice: number; profit: number }>>();
   for (const row of profitRows as any[]) {
-    const id = String(row.accountId);
-    const acc = profitAggByAccountId.get(id) ?? { net: 0, buying: 0, profit: 0 };
-    acc.net += money(row.netPayout);
-    acc.buying += money(row.buyingPrice);
-    acc.profit += money(row.profit);
-    profitAggByAccountId.set(id, acc);
+    const key = String(row.accountId);
+    if (!profitRowsByAccountId.has(key)) profitRowsByAccountId.set(key, []);
+    profitRowsByAccountId.get(key)!.push({
+      itemCreditTxn: String(row.itemCreditTxn ?? ""),
+      netPayout: money(row.netPayout),
+      buyingPrice: money(row.buyingPrice),
+      profit: money(row.profit),
+    });
   }
 
   const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
   const draftMetricsByShopId = new Map<string, { dedupNet: number; returns: number; duplicateCount: number }>();
-  if (draftTableAvailable && shopIds.length) {
+  if (draftTableAvailable && allShopIds.length) {
     const drafts = await prisma.marketplaceStatementDraft.findMany({
-      where: { platform: "JUMIA", weekStart, weekEnd, shopId: { in: shopIds } },
+      where: { platform: "JUMIA", weekStart, weekEnd, shopId: { in: allShopIds } },
       orderBy: { updatedAt: "desc" },
       select: { shopId: true, rows: true },
-      take: 50,
+      take: 200,
     });
     for (const d of drafts) {
       const sid = String(d.shopId);
@@ -234,21 +251,34 @@ async function getDividedData(weekStartRaw: string) {
     }
   }
 
-  const accountsOut = chosen.map((c) => {
-    const prof = c.accountId ? profitAggByAccountId.get(c.accountId) ?? { net: 0, buying: 0, profit: 0 } : { net: 0, buying: 0, profit: 0 };
-    const draftMetrics = c.shopId ? draftMetricsByShopId.get(c.shopId) : null;
-    const sales = draftMetrics ? draftMetrics.dedupNet : prof.net;
-    const returns = draftMetrics?.returns ?? 0;
-    const duplicates = draftMetrics?.duplicateCount ?? 0;
+  const accountsOut = targetResolved.map((target) => {
+    const allProfitRowsForTarget = target.accountIds.flatMap((id) => profitRowsByAccountId.get(id) ?? []);
+    const profitSummary = summarizeProfitRows(allProfitRowsForTarget);
+    const draftCandidates = target.shopIds
+      .map((sid) => draftMetricsByShopId.get(sid))
+      .filter(Boolean) as Array<{ dedupNet: number; returns: number; duplicateCount: number }>;
+    const draftSummary = draftCandidates.reduce(
+      (acc, cur) => {
+        acc.dedupNet += cur.dedupNet;
+        acc.returns += cur.returns;
+        acc.duplicateCount += cur.duplicateCount;
+        return acc;
+      },
+      { dedupNet: 0, returns: 0, duplicateCount: 0 },
+    );
+    const hasDraft = draftCandidates.length > 0;
+    const sales = hasDraft ? draftSummary.dedupNet : profitSummary.net;
+    const returns = hasDraft ? draftSummary.returns : 0;
+    const duplicates = (hasDraft ? draftSummary.duplicateCount : 0) + profitSummary.duplicateCount;
     return {
-      key: c.key,
-      label: c.label,
+      key: target.key,
+      label: target.label,
       salesNetPayout: sales,
       returns,
       duplicateCount: duplicates,
-      grossProfit: prof.profit + returns,
-      profit: prof.profit,
-      buyingTotal: prof.buying,
+      grossProfit: profitSummary.profit + returns,
+      profit: profitSummary.profit,
+      buyingTotal: profitSummary.buying,
     };
   });
 
