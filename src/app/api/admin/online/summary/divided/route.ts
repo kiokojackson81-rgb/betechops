@@ -48,7 +48,7 @@ function normalizeNameForMatch(value: unknown): string {
 }
 
 function draftTxn(row: any): string {
-  return normalize(
+  const direct = normalize(
     row?.itemCreditTxn ??
       row?.txn ??
       row?.transactionNumber ??
@@ -56,6 +56,19 @@ function draftTxn(row: any): string {
       row?.uniqueNumber ??
       row?.itemCreditTransaction,
   ).toLowerCase();
+  if (direct) return direct;
+  // Fallback key when statement export omits explicit txn id.
+  const fallback = [
+    normalize(row?.orderNo ?? row?.orderId),
+    normalize(row?.orderItemNo ?? row?.orderItemId),
+    normalize(row?.dateUtc ?? row?.date),
+    String(money(row?.netPayout)),
+    normalize(row?.details ?? row?.productName),
+  ]
+    .filter(Boolean)
+    .join("|")
+    .toLowerCase();
+  return fallback;
 }
 
 function summarizeDraftRows(rows: any[]): { dedupNet: number; returns: number; duplicateCount: number } {
@@ -189,27 +202,13 @@ export async function GET(req: NextRequest) {
   const allAccountIds = [...new Set(targetResolved.flatMap((t) => t.accountIds))];
   const allShopIds = [...new Set(targetResolved.flatMap((t) => t.shopIds))];
 
-  const [weeklySales, profitRows] = await Promise.all([
-    allShopIds.length
-      ? prisma.weeklySale.findMany({
-          where: { platform: "JUMIA", shopId: { in: allShopIds }, weekStart, weekEnd },
-          select: { shopId: true, amount: true },
-        })
-      : Promise.resolve([]),
-    allAccountIds.length
+  const profitRows = allAccountIds.length
       ? (prisma as any).marketplaceProfitEntry.findMany({
           where: { platform: "JUMIA", accountId: { in: allAccountIds }, weekStart, weekEnd },
           select: { accountId: true, itemCreditTxn: true, netPayout: true, buyingPrice: true, profit: true },
           take: 15000,
         })
-      : Promise.resolve([]),
-  ]);
-
-  const weeklySalesByShop = new Map<string, number>();
-  for (const row of weeklySales) {
-    const sid = String(row.shopId);
-    weeklySalesByShop.set(sid, (weeklySalesByShop.get(sid) ?? 0) + money(row.amount));
-  }
+      : Promise.resolve([]);
 
   const profitRowsByAccountId = new Map<string, Array<{ itemCreditTxn: string; netPayout: number; buyingPrice: number; profit: number }>>();
   for (const row of profitRows as any[]) {
@@ -251,13 +250,22 @@ export async function GET(req: NextRequest) {
     const draftCandidates = target.shopIds
       .map((sid) => draftMetricsByShopId.get(sid))
       .filter(Boolean) as Array<{ dedupNet: number; returns: number; duplicateCount: number }>;
-    const draftSummary = draftCandidates[0] ?? null;
+    const draftSummary = draftCandidates.reduce(
+      (acc, cur) => {
+        acc.dedupNet += cur.dedupNet;
+        acc.returns += cur.returns;
+        acc.duplicateCount += cur.duplicateCount;
+        return acc;
+      },
+      { dedupNet: 0, returns: 0, duplicateCount: 0 },
+    );
+    const hasDraft = draftCandidates.length > 0;
 
-    const weeklySalesTotal = target.shopIds.reduce((sum, sid) => sum + (weeklySalesByShop.get(sid) ?? 0), 0);
-
-    const sales = draftSummary ? draftSummary.dedupNet : weeklySalesTotal !== 0 ? weeklySalesTotal : profitSummary.net;
-    const returns = draftSummary?.returns ?? 0;
-    const duplicateCount = (draftSummary?.duplicateCount ?? 0) + profitSummary.duplicateCount;
+    // Use captured/deduped statement/profit rows as source of truth for divided
+    // to avoid duplicated weeklySale aggregates.
+    const sales = hasDraft ? draftSummary.dedupNet : profitSummary.net;
+    const returns = hasDraft ? draftSummary.returns : 0;
+    const duplicateCount = (hasDraft ? draftSummary.duplicateCount : 0) + profitSummary.duplicateCount;
 
     return {
       key: target.key,
@@ -302,4 +310,3 @@ export async function GET(req: NextRequest) {
     },
   );
 }
-

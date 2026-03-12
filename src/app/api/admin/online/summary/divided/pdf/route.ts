@@ -87,7 +87,7 @@ async function resolveShopForAccount(account: { platform: Platform; displayName:
 }
 
 function draftTxn(row: any): string {
-  return normalize(
+  const direct = normalize(
     row?.itemCreditTxn ??
       row?.txn ??
       row?.transactionNumber ??
@@ -95,6 +95,18 @@ function draftTxn(row: any): string {
       row?.uniqueNumber ??
       row?.itemCreditTransaction,
   ).toLowerCase();
+  if (direct) return direct;
+  const fallback = [
+    normalize(row?.orderNo ?? row?.orderId),
+    normalize(row?.orderItemNo ?? row?.orderItemId),
+    normalize(row?.dateUtc ?? row?.date),
+    String(money(row?.netPayout)),
+    normalize(row?.details ?? row?.productName),
+  ]
+    .filter(Boolean)
+    .join("|")
+    .toLowerCase();
+  return fallback;
 }
 
 function summarizeDraftRows(rows: any[]): { dedupNet: number; returns: number; duplicateCount: number } {
@@ -188,15 +200,6 @@ async function getDividedData(weekStartRaw: string) {
   const shopIds = chosen.map((c) => c.shopId).filter(Boolean) as string[];
   const accountIds = chosen.map((c) => c.accountId).filter(Boolean) as string[];
 
-  const weeklySales = shopIds.length
-    ? await prisma.weeklySale.findMany({
-        where: { platform: "JUMIA", shopId: { in: shopIds }, weekStart, weekEnd },
-        select: { shopId: true, amount: true },
-      })
-    : [];
-  const salesByShopId = new Map(weeklySales.map((r) => [String(r.shopId), money(r.amount)]));
-  const salesShopIdSet = new Set(weeklySales.map((r) => String(r.shopId)));
-
   const profitRows = accountIds.length
     ? await (prisma as any).marketplaceProfitEntry.findMany({
         where: { platform: "JUMIA", accountId: { in: accountIds }, weekStart, weekEnd },
@@ -233,13 +236,8 @@ async function getDividedData(weekStartRaw: string) {
 
   const accountsOut = chosen.map((c) => {
     const prof = c.accountId ? profitAggByAccountId.get(c.accountId) ?? { net: 0, buying: 0, profit: 0 } : { net: 0, buying: 0, profit: 0 };
-    const salesFromWeekly = c.shopId ? salesByShopId.get(c.shopId) ?? 0 : 0;
     const draftMetrics = c.shopId ? draftMetricsByShopId.get(c.shopId) : null;
-    const sales = draftMetrics
-      ? draftMetrics.dedupNet
-      : c.shopId && salesShopIdSet.has(c.shopId)
-      ? salesFromWeekly
-      : prof.net;
+    const sales = draftMetrics ? draftMetrics.dedupNet : prof.net;
     const returns = draftMetrics?.returns ?? 0;
     const duplicates = draftMetrics?.duplicateCount ?? 0;
     return {
