@@ -155,63 +155,101 @@ export default function renderReceiptTemplate(
     <title>${siteTitle} Receipt ${order.orderNumber || ''}</title>
       <style>
         :root { --brandColor: ${brandColor}; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #111827; background:#f3f4f6; margin:0; }
-      .page { box-sizing:border-box; width:100%; max-width: 900px; margin: 12px auto; padding: 14px; background: #fff; border: none; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.09); }
-      @page { size: A4 portrait; margin: 1mm; }
-      @media print {
+        @page { size: A5 portrait; margin: 6mm; }
         html, body {
-          width: 210mm;
           margin: 0;
           padding: 0;
-          font-size: 10.5px;
-          line-height: 1.2;
-          word-break: normal;
-          hyphens: none;
-          background: #fff;
+          color: #111827;
+          background: #f3f4f6;
+          font-family: "Segoe UI", Arial, Helvetica, sans-serif;
         }
-        body { overflow: visible; }
+        body { padding: 10px; }
         .page {
-          width: auto;
-          max-width: none;
+          box-sizing: border-box;
+          width: 148mm;
+          min-height: 198mm;
+          margin: 0 auto;
+          padding: 8mm;
+          background: #fff;
+          border: 1px solid #d1d5db;
+          box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+          display: flex;
+          flex-direction: column;
+        }
+        .receipt-body {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
           min-height: 0;
-          margin: 0;
-          padding: 1.5mm 2mm;
-          box-shadow: none;
-          border-radius: 0;
-          page-break-inside: auto;
-          break-inside: auto;
         }
-        header,
-        .signature,
-        .receipt-footer,
-        .receipt-footer-container,
-        .meta,
-        .item-warranty,
-        .notes,
-        tr {
-          page-break-inside: avoid;
-          break-inside: avoid;
+        .receipt-bottom {
+          margin-top: auto;
         }
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        table { font-size: 10px; }
-        th, td { padding: 5px 6px; }
-        .meta { font-size: 10px; gap: 6px; }
-        .social-link { font-size: 10px; }
-        .footer-divider { margin: 8px auto; width: 82%; }
-        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      }
-        header { text-align:center; margin-bottom:12px; }
-        .meta { display:flex; justify-content:space-between; margin:12px 0 }
-        table { width:100%; border-collapse: collapse; margin-top:8px }
-        th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:${brandColor}; }
-        td { padding:8px }
+        header {
+          text-align: center;
+          margin-bottom: 10px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .meta {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin: 6px 0 10px;
+          font-size: 12px;
+        }
+        .meta > div {
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 8px 10px;
+          background: #fafafa;
+          line-height: 1.45;
+        }
+        table { width:100%; border-collapse: collapse; margin-top:8px; font-size: 12px; }
+        th {
+          text-align:left;
+          padding:8px;
+          border-top:1px solid #d1d5db;
+          border-bottom:1px solid #d1d5db;
+          background: #f8fafc;
+          color:${brandColor};
+          font-weight: 700;
+          letter-spacing: 0.2px;
+        }
+        td { padding:8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         .right { text-align:right }
-        .totals { width:100%; margin-top:12px }
-        .totals td { border:none; padding:6px; color:${brandColor}; }
-        .totals strong { color:${brandColor}; }
-        .notes { margin-top:14px; padding:10px; background:#f8fafc; border-radius:6px }
-      .signature { margin-top:20px; text-align:center }
+        .totals {
+          width: 56%;
+          margin: 10px 0 0 auto;
+          border-collapse: collapse;
+          font-size: 12px;
+        }
+        .totals td {
+          border: none;
+          padding: 5px 0;
+          color: #1f2937;
+        }
+        .totals .total-row td {
+          border-top: 1px solid #d1d5db;
+          padding-top: 7px;
+          font-size: 13px;
+          color: ${brandColor};
+        }
+        .notes {
+          margin-top: 10px;
+          padding: 10px;
+          background:#f8fafc;
+          border-radius: 8px;
+          border: 1px solid #e5e7eb;
+          font-size: 11.5px;
+          line-height: 1.5;
+        }
+      .signature {
+        margin-top: 12px;
+        text-align:center;
+        font-size: 11.5px;
+        line-height: 1.45;
+      }
 
       .item-warranty-row {
         font-size: 11px;
@@ -250,7 +288,7 @@ export default function renderReceiptTemplate(
 
       /* Ensure the footer container stays on the same printed page */
       .receipt-footer-container {
-        margin-top: auto;
+        margin-top: 12px;
         page-break-inside: avoid;
         break-inside: avoid;
       }
@@ -273,15 +311,15 @@ export default function renderReceiptTemplate(
 
       .footer-muted {
         margin: 0;
-        font-size: 11.5px;
+        font-size: 11px;
       }
 
       .social-row {
         display: inline-flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 5px;
         align-items: center;
-        margin: 0 0 10px;
+        margin: 0 0 8px;
       }
 
       .social-link {
@@ -291,6 +329,7 @@ export default function renderReceiptTemplate(
         color: #111;
         text-decoration: underline;
         font-weight: 600;
+        font-size: 10.5px;
       }
 
       .social-link span {
@@ -304,8 +343,8 @@ export default function renderReceiptTemplate(
       }
 
       .footer-divider {
-        margin: 10px auto;
-        width: 70%;
+        margin: 8px auto;
+        width: 78%;
         border-top: 1px solid rgba(0, 0, 0, 0.2);
       }
 
@@ -321,9 +360,43 @@ export default function renderReceiptTemplate(
       }
 
       @media print {
+        html, body {
+          width: 148mm;
+          min-height: 210mm;
+          margin: 0;
+          padding: 0;
+          background: #fff;
+          font-size: 11px;
+          line-height: 1.35;
+        }
+        body { overflow: visible; }
+        .page {
+          width: 100%;
+          min-height: 198mm;
+          margin: 0;
+          padding: 8mm;
+          box-shadow: none;
+          border: none;
+        }
+        header,
+        .signature,
+        .receipt-footer,
+        .receipt-footer-container,
+        .meta,
+        .item-warranty,
+        .notes,
+        tr {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .meta { font-size: 11px; }
+        table { font-size: 11px; }
+        th, td { padding: 6px; }
+        .totals { font-size: 11.5px; width: 58%; }
         .receipt-footer {
           page-break-inside: avoid;
         }
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
       </style>
   </head>
@@ -333,13 +406,14 @@ export default function renderReceiptTemplate(
         ${headerHtml}
       </header>
 
+    <div class="receipt-body">
     <div class="meta">
-      <div>
+      <div class="meta-left">
         <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
         <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
         <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
       </div>
-      <div class="right">
+      <div class="right meta-right">
         <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>
         <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'}</div>
       </div>
@@ -357,13 +431,14 @@ export default function renderReceiptTemplate(
     <table class="totals">
       <tr><td></td><td class="right">Subtotal:</td><td class="right">${formatAmount(subtotalValue)}</td></tr>
       ${snapshot.showDiscount ? `<tr><td></td><td class="right">Discount:</td><td class="right">${formatAmount(toNumberOrNull(snapshot.discount) ?? toNumberOrNull(totals.discount))}</td></tr>` : ''}
-      <tr><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
+      <tr class="total-row"><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
     </table>
 
       ${itemWarrantyEntries ? `<div class="item-warranty">${itemWarrantyEntries}</div>` : ''}
 
       ${notes ? `<div class="notes"><strong>Notes:</strong><div style="margin-top:6px">${notes}</div></div>` : ''}
 
+      <div class="receipt-bottom">
       <div class="signature">
         <p>You were served by ${attendant || '____'}.</p>
         <p>Goods once sold cannot be refunded.</p>
@@ -416,7 +491,9 @@ export default function renderReceiptTemplate(
       </div>
       </div>
       ` : ""}
+      </div>
 
+    </div>
     </div>
   </body>
   </html>
