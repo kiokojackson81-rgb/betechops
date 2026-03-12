@@ -845,6 +845,38 @@ export default function ReceiptsAdminClient({
     }
   };
 
+  const downloadReceiptById = useCallback(
+    async (row: ReceiptRow) => {
+      if (!row?.id) return;
+      try {
+        const res = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/pdf`, { cache: "no-store" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || "Failed to download receipt PDF");
+        }
+
+        const blob = await res.blob();
+        if (!blob || blob.size === 0) {
+          throw new Error("Downloaded file is empty");
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const safeRef = String(row.orderRef || row.id || "receipt").replace(/[^a-zA-Z0-9_-]+/g, "-");
+        a.href = objectUrl;
+        a.download = `${safeRef}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to download receipt PDF";
+        showToast(message, "error");
+      }
+    },
+    [],
+  );
+
   const handleDeleteReceipt = async () => {
     if (!selected || !allowEdit) return;
     if (!window.confirm("Delete this receipt and all related records from the system?")) return;
@@ -1602,7 +1634,7 @@ export default function ReceiptsAdminClient({
                           void fetchReceiptDetail(row.id);
                         }}
                         onDelete={() => void deleteReceiptById(row.id)}
-                        onDownload={() => window.open(`/receipts/${row.id}`, "_blank")}
+                        onDownload={() => void downloadReceiptById(row)}
                         onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
                         onResendPod={row.isPodDelivery ? () => void sendReceiptById(row.id, "whatsapp") : undefined}
                         onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
