@@ -224,12 +224,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Fallback memory: reusable pricing templates survive statement deletes.
+      const templateByKey = new Map<string, number>();
+      const normalizedNames = Array.from(
+        new Set(
+          aggregated.aggregates
+            .map((r) => normalizeText(r.details || ""))
+            .filter(Boolean),
+        ),
+      );
+      if (normalizedNames.length) {
+        const templates = await prisma.marketplacePricingTemplate.findMany({
+          where: { platform: account.platform as any, normalizedProductName: { in: normalizedNames } },
+          select: { normalizedProductName: true, sellingPrice: true, defaultBuyingPrice: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 5000,
+        });
+        for (const t of templates) {
+          const key = `${normalizeText(t.normalizedProductName)}|${moneyKey(Number(t.sellingPrice ?? 0))}`;
+          if (!templateByKey.has(key)) templateByKey.set(key, Number(t.defaultBuyingPrice ?? 0));
+        }
+      }
+
       for (const r of aggregated.aggregates) {
         const sku = normalizeSku(r.jumiaSku || r.sellerSku || "");
         const name = normalizeText(r.details || "");
         const price = moneyKey(Number(r.grossSale ?? 0));
         const key = `${sku}|${name}|${price}`;
-        const match = bestSameAccount.get(key) ?? bestAny.get(key) ?? null;
+        const match =
+          bestSameAccount.get(key) ??
+          bestAny.get(key) ??
+          (() => {
+            const t = templateByKey.get(`${name}|${price}`);
+            return typeof t === "number" && Number.isFinite(t) && t > 0 ? { buyingPrice: t, ts: 0 } : null;
+          })();
         if (match && r.itemCreditTxn) {
           suggestedBuyingByTxn[r.itemCreditTxn] = match.buyingPrice;
         }

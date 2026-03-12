@@ -8,6 +8,11 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const normalizeName = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
 type RowPayload = {
   itemCreditTxn: string;
   dateUtc: string;
@@ -172,6 +177,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to create profit entry" }, { status: 400 });
   }
 
+  // Persist a reusable buying-price template so re-uploads can prefill even
+  // after profit entries are deleted.
+  try {
+    const normalizedProductName = normalizeName((row as any).details);
+    if (normalizedProductName && Number.isFinite(grossSale) && grossSale > 0 && Number.isFinite(buying) && buying > 0) {
+      await prisma.marketplacePricingTemplate.upsert({
+        where: {
+          platform_normalizedProductName_sellingPrice: {
+            platform: account.platform as Platform,
+            normalizedProductName,
+            sellingPrice: grossSale,
+          },
+        },
+        create: {
+          platform: account.platform as Platform,
+          normalizedProductName,
+          sellingPrice: grossSale,
+          defaultBuyingPrice: buying,
+          updatedById: actorId,
+        },
+        update: {
+          defaultBuyingPrice: buying,
+          updatedById: actorId,
+          updatedAt: new Date(),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[csv-submit-row] pricing template upsert failed", err);
+  }
+
   return NextResponse.json({
     ok: true,
     entry: {
@@ -184,4 +220,3 @@ export async function POST(req: NextRequest) {
     },
   });
 }
-

@@ -192,9 +192,31 @@ export async function POST(req: NextRequest) {
         if (!bestAny.has(key) || (bestAny.get(key)?.ts ?? 0) < ts) bestAny.set(key, { buyingPrice: buying, ts });
       }
 
+      // Fallback memory: reusable pricing templates survive statement deletes.
+      const templateByKey = new Map<string, number>();
+      const normalizedNames = Array.from(new Set(inWeek.map((o) => normalizeText(o.productName)).filter(Boolean)));
+      if (normalizedNames.length) {
+        const templates = await prisma.marketplacePricingTemplate.findMany({
+          where: { platform: account.platform as any, normalizedProductName: { in: normalizedNames } },
+          select: { normalizedProductName: true, sellingPrice: true, defaultBuyingPrice: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 5000,
+        });
+        for (const t of templates) {
+          const key = `${normalizeText(t.normalizedProductName)}|${moneyKey(Number(t.sellingPrice ?? 0))}`;
+          if (!templateByKey.has(key)) templateByKey.set(key, Number(t.defaultBuyingPrice ?? 0));
+        }
+      }
+
       for (const o of inWeek) {
         const key = `${normalizeSku(o.productId)}|${normalizeText(o.productName)}|${moneyKey(Number(o.payableAmount ?? 0))}`;
-        const match = bestSameAccount.get(key) ?? bestAny.get(key) ?? null;
+        const match =
+          bestSameAccount.get(key) ??
+          bestAny.get(key) ??
+          (() => {
+            const t = templateByKey.get(`${normalizeText(o.productName)}|${moneyKey(Number(o.payableAmount ?? 0))}`);
+            return typeof t === "number" && Number.isFinite(t) && t > 0 ? { buyingPrice: t, ts: 0 } : null;
+          })();
         if (match) suggestedBuyingByTxn[txnFor(o)] = match.buyingPrice;
       }
     }
@@ -263,12 +285,54 @@ export async function POST(req: NextRequest) {
     try {
       const existingDraft = await prisma.marketplaceStatementDraft.findUnique({ where: { draftKey }, select: { id: true } });
       if (existingDraft) {
+        const fullDraft = await prisma.marketplaceStatementDraft.findUnique({
+          where: { id: existingDraft.id },
+          select: { id: true, buyingByTxn: true },
+        });
+        const existingBuying =
+          fullDraft?.buyingByTxn && typeof fullDraft.buyingByTxn === "object" && !Array.isArray(fullDraft.buyingByTxn)
+            ? (fullDraft.buyingByTxn as Record<string, any>)
+            : {};
+        const mergedBuying: Record<string, any> = { ...suggestedBuyingByTxn };
+        for (const [k, v] of Object.entries(existingBuying)) mergedBuying[k] = v;
+
+        await prisma.marketplaceStatementDraft.update({
+          where: { id: existingDraft.id },
+          data: {
+            rowCount: items.length,
+            totalNetPayout: totals.netPayout,
+            rows: items as any,
+            buyingByTxn: mergedBuying as any,
+            fileName: (file as File).name || null,
+          },
+        });
+
+        // Keep weeklySale synced with latest statement totals even when draft exists.
+        let effectiveUserId = userIdRaw ? userIdRaw : null;
+        if (!effectiveUserId) {
+          const primary = await prisma.marketplaceAccountAssignment.findFirst({
+            where: { accountId: account.id, endsAt: null },
+            orderBy: { startsAt: "desc" },
+            select: { attendantId: true },
+          });
+          effectiveUserId = primary?.attendantId ?? null;
+        }
+        await upsertManualWeeklySale({
+          shopId: resolved.shopId,
+          weekStart,
+          weekEnd,
+          amount: totals.netPayout,
+          userId: effectiveUserId,
+          actorId,
+        });
+
         return NextResponse.json({
           alreadyUploaded: true,
           account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
           resolvedShopId: resolved.shopId,
           draftId: existingDraft.id,
           week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
+          totals,
           excluded,
         });
       }

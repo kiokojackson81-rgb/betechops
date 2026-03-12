@@ -8,6 +8,11 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const normalizeName = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
 type RowPayload = {
   itemCreditTxn: string;
   dateUtc: string;
@@ -205,6 +210,37 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     where: { id: draft.id },
     data: { buyingByTxn, submittedByTxn },
   });
+
+  // Persist a reusable buying-price template so re-uploads can prefill even
+  // after profit entries are deleted.
+  try {
+    const normalizedProductName = normalizeName(row.details);
+    if (normalizedProductName && Number.isFinite(grossSale) && grossSale > 0 && Number.isFinite(buying) && buying > 0) {
+      await prisma.marketplacePricingTemplate.upsert({
+        where: {
+          platform_normalizedProductName_sellingPrice: {
+            platform: draft.platform as Platform,
+            normalizedProductName,
+            sellingPrice: grossSale,
+          },
+        },
+        create: {
+          platform: draft.platform as Platform,
+          normalizedProductName,
+          sellingPrice: grossSale,
+          defaultBuyingPrice: buying,
+          updatedById: actorId,
+        },
+        update: {
+          defaultBuyingPrice: buying,
+          updatedById: actorId,
+          updatedAt: new Date(),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[draft-submit-row] pricing template upsert failed", err);
+  }
 
   return NextResponse.json({
     ok: true,
