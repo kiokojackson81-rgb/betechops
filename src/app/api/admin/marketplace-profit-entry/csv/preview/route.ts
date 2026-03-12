@@ -273,6 +273,30 @@ export async function POST(req: NextRequest) {
   const draftKey = `csv:${resolved.shopId}:${weekKey}:${hash}`;
   const periodKey = getTradingPeriodFor(weekStart).key;
   const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
+  const rowPayload = aggregated.aggregates.map((r) => ({
+    key: r.key,
+    dateUtc: r.dateUtc.toISOString(),
+    orderNo: r.orderNo,
+    orderItemNo: r.orderItemNo,
+    details: r.details,
+    sellerSku: r.sellerSku,
+    jumiaSku: r.jumiaSku,
+    itemCreditTxn: r.itemCreditTxn,
+    commissionTxn: r.commissionTxn,
+    shippingTxn: r.shippingTxn,
+    otherTxn: r.otherTxn,
+    grossSale: r.grossSale,
+    commission: r.commission,
+    shippingFee: r.shippingFee,
+    otherFees: r.otherFees,
+    netPayout: r.netPayout,
+    statementNumber: r.statementNumber,
+    paidStatus: r.paidStatus,
+    orderItemStatus: r.orderItemStatus,
+    shippingProvider: r.shippingProvider,
+    trackingNumber: r.trackingNumber,
+    countryCode: r.countryCode,
+  }));
 
   let draftId: string | null = null;
   // Prevent statement duplication: if this shop+week already has a draft for the same statement number, resume it instead of creating a new one.
@@ -284,6 +308,49 @@ export async function POST(req: NextRequest) {
         select: { id: true, draftKey: true },
       });
       if (existingSameStatement && String(existingSameStatement.draftKey) !== draftKey) {
+        const existingDraft = await prisma.marketplaceStatementDraft.findUnique({
+          where: { id: existingSameStatement.id },
+          select: { id: true, buyingByTxn: true },
+        });
+        const existingBuying = (existingDraft?.buyingByTxn && typeof existingDraft.buyingByTxn === "object"
+          ? (existingDraft.buyingByTxn as any)
+          : {}) as Record<string, any>;
+        const mergedBuying: Record<string, any> = { ...suggestedBuyingByTxn };
+        for (const [k, v] of Object.entries(existingBuying)) {
+          mergedBuying[k] = v;
+        }
+
+        await prisma.marketplaceStatementDraft.update({
+          where: { id: existingSameStatement.id },
+          data: {
+            rowCount: aggregated.aggregates.length,
+            totalNetPayout: totals.netPayout,
+            rows: rowPayload as any,
+            buyingByTxn: mergedBuying as any,
+            fileName: (file as File).name || null,
+          },
+        });
+
+        // Keep weeklySales in sync with latest parsed statement total even when
+        // we resume an already-uploaded draft.
+        let effectiveUserId = userIdRaw ? userIdRaw : null;
+        if (!effectiveUserId) {
+          const primary = await prisma.marketplaceAccountAssignment.findFirst({
+            where: { accountId: account.id, endsAt: null },
+            orderBy: { startsAt: "desc" },
+            select: { attendantId: true },
+          });
+          effectiveUserId = primary?.attendantId ?? null;
+        }
+        await upsertManualWeeklySale({
+          shopId: resolved.shopId,
+          weekStart,
+          weekEnd,
+          amount: totals.netPayout,
+          userId: effectiveUserId,
+          actorId,
+        });
+
         return NextResponse.json({
           alreadyUploaded: true,
           account: { id: account.id, displayName: account.displayName, platform: account.platform as Platform },
@@ -291,6 +358,7 @@ export async function POST(req: NextRequest) {
           draftId: existingSameStatement.id,
           week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
           statementNumber,
+          totals,
         });
       }
     } catch (err) {
@@ -299,31 +367,6 @@ export async function POST(req: NextRequest) {
   }
   if (draftTableAvailable) {
     try {
-      const rowPayload = aggregated.aggregates.map((r) => ({
-      key: r.key,
-      dateUtc: r.dateUtc.toISOString(),
-      orderNo: r.orderNo,
-      orderItemNo: r.orderItemNo,
-      details: r.details,
-      sellerSku: r.sellerSku,
-      jumiaSku: r.jumiaSku,
-      itemCreditTxn: r.itemCreditTxn,
-      commissionTxn: r.commissionTxn,
-      shippingTxn: r.shippingTxn,
-      otherTxn: r.otherTxn,
-      grossSale: r.grossSale,
-      commission: r.commission,
-      shippingFee: r.shippingFee,
-      otherFees: r.otherFees,
-      netPayout: r.netPayout,
-      statementNumber: r.statementNumber,
-      paidStatus: r.paidStatus,
-      orderItemStatus: r.orderItemStatus,
-      shippingProvider: r.shippingProvider,
-      trackingNumber: r.trackingNumber,
-      countryCode: r.countryCode,
-    }));
-
     const existingDraft = await prisma.marketplaceStatementDraft.findUnique({
       where: { draftKey },
       select: { id: true, buyingByTxn: true, submittedByTxn: true },
