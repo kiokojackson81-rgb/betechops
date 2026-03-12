@@ -155,108 +155,50 @@ export default function renderReceiptTemplate(
     <title>${siteTitle} Receipt ${order.orderNumber || ''}</title>
       <style>
         :root { --brandColor: ${brandColor}; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #111827; }
-      .page { max-width: 760px; margin: 0 auto; padding: 18px; background: #fff; border: none; box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12); }
-      /* Print layout: force A5, prevent unwanted page breaks and keep footer on same page */
-      @page { size: A5 portrait; margin: 2mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111827; background:#f3f4f6; margin:0; }
+      .page { box-sizing:border-box; width:100%; max-width: 900px; margin: 12px auto; padding: 14px; background: #fff; border: none; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.09); }
+      @page { size: A4 portrait; margin: 1mm; }
       @media print {
-        html,
-        body {
-          width: 148mm;
-          height: 210mm;
+        html, body {
+          width: 210mm;
           margin: 0;
           padding: 0;
-          font-size: 10px;
-          line-height: 1.1;
-          word-break: keep-all;
+          font-size: 10.5px;
+          line-height: 1.2;
+          word-break: normal;
           hyphens: none;
           background: #fff;
         }
-        body {
-          min-height: 210mm;
-          overflow: hidden;
-        }
+        body { overflow: visible; }
         .page {
-          box-sizing: border-box;
-          width: 100%;
-          max-width: calc(148mm - 4mm);
-          max-height: calc(210mm - 4mm);
-          display: flex;
-          flex-direction: column;
-          padding: 2mm;
-          margin: 0 auto;
+          width: auto;
+          max-width: none;
+          min-height: 0;
+          margin: 0;
+          padding: 1.5mm 2mm;
           box-shadow: none;
-          page-break-inside: avoid;
-          break-inside: avoid;
-          background: #fff;
           border-radius: 0;
-          overflow: hidden;
+          page-break-inside: auto;
+          break-inside: auto;
         }
-        /* Keep header and footer from breaking */
-        header { flex: 0 0 auto; }
-        .signature { flex: 0 0 auto; }
-        .receipt-footer {
-          flex: 0 0 auto;
-          page-break-inside: avoid;
-          break-inside: avoid;
-          margin-top: 10px;
-          font-size: 10px;
-        }
-        .receipt-footer-container {
-          margin-top: auto;
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .meta, table, .item-warranty, .notes {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        table {
-          page-break-after: auto;
-        }
+        header,
+        .signature,
+        .receipt-footer,
+        .receipt-footer-container,
+        .meta,
+        .item-warranty,
+        .notes,
         tr {
           page-break-inside: avoid;
           break-inside: avoid;
         }
         thead { display: table-header-group; }
         tfoot { display: table-footer-group; }
-        th, td {
-          padding: 5px 6px;
-        }
-        .meta {
-          flex-wrap: wrap;
-          gap: 4px;
-        }
-        .receipt-footer {
-          margin-top: 10px;
-        }
-        .social-row {
-          gap: 4px;
-        }
-        .social-link {
-          font-size: 10px;
-        }
-        .footer-divider {
-          margin: 6px auto;
-          width: 85%;
-        }
-        body, .page { font-size: 10px; }
-        body {
-          zoom: 0.94;
-        }
-        table {
-          font-size: 9px;
-        }
-        td, th {
-          padding: 4px 5px;
-        }
-        .meta {
-          font-size: 9px;
-        }
-        h1, h2, h3 {
-          font-size: 10px;
-        }
-        /* Ensure colors print accurately */
+        table { font-size: 10px; }
+        th, td { padding: 5px 6px; }
+        .meta { font-size: 10px; gap: 6px; }
+        .social-link { font-size: 10px; }
+        .footer-divider { margin: 8px auto; width: 82%; }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
         header { text-align:center; margin-bottom:12px; }

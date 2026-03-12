@@ -246,8 +246,18 @@ export async function generateReceiptPdf(
   try {
     browser = await launchChromiumBrowser();
     const page = await browser.newPage();
+    await page.emulateMediaType('print');
     await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'A4', printBackground: true });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '1mm',
+        right: '1mm',
+        bottom: '1mm',
+        left: '1mm',
+      },
+    });
     return pdf;
   } catch (err) {
     console.error('[receiptSender] failed to render PDF', err);

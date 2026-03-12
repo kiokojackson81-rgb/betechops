@@ -29,8 +29,10 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
   try {
     const search = req.nextUrl.searchParams;
-    const forceFresh = search.get('fresh') === '1';
     const asDownload = search.get('download') === '1';
+    // Always generate a fresh PDF for explicit download so users get the latest
+    // polished layout, even when older stored files exist.
+    const forceFresh = search.get('fresh') === '1' || asDownload;
 
     const files = forceFresh
       ? []
@@ -97,16 +99,16 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     const browser = await launchChromiumBrowser();
     try {
       const page = await browser.newPage();
-      await page.emulateMediaType('screen');
+      await page.emulateMediaType('print');
       await page.setContent(html, { waitUntil: 'networkidle0' });
       const pdf = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
-          top: '8mm',
-          right: '8mm',
-          bottom: '10mm',
-          left: '8mm',
+          top: '1mm',
+          right: '1mm',
+          bottom: '1mm',
+          left: '1mm',
         },
       });
       const headers = new Headers();
