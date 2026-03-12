@@ -50,13 +50,15 @@ export default async function OnlinePerformancePage({
   let perWeekAgg: any[] = [];
   let perWeekLossCount: any[] = [];
   let perWeekWeeklySales: any[] = [];
+  let perWeekSubmittedAccounts: any[] = [];
+  let perWeekMissingPricing: any[] = [];
   let dbReady = true;
   let isLossColumnReady = true;
   let accountIdColumnReady = true;
   try {
     const shopIdsForWeeklySales = accountId ? await resolveShopIdsForMarketplaceAccount(accountId) : [];
 
-    [perWeekAgg, perWeekLossCount, perWeekWeeklySales] = await Promise.all([
+    [perWeekAgg, perWeekLossCount, perWeekWeeklySales, perWeekSubmittedAccounts, perWeekMissingPricing] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
         _sum: { netPayout: true, profit: true },
@@ -84,6 +86,22 @@ export default async function OnlinePerformancePage({
           ...(accountId
             ? { shopId: { in: shopIdsForWeeklySales.length ? shopIdsForWeeklySales : ["__none__"] } }
             : {}),
+        },
+        orderBy: { weekStart: "asc" },
+      }),
+      (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart", "accountId"],
+        where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
+        orderBy: [{ weekStart: "asc" }, { accountId: "asc" }],
+      }),
+      (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart"],
+        _count: { _all: true },
+        where: {
+          weekStart: { in: weekStarts },
+          periodKey: period.key,
+          buyingPrice: { lte: 0 },
+          ...(accountId ? { accountId } : {}),
         },
         orderBy: { weekStart: "asc" },
       }),
@@ -125,6 +143,27 @@ export default async function OnlinePerformancePage({
         },
         orderBy: { weekStart: "asc" },
       });
+
+      try {
+        perWeekSubmittedAccounts = await (prisma as any).marketplaceProfitEntry.groupBy({
+          by: ["weekStart", "accountId"],
+          where: { weekStart: { in: weekStarts }, periodKey: period.key },
+          orderBy: [{ weekStart: "asc" }, { accountId: "asc" }],
+        });
+      } catch {
+        perWeekSubmittedAccounts = [];
+      }
+
+      perWeekMissingPricing = await (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart"],
+        _count: { _all: true },
+        where: {
+          weekStart: { in: weekStarts },
+          periodKey: period.key,
+          buyingPrice: { lte: 0 },
+        },
+        orderBy: { weekStart: "asc" },
+      });
     } else {
       throw err;
     }
@@ -146,6 +185,15 @@ export default async function OnlinePerformancePage({
   const weeklySaleMap = new Map(
     (perWeekWeeklySales as any[]).map((row) => [new Date(row.weekStart).toISOString(), Number(row._sum?.amount ?? 0)]),
   );
+  const missingPricingMap = new Map(
+    (perWeekMissingPricing as any[]).map((row) => [new Date(row.weekStart).toISOString(), Number(row._count?._all ?? 0)]),
+  );
+  const submittedAccountsMap = new Map<string, number>();
+  for (const row of perWeekSubmittedAccounts as any[]) {
+    const key = new Date(row.weekStart).toISOString();
+    submittedAccountsMap.set(key, (submittedAccountsMap.get(key) ?? 0) + 1);
+  }
+  const totalAccountsForCoverage = accountId ? 1 : accounts.length;
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const nextPeriod = getNextTradingPeriod(period);
@@ -247,10 +295,13 @@ export default async function OnlinePerformancePage({
             const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
             const netToShow = typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
             const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
+            const submittedAccounts = submittedAccountsMap.get(wk.weekStart.toISOString()) ?? 0;
+            const missingPricingCount = missingPricingMap.get(wk.weekStart.toISOString()) ?? 0;
+            const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
             return (
               <Link
                 key={wk.key}
-                href={`/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}`}
+                href={weekHref}
                 className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
               >
                 <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
@@ -260,6 +311,18 @@ export default async function OnlinePerformancePage({
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Loss entries</span>
                       <span className="font-semibold text-amber-200">{lossCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts submitted</span>
+                      <span className="font-semibold text-slate-100">
+                        {submittedAccounts}/{totalAccountsForCoverage}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Missing pricing</span>
+                      <span className={`font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
+                        {missingPricingCount}
+                      </span>
                     </div>
                     <div className="text-xs text-slate-500">Totals hidden for supervisor view. Open week to see per-order profit/loss.</div>
                   </div>
@@ -283,8 +346,24 @@ export default async function OnlinePerformancePage({
                       <span className="text-slate-400">Avg commission %</span>
                       <span className="font-semibold text-slate-200">{agg.avgCommissionRate.toFixed(1)}%</span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts submitted</span>
+                      <span className="font-semibold text-slate-100">
+                        {submittedAccounts}/{totalAccountsForCoverage}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Missing pricing</span>
+                      <span className={`font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
+                        {missingPricingCount}
+                      </span>
+                    </div>
                   </div>
                 )}
+                <div className="mt-3 border-t border-white/10 pt-2 text-xs">
+                  <span className="text-slate-400">Drill-down:</span>{" "}
+                  <span className="font-semibold text-emerald-200">Open missing pricing list</span>
+                </div>
               </Link>
             );
           })}

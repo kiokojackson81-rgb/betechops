@@ -204,6 +204,8 @@ export default async function OnlinePerformanceWeekPage({
 
   const lossEntries = rows.filter((e) => Number(e.profit ?? 0) < 0);
   const lossEntriesFlagged = rows.filter((e) => Boolean((e as any).isLoss));
+  const missingPricingRows = rows.filter((e) => Number(e.buyingPrice ?? 0) <= 0);
+  const missingPricingCount = missingPricingRows.length;
 
   return (
     <div className="space-y-8">
@@ -269,6 +271,12 @@ export default async function OnlinePerformanceWeekPage({
               <p className="text-xs uppercase tracking-wide text-slate-400">Statement net payout</p>
               <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
             </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Products missing pricing</p>
+              <p className={`mt-2 text-xl font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
+                {missingPricingCount}
+              </p>
+            </div>
           </div>
         </section>
       ) : (
@@ -310,6 +318,59 @@ export default async function OnlinePerformanceWeekPage({
         <h2 className="text-lg font-semibold text-white">All entries</h2>
         <div className="mt-4">
           <WeekProfitEntriesClient rows={rows as any} emptyText="No profit entries captured for this week." variant="all" enableBulkDelete />
+        </div>
+      </section>
+
+      <section id="missing-pricing" className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Products missing pricing</h2>
+            <p className="text-sm text-slate-400">Rows where buying price is zero. Price these to complete weekly profit capture.</p>
+          </div>
+          <Link
+            href="/admin/online/performance/capture"
+            className="rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
+          >
+            Open capture page
+          </Link>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[920px] text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-400">
+                <th className="py-2 pr-4">Date</th>
+                <th className="py-2 pr-4">Shop</th>
+                <th className="py-2 pr-4">Order</th>
+                <th className="py-2 pr-4">Product</th>
+                <th className="py-2 pr-4">SKU</th>
+                <th className="py-2 pr-4">Txn</th>
+                <th className="py-2 pr-4 text-right">Net payout</th>
+                <th className="py-2 pr-4 text-right">Buying</th>
+              </tr>
+            </thead>
+            <tbody>
+              {missingPricingRows.map((row) => (
+                <tr key={row.id} className="border-t border-white/5">
+                  <td className="py-3 pr-4 text-slate-200">{new Date(row.date).toLocaleDateString()}</td>
+                  <td className="py-3 pr-4 text-slate-200">{row.shopName || "-"}</td>
+                  <td className="py-3 pr-4 text-slate-200">{row.orderId || "-"}</td>
+                  <td className="py-3 pr-4 text-slate-100">{row.productName || "-"}</td>
+                  <td className="py-3 pr-4 text-slate-300">{row.sku || "-"}</td>
+                  <td className="py-3 pr-4 font-medium text-emerald-200">{row.itemCreditTxn || "-"}</td>
+                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(row.netPayout ?? 0))}</td>
+                  <td className="py-3 pr-4 text-right font-semibold text-rose-300">{currency.format(Number(row.buyingPrice ?? 0))}</td>
+                </tr>
+              ))}
+              {missingPricingRows.length === 0 ? (
+                <tr>
+                  <td className="py-6 text-center text-slate-500" colSpan={8}>
+                    No missing pricing rows for this week.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
