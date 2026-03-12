@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { withImpersonateId } from "@/lib/impersonation";
 
-const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
+const currency = new Intl.NumberFormat("en-KE", {
+  style: "currency",
+  currency: "KES",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 type DividedAccountRow = {
   key: string;
@@ -332,4 +337,3 @@ export default function DividedViewClient(props: {
     </section>
   );
 }
-

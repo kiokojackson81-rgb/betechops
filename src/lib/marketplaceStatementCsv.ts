@@ -195,6 +195,14 @@ export function aggregateMarketplaceStatementRows(opts: {
   const errors: string[] = [];
   const byKey = new Map<string, AggregateBucket>();
   let skipped = 0;
+  const weekStartDateOnly =
+    opts.weekStartUtc instanceof Date && !Number.isNaN(opts.weekStartUtc.getTime())
+      ? parseDateOnlyUtc(opts.weekStartUtc.toISOString().slice(0, 10))
+      : null;
+  const weekEndDateOnly =
+    opts.weekEndUtc instanceof Date && !Number.isNaN(opts.weekEndUtc.getTime())
+      ? parseDateOnlyUtc(opts.weekEndUtc.toISOString().slice(0, 10))
+      : null;
 
   for (const row of opts.rows) {
     const dateUtc = row.transactionDateUtc;
@@ -203,7 +211,12 @@ export function aggregateMarketplaceStatementRows(opts: {
       continue;
     }
     if (opts.weekStartUtc && opts.weekEndUtc) {
-      if (!(dateUtc >= opts.weekStartUtc && dateUtc < opts.weekEndUtc)) {
+      // CSV timestamps are statement-local. Filter by date-only first to avoid
+      // shifting early-Monday rows across week boundaries due timezone parsing.
+      const rowDateOnly = parseDateOnlyUtc(row.transactionDateRaw);
+      if (rowDateOnly && weekStartDateOnly && weekEndDateOnly) {
+        if (!(rowDateOnly >= weekStartDateOnly && rowDateOnly < weekEndDateOnly)) continue;
+      } else if (!(dateUtc >= opts.weekStartUtc && dateUtc < opts.weekEndUtc)) {
         continue;
       }
     }

@@ -155,10 +155,25 @@ export async function POST(req: NextRequest) {
     weekEnd = detected.weekEnd;
   }
 
+  const parsedStatementNumberCounts = new Map<string, number>();
+  for (const r of parsed.rows) {
+    const n = String((r as any)?.statementNumber ?? "").trim();
+    if (!n) continue;
+    parsedStatementNumberCounts.set(n, (parsedStatementNumberCounts.get(n) ?? 0) + 1);
+  }
+  const dominantStatementNumber =
+    Array.from(parsedStatementNumberCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  const rowsForAggregation = dominantStatementNumber
+    ? parsed.rows.filter((r) => String((r as any)?.statementNumber ?? "").trim() === dominantStatementNumber)
+    : parsed.rows;
+
   const aggregated = aggregateMarketplaceStatementRows({
-    rows: parsed.rows,
-    weekStartUtc: weekStart,
-    weekEndUtc: weekEnd,
+    rows: rowsForAggregation,
+    // When a statement number is present, trust statement membership from file
+    // instead of strict timestamp windowing to avoid timezone-edge omissions.
+    weekStartUtc: dominantStatementNumber ? undefined : weekStart,
+    weekEndUtc: dominantStatementNumber ? undefined : weekEnd,
   });
 
   // Prefill buying prices from the most recent matching SKU+name+price in prior profit entries.
