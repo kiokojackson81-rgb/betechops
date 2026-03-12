@@ -24,14 +24,32 @@ function normalize(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function normalizeNameForMatch(value: unknown): string {
+  return normalize(value)
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function resolveShopForAccount(account: { id: string; platform: Platform; displayName: string | null; jumiaShopSid: string | null }) {
-  const apiKey = normalize(account.jumiaShopSid);
+  const sid = normalize(account.jumiaShopSid);
   const name = normalize(account.displayName);
+  const normalizedAccountName = normalizeNameForMatch(name);
 
   const shop =
-    (apiKey
+    // Primary: canonical shop SID mapping.
+    (sid
       ? await prisma.shop.findFirst({
-          where: { platform: account.platform as any, apiConfig: { is: { apiKey } } as any },
+          where: { platform: account.platform as any, jumiaShopSid: sid },
+          select: { id: true, name: true },
+        })
+      : null) ??
+    // Backward compatibility: older rows where SID was stored in apiConfig.apiKey.
+    (sid
+      ? await prisma.shop.findFirst({
+          where: { platform: account.platform as any, apiConfig: { is: { apiKey: sid } } as any },
           select: { id: true, name: true },
         })
       : null) ??
@@ -42,7 +60,25 @@ async function resolveShopForAccount(account: { id: string; platform: Platform; 
         })
       : null);
 
-  return shop ? { id: shop.id, name: shop.name } : null;
+  if (shop) return { id: shop.id, name: shop.name };
+
+  // Last resort: normalized display-name matching (handles "(JUMIA)" suffixes
+  // and punctuation differences between account names and shop names).
+  if (!normalizedAccountName) return null;
+  const allJumiaShops = await prisma.shop.findMany({
+    where: { platform: account.platform as any },
+    select: { id: true, name: true },
+    take: 200,
+  });
+  const fallback =
+    allJumiaShops.find((s) => normalizeNameForMatch(s.name) === normalizedAccountName) ??
+    allJumiaShops.find((s) => {
+      const n = normalizeNameForMatch(s.name);
+      return n.includes(normalizedAccountName) || normalizedAccountName.includes(n);
+    }) ??
+    null;
+
+  return fallback ? { id: fallback.id, name: fallback.name } : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -194,4 +230,3 @@ export async function GET(req: NextRequest) {
     totals,
   });
 }
-
