@@ -23,7 +23,7 @@ export default async function AttendantPerformanceCapturePage() {
       <main className="mx-auto max-w-6xl space-y-6 p-6">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
-          <h1 className="text-3xl font-semibold text-white">Capture profit</h1>
+          <h1 className="text-3xl font-semibold text-white">Capture Buying price</h1>
           <p className="text-sm text-slate-300">
             Enter buying price and paste transaction details. Admin can review and analyze later.
           </p>

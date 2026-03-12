@@ -4,10 +4,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 
 export const dynamic = "force-dynamic";
-
-const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
 type SearchParams = { periodKey?: string; accountId?: string };
 
@@ -46,7 +45,10 @@ export default async function OnlinePerformanceLossPage({
         ...(accountId ? { accountId } : {}),
         ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
       },
-      include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+      include: {
+        account: { select: { displayName: true } },
+        enteredByAdmin: { select: { id: true, name: true, email: true } },
+      },
       orderBy: [{ profit: "asc" }, { date: "asc" }],
     });
   } catch (err: any) {
@@ -63,13 +65,33 @@ export default async function OnlinePerformanceLossPage({
           profit: { lt: 0 },
           ...(limitedView ? { enteredByAdminId: (session?.user as any)?.id } : {}),
         },
-        include: { enteredByAdmin: { select: { id: true, name: true, email: true } } },
+        include: {
+          account: { select: { displayName: true } },
+          enteredByAdmin: { select: { id: true, name: true, email: true } },
+        },
         orderBy: [{ profit: "asc" }, { date: "asc" }],
       });
     } else {
       throw err;
     }
   }
+  const rows = (lossEntries as any[]).map((e) => ({
+    id: String(e.id),
+    date: e.date instanceof Date ? e.date.toISOString() : String(e.date),
+    platform: e.platform,
+    itemCreditTxn: String(e.itemCreditTxn ?? ""),
+    shopName: String(e.account?.displayName ?? ""),
+    orderId: String(e.orderId ?? ""),
+    sku: String(e.sku ?? ""),
+    productName: String(e.productName ?? ""),
+    itemCreditAmount: Number(e.itemCreditAmount ?? 0),
+    commissionAmount: Number(e.commissionAmount ?? 0),
+    shippingAmount: Number(e.shippingAmount ?? 0),
+    netPayout: Number(e.netPayout ?? 0),
+    buyingPrice: Number(e.buyingPrice ?? 0),
+    profit: Number(e.profit ?? 0),
+    enteredBy: e.enteredByAdmin?.name || e.enteredByAdmin?.email || "-",
+  }));
 
   return (
     <div className="space-y-8">
@@ -127,44 +149,8 @@ export default async function OnlinePerformanceLossPage({
             Database is missing the `accountId` column. Shop filtering is temporarily disabled until migrations are applied.
           </div>
         )}
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead>
-              <tr className="text-xs uppercase tracking-wide text-slate-400">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Week start</th>
-                <th className="py-2 pr-4">Platform</th>
-                <th className="py-2 pr-4">Txn</th>
-                <th className="py-2 pr-4 text-right">Net payout</th>
-                <th className="py-2 pr-4 text-right">Buying</th>
-                <th className="py-2 pr-4 text-right">Profit</th>
-                <th className="py-2 pr-4 text-right">Commission %</th>
-                <th className="py-2 pr-4">Entered by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lossEntries.map((e) => (
-                <tr key={e.id} className="border-t border-white/5">
-                  <td className="py-3 pr-4 text-slate-200">{new Date(e.date).toLocaleDateString()}</td>
-                  <td className="py-3 pr-4 text-slate-200">{new Date(e.weekStart).toISOString().slice(0, 10)}</td>
-                  <td className="py-3 pr-4 text-slate-200">{e.platform}</td>
-                  <td className="py-3 pr-4 font-medium text-white">{e.itemCreditTxn}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.netPayout ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(e.buyingPrice ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right font-semibold text-red-300">{currency.format(Number(e.profit ?? 0))}</td>
-                  <td className="py-3 pr-4 text-right text-slate-200">{Number(e.commissionRatePct ?? 0).toFixed(1)}%</td>
-                  <td className="py-3 pr-4 text-slate-300">{e.enteredByAdmin?.name || e.enteredByAdmin?.email || "-"}</td>
-                </tr>
-              ))}
-              {!lossEntries.length && (
-                <tr>
-                  <td className="py-6 text-center text-slate-500" colSpan={9}>
-                    No loss entries for this period’s 4 weeks.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <WeekProfitEntriesClient rows={rows as any} emptyText="No loss entries for this period’s 4 weeks." variant="loss" />
         </div>
       </section>
     </div>

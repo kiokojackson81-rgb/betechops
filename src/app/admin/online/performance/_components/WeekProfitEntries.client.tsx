@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
@@ -11,6 +11,10 @@ type EntryRow = {
   date: string;
   platform: Platform;
   itemCreditTxn: string;
+  shopName?: string;
+  orderId?: string;
+  sku?: string;
+  productName?: string;
   itemCreditAmount?: number;
   commissionAmount?: number;
   shippingAmount?: number;
@@ -32,8 +36,11 @@ export default function WeekProfitEntriesClient(props: {
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<EntryRow[]>(props.rows);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [detailBuyingInput, setDetailBuyingInput] = useState<string>("");
 
   const selectedList = useMemo(() => Object.keys(selectedIds).filter((id) => selectedIds[id]), [selectedIds]);
+  const tableColSpan = props.enableBulkDelete ? (props.variant === "all" ? 12 : 9) : props.variant === "all" ? 11 : 8;
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelectedIds({});
@@ -91,10 +98,7 @@ export default function WeekProfitEntriesClient(props: {
     }
   };
 
-  const editBuying = async (row: EntryRow) => {
-    const raw = window.prompt("New buying price (KES)", String(row.buyingPrice ?? 0));
-    if (raw === null) return;
-    const nextBuying = Number(raw);
+  const saveBuyingPrice = async (row: EntryRow, nextBuying: number) => {
     if (!Number.isFinite(nextBuying) || nextBuying < 0) {
       showToast("Enter a valid non-negative number", "error");
       return;
@@ -126,6 +130,17 @@ export default function WeekProfitEntriesClient(props: {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openDetails = (row: EntryRow) => {
+    const nextOpen = openRowId === row.id ? null : row.id;
+    setOpenRowId(nextOpen);
+    setDetailBuyingInput(String(row.buyingPrice ?? 0));
+  };
+
+  const saveBuyingFromDetails = async (row: EntryRow) => {
+    const nextBuying = Number(detailBuyingInput);
+    await saveBuyingPrice(row, nextBuying);
   };
 
   const hasRows = rows.length > 0;
@@ -183,58 +198,146 @@ export default function WeekProfitEntriesClient(props: {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-white/5">
-                {props.enableBulkDelete ? (
+              <Fragment key={r.id}>
+                <tr className="border-t border-white/5">
+                  {props.enableBulkDelete ? (
+                    <td className="py-3 pr-4">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedIds[r.id])}
+                        onChange={(e) => setSelectedIds((prev) => ({ ...prev, [r.id]: e.target.checked }))}
+                        disabled={saving}
+                      />
+                    </td>
+                  ) : null}
+                  <td className="py-3 pr-4 text-slate-200">{new Date(r.date).toLocaleDateString()}</td>
+                  <td className="py-3 pr-4 text-slate-200">{r.platform}</td>
                   <td className="py-3 pr-4">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedIds[r.id])}
-                      onChange={(e) => setSelectedIds((prev) => ({ ...prev, [r.id]: e.target.checked }))}
-                      disabled={saving}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openDetails(r)}
+                      className="font-medium text-emerald-200 hover:text-emerald-100 hover:underline"
+                      title="Open order details"
+                    >
+                      {r.itemCreditTxn}
+                    </button>
                   </td>
+                  {props.variant === "all" ? (
+                    <>
+                      <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.itemCreditAmount ?? 0))}</td>
+                      <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.commissionAmount ?? 0))}</td>
+                      <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.shippingAmount ?? 0))}</td>
+                    </>
+                  ) : null}
+                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.netPayout ?? 0))}</td>
+                  <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.buyingPrice ?? 0))}</td>
+                  <td className={`py-3 pr-4 text-right font-semibold ${Number(r.profit ?? 0) < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                    {currency.format(Number(r.profit ?? 0))}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-300">{r.enteredBy || "-"}</td>
+                  <td className="py-3 pr-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openDetails(r)}
+                        disabled={saving}
+                        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:opacity-60"
+                      >
+                        Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteOne(r.id)}
+                        disabled={saving}
+                        className="rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-500/15 disabled:opacity-60"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {openRowId === r.id ? (
+                  <tr className="border-t border-white/5 bg-slate-950/40">
+                    <td className="px-4 py-4" colSpan={tableColSpan}>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Shop</div>
+                          <div className="mt-1 text-sm text-slate-100">{r.shopName || "-"}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Order number</div>
+                          <div className="mt-1 text-sm text-slate-100">{r.orderId || "-"}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">SKU</div>
+                          <div className="mt-1 text-sm text-slate-100">{r.sku || "-"}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Item</div>
+                          <div className="mt-1 text-sm text-slate-100">{r.productName || "-"}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Selling price</div>
+                          <div className="mt-1 text-sm font-semibold text-slate-100">{currency.format(Number(r.itemCreditAmount ?? 0))}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Net payout</div>
+                          <div className="mt-1 text-sm font-semibold text-slate-100">{currency.format(Number(r.netPayout ?? 0))}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Current buying</div>
+                          <div className="mt-1 text-sm font-semibold text-slate-100">{currency.format(Number(r.buyingPrice ?? 0))}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-400">Current profit</div>
+                          <div className={`mt-1 text-sm font-semibold ${Number(r.profit ?? 0) < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                            {currency.format(Number(r.profit ?? 0))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-end gap-3">
+                        <label className="block">
+                          <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">Edit buying price (KES)</div>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={detailBuyingInput}
+                            onChange={(e) => setDetailBuyingInput(e.target.value)}
+                            className="w-44 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-slate-100"
+                          />
+                        </label>
+                        <div className="text-xs text-slate-400">
+                          Preview profit: {currency.format(Number(r.netPayout ?? 0) - (Number(detailBuyingInput) || 0))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void saveBuyingFromDetails(r)}
+                          disabled={saving}
+                          className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60"
+                        >
+                          Save buying price
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOpenRowId(null)}
+                          className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ) : null}
-                <td className="py-3 pr-4 text-slate-200">{new Date(r.date).toLocaleDateString()}</td>
-                <td className="py-3 pr-4 text-slate-200">{r.platform}</td>
-                <td className="py-3 pr-4 font-medium text-white">{r.itemCreditTxn}</td>
-                {props.variant === "all" ? (
-                  <>
-                    <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.itemCreditAmount ?? 0))}</td>
-                    <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.commissionAmount ?? 0))}</td>
-                    <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.shippingAmount ?? 0))}</td>
-                  </>
-                ) : null}
-                <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.netPayout ?? 0))}</td>
-                <td className="py-3 pr-4 text-right text-slate-200">{currency.format(Number(r.buyingPrice ?? 0))}</td>
-                <td className={`py-3 pr-4 text-right font-semibold ${Number(r.profit ?? 0) < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                  {currency.format(Number(r.profit ?? 0))}
-                </td>
-                <td className="py-3 pr-4 text-slate-300">{r.enteredBy || "-"}</td>
-                <td className="py-3 pr-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => editBuying(r)}
-                      disabled={saving}
-                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:opacity-60"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteOne(r.id)}
-                      disabled={saving}
-                      className="rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-500/15 disabled:opacity-60"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
+              </Fragment>
             ))}
             {!rows.length ? (
               <tr>
-                <td className="py-6 text-center text-slate-500" colSpan={props.enableBulkDelete ? 12 : 11}>
+                <td className="py-6 text-center text-slate-500" colSpan={tableColSpan}>
                   {props.emptyText}
                 </td>
               </tr>
@@ -245,4 +348,3 @@ export default function WeekProfitEntriesClient(props: {
     </div>
   );
 }
-

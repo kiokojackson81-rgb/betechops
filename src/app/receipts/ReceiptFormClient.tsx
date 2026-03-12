@@ -255,8 +255,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
 
+  const toBase64Utf8 = (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary);
+  };
+
   const buildPreviewUrl = (draft: ReturnType<typeof buildDraft>) => {
-    const encoded = encodeURIComponent(btoa(JSON.stringify(draft)));
+    const encoded = encodeURIComponent(toBase64Utf8(JSON.stringify(draft)));
     // always preview using A5
     return `/receipts/preview?draft=${encoded}`;
   };

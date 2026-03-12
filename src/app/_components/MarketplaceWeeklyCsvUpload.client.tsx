@@ -905,7 +905,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         <label className="block">
           <div className="mb-1 text-xs text-slate-400">Shop</div>
           <select
@@ -919,7 +919,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                 const ok = window.confirm("Switch shop? This will clear the current view. Your loaded statement remains saved.");
                 if (!ok) return;
                 resetView({ preserveStorage: true });
-                setWeekStart("");
               }
               setShopId(next);
             }}
@@ -997,7 +996,6 @@ export default function MarketplaceWeeklyCsvUpload(props: {
             />
         </label>
 
-        <div className="hidden" aria-hidden="true" />
       </div>
 
       {!rows.length && !file && shopId && openDrafts.length > 0 ? (
@@ -1038,36 +1036,38 @@ export default function MarketplaceWeeklyCsvUpload(props: {
 
       {rows.length ? (
         <div className="mt-4">
-          {!props.hideSummaryTotals ? (
-            <div className="mb-3 grid gap-2 sm:grid-cols-4">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Rows</div>
-                <div className="text-base font-semibold text-slate-100">{rows.length}</div>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Net payout total</div>
-                <div className="text-base font-semibold text-slate-100">{currency.format(totals.netPayout)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Duplicates</div>
-                <div className="text-base font-semibold text-slate-100">{totals.duplicates}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowOnlyUnpriced((v) => !v)}
-                className={
-                  showOnlyUnpriced
-                    ? "rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-left"
-                    : "rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left hover:bg-slate-950/55"
-                }
-                title="Show orders not yet priced"
-              >
-                <div className="text-xs text-slate-400">Unpriced orders</div>
-                <div className="text-base font-semibold text-slate-100">{unpricedCounts.unpriced}</div>
-                <div className="mt-1 text-[11px] text-slate-400">{showOnlyUnpriced ? "Showing unpriced only" : "Click to filter list"}</div>
-              </button>
-            </div>
-          ) : null}
+          <div className={`mb-3 grid gap-2 ${props.hideSummaryTotals ? "sm:grid-cols-1" : "sm:grid-cols-4"}`}>
+            {!props.hideSummaryTotals ? (
+              <>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Rows</div>
+                  <div className="text-base font-semibold text-slate-100">{rows.length}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Net payout total</div>
+                  <div className="text-base font-semibold text-slate-100">{currency.format(totals.netPayout)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="text-xs text-slate-400">Duplicates</div>
+                  <div className="text-base font-semibold text-slate-100">{totals.duplicates}</div>
+                </div>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setShowOnlyUnpriced((v) => !v)}
+              className={
+                showOnlyUnpriced
+                  ? "rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-left"
+                  : "rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left hover:bg-slate-950/55"
+              }
+              title="Show orders not yet priced"
+            >
+              <div className="text-xs text-slate-400">Unpriced orders</div>
+              <div className="text-base font-semibold text-slate-100">{unpricedCounts.unpriced}</div>
+              <div className="mt-1 text-[11px] text-slate-400">{showOnlyUnpriced ? "Showing unpriced only" : "Click to filter list"}</div>
+            </button>
+          </div>
 
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div className="text-xs text-slate-500">
@@ -1101,17 +1101,27 @@ export default function MarketplaceWeeklyCsvUpload(props: {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800">
-            <table className="min-w-[980px] w-full text-left text-sm">
+            <table className="min-w-[1160px] w-full text-left text-sm">
+              <colgroup>
+                <col className="w-[120px]" />
+                <col className="w-[160px]" />
+                <col />
+                <col className="w-[120px]" />
+                <col className="w-[130px]" />
+                <col className="w-[160px]" />
+                <col className="w-[140px]" />
+                <col className="w-[120px]" />
+              </colgroup>
               <thead className="bg-slate-950/60 text-xs uppercase tracking-wide text-slate-400">
                 <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Order</th>
-                  <th className="px-3 py-2">Item</th>
-                  <th className="px-3 py-2">SKU</th>
+                  <th className="px-3 py-2 whitespace-nowrap">Date</th>
+                  <th className="px-3 py-2 whitespace-nowrap">Order</th>
+                  <th className="px-3 py-2 whitespace-nowrap">Item</th>
+                  <th className="px-3 py-2 whitespace-nowrap">SKU</th>
                   <th className="px-3 py-2 whitespace-nowrap">Net</th>
                   <th className="px-3 py-2 whitespace-nowrap">Buying</th>
                   <th className="px-3 py-2 whitespace-nowrap">Profit</th>
-                  <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2 whitespace-nowrap text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/20">
@@ -1134,23 +1144,25 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                   const canSubmitRow = !isSubmitted && !isReturn && hasValidBuying;
                   const canUpdateRow = isSubmitted && !isReturn && hasValidBuying && buyingRaw !== savedRaw;
                   const skuLabel = String(r.jumiaSku || r.sellerSku || "-");
+                  const orderLabel = String(r.orderNo || "-").replace(/\s+/g, "");
+                  const itemNoLabel = String(r.orderItemNo || "").replace(/\s+/g, "");
                   const isAutofilled = Boolean(autofilledByTxn[r.itemCreditTxn]);
                   return (
                     <tr key={r.key} className={isDup ? "bg-amber-950/20" : ""}>
-                      <td className="px-3 py-2 text-slate-200">{new Date(r.dateUtc).toLocaleDateString("en-KE")}</td>
-                      <td className="px-3 py-2 text-slate-200">{r.orderNo || "-"}</td>
-                      <td className="px-3 py-2 text-slate-200">
-                        <div className="max-w-[420px] truncate" title={r.details}>
+                      <td className="px-3 py-2 align-top whitespace-nowrap text-slate-200">{new Date(r.dateUtc).toLocaleDateString("en-KE")}</td>
+                      <td className="px-3 py-2 align-top whitespace-nowrap text-slate-200">{orderLabel}</td>
+                      <td className="px-3 py-2 align-top text-slate-200">
+                        <div className="max-w-[480px] truncate" title={r.details}>
                           {r.details || "-"}
                         </div>
-                        <div className="text-xs text-slate-400">{r.orderItemNo || ""}</div>
+                        <div className="text-xs text-slate-400">{itemNoLabel}</div>
                       </td>
-                      <td className="px-3 py-2 text-slate-200">
+                      <td className="px-3 py-2 align-top whitespace-nowrap text-slate-200">
                         {skuLabel !== "-" ? (
                           <button
                             type="button"
                             onClick={() => void copySku(skuLabel)}
-                            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900"
+                            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-semibold whitespace-nowrap text-slate-200 hover:bg-slate-900"
                             title={skuLabel}
                           >
                             Copy SKU
@@ -1159,13 +1171,13 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                           <span className="text-slate-500">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-100">
+                      <td className="px-3 py-2 align-top whitespace-nowrap font-medium text-slate-100">
                         {currency.format(Number(r.netPayout ?? 0))}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 align-top">
                         <div className="flex items-center gap-2">
                           <input
-                            className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 disabled:opacity-60"
+                            className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 disabled:opacity-60"
                             inputMode="decimal"
                             placeholder={isReturn ? "Return" : "0"}
                             value={buyingByTxn[r.itemCreditTxn] ?? ""}
@@ -1183,14 +1195,14 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                       <td
                         className={
                           isReturn
-                            ? "px-3 py-2 whitespace-nowrap font-semibold text-slate-500"
+                            ? "px-3 py-2 align-top whitespace-nowrap font-semibold text-slate-500"
                             : profitValue !== undefined && profitValue < 0
                               ? isSubmitted
-                                ? "px-3 py-2 whitespace-nowrap font-semibold text-rose-300"
-                                : "px-3 py-2 whitespace-nowrap font-semibold text-rose-300/80"
+                                ? "px-3 py-2 align-top whitespace-nowrap font-semibold text-rose-300"
+                                : "px-3 py-2 align-top whitespace-nowrap font-semibold text-rose-300/80"
                               : isSubmitted
-                                ? "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300"
-                                : "px-3 py-2 whitespace-nowrap font-semibold text-emerald-300/80"
+                                ? "px-3 py-2 align-top whitespace-nowrap font-semibold text-emerald-300"
+                                : "px-3 py-2 align-top whitespace-nowrap font-semibold text-emerald-300/80"
                         }
                       >
                         {isReturn ? "—" : profitValue !== undefined ? currency.format(profitValue) : "—"}
@@ -1198,12 +1210,12 @@ export default function MarketplaceWeeklyCsvUpload(props: {
                           <span className="ml-2 text-[10px] font-semibold text-slate-400">(pending)</span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 align-top text-right">
                         <button
                           type="button"
                           onClick={() => void submitRow(r.itemCreditTxn)}
                           disabled={!(canSubmitRow || canUpdateRow) || submittingTxn === r.itemCreditTxn || isReturn}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                          className="min-w-[88px] rounded-lg bg-emerald-600 px-3 py-1.5 text-center text-xs font-semibold whitespace-nowrap text-white hover:bg-emerald-500 disabled:opacity-50"
                         >
                           {submittingTxn === r.itemCreditTxn
                             ? isSubmitted

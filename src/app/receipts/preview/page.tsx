@@ -6,6 +6,13 @@ export default function ReceiptPreviewPage() {
   const [err, setErr] = useState<string | null>(null);
   const [autoPrint, setAutoPrint] = useState(false);
 
+  const fromBase64Utf8 = (encoded: string) => {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -16,7 +23,13 @@ export default function ReceiptPreviewPage() {
         if (!enc) return setErr("No draft provided");
 
         const json = decodeURIComponent(enc);
-        const parsed = JSON.parse(atob(json));
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(fromBase64Utf8(json));
+        } catch {
+          // Backward compatibility for older Latin1-only draft links.
+          parsed = JSON.parse(atob(json));
+        }
 
         const r = await fetch("/api/receipts/render-html", {
           method: "POST",

@@ -397,18 +397,29 @@ export async function sendReceiptChannels(
 ) {
   const requestId = opts?.requestId ?? randomUUID();
   const startTime = Date.now();
-  const receipt = await prisma.receipt.findUnique({
-    where: { id: receiptId },
-    include: {
-      order: {
-        include: {
-          items: { include: { product: { select: { name: true } } } },
-          attendant: true,
+  const readReceipt = async () =>
+    prisma.receipt.findUnique({
+      where: { id: receiptId },
+      include: {
+        order: {
+          include: {
+            items: { include: { product: { select: { name: true } } } },
+            attendant: true,
+          },
         },
+        issuedBy: true,
       },
-      issuedBy: true,
-    },
-  });
+    });
+
+  let receipt = await readReceipt();
+  if (!receipt) {
+    // In pooled/serverless setups, a just-created receipt can be briefly invisible
+    // across connections. Retry a few times before failing hard.
+    for (let attempt = 0; attempt < 3 && !receipt; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1)));
+      receipt = await readReceipt();
+    }
+  }
   if (!receipt) throw new Error('Receipt not found');
   const wantEmail = channels.length === 0 || channels.includes('email');
   const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
