@@ -359,7 +359,7 @@ export default function renderReceiptTemplate(
         color: var(--brandColor);
       }
 
-      @media print {
+        @media print {
         html, body {
           width: 148mm;
           min-height: 210mm;
@@ -372,11 +372,22 @@ export default function renderReceiptTemplate(
         body { overflow: visible; }
         .page {
           width: 100%;
+          height: 198mm;
           min-height: 198mm;
+          max-height: 198mm;
           margin: 0;
-          padding: 8mm;
+          padding: 6mm 6mm 5mm;
           box-shadow: none;
           border: none;
+          overflow: hidden;
+        }
+        .receipt-body {
+          min-height: 0;
+          height: 100%;
+          overflow: hidden;
+        }
+        .receipt-bottom {
+          margin-top: auto;
         }
         header,
         .signature,
@@ -390,9 +401,21 @@ export default function renderReceiptTemplate(
           break-inside: avoid;
         }
         .meta { font-size: 11px; }
+        .meta { margin: 5px 0 7px; gap: 6px; }
+        .meta > div { padding: 6px 8px; }
         table { font-size: 11px; }
-        th, td { padding: 6px; }
+        th, td { padding: 5px; }
         .totals { font-size: 11.5px; width: 58%; }
+        .totals { margin-top: 7px; }
+        .totals td { padding: 3px 0; }
+        .notes { margin-top: 7px; padding: 7px; }
+        .signature { margin-top: 7px; font-size: 10.8px; line-height: 1.3; }
+        .receipt-footer-container { margin-top: 6px; }
+        .receipt-footer { margin-top: 0; padding-top: 7px; font-size: 10.5px; line-height: 1.3; }
+        .footer-badge { margin-bottom: 4px; font-size: 10.5px; padding: 3px 8px; }
+        .social-row { gap: 3px; margin-bottom: 5px; }
+        .social-link { font-size: 10px; }
+        .footer-divider { margin: 6px auto; }
         .receipt-footer {
           page-break-inside: avoid;
         }
