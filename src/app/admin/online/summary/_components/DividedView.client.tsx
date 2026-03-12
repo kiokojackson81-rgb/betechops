@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { withImpersonateId } from "@/lib/impersonation";
 
@@ -85,15 +85,26 @@ export default function DividedViewClient(props: {
     }
   }, [storageKey, expenses, lowSellerScore, dividendRatePct, coopLoan, otherDeduction, mpesaTo0722]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const qs = new URLSearchParams({
+        weekStart: props.weekStart,
+        periodKey: props.periodKey,
+        _: String(Date.now()),
+      });
       const res = await fetch(
         withImpersonateId(
-          `/api/admin/online/summary/divided?weekStart=${encodeURIComponent(props.weekStart)}`,
+          `/api/admin/online/summary/divided?${qs.toString()}`,
           props.impersonateId ?? null,
         ),
-        { cache: "no-store" },
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+            Pragma: "no-cache",
+          },
+        },
       );
       const body = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(String(body?.error ?? "Failed to load divided summary"));
@@ -103,12 +114,26 @@ export default function DividedViewClient(props: {
     } finally {
       setLoading(false);
     }
-  };
+  }, [props.weekStart, props.periodKey, props.impersonateId]);
 
   useEffect(() => {
     void fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.weekStart]);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      void fetchData();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchData();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchData]);
 
   const derived = useMemo(() => {
     const totals = data?.totals ?? { sales: 0, profit: 0, returns: 0, grossProfit: 0 };

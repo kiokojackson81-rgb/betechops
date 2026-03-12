@@ -227,10 +227,19 @@ export async function GET(req: NextRequest) {
     { sales: 0, profit: 0, returns: 0, grossProfit: 0 },
   );
 
-  return NextResponse.json({
-    week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString(), weekStartInput: weekStartRaw },
-    draftTableAvailable,
-    accounts: perAccount,
-    totals,
-  });
+  return NextResponse.json(
+    {
+      week: { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString(), weekStartInput: weekStartRaw },
+      draftTableAvailable,
+      accounts: perAccount,
+      totals,
+      generatedAt: new Date().toISOString(),
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
+        Pragma: "no-cache",
+      },
+    },
+  );
 }
