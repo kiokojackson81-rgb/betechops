@@ -467,6 +467,8 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
         if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.customerType) params.set("customerType", appliedFilters.customerType);
+        if (appliedFilters.podStatus) params.set("status", appliedFilters.podStatus);
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -522,6 +524,12 @@ export default function ReceiptsAdminClient({
       }
       if (appliedFilters.q.trim()) {
         params.set("q", appliedFilters.q.trim());
+      }
+      if (appliedFilters.customerType) {
+        params.set("customerType", appliedFilters.customerType);
+      }
+      if (appliedFilters.podStatus) {
+        params.set("status", appliedFilters.podStatus);
       }
       params.set("scope", scopeMode);
       if (onlyPos) params.set("onlyPos", "1");
@@ -1195,10 +1203,18 @@ export default function ReceiptsAdminClient({
 
   const applyPodFilters = (status: PodPanelStatus = podPanelStatus) => {
     setPodPanelStatus(status);
+    applyFilters({
+      customerType: "pod",
+      podStatus: status === "all" ? undefined : status,
+    });
   };
 
   const clearPodFilters = () => {
     setPodPanelStatus("all");
+    applyFilters({
+      customerType: undefined,
+      podStatus: undefined,
+    });
   };
   const { itemsWithCost, supportBuyingTotal, hasCompleteCosts } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
