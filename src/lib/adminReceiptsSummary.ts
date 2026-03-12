@@ -57,6 +57,7 @@ type SummaryOptions = {
   currentUserId?: string | null;
   customerType?: string;
   podStatus?: string;
+  onlyPos?: boolean;
 };
 
 const buildPosSearchOr = (q: string): Prisma.ReceiptWhereInput[] => [
@@ -106,13 +107,14 @@ export async function computeAdminReceiptSummary({
   currentUserId,
   customerType,
   podStatus,
+  onlyPos = false,
 }: SummaryOptions) {
   const normalizedDocType = docType ? docType.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
-  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
-  const includeSupportReceipts = !normalizedDocType || isSupportDocType;
+  const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
+  const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
   const normalizedCustomerType = customerType ? customerType.toLowerCase().trim() : undefined;
   const normalizedPodStatus = (() => {
     const value = podStatus ? podStatus.toLowerCase().trim() : undefined;

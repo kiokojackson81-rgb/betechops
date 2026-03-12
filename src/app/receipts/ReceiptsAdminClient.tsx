@@ -116,6 +116,7 @@ type Props = {
   onSummaryChange?: (summary: ReceiptSummary) => void;
   refreshSignal?: number;
   scope?: "mine" | "global";
+  onlyPos?: boolean;
 };
 
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
@@ -331,6 +332,7 @@ export default function ReceiptsAdminClient({
   onSummaryChange,
   refreshSignal = 0,
   scope,
+  onlyPos = false,
 }: Props) {
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
@@ -470,6 +472,7 @@ export default function ReceiptsAdminClient({
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
         params.set("scope", scopeMode);
+        if (onlyPos) params.set("onlyPos", "1");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -486,7 +489,7 @@ export default function ReceiptsAdminClient({
         if (!opts?.silent) setLoading(false);
       }
     },
-    [appliedFilters, scopeMode],
+    [appliedFilters, scopeMode, onlyPos],
   );
 
   useEffect(() => {
@@ -521,6 +524,7 @@ export default function ReceiptsAdminClient({
         params.set("q", appliedFilters.q.trim());
       }
       params.set("scope", scopeMode);
+      if (onlyPos) params.set("onlyPos", "1");
       const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
         cache: "no-store",
         signal: opts?.signal,
@@ -552,7 +556,7 @@ export default function ReceiptsAdminClient({
     } finally {
       setSummaryLoading(false);
     }
-  }, [appliedFilters, scopeMode]);
+  }, [appliedFilters, scopeMode, onlyPos]);
 
   const handleTriggerSummary = useCallback(async () => {
     if (triggerSummaryLoading) return;
@@ -1131,6 +1135,7 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.docType) base.set("docType", appliedFilters.docType);
         if (appliedFilters.q.trim()) base.set("q", appliedFilters.q.trim());
         base.set("scope", scopeMode);
+        if (onlyPos) base.set("onlyPos", "1");
         base.set("customerType", "pod");
 
         const fetchOne = async (status?: string) => {
@@ -1172,6 +1177,7 @@ export default function ReceiptsAdminClient({
     appliedFilters.docType,
     appliedFilters.q,
     scopeMode,
+    onlyPos,
   ]);
 
   const podStats = useMemo(() => {

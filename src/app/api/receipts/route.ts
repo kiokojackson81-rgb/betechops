@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
   const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
+  const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
   const customerType = url.searchParams.get("customerType") || undefined;
@@ -66,9 +67,9 @@ export async function GET(req: NextRequest) {
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
-  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !normalizedDocType || isMarketingDocType;
-  const includeSupportReceipts = !normalizedDocType || isSupportDocType;
+  const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
+  const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
 
   const and: Prisma.ReceiptWhereInput[] = [];
   and.push({ generatedAt: { gte: startDate, lte: endDate } });

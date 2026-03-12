@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   }
   const customerType = url.searchParams.get("customerType") || undefined;
   const podStatus = url.searchParams.get("status") || undefined;
+  const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
 
   try {
     const summary = await computeAdminReceiptSummary({
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       currentUserId: userId,
       customerType,
       podStatus,
+      onlyPos,
     });
     return NextResponse.json(summary);
   } catch (error) {
