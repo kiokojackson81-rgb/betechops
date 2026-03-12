@@ -21,6 +21,7 @@ type DividedAccountRow = {
   buyingTotal: number;
   pricedNetPayout: number;
   returns: number;
+  duplicateCount: number;
   grossProfit: number;
 };
 
@@ -28,7 +29,7 @@ type DividedPayload = {
   week: { weekStart: string; weekEnd: string; weekStartInput: string };
   draftTableAvailable: boolean;
   accounts: DividedAccountRow[];
-  totals: { sales: number; profit: number; returns: number; grossProfit: number };
+  totals: { sales: number; profit: number; returns: number; grossProfit: number; duplicates: number };
 };
 
 function numberOr(value: unknown, fallback: number) {
@@ -217,6 +218,7 @@ export default function DividedViewClient(props: {
                   <tr className="text-xs uppercase tracking-wide text-slate-400">
                     <th className="py-2 pr-4">Account</th>
                     <th className="py-2 pr-4 text-right">Sales</th>
+                    <th className="py-2 pr-4 text-right">Duplicates</th>
                     <th className="py-2 pr-4 text-right">Returns</th>
                     <th className="py-2 pr-4 text-right">Gross profit</th>
                     <th className="py-2 pr-4 text-right">Profit</th>
@@ -227,6 +229,9 @@ export default function DividedViewClient(props: {
                     <tr key={a.key} className="border-t border-white/5">
                       <td className="py-3 pr-4 font-medium text-white">{a.label}</td>
                       <td className="py-3 pr-4 text-right font-semibold text-emerald-300">{currency.format(a.salesNetPayout)}</td>
+                      <td className={`py-3 pr-4 text-right font-semibold ${a.duplicateCount > 0 ? "text-rose-300" : "text-slate-300"}`}>
+                        {a.duplicateCount}
+                      </td>
                       <td className="py-3 pr-4 text-right text-slate-200">{currency.format(a.returns)}</td>
                       <td className="py-3 pr-4 text-right text-slate-200">{currency.format(a.grossProfit)}</td>
                       <td className="py-3 pr-4 text-right font-semibold text-slate-100">{currency.format(a.profit)}</td>
@@ -237,6 +242,9 @@ export default function DividedViewClient(props: {
                   <tr className="border-t border-white/10">
                     <td className="py-3 pr-4 font-semibold text-white">Totals</td>
                     <td className="py-3 pr-4 text-right font-semibold text-emerald-300">{currency.format(data.totals.sales)}</td>
+                    <td className={`py-3 pr-4 text-right font-semibold ${data.totals.duplicates > 0 ? "text-rose-300" : "text-slate-300"}`}>
+                      {data.totals.duplicates}
+                    </td>
                     <td className="py-3 pr-4 text-right text-slate-200">{currency.format(data.totals.returns)}</td>
                     <td className="py-3 pr-4 text-right text-slate-200">{currency.format(data.totals.grossProfit)}</td>
                     <td className="py-3 pr-4 text-right font-semibold text-slate-100">{currency.format(data.totals.profit)}</td>
