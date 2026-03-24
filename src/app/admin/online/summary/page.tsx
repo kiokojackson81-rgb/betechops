@@ -9,6 +9,7 @@ import {
 } from "@/lib/tradingPeriod";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { canDownloadOnlineSummaryIndividual } from "@/lib/onlineSummaryIndividuals";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ManualWeekViewClient from "@/app/admin/online/summary/_components/ManualWeekView.client";
@@ -216,7 +217,10 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
     }
   >();
 
-  const attendantTotals = new Map<string, { attendantId: string | null; attendantName: string; total: number }>();
+  const attendantTotals = new Map<
+    string,
+    { attendantId: string | null; attendantName: string; attendantEmail: string | null; total: number }
+  >();
 
   for (const row of manualWeeklyRows as any[]) {
     const platform = row.platform as Platform;
@@ -227,6 +231,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
 
     const shopName = (row.shop?.name ?? shopId ?? "Unassigned").toString();
     const attendantName = (row.user?.name ?? row.user?.email ?? userId ?? "—").toString();
+    const attendantEmail = row.user?.email ? String(row.user.email) : null;
     const amount = Number(row.amount ?? 0);
 
     const key = `${platform}|${shopId ?? "none"}|${userId ?? "none"}`;
@@ -247,7 +252,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
 
     const attKey = userId ?? "none";
     if (!attendantTotals.has(attKey)) {
-      attendantTotals.set(attKey, { attendantId: userId, attendantName, total: 0 });
+      attendantTotals.set(attKey, { attendantId: userId, attendantName, attendantEmail, total: 0 });
     }
     attendantTotals.get(attKey)!.total += amount;
   }
@@ -437,6 +442,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
                     <tr className="text-xs uppercase tracking-wide text-slate-400">
                       <th className="py-2 pr-4">Attendant</th>
                       <th className="py-2 pr-4 text-right">Total</th>
+                      <th className="py-2 pr-4 text-right">Download</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -446,11 +452,25 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
                         <td className="py-3 pr-4 text-right font-semibold text-emerald-300">
                           {currencyFormatter.format(row.total)}
                         </td>
+                        <td className="py-3 pr-4 text-right">
+                          {row.attendantId && canDownloadOnlineSummaryIndividual(row.attendantEmail) ? (
+                            <a
+                              href={`/api/admin/online/summary/individual-export?userId=${encodeURIComponent(
+                                row.attendantId,
+                              )}&periodKey=${encodeURIComponent(period.key)}`}
+                              className="inline-flex items-center justify-center rounded-full border border-emerald-500/40 px-3 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/10"
+                            >
+                              Download PDF
+                            </a>
+                          ) : (
+                            <span className="text-xs text-slate-500">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {!attendantTotalRows.length && (
                       <tr>
-                        <td className="py-3 pr-4 text-slate-400" colSpan={2}>
+                        <td className="py-3 pr-4 text-slate-400" colSpan={3}>
                           No manual weekly sales captured yet.
                         </td>
                       </tr>
