@@ -19,7 +19,7 @@ export default function renderReceiptTemplate(
   // Only render an <img> header when we have a header image. Otherwise leave
   // the header empty so the printed receipt shows just the page content.
   const headerHtml = headerImg
-    ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:8px;margin-bottom:12px;object-fit:cover;" />`
+    ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:6px;margin-bottom:8px;object-fit:cover;" />`
     : '';
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
@@ -155,7 +155,7 @@ export default function renderReceiptTemplate(
     <title>${siteTitle} Receipt ${order.orderNumber || ''}</title>
       <style>
         :root { --brandColor: ${brandColor}; }
-        @page { size: A5 portrait; margin: 6mm; }
+        @page { size: A5 portrait; margin: 2mm; }
         html, body {
           margin: 0;
           padding: 0;
@@ -163,13 +163,13 @@ export default function renderReceiptTemplate(
           background: #f3f4f6;
           font-family: "Segoe UI", Arial, Helvetica, sans-serif;
         }
-        body { padding: 10px; }
+        body { padding: 4px; }
         .page {
           box-sizing: border-box;
-          width: 148mm;
-          min-height: 198mm;
+          width: calc(148mm - 4mm);
+          min-height: calc(210mm - 4mm);
           margin: 0 auto;
-          padding: 8mm;
+          padding: 4mm 4.5mm 3.5mm;
           background: #fff;
           border: 1px solid #d1d5db;
           box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
@@ -361,8 +361,8 @@ export default function renderReceiptTemplate(
 
         @media print {
         html, body {
-          width: 148mm;
-          min-height: 210mm;
+          width: auto;
+          min-height: auto;
           margin: 0;
           padding: 0;
           background: #fff;
@@ -371,12 +371,12 @@ export default function renderReceiptTemplate(
         }
         body { overflow: visible; }
         .page {
-          width: 100%;
-          height: 198mm;
-          min-height: 198mm;
-          max-height: 198mm;
+          width: calc(148mm - 4mm);
+          height: calc(210mm - 4mm);
+          min-height: calc(210mm - 4mm);
+          max-height: calc(210mm - 4mm);
           margin: 0;
-          padding: 6mm 6mm 5mm;
+          padding: 3mm 3.5mm 2.5mm;
           box-shadow: none;
           border: none;
           overflow: hidden;
@@ -401,21 +401,21 @@ export default function renderReceiptTemplate(
           break-inside: avoid;
         }
         .meta { font-size: 11px; }
-        .meta { margin: 5px 0 7px; gap: 6px; }
-        .meta > div { padding: 6px 8px; }
+        .meta { margin: 4px 0 6px; gap: 5px; }
+        .meta > div { padding: 5px 7px; }
         table { font-size: 11px; }
-        th, td { padding: 5px; }
+        th, td { padding: 4px; }
         .totals { font-size: 11.5px; width: 58%; }
-        .totals { margin-top: 7px; }
-        .totals td { padding: 3px 0; }
-        .notes { margin-top: 7px; padding: 7px; }
-        .signature { margin-top: 7px; font-size: 10.8px; line-height: 1.3; }
-        .receipt-footer-container { margin-top: 6px; }
-        .receipt-footer { margin-top: 0; padding-top: 7px; font-size: 10.5px; line-height: 1.3; }
-        .footer-badge { margin-bottom: 4px; font-size: 10.5px; padding: 3px 8px; }
-        .social-row { gap: 3px; margin-bottom: 5px; }
+        .totals { margin-top: 5px; }
+        .totals td { padding: 2px 0; }
+        .notes { margin-top: 5px; padding: 6px; }
+        .signature { margin-top: 5px; font-size: 10.6px; line-height: 1.25; }
+        .receipt-footer-container { margin-top: 4px; }
+        .receipt-footer { margin-top: 0; padding-top: 5px; font-size: 10.3px; line-height: 1.25; }
+        .footer-badge { margin-bottom: 3px; font-size: 10.3px; padding: 2px 7px; }
+        .social-row { gap: 2px; margin-bottom: 4px; }
         .social-link { font-size: 10px; }
-        .footer-divider { margin: 6px auto; }
+        .footer-divider { margin: 4px auto; }
         .receipt-footer {
           page-break-inside: avoid;
         }
