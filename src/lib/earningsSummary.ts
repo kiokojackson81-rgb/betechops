@@ -9,6 +9,7 @@ import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 export type EarningsSummary = {
   periodKey: string;
   periodLabel: string;
+  attendantEmail?: string | null;
 
   totalSales: number;
   totalProfit: number;
@@ -347,6 +348,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   return {
     periodKey,
     periodLabel,
+    attendantEmail: normalizedEmail || null,
     totalSales,
     totalProfit,
     totalNewProducts: newProducts,

@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from '@prisma/client';
 import { nowInNairobi } from "@/lib/timezone";
 import { summarizePosReceiptsForPeriod, type PosReceiptSummary } from "@/lib/posReceiptSummary";
+import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function GET(req: Request) {
   });
   const targetUserEmail = targetUser?.email?.toLowerCase().trim() ?? null;
   const targetUserName = targetUser?.name ?? null;
+  const isBrendah = targetUserEmail === "brendah@betech.co.ke";
   const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
   // POS receipts are the source-of-truth for DIRECT_SALES_OPS tracker stats.
   // Jeniffer is a special global viewer: show global POS totals (not user-scoped).
@@ -207,7 +209,9 @@ export async function GET(req: Request) {
   }
 
   let commission = 0;
-  if (usePosTotals && posSummary) {
+  if (isBrendah) {
+    commission = computeBrendahDirectCommission(totalSales, totalProfit).amount;
+  } else if (usePosTotals && posSummary) {
     commission = computeSalesCommissionFromTiers(
       posSummary.totalSales,
       posSummary.totalProfit,
@@ -219,7 +223,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    if (!usePosTotals && targetUserEmail) {
+    if (!usePosTotals && targetUserEmail && !isBrendah) {
       const unpriced = await getUnpricedDailySalesForCurrentPeriod();
       const hasUnpricedForUser = unpriced.some(
         (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
@@ -232,7 +236,7 @@ export async function GET(req: Request) {
     // ignore
   }
 
-  if (!usePosTotals) {
+  if (!usePosTotals && !isBrendah) {
     try {
       const ledger = await prisma.commissionLedger.findUnique({
         where: {

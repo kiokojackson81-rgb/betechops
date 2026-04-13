@@ -222,10 +222,18 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
+  const [hasAuthoritativeCommission, setHasAuthoritativeCommission] = useState(false);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
+  const sessionEmail =
+    typeof (session?.user as { email?: string } | undefined)?.email === "string"
+      ? (session?.user as { email?: string }).email!.toLowerCase().trim()
+      : null;
+  const effectiveAttendantEmail = resolvedAttendantEmail ?? (impersonateId ? null : sessionEmail);
+  const isBrendahView = effectiveAttendantEmail === "brendah@betech.co.ke";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -270,7 +278,13 @@ export default function DailyReportFinal() {
         if (!data) return null;
         setEarningsError(null);
         setEarningsSummary(data);
-        setCommissionForPeriod(Math.round(data.grossCommission ?? 0));
+        const nextAttendantEmail =
+          typeof data.attendantEmail === "string" ? data.attendantEmail.toLowerCase().trim() : null;
+        const prefersEarningsQuickStats = nextAttendantEmail === "brendah@betech.co.ke";
+        setResolvedAttendantEmail(nextAttendantEmail);
+        const grossCommission = Number(data.grossCommission ?? 0);
+        setCommissionForPeriod(Math.round(grossCommission));
+        setHasAuthoritativeCommission(Number.isFinite(grossCommission));
         const payrollSales = Number(data.totalSales ?? 0);
         const payrollItems = Number(data.totalItems ?? 0);
         const payrollReceipts = Number(data.totalReceipts ?? 0);
@@ -294,17 +308,29 @@ export default function DailyReportFinal() {
             const summarySales = hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0);
             const summaryItems = hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0);
             const summaryReceipts = hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0);
+            const nextQuickStats = prefersEarningsQuickStats
+              ? {
+                  totalSales: payrollSales,
+                  totalItems: payrollItems,
+                  totalNewProducts: Number(qsData.totalNewProducts ?? data.totalNewProducts ?? 0),
+                  totalEditedProducts: Number(qsData.totalEditedProducts ?? data.totalEditedProducts ?? 0),
+                  totalCopiedProducts: Number(qsData.totalCopiedProducts ?? data.totalCopiedProducts ?? 0),
+                  walkInsServed: Number(qsData.walkInsServed ?? 0),
+                  walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
+                  totalReceipts: payrollReceipts,
+                }
+              : {
+                  totalSales: Math.max(summarySales, payrollSales),
+                  totalItems: Math.max(summaryItems, payrollItems),
+                  totalNewProducts: Number(qsData.totalNewProducts ?? 0),
+                  totalEditedProducts: Number(qsData.totalEditedProducts ?? 0),
+                  totalCopiedProducts: Number(qsData.totalCopiedProducts ?? 0),
+                  walkInsServed: Number(qsData.walkInsServed ?? 0),
+                  walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
+                  totalReceipts: Math.max(summaryReceipts, payrollReceipts),
+                };
 
-            setServerQuickStats({
-              totalSales: Math.max(summarySales, payrollSales),
-              totalItems: Math.max(summaryItems, payrollItems),
-              totalNewProducts: Number(qsData.totalNewProducts ?? 0),
-              totalEditedProducts: Number(qsData.totalEditedProducts ?? 0),
-              totalCopiedProducts: Number(qsData.totalCopiedProducts ?? 0),
-              walkInsServed: Number(qsData.walkInsServed ?? 0),
-              walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
-              totalReceipts: Math.max(summaryReceipts, payrollReceipts),
-            });
+            setServerQuickStats(nextQuickStats);
           } else {
             // fallback to earnings payload if daily-report summary isn't available
             setServerQuickStats({
@@ -365,8 +391,21 @@ export default function DailyReportFinal() {
         });
         if (!res.ok) return null;
         const data = await res.json().catch(() => null);
+        if (!data) return null;
+        if (isBrendahView) {
+          setServerQuickStats((prev) => ({
+            totalSales: Number(data.aggregates?.totalSales ?? 0),
+            totalItems: Number(data.aggregates?.totalItems ?? 0),
+            totalNewProducts: Number(prev?.totalNewProducts ?? 0),
+            totalEditedProducts: Number(prev?.totalEditedProducts ?? 0),
+            totalCopiedProducts: Number(prev?.totalCopiedProducts ?? 0),
+            walkInsServed: Number(prev?.walkInsServed ?? 0),
+            walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
+            totalReceipts: Number(data.aggregates?.totalReceipts ?? 0),
+          }));
+        }
         const commission = data?.aggregates?.commission?.commission;
-        if (typeof commission === "number") {
+        if (!hasAuthoritativeCommission && !isBrendahView && typeof commission === "number") {
           setCommissionForPeriod(Math.round(commission));
         }
         return data;
@@ -376,7 +415,7 @@ export default function DailyReportFinal() {
         return null;
       }
     },
-    [date, impersonateId, selectedPeriodKey],
+    [date, hasAuthoritativeCommission, impersonateId, isBrendahView, selectedPeriodKey],
   );
 
   const downloadPerformanceReceiptPdf = useCallback(() => {
