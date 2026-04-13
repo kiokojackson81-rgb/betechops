@@ -84,6 +84,7 @@ type CostSummary = {
   itemsWithCost: ItemWithCost[];
   supportBuyingTotal: number;
   hasCompleteCosts: boolean;
+  hasAuthoritativeBuyingTotal: boolean;
 };
 
 type EditItem = {
@@ -1051,7 +1052,12 @@ export default function ReceiptsAdminClient({
   const costSummary = useMemo<CostSummary>(() => {
     const orderItems = detail?.receipt?.order?.items ?? [];
   if (!orderItems.length) {
-      return { itemsWithCost: [], supportBuyingTotal: 0, hasCompleteCosts: false };
+      return {
+        itemsWithCost: [],
+        supportBuyingTotal: 0,
+        hasCompleteCosts: false,
+        hasAuthoritativeBuyingTotal: false,
+      };
     }
     // If the server provided a supportReceiptSummary with a stored buyingTotal,
     // prefer that authoritative DB value for the admin UI to match the DB.
@@ -1114,6 +1120,9 @@ export default function ReceiptsAdminClient({
       supportCostSum += Math.max(0, Number(entry.buyingPrice));
     }
     const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
+    const hasAuthoritativeBuyingTotal =
+      receiptBuyingTotal !== null || supportReceiptBuyingTotal !== null;
+
     return {
       itemsWithCost,
       supportBuyingTotal:
@@ -1123,6 +1132,7 @@ export default function ReceiptsAdminClient({
             ? supportReceiptBuyingTotal
             : matchedCost + supportCostSum,
       hasCompleteCosts,
+      hasAuthoritativeBuyingTotal,
     };
   }, [detail]);
 
@@ -1288,11 +1298,12 @@ export default function ReceiptsAdminClient({
       podStatus: undefined,
     });
   };
-  const { itemsWithCost, supportBuyingTotal, hasCompleteCosts } = costSummary;
+  const { itemsWithCost, supportBuyingTotal, hasCompleteCosts, hasAuthoritativeBuyingTotal } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
-  const profitAmount = hasCompleteCosts ? receiptGrandTotal - supportBuyingTotal : 0;
+  const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal;
+  const profitAmount = canShowReceiptProfit ? receiptGrandTotal - supportBuyingTotal : 0;
   const profitColor =
-    hasCompleteCosts && profitAmount >= 0 ? "text-emerald-300" : hasCompleteCosts ? "text-rose-400" : "text-slate-400";
+    canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
   const tradingPeriod = getTradingPeriodFor(new Date());
   const rangeLabelText =
@@ -1866,7 +1877,7 @@ export default function ReceiptsAdminClient({
                       <div>
                         <p className="text-xs text-slate-500">Profit</p>
                         <p className={`text-lg font-semibold ${profitColor}`}>
-                          {hasCompleteCosts ? formatCurrency(profitAmount) : "Awaiting cost data"}
+                          {canShowReceiptProfit ? formatCurrency(profitAmount) : "Awaiting cost data"}
                         </p>
                     </div>
                   </div>
