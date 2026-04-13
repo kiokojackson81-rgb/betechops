@@ -226,6 +226,7 @@ export default function DailyReportFinal() {
   const [hasAuthoritativeCommission, setHasAuthoritativeCommission] = useState(false);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
+  const sessionStatus = sessionResponse?.status ?? "loading";
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
   const sessionEmail =
@@ -234,6 +235,8 @@ export default function DailyReportFinal() {
       : null;
   const effectiveAttendantEmail = resolvedAttendantEmail ?? (impersonateId ? null : sessionEmail);
   const isBrendahView = effectiveAttendantEmail === "brendah@betech.co.ke";
+  const canResolveCommissionOwner =
+    Boolean(resolvedAttendantEmail) || (!impersonateId && sessionStatus !== "loading");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -405,7 +408,12 @@ export default function DailyReportFinal() {
           }));
         }
         const commission = data?.aggregates?.commission?.commission;
-        if (isBrendahView && typeof commission === "number" && Number.isFinite(commission)) {
+        if (
+          canResolveCommissionOwner &&
+          isBrendahView &&
+          typeof commission === "number" &&
+          Number.isFinite(commission)
+        ) {
           const roundedCommission = Math.round(commission);
           setCommissionForPeriod(roundedCommission);
           setEarningsSummary((prev) =>
@@ -430,7 +438,12 @@ export default function DailyReportFinal() {
               : prev,
           );
         }
-        if (!hasAuthoritativeCommission && !isBrendahView && typeof commission === "number") {
+        if (
+          canResolveCommissionOwner &&
+          !hasAuthoritativeCommission &&
+          !isBrendahView &&
+          typeof commission === "number"
+        ) {
           setCommissionForPeriod(Math.round(commission));
         }
         return data;
@@ -440,7 +453,15 @@ export default function DailyReportFinal() {
         return null;
       }
     },
-    [date, hasAuthoritativeCommission, impersonateId, isBrendahView, selectedPeriodKey],
+    [
+      canResolveCommissionOwner,
+      date,
+      hasAuthoritativeCommission,
+      impersonateId,
+      isBrendahView,
+      selectedPeriodKey,
+      sessionStatus,
+    ],
   );
 
   const downloadPerformanceReceiptPdf = useCallback(() => {
