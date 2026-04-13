@@ -114,7 +114,8 @@ export async function POST(req: Request) {
       data: { buyingTotal: receiptBuyingTotal },
     });
 
-    const canonicalReceipt = canonicalReceiptNumber(refreshedReceipt.receiptNumber) ?? refreshedReceipt.receiptNumber ?? null;
+    const rawReceiptNumber = refreshedReceipt.receiptNumber ?? undefined;
+    const canonicalReceipt = canonicalReceiptNumber(rawReceiptNumber) ?? rawReceiptNumber;
     const linkedReceipt = canonicalReceipt
       ? await tx.receipt.findFirst({
           where: {
