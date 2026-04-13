@@ -410,7 +410,6 @@ export default function DailyReportFinal() {
             const summarySales = hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0);
             const summaryItems = hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0);
             const summaryReceipts = hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0);
-
             const nextQuickStats = prefersEarningsQuickStats
               ? {
                   totalSales: brendahSavedSales,
@@ -464,7 +463,7 @@ export default function DailyReportFinal() {
             walkInsPurchased: Number(data.walkInsPurchased ?? 0),
             totalReceipts: prefersEarningsQuickStats
               ? brendahSavedReceipts
-              : Number(data.totalReceipts ?? 0),
+                : Number(data.totalReceipts ?? 0),
           });
         }
         return data;
