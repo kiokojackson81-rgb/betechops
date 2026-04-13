@@ -158,6 +158,10 @@ export default function DailyReportReceiptsPanel({
         if (typeof includeLedger === "boolean") {
           params.set("includeLedger", includeLedger ? "true" : "false");
         }
+        params.set("scope", "mine");
+        if (onlyPos) params.set("onlyPos", "1");
+        if (paidOnly) params.set("paidOnly", "1");
+        if (typeof includeLedger === "boolean") params.set("includeLedger", includeLedger ? "true" : "false");
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
         let url = `/api/receipts?${params.toString()}`;
