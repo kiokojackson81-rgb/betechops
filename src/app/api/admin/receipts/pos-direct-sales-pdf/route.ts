@@ -252,9 +252,14 @@ export async function GET(req: Request) {
     if (!paymentStatus) return false;
     return paymentStatus === "PAID";
   };
+  const isPodSettledForSales = (r: any) => {
+    if (!isPodReceipt(r)) return false;
+    if (podStatusOf(r) === "pending") return false;
+    return isPodPaid(r) || isPosPaid(r);
+  };
   const shouldIncludeForSales = (r: any) => {
     // Mirror the admin summary logic: only include paid receipts by default.
-    if (isPodReceipt(r)) return isPodPaid(r);
+    if (isPodReceipt(r)) return isPodSettledForSales(r);
     return isPosPaid(r);
   };
 

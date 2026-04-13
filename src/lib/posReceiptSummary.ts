@@ -269,12 +269,30 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const receipts = [...baseReceipts, ...extraReceipts] as PosReceiptRow[];
 
-  // Ensure POD-pending receipts are excluded at the application layer
-  // to avoid any inconsistencies with Prisma JSON path filters.
-  const filteredReceipts = receipts.filter((r) => {
-    const pod = r.data?.podDelivery as any | undefined;
-    if (!pod) return true;
-    return (pod.status || '').toString().toLowerCase() !== 'pending';
+  const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+  const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
+  const isPosPaid = (r: any) => {
+    const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
+    if (!paymentStatus) return false;
+    return paymentStatus === "PAID";
+  };
+  const isPodSettledForSales = (r: any) => {
+    if (!isPodReceipt(r)) return false;
+    if (podStatusOf(r) === "pending") return false;
+    return isPodPaid(r) || isPosPaid(r);
+  };
+
+  // Filter at the application layer:
+  // - exclude POD pending always
+  // - include only settled receipts for totals
+  //   POD counts once delivered and the linked order is already PAID, even if
+  //   the separate POD `paidAt` marker has not been set yet.
+  const filteredReceipts = receipts.filter((r: any) => {
+    if (isPodReceipt(r)) {
+      return isPodSettledForSales(r);
+    }
+    return isPosPaid(r);
   }).filter((receipt) => matchesOwnershipMode(receipt, period.userId, period.ownershipMode));
 
   const seen = new Map<string, string>();

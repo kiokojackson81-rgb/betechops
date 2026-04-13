@@ -418,6 +418,11 @@ export async function GET(req: Request) {
         if (!paymentStatus) return false;
         return paymentStatus === "PAID";
       };
+      const isPodSettledForSales = (r: any) => {
+        if (!isPodReceipt(r)) return false;
+        if (podStatusOf(r) === "pending") return false;
+        return isPodPaid(r) || isPosPaid(r);
+      };
 
       const toNumber = (value: unknown): number => {
         if (value === null || typeof value === "undefined") return 0;
@@ -449,8 +454,7 @@ export async function GET(req: Request) {
       const seen = new Set<string>();
       for (const r of receipts as any[]) {
         if (isPodReceipt(r)) {
-          if (podStatusOf(r) === "pending") continue;
-          if (!isPodPaid(r)) continue;
+          if (!isPodSettledForSales(r)) continue;
         } else {
           if (!isPosPaid(r)) continue;
         }
