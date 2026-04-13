@@ -378,7 +378,6 @@ export async function GET(req: Request) {
     const attendantName = (user.name ?? user.email ?? user.id).toString();
     const attendantEmail = (user.email ?? "").toString();
 
-    const MAX_RECEIPTS_IN_PDF = 200;
     let receiptsTruncated = false;
     let receiptRows: ReceiptListRow[] = [];
 
@@ -408,7 +407,6 @@ export async function GET(req: Request) {
           },
         },
         orderBy: { generatedAt: "desc" },
-        take: MAX_RECEIPTS_IN_PDF * 3,
       });
 
       const isPodReceipt = (r: any) =>
@@ -478,11 +476,7 @@ export async function GET(req: Request) {
           amountKes,
           source: "POS",
         });
-
-        if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
       }
-
-      receiptsTruncated = seen.size > receiptRows.length;
     } else {
       const [marketingReceipts, supportReceipts] = await Promise.all([
         prisma.marketingReceipt.findMany({
@@ -498,7 +492,6 @@ export async function GET(req: Request) {
             items: { select: { id: true } },
           },
           orderBy: { createdAt: "desc" },
-          take: MAX_RECEIPTS_IN_PDF * 3,
         }),
         prisma.supportReceipt.findMany({
           where: {
@@ -513,7 +506,6 @@ export async function GET(req: Request) {
             items: { select: { id: true } },
           },
           orderBy: { createdAt: "desc" },
-          take: MAX_RECEIPTS_IN_PDF * 3,
         }),
       ]);
 
@@ -534,24 +526,19 @@ export async function GET(req: Request) {
           amountKes: Math.round(Number(r.sellingTotal ?? 0)),
           source: "MARKETING",
         });
-        if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
       }
-      if (receiptRows.length < MAX_RECEIPTS_IN_PDF) {
-        for (const r of supportReceipts as any[]) {
-          pushUnique({
-            createdAtIso: (r.createdAt ?? new Date()).toISOString(),
-            receiptNumber: (r.receiptNumber ?? r.id).toString(),
-            paymentMethod: normalizePaymentMethod(r.paymentMethod),
-            itemsCount: Array.isArray(r.items) ? r.items.length : 0,
-            amountKes: Math.round(Number(r.sellingTotal ?? 0)),
-            source: "SUPPORT",
-          });
-          if (receiptRows.length >= MAX_RECEIPTS_IN_PDF) break;
-        }
+      for (const r of supportReceipts as any[]) {
+        pushUnique({
+          createdAtIso: (r.createdAt ?? new Date()).toISOString(),
+          receiptNumber: (r.receiptNumber ?? r.id).toString(),
+          paymentMethod: normalizePaymentMethod(r.paymentMethod),
+          itemsCount: Array.isArray(r.items) ? r.items.length : 0,
+          amountKes: Math.round(Number(r.sellingTotal ?? 0)),
+          source: "SUPPORT",
+        });
       }
 
       receiptRows.sort((a, b) => (b.createdAtIso || "").localeCompare(a.createdAtIso || ""));
-      receiptsTruncated = seen.size > receiptRows.length;
     }
 
     const html = renderHtml({

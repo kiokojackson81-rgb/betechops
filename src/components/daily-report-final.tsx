@@ -253,6 +253,7 @@ export default function DailyReportFinal() {
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
   const [hasAuthoritativeCommission, setHasAuthoritativeCommission] = useState(false);
+  const [downloadingPerformance, setDownloadingPerformance] = useState(false);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
   const sessionStatus = sessionResponse?.status ?? "loading";
@@ -568,6 +569,19 @@ export default function DailyReportFinal() {
   }, [fetchPeriodSummary, impersonationReady, selectedPeriodKey]);
 
   const clamp0 = (value: unknown) => Math.max(0, Number(value ?? 0) || 0);
+
+  const downloadPerformancePdf = useCallback(() => {
+    try {
+      setDownloadingPerformance(true);
+      const params = new URLSearchParams();
+      if (selectedPeriodKey) params.set("periodKey", selectedPeriodKey);
+      if (impersonateId) params.set("impersonateId", impersonateId);
+      const url = `/api/marketing/report/performance-pdf?${params.toString()}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setTimeout(() => setDownloadingPerformance(false), 700);
+    }
+  }, [impersonateId, selectedPeriodKey]);
 
   const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
     let totalReceipts = 0;
@@ -1007,11 +1021,21 @@ export default function DailyReportFinal() {
                 <p className="text-xs text-amber-300">Showing archived period.</p>
               )}
             </div>
-            <PeriodSwitcher
-              currentPeriod={currentPeriod}
-              selectedPeriod={selectedPeriod}
-              onSelectPeriod={setSelectedPeriod}
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={downloadPerformancePdf}
+                disabled={downloadingPerformance}
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15 disabled:opacity-60"
+              >
+                {downloadingPerformance ? "Preparing PDF..." : "Download PDF"}
+              </button>
+              <PeriodSwitcher
+                currentPeriod={currentPeriod}
+                selectedPeriod={selectedPeriod}
+                onSelectPeriod={setSelectedPeriod}
+              />
+            </div>
           </div>
         </div>
 
