@@ -8,6 +8,7 @@ import { notifyInternalReceipt } from '@/lib/receiptInternalNotifications';
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from '@/lib/commission';
 import { getTradingPeriodFor } from '@/lib/tradingPeriod';
 import { recomputeSupportCommissionLedger } from '@/lib/supportCommission';
+import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -113,6 +114,18 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
   try {
     await prisma.$transaction(async (tx) => {
+      const deliveredOrder = desiredStatus === 'delivered'
+        ? await tx.order.findUnique({ where: { id: receipt.orderId! }, include: { items: true } })
+        : null;
+      const deliveredReceiptItems = (deliveredOrder?.items || []).map((it: any) => ({
+        productName: String(it.title || it.productName || 'Item').trim(),
+        buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
+      }));
+      const deliveredBuyingTotal = deliveredReceiptItems.reduce((sum: number, item: any) => sum + Number(item.buyingPrice || 0), 0);
+      const deliveredSellingTotal = Math.round(Number(deliveredOrder?.totalAmount ?? receipt.order?.totalAmount ?? 0));
+      const deliveredAllItemsPriced =
+        deliveredReceiptItems.length > 0 && deliveredReceiptItems.every((item: any) => Number(item.buyingPrice ?? 0) > 0);
+
       // Re-read receipt inside transaction to enforce lock and avoid race
       const pr = await tx.receipt.findUnique({ where: { id: receiptId } });
       const prData = typeof pr?.data === 'object' && pr?.data ? (pr.data as any) : {};
@@ -148,8 +161,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         },
       });
 
-      // If delivered, also insert marketing/support daily entries so the
-      // receipt becomes visible in the pricing/marketing views (same as non-POD flow).
+      // If delivered, create/update support placeholders immediately so PODs
+      // stay visible in pricing queues. Only post financial totals once every
+      // buying price is already known.
       if (desiredStatus === 'delivered') {
         try {
           const attendantId = receipt.order?.attendantId ?? null;
@@ -218,7 +232,6 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               console.warn('[pod] failed to update marketing entry', e);
             }
           }
-
           // Support entry/upsert
           if (attendantId && tx.supportDailyEntry && tx.supportReceipt) {
             try {
@@ -226,40 +239,56 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               startOfDay.setHours(0, 0, 0, 0);
               const endOfDay = new Date(entryDate);
               endOfDay.setHours(23, 59, 59, 999);
-
-              const orderForSupport = await tx.order.findUnique({
-                where: { id: receipt.orderId },
-                include: { items: { include: { product: true } } },
-              });
-
-              const supportReceiptItems = (orderForSupport?.items || []).map((it: any) => ({
-                productName: resolveOrderItemName(it),
-                buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
-              }));
-
-              const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum: number, item: any) => sum + (item.buyingPrice || 0), 0);
-              const supportSellingTotal = Math.round(Number(orderForSupport?.totalAmount ?? receipt.order?.totalAmount ?? 0));
-
-              const receiptKey = null;
+              const receiptNumber = canonicalReceiptNumber(receipt.order?.orderNumber) ?? receipt.order?.orderNumber ?? null;
               const paymentMethod = (baseData as any)?.paymentMethod ?? null;
 
               const entryId = (await tx.supportDailyEntry.findFirst({ where: { submittedById: attendantId, date: { gte: startOfDay, lte: endOfDay } }, select: { id: true } }))?.id
                 ?? (await tx.supportDailyEntry.create({ data: { date: entryDate, dayOfWeek, totalSales: 0, totalProfit: 0, newBatteries: 0, changedBatteries: 0, submittedById: attendantId }, select: { id: true } })).id;
 
-              await tx.supportReceipt.create({
-                data: {
-                  dailyEntryId: entryId,
-                  receiptNumber: receipt.order?.orderNumber ?? null,
-                  receiptKey: null,
-                  paymentMethod,
-                  sellingTotal: supportSellingTotal,
-                  buyingTotal: supportReceiptBuyingTotal,
-                  items: supportReceiptItems.length ? { create: supportReceiptItems } : undefined,
-                },
-              });
+              const existingSupportReceipt = receiptNumber
+                ? await tx.supportReceipt.findFirst({
+                    where: { receiptNumber },
+                    orderBy: { updatedAt: 'desc' },
+                    select: { id: true },
+                  })
+                : null;
 
-              if (entryId) {
-                await tx.supportDailyEntry.update({ where: { id: entryId }, data: { totalSales: { increment: supportSellingTotal }, totalProfit: { increment: supportSellingTotal - supportReceiptBuyingTotal } } });
+              if (existingSupportReceipt) {
+                await tx.supportReceiptItem.deleteMany({ where: { receiptId: existingSupportReceipt.id } });
+                await tx.supportReceipt.update({
+                  where: { id: existingSupportReceipt.id },
+                  data: {
+                    dailyEntryId: entryId,
+                    receiptNumber,
+                    receiptKey: null,
+                    paymentMethod,
+                    sellingTotal: deliveredSellingTotal,
+                    buyingTotal: deliveredBuyingTotal,
+                    items: deliveredReceiptItems.length ? { create: deliveredReceiptItems } : undefined,
+                  },
+                });
+              } else {
+                await tx.supportReceipt.create({
+                  data: {
+                    dailyEntryId: entryId,
+                    receiptNumber,
+                    receiptKey: null,
+                    paymentMethod,
+                    sellingTotal: deliveredSellingTotal,
+                    buyingTotal: deliveredBuyingTotal,
+                    items: deliveredReceiptItems.length ? { create: deliveredReceiptItems } : undefined,
+                  },
+                });
+              }
+
+              if (entryId && deliveredAllItemsPriced) {
+                await tx.supportDailyEntry.update({
+                  where: { id: entryId },
+                  data: {
+                    totalSales: { increment: deliveredSellingTotal },
+                    totalProfit: { increment: deliveredSellingTotal - deliveredBuyingTotal },
+                  },
+                });
               }
             } catch (e) {
               console.warn('[pod] failed to update support entry', e);
@@ -271,7 +300,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       }
 
       // If delivered, release commission record and earnings, recompute ledgers.
-      if (desiredStatus === 'delivered') {
+      if (desiredStatus === 'delivered' && deliveredAllItemsPriced) {
         try {
           const attendantId = receipt.order?.attendantId ?? null;
           // Release commission record if present

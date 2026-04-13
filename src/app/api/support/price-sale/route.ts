@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
+import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { cleanupMarketingReceipts, recalcSupportEntry } from "@/lib/marketingReceiptCleanup";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -74,48 +78,208 @@ export async function POST(req: Request) {
   const itemsCount = Math.max(1, (receipt.items || []).length);
   const sellingTotal = Number(receipt.sellingTotal ?? 0);
   const sellingPrice = Math.round(sellingTotal / itemsCount);
+  const now = new Date();
+  let finalEntryId = entryId;
+  let submitterId = receiptItem.receipt.dailyEntry.submittedById ?? null;
+  let finalizedPodOrderId: string | null = null;
+  let finalizedPodAt: Date | null = null;
 
   await prisma.$transaction(async (tx) => {
     // update the receipt item
     await tx.supportReceiptItem.update({
       where: { id: receiptItem.id },
-      data: { buyingPrice: roundedPrice, pricedAt: new Date() },
+      data: { buyingPrice: roundedPrice, pricedAt: now },
     });
 
-    // Recompute totalProfit for the whole daily entry in a safe, idempotent way
-    const receipts = await tx.supportReceipt.findMany({
-      where: { dailyEntryId: entryId },
-      include: { items: true },
+    const refreshedReceipt = await tx.supportReceipt.findUnique({
+      where: { id: receipt.id },
+      include: {
+        items: true,
+        dailyEntry: true,
+      },
+    });
+    if (!refreshedReceipt?.dailyEntry) return;
+
+    submitterId = refreshedReceipt.dailyEntry.submittedById ?? submitterId;
+    const receiptBuyingTotal = (refreshedReceipt.items || []).reduce(
+      (sum, item) => sum + Number(item.buyingPrice ?? 0),
+      0,
+    );
+    const allItemsPriced =
+      (refreshedReceipt.items || []).length > 0 &&
+      refreshedReceipt.items.every((item) => Number(item.buyingPrice ?? 0) > 0);
+
+    await tx.supportReceipt.update({
+      where: { id: refreshedReceipt.id },
+      data: { buyingTotal: receiptBuyingTotal },
     });
 
-    let recomputedTotalProfit = 0;
-    for (const r of receipts) {
-      const sell = Number(r.sellingTotal ?? 0);
-      const cost = (r.items || []).reduce((s, it) => s + Number(it.buyingPrice ?? 0), 0);
-      recomputedTotalProfit += sell - cost;
-    }
+    const canonicalReceipt = canonicalReceiptNumber(refreshedReceipt.receiptNumber) ?? refreshedReceipt.receiptNumber ?? null;
+    const linkedReceipt = canonicalReceipt
+      ? await tx.receipt.findFirst({
+          where: {
+            OR: [
+              { receiptNumber: canonicalReceipt },
+              { order: { orderNumber: canonicalReceipt } },
+              { order: { orderNumber: refreshedReceipt.receiptNumber ?? undefined } },
+            ],
+          },
+          include: { order: true },
+        })
+      : null;
+    const linkedData =
+      linkedReceipt?.data && typeof linkedReceipt.data === "object"
+        ? (linkedReceipt.data as Record<string, any>)
+        : {};
+    const linkedPod = linkedData?.podDelivery && typeof linkedData.podDelivery === "object"
+      ? (linkedData.podDelivery as Record<string, any>)
+      : null;
+    const isDeliveredPod = Boolean(
+      linkedReceipt?.orderId &&
+      linkedPod?.status &&
+      String(linkedPod.status).toLowerCase() === "delivered",
+    );
 
-    for (const receipt of receipts) {
-      const cost = (receipt.items || []).reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+    if (isDeliveredPod && allItemsPriced && submitterId) {
+      const startOfToday = new Date(now);
+      startOfToday.setHours(0, 0, 0, 0);
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+      const dayOfWeek = String(now.getDay());
+      const oldEntryId = refreshedReceipt.dailyEntryId;
+
+      const todayEntry =
+        await tx.supportDailyEntry.findFirst({
+          where: { submittedById: submitterId, date: { gte: startOfToday, lte: endOfToday } },
+          select: { id: true },
+        }) ??
+        await tx.supportDailyEntry.create({
+          data: {
+            date: now,
+            dayOfWeek,
+            totalSales: 0,
+            totalProfit: 0,
+            newBatteries: 0,
+            changedBatteries: 0,
+            submittedById: submitterId,
+          },
+          select: { id: true },
+        });
+
+      finalEntryId = todayEntry.id;
+      finalizedPodOrderId = linkedReceipt?.orderId ?? null;
+      finalizedPodAt = now;
+
       await tx.supportReceipt.update({
-        where: { id: receipt.id },
-        data: { buyingTotal: cost },
+        where: { id: refreshedReceipt.id },
+        data: {
+          dailyEntryId: todayEntry.id,
+          buyingTotal: receiptBuyingTotal,
+          createdAt: now,
+        },
+      });
+
+      if (canonicalReceipt) {
+        await cleanupMarketingReceipts(tx, canonicalReceipt);
+      }
+
+      await recalcSupportEntry(tx as any, oldEntryId);
+      if (todayEntry.id !== oldEntryId) {
+        await recalcSupportEntry(tx as any, todayEntry.id);
+      }
+
+      if (linkedReceipt) {
+        const existingTotals =
+          linkedReceipt.totals && typeof linkedReceipt.totals === "object"
+            ? (linkedReceipt.totals as Record<string, any>)
+            : {};
+        const total = Number(existingTotals.total ?? linkedReceipt.order?.totalAmount ?? refreshedReceipt.sellingTotal ?? 0);
+        const nextTotals = {
+          ...existingTotals,
+          buyingTotal: receiptBuyingTotal,
+          profit: total - receiptBuyingTotal,
+        };
+        await tx.receipt.update({
+          where: { id: linkedReceipt.id },
+          data: {
+            totals: nextTotals as any,
+            data: {
+              ...linkedData,
+              totals: nextTotals,
+              podDelivery: {
+                ...linkedPod,
+                pricedAt: now.toISOString(),
+                financialFinalizedAt: now.toISOString(),
+              },
+            } as any,
+          },
+        });
+      }
+    } else if (isDeliveredPod) {
+      await tx.supportDailyEntry.update({
+        where: { id: entryId },
+        data: { totalProfit: 0 },
+      });
+    } else {
+      const receipts = await tx.supportReceipt.findMany({
+        where: { dailyEntryId: entryId },
+        include: { items: true },
+      });
+
+      let recomputedTotalProfit = 0;
+      for (const row of receipts) {
+        const sell = Number(row.sellingTotal ?? 0);
+        const cost = (row.items || []).reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+        recomputedTotalProfit += sell - cost;
+      }
+
+      await tx.supportDailyEntry.update({
+        where: { id: entryId },
+        data: { totalProfit: recomputedTotalProfit },
       });
     }
-
-    await tx.supportDailyEntry.update({
-      where: { id: entryId },
-      data: { totalProfit: recomputedTotalProfit },
-    });
   });
 
-  const submitterId = receiptItem.receipt.dailyEntry.submittedById;
   if (submitterId) {
     try {
-      const period = getTradingPeriodFor(new Date(receiptItem.receipt.dailyEntry.date));
+      const period = getTradingPeriodFor(finalizedPodAt ?? new Date(receiptItem.receipt.dailyEntry.date));
       await recomputeSupportCommissionLedger({ userId: submitterId, period });
     } catch (ledgerErr) {
       console.error("[support/price-sale] failed to recompute commission ledger", ledgerErr);
+    }
+  }
+
+  if (submitterId && finalizedPodOrderId && finalizedPodAt) {
+    try {
+      const { period, tiers } = await getOrCreateCommissionPeriod(finalizedPodAt);
+      const posSummary = await summarizePosReceiptsForPeriod({
+        start: period.startDate,
+        end: period.endDate,
+        userId: submitterId,
+      });
+      const fallbackPercent = posSummary.totalProfit > 0 ? 0.05 : 0;
+      const salesCommission = computeSalesCommissionFromTiers(
+        posSummary.totalSales,
+        posSummary.totalProfit,
+        tiers as any,
+        fallbackPercent,
+      );
+
+      await prisma.commissionRecord.updateMany({
+        where: { orderId: finalizedPodOrderId },
+        data: {
+          amount: String(salesCommission),
+          status: "RELEASED",
+          releasedAt: finalizedPodAt,
+          periodId: period.id,
+        },
+      });
+      await prisma.commissionEarning.updateMany({
+        where: { orderItem: { orderId: finalizedPodOrderId } as any, status: "PENDING" },
+        data: { status: "RELEASED" },
+      });
+    } catch (releaseErr) {
+      console.error("[support/price-sale] failed to finalize POD commission state", releaseErr);
     }
   }
 
@@ -128,7 +292,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    entryId,
+    entryId: finalEntryId,
     profitDelta,
     saleValue: sellingPrice,
     receiptTotal: sellingTotal,
