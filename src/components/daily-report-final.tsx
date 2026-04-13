@@ -405,6 +405,31 @@ export default function DailyReportFinal() {
           }));
         }
         const commission = data?.aggregates?.commission?.commission;
+        if (isBrendahView && typeof commission === "number" && Number.isFinite(commission)) {
+          const roundedCommission = Math.round(commission);
+          setCommissionForPeriod(roundedCommission);
+          setEarningsSummary((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  salesCommission: roundedCommission,
+                  grossCommission: roundedCommission,
+                  commission: roundedCommission,
+                  totalEarnings:
+                    Number(prev.baseSalary ?? 0) +
+                    Number(prev.transportAllowance ?? 0) +
+                    roundedCommission +
+                    Number(prev.bonusTotal ?? 0),
+                  netPay:
+                    Number(prev.baseSalary ?? 0) +
+                    Number(prev.transportAllowance ?? 0) +
+                    roundedCommission +
+                    Number(prev.bonusTotal ?? 0) -
+                    Number(prev.totalDeductions ?? 0),
+                }
+              : prev,
+          );
+        }
         if (!hasAuthoritativeCommission && !isBrendahView && typeof commission === "number") {
           setCommissionForPeriod(Math.round(commission));
         }
