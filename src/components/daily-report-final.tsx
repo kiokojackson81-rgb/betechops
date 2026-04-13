@@ -74,7 +74,24 @@ const toNairobiDayBoundaryIso = (value: string, boundary: "start" | "end") => {
 
 const toStartOfDayIso = (value: string) => toNairobiDayBoundaryIso(value, "start");
 const toEndOfDayIso = (value: string) => toNairobiDayBoundaryIso(value, "end");
+const toKenyaIsoDate = (date: Date) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: kenyaTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+};
 
+const shiftIsoDate = (isoDate: string, days: number) => {
+  const shifted = new Date(`${isoDate}T12:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return toKenyaIsoDate(shifted);
+};
 const cardClasses =
   "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
 const inputClasses =
@@ -85,7 +102,7 @@ export default function DailyReportFinal() {
   const [showMyReceipts, setShowMyReceipts] = useState(false);
 
   // receipts-history controls (used when #my-receipts)
-  const todayIso = new Date().toISOString().split("T")[0];
+  const todayIso = toKenyaIsoDate(new Date());
   const [startDate, setStartDate] = useState<string>(todayIso);
   const [endDate, setEndDate] = useState<string>(todayIso);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -97,45 +114,37 @@ export default function DailyReportFinal() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  const applyThisTradingPeriodRange = useCallback(() => {
-    const period = getTradingPeriodFor(new Date());
-    setStartDate(toLocalIsoDate(period.start));
-    setEndDate(toLocalIsoDate(period.end));
+  const receiptsHistoryRanges = useMemo(() => {
+    const now = new Date();
+    const today = toKenyaIsoDate(now);
+    const yesterday = shiftIsoDate(today, -1);
+    const weekdayName = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      timeZone: kenyaTimeZone,
+    }).format(now);
+    const weekdayIndex = {
+      Monday: 0,
+      Tuesday: 1,
+      Wednesday: 2,
+      Thursday: 3,
+      Friday: 4,
+      Saturday: 5,
+      Sunday: 6,
+    }[weekdayName] ?? 0;
+    const thisWeekStart = shiftIsoDate(today, -weekdayIndex);
+    const period = getTradingPeriodFor(now);
+    return {
+      today: { start: today, end: today },
+      yesterday: { start: yesterday, end: yesterday },
+      thisWeek: { start: thisWeekStart, end: today },
+      period: { start: toKenyaIsoDate(period.start), end: toKenyaIsoDate(period.end) },
+    };
   }, []);
 
   const setRange = (range: "today" | "yesterday" | "thisWeek" | "period") => {
-    const now = new Date();
-    if (range === "today") {
-      const iso = now.toISOString().split("T")[0];
-      setStartDate(iso);
-      setEndDate(iso);
-      return;
-    }
-    if (range === "yesterday") {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 1);
-      const iso = d.toISOString().split("T")[0];
-      setStartDate(iso);
-      setEndDate(iso);
-      return;
-    }
-    if (range === "thisWeek") {
-      const d = new Date(now);
-      const day = d.getDay();
-      // compute Monday as start (if Sunday day=0 -> go back 6)
-      const diffToMonday = day === 0 ? -6 : 1 - day;
-      const start = new Date(d);
-      start.setDate(d.getDate() + diffToMonday);
-      const isoStart = start.toISOString().split("T")[0];
-      const isoEnd = now.toISOString().split("T")[0];
-      setStartDate(isoStart);
-      setEndDate(isoEnd);
-      return;
-    }
-    if (range === "period") {
-      applyThisTradingPeriodRange();
-      return;
-    }
+    const selected = receiptsHistoryRanges[range];
+    setStartDate(selected.start);
+    setEndDate(selected.end);
   };
 
   const backToDashboard = () => {
@@ -891,32 +900,16 @@ export default function DailyReportFinal() {
                 <p className="text-sm text-slate-400">Explore every receipt captured across the system and filter by date, range, or attendant.</p>
               </div>
               <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                <button onClick={() => setRange("today")} className={`rounded-full border px-4 py-1 transition ${startDate === new Date().toISOString().split("T")[0] && endDate === new Date().toISOString().split("T")[0] ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>
+                <button onClick={() => setRange("today")} className={`rounded-full border px-4 py-1 transition ${startDate === receiptsHistoryRanges.today.start && endDate === receiptsHistoryRanges.today.end ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>
                   Today
                 </button>
-                <button onClick={() => setRange("yesterday")} className={`rounded-full border px-4 py-1 transition ${(() => { const d = new Date(); d.setDate(d.getDate()-1); const iso = d.toISOString().split("T")[0]; return startDate===iso && endDate===iso ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white" })()}`}>
+                <button onClick={() => setRange("yesterday")} className={`rounded-full border px-4 py-1 transition ${startDate === receiptsHistoryRanges.yesterday.start && endDate === receiptsHistoryRanges.yesterday.end ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>
                   Yesterday
                 </button>
-                <button onClick={() => setRange("thisWeek")} className={`rounded-full border px-4 py-1 transition ${(() => { const now=new Date(); const day=now.getDay(); const diffToMonday = day===0?-6:1-day; const monday=new Date(now); monday.setDate(now.getDate()+diffToMonday); const isoMonday=monday.toISOString().split("T")[0]; const isoToday=new Date().toISOString().split("T")[0]; return startDate===isoMonday && endDate===isoToday ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white" })()}`}>
+                <button onClick={() => setRange("thisWeek")} className={`rounded-full border px-4 py-1 transition ${startDate === receiptsHistoryRanges.thisWeek.start && endDate === receiptsHistoryRanges.thisWeek.end ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>
                   This week
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    applyThisTradingPeriodRange();
-                  }}
-                  className={`rounded-full border px-4 py-1 transition ${(() => {
-                    const p = getTradingPeriodFor(new Date());
-                    const s = toLocalIsoDate(p.start);
-                    const en = toLocalIsoDate(p.end);
-                    return startDate === s && endDate === en
-                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                      : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white";
-                  })()}`}
-                >
-                  This period
-                </button>
+                <button onClick={() => setRange("period")} className={`rounded-full border px-4 py-1 transition ${startDate === receiptsHistoryRanges.period.start && endDate === receiptsHistoryRanges.period.end ? "border-emerald-500 bg-emerald-500/20 text-emerald-200" : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"}`}>This period</button>
               </div>
             </div>
 
