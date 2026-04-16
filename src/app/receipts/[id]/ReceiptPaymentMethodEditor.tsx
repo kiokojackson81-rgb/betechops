@@ -6,9 +6,14 @@ import { showToast } from "@/lib/ui/toast";
 type Props = {
   receiptId: string;
   initialPaymentMethod: "MPESA" | "CASH";
+  className?: string;
 };
 
-export default function ReceiptPaymentMethodEditor({ receiptId, initialPaymentMethod }: Props) {
+export default function ReceiptPaymentMethodEditor({
+  receiptId,
+  initialPaymentMethod,
+  className = "",
+}: Props) {
   const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">(initialPaymentMethod);
   const [saving, setSaving] = useState(false);
 
@@ -32,8 +37,10 @@ export default function ReceiptPaymentMethodEditor({ receiptId, initialPaymentMe
   };
 
   return (
-    <div className="no-print mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <span className="text-sm font-medium text-slate-700">Payment method</span>
+    <div
+      className={`no-print flex shrink-0 flex-nowrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 ${className}`.trim()}
+    >
+      <span className="shrink-0 text-sm font-medium text-slate-700">Payment method</span>
       <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white">
         {(["MPESA", "CASH"] as const).map((method) => {
           const active = paymentMethod === method;
@@ -53,7 +60,7 @@ export default function ReceiptPaymentMethodEditor({ receiptId, initialPaymentMe
         type="button"
         onClick={save}
         disabled={saving || paymentMethod === initialPaymentMethod}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+        className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
       >
         {saving ? "Saving..." : "Save payment method"}
       </button>

@@ -183,11 +183,14 @@ export default function ReceiptDetailClient({
             Edit receipt
           </button>
         ) : null}
+        {canEdit ? (
+          <ReceiptPaymentMethodEditor
+            receiptId={receiptId}
+            initialPaymentMethod={initialPaymentMethod}
+            className="mb-0"
+          />
+        ) : null}
       </div>
-
-      {canEdit ? (
-        <ReceiptPaymentMethodEditor receiptId={receiptId} initialPaymentMethod={initialPaymentMethod} />
-      ) : null}
 
       <div dangerouslySetInnerHTML={{ __html: html }} />
 
