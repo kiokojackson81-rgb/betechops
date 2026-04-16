@@ -112,7 +112,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {
-  const guard = await requireRole(["ADMIN"]);
+  const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) {
     // Some test environments surface a 401 (unauthorized) while tests expect 403 (forbidden).
     // Normalize 401 -> 403 here as a best-effort so tests that mock auth behave consistently.
@@ -145,6 +145,16 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         include: { order: { include: { items: true, layawayPlan: true } } },
       });
       if (!existing) throw new Error("Receipt not found");
+      const dataAttendantId =
+        existing.data && typeof existing.data === "object"
+          ? String((existing.data as Record<string, unknown>).attendantId ?? "").trim() || null
+          : null;
+      const ownsReceipt =
+        Boolean(actorId) &&
+        (actorId === existing.issuedById || actorId === existing.order?.attendantId || actorId === dataAttendantId);
+      if (guard.role === "ATTENDANT" && !ownsReceipt) {
+        return null;
+      }
       const docType = body?.docType ? String(body.docType).toUpperCase() : String(existing.docType);
       const layawayDeposit = Number(existing.order?.layawayPlan?.deposit ?? existing.order?.paidAmount ?? 0);
       const paidAmount = docType === "LAYAWAY" ? layawayDeposit : total;
@@ -454,6 +464,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
       return updatedReceipt;
     });
+
+    if (!updated) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // recompute support ledger if attendant is present
     const ledgerAttendantId = attendantId || (updated as any)?.order?.attendantId;
