@@ -4,6 +4,7 @@ import PrintControls from "./PrintControls";
 import ReceiptPaymentMethodEditor from "./ReceiptPaymentMethodEditor";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -67,11 +68,26 @@ export default async function Page({ params }: { params: any }) {
   const html = await renderReceiptHtml(snapshot, { hideStamp: false });
   const initialPaymentMethod =
     String(snapshot?.paymentMethod ?? "").toUpperCase() === "CASH" ? "CASH" : "MPESA";
+  const session = await auth();
+  const actor = session?.user as { id?: string; role?: string } | undefined;
+  const dataAttendantId =
+    receipt.data && typeof receipt.data === "object"
+      ? String((receipt.data as Record<string, unknown>).attendantId ?? "").trim() || null
+      : null;
+  const canEditPaymentMethod =
+    actor?.role === "ADMIN" ||
+    actor?.role === "SUPERVISOR" ||
+    (Boolean(actor?.id) &&
+      (actor?.id === receipt.issuedById ||
+        actor?.id === receipt.order?.attendantId ||
+        actor?.id === dataAttendantId));
 
   return (
     <div className="mx-auto max-w-3xl bg-white p-6 text-black">
       <PrintControls receiptId={id} />
-      <ReceiptPaymentMethodEditor receiptId={id} initialPaymentMethod={initialPaymentMethod} />
+      {canEditPaymentMethod ? (
+        <ReceiptPaymentMethodEditor receiptId={id} initialPaymentMethod={initialPaymentMethod} />
+      ) : null}
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );

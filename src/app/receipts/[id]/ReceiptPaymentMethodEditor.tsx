@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { showToast } from "@/lib/ui/toast";
 
 type Props = {
@@ -10,11 +9,8 @@ type Props = {
 };
 
 export default function ReceiptPaymentMethodEditor({ receiptId, initialPaymentMethod }: Props) {
-  const { status } = useSession();
   const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH">(initialPaymentMethod);
   const [saving, setSaving] = useState(false);
-
-  if (status !== "authenticated") return null;
 
   const save = async () => {
     setSaving(true);
