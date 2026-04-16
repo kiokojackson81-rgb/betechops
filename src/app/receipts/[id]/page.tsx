@@ -1,6 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import PrintControls from "./PrintControls";
+import ReceiptPaymentMethodEditor from "./ReceiptPaymentMethodEditor";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
 
@@ -64,10 +65,13 @@ export default async function Page({ params }: { params: any }) {
 
   const snapshot = buildReceiptSnapshot(receipt);
   const html = await renderReceiptHtml(snapshot, { hideStamp: false });
+  const initialPaymentMethod =
+    String(snapshot?.paymentMethod ?? "").toUpperCase() === "CASH" ? "CASH" : "MPESA";
 
   return (
     <div className="mx-auto max-w-3xl bg-white p-6 text-black">
       <PrintControls receiptId={id} />
+      <ReceiptPaymentMethodEditor receiptId={id} initialPaymentMethod={initialPaymentMethod} />
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
