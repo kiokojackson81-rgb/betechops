@@ -46,29 +46,22 @@ export default function DividedViewClient(props: {
   periodKey: string;
   impersonateId?: string | null;
 }) {
-  const storageKey = `betechops:divided:v1:${props.weekStart}`;
+  const storageKey = `betechops:divided:v2:${props.weekStart}`;
+  const fixedDeduction = 35000;
+  const dividendRatePct = 7;
 
   const [loading, setLoading] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [data, setData] = useState<DividedPayload | null>(null);
 
-  const [expenses, setExpenses] = useState<number>(25000);
-  const [lowSellerScore, setLowSellerScore] = useState<number>(10000);
-  const [dividendRatePct, setDividendRatePct] = useState<number>(7);
-  const [coopLoan, setCoopLoan] = useState<number>(0);
-  const [otherDeduction, setOtherDeduction] = useState<number>(0);
-  const [mpesaTo0722, setMpesaTo0722] = useState<number>(35000);
+  const [mpesaTo0722, setMpesaTo0722] = useState<number>(fixedDeduction);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as any;
-      setExpenses(numberOr(parsed?.expenses, 25000));
-      setLowSellerScore(numberOr(parsed?.lowSellerScore, 10000));
-      setDividendRatePct(numberOr(parsed?.dividendRatePct, 7));
-      setCoopLoan(numberOr(parsed?.coopLoan, 0));
-      setOtherDeduction(numberOr(parsed?.otherDeduction, 0));
-      setMpesaTo0722(numberOr(parsed?.mpesaTo0722, 35000));
+      setMpesaTo0722(numberOr(parsed?.mpesaTo0722, fixedDeduction));
     } catch {
       // ignore
     }
@@ -79,12 +72,12 @@ export default function DividedViewClient(props: {
     try {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ expenses, lowSellerScore, dividendRatePct, coopLoan, otherDeduction, mpesaTo0722 }),
+        JSON.stringify({ mpesaTo0722 }),
       );
     } catch {
       // ignore
     }
-  }, [storageKey, expenses, lowSellerScore, dividendRatePct, coopLoan, otherDeduction, mpesaTo0722]);
+  }, [storageKey, mpesaTo0722]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -138,33 +131,28 @@ export default function DividedViewClient(props: {
 
   const derived = useMemo(() => {
     const totals = data?.totals ?? { sales: 0, profit: 0, returns: 0, grossProfit: 0 };
-    const baseProfit = totals.profit - expenses - lowSellerScore;
+    const baseProfit = totals.grossProfit - fixedDeduction;
     const dividend = clamp0((baseProfit * dividendRatePct) / 100);
     const afterDividend = baseProfit - dividend;
-    const afterDeductions = afterDividend - coopLoan - otherDeduction;
 
     const hitech = (data?.accounts ?? []).find((a) => a.key === "hitech-power") ?? null;
     const hitechPayout = hitech?.salesNetPayout ?? 0;
-    const equityBalance = hitechPayout - dividend - mpesaTo0722 - coopLoan - otherDeduction;
+    const equityBalance = hitechPayout - dividend - mpesaTo0722;
 
     return {
       baseProfit,
       dividend,
       afterDividend,
-      afterDeductions,
       hitechPayout,
       equityBalance,
     };
-  }, [data, expenses, lowSellerScore, dividendRatePct, coopLoan, otherDeduction, mpesaTo0722]);
+  }, [data, dividendRatePct, fixedDeduction, mpesaTo0722]);
 
   const downloadPdf = () => {
     const deductionsJson = encodeURIComponent(
       JSON.stringify({
-        expenses,
-        lowSellerScore,
+        fixedDeduction,
         dividendRatePct,
-        coopLoan,
-        otherDeduction,
         mpesaTo0722,
         weekStart: props.weekStart,
       }),
@@ -175,6 +163,34 @@ export default function DividedViewClient(props: {
     );
     window.open(url, "_blank");
   };
+
+  const sendReportWhatsApp = useCallback(async () => {
+    setSendingWhatsApp(true);
+    try {
+      const res = await fetch(
+        withImpersonateId("/api/admin/online/summary/divided/whatsapp", props.impersonateId ?? null),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            weekStart: props.weekStart,
+            periodKey: props.periodKey,
+          }),
+        },
+      );
+      const body = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        throw new Error(String(body?.error ?? "Failed to send divided WhatsApp report"));
+      }
+      showToast(`WhatsApp flow triggered for ${String(body?.reference ?? props.weekStart)}`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to send divided WhatsApp report", "error");
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  }, [props.impersonateId, props.periodKey, props.weekStart]);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
@@ -193,6 +209,15 @@ export default function DividedViewClient(props: {
             disabled={loading}
           >
             {loading ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendReportWhatsApp()}
+            className="rounded-full border border-sky-500/50 px-4 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+            disabled={loading || sendingWhatsApp || !data}
+            title="Send the selected week divided report to WhatsApp"
+          >
+            {sendingWhatsApp ? "Sending WhatsApp..." : "Send Report WhatsApp"}
           </button>
           <button
             type="button"
@@ -263,56 +288,27 @@ export default function DividedViewClient(props: {
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <div className="text-xs uppercase tracking-wide text-slate-400">Deductions</div>
             <div className="mt-3 space-y-3">
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Expenses</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="numeric"
-                  value={expenses}
-                  onChange={(e) => setExpenses(numberOr(e.target.value, 0))}
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Low seller score</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="numeric"
-                  value={lowSellerScore}
-                  onChange={(e) => setLowSellerScore(numberOr(e.target.value, 0))}
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Dividend rate (%)</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="decimal"
-                  value={dividendRatePct}
-                  onChange={(e) => setDividendRatePct(numberOr(e.target.value, 7))}
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Coop loan</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="numeric"
-                  value={coopLoan}
-                  onChange={(e) => setCoopLoan(numberOr(e.target.value, 0))}
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-xs text-slate-400">Other deduction</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="numeric"
-                  value={otherDeduction}
-                  onChange={(e) => setOtherDeduction(numberOr(e.target.value, 0))}
-                />
-              </label>
+              <div className="rounded-lg border border-white/10 bg-slate-950 px-3 py-3 text-sm text-slate-100">
+                <div className="mb-1 text-xs text-slate-400">Fixed deduction</div>
+                <div className="font-semibold text-white">{currency.format(fixedDeduction)}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-slate-950 px-3 py-3 text-sm text-slate-100">
+                <div className="mb-1 text-xs text-slate-400">Divided rate</div>
+                <div className="font-semibold text-white">{dividendRatePct}%</div>
+              </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <div className="text-xs uppercase tracking-wide text-slate-400">Divided result</div>
               <div className="mt-2 space-y-1 text-sm text-slate-200">
+                <div className="flex justify-between">
+                  <span>Gross profit</span>
+                  <span className="font-semibold text-white">{currency.format(data.totals.grossProfit)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Less fixed deduction</span>
+                  <span className="font-semibold text-rose-300">- {currency.format(fixedDeduction)}</span>
+                </div>
                 <div className="flex justify-between">
                   <span>Base profit</span>
                   <span className="font-semibold text-white">{currency.format(derived.baseProfit)}</span>
@@ -323,7 +319,7 @@ export default function DividedViewClient(props: {
                 </div>
                 <div className="flex justify-between">
                   <span>Balance</span>
-                  <span className="font-semibold text-white">{currency.format(derived.afterDeductions)}</span>
+                  <span className="font-semibold text-white">{currency.format(derived.afterDividend)}</span>
                 </div>
               </div>
             </div>
@@ -352,12 +348,6 @@ export default function DividedViewClient(props: {
                   <span>Less MPESA 0722151083</span>
                   <span className="font-semibold text-rose-300">- {currency.format(mpesaTo0722)}</span>
                 </div>
-                {(coopLoan + otherDeduction) > 0 ? (
-                  <div className="flex justify-between">
-                    <span>Less other deductions</span>
-                    <span className="font-semibold text-rose-300">- {currency.format(coopLoan + otherDeduction)}</span>
-                  </div>
-                ) : null}
                 <div className="mt-2 flex justify-between border-t border-white/10 pt-2">
                   <span className="font-semibold text-white">Send to Equity</span>
                   <span className="font-semibold text-emerald-300">{currency.format(derived.equityBalance)}</span>
