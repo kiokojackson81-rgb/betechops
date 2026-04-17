@@ -73,6 +73,25 @@ export type DividedComputedValues = {
   reference: string;
 };
 
+export type DividedCompletionTargetState = {
+  key: string;
+  label: string;
+  accountId: string | null;
+  shopId: string | null;
+  hasDraft: boolean;
+  draftComplete: boolean;
+  markedZero: boolean;
+  hasProfitEntries: boolean;
+  ready: boolean;
+};
+
+export type DividedCompletionState = {
+  weekStartInput: string;
+  weekEndInput: string;
+  ready: boolean;
+  targets: DividedCompletionTargetState[];
+};
+
 function money(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -211,6 +230,12 @@ async function resolveShopForAccount(account: {
     null;
 
   return fallback ? { id: fallback.id, name: fallback.name } : null;
+}
+
+async function resolveDividedTargets(): Promise<TargetResolved[]> {
+  const targetResolved = await resolveDividedTargets();
+
+  return targetResolved;
 }
 
 export function getWeekEndInputFromExclusive(weekEndExclusive: Date) {
@@ -409,5 +434,104 @@ export async function getDividedReportForWeek(weekStartRaw: string): Promise<Div
     accounts: perAccount,
     totals,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+export async function getDividedCompletionStateForWeek(weekStartRaw: string): Promise<DividedCompletionState> {
+  const parsed = parseDateOnlyUtc(weekStartRaw);
+  if (!parsed) {
+    throw new Error("Invalid weekStart");
+  }
+  const weekStart = canonicalNairobiWeekStartUtc(parsed);
+  const { weekEnd } = mondayToSundayNairobiWindow(weekStart);
+  const weekEndInput = getWeekEndInputFromExclusive(weekEnd);
+  const targetResolved = await resolveDividedTargets();
+  const allAccountIds = [...new Set(targetResolved.flatMap((target) => target.accountIds))];
+  const allShopIds = [...new Set(targetResolved.flatMap((target) => target.shopIds))];
+
+  const weeklySales = allShopIds.length
+    ? await prisma.weeklySale.findMany({
+        where: { shopId: { in: allShopIds }, weekStart, weekEnd },
+        select: { shopId: true, amount: true },
+      })
+    : [];
+  const zeroShopIds = new Set(
+    weeklySales.filter((row) => money(row.amount) === 0).map((row) => String(row.shopId ?? "").trim()).filter(Boolean),
+  );
+
+  const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
+  const latestDraftByTargetKey = new Map<string, { rowCount: number; submittedCount: number }>();
+  if (draftTableAvailable && (allShopIds.length || allAccountIds.length)) {
+    try {
+      const drafts = await prisma.marketplaceStatementDraft.findMany({
+        where: {
+          platform: "JUMIA",
+          weekStart,
+          weekEnd,
+          OR: [{ shopId: { in: allShopIds } }, { accountId: { in: allAccountIds } }],
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { shopId: true, accountId: true, rowCount: true, submittedByTxn: true },
+        take: Math.max(20, targetResolved.length * 4),
+      });
+      for (const draft of drafts) {
+        const target = targetResolved.find(
+          (item) => item.shopIds.includes(String(draft.shopId ?? "")) || item.accountIds.includes(String(draft.accountId ?? "")),
+        );
+        if (!target || latestDraftByTargetKey.has(target.key)) continue;
+        const submittedCount =
+          draft.submittedByTxn && typeof draft.submittedByTxn === "object" ? Object.keys(draft.submittedByTxn as any).length : 0;
+        latestDraftByTargetKey.set(target.key, {
+          rowCount: Number(draft.rowCount ?? 0),
+          submittedCount,
+        });
+      }
+    } catch (err: any) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2021")) {
+        throw err;
+      }
+    }
+  }
+
+  const profitRows = allAccountIds.length
+    ? await (prisma as any).marketplaceProfitEntry.findMany({
+        where: { platform: "JUMIA", accountId: { in: allAccountIds }, weekStart, weekEnd },
+        select: { accountId: true },
+        take: 15000,
+      })
+    : [];
+  const profitCountByAccountId = new Map<string, number>();
+  for (const row of profitRows as any[]) {
+    const accountId = String(row.accountId ?? "").trim();
+    if (!accountId) continue;
+    profitCountByAccountId.set(accountId, (profitCountByAccountId.get(accountId) ?? 0) + 1);
+  }
+
+  const targets: DividedCompletionTargetState[] = targetResolved.map((target) => {
+    const draftState = latestDraftByTargetKey.get(target.key) ?? null;
+    const hasDraft = Boolean(draftState);
+    const draftComplete = Boolean(draftState && draftState.rowCount > 0 && draftState.submittedCount >= draftState.rowCount);
+    const markedZero = target.shopIds.some((shopId) => zeroShopIds.has(shopId));
+    const hasProfitEntries = target.accountIds.some((accountId) => (profitCountByAccountId.get(accountId) ?? 0) > 0);
+    const ready = markedZero || draftComplete || (!hasDraft && hasProfitEntries);
+
+    return {
+      key: target.key,
+      label: target.label,
+      accountId: target.accountIds[0] ?? null,
+      shopId: target.shopIds[0] ?? null,
+      hasDraft,
+      draftComplete,
+      markedZero,
+      hasProfitEntries,
+      ready,
+    };
+  });
+
+  return {
+    weekStartInput: weekStart.toISOString().slice(0, 10),
+    weekEndInput,
+    ready: targets.every((target) => target.ready),
+    targets,
   };
 }

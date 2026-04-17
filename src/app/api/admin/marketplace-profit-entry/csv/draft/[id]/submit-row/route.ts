@@ -77,6 +77,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       platform: true,
       shopId: true,
       accountId: true,
+      weekStart: true,
       rows: true,
       buyingByTxn: true,
       submittedByTxn: true,
