@@ -5,6 +5,8 @@ import { requireRoleOrBenjamin } from "@/lib/api";
 import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from "@/lib/weekWindow";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -273,6 +275,20 @@ export async function POST(req: NextRequest) {
     console.error("[csv-import] weekly sale upsert failed", err);
   }
 
+  try {
+    await maybeAutoSendDividedWhatsappReport({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-import",
+    });
+    await maybeAutoSendPricingWeekWhatsapp({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-import",
+    });
+  } catch (err) {
+    console.error("[csv-import] auto-send failed", err);
+  }
   return NextResponse.json(
     {
       account: { id: account.id, displayName: account.displayName, platform: account.platform },

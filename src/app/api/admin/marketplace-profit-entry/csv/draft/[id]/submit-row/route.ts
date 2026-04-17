@@ -245,16 +245,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   try {
-    await maybeAutoSendDividedWhatsappReport({
-      weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
-      actorId,
-      source: "draft-submit-row",
-    });
-    await maybeAutoSendPricingWeekWhatsapp({
-      weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
-      actorId,
-      source: "draft-submit-row",
-    });
+    const submittedCount = Object.keys(submittedByTxn).length;
+    const rowCount = rows.length;
+    if (rowCount > 0 && submittedCount >= rowCount) {
+      await maybeAutoSendDividedWhatsappReport({
+        weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
+        actorId,
+        source: "draft-submit-row",
+      });
+      await maybeAutoSendPricingWeekWhatsapp({
+        weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
+        actorId,
+        source: "draft-submit-row",
+      });
+    }
   } catch (err) {
     console.error("[draft-submit-row] auto-send failed", err);
   }

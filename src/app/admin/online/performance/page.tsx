@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { getPreviousTradingPeriod, getTradingPeriodFor, parseTradingPeriodKey, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import PerformanceFiltersClient from "@/app/admin/online/performance/_components/PerformanceFilters.client";
+import PricingWeekWhatsappButton from "@/app/admin/online/performance/_components/PricingWeekWhatsappButton.client";
 import { WeeklySaleStatus } from "@prisma/client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
+import { getPricingWeekSummary, PRICING_WEEK_ENTITY, PRICING_WEEK_SUCCESS_ACTION } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -194,6 +196,25 @@ export default async function OnlinePerformancePage({
     submittedAccountsMap.set(key, (submittedAccountsMap.get(key) ?? 0) + 1);
   }
   const totalAccountsForCoverage = accountId ? 1 : accounts.length;
+  const completionSummaries = accountId
+    ? await Promise.all(weeks.map((wk) => getPricingWeekSummary(wk.startInput, { accountIds: [accountId] })))
+    : await Promise.all(weeks.map((wk) => getPricingWeekSummary(wk.startInput)));
+  const completionSummaryMap = new Map(completionSummaries.map((summary) => [summary.week_start, summary]));
+  const successLogs = await prisma.actionLog.findMany({
+    where: {
+      entity: PRICING_WEEK_ENTITY,
+      action: PRICING_WEEK_SUCCESS_ACTION,
+      entityId: { in: weeks.map((wk) => wk.startInput) },
+    },
+    select: { entityId: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const sentWeekMap = new Map<string, string>();
+  for (const row of successLogs) {
+    const key = String(row.entityId ?? "").trim();
+    if (!key || sentWeekMap.has(key)) continue;
+    sentWeekMap.set(key, row.createdAt.toISOString());
+  }
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const nextPeriod = getNextTradingPeriod(period);
@@ -295,14 +316,15 @@ export default async function OnlinePerformancePage({
             const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
             const netToShow = typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
             const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
-            const submittedAccounts = submittedAccountsMap.get(wk.weekStart.toISOString()) ?? 0;
-            const missingPricingCount = missingPricingMap.get(wk.weekStart.toISOString()) ?? 0;
             const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
+            const completion = completionSummaryMap.get(wk.startInput) ?? null;
+            const submittedAccounts = completion?.accounts_completed ?? (submittedAccountsMap.get(wk.weekStart.toISOString()) ?? 0);
+            const missingPricingCount = completion?.missing_pricing ?? (missingPricingMap.get(wk.weekStart.toISOString()) ?? 0);
+            const sentAt = sentWeekMap.get(wk.startInput) ?? null;
             return (
-              <Link
+              <div
                 key={wk.key}
-                href={weekHref}
-                className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
+                className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4"
               >
                 <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
                 <p className="mt-1 text-sm font-semibold text-white">{wk.label}</p>
@@ -358,13 +380,28 @@ export default async function OnlinePerformancePage({
                         {missingPricingCount}
                       </span>
                     </div>
+                    {completion ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Accounts marked zero</span>
+                        <span className="font-semibold text-slate-200">{completion.accounts_zero}</span>
+                      </div>
+                    ) : null}
                   </div>
                 )}
-                <div className="mt-3 border-t border-white/10 pt-2 text-xs">
-                  <span className="text-slate-400">Drill-down:</span>{" "}
-                  <span className="font-semibold text-emerald-200">Open missing pricing list</span>
+                <div className="mt-3 border-t border-white/10 pt-3">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <Link href={weekHref} className="text-slate-400 hover:text-slate-200">
+                      Drill-down: <span className="font-semibold text-emerald-200">Open missing pricing list</span>
+                    </Link>
+                    <PricingWeekWhatsappButton weekStart={wk.startInput} defaultSent={Boolean(sentAt)} />
+                  </div>
+                  {sentAt ? (
+                    <p className="mt-2 text-[11px] text-emerald-300">
+                      WhatsApp sent on {new Date(sentAt).toLocaleString("en-KE")}
+                    </p>
+                  ) : null}
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>

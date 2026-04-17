@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +62,22 @@ export async function POST(req: NextRequest) {
     actorId,
   });
 
+  try {
+    if (actorId) {
+      await maybeAutoSendDividedWhatsappReport({
+        weekStartRaw: weekStart.toISOString().slice(0, 10),
+        actorId,
+        source: "reset-weekly-sale",
+      });
+      await maybeAutoSendPricingWeekWhatsapp({
+        weekStartRaw: weekStart.toISOString().slice(0, 10),
+        actorId,
+        source: "reset-weekly-sale",
+      });
+    }
+  } catch (err) {
+    console.error("[reset-weekly-sale] auto-send failed", err);
+  }
   return NextResponse.json({ ok: true });
 }
 
