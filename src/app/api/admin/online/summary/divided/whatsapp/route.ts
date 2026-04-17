@@ -20,6 +20,7 @@ export const runtime = "nodejs";
 const SHARE_TEMPLATE_NAME = "divided_share_ready_short_v1";
 const ADMIN_TEMPLATE_NAME = "divided_admin_short_v1";
 const DIVIDED_READY_TAG = "divided_ready";
+const ADMIN_TRIGGER_TAG = "Admin Send Tag";
 const DIVIDED_SHARE_SENT_TAG = "divided_share_sent";
 const DIVIDED_ADMIN_SENT_TAG = "divided_admin_sent";
 const DIVIDED_READY_RULE = "divided_ready_rule";
@@ -86,6 +87,9 @@ export async function POST(req: NextRequest) {
       hitech_payout: metrics.hitechPayout,
       equity: metrics.equity,
       reference,
+      receipt_url: pdfUpload.url,
+      media_url: pdfUpload.url,
+      file_url: pdfUpload.url,
       pdf_url: pdfUpload.url,
       report_pdf_url: pdfUpload.url,
       divided_pdf_url: pdfUpload.url,
@@ -102,6 +106,8 @@ export async function POST(req: NextRequest) {
       phone: DIVIDED_ADMIN_PHONE,
       firstName: "Divided Admin",
       fields: commonFields,
+      tagsToRemove: [ADMIN_TRIGGER_TAG],
+      tagsToAdd: [ADMIN_TRIGGER_TAG],
     });
     if (!adminResult.ok) {
       return NextResponse.json(
@@ -140,6 +146,7 @@ export async function POST(req: NextRequest) {
       pdf_url: pdfUpload.url,
       send_result: {
         triggered_tag: DIVIDED_READY_TAG,
+        admin_trigger_tag: ADMIN_TRIGGER_TAG,
         expected_downstream_tags: [DIVIDED_SHARE_SENT_TAG, DIVIDED_ADMIN_SENT_TAG],
         share_contact_id: shareResult.contactId,
         admin_contact_id: adminResult.contactId,
