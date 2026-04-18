@@ -109,6 +109,8 @@ export default function MarketingReceiptsPage() {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "80");
+        params.set("onlyPos", "1");
+        params.set("scope", "mine");
         const startIso = toStartOfDayIso(filters.start);
         const endIso = toEndOfDayIso(filters.end);
         if (startIso) params.set("start", startIso);
@@ -216,8 +218,7 @@ export default function MarketingReceiptsPage() {
           <div>
             <h1 className="text-3xl font-semibold">Receipts history</h1>
             <p className="text-sm text-slate-300">
-              Browse every receipt captured in the system. Use the range pills or
-              custom dates to narrow the window.
+              Browse your POS receipts and open the shared receipt detail page to print, send, or change payment method.
             </p>
           </div>
           <Link
@@ -232,11 +233,9 @@ export default function MarketingReceiptsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
-              <h2 className="text-lg font-semibold text-slate-100">
-                Read-only receipts history
-              </h2>
+              <h2 className="text-lg font-semibold text-slate-100">My POS receipts</h2>
               <p className="text-sm text-slate-400">
-                Explore every receipt captured across the system and filter by date, range, or attendant.
+                Filter your POS receipts by date or search term. Only your logged-in receipts are shown here.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
@@ -300,7 +299,7 @@ export default function MarketingReceiptsPage() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
               <p className="text-2xl font-semibold text-emerald-300">{summary.count}</p>
-              <p className="text-xs text-slate-400">Captured in the selected window</p>
+              <p className="text-xs text-slate-400">Your POS receipts in the selected window</p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
@@ -344,7 +343,7 @@ export default function MarketingReceiptsPage() {
                       rel="noopener noreferrer"
                       className="text-xs text-emerald-300 hover:text-emerald-200"
                     >
-                      View details
+                      View receipt
                     </Link>
                   ) : (
                     <span className="text-xs text-slate-500">Unavailable</span>

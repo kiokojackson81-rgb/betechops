@@ -26,6 +26,10 @@ type Props = {
   q?: string | null;
   attendantId: string | null | undefined;
   hideHeader?: boolean;
+  onlyPos?: boolean;
+  title?: string;
+  subtitle?: string;
+  emptyMessage?: string;
   onSummary?: (s: { totalSales: number; count: number }) => void;
 };
 
@@ -96,6 +100,10 @@ export default function DailyReportReceiptsPanel({
   q,
   attendantId,
   hideHeader,
+  onlyPos = false,
+  title,
+  subtitle,
+  emptyMessage,
   onSummary,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
@@ -140,6 +148,8 @@ export default function DailyReportReceiptsPanel({
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
         if (q) params.set("q", q);
+        params.set("scope", "mine");
+        if (onlyPos) params.set("onlyPos", "1");
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
         let url = `/api/receipts?${params.toString()}`;
@@ -257,8 +267,10 @@ export default function DailyReportReceiptsPanel({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400">My receipts</p>
-              <h2 className="text-lg font-semibold text-white">{displayDate}</h2>
-              <p className="text-sm text-slate-400">Showing receipts captured by you for this date.</p>
+              <h2 className="text-lg font-semibold text-white">{title ?? displayDate}</h2>
+              <p className="text-sm text-slate-400">
+                {subtitle ?? "Showing receipts captured by you for this date."}
+              </p>
             </div>
             <div className="flex flex-col items-start gap-1 text-sm sm:items-end">
               <span className="text-[10px] uppercase tracking-[0.3em] text-slate-400">Count</span>
@@ -287,7 +299,7 @@ export default function DailyReportReceiptsPanel({
         {error && <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{error}</div>}
 
         {!loading && !error && receipts.length === 0 && (
-          <p className="text-sm text-slate-400">No receipts found for this date.</p>
+          <p className="text-sm text-slate-400">{emptyMessage ?? "No receipts found for this date."}</p>
         )}
 
         {!!receipts.length && (

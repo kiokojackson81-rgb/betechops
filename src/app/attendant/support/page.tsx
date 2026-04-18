@@ -14,6 +14,7 @@ import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -93,6 +94,8 @@ export default function SupportOpsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showPosReceipts, setShowPosReceipts] = useState(false);
   const [serverSummary, setServerSummary] = useState<SupportSummaryResponse | null>(
     null,
   );
@@ -121,6 +124,7 @@ export default function SupportOpsPage() {
           router.replace("/attendant/login");
           return;
         }
+        setCurrentUserId(typeof user.id === "string" ? user.id : null);
         const category = user.attendantCategory as string | undefined;
         const role = user.role as string | undefined;
         if (role === "ADMIN" || category === "SUPPORT_OPS") {
@@ -370,6 +374,37 @@ export default function SupportOpsPage() {
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
+            <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">My POS receipts</p>
+                  <h2 className="text-lg font-semibold text-white">View your POS receipts for the selected day</h2>
+                  <p className="text-sm text-slate-400">
+                    Open the same receipt detail page used on daily report to print, send, or change payment method.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPosReceipts((current) => !current)}
+                  className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
+                >
+                  {showPosReceipts ? "Hide POS receipts" : "View POS receipts"}
+                </button>
+              </div>
+            </section>
+
+            {showPosReceipts && (
+              <DailyReportReceiptsPanel
+                start={date}
+                end={date}
+                attendantId={currentUserId}
+                onlyPos
+                title="My POS receipts"
+                subtitle="Showing your POS receipts for the selected day only."
+                emptyMessage="No POS receipts found for the selected day."
+              />
+            )}
+
             <ReceiptsEditor
               receipts={receipts}
               setReceipts={setReceipts}

@@ -18,7 +18,13 @@ type ReceiptRow = {
   detailUrl?: string | null;
 };
 
-export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] }) {
+export default function ReceiptsPageClient({
+  initial,
+  initialOnlyPos = true,
+}: {
+  initial: ReceiptRow[];
+  initialOnlyPos?: boolean;
+}) {
   const [view, setView] = useState<"create" | "list">("create");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ReceiptRow[]>(initial ?? []);
@@ -31,6 +37,7 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
   const [page, setPage] = useState(1);
   const size = 10;
   const [attendantId, setAttendantId] = useState<string | null>(null);
+  const [onlyPos] = useState(initialOnlyPos);
   const [fromDate, setFromDate] = useState<string | null>(null);
   const [toDate, setToDate] = useState<string | null>(null);
 
@@ -57,6 +64,8 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
       if (fromDate) params.set("from", fromDate);
       if (toDate) params.set("to", toDate);
       params.set("includeItems", "true");
+      params.set("scope", "mine");
+      if (onlyPos) params.set("onlyPos", "1");
       params.set("page", String(nextPage));
       params.set("size", String(size));
       if (attendantId) params.set("attendantId", attendantId);
@@ -159,15 +168,15 @@ export default function ReceiptsPageClient({ initial }: { initial: ReceiptRow[] 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                {attendantId ? "Receipts list" : "Receipts desk"}
+                {attendantId ? "My POS receipts" : "Receipts desk"}
               </p>
               <h2 className="text-xl font-semibold text-white">
-                {attendantId ? "Read-only receipts history" : "Search receipts"}
+                {attendantId ? "Read-only POS receipts history" : "Search POS receipts"}
               </h2>
               <p className="text-sm text-slate-400">
                 {attendantId
-                  ? "Explore every receipt captured across the system and filter by date, range, or attendant."
-                  : "Search by receipt number, customer phone, or attendant name."}
+                  ? "Browse your POS receipts only. Open any row to print, send, or change payment method on the shared receipt page."
+                  : "Search your POS receipts by receipt number, customer phone, or attendant name."}
               </p>
             </div>
             <button
