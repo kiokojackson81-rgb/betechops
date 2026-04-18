@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { CalendarIcon } from "lucide-react";
-import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import Card from "@/app/_components/Card";
 import SensitiveValue from "@/components/SensitiveValue";
 import Button from "@/app/_components/Button";
@@ -68,27 +67,13 @@ const safeLocale = (value?: number | null, fallback = "0") => {
   return Number.isFinite(num) ? num.toLocaleString() : fallback;
 };
 
-const createItem = (): ReceiptItem => ({
-  id: crypto.randomUUID(),
-  productName: "",
-  buyingPrice: "",
-});
-
-const createReceipt = (): ReceiptRow => ({
-  id: crypto.randomUUID(),
-  receiptNumber: "",
-  sellingTotal: "",
-  paymentMethod: "",
-  items: [createItem()],
-});
-
 export default function SupportOpsPage() {
   const router = useRouter();
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dayOfWeek, setDayOfWeek] = useState(() =>
     new Date().toLocaleDateString("en-KE", { weekday: "long" })
   );
-  const [receipts, setReceipts] = useState<ReceiptRow[]>([createReceipt()]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [newBatteries, setNewBatteries] = useState<number | "">("");
   const [changedBatteries, setChangedBatteries] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
@@ -227,7 +212,7 @@ export default function SupportOpsPage() {
       : commissionSummary.commission;
 
   const handleReset = () => {
-    setReceipts([createReceipt()]);
+    setReceipts([]);
     setNewBatteries("");
     setChangedBatteries("");
     setError(null);
@@ -383,13 +368,6 @@ export default function SupportOpsPage() {
 
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
-            <ReceiptsEditor
-              receipts={receipts}
-              setReceipts={setReceipts}
-              totals={totals}
-              hideBuyingPrice
-            />
-
             <section className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
               <div className="flex items-center justify-between">
                 <div>

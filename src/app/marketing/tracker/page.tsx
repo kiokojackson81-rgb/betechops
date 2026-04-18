@@ -8,7 +8,6 @@ import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
-import ReceiptsEditor from "@/app/_components/ReceiptsEditor";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import {
@@ -103,26 +102,6 @@ const defaultFormState = (): MarketingDailyFormState => {
     fields: { ...dynamic },
   };
 };
-
-const newSaleRow = (): ReceiptRow => ({
-  id:
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2),
-  receiptNumber: "",
-  sellingTotal: "",
-  paymentMethod: "",
-  items: [
-    {
-      id:
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : Math.random().toString(36).slice(2),
-      productName: "",
-      buyingPrice: "",
-    },
-  ],
-});
 
 const pillClass = (checked: boolean) =>
   `rounded-full border px-4 py-2 text-sm font-medium transition ${
@@ -619,7 +598,7 @@ export default function MarketingTrackerPage() {
   const [form, setForm] = useState<MarketingDailyFormState>(() =>
     defaultFormState(),
   );
-  const [receipts, setReceipts] = useState<ReceiptRow[]>([newSaleRow()]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [weeklyMeetingAttended, setWeeklyMeetingAttended] = useState(false);
   const [weeklyVideoShootParticipated, setWeeklyVideoShootParticipated] =
@@ -1413,7 +1392,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       if (res.ok) {
         showToast("Marketing daily tracker submitted", "success");
         setForm(defaultFormState());
-        setReceipts([newSaleRow()]);
+        setReceipts([]);
         setWeeklyMeetingAttended(false);
         setWeeklyVideoShootParticipated(false);
         setWeeklyVideoCount("");
@@ -1621,16 +1600,8 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           </div>
         </Card>
 
-        {/* SALES RECORDS + QUICK STATS ROW */}
-        <div className="grid gap-6 lg:grid-cols-12 items-start">
-          <div className="lg:col-span-8">
-            <ReceiptsEditor
-              receipts={receipts}
-              setReceipts={setReceipts}
-              totals={totals}
-            />
-          </div>
-          <div className="lg:col-span-4 space-y-4">
+        <div className="grid gap-6 xl:grid-cols-12 items-start">
+          <div className={currentUserEmail === "jeniffer@betech.co.ke" ? "xl:col-span-4" : "xl:col-span-6"}>
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
@@ -1641,8 +1612,12 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />
+          </div>
+          <div className={currentUserEmail === "jeniffer@betech.co.ke" ? "xl:col-span-4" : "xl:col-span-6"}>
             <EarningsCard summary={earningsSummary} />
-            {currentUserEmail === "jeniffer@betech.co.ke" && (
+          </div>
+          {currentUserEmail === "jeniffer@betech.co.ke" && (
+            <div className="xl:col-span-4">
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1899,8 +1874,8 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                 )}
 
               </Card>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">

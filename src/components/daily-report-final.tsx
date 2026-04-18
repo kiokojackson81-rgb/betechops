@@ -57,23 +57,6 @@ const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
-function createEmptyProduct(): ProductRow {
-  return {
-    id: crypto.randomUUID(),
-    name: "",
-  };
-}
-
-function createEmptyReceipt(): ReceiptRow {
-  return {
-    id: crypto.randomUUID(),
-    sellingTotal: "",
-    receiptNumber: "",
-    paymentMethod: "MPESA",
-    products: [createEmptyProduct()],
-  };
-}
-
 export default function DailyReportFinal() {
   const [showMyReceipts, setShowMyReceipts] = useState(false);
 
@@ -155,7 +138,7 @@ export default function DailyReportFinal() {
     return d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone });
   });
 
-  const [receipts, setReceipts] = useState<ReceiptRow[]>([createEmptyReceipt()]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
 
   const [walkinsServed, setWalkinsServed] = useState<number | "">("");
   const [walkinsPurchased, setWalkinsPurchased] = useState<number | "">("");
@@ -555,57 +538,6 @@ export default function DailyReportFinal() {
     netPay: commissionForPeriod,
   };
 
-  const updateReceipt = (id: string, updates: Partial<ReceiptRow>) =>
-    setReceipts((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
-
-  const updateProduct = (
-    receiptId: string,
-    productId: string,
-    updates: Partial<ProductRow>,
-  ) => {
-    setReceipts((prev) =>
-      prev.map((r) =>
-        r.id === receiptId
-          ? {
-              ...r,
-              products: r.products.map((p) =>
-                p.id === productId ? { ...p, ...updates } : p,
-              ),
-            }
-          : r,
-      ),
-    );
-  };
-
-  const addProductToReceipt = (receiptId: string) => {
-    setReceipts((prev) =>
-      prev.map((r) =>
-        r.id === receiptId ? { ...r, products: [...r.products, createEmptyProduct()] } : r,
-      ),
-    );
-  };
-
-  const removeProductFromReceipt = (receiptId: string, productId: string) => {
-    setReceipts((prev) =>
-      prev.map((r) =>
-        r.id === receiptId
-          ? {
-              ...r,
-              products:
-                r.products.length > 1
-                  ? r.products.filter((p) => p.id !== productId)
-                  : r.products,
-            }
-          : r,
-      ),
-    );
-  };
-
-  const addReceipt = () => setReceipts((prev) => [...prev, createEmptyReceipt()]);
-
-  const removeReceipt = (id: string) =>
-    setReceipts((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
-
   const salesTotals = {
     receipts: totalReceipts,
     sales: totalSales,
@@ -613,7 +545,7 @@ export default function DailyReportFinal() {
   };
 
   const handleResetDay = () => {
-    setReceipts([createEmptyReceipt()]);
+    setReceipts([]);
     setWalkinsServed("");
     setWalkinsPurchased("");
     setShopNeatness({ cleaned: false, neat: false, labeled: false });
@@ -981,84 +913,73 @@ export default function DailyReportFinal() {
       </section>
 
       {!showMyReceipts && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-8">
-            <SalesReceiptsCard
-              receipts={receipts}
-              updateReceipt={updateReceipt}
-              updateProduct={updateProduct}
-              addProductToReceipt={addProductToReceipt}
-              removeProductFromReceipt={removeProductFromReceipt}
-              addReceipt={addReceipt}
-              removeReceipt={removeReceipt}
-              salesTotals={salesTotals}
-            />
-
-            <div className="space-y-6">
-              <DaySpecificBlocks
-                selectedDay={dayOfWeek}
-                walkIns={Number(walkinsServed || 0)}
-                onWalkInsChange={(val) => setWalkinsServed(val)}
-                neatness={shopNeatness}
-                onNeatnessChange={setShopNeatness}
-                productTasks={{
-                  uploaded: productsUploaded,
-                  edited: productsEdited,
-                  copied: productsCopied,
-                }}
-                onProductTasksChange={(next) => {
-                  setProductsUploaded(next.uploaded);
-                  setProductsEdited(next.edited);
-                  setProductsCopied(next.copied);
-                }}
-                communications={communications}
-                onCommunicationsChange={setCommunications}
-                marketplace={marketplace}
-                onMarketplaceChange={setMarketplace}
-                liveSession={liveSession}
-                onLiveSessionChange={setLiveSession}
-                thursdayActivities={thursdayActivities}
-                onThursdayActivitiesChange={setThursdayActivities}
-                fridayTasks={fridayTasks}
-                onFridayTasksChange={setFridayTasks}
-                saturdaySummary={saturdaySummary}
-                onSaturdaySummaryChange={setSaturdaySummary}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <div className="xl:col-span-6">
+              <QuickStats
+                receipts={displayedReceipts}
+                salesKes={displayedSalesKes}
+                newProducts={displayedNewProducts}
+                editedProducts={displayedEditedProducts}
+                copiedProducts={displayedCopiedProducts}
+                walkInsServed={displayedWalkInsServed}
+                walkInsPurchased={displayedWalkInsPurchased}
+                commissionKes={commissionForPeriod}
+                periodLabel={selectedPeriodLabel}
               />
+            </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={handleResetDay}
-                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-                >
-                  Reset day
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
-                >
-                  {isSubmitting ? "Submitting..." : "Submit report"}
-                </button>
-              </div>
+            <div className="xl:col-span-6">
+              <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
             </div>
           </div>
 
-          <div className="space-y-6 lg:col-span-4">
-            <QuickStats
-              receipts={displayedReceipts}
-              salesKes={displayedSalesKes}
-              newProducts={displayedNewProducts}
-              editedProducts={displayedEditedProducts}
-              copiedProducts={displayedCopiedProducts}
-              walkInsServed={displayedWalkInsServed}
-              walkInsPurchased={displayedWalkInsPurchased}
-              commissionKes={commissionForPeriod}
-              periodLabel={selectedPeriodLabel}
-            />
+          <DaySpecificBlocks
+            selectedDay={dayOfWeek}
+            walkIns={Number(walkinsServed || 0)}
+            onWalkInsChange={(val) => setWalkinsServed(val)}
+            neatness={shopNeatness}
+            onNeatnessChange={setShopNeatness}
+            productTasks={{
+              uploaded: productsUploaded,
+              edited: productsEdited,
+              copied: productsCopied,
+            }}
+            onProductTasksChange={(next) => {
+              setProductsUploaded(next.uploaded);
+              setProductsEdited(next.edited);
+              setProductsCopied(next.copied);
+            }}
+            communications={communications}
+            onCommunicationsChange={setCommunications}
+            marketplace={marketplace}
+            onMarketplaceChange={setMarketplace}
+            liveSession={liveSession}
+            onLiveSessionChange={setLiveSession}
+            thursdayActivities={thursdayActivities}
+            onThursdayActivitiesChange={setThursdayActivities}
+            fridayTasks={fridayTasks}
+            onFridayTasksChange={setFridayTasks}
+            saturdaySummary={saturdaySummary}
+            onSaturdaySummaryChange={setSaturdaySummary}
+          />
 
-            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={handleResetDay}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+            >
+              Reset day
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+            >
+              {isSubmitting ? "Submitting..." : "Submit report"}
+            </button>
           </div>
         </div>
       )}
@@ -1069,182 +990,6 @@ export default function DailyReportFinal() {
 }
 
 // Helper components
-
-type SalesReceiptsCardProps = {
-  receipts: ReceiptRow[];
-  updateReceipt: (id: string, updates: Partial<ReceiptRow>) => void;
-  updateProduct: (receiptId: string, productId: string, updates: Partial<ProductRow>) => void;
-  addProductToReceipt: (receiptId: string) => void;
-  removeProductFromReceipt: (receiptId: string, productId: string) => void;
-  addReceipt: () => void;
-  removeReceipt: (id: string) => void;
-  salesTotals: { receipts: number; sales: number; items: number };
-};
-
-function SalesReceiptsCard(props: SalesReceiptsCardProps) {
-  const {
-    receipts,
-    updateReceipt,
-    updateProduct,
-    addProductToReceipt,
-    removeProductFromReceipt,
-    addReceipt,
-    removeReceipt,
-    salesTotals,
-  } = props;
-
-  return (
-    <div className={cardClasses + " px-6 py-5 space-y-4"}>
-      <header className="flex flex-col gap-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
-          Sales records
-        </p>
-        <h2 className="text-lg md:text-xl font-semibold">Add each receipt for today</h2>
-        <p className="text-sm text-slate-400">Totals are calculated automatically.</p>
-      </header>
-
-      <div className="space-y-6">
-        {receipts.map((receipt, rIndex) => (
-          <div
-            key={receipt.id}
-            className="rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-4 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Receipt {rIndex + 1}
-              </span>
-              {receipts.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeReceipt(receipt.id)}
-                  className="text-xs text-slate-400 hover:text-red-400"
-                >
-                  Remove receipt
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Selling total (KES)
-                </label>
-                <input
-                  type="number"
-                  value={receipt.sellingTotal}
-                  onChange={(e) =>
-                    updateReceipt(receipt.id, { sellingTotal: Number(e.target.value || 0) })
-                  }
-                  className={inputClasses}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Receipt number (required)
-                </label>
-                <input
-                  type="text"
-                  value={receipt.receiptNumber}
-                  onChange={(e) => updateReceipt(receipt.id, { receiptNumber: e.target.value })}
-                  placeholder="Required"
-                  className={inputClasses}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Payment method (required)
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateReceipt(receipt.id, { paymentMethod: "MPESA" })}
-                    className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                      receipt.paymentMethod === "MPESA"
-                        ? "border-emerald-500 bg-emerald-500 text-black"
-                        : "border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800"
-                    }`}
-                  >
-                    MPESA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateReceipt(receipt.id, { paymentMethod: "CASH" })}
-                    className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                      receipt.paymentMethod === "CASH"
-                        ? "border-emerald-500 bg-emerald-500 text-black"
-                        : "border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800"
-                    }`}
-                  >
-                    Cash
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                Products in this receipt
-              </p>
-              <div className="space-y-2">
-                {receipt.products.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex flex-col gap-2 md:grid md:grid-cols-[minmax(0,2fr)_auto] md:items-start"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Product name"
-                        value={p.name}
-                        onChange={(e) => updateProduct(receipt.id, p.id, { name: e.target.value })}
-                        className={inputClasses}
-                      />
-                      {receipt.products.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeProductFromReceipt(receipt.id, p.id)}
-                          className="text-xs text-slate-400 hover:text-red-400 self-end"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => addProductToReceipt(receipt.id)}
-                className="mt-1 inline-flex items-center gap-1 rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:bg-slate-800"
-              >
-                + Add product to this receipt
-              </button>
-            </div>
-          </div>
-        ))}
-
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <button
-            type="button"
-            onClick={addReceipt}
-            className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800"
-          >
-            + Add receipt
-          </button>
-          <div className="flex flex-wrap gap-3 text-xs text-slate-300">
-            <span className="rounded-full bg-slate-900/70 px-3 py-1.5">
-              Receipts: <span className="font-semibold text-emerald-400">{salesTotals.receipts}</span>
-            </span>
-            <span className="rounded-full bg-slate-900/70 px-3 py-1.5">
-              Sales: <span className="font-semibold text-emerald-400">KES {salesTotals.sales.toLocaleString()}</span>
-            </span>
-            <span className="rounded-full bg-slate-900/70 px-3 py-1.5">
-              Items: <span className="font-semibold text-emerald-400">{salesTotals.items}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DaySpecificBlocks(props: DaySpecificBlocksProps) {
   const {
