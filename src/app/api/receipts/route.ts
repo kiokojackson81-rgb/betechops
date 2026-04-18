@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
   const q = url.searchParams.get("q") || undefined;
   const phoneParam = url.searchParams.get("phone") || undefined;
   const docTypeParam = url.searchParams.get("docType") || undefined;
+  const requestedAttendantId = url.searchParams.get("attendantId") || undefined;
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const issuerOnly = url.searchParams.get("issuerOnly") === "true";
@@ -53,8 +54,8 @@ export async function GET(req: NextRequest) {
   const podStatus = url.searchParams.get("status") || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   const identity = await resolveTargetUserId(req);
   const meta = identity;
-  const attendantId = identity.resolvedUserId;
-  if (!attendantId) {
+  const resolvedUserId = identity.resolvedUserId;
+  if (!resolvedUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -125,13 +126,13 @@ export async function GET(req: NextRequest) {
   if (scope === "mine") {
     const ownerOr: Prisma.ReceiptWhereInput[] = [];
     ownerOr.push(
-      { issuedById: attendantId },
-      { order: { attendantId } },
-      { data: { path: ["attendantId"], equals: attendantId } },
+      { issuedById: resolvedUserId },
+      { order: { attendantId: resolvedUserId } },
+      { data: { path: ["attendantId"], equals: resolvedUserId } },
     );
     // If issuerOnly requested, restrict to issuedById only
     if (issuerOnly) {
-      and.push({ issuedById: attendantId });
+      and.push({ issuedById: resolvedUserId });
     } else {
       and.push({ OR: ownerOr });
     }
@@ -163,12 +164,12 @@ export async function GET(req: NextRequest) {
             ? await getPosProfitReceiptIdsForAdminFilters({
                 start: startDate,
                 end: endDate,
-                attendantId: scope === "mine" ? undefined : attendantId ?? undefined,
+                attendantId: scope === "mine" ? undefined : requestedAttendantId,
                 paymentMethod: paymentMethodParam,
                 search: q,
                 docType: normalizedDocType,
                 scope: scope as "mine" | "global",
-                currentUserId: scope === "mine" ? attendantId : null,
+                currentUserId: scope === "mine" ? resolvedUserId : null,
                 customerType,
                 podStatus,
                 onlyPos: true,
@@ -287,7 +288,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && attendantId) marketingFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && resolvedUserId) marketingFilter.dailyEntry.submittedById = resolvedUserId;
+  else if (scope === "global" && requestedAttendantId) marketingFilter.dailyEntry.submittedById = requestedAttendantId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -302,7 +304,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && attendantId) supportFilter.dailyEntry.submittedById = attendantId;
+  if (scope === "mine" && resolvedUserId) supportFilter.dailyEntry.submittedById = resolvedUserId;
+  else if (scope === "global" && requestedAttendantId) supportFilter.dailyEntry.submittedById = requestedAttendantId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
