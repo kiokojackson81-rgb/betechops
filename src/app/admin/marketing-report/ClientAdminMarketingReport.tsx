@@ -42,6 +42,7 @@ type Props = {
   dow?: string;
   dateStr?: string;
   userFilter?: string;
+  impersonateId?: string;
 };
 
 export default function ClientAdminMarketingReport({
@@ -51,6 +52,7 @@ export default function ClientAdminMarketingReport({
   dow = "",
   dateStr = "",
   userFilter = "",
+  impersonateId = "",
 }: Props) {
   const [selectedEntry, setSelectedEntry] = useState<MarketingReportEntry | null>(null);
 
@@ -67,8 +69,9 @@ export default function ClientAdminMarketingReport({
     if (selectedPeriodKey) params.set("period", selectedPeriodKey);
     if (dateStr) params.set("date", dateStr);
     if (userFilter) params.set("user", userFilter);
+    if (impersonateId) params.set("impersonateId", impersonateId);
     return params;
-  }, [selectedPeriodKey, dateStr, userFilter]);
+  }, [selectedPeriodKey, dateStr, userFilter, impersonateId]);
 
   const getDayHref = (dayLabel: string) => {
     const params = new URLSearchParams(baseParams);
@@ -111,7 +114,7 @@ export default function ClientAdminMarketingReport({
             <div className="text-lg font-semibold">{aggregates?.period?.label ?? selectedPeriodKey ?? "-"}</div>
           </div>
           <div className="flex items-center gap-2">
-            <MultiDayExportClient periodKey={selectedPeriodKey} userFilter={userFilter} />
+            <MultiDayExportClient periodKey={selectedPeriodKey} userFilter={userFilter} impersonateId={impersonateId} />
           </div>
         </div>
 
@@ -120,6 +123,7 @@ export default function ClientAdminMarketingReport({
           initialDay={dow}
           initialDate={dateStr}
           initialUser={userFilter}
+          impersonateId={impersonateId}
         />
 
         <div className="flex flex-wrap gap-2">

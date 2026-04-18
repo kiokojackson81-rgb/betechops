@@ -10,6 +10,7 @@ type AdminSearchParams = {
   dow?: string | string[];
   date?: string | string[];
   user?: string | string[];
+  impersonateId?: string | string[];
 };
 
 type AdminMarketingReportPageProps = {
@@ -35,6 +36,7 @@ const AdminMarketingReportPage = async ({ searchParams }: AdminMarketingReportPa
   const dow = getFirstParam(searchParams?.dow);
   const dateStrRaw = getFirstParam(searchParams?.date);
   const userSearch = getFirstParam(searchParams?.user);
+  const impersonateId = getFirstParam(searchParams?.impersonateId);
 
   const parsedDate = dateStrRaw ? new Date(dateStrRaw) : undefined;
   const validDate = parsedDate && !Number.isNaN(parsedDate.getTime());
@@ -47,6 +49,7 @@ const AdminMarketingReportPage = async ({ searchParams }: AdminMarketingReportPa
     from,
     to,
     userFilter: userSearch || undefined,
+    submittedById: impersonateId || undefined,
   });
 
   return (
@@ -59,6 +62,7 @@ const AdminMarketingReportPage = async ({ searchParams }: AdminMarketingReportPa
           dow={dow}
           dateStr={validDate && dateStrRaw ? dateStrRaw : ""}
           userFilter={userSearch ?? ""}
+          impersonateId={impersonateId || ""}
         />
       </main>
     </div>

@@ -4,7 +4,15 @@ import React, { useState } from "react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function MultiDayExportClient({ periodKey, userFilter }: { periodKey?: string; userFilter?: string }) {
+export default function MultiDayExportClient({
+  periodKey,
+  userFilter,
+  impersonateId,
+}: {
+  periodKey?: string;
+  userFilter?: string;
+  impersonateId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>(() => {
     const s: Record<string, boolean> = {};
@@ -20,6 +28,7 @@ export default function MultiDayExportClient({ periodKey, userFilter }: { period
     const params = new URLSearchParams();
     if (periodKey) params.set("period", periodKey);
     if (userFilter) params.set("user", userFilter);
+    if (impersonateId) params.set("impersonateId", impersonateId);
     params.set("dows", picked.join(","));
     const url = `/api/admin/marketing-report/export-period?${params.toString()}`;
     window.open(url, "_blank");

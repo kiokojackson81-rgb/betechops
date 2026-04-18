@@ -11,9 +11,16 @@ type Props = {
   initialDay?: string;
   initialDate?: string;
   initialUser?: string;
+  impersonateId?: string;
 };
 
-export default function MarketingReportFilterBar({ initialPeriod = "", initialDay = "", initialDate = "", initialUser = "" }: Props) {
+export default function MarketingReportFilterBar({
+  initialPeriod = "",
+  initialDay = "",
+  initialDate = "",
+  initialUser = "",
+  impersonateId = "",
+}: Props) {
   const periods = useMemo(() => getRecentTradingPeriods(6), []);
   const defaultPeriodKey = initialPeriod || periods[0]?.key || "";
   const [periodKey, setPeriodKey] = useState(defaultPeriodKey);
@@ -72,6 +79,7 @@ export default function MarketingReportFilterBar({ initialPeriod = "", initialDa
     if (date) qs.set("date", date);
     const trimmedUser = user.trim();
     if (trimmedUser) qs.set("user", trimmedUser);
+    if (impersonateId) qs.set("impersonateId", impersonateId);
     const url = `/admin/marketing-report${qs.toString() ? `?${qs.toString()}` : ""}`;
     router.push(url);
   };
