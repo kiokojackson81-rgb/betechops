@@ -18,6 +18,8 @@ export function buildAdminSummaryMessage(opts: {
   const slot3 = `KES ${formatNumber(summary.totalProfit)}`;
   const slot4 = `${summary.receiptsCount} receipts`;
   const slot5 = `${summary.itemsCount} products sold`;
+  const slot6 = `${summary.posReceiptsCount} POS receipts`;
+  const slot7 = `KES ${formatNumber(summary.posTotalSales)}`;
   const summaryText = `Hello Admin,
 
 Here is the daily receipts summary from the Betech Ops System.
@@ -27,6 +29,8 @@ Total sales: ${slot2}
 Total profit: ${slot3}
 ${slot4}
 ${slot5}
+POS receipts: ${slot6}
+POS amount: ${slot7}
 
 This is an automated internal notification from Betech Ops.`;
 
@@ -37,6 +41,8 @@ This is an automated internal notification from Betech Ops.`;
     slot3,
     slot4,
     slot5,
+    slot6,
+    slot7,
     summaryText,
   };
 }

@@ -577,7 +577,14 @@ export default function ReceiptsAdminClient({
       const res = await fetch("/api/admin/daily-summary/trigger", { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to trigger summary");
-      setTriggerSummaryResult(`${data.slot2} · ${data.slot3} · ${data.slot4}`);
+      const previewParts = [
+        data?.payload?.slot2 ?? data?.slot2,
+        data?.payload?.slot3 ?? data?.slot3,
+        data?.payload?.slot4 ?? data?.slot4,
+      ].filter((value): value is string => Boolean(value));
+      setTriggerSummaryResult(
+        previewParts.length > 0 ? previewParts.join(" · ") : (data?.chatrace?.ok ? "Summary triggered" : "Trigger sent"),
+      );
       showToast("Admin summary triggered", "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to trigger summary";

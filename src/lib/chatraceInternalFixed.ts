@@ -467,34 +467,131 @@ async function persistInternalDebug(receiptNumber: string, rid: string, debug: a
 
 export async function pushInternalDailySummary(input: {
   dateLabel: string;
-  totalReceipts: string;
-  totalSales: string;
-  totalProfit: string;
-  totalMpesa: string;
-  totalCash: string;
+  totalReceipts: string | number;
+  totalSales: string | number;
+  totalProfit: string | number;
+  totalMpesa: string | number;
+  totalCash: string | number;
+  totalItems?: string | number;
+  awaitingPricingCount?: string | number;
+  mpesaReceipts?: string | number;
+  cashReceipts?: string | number;
+  posReceipts?: string | number;
+  posSales?: string | number;
   requestId?: string;
 }) {
   const rid = input.requestId || randomUUID();
   const env = getEnv();
   const debug = makeDebug(rid, env);
   if (!env.enabled) return { ok: true, debug: { ...debug, ok: true, skipped: "disabled" } };
-  if (!env.baseUrl || !env.accountId || !env.token || !env.adminPhone) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+  if (!env.baseUrl || !env.token || !env.adminPhone) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
 
-  const payload = {
-    phone: env.adminPhone,
-    actions: [
-      { action: "set_field_value", field_name: "summary_date", value: input.dateLabel },
-      { action: "set_field_value", field_name: "summary_total_receipts", value: input.totalReceipts },
-      { action: "set_field_value", field_name: "summary_total_sales", value: input.totalSales },
-      { action: "set_field_value", field_name: "summary_total_profit", value: input.totalProfit },
-      { action: "set_field_value", field_name: "summary_total_mpesa", value: input.totalMpesa },
-      { action: "set_field_value", field_name: "summary_total_cash", value: input.totalCash },
-      { action: "add_tag", tag_name: "daily_receipt_summary" },
-    ],
+  const accountIdForRequest = (env.accountId || process.env.CHATRACE_INTERNAL_POD_ACCOUNT_ID || "1802145").toString().trim();
+  if (!accountIdForRequest) return { ok: false, debug: { ...debug, error: "missing_internal_env" } };
+
+  const sanitizeSummaryDate = (value: string | number | null | undefined, maxLen = 60) => {
+    const raw = (value ?? "").toString();
+    const collapsed = raw.replace(/[\r\n\t]+/g, " ").replace(/ {2,}/g, " ").trim();
+    if (!collapsed) return "N/A";
+    return collapsed.length > maxLen ? `${collapsed.slice(0, maxLen - 1)}…` : collapsed;
   };
+  const sanitizeSummaryNumber = (value: string | number | null | undefined) => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    const raw = (value ?? "").toString().trim();
+    if (!raw) return 0;
+    const normalized = raw.replace(/[^0-9.-]/g, "");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const tagName = "betech_ops_daily_summary_template";
+  const safeDateLabel = sanitizeSummaryDate(input.dateLabel);
+  const safeTotalReceipts = sanitizeSummaryNumber(input.totalReceipts);
+  const safeTotalSales = sanitizeSummaryNumber(input.totalSales);
+  const safeTotalProfit = sanitizeSummaryNumber(input.totalProfit);
+  const safeTotalMpesa = sanitizeSummaryNumber(input.totalMpesa);
+  const safeTotalCash = sanitizeSummaryNumber(input.totalCash);
+  const safeTotalItems = sanitizeSummaryNumber(input.totalItems ?? 0);
+  const safeAwaitingPricingCount = sanitizeSummaryNumber(input.awaitingPricingCount ?? 0);
+  const safeMpesaReceipts = sanitizeSummaryNumber(input.mpesaReceipts ?? 0);
+  const safeCashReceipts = sanitizeSummaryNumber(input.cashReceipts ?? 0);
+  const safePosReceipts = sanitizeSummaryNumber(input.posReceipts ?? 0);
+  const safePosSales = sanitizeSummaryNumber(input.posSales ?? 0);
+
+  const phoneNormalized = normalizeRecipientPhone(env.adminPhone);
   const url = `${env.baseUrl.replace(/\/$/, "")}${CONTACTS_PATH}`;
-  const step = await postJson(url, env.token, payload, { rid, accountId: env.accountId });
-  debug.steps.createOrUpdate = step;
-  debug.ok = step.ok;
-  return { ok: step.ok, debug };
+  const fieldActions = [
+    { action: "set_field_value", field_name: "summary_date", value: safeDateLabel },
+    { action: "set_field_value", field_name: "summary_total_receipts", value: safeTotalReceipts },
+    { action: "set_field_value", field_name: "summary_total_sales", value: safeTotalSales },
+    { action: "set_field_value", field_name: "summary_total_profit", value: safeTotalProfit },
+    { action: "set_field_value", field_name: "summary_total_mpesa", value: safeTotalMpesa },
+    { action: "set_field_value", field_name: "summary_total_cash", value: safeTotalCash },
+    { action: "set_field_value", field_name: "daily_summary_date", value: safeDateLabel },
+    { action: "set_field_value", field_name: "daily_summary_total_receipts", value: safeTotalReceipts },
+    { action: "set_field_value", field_name: "daily_summary_total_sales", value: safeTotalSales },
+    { action: "set_field_value", field_name: "daily_summary_total_profit", value: safeTotalProfit },
+    { action: "set_field_value", field_name: "daily_summary_total_mpesa", value: safeTotalMpesa },
+    { action: "set_field_value", field_name: "daily_summary_total_cash", value: safeTotalCash },
+    { action: "set_field_value", field_name: "daily_summary_total_items", value: safeTotalItems },
+    { action: "set_field_value", field_name: "daily_summary_awaiting_pricing", value: safeAwaitingPricingCount },
+    { action: "set_field_value", field_name: "daily_summary_mpesa_receipts", value: safeMpesaReceipts },
+    { action: "set_field_value", field_name: "daily_summary_cash_receipts", value: safeCashReceipts },
+    { action: "set_field_value", field_name: "daily_summary_pos_receipts", value: safePosReceipts },
+    { action: "set_field_value", field_name: "daily_summary_pos_sales", value: safePosSales },
+  ];
+  const tagActions = [
+    { action: "remove_tag", tag_name: tagName },
+    { action: "add_tag", tag_name: tagName },
+  ];
+
+  console.info("[internal][dailySummary] outbound", {
+    rid,
+    phone: phoneNormalized,
+    baseUrl: env.baseUrl,
+    accountId: accountIdForRequest,
+    tag: tagName,
+    fieldNames: fieldActions.map((entry) => entry.field_name),
+  });
+
+  const fieldsPayload = {
+    phone: phoneNormalized,
+    first_name: "Admin",
+    actions: fieldActions,
+  };
+  const fieldsStep = await postJson(url, env.token, fieldsPayload, { rid, accountId: accountIdForRequest });
+  debug.steps.fields = fieldsStep;
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const delayRaw = process.env.CHATRACE_INTERNAL_TAG_DELAY_MS ? Number(process.env.CHATRACE_INTERNAL_TAG_DELAY_MS) : 800;
+  const delayMs = process.env.NODE_ENV === "test" ? 0 : Number.isFinite(delayRaw) ? Math.max(0, Math.round(delayRaw)) : 800;
+  await sleep(delayMs);
+
+  const tagPayload = {
+    phone: phoneNormalized,
+    first_name: "Admin",
+    actions: tagActions,
+  };
+  const tagStep = await postJson(url, env.token, tagPayload, { rid, accountId: accountIdForRequest });
+  debug.steps.tag = tagStep;
+
+  try {
+    const raw = (tagStep.raw ?? "").toString();
+    const isMetaMissingParam =
+      raw.includes("#131008") ||
+      raw.includes("131008") ||
+      raw.toLowerCase().includes("required parameter is missing") ||
+      raw.toLowerCase().includes("missing text value");
+    if (isMetaMissingParam) {
+      await sleep(process.env.NODE_ENV === "test" ? 0 : 1500);
+      const retryStep = await postJson(url, env.token, tagPayload, { rid, accountId: accountIdForRequest });
+      (debug.steps as any).tagRetry = retryStep;
+    }
+  } catch (error) {
+    console.warn("[internal][dailySummary] tag retry skipped/failed", String(error));
+  }
+
+  const retryOk = Boolean((debug.steps as any).tagRetry?.ok);
+  debug.ok = Boolean(fieldsStep.ok && (tagStep.ok || retryOk));
+  return { ok: debug.ok, debug };
 }

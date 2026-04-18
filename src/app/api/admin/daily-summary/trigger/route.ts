@@ -23,14 +23,27 @@ export async function GET(req: Request) {
     const chatrace = await pushInternalDailySummary({
       requestId: `manual-${summaryDate}`,
       dateLabel: summaryDate,
-      totalReceipts: String(summary.receiptsCount),
-      totalSales: String(summary.totalSales),
-      totalProfit: String(summary.totalProfit),
-      totalMpesa: String(summary.paymentTotals.mpesa.totalSales),
-      totalCash: String(summary.paymentTotals.cash.totalSales),
+      totalReceipts: summary.receiptsCount,
+      totalSales: summary.totalSales,
+      totalProfit: summary.totalProfit,
+      totalMpesa: summary.paymentTotals.mpesa.totalSales,
+      totalCash: summary.paymentTotals.cash.totalSales,
+      totalItems: summary.itemsCount,
+      awaitingPricingCount: summary.awaitingPricingCount,
+      mpesaReceipts: summary.paymentTotals.mpesa.count,
+      cashReceipts: summary.paymentTotals.cash.count,
+      posReceipts: summary.posReceiptsCount,
+      posSales: summary.posTotalSales,
     });
     console.log('[adminSummary][manual] chatrace result=', chatrace && chatrace.debug ? chatrace.debug : chatrace);
-    return NextResponse.json({ ok: true, payload: result.payload, chatrace });
+    return NextResponse.json({
+      ok: true,
+      payload: result.payload,
+      chatrace,
+      slot2: result.payload.slot2,
+      slot3: result.payload.slot3,
+      slot4: result.payload.slot4,
+    });
   } catch (e) {
     console.error('[adminSummary][manual] pushInternalDailySummary failed', e instanceof Error ? e.message : e);
     return NextResponse.json({ ok: false, error: String(e), payload: result.payload });

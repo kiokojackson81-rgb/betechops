@@ -14,14 +14,20 @@ export async function GET() {
   let chatrace: any = null;
   try {
     chatrace = await pushInternalDailySummary({
-    requestId: `daily-${summaryDate}`,
-    dateLabel: summaryDate,
-    totalReceipts: String(summary.receiptsCount),
-    totalSales: String(summary.totalSales),
-    totalProfit: String(summary.totalProfit),
-    totalMpesa: String(summary.paymentTotals.mpesa.totalSales),
-    totalCash: String(summary.paymentTotals.cash.totalSales),
-  });
+      requestId: `daily-${summaryDate}`,
+      dateLabel: summaryDate,
+      totalReceipts: summary.receiptsCount,
+      totalSales: summary.totalSales,
+      totalProfit: summary.totalProfit,
+      totalMpesa: summary.paymentTotals.mpesa.totalSales,
+      totalCash: summary.paymentTotals.cash.totalSales,
+      totalItems: summary.itemsCount,
+      awaitingPricingCount: summary.awaitingPricingCount,
+      mpesaReceipts: summary.paymentTotals.mpesa.count,
+      cashReceipts: summary.paymentTotals.cash.count,
+      posReceipts: summary.posReceiptsCount,
+      posSales: summary.posTotalSales,
+    });
   } catch (e) {
     console.error('[adminSummary][cron] pushInternalDailySummary failed', e instanceof Error ? e.message : e);
   }

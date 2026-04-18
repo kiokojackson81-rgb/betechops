@@ -30,6 +30,8 @@ export type AdminReceiptSummary = {
   totalProfitPriced: number;
   totalProfitInclusive: number;
   receiptsCount: number;
+  posReceiptsCount: number;
+  posTotalSales: number;
   itemsCount: number;
   hasCompleteCosts: boolean;
   awaitingPricingCount: number;
@@ -388,6 +390,8 @@ async function computePosOnlyReceiptSummary({
   let totalProfitPriced = 0;
   let totalProfitInclusive = 0;
   let receiptsCount = 0;
+  let posReceiptsCount = 0;
+  let posTotalSales = 0;
   let itemsCount = 0;
   let awaitingPricingCount = 0;
   let hasIncompleteCosts = false;
@@ -473,6 +477,8 @@ async function computePosOnlyReceiptSummary({
 
     totalSales += salesValue;
     receiptsCount += 1;
+    posReceiptsCount += 1;
+    posTotalSales += salesValue;
     itemsCount += sumItemQuantities(items);
 
     const normalizedPayment = normalizePaymentMethod(payment);
@@ -492,6 +498,8 @@ async function computePosOnlyReceiptSummary({
     totalProfitPriced,
     totalProfitInclusive,
     receiptsCount,
+    posReceiptsCount,
+    posTotalSales,
     itemsCount,
     hasCompleteCosts: receiptsCount === 0 ? true : !hasIncompleteCosts,
     awaitingPricingCount,
@@ -539,6 +547,8 @@ export async function computeAdminReceiptSummary({
       totalProfitPriced: posOnly.totalProfitPriced,
       totalProfitInclusive: posOnly.totalProfitInclusive,
       receiptsCount: posOnly.receiptsCount,
+      posReceiptsCount: posOnly.posReceiptsCount,
+      posTotalSales: posOnly.posTotalSales,
       itemsCount: posOnly.itemsCount,
       hasCompleteCosts: posOnly.hasCompleteCosts,
       awaitingPricingCount: posOnly.awaitingPricingCount,
@@ -912,6 +922,7 @@ export async function computeAdminReceiptSummary({
   const filteredPos = filteredRecords.filter((record) => record.source === "pos");
 
   const totalSales = filteredRecords.reduce((sum, receipt) => sum + Number(receipt.sellingTotal ?? 0), 0);
+  const posTotalSales = filteredPos.reduce((sum, receipt) => sum + Number(receipt.sellingTotal ?? 0), 0);
 
   const marketingItemsCount = filteredMarketingSupport.reduce(
     (sum, receipt) => sum + sumItemQuantities(receipt.items),
@@ -924,6 +935,7 @@ export async function computeAdminReceiptSummary({
   const itemsCount = marketingItemsCount + posItemsCount;
 
   const receiptsCount = filteredRecords.length;
+  const posReceiptsCount = filteredPos.length;
 
   let totalCost = 0;
   let totalProfitPriced = 0;
@@ -977,6 +989,8 @@ export async function computeAdminReceiptSummary({
     totalProfitPriced,
     totalProfitInclusive,
     receiptsCount,
+    posReceiptsCount,
+    posTotalSales,
     itemsCount,
     hasCompleteCosts,
     awaitingPricingCount,
