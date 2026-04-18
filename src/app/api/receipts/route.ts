@@ -15,6 +15,7 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
+  const summaryView = (url.searchParams.get("summaryView") || "").toLowerCase();
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
   const customerType = url.searchParams.get("customerType") || undefined;
@@ -155,25 +157,58 @@ export async function GET(req: NextRequest) {
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
-    ? await prisma.receipt.findMany({
-        where,
-        include: {
-          order: includeItems
-            ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
-            : {
-                select: {
-                  orderNumber: true,
-                  customerName: true,
-                  attendant: { select: { id: true, name: true } },
-                  status: true,
-                  paymentStatus: true,
-                  totalAmount: true,
+    ? await (async () => {
+        const receiptIds =
+          onlyPos && summaryView === "profit"
+            ? await getPosProfitReceiptIdsForAdminFilters({
+                start: startDate,
+                end: endDate,
+                attendantId: scope === "mine" ? undefined : attendantId ?? undefined,
+                paymentMethod: paymentMethodParam,
+                search: q,
+                docType: normalizedDocType,
+                scope: scope as "mine" | "global",
+                currentUserId: scope === "mine" ? attendantId : null,
+                customerType,
+                podStatus,
+                onlyPos: true,
+              })
+            : null;
+
+        if (receiptIds && receiptIds.length === 0) {
+          return [];
+        }
+
+        const effectiveWhere =
+          receiptIds && receiptIds.length > 0
+            ? {
+                AND: [
+                  ...and.filter((clause) => !("generatedAt" in clause)),
+                  { id: { in: receiptIds } },
+                ],
+              }
+            : where;
+
+        return prisma.receipt.findMany({
+          where: effectiveWhere,
+          include: {
+            order: includeItems
+              ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+              : {
+                  select: {
+                    orderNumber: true,
+                    customerName: true,
+                    attendant: { select: { id: true, name: true } },
+                    status: true,
+                    paymentStatus: true,
+                    totalAmount: true,
+                  },
                 },
-              },
-          issuedBy: { select: { id: true, name: true } },
-        },
-        orderBy: { generatedAt: "desc" },
-      })
+            issuedBy: { select: { id: true, name: true } },
+          },
+          orderBy: { generatedAt: "desc" },
+        });
+      })()
     : [];
 
   const mapPosRow = (r: any) => {

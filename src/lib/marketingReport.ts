@@ -107,6 +107,15 @@ const toNumber = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const isDateWithinRange = (value: Date | null | undefined, start?: Date, end?: Date) => {
+  if (!(value instanceof Date)) return false;
+  const time = value.getTime();
+  if (!Number.isFinite(time)) return false;
+  if (start && time < start.getTime()) return false;
+  if (end && time > end.getTime()) return false;
+  return true;
+};
+
 const computeEntryTotals = (entry: MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[]; sales?: MarketingSale[] }) => {
   if (entry.receipts && entry.receipts.length) {
     const totalSales = entry.receipts.reduce((sum, r) => sum + toNumber(r.sellingTotal), 0);
@@ -365,6 +374,45 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
 
   const commission = getCommissionSummaryForSales(totalSales);
 
+  let adjustedTotalProfit = totalProfit;
+  if (params.from || params.to) {
+    const pricingShiftSales = await prisma.marketingSale.findMany({
+      where: {
+        entry: {
+          date: { gte: period.start, lte: period.end },
+          ...(params.dayOfWeek ? { dayOfWeek: params.dayOfWeek } : {}),
+          ...(params.submittedById ? { submittedById: params.submittedById } : {}),
+          ...(userFilter
+            ? {
+                OR: [
+                  { submittedByName: { contains: userFilter, mode: "insensitive" } },
+                  { submittedByEmail: { contains: userFilter, mode: "insensitive" } },
+                  { submittedById: { contains: userFilter, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
+        OR: [
+          { entry: { date: { gte: params.from ?? period.start, lte: params.to ?? period.end } } },
+          { pricedAt: { gte: params.from ?? period.start, lte: params.to ?? period.end } },
+          { pricedAt: null, createdAt: { gte: params.from ?? period.start, lte: params.to ?? period.end } },
+        ],
+      },
+      include: {
+        entry: { select: { date: true } },
+      },
+    });
+
+    for (const sale of pricingShiftSales) {
+      const saleProfit = toNumber(sale.sellingPrice) - toNumber(sale.buyingPrice);
+      if (!saleProfit) continue;
+      const countedBySalesDate = isDateWithinRange(sale.entry?.date ?? null, params.from, params.to);
+      const recognizedAt = sale.pricedAt ?? sale.createdAt;
+      const countedByProfitDate = isDateWithinRange(recognizedAt, params.from, params.to);
+      adjustedTotalProfit += (countedByProfitDate ? saleProfit : 0) - (countedBySalesDate ? saleProfit : 0);
+    }
+  }
+
   return {
     entries,
     aggregates: {
@@ -372,7 +420,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       totalDaysLogged,
       completionRate,
       totalSales,
-      totalProfit,
+      totalProfit: adjustedTotalProfit,
       totalItems,
       totalLiveSessions,
       totalEstimatedViewers,
@@ -509,6 +557,32 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
     totalItems += dayItems;
     mpesaTotal += dayMpesa;
     cashTotal += dayCash;
+  }
+
+  const pricingShiftSales = await prisma.marketingSale.findMany({
+    where: {
+      OR: [
+        { entry: { date: { gte: from, lte: to } } },
+        { pricedAt: { gte: from, lte: to } },
+        { pricedAt: null, createdAt: { gte: from, lte: to } },
+      ],
+    },
+    select: {
+      buyingPrice: true,
+      sellingPrice: true,
+      createdAt: true,
+      pricedAt: true,
+      entry: { select: { date: true } },
+    },
+  });
+
+  for (const sale of pricingShiftSales) {
+    const saleProfit = toNumber(sale.sellingPrice) - toNumber(sale.buyingPrice);
+    if (!saleProfit) continue;
+    const countedBySalesDate = isDateWithinRange(sale.entry?.date ?? null, from, to);
+    const recognizedAt = sale.pricedAt ?? sale.createdAt;
+    const countedByProfitDate = isDateWithinRange(recognizedAt, from, to);
+    totalProfit += (countedByProfitDate ? saleProfit : 0) - (countedBySalesDate ? saleProfit : 0);
   }
 
   const days = Object.values(daysMap).sort((a, b) => a.date.localeCompare(b.date));

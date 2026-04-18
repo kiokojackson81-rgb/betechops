@@ -55,6 +55,7 @@ type StaffOption = { id: string; name: string };
 
 type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom" | "trading-period";
 type PodPanelStatus = "all" | "pending" | "delivered" | "delivery_failed";
+type SummaryViewMode = "all" | "profit";
 
 type SupportItemDetail = {
   id: string;
@@ -353,6 +354,7 @@ export default function ReceiptsAdminClient({
     };
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryView, setSummaryView] = useState<SummaryViewMode>("all");
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -475,6 +477,7 @@ export default function ReceiptsAdminClient({
         if (endParam) params.set("end", endParam);
         params.set("scope", scopeMode);
         if (onlyPos) params.set("onlyPos", "1");
+        if (summaryView === "profit") params.set("summaryView", "profit");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -491,7 +494,7 @@ export default function ReceiptsAdminClient({
         if (!opts?.silent) setLoading(false);
       }
     },
-    [appliedFilters, scopeMode, onlyPos],
+    [appliedFilters, scopeMode, onlyPos, summaryView],
   );
 
   useEffect(() => {
@@ -682,6 +685,9 @@ export default function ReceiptsAdminClient({
 
   const handleManualRefresh = () => {
     void loadRows(page);
+  };
+  const handleProfitSummaryClick = () => {
+    setSummaryView((prev) => (prev === "profit" ? "all" : "profit"));
   };
   const fetchReceiptDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -1344,6 +1350,8 @@ export default function ReceiptsAdminClient({
               quickRange={quickRange}
               onApplyQuickRange={applyQuickRange}
               rangeLabel={rangeDisplay}
+              profitViewActive={summaryView === "profit"}
+              onProfitClick={onlyPos ? handleProfitSummaryClick : undefined}
             />
             <PaymentMethodFilterCard
               totals={summaryForDisplay?.paymentTotals ?? null}
@@ -1570,9 +1578,20 @@ export default function ReceiptsAdminClient({
       <section className="rounded-[32px] border border-white/10 bg-slate-950/70 p-4 shadow-[0_25px_55px_rgba(0,0,0,0.65)]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Receipt list</p>
-          <span className="text-xs text-slate-400">
-            Showing {rows.length} receipts · page {page}
-          </span>
+          <div className="flex items-center gap-3">
+            {summaryView === "profit" && onlyPos ? (
+              <button
+                type="button"
+                onClick={() => setSummaryView("all")}
+                className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-200"
+              >
+                Profit receipts mode
+              </button>
+            ) : null}
+            <span className="text-xs text-slate-400">
+              Showing {rows.length} receipts · page {page}
+            </span>
+          </div>
         </div>
         <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">
           <table className="min-w-[900px] text-sm">

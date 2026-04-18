@@ -60,6 +60,10 @@ type SummaryOptions = {
   onlyPos?: boolean;
 };
 
+type PosOnlySummaryResult = AdminReceiptSummary & {
+  profitReceiptIds: string[];
+};
+
 const buildPosSearchOr = (q: string): Prisma.ReceiptWhereInput[] => [
   { order: { customerName: { contains: q, mode: "insensitive" } } },
   { order: { customerPhone: { contains: q, mode: "insensitive" } } },
@@ -96,6 +100,393 @@ const buildPosScopeCondition = (userId?: string | null): Prisma.ReceiptWhereInpu
   ];
 };
 
+const extractCanonicalFromReceiptKey = (value?: string | null): string | null => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const tail = raw.includes(":") ? raw.split(":").pop() : raw;
+  return canonicalReceiptNumber(tail);
+};
+
+const isDateInRange = (value: unknown, start: Date, end: Date): boolean => {
+  if (!(value instanceof Date)) return false;
+  const time = value.getTime();
+  return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
+};
+
+async function computePosOnlyReceiptSummary({
+  start,
+  end,
+  attendantId,
+  paymentMethod,
+  search,
+  docType,
+  scope = "global",
+  currentUserId,
+  customerType,
+  podStatus,
+}: SummaryOptions): Promise<PosOnlySummaryResult> {
+  const normalizedDocType = docType ? docType.toUpperCase() : undefined;
+  const normalizedCustomerType = customerType ? customerType.toLowerCase().trim() : undefined;
+  const normalizedPodStatus = (() => {
+    const value = podStatus ? podStatus.toLowerCase().trim() : undefined;
+    if (!value) return undefined;
+    if (value === "failed") return "delivery_failed";
+    if (value === "delivery_failed" || value === "pending" || value === "delivered") return value;
+    return undefined;
+  })();
+
+  const basePosWhere: Prisma.ReceiptWhereInput = {
+    AND: [
+      { generatedAt: { gte: start, lte: end } },
+    ],
+  };
+
+  if (normalizedDocType) {
+    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ docType: normalizedDocType as any });
+  }
+  if (paymentMethod) {
+    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ data: { path: ["paymentMethod"], equals: paymentMethod } });
+  }
+  if (search) {
+    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: buildPosSearchOr(search) });
+  }
+  if (scope === "mine") {
+    const ownerOr = buildPosScopeCondition(currentUserId);
+    if (ownerOr.length) {
+      (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
+    }
+  } else if (attendantId) {
+    const ownerOr = buildPosScopeCondition(attendantId);
+    if (ownerOr.length) {
+      (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
+    }
+  }
+
+  const supportDailyEntryWhere: Prisma.SupportDailyEntryWhereInput = {};
+  if (scope === "mine") {
+    supportDailyEntryWhere.submittedById = currentUserId ?? attendantId ?? undefined;
+  } else if (attendantId) {
+    supportDailyEntryWhere.submittedById = attendantId;
+  }
+
+  const [basePosReceipts, latePricedSupportReceipts] = await Promise.all([
+    prisma.receipt.findMany({
+      where: basePosWhere,
+      include: {
+        order: {
+          include: {
+            items: {
+              include: {
+                orderCosts: true,
+                profitSnapshots: {
+                  orderBy: { computedAt: "desc" },
+                  take: 1,
+                  select: { unitCost: true },
+                },
+                product: { select: { lastBuyingPrice: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.supportReceipt.findMany({
+      where: {
+        ...(Object.keys(supportDailyEntryWhere).length ? { dailyEntry: supportDailyEntryWhere } : {}),
+        items: { some: { pricedAt: { gte: start, lte: end } } },
+        ...(search ? { OR: buildSupportSearchOr(search) } : {}),
+      },
+      select: {
+        receiptNumber: true,
+        receiptKey: true,
+      },
+    }),
+  ]);
+
+  const lateReceiptNumbers = Array.from(
+    new Set(
+      latePricedSupportReceipts.flatMap((row) => {
+        const direct = canonicalReceiptNumber(row.receiptNumber ?? undefined);
+        const fromKey = extractCanonicalFromReceiptKey(row.receiptKey);
+        return [direct, fromKey].filter((value): value is string => Boolean(value));
+      }),
+    ),
+  );
+
+  const extraPosReceipts =
+    lateReceiptNumbers.length > 0
+      ? await prisma.receipt.findMany({
+          where: {
+            AND: [
+              ...(basePosWhere.AND as Prisma.ReceiptWhereInput[]).filter((clause) => !("generatedAt" in clause)),
+              {
+                OR: [
+                  { order: { orderNumber: { in: lateReceiptNumbers } } },
+                  { receiptNumber: { in: lateReceiptNumbers } },
+                ],
+              },
+            ],
+          },
+          include: {
+            order: {
+              include: {
+                items: {
+                  include: {
+                    orderCosts: true,
+                    profitSnapshots: {
+                      orderBy: { computedAt: "desc" },
+                      take: 1,
+                      select: { unitCost: true },
+                    },
+                    product: { select: { lastBuyingPrice: true } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
+
+  const receiptsById = new Map<string, any>();
+  for (const receipt of [...basePosReceipts, ...extraPosReceipts]) {
+    receiptsById.set(receipt.id, receipt);
+  }
+
+  const mergedReceipts = Array.from(receiptsById.values());
+
+  const posReceiptsFinal = (() => {
+    const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+    const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+
+    if (normalizedCustomerType === "pod") {
+      const onlyPods = mergedReceipts.filter(isPodReceipt);
+      if (normalizedPodStatus) {
+        return onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus);
+      }
+      return onlyPods;
+    }
+
+    return mergedReceipts;
+  })();
+
+  const productCostMap = new Map<string, number>();
+  try {
+    const productIds = new Set<string>();
+    for (const receipt of posReceiptsFinal) {
+      const items = (receipt?.order?.items ?? []) as any[];
+      for (const item of items) {
+        if (item?.productId) productIds.add(String(item.productId));
+      }
+    }
+    const ids = Array.from(productIds);
+    if (ids.length > 0) {
+      const costs = await prisma.productCost.findMany({
+        where: { productId: { in: ids } },
+        orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
+        distinct: ["productId"],
+        select: { productId: true, price: true },
+      });
+      for (const row of costs) {
+        const value = Number(row.price ?? 0);
+        if (row.productId && Number.isFinite(value) && value > 0) {
+          productCostMap.set(String(row.productId), value);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[adminReceiptsSummary] failed to load ProductCost fallbacks", err);
+  }
+
+  const candidateReceiptNumbers = Array.from(
+    new Set(
+      posReceiptsFinal.flatMap((receipt: any) => {
+        const orderNumber = canonicalReceiptNumber(receipt.order?.orderNumber);
+        const receiptNumber = canonicalReceiptNumber(receipt.receiptNumber);
+        return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+      }),
+    ),
+  );
+
+  const supportContexts = new Map<string, { buyingTotal: number; latestPricedAt: Date | null }>();
+  if (candidateReceiptNumbers.length > 0) {
+    const supportRows = await prisma.supportReceipt.findMany({
+      where: {
+        OR: [
+          { receiptNumber: { in: candidateReceiptNumbers } },
+          { receiptKey: { in: candidateReceiptNumbers } },
+        ],
+      },
+      select: {
+        receiptNumber: true,
+        receiptKey: true,
+        buyingTotal: true,
+        items: {
+          select: {
+            buyingPrice: true,
+            pricedAt: true,
+          },
+        },
+      },
+    });
+
+    for (const row of supportRows) {
+      const items = Array.isArray(row.items) ? row.items : [];
+      const itemsBuyingTotal = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+      const aggregateBuyingTotal = Number(row.buyingTotal ?? 0);
+      const buyingTotal = aggregateBuyingTotal > 0 ? aggregateBuyingTotal : itemsBuyingTotal;
+      const latestPricedAt = items.reduce<Date | null>((latest, item) => {
+        if (!(item.pricedAt instanceof Date)) return latest;
+        if (!latest || item.pricedAt.getTime() > latest.getTime()) return item.pricedAt;
+        return latest;
+      }, null);
+
+      for (const rawKey of [row.receiptNumber, extractCanonicalFromReceiptKey(row.receiptKey)]) {
+        const canonical = canonicalReceiptNumber(rawKey ?? undefined);
+        if (!canonical) continue;
+        const existing = supportContexts.get(canonical);
+        if (!existing) {
+          supportContexts.set(canonical, { buyingTotal, latestPricedAt });
+          continue;
+        }
+        supportContexts.set(canonical, {
+          buyingTotal: Math.max(existing.buyingTotal, buyingTotal),
+          latestPricedAt:
+            latestPricedAt && (!existing.latestPricedAt || latestPricedAt.getTime() > existing.latestPricedAt.getTime())
+              ? latestPricedAt
+              : existing.latestPricedAt,
+        });
+      }
+    }
+  }
+
+  const paymentTotals = {
+    mpesa: { totalSales: 0, count: 0 },
+    cash: { totalSales: 0, count: 0 },
+  } as PaymentTotals;
+
+  let totalSales = 0;
+  let totalCost = 0;
+  let totalProfitPriced = 0;
+  let totalProfitInclusive = 0;
+  let receiptsCount = 0;
+  let itemsCount = 0;
+  let awaitingPricingCount = 0;
+  let hasIncompleteCosts = false;
+  const profitReceiptIds = new Set<string>();
+
+  for (const receipt of posReceiptsFinal as any[]) {
+    const salesDate = receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt;
+    const salesIncluded = isDateInRange(salesDate, start, end);
+    const salesValue = Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0);
+    const payment = normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null;
+    const canonicalOrderNumber =
+      canonicalReceiptNumber(receipt.order?.orderNumber) ??
+      canonicalReceiptNumber(receipt.receiptNumber) ??
+      null;
+    const supportContext = canonicalOrderNumber ? supportContexts.get(canonicalOrderNumber) : undefined;
+
+    const items = (receipt.order?.items ?? []).map((item: any) => {
+      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+      const buyingSum = costs.reduce((sum: number, cost: any) => sum + Number(cost.unitCost ?? 0), 0);
+      const snapUnitCost = (() => {
+        const snapshot = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+        const value = snapshot ? Number(snapshot.unitCost ?? 0) : 0;
+        return Number.isFinite(value) ? value : 0;
+      })();
+      const productLastBuying = Number(item?.product?.lastBuyingPrice ?? 0) || 0;
+      const productCost = productCostMap.get(String(item?.productId ?? "")) ?? 0;
+      const fallbackUnitCost =
+        snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
+      return {
+        quantity: item?.quantity,
+        buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
+      };
+    });
+
+    const supportBuyingTotal = Number(supportContext?.buyingTotal ?? 0);
+    const aggregateBuyingTotal = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
+    const resolvedBuyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : aggregateBuyingTotal;
+    const costFromItems = items.reduce(
+      (sum: number, item: any) => sum + (Number(item?.buyingPrice ?? 0) * (Number(item?.quantity ?? 1) || 1)),
+      0,
+    );
+    const allItemsPriced = items.length > 0 && items.every((item: any) => Number(item?.buyingPrice ?? 0) > 0);
+    const hasAggregateCost = resolvedBuyingTotal > 0;
+    const explicitProfitRaw = (receipt as any)?.profit ?? (receipt.data as any)?.profit;
+    const explicitProfit =
+      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw)
+        ? Number(explicitProfitRaw)
+        : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
+          ? Number(explicitProfitRaw)
+          : undefined;
+
+    const hasRecognizableProfit = hasAggregateCost || allItemsPriced || explicitProfit !== undefined;
+    const profitRecognizedAt =
+      supportContext?.latestPricedAt ??
+      (hasRecognizableProfit && salesDate instanceof Date ? salesDate : null);
+
+    let receiptProfit = 0;
+    if (hasAggregateCost || allItemsPriced) {
+      const buyingSum = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
+      receiptProfit = salesValue - buyingSum;
+      if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
+        totalCost += buyingSum;
+        totalProfitPriced += receiptProfit;
+      }
+    } else if (explicitProfit !== undefined) {
+      receiptProfit = explicitProfit;
+      if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
+        totalProfitPriced += receiptProfit;
+      }
+    } else if (salesIncluded) {
+      awaitingPricingCount += 1;
+      hasIncompleteCosts = true;
+    }
+
+    if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
+      totalProfitInclusive += receiptProfit;
+      profitReceiptIds.add(receipt.id);
+    }
+
+    if (!salesIncluded) {
+      continue;
+    }
+
+    totalSales += salesValue;
+    receiptsCount += 1;
+    itemsCount += sumItemQuantities(items);
+
+    const normalizedPayment = normalizePaymentMethod(payment);
+    if (normalizedPayment === "CASH") {
+      paymentTotals.cash.totalSales += salesValue;
+      paymentTotals.cash.count += 1;
+    } else if (normalizedPayment === "MPESA") {
+      paymentTotals.mpesa.totalSales += salesValue;
+      paymentTotals.mpesa.count += 1;
+    }
+  }
+
+  return {
+    totalSales,
+    totalCost,
+    totalProfit: totalProfitInclusive,
+    totalProfitPriced,
+    totalProfitInclusive,
+    receiptsCount,
+    itemsCount,
+    hasCompleteCosts: receiptsCount === 0 ? true : !hasIncompleteCosts,
+    awaitingPricingCount,
+    paymentTotals,
+    profitReceiptIds: Array.from(profitReceiptIds),
+  };
+}
+
+export async function getPosProfitReceiptIdsForAdminFilters(options: SummaryOptions): Promise<string[]> {
+  const result = await computePosOnlyReceiptSummary(options);
+  return result.profitReceiptIds;
+}
+
 export async function computeAdminReceiptSummary({
   start,
   end,
@@ -109,6 +500,34 @@ export async function computeAdminReceiptSummary({
   podStatus,
   onlyPos = false,
 }: SummaryOptions) {
+  if (onlyPos) {
+    const posOnly = await computePosOnlyReceiptSummary({
+      start,
+      end,
+      attendantId,
+      paymentMethod,
+      search,
+      docType,
+      scope,
+      currentUserId,
+      customerType,
+      podStatus,
+      onlyPos,
+    });
+    return {
+      totalSales: posOnly.totalSales,
+      totalCost: posOnly.totalCost,
+      totalProfit: posOnly.totalProfit,
+      totalProfitPriced: posOnly.totalProfitPriced,
+      totalProfitInclusive: posOnly.totalProfitInclusive,
+      receiptsCount: posOnly.receiptsCount,
+      itemsCount: posOnly.itemsCount,
+      hasCompleteCosts: posOnly.hasCompleteCosts,
+      awaitingPricingCount: posOnly.awaitingPricingCount,
+      paymentTotals: posOnly.paymentTotals,
+    };
+  }
+
   const normalizedDocType = docType ? docType.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";

@@ -18,12 +18,16 @@ export default function ReceiptsSummary({
   quickRange,
   onApplyQuickRange,
   rangeLabel,
+  profitViewActive = false,
+  onProfitClick,
 }: {
   summary: Summary | null;
   loading: boolean;
   quickRange: "today" | "yesterday" | "this-week" | "custom" | "trading-period";
   onApplyQuickRange: (key: "today" | "yesterday" | "this-week" | "trading-period") => void;
   rangeLabel: string;
+  profitViewActive?: boolean;
+  onProfitClick?: () => void;
 }) {
 
   const formatCurrency = (value: number) =>
@@ -102,7 +106,15 @@ export default function ReceiptsSummary({
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
           <p className="text-xl font-semibold text-emerald-300">{salesLabel}</p>
         </div>
-        <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
+        <button
+          type="button"
+          onClick={onProfitClick}
+          className={`rounded-xl border bg-slate-950/40 px-3 py-2 text-left transition ${
+            profitViewActive
+              ? "border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.3)]"
+              : "border-white/5 hover:border-emerald-500/40"
+          }`}
+        >
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Total profit</p>
           <div>
             <p className={`text-xl font-semibold ${summary?.hasCompleteCosts ? "text-emerald-300" : "text-slate-400"}`}>
@@ -111,8 +123,13 @@ export default function ReceiptsSummary({
             {profitNote && (
               <p className="text-[11px] text-slate-400">{profitNote}</p>
             )}
+            {onProfitClick && (
+              <p className="text-[11px] text-emerald-300">
+                {profitViewActive ? "Showing contributing POS receipts" : "Click to show contributing POS receipts"}
+              </p>
+            )}
           </div>
-        </div>
+        </button>
         <div className="rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
           <p className="text-xl font-semibold text-white">{receiptsLabel}</p>
