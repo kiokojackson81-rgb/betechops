@@ -116,6 +116,96 @@ const isDateWithinRange = (value: Date | null | undefined, start?: Date, end?: D
   return true;
 };
 
+const getDateKey = (value: Date | null | undefined) =>
+  value instanceof Date && Number.isFinite(value.getTime()) ? value.toISOString().split("T")[0] : null;
+
+const matchesDayFilter = (value: Date | null | undefined, dayOfWeek?: string) => {
+  if (!dayOfWeek) return true;
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return false;
+  return value.toLocaleDateString("en-KE", { weekday: "long" }).toLowerCase() === dayOfWeek.toLowerCase();
+};
+
+const isDateSelected = (value: Date | null | undefined, start?: Date, end?: Date, dayOfWeek?: string) =>
+  isDateWithinRange(value, start, end) && matchesDayFilter(value, dayOfWeek);
+
+type SupportProfitAdjustment = {
+  totalProfit: number;
+  byDate: Map<string, number>;
+};
+
+async function getSupportLatePricingProfitAdjustments(params: {
+  periodStart: Date;
+  periodEnd: Date;
+  from?: Date;
+  to?: Date;
+  dayOfWeek?: string;
+  submittedById?: string;
+  userFilter?: string;
+}): Promise<SupportProfitAdjustment> {
+  const where: any = {
+    dailyEntry: {
+      date: { gte: params.periodStart, lte: params.periodEnd },
+      ...(params.submittedById ? { submittedById: params.submittedById } : {}),
+      ...(params.userFilter
+        ? {
+            OR: [
+              { submittedById: { contains: params.userFilter, mode: "insensitive" } },
+              { submittedBy: { is: { name: { contains: params.userFilter, mode: "insensitive" } } } },
+              { submittedBy: { is: { email: { contains: params.userFilter, mode: "insensitive" } } } },
+            ],
+          }
+        : {}),
+    },
+    items: { some: { pricedAt: { not: null } } },
+  };
+
+  const rows = await prisma.supportReceipt.findMany({
+    where,
+    select: {
+      sellingTotal: true,
+      buyingTotal: true,
+      dailyEntry: { select: { date: true } },
+      items: {
+        select: {
+          buyingPrice: true,
+          pricedAt: true,
+        },
+      },
+    },
+  });
+
+  const byDate = new Map<string, number>();
+  let totalProfit = 0;
+
+  for (const row of rows) {
+    const items = Array.isArray(row.items) ? row.items : [];
+    const latestPricedAt = items.reduce<Date | null>((latest, item) => {
+      if (!(item.pricedAt instanceof Date)) return latest;
+      if (!latest || item.pricedAt.getTime() > latest.getTime()) return item.pricedAt;
+      return latest;
+    }, null);
+    if (!latestPricedAt) continue;
+    if (!isDateSelected(latestPricedAt, params.from, params.to, params.dayOfWeek)) continue;
+
+    const fallbackCost = items.reduce((sum, item) => sum + toNumber(item.buyingPrice), 0);
+    const aggregateCost = toNumber(row.buyingTotal);
+    const hasAggregateCost = aggregateCost > 0;
+    const allItemsPriced = items.length > 0 && items.every((item) => toNumber(item.buyingPrice) > 0);
+    if (!hasAggregateCost && !allItemsPriced) continue;
+
+    const buyingTotal = hasAggregateCost ? aggregateCost : fallbackCost;
+    const profit = toNumber(row.sellingTotal) - buyingTotal;
+    if (!profit) continue;
+
+    totalProfit += profit;
+    const dateKey = getDateKey(latestPricedAt);
+    if (!dateKey) continue;
+    byDate.set(dateKey, (byDate.get(dateKey) ?? 0) + profit);
+  }
+
+  return { totalProfit, byDate };
+}
+
 const computeEntryTotals = (entry: MarketingDailyEntry & { receipts?: (MarketingReceipt & { items: MarketingReceiptItem[] })[]; sales?: MarketingSale[] }) => {
   if (entry.receipts && entry.receipts.length) {
     const totalSales = entry.receipts.reduce((sum, r) => sum + toNumber(r.sellingTotal), 0);
@@ -279,9 +369,27 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
     }),
   ]);
 
+  const supportProfitAdjustments = await getSupportLatePricingProfitAdjustments({
+    periodStart: period.start,
+    periodEnd: period.end,
+    from: params.from ?? period.start,
+    to: params.to ?? period.end,
+    dayOfWeek: params.dayOfWeek,
+    submittedById: params.submittedById,
+    userFilter,
+  });
+
   const marketingEntries = marketingRaw.map(normalizeEntry);
   const attendantEntries = dailyRaw.map((entry) => normalizeAttendantEntry(entry));
   const entries = [...marketingEntries, ...attendantEntries].sort((a, b) => b.date.localeCompare(a.date));
+  let supportProfitAppliedToEntries = 0;
+  for (const [dateKey, profit] of supportProfitAdjustments.byDate) {
+    const matchingEntries = entries.filter((entry) => getDateKey(new Date(entry.date)) === dateKey);
+    if (matchingEntries.length === 0) continue;
+    const preferredEntry = matchingEntries.find((entry) => entry.source === "MARKETING") ?? matchingEntries[0];
+    preferredEntry.totalProfit += profit;
+    supportProfitAppliedToEntries += profit;
+  }
 
   const totalDaysLogged = entries.length;
   const totalSales = entries.reduce((acc, e) => acc + toNumber(e.totalSales), 0);
@@ -412,6 +520,7 @@ export async function getMarketingReport(params: MarketingReportFilters): Promis
       adjustedTotalProfit += (countedByProfitDate ? saleProfit : 0) - (countedBySalesDate ? saleProfit : 0);
     }
   }
+  adjustedTotalProfit += supportProfitAdjustments.totalProfit - supportProfitAppliedToEntries;
 
   return {
     entries,
@@ -583,6 +692,27 @@ export async function getMarketingSummary(opts: { from: Date; to: Date }): Promi
     const recognizedAt = sale.pricedAt ?? sale.createdAt;
     const countedByProfitDate = isDateWithinRange(recognizedAt, from, to);
     totalProfit += (countedByProfitDate ? saleProfit : 0) - (countedBySalesDate ? saleProfit : 0);
+  }
+
+  const supportProfitAdjustments = await getSupportLatePricingProfitAdjustments({
+    periodStart: from,
+    periodEnd: to,
+    from,
+    to,
+  });
+
+  for (const [dateKey, profit] of supportProfitAdjustments.byDate) {
+    const existing = daysMap[dateKey] ?? {
+      date: dateKey,
+      totalSales: 0,
+      totalProfit: 0,
+      items: 0,
+      mpesaTotal: 0,
+      cashTotal: 0,
+    };
+    existing.totalProfit += profit;
+    daysMap[dateKey] = existing;
+    totalProfit += profit;
   }
 
   const days = Object.values(daysMap).sort((a, b) => a.date.localeCompare(b.date));
