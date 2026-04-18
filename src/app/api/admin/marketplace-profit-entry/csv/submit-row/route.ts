@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -206,6 +208,21 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[csv-submit-row] pricing template upsert failed", err);
+  }
+
+  try {
+    await maybeAutoSendDividedWhatsappReport({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-submit-row",
+    });
+    await maybeAutoSendPricingWeekWhatsapp({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-submit-row",
+    });
+  } catch (err) {
+    console.error("[csv-submit-row] auto-send failed", err);
   }
 
   return NextResponse.json({
