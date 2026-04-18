@@ -18,7 +18,7 @@ export function buildAdminSummaryMessage(opts: {
   const slot3 = `KES ${formatNumber(summary.totalProfit)}`;
   const slot4 = `${summary.receiptsCount} receipts`;
   const slot5 = `${summary.itemsCount} products sold`;
-  const slot6 = `${summary.posReceiptsCount} POS receipts`;
+  const slot6 = `${summary.posReceiptsCount} POD receipts`;
   const slot7 = `KES ${formatNumber(summary.posTotalSales)}`;
   const summaryText = `Hello Admin,
 
@@ -29,8 +29,8 @@ Total sales: ${slot2}
 Total profit: ${slot3}
 ${slot4}
 ${slot5}
-POS receipts: ${slot6}
-POS amount: ${slot7}
+POD receipts: ${slot6}
+POD amount: ${slot7}
 
 This is an automated internal notification from Betech Ops.`;
 

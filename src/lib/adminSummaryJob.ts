@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
+import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminSummaryMessage } from "@/lib/adminSummaryMessage";
 import { sendWhatsAppTextMessage, hasWhatsAppConfig } from "@/lib/notifications/whatsapp";
@@ -81,8 +82,42 @@ export function getNairobiSummaryDateLabel(now: Date) {
   return `${day}/${month}/${year}`;
 }
 
+async function getAllTimePendingPodStats() {
+  const receipts = await prisma.receipt.findMany({
+    where: {
+      data: { path: ["podDelivery", "status"], equals: "pending" },
+    },
+    select: {
+      totals: true,
+      order: {
+        select: {
+          totalAmount: true,
+        },
+      },
+    },
+  });
+
+  return receipts.reduce(
+    (acc, receipt) => {
+      const sale = Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0);
+      acc.count += 1;
+      acc.amount += sale;
+      return acc;
+    },
+    { count: 0, amount: 0 },
+  );
+}
+
 async function buildPayload(start: Date, end: Date) {
-  const summary = await computeAdminReceiptSummary({ start, end, scope: "global", onlyPos: true });
+  const [summaryBase, pendingPodStats] = await Promise.all([
+    computeAdminReceiptSummary({ start, end, scope: "global", onlyPos: true }),
+    getAllTimePendingPodStats(),
+  ]);
+  const summary = {
+    ...summaryBase,
+    posReceiptsCount: pendingPodStats.count,
+    posTotalSales: pendingPodStats.amount,
+  };
   const payload = buildAdminSummaryMessage({ summary, start, end });
   return { summary, payload };
 }
