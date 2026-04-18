@@ -82,7 +82,7 @@ export function getNairobiSummaryDateLabel(now: Date) {
 }
 
 async function buildPayload(start: Date, end: Date) {
-  const summary = await computeAdminReceiptSummary({ start, end, scope: "global" });
+  const summary = await computeAdminReceiptSummary({ start, end, scope: "global", onlyPos: true });
   const payload = buildAdminSummaryMessage({ summary, start, end });
   return { summary, payload };
 }
