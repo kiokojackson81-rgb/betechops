@@ -59,20 +59,47 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       if (candidates.size > 0) {
         const supportReceipts = await prisma.supportReceipt.findMany({
           where: {
-            OR: Array.from(candidates).map((value) => ({ receiptNumber: value })),
+            OR: [
+              ...Array.from(candidates).map((value) => ({ receiptNumber: value })),
+              ...Array.from(candidates).map((value) => ({ receiptKey: value })),
+            ],
           },
           include: { items: true },
         });
         if (supportReceipts.length > 0) {
-          supportItems = supportReceipts.flatMap((sr) =>
-            sr.items.map((it) => ({
-              id: it.id,
-              buyingPrice: Number.isFinite(Number(it.buyingPrice ?? 0)) ? Number(it.buyingPrice ?? 0) : null,
-              productName: it.productName ?? null,
-            })),
-          );
-          // Prefer the first support receipt summary (there should normally be one)
-          const sr = supportReceipts[0];
+          // Prefer a single authoritative support receipt. POD/edit flows can leave
+          // both raw and canonical receipt numbers pointing to the same sale; merging
+          // them makes the UI think pricing is incomplete even when one receipt is
+          // fully priced.
+          const scored = supportReceipts
+            .map((sr) => {
+              const pricedItems = sr.items.filter((it) => Number(it.buyingPrice ?? 0) > 0).length;
+              const latestPricedAt = sr.items.reduce<number>(
+                (latest, item) => {
+                  const time = item.pricedAt ? new Date(item.pricedAt).getTime() : 0;
+                  return time > latest ? time : latest;
+                },
+                0,
+              );
+              return {
+                receipt: sr,
+                pricedItems,
+                buyingTotal: Number(sr.buyingTotal ?? 0),
+                latestPricedAt,
+              };
+            })
+            .sort((a, b) => {
+              if (b.pricedItems !== a.pricedItems) return b.pricedItems - a.pricedItems;
+              if (b.buyingTotal !== a.buyingTotal) return b.buyingTotal - a.buyingTotal;
+              if (b.latestPricedAt !== a.latestPricedAt) return b.latestPricedAt - a.latestPricedAt;
+              return new Date(b.receipt.updatedAt).getTime() - new Date(a.receipt.updatedAt).getTime();
+            });
+          const sr = scored[0].receipt;
+          supportItems = sr.items.map((it) => ({
+            id: it.id,
+            buyingPrice: Number.isFinite(Number(it.buyingPrice ?? 0)) ? Number(it.buyingPrice ?? 0) : null,
+            productName: it.productName ?? null,
+          }));
           supportReceiptSummary = { id: sr.id, buyingTotal: Number(sr.buyingTotal ?? 0) };
         }
       }
@@ -244,13 +271,20 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         buyingPrice: item.costPrice,
       }));
       const totalBuying = createdItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
+      const existingReceiptCandidates = Array.from(
+        new Set(
+          [existing.order?.orderNumber ?? null, normalizedReceiptNumber ?? null]
+            .map((value) => (typeof value === "string" && value.trim().length > 0 ? value.trim() : null))
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
       const existingSupportReceipt =
-        normalizedReceiptNumber && tx.supportReceipt
-          ? await tx.supportReceipt.findFirst({ where: { receiptNumber: normalizedReceiptNumber } })
+        existingReceiptCandidates.length > 0 && tx.supportReceipt
+          ? await tx.supportReceipt.findFirst({ where: { receiptNumber: { in: existingReceiptCandidates } } })
           : null;
       const existingMarketingReceipt =
-        normalizedReceiptNumber && tx.marketingReceipt
-          ? await tx.marketingReceipt.findFirst({ where: { receiptNumber: normalizedReceiptNumber } })
+        existingReceiptCandidates.length > 0 && tx.marketingReceipt
+          ? await tx.marketingReceipt.findFirst({ where: { receiptNumber: { in: existingReceiptCandidates } } })
           : null;
       const previousSupportEntryId = existingSupportReceipt?.dailyEntryId ?? null;
       const previousMarketingEntryId = existingMarketingReceipt?.dailyEntryId ?? null;
