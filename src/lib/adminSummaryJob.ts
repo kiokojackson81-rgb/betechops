@@ -19,6 +19,7 @@ type AdminSummaryJobOptions = {
   advanceCutoff?: boolean;
   sendWhatsApp?: boolean;
   adminPhone?: string;
+  rangeMode?: "cutoff" | "today";
 };
 
 const CACHE_DIR = path.join(process.cwd(), ".cache");
@@ -60,6 +61,26 @@ function determineRange(now: Date, useCutoff: boolean) {
   return { start, end };
 }
 
+function determineTodayRange(now: Date) {
+  const nairobiDate = now.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const start = new Date(`${nairobiDate}T00:00:00+03:00`);
+  const end = now;
+  return { start, end };
+}
+
+export function getNairobiSummaryDateLabel(now: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Nairobi",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).formatToParts(now);
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  return `${day}/${month}/${year}`;
+}
+
 async function buildPayload(start: Date, end: Date) {
   const summary = await computeAdminReceiptSummary({ start, end, scope: "global" });
   const payload = buildAdminSummaryMessage({ summary, start, end });
@@ -73,12 +94,14 @@ export async function runAdminSummaryJob(options: AdminSummaryJobOptions = {}): 
     advanceCutoff = true,
     sendWhatsApp = true,
     adminPhone,
+    rangeMode = "cutoff",
   } = options;
 
-  const { start, end } = determineRange(now, useCutoff);
+  const { start, end } =
+    rangeMode === "today" ? determineTodayRange(now) : determineRange(now, useCutoff);
   const { summary, payload } = await buildPayload(start, end);
 
-  if (advanceCutoff && useCutoff) {
+  if (rangeMode === "cutoff" && advanceCutoff && useCutoff) {
     writeCutoff(end);
   }
 

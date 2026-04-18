@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
-import { runAdminSummaryJob } from "@/lib/adminSummaryJob";
+import { getNairobiSummaryDateLabel, runAdminSummaryJob } from "@/lib/adminSummaryJob";
 import { pushInternalDailySummary } from "@/lib/chatraceInternalFixed";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,13 @@ export async function GET(req: Request) {
   const result = await runAdminSummaryJob({
     sendWhatsApp: false,
     advanceCutoff: false,
-    useCutoff: true,
+    useCutoff: false,
+    rangeMode: "today",
   });
   
   try {
-    const { summary, start } = result;
-    const summaryDate = start.toISOString().slice(0, 10);
+    const { summary, end } = result;
+    const summaryDate = getNairobiSummaryDateLabel(end);
     console.log('[adminSummary][manual] summaryDate=', summaryDate);
     console.log('[adminSummary][manual] payloadText=', result.payload.summaryText);
     const chatrace = await pushInternalDailySummary({

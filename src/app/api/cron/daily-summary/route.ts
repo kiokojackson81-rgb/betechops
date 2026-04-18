@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { pushInternalDailySummary } from "@/lib/chatraceInternalFixed";
-import { runAdminSummaryJob } from "@/lib/adminSummaryJob";
+import { getNairobiSummaryDateLabel, runAdminSummaryJob } from "@/lib/adminSummaryJob";
 
 export async function GET() {
-  const result = await runAdminSummaryJob();
-  const { summary, start, payload } = result;
-  const summaryDate = start.toISOString().slice(0, 10);
+  const result = await runAdminSummaryJob({
+    useCutoff: false,
+    advanceCutoff: false,
+    rangeMode: "today",
+  });
+  const { summary, end, payload } = result;
+  const summaryDate = getNairobiSummaryDateLabel(end);
 
   console.log('[adminSummary][cron] summaryDate=', summaryDate);
   console.log('[adminSummary][cron] payloadText=', payload.summaryText);
