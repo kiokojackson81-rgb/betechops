@@ -15,6 +15,10 @@ export const dynamic = 'force-dynamic';
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
+function resolveOrderItemName(item: any): string {
+  return String(item?.title || item?.productName || item?.product?.name || 'Item').trim() || 'Item';
+}
+
 export async function POST(req: NextRequest, context: ParamsContext) {
   const requestId = randomUUID();
 
@@ -181,10 +185,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
                 });
               }
 
-              const orderWithItems = await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } });
+              const orderWithItems = await tx.order.findUnique({
+                where: { id: receipt.orderId },
+                include: { items: { include: { product: true } } },
+              });
               const receiptSellingTotal = Math.round(Number(orderWithItems?.totalAmount ?? receipt.order?.totalAmount ?? 0));
               const receiptItemsPayload = (orderWithItems?.items || []).map((it: any) => ({
-                productName: String(it.title || it.productName || 'Item').trim(),
+                productName: resolveOrderItemName(it),
                 buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
               }));
               const receiptBuyingTotal = receiptItemsPayload.reduce((s: number, i: any) => s + i.buyingPrice, 0);
@@ -220,10 +227,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               const endOfDay = new Date(entryDate);
               endOfDay.setHours(23, 59, 59, 999);
 
-              const orderForSupport = await tx.order.findUnique({ where: { id: receipt.orderId }, include: { items: true } });
+              const orderForSupport = await tx.order.findUnique({
+                where: { id: receipt.orderId },
+                include: { items: { include: { product: true } } },
+              });
 
               const supportReceiptItems = (orderForSupport?.items || []).map((it: any) => ({
-                productName: String(it.title || it.productName || 'Item').trim(),
+                productName: resolveOrderItemName(it),
                 buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
               }));
 
