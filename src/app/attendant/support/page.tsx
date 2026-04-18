@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -383,13 +384,23 @@ export default function SupportOpsPage() {
                     Open the same receipt detail page used on daily report to print, send, or change payment method.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPosReceipts((current) => !current)}
-                  className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
-                >
-                  {showPosReceipts ? "Hide POS receipts" : "View POS receipts"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPosReceipts((current) => !current)}
+                    className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
+                  >
+                    {showPosReceipts ? "Hide POS receipts" : "View POS receipts"}
+                  </button>
+                  {currentUserId ? (
+                    <Link
+                      href={`/receipts?attendantId=${encodeURIComponent(currentUserId)}`}
+                      className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+                    >
+                      Open receipts history
+                    </Link>
+                  ) : null}
+                </div>
               </div>
             </section>
 

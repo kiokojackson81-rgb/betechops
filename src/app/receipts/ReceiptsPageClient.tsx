@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
+import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 
 type ReceiptRow = {
   id: string;
@@ -40,6 +41,15 @@ export default function ReceiptsPageClient({
   const [onlyPos] = useState(initialOnlyPos);
   const [fromDate, setFromDate] = useState<string | null>(null);
   const [toDate, setToDate] = useState<string | null>(null);
+  const todayInput = new Date().toISOString().slice(0, 10);
+  const [historyStart, setHistoryStart] = useState<string>(todayInput);
+  const [historyEnd, setHistoryEnd] = useState<string>(todayInput);
+  const [historySearch, setHistorySearch] = useState("");
+  const [debouncedHistorySearch, setDebouncedHistorySearch] = useState("");
+  const [historySummary, setHistorySummary] = useState<{ count: number; totalSales: number }>({
+    count: 0,
+    totalSales: 0,
+  });
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
@@ -90,11 +100,16 @@ export default function ReceiptsPageClient({
   };
 
   useEffect(() => {
-    if (view !== "list") return;
+    if (view !== "list" || attendantId) return;
     const t = setTimeout(() => doSearch({ page: 1 }), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, view]);
+  }, [query, view, attendantId]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedHistorySearch(historySearch), 250);
+    return () => clearTimeout(t);
+  }, [historySearch]);
 
   // On mount, detect attendantId in the URL and open list view filtered to that attendant
   useEffect(() => {
@@ -129,6 +144,158 @@ export default function ReceiptsPageClient({
     setView("create");
     setTimeout(() => scrollIntoView(formRef), 100);
   };
+
+  const setHistoryRange = (range: "today" | "yesterday" | "thisWeek" | "period") => {
+    const now = new Date();
+    if (range === "today") {
+      const iso = now.toISOString().slice(0, 10);
+      setHistoryStart(iso);
+      setHistoryEnd(iso);
+      return;
+    }
+    if (range === "yesterday") {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      const iso = d.toISOString().slice(0, 10);
+      setHistoryStart(iso);
+      setHistoryEnd(iso);
+      return;
+    }
+    if (range === "thisWeek") {
+      const d = new Date(now);
+      const day = d.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const start = new Date(d);
+      start.setDate(d.getDate() + diffToMonday);
+      setHistoryStart(start.toISOString().slice(0, 10));
+      setHistoryEnd(now.toISOString().slice(0, 10));
+      return;
+    }
+    const day = now.getDay();
+    const periodStart = new Date(now);
+    periodStart.setDate(now.getDate() - ((day + 5) % 7));
+    setHistoryStart(periodStart.toISOString().slice(0, 10));
+    setHistoryEnd(now.toISOString().slice(0, 10));
+  };
+
+  if (view === "list" && attendantId) {
+    return (
+      <div className="page-shell space-y-6 py-6">
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-4xl font-semibold text-white">Receipts history</h1>
+              <p className="mt-2 text-sm text-slate-300">
+                Browse your POS receipts and open the same shared receipt page used across the system.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:bg-white/10"
+            >
+              Back
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
+              <h2 className="text-2xl font-semibold text-white">Read-only receipts history</h2>
+              <p className="text-sm text-slate-400">
+                Explore your POS receipts, filter by date range, and open the shared receipt detail view.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+              {[
+                { key: "today", label: "Today" },
+                { key: "yesterday", label: "Yesterday" },
+                { key: "thisWeek", label: "This week" },
+                { key: "period", label: "This period" },
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setHistoryRange(option.key as "today" | "yesterday" | "thisWeek" | "period")}
+                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 hover:border-emerald-500 hover:text-white"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-3">
+            <label className="text-xs uppercase tracking-wide text-slate-400">
+              Search
+              <input
+                type="search"
+                placeholder="Customer, attendant, receipt..."
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="text-xs uppercase tracking-wide text-slate-400">
+              Start date
+              <input
+                type="date"
+                value={historyStart}
+                onChange={(event) => setHistoryStart(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="text-xs uppercase tracking-wide text-slate-400">
+              End date
+              <input
+                type="date"
+                value={historyEnd}
+                onChange={(event) => setHistoryEnd(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
+              <p className="text-sm font-semibold text-slate-100">Selected</p>
+              <p className="text-xs text-slate-400">
+                Showing receipts from {historyStart} to {historyEnd}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
+              <p className="text-2xl font-semibold text-emerald-300">{historySummary.count}</p>
+              <p className="text-xs text-slate-400">Captured in the selected window</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
+              <p className="text-2xl font-semibold text-emerald-300">
+                KES {historySummary.totalSales.toLocaleString("en-KE", { maximumFractionDigits: 0 })}
+              </p>
+              <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <DailyReportReceiptsPanel
+              start={historyStart}
+              end={historyEnd}
+              q={debouncedHistorySearch}
+              attendantId={attendantId}
+              hideHeader
+              onlyPos
+              emptyMessage="No receipts found for this date."
+              onSummary={(summary) => setHistorySummary(summary)}
+            />
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell space-y-6 py-6">
