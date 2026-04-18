@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRoleOrBenjamin } from "@/lib/api";
 import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -242,6 +244,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     console.error("[draft-submit-row] pricing template upsert failed", err);
   }
 
+  try {
+    await maybeAutoSendDividedWhatsappReport({
+      weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "draft-submit-row",
+    });
+    await maybeAutoSendPricingWeekWhatsapp({
+      weekStartRaw: draft.weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "draft-submit-row",
+    });
+  } catch (err) {
+    console.error("[draft-submit-row] auto-send failed", err);
+  }
   return NextResponse.json({
     ok: true,
     entry: {
