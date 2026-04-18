@@ -108,6 +108,25 @@ const extractCanonicalFromReceiptKey = (value?: string | null): string | null =>
   return canonicalReceiptNumber(tail);
 };
 
+const collectReceiptVariants = (...values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values.flatMap((value) => {
+        const raw = typeof value === "string" ? value.trim() : "";
+        const canonical = canonicalReceiptNumber(raw);
+        return [raw, canonical].filter((entry): entry is string => Boolean(entry));
+      }),
+    ),
+  );
+
+const extractReceiptKeyTailVariants = (value?: string | null) => {
+  if (!value) return [] as string[];
+  const raw = String(value).trim();
+  if (!raw) return [] as string[];
+  const tail = raw.includes(":") ? raw.split(":").pop() : raw;
+  return collectReceiptVariants(raw, tail ?? undefined);
+};
+
 const isDateInRange = (value: unknown, start: Date, end: Date): boolean => {
   if (!(value instanceof Date)) return false;
   const time = value.getTime();
@@ -207,9 +226,10 @@ async function computePosOnlyReceiptSummary({
   const lateReceiptNumbers = Array.from(
     new Set(
       latePricedSupportReceipts.flatMap((row) => {
-        const direct = canonicalReceiptNumber(row.receiptNumber ?? undefined);
-        const fromKey = extractCanonicalFromReceiptKey(row.receiptKey);
-        return [direct, fromKey].filter((value): value is string => Boolean(value));
+        return [
+          ...collectReceiptVariants(row.receiptNumber ?? undefined),
+          ...extractReceiptKeyTailVariants(row.receiptKey),
+        ];
       }),
     ),
   );
@@ -301,9 +321,7 @@ async function computePosOnlyReceiptSummary({
   const candidateReceiptNumbers = Array.from(
     new Set(
       posReceiptsFinal.flatMap((receipt: any) => {
-        const orderNumber = canonicalReceiptNumber(receipt.order?.orderNumber);
-        const receiptNumber = canonicalReceiptNumber(receipt.receiptNumber);
-        return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+        return collectReceiptVariants(receipt.order?.orderNumber, receipt.receiptNumber);
       }),
     ),
   );
@@ -341,8 +359,8 @@ async function computePosOnlyReceiptSummary({
         return latest;
       }, null);
 
-      for (const rawKey of [row.receiptNumber, extractCanonicalFromReceiptKey(row.receiptKey)]) {
-        const canonical = canonicalReceiptNumber(rawKey ?? undefined);
+      for (const rawKey of [...collectReceiptVariants(row.receiptNumber ?? undefined), ...extractReceiptKeyTailVariants(row.receiptKey)]) {
+        const canonical = canonicalReceiptNumber(rawKey);
         if (!canonical) continue;
         const existing = supportContexts.get(canonical);
         if (!existing) {

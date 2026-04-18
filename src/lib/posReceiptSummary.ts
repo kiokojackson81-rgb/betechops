@@ -87,6 +87,25 @@ const canonicalKeyForRow = (row: PosReceiptRow) => {
   return canonicalNumber || row.id;
 };
 
+const collectReceiptVariants = (...values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values.flatMap((value) => {
+        const raw = typeof value === "string" ? value.trim() : "";
+        const canonical = canonicalReceiptNumber(raw);
+        return [raw, canonical].filter((entry): entry is string => Boolean(entry));
+      }),
+    ),
+  );
+
+const extractReceiptKeyTailVariants = (value?: string | null) => {
+  if (!value) return [] as string[];
+  const raw = String(value).trim();
+  if (!raw) return [] as string[];
+  const tail = raw.includes(":") ? raw.split(":").pop() : raw;
+  return collectReceiptVariants(raw, tail ?? undefined);
+};
+
 const isDateInRange = (value: Date | null | undefined, start: Date, end: Date) => {
   if (!(value instanceof Date)) return false;
   const time = value.getTime();
@@ -156,9 +175,10 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
   const lateReceiptNumbers = Array.from(
     new Set(
       latePricedSupportReceipts.flatMap((row) => {
-        const direct = canonicalReceiptNumber(row.receiptNumber ?? undefined);
-        const fromKey = canonicalReceiptNumber(row.receiptKey ?? undefined);
-        return [direct, fromKey].filter((value): value is string => Boolean(value));
+        return [
+          ...collectReceiptVariants(row.receiptNumber ?? undefined),
+          ...extractReceiptKeyTailVariants(row.receiptKey),
+        ];
       }),
     ),
   );
@@ -225,9 +245,7 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
   const candidateReceiptNumbers = Array.from(
     new Set(
       filteredReceipts.flatMap((receipt) => {
-        const orderNumber = canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined);
-        const receiptNumber = canonicalReceiptNumber(receipt.receiptNumber ?? undefined);
-        return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+        return collectReceiptVariants(receipt.order?.orderNumber ?? undefined, receipt.receiptNumber ?? undefined);
       }),
     ),
   );
@@ -267,8 +285,8 @@ export async function summarizePosReceiptsForPeriod(period: { start: Date; end: 
       if (!latestPricedAt) continue;
       const buyingTotal = aggregateBuying > 0 ? aggregateBuying : fallbackBuying;
       if (buyingTotal <= 0) continue;
-      for (const rawKey of [row.receiptNumber, row.receiptKey]) {
-        const canonical = canonicalReceiptNumber(rawKey ?? undefined);
+      for (const rawKey of [...collectReceiptVariants(row.receiptNumber ?? undefined), ...extractReceiptKeyTailVariants(row.receiptKey)]) {
+        const canonical = canonicalReceiptNumber(rawKey);
         if (!canonical) continue;
         const existing = supportContexts.get(canonical);
         if (!existing) {
