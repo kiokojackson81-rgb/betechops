@@ -5,7 +5,8 @@ import { WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
-import { computeOnlinePeriodCommission, type PeriodInputs } from "@/lib/onlineCommission";
+import { computeOnlinePeriodCommission, resolveDirectCommissionMode, type PeriodInputs } from "@/lib/onlineCommission";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 type PrismaOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -79,6 +80,7 @@ export async function recomputeWeeklySalesCommission(opts: {
   const { period: commissionPeriod, tiers } = await getOrCreateCommissionPeriod(period.start);
   const marketplaceTotals = await getMarketplaceTotals(userId, period, client);
   const directTotals = await getDirectSalesTotals(userId, period, client);
+  const user = await client.user.findUnique({ where: { id: userId }, select: { email: true } });
   const periodInputs: PeriodInputs = {
     attendantId: userId,
     periodStart: period.start,
@@ -88,7 +90,9 @@ export async function recomputeWeeklySalesCommission(opts: {
     jumiaSales: marketplaceTotals.jumia,
     kilimallSales: marketplaceTotals.kilimall,
   };
-  const periodCommission = computeOnlinePeriodCommission(periodInputs);
+  const periodCommission = computeOnlinePeriodCommission(periodInputs, {
+    directCommissionMode: resolveDirectCommissionMode(user?.email),
+  });
   const payout = periodCommission.totalCommission;
 
   const existingCommission = await client.attendantCommission.findFirst({
@@ -250,22 +254,13 @@ async function getMarketplaceTotals(userId: string, period: TradingPeriod, clien
 }
 
 async function getDirectSalesTotals(userId: string, period: TradingPeriod, client: PrismaOrTx) {
-  const entries = await client.supportDailyEntry.findMany({
-    where: {
-      submittedById: userId,
-      date: { gte: period.start, lte: period.end },
-    },
-    select: {
-      totalSales: true,
-      totalProfit: true,
-    },
+  const totals = await summarizePosReceiptsForPeriod({
+    start: period.start,
+    end: period.end,
+    userId,
   });
-  return entries.reduce(
-    (acc, entry) => {
-      acc.sales += Number(entry.totalSales ?? 0);
-      acc.profit += Number(entry.totalProfit ?? 0);
-      return acc;
-    },
-    { sales: 0, profit: 0 },
-  );
+  return {
+    sales: Number(totals.totalSales ?? 0),
+    profit: Number(totals.totalProfit ?? 0),
+  };
 }

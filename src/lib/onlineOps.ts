@@ -16,6 +16,7 @@ import {
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 type AssignmentWithAccount = any;
 
@@ -462,32 +463,18 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
 }
 
 async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
-  const entries = await prisma.supportDailyEntry.findMany({
-    where: {
-      submittedById: attendantId,
-      date: { gte: period.start, lte: period.end },
-    },
-    select: {
-      totalSales: true,
-      totalProfit: true,
-      receipts: {
-        select: {
-          items: { select: { id: true } },
-        },
-      },
-    },
+  const posSummary = await summarizePosReceiptsForPeriod({
+    start: period.start,
+    end: period.end,
+    userId: attendantId,
   });
 
-  return entries.reduce(
-    (acc, entry) => {
-      acc.sales += entry.totalSales;
-      acc.profit += entry.totalProfit;
-      acc.receipts += entry.receipts.length;
-      acc.items += entry.receipts.reduce((sum, receipt) => sum + receipt.items.length, 0);
-      return acc;
-    },
-    { sales: 0, profit: 0, receipts: 0, items: 0 },
-  );
+  return {
+    sales: Number(posSummary.totalSales ?? 0),
+    profit: Number(posSummary.totalProfit ?? 0),
+    receipts: Number(posSummary.totalReceipts ?? 0),
+    items: Number(posSummary.totalItems ?? 0),
+  };
 }
 
 async function getWeeklyManualSales(attendantId: string, period: TradingPeriod) {
