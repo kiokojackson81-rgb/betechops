@@ -293,25 +293,10 @@ export default function AttendantOnlineClient() {
       });
       appendImpersonateParam(params);
 
-      // If user is an admin, prefer the richer admin endpoint which may return multiple rows
-      if (userRole === "ADMIN") {
-        try {
-          const adminRes = await fetch(`/api/admin/payroll/summary?${params.toString()}`, { cache: "no-store" });
-          if (adminRes.ok) {
-            const adminPayload = await parseIdentityResponse(adminRes);
-            const rows = Array.isArray(adminPayload?.rows) ? adminPayload.rows : [];
-            if (rows.length > 0) {
-              setPayrollSummary(rows[0]);
-              return;
-            }
-          }
-        } catch (e) {
-          // fall through to normal endpoint on error
-        }
-      }
-
-      // For attendants, use the attendant earnings summary endpoint (existing route)
-      const res = await fetch(`/api/attendant/earnings/summary?${params.toString()}`, { cache: "no-store" });
+      // Online ops attendants need the online-specific earnings breakdown so
+      // marketplace commission and POS profit-share commission stay aligned.
+      params.set("periodKey", selectedPeriodKey);
+      const res = await fetch(`/api/online/earnings/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         setPayrollSummary(null);
         return;
@@ -329,7 +314,7 @@ export default function AttendantOnlineClient() {
     } finally {
       setPayrollLoading(false);
     }
-  }, [userId, period, appendImpersonateParam]);
+  }, [userId, period, appendImpersonateParam, selectedPeriodKey, parseIdentityResponse]);
 
   // receiptTotals loader removed
 

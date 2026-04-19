@@ -419,7 +419,10 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   let commissionTotal: number;
   let commissionSourceLabel: string;
 
-  if (ledgerCommissionValue > 0) {
+  if (directCommissionMode === "PROFIT_10") {
+    commissionTotal = grossCommission;
+    commissionSourceLabel = "computed-profit10";
+  } else if (ledgerCommissionValue > 0) {
     commissionTotal = ledgerCommissionValue;
     commissionSourceLabel = `ledger${ledger?.id ? ` (${ledger.id})` : ""}`;
   } else if (isBrendah && brendahComputedCommission != null) {
