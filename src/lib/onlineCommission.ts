@@ -89,7 +89,7 @@ function splitMarketplaceCommission(
 }
 
 export type DirectCommissionMode = "DEFAULT" | "BRENDAH" | "PROFIT_10";
-export type OnlinePosOwnershipMode = "issuerOnly" | "staffOnly";
+export type OnlinePosOwnershipMode = "issuerOnly" | "staffOnly" | "staffDisplay";
 
 export function resolveDirectCommissionMode(email?: string | null): DirectCommissionMode {
   const normalized = (email ?? "").toLowerCase().trim();
@@ -99,7 +99,7 @@ export function resolveDirectCommissionMode(email?: string | null): DirectCommis
 }
 
 export function resolveOnlinePosOwnershipMode(email?: string | null): OnlinePosOwnershipMode {
-  return resolveDirectCommissionMode(email) === "PROFIT_10" ? "staffOnly" : "issuerOnly";
+  return resolveDirectCommissionMode(email) === "PROFIT_10" ? "staffDisplay" : "issuerOnly";
 }
 
 export function progressiveAmount(totalSales: Money): Money {

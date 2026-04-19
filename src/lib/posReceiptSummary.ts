@@ -15,9 +15,11 @@ type PosReceiptRow = {
   receiptNumber: string | null;
   totals: Record<string, unknown> | null;
   data: Record<string, unknown> | null;
+  issuedById?: string | null;
   order?: {
     orderNumber?: string | null;
     totalAmount?: number | null;
+    attendantId?: string | null;
     items?: OrderItemCandidate[];
   } | null;
 };
@@ -112,11 +114,43 @@ const isDateInRange = (value: Date | null | undefined, start: Date, end: Date) =
   return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
 };
 
+const normalizeOptionalId = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const matchesOwnershipMode = (
+  receipt: PosReceiptRow,
+  userId: string | null | undefined,
+  ownershipMode: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay" = "hybrid",
+) => {
+  if (!userId) return true;
+  const dataAttendantId = normalizeOptionalId(receipt.data?.attendantId);
+  const orderAttendantId = normalizeOptionalId(receipt.order?.attendantId);
+  const issuedById = normalizeOptionalId(receipt.issuedById);
+  const hasExplicitStaff = Boolean(orderAttendantId || dataAttendantId);
+
+  if (ownershipMode === "issuerOnly") {
+    return issuedById === userId;
+  }
+  if (ownershipMode === "staffOnly") {
+    return orderAttendantId === userId || dataAttendantId === userId;
+  }
+  if (ownershipMode === "staffDisplay") {
+    if (orderAttendantId === userId || dataAttendantId === userId) return true;
+    if (!hasExplicitStaff && issuedById === userId) return true;
+    return false;
+  }
+
+  return issuedById === userId || orderAttendantId === userId || dataAttendantId === userId;
+};
+
 export async function summarizePosReceiptsForPeriod(period: {
   start: Date;
   end: Date;
   userId?: string | null;
-  ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly";
+  ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay";
 }) {
   const ownerOr =
     period.userId && period.userId.length > 0
@@ -124,6 +158,12 @@ export async function summarizePosReceiptsForPeriod(period: {
         ? [{ issuedById: period.userId }]
         : period.ownershipMode === "staffOnly"
           ? [
+              { order: { attendantId: period.userId } },
+              { data: { path: ["attendantId"], equals: period.userId } },
+            ]
+        : period.ownershipMode === "staffDisplay"
+          ? [
+              { issuedById: period.userId },
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
             ]
@@ -163,6 +203,7 @@ export async function summarizePosReceiptsForPeriod(period: {
           select: {
             orderNumber: true,
             totalAmount: true,
+            attendantId: true,
             items: {
               select: {
                 quantity: true,
@@ -220,6 +261,7 @@ export async function summarizePosReceiptsForPeriod(period: {
               select: {
                 orderNumber: true,
                 totalAmount: true,
+                attendantId: true,
                 items: {
                   select: {
                     quantity: true,
@@ -239,7 +281,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     const pod = r.data?.podDelivery as any | undefined;
     if (!pod) return true;
     return (pod.status || '').toString().toLowerCase() !== 'pending';
-  });
+  }).filter((receipt) => matchesOwnershipMode(receipt, period.userId, period.ownershipMode));
 
   const seen = new Map<string, string>();
   const periodLabel = `${period.start.toISOString()}_${period.end.toISOString()}`;
