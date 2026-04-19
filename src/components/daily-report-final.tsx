@@ -831,9 +831,21 @@ export default function DailyReportFinal() {
     }
   };
 
+  const setQuickDate = (mode: "today" | "yesterday") => {
+    const d = new Date();
+    if (mode === "yesterday") {
+      d.setDate(d.getDate() - 1);
+    }
+    const iso = d.toISOString().split("T")[0];
+    setDate(iso);
+    setDayOfWeek(
+      d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
+    );
+  };
+
   const datePicker = (
-    <div className="flex items-center gap-2">
-      <CalendarIcon size={16} className="text-slate-400" />
+    <div className="relative">
+      <CalendarIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
       <input
         type="date"
         value={date}
@@ -846,39 +858,8 @@ export default function DailyReportFinal() {
             );
           }
         }}
-        className={inputClasses}
+        className={`${inputClasses} pl-10`}
       />
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            const d = new Date();
-            const iso = d.toISOString().split("T")[0];
-            setDate(iso);
-            setDayOfWeek(
-              d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
-            );
-          }}
-          className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const d = new Date();
-            d.setDate(d.getDate() - 1);
-            const iso = d.toISOString().split("T")[0];
-            setDate(iso);
-            setDayOfWeek(
-              d.toLocaleDateString(kenyanLocale, { weekday: "long", timeZone: kenyaTimeZone }),
-            );
-          }}
-          className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-900/70"
-        >
-          Yesterday
-        </button>
-      </div>
     </div>
   );
 
@@ -1011,17 +992,18 @@ export default function DailyReportFinal() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 px-6 py-8 space-y-6">
+    <div className="min-h-screen bg-slate-950 px-5 py-6 text-slate-50 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-6">
       <section className="mb-2 space-y-6">
         <div className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations Dashboard</h1>
               <p className="text-slate-400 text-sm">
                 Daily tracker for uploads, engagement, walk-ins and live sessions.
               </p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               <button
                 type="button"
                 onClick={downloadPerformanceReceiptPdf}
@@ -1077,14 +1059,30 @@ export default function DailyReportFinal() {
               <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Day of week</label>
               {dayOfWeekSelect}
             </div>
+            <div className="sm:col-span-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setQuickDate("today")}
+                className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-900/80"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickDate("yesterday")}
+                className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-900/80"
+              >
+                Yesterday
+              </button>
+            </div>
           </div>
         </div>
       </section>
       </section>
 
       {!showMyReceipts && (
-        <div className="grid gap-6 xl:grid-cols-12 items-start">
-          <div className="space-y-6 xl:col-span-7">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
+          <div className="min-w-0 space-y-6">
             <DaySpecificBlocks
               selectedDay={dayOfWeek}
               walkIns={Number(walkinsServed || 0)}
@@ -1115,7 +1113,7 @@ export default function DailyReportFinal() {
               onSaturdaySummaryChange={setSaturdaySummary}
             />
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
               <button
                 type="button"
                 onClick={handleResetDay}
@@ -1134,7 +1132,7 @@ export default function DailyReportFinal() {
             </div>
           </div>
 
-          <div className="space-y-6 xl:sticky xl:top-6 xl:col-span-5">
+          <aside className="space-y-6 lg:sticky lg:top-6">
             <QuickStats
               receipts={displayedReceipts}
               salesKes={displayedSalesKes}
@@ -1148,11 +1146,12 @@ export default function DailyReportFinal() {
             />
 
             <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
-          </div>
+          </aside>
         </div>
       )}
 
       {showMyReceipts && <DailyReportReceiptsPanel start={date} end={date} attendantId={attendantId} onlyPos />}
+      </div>
     </div>
   );
 }
