@@ -196,12 +196,6 @@ export async function summarizePosReceiptsForPeriod(period: {
             ],
           },
           ...(ownerOr ? [{ OR: ownerOr }] : []),
-          {
-            OR: [
-              { data: { path: ["podDelivery"], equals: Prisma.JsonNull } },
-              { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } },
-            ],
-          },
         ],
       },
       include: {
@@ -252,12 +246,6 @@ export async function summarizePosReceiptsForPeriod(period: {
                 OR: [
                   { order: { orderNumber: { in: lateReceiptNumbers } } },
                   { receiptNumber: { in: lateReceiptNumbers } },
-                ],
-              },
-              {
-                OR: [
-                  { data: { path: ["podDelivery"], equals: Prisma.JsonNull } },
-                  { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } },
                 ],
               },
             ],
