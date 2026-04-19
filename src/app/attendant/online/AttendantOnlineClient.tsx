@@ -409,11 +409,18 @@ export default function AttendantOnlineClient() {
 
   const accountRows = weeklyEarnings?.rows ?? [];
 
+  const directReceiptsSummary = onlineSummary?.directReceipts ?? null;
   const directSales = useMemo(() => {
+    if (directReceiptsSummary && Number(directReceiptsSummary.totalSales ?? 0) > 0) {
+      return Number(directReceiptsSummary.totalSales ?? 0);
+    }
     return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
-  }, [receiptRows]);
+  }, [directReceiptsSummary, receiptRows]);
 
   const receiptsCount = useMemo(() => {
+    if (directReceiptsSummary && Number(directReceiptsSummary.totalReceipts ?? 0) > 0) {
+      return Number(directReceiptsSummary.totalReceipts ?? 0);
+    }
     const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? [];
     const localKeys = (receiptRows ?? []).map((r: any) => {
       const createdAt = r.createdAt ?? r.generatedAt ?? new Date().toISOString();
@@ -429,7 +436,7 @@ export default function AttendantOnlineClient() {
     });
     const union = new Set<string>([...serverKeys, ...localKeys]);
     return union.size;
-  }, [receiptRows, payrollSummary]);
+  }, [directReceiptsSummary, receiptRows, payrollSummary]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 

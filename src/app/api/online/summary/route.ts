@@ -7,6 +7,7 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,11 @@ export async function GET(req: Request) {
     day: "2-digit",
     month: "short",
   })} - ${end.toLocaleDateString("en-KE", { day: "2-digit", month: "short" })}`;
+  const directPosSummary = await summarizePosReceiptsForPeriod({
+    start,
+    end,
+    userId: targetUserId,
+  });
 
   const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(targetUserId);
   if (!accountIds.length) {
@@ -58,6 +64,12 @@ export async function GET(req: Request) {
         toNextTier: 0,
         tierProgress: 0,
         commissionInfo: {},
+      },
+      directReceipts: {
+        totalSales: Number(directPosSummary.totalSales ?? 0),
+        totalProfit: Number(directPosSummary.totalProfit ?? 0),
+        totalReceipts: Number(directPosSummary.totalReceipts ?? 0),
+        totalItems: Number(directPosSummary.totalItems ?? 0),
       },
     };
     return NextResponse.json(composeIdentityResponse(meta, emptyData));
@@ -168,6 +180,12 @@ export async function GET(req: Request) {
       toNextTier,
       tierProgress,
       commissionInfo,
+    },
+    directReceipts: {
+      totalSales: Number(directPosSummary.totalSales ?? 0),
+      totalProfit: Number(directPosSummary.totalProfit ?? 0),
+      totalReceipts: Number(directPosSummary.totalReceipts ?? 0),
+      totalItems: Number(directPosSummary.totalItems ?? 0),
     },
   };
 
