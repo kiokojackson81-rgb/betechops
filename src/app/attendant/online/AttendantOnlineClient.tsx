@@ -425,6 +425,9 @@ export default function AttendantOnlineClient() {
   }, [directReceiptsSummary, posReceiptRows]);
 
   const receiptsCount = useMemo(() => {
+    if (!receiptStatsLoading && Array.isArray(receiptRows)) {
+      return posReceiptRows.length;
+    }
     if (
       directReceiptsSummary &&
       (Number(directReceiptsSummary.totalSales ?? 0) > 0 || Number(directReceiptsSummary.totalReceipts ?? 0) > 0)
@@ -446,7 +449,7 @@ export default function AttendantOnlineClient() {
     });
     const union = new Set<string>([...serverKeys, ...localKeys]);
     return union.size;
-  }, [directReceiptsSummary, posReceiptRows, payrollSummary]);
+  }, [directReceiptsSummary, payrollSummary, posReceiptRows, receiptRows, receiptStatsLoading]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
@@ -535,6 +538,7 @@ export default function AttendantOnlineClient() {
     marketplace && Number(marketplace.marketplaceSalesOnly ?? 0) > 0
       ? Number(marketplace.marketplaceSalesOnly)
       : aggregatorMarketplaceSalesOnly;
+  const commissionBreakdown = onlineSummary?.commissions ?? null;
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
     jumiaSales: quickJumiaSales,
@@ -543,6 +547,19 @@ export default function AttendantOnlineClient() {
     receiptsCount,
     totalSales: quickMarketplaceSalesOnly + directSales,
     commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
+    directCommission:
+      Number(
+        commissionBreakdown?.direct ??
+          payrollSummary?.directCommission ??
+          payrollSummary?.salesCommission ??
+          0,
+      ) || 0,
+    marketplaceCommission:
+      Number(
+        commissionBreakdown?.marketplaceCombined ??
+          payrollSummary?.marketplaceCommission ??
+          0,
+      ) || 0,
     toNextTier: Number(marketplace?.toNextTier ?? toNextTier),
     tierProgress: Number(marketplace?.tierProgress ?? 0),
     tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",

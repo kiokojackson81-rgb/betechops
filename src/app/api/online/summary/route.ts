@@ -8,7 +8,11 @@ import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
-import { resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
+import {
+  computeOnlinePeriodCommission,
+  resolveDirectCommissionMode,
+  resolveOnlinePosOwnershipMode,
+} from "@/lib/onlineCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +165,32 @@ export async function GET(req: Request) {
   const totalSalesWithMarketplace = totalSales + weeklyManualSales;
   // marketplace-only sales (exclude direct/receipts) used to compute ladder progress
   const marketplaceSalesOnly = weeklyManualSales + platforms.reduce((s, p) => s + Number(p.sales || 0), 0);
+  const commissionBreakdown = computeOnlinePeriodCommission(
+    {
+      attendantId: targetUserId,
+      periodStart: start,
+      periodEnd: end,
+      directSales: Number(directPosSummary.totalSales ?? 0),
+      directProfit: Number(directPosSummary.totalProfit ?? 0),
+      jumiaSales:
+        platforms
+          .filter((p) => (p.key ?? "").toUpperCase().includes("JUMIA"))
+          .reduce((s, p) => s + Number(p.sales || 0), 0) + manualJumiaSales,
+      kilimallSales:
+        platforms
+          .filter((p) => (p.key ?? "").toUpperCase().includes("KILIMALL"))
+          .reduce((s, p) => s + Number(p.sales || 0), 0) + manualKilimallSales,
+    },
+    { directCommissionMode: resolveDirectCommissionMode(targetUser?.email) },
+  );
+  const directCommission = Number(
+    commissionBreakdown.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0,
+  );
+  const marketplaceCommission = Number(
+    commissionBreakdown.lines
+      .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
+      .reduce((sum, line) => sum + Number(line.commission ?? 0), 0),
+  );
 
   // commission summary for marketplace totals (used for "To next tier")
   const commissionInfo = getCommissionSummaryForSales(marketplaceSalesOnly);
@@ -192,6 +222,11 @@ export async function GET(req: Request) {
       totalProfit: Number(directPosSummary.totalProfit ?? 0),
       totalReceipts: Number(directPosSummary.totalReceipts ?? 0),
       totalItems: Number(directPosSummary.totalItems ?? 0),
+    },
+    commissions: {
+      direct: directCommission,
+      marketplaceCombined: marketplaceCommission,
+      total: Number(commissionBreakdown.totalCommission ?? 0),
     },
   };
 

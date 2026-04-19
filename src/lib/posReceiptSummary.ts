@@ -385,7 +385,7 @@ export async function summarizePosReceiptsForPeriod(period: {
         ? sales - supportContext.buyingTotal
         : extractProfit(receipt, sales);
 
-    if (salesIncluded) {
+    if (salesIncluded && sales > 0) {
       totalSales += sales;
       totalItems += countItems(receipt);
       totalReceipts += 1;

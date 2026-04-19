@@ -15,6 +15,8 @@ type OnlineOpsQuickStats = {
   receiptsCount: number;
   totalSales: number;
   commission: number;
+  directCommission?: number;
+  marketplaceCommission?: number;
   toNextTier?: number;
   tierProgress?: number;
   tierMessage?: string;
@@ -37,14 +39,33 @@ export function QuickStatsCard({
         { label: "Direct sales (POS receipts)", value: formatKES(onlineOps.directSales) },
         { label: "POS receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
         { label: "Jumia sales (online performance)", value: formatKES(onlineOps.jumiaSales) },
-        { label: "Kilimall sales (online performance)", value: formatKES(onlineOps.kilimallSales) },
-        { label: "Total sales (all channels)", value: formatKES(onlineOps.totalSales) },
-        // Prefer persisted commission_total from server (various field names), fall back to computed `commission`.
         {
-          label: "Commission",
-          value: formatKES(
-            Number((onlineOps as any).commissionTotal ?? (onlineOps as any).commission_total ?? onlineOps.commission ?? 0),
-          ),
+          label:
+            onlineOps.marketplaceCommission != null
+              ? "Jumia + Kilimall commission"
+              : "Kilimall sales (online performance)",
+          value:
+            onlineOps.marketplaceCommission != null
+              ? formatKES(onlineOps.marketplaceCommission)
+              : formatKES(onlineOps.kilimallSales),
+        },
+        { label: "Total sales (all channels)", value: formatKES(onlineOps.totalSales) },
+        {
+          label:
+            onlineOps.directCommission != null
+              ? "Direct commission (10% of POS profit)"
+              : "Commission",
+          value:
+            onlineOps.directCommission != null
+              ? formatKES(onlineOps.directCommission)
+              : formatKES(
+                  Number(
+                    (onlineOps as any).commissionTotal ??
+                      (onlineOps as any).commission_total ??
+                      onlineOps.commission ??
+                      0,
+                  ),
+                ),
         },
       ]
     : [];
