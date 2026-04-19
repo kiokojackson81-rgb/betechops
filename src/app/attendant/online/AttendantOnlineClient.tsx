@@ -410,19 +410,23 @@ export default function AttendantOnlineClient() {
   const accountRows = weeklyEarnings?.rows ?? [];
 
   const directReceiptsSummary = onlineSummary?.directReceipts ?? null;
+  const posReceiptRows = useMemo(
+    () => (receiptRows ?? []).filter((row: any) => row?.source === "pos"),
+    [receiptRows],
+  );
   const directSales = useMemo(() => {
-    if (directReceiptsSummary && Number(directReceiptsSummary.totalSales ?? 0) > 0) {
+    if (directReceiptsSummary) {
       return Number(directReceiptsSummary.totalSales ?? 0);
     }
-    return receiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
-  }, [directReceiptsSummary, receiptRows]);
+    return posReceiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+  }, [directReceiptsSummary, posReceiptRows]);
 
   const receiptsCount = useMemo(() => {
-    if (directReceiptsSummary && Number(directReceiptsSummary.totalReceipts ?? 0) > 0) {
+    if (directReceiptsSummary) {
       return Number(directReceiptsSummary.totalReceipts ?? 0);
     }
     const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? [];
-    const localKeys = (receiptRows ?? []).map((r: any) => {
+    const localKeys = posReceiptRows.map((r: any) => {
       const createdAt = r.createdAt ?? r.generatedAt ?? new Date().toISOString();
       const d = new Date(createdAt);
       const y = d.getFullYear();
@@ -436,7 +440,7 @@ export default function AttendantOnlineClient() {
     });
     const union = new Set<string>([...serverKeys, ...localKeys]);
     return union.size;
-  }, [directReceiptsSummary, receiptRows, payrollSummary]);
+  }, [directReceiptsSummary, posReceiptRows, payrollSummary]);
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
