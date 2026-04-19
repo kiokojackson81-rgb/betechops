@@ -1563,45 +1563,238 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           </Card>
         )}
 
-        <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Date</label>
-              <div className="flex items-center gap-3">
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, date: e.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wide text-slate-400">Day of week</label>
-              <select
-                value={form.dayOfWeek}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    dayOfWeek: e.target.value as DayName,
-                  }))
-                }
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-              >
-                {dayOptions.map((day) => (
-                  <option key={day} value={day}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Card>
-
         <div className="grid gap-6 xl:grid-cols-12 items-start">
-          <div className={currentUserEmail === "jeniffer@betech.co.ke" ? "xl:col-span-4" : "xl:col-span-6"}>
+          <div className="space-y-6 xl:col-span-7">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Reporting day</p>
+                  <h2 className="text-xl font-semibold text-slate-100">
+                    {config.day} checklist
+                  </h2>
+                  <p className="text-sm text-slate-400">
+                    Choose the date, confirm the auto-loaded day, then complete the checklist on the left.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:min-w-[360px] lg:max-w-[440px]">
+                  <label className="space-y-2 text-xs uppercase tracking-wide text-slate-400">
+                    Date
+                    <Input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, date: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                    />
+                  </label>
+                  <label className="space-y-2 text-xs uppercase tracking-wide text-slate-400">
+                    Day of week
+                    <select
+                      value={form.dayOfWeek}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          dayOfWeek: e.target.value as DayName,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                    >
+                      {dayOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
+                  <h2 className="text-xl font-semibold">{config.day}</h2>
+                </div>
+                <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+                  Auto-loaded from selected day
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {groupedYesNo.map(([section, fields]) => (
+                  <div key={section} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {fields.map((f) => (
+                        <button
+                          type="button"
+                          key={f.key}
+                          onClick={() =>
+                            updateField(f.key, !Boolean(form.fields[f.key]))
+                          }
+                          className={pillClass(Boolean(form.fields[f.key]))}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {form.dayOfWeek === "Thursday" && (
+                  <section className="mt-6 rounded-xl border border-red-500/30 p-4">
+                    <h3 className="mb-3 text-sm font-semibold">
+                      Weekly Marketing Activities (Thursday)
+                    </h3>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-full">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Weekly meeting
+                          </label>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWeeklyMeetingAttended(true);
+                                updateField("weeklyMeetingAttended", true);
+                              }}
+                              className={pillClass(weeklyMeetingAttended)}
+                            >
+                              Attended weekly marketing meeting
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWeeklyMeetingAttended(false);
+                                updateField("weeklyMeetingAttended", false);
+                              }}
+                              className={pillClass(!weeklyMeetingAttended)}
+                            >
+                              Did not attend
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-full">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Video shoot
+                          </label>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWeeklyVideoShootParticipated(true);
+                                updateField("weeklyVideoShootParticipated", true);
+                              }}
+                              className={pillClass(weeklyVideoShootParticipated)}
+                            >
+                              Participated in weekly video shoot
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWeeklyVideoShootParticipated(false);
+                                updateField("weeklyVideoShootParticipated", false);
+                              }}
+                              className={pillClass(!weeklyVideoShootParticipated)}
+                            >
+                              Did not participate
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-full">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Number of videos participated in (shooting)
+                          </label>
+                          <div className="mt-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={String(weeklyVideoCount)}
+                              onChange={(e) => {
+                                const v =
+                                  e.target.value === ""
+                                    ? ""
+                                    : Math.max(0, Number(e.target.value));
+                                setWeeklyVideoCount(
+                                  v === "" ? "" : Number(v),
+                                );
+                                updateField(
+                                  "weeklyVideoCount",
+                                  v === "" ? "" : Number(v),
+                                );
+                              }}
+                              className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {(config.numericFields || []).length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-200">
+                      Numeric checks
+                    </h3>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {(config.numericFields || []).map((f) => (
+                        <div key={f.key} className="space-y-2">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            {f.label}
+                          </label>
+                          <Input
+                            type="number"
+                            min={f.min}
+                            value={String(form.fields[f.key] ?? "")}
+                            onChange={(e) => updateField(f.key, e.target.value)}
+                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(config.textFields || []).length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
+                    <div className="grid gap-3">
+                      {(config.textFields || []).map((f) => (
+                        <div key={f.key} className="space-y-2">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            {f.label}
+                          </label>
+                          <Textarea
+                            value={String(form.fields[f.key] ?? "")}
+                            onChange={(e) => updateField(f.key, e.target.value)}
+                            placeholder={f.placeholder}
+                            rows={3}
+                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-6 xl:sticky xl:top-6 xl:col-span-5">
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
@@ -1612,12 +1805,8 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />
-          </div>
-          <div className={currentUserEmail === "jeniffer@betech.co.ke" ? "xl:col-span-4" : "xl:col-span-6"}>
             <EarningsCard summary={earningsSummary} />
-          </div>
-          {currentUserEmail === "jeniffer@betech.co.ke" && (
-            <div className="xl:col-span-4">
+            {currentUserEmail === "jeniffer@betech.co.ke" && (
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1874,190 +2063,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                 )}
 
               </Card>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-
-        <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
-              <h2 className="text-xl font-semibold">{config.day}</h2>
-            </div>
-            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
-              Auto-loaded from selected day
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {groupedYesNo.map(([section, fields]) => (
-              <div key={section} className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {fields.map((f) => (
-                    <button
-                      type="button"
-                      key={f.key}
-                      onClick={() =>
-                        updateField(f.key, !Boolean(form.fields[f.key]))
-                      }
-                      className={pillClass(Boolean(form.fields[f.key]))}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {form.dayOfWeek === "Thursday" && (
-              <section className="mt-6 rounded-xl border border-red-500/30 p-4">
-                <h3 className="mb-3 text-sm font-semibold">
-                  Weekly Marketing Activities (Thursday)
-                </h3>
-
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        Weekly meeting
-                      </label>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWeeklyMeetingAttended(true);
-                            updateField("weeklyMeetingAttended", true);
-                          }}
-                          className={pillClass(weeklyMeetingAttended)}
-                        >
-                          Attended weekly marketing meeting
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWeeklyMeetingAttended(false);
-                            updateField("weeklyMeetingAttended", false);
-                          }}
-                          className={pillClass(!weeklyMeetingAttended)}
-                        >
-                          Did not attend
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        Video shoot
-                      </label>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWeeklyVideoShootParticipated(true);
-                            updateField("weeklyVideoShootParticipated", true);
-                          }}
-                          className={pillClass(weeklyVideoShootParticipated)}
-                        >
-                          Participated in weekly video shoot
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWeeklyVideoShootParticipated(false);
-                            updateField("weeklyVideoShootParticipated", false);
-                          }}
-                          className={pillClass(!weeklyVideoShootParticipated)}
-                        >
-                          Did not participate
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="w-full">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        Number of videos participated in (shooting)
-                      </label>
-                      <div className="mt-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          value={String(weeklyVideoCount)}
-                          onChange={(e) => {
-                            const v =
-                              e.target.value === ""
-                                ? ""
-                                : Math.max(0, Number(e.target.value));
-                            setWeeklyVideoCount(
-                              v === "" ? "" : Number(v),
-                            );
-                            updateField(
-                              "weeklyVideoCount",
-                              v === "" ? "" : Number(v),
-                            );
-                          }}
-                          className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {(config.numericFields || []).length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-200">
-                  Numeric checks
-                </h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(config.numericFields || []).map((f) => (
-                    <div key={f.key} className="space-y-2">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        {f.label}
-                      </label>
-                      <Input
-                        type="number"
-                        min={f.min}
-                        value={String(form.fields[f.key] ?? "")}
-                        onChange={(e) => updateField(f.key, e.target.value)}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(config.textFields || []).length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
-                <div className="grid gap-3">
-                  {(config.textFields || []).map((f) => (
-                    <div key={f.key} className="space-y-2">
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        {f.label}
-                      </label>
-                      <Textarea
-                        value={String(form.fields[f.key] ?? "")}
-                        onChange={(e) => updateField(f.key, e.target.value)}
-                        placeholder={f.placeholder}
-                        rows={3}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
 
         <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
           <Button
