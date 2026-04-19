@@ -1,7 +1,7 @@
 "use server";
 
-import type { AttendantPayrollAdjustment, PayrollAdjustmentType, Prisma } from "@prisma/client";
-import { WeeklySaleStatus } from "@prisma/client";
+import type { AttendantPayrollAdjustment, PayrollAdjustmentType } from "@prisma/client";
+import { Prisma, WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
@@ -19,6 +19,7 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
+import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 
 type AssignmentWithAccount = any;
 
@@ -34,6 +35,7 @@ export type AssignedMarketplaceAccountSales = {
   platform: string;
   payoutSales: number;
   manualSales: number;
+  profitEntrySales: number;
   sales: number;
   orders: number;
   shopIds: string[];
@@ -109,6 +111,90 @@ type ReceiptRecord = {
   profit?: number;
   items?: number;
 };
+
+function money(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalize(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function draftTxn(row: any): string {
+  const direct = normalize(
+    row?.itemCreditTxn ??
+      row?.txn ??
+      row?.transactionNumber ??
+      row?.uniqueTxn ??
+      row?.uniqueNumber ??
+      row?.itemCreditTransaction,
+  ).toLowerCase();
+  if (direct) return direct;
+
+  return [
+    normalize(row?.orderNo ?? row?.orderId),
+    normalize(row?.orderItemNo ?? row?.orderItemId),
+    normalize(row?.dateUtc ?? row?.date),
+    String(money(row?.netPayout)),
+    normalize(row?.details ?? row?.productName),
+  ]
+    .filter(Boolean)
+    .join("|")
+    .toLowerCase();
+}
+
+function summarizeDraftRows(rows: any[]): { dedupNet: number; orderCount: number } {
+  let dedupNet = 0;
+  let orderCount = 0;
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const txn = draftTxn(row);
+    if (txn) {
+      if (seen.has(txn)) continue;
+      seen.add(txn);
+    }
+    dedupNet += money((row as any)?.netPayout);
+    orderCount += 1;
+  }
+  return { dedupNet, orderCount };
+}
+
+function summarizeProfitRows(
+  rows: Array<{ itemCreditTxn: string; netPayout: number }>,
+): { net: number; orderCount: number } {
+  let net = 0;
+  let orderCount = 0;
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const txn = normalize(row.itemCreditTxn).toLowerCase();
+    if (txn) {
+      if (seen.has(txn)) continue;
+      seen.add(txn);
+    }
+    net += money(row.netPayout);
+    orderCount += 1;
+  }
+  return { net, orderCount };
+}
+
+let marketplaceProfitEntryTableAvailable: Promise<boolean> | null = null;
+
+async function isMarketplaceProfitEntryTableAvailable(): Promise<boolean> {
+  if (marketplaceProfitEntryTableAvailable) return marketplaceProfitEntryTableAvailable;
+  marketplaceProfitEntryTableAvailable = (async () => {
+    try {
+      await (prisma as any).marketplaceProfitEntry.findFirst({ select: { id: true } });
+      return true;
+    } catch (error: any) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+        return false;
+      }
+      return false;
+    }
+  })();
+  return marketplaceProfitEntryTableAvailable;
+}
 
 export async function findPreferredCommissionLedger(
   userId: string,
@@ -241,15 +327,6 @@ export async function getAssignedMarketplaceSalesForPeriod(
     };
   }
 
-  const payoutRows = await recomputeWeeklySummary(period.start, period.end);
-  const payoutByAccount = new Map<string, { sales: number; orders: number }>();
-  for (const row of payoutRows) {
-    payoutByAccount.set(row.accountId, {
-      sales: (payoutByAccount.get(row.accountId)?.sales ?? 0) + Number(row.totalGross ?? 0),
-      orders: (payoutByAccount.get(row.accountId)?.orders ?? 0) + 1,
-    });
-  }
-
   const shopIdsByAccount = new Map<string, string[]>();
   for (const assignment of uniqueAssignments) {
     const shopIds = await resolveShopIdsForMarketplaceAccount(assignment.accountId);
@@ -286,7 +363,102 @@ export async function getAssignedMarketplaceSalesForPeriod(
     manualByShopId.set(shopId, current);
   }
 
+  const accountIds = uniqueAssignments.map((assignment) => assignment.accountId);
+  const profitEntryTableAvailable = await isMarketplaceProfitEntryTableAvailable();
+  const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
+
+  const profitEntryRows =
+    profitEntryTableAvailable && accountIds.length
+      ? await (prisma as any).marketplaceProfitEntry.findMany({
+          where: {
+            accountId: { in: accountIds },
+            periodKey: period.key,
+            weekStart: { lte: period.end },
+            weekEnd: { gte: period.start },
+          },
+          select: {
+            accountId: true,
+            weekStart: true,
+            itemCreditTxn: true,
+            netPayout: true,
+          },
+          take: 30000,
+        })
+      : [];
+
+  const profitRowsByAccountWeek = new Map<string, Array<{ itemCreditTxn: string; netPayout: number }>>();
+  for (const row of profitEntryRows as any[]) {
+    const key = `${String(row.accountId)}::${new Date(row.weekStart).toISOString()}`;
+    if (!profitRowsByAccountWeek.has(key)) {
+      profitRowsByAccountWeek.set(key, []);
+    }
+    profitRowsByAccountWeek.get(key)!.push({
+      itemCreditTxn: String(row.itemCreditTxn ?? ""),
+      netPayout: money(row.netPayout),
+    });
+  }
+
+  const draftRows =
+    draftTableAvailable && accountIds.length
+      ? await prisma.marketplaceStatementDraft.findMany({
+          where: {
+            accountId: { in: accountIds },
+            periodKey: period.key,
+            weekStart: { lte: period.end },
+            weekEnd: { gte: period.start },
+          },
+          select: {
+            accountId: true,
+            weekStart: true,
+            rows: true,
+          },
+          take: 500,
+        })
+      : [];
+
+  const draftMetricsByAccountWeek = new Map<string, { dedupNet: number; orderCount: number }>();
+  for (const row of draftRows) {
+    const key = `${String(row.accountId)}::${new Date(row.weekStart).toISOString()}`;
+    if (draftMetricsByAccountWeek.has(key)) continue;
+    draftMetricsByAccountWeek.set(key, summarizeDraftRows(Array.isArray(row.rows) ? (row.rows as any[]) : []));
+  }
+
+  const profitEntryByAccount = new Map<string, { sales: number; orders: number }>();
+  for (const assignment of uniqueAssignments) {
+    const weekKeys = new Set<string>();
+    for (const key of profitRowsByAccountWeek.keys()) {
+      if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
+    }
+    for (const key of draftMetricsByAccountWeek.keys()) {
+      if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
+    }
+
+    const totals = { sales: 0, orders: 0 };
+    for (const key of weekKeys) {
+      const draftSummary = draftMetricsByAccountWeek.get(key);
+      if (draftSummary) {
+        totals.sales += draftSummary.dedupNet;
+        totals.orders += draftSummary.orderCount;
+        continue;
+      }
+      const profitSummary = summarizeProfitRows(profitRowsByAccountWeek.get(key) ?? []);
+      totals.sales += profitSummary.net;
+      totals.orders += profitSummary.orderCount;
+    }
+    profitEntryByAccount.set(assignment.accountId, totals);
+  }
+
+  const payoutRows = await recomputeWeeklySummary(period.start, period.end);
+  const payoutByAccount = new Map<string, { sales: number; orders: number }>();
+  for (const row of payoutRows) {
+    payoutByAccount.set(row.accountId, {
+      sales: (payoutByAccount.get(row.accountId)?.sales ?? 0) + Number(row.totalPayout ?? 0),
+      orders: (payoutByAccount.get(row.accountId)?.orders ?? 0) + 1,
+    });
+  }
+
   const rows = uniqueAssignments.map<AssignedMarketplaceAccountSales>((assignment) => {
+    const profitEntry = profitEntryByAccount.get(assignment.accountId) ?? { sales: 0, orders: 0 };
     const payout = payoutByAccount.get(assignment.accountId) ?? { sales: 0, orders: 0 };
     const shopIds = shopIdsByAccount.get(assignment.accountId) ?? [];
     const manual = shopIds.reduce(
@@ -298,14 +470,15 @@ export async function getAssignedMarketplaceSalesForPeriod(
       },
       { sales: 0, orders: 0 },
     );
-    const sales = payout.sales > 0 ? payout.sales : manual.sales;
-    const orders = payout.orders > 0 ? payout.orders : manual.orders;
+    const sales = profitEntry.sales > 0 ? profitEntry.sales : payout.sales > 0 ? payout.sales : manual.sales;
+    const orders = profitEntry.orders > 0 ? profitEntry.orders : payout.orders > 0 ? payout.orders : manual.orders;
     return {
       accountId: assignment.accountId,
       displayName: assignment.account?.displayName ?? null,
       platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
       payoutSales: payout.sales,
       manualSales: manual.sales,
+      profitEntrySales: profitEntry.sales,
       sales,
       orders,
       shopIds,
