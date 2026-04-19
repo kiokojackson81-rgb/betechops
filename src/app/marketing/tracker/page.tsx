@@ -1453,16 +1453,16 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <form
         onSubmit={handleSubmit}
-        className="mx-auto flex max-w-6xl flex-col gap-6 p-6"
+        className="mx-auto flex w-full max-w-[1460px] flex-col gap-6 px-5 py-6 lg:px-8"
       >
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-semibold">Sales Operations Dashboard</h1>
             <p className="text-sm text-slate-300">
               Every task you complete brings you closer to your next reward.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
               Download report (PDF)
             </Button>
@@ -1563,8 +1563,8 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           </Card>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-12 items-start">
-          <div className="space-y-6 xl:col-span-7">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px] items-start">
+          <div className="min-w-0 space-y-6">
             <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-1">
@@ -1794,7 +1794,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             </Card>
           </div>
 
-          <div className="space-y-6 xl:sticky xl:top-6 xl:col-span-5">
+          <aside className="space-y-6 lg:sticky lg:top-6">
             <StatsCard
               periodLabel={periodLabel}
               receipts={displayedReceipts}
@@ -1808,25 +1808,31 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             <EarningsCard summary={earningsSummary} />
             {currentUserEmail === "jeniffer@betech.co.ke" && (
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Sales needing buying price
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Attach buying price to attendants&apos; sales to earn commission.
-                </p>
-              </div>
-              {unpricedSales.length > 0 ? (
-                <div className="flex flex-col items-start rounded-xl border border-slate-800/80 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-300 sm:flex-row sm:items-center sm:gap-4">
-                  <span>{unpricedQueueStats.receipts} receipts</span>
-                  <span>{unpricedQueueStats.items} items pending</span>
-                  {unpricedQueueStats.supportReceipts ? (
-                    <span>{unpricedQueueStats.supportReceipts} support receipts</span>
+                <div className="mb-3 flex flex-col gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Sales needing buying price
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Attach buying price to attendants&apos; sales to earn commission.
+                    </p>
+                  </div>
+                  {unpricedSales.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-wide text-slate-300">
+                      <span className="rounded-full border border-slate-800/80 px-3 py-2">
+                        {unpricedQueueStats.receipts} receipts
+                      </span>
+                      <span className="rounded-full border border-slate-800/80 px-3 py-2">
+                        {unpricedQueueStats.items} items pending
+                      </span>
+                      {unpricedQueueStats.supportReceipts ? (
+                        <span className="rounded-full border border-slate-800/80 px-3 py-2">
+                          {unpricedQueueStats.supportReceipts} support receipts
+                        </span>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
 
                 {unpricedSales.length === 0 ? (
 
@@ -2064,10 +2070,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
 
               </Card>
             )}
-          </div>
+          </aside>
         </div>
 
-        <div className="sticky bottom-4 flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 backdrop-blur">
+        <div className="flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
           <Button
             type="reset"
             variant="secondary"
