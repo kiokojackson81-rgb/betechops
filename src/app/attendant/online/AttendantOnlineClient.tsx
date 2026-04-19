@@ -548,6 +548,12 @@ export default function AttendantOnlineClient() {
     tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
   };
 
+  const receiptsHistoryHref = userId
+    ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
+        period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }),
+      )}&end=${encodeURIComponent(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }))}`
+    : "/receipts";
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-6xl space-y-6 p-6">
@@ -561,7 +567,7 @@ export default function AttendantOnlineClient() {
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
             <Link
-              href={userId ? `/receipts?attendantId=${encodeURIComponent(userId)}` : "/receipts"}
+              href={receiptsHistoryHref}
               className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
             >
               Receipts

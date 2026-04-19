@@ -1,5 +1,6 @@
 import ReceiptsPageClient from "./ReceiptsPageClient";
 import { absUrl, withParams } from "@/lib/abs-url";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,15 @@ export default async function ReceiptsPage({ searchParams }: { searchParams?: Re
     };
     const attendantId = searchParams && typeof searchParams.attendantId === "string" ? searchParams.attendantId : undefined;
     if (attendantId) params.attendantId = attendantId;
+    const start = searchParams && typeof searchParams.start === "string" ? searchParams.start : undefined;
+    const end = searchParams && typeof searchParams.end === "string" ? searchParams.end : undefined;
+    if (start) params.start = start;
+    if (end) params.end = end;
+    if (attendantId && !start && !end) {
+      const period = getTradingPeriodFor(new Date());
+      params.start = period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+      params.end = period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+    }
     const initialOnlyPos =
       !searchParams || typeof searchParams.onlyPos !== "string"
         ? true

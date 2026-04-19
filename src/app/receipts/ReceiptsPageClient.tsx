@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRow = {
   id: string;
@@ -41,9 +42,11 @@ export default function ReceiptsPageClient({
   const [onlyPos] = useState(initialOnlyPos);
   const [fromDate, setFromDate] = useState<string | null>(null);
   const [toDate, setToDate] = useState<string | null>(null);
-  const todayInput = new Date().toISOString().slice(0, 10);
-  const [historyStart, setHistoryStart] = useState<string>(todayInput);
-  const [historyEnd, setHistoryEnd] = useState<string>(todayInput);
+  const defaultTradingPeriod = getTradingPeriodFor(new Date());
+  const defaultPeriodStart = defaultTradingPeriod.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const defaultPeriodEnd = defaultTradingPeriod.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
+  const [historyStart, setHistoryStart] = useState<string>(defaultPeriodStart);
+  const [historyEnd, setHistoryEnd] = useState<string>(defaultPeriodEnd);
   const [historySearch, setHistorySearch] = useState("");
   const [debouncedHistorySearch, setDebouncedHistorySearch] = useState("");
   const [historySummary, setHistorySummary] = useState<{ count: number; totalSales: number }>({
@@ -117,9 +120,13 @@ export default function ReceiptsPageClient({
       if (typeof window !== "undefined") {
         const sp = new URLSearchParams(window.location.search);
         const aid = sp.get("attendantId");
+        const start = sp.get("start");
+        const end = sp.get("end");
         if (aid) {
           setAttendantId(aid);
           setView("list");
+          if (start) setHistoryStart(start);
+          if (end) setHistoryEnd(end);
           // If server-side provided initial receipts, prefer them; otherwise trigger search
           if (!initial || initial.length === 0) {
             void doSearch({ page: 1 });
@@ -171,11 +178,9 @@ export default function ReceiptsPageClient({
       setHistoryEnd(now.toISOString().slice(0, 10));
       return;
     }
-    const day = now.getDay();
-    const periodStart = new Date(now);
-    periodStart.setDate(now.getDate() - ((day + 5) % 7));
-    setHistoryStart(periodStart.toISOString().slice(0, 10));
-    setHistoryEnd(now.toISOString().slice(0, 10));
+    const period = getTradingPeriodFor(now);
+    setHistoryStart(period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }));
+    setHistoryEnd(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }));
   };
 
   if (view === "list" && attendantId) {
