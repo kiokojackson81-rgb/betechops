@@ -116,12 +116,17 @@ export async function summarizePosReceiptsForPeriod(period: {
   start: Date;
   end: Date;
   userId?: string | null;
-  ownershipMode?: "hybrid" | "issuerOnly";
+  ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly";
 }) {
   const ownerOr =
     period.userId && period.userId.length > 0
       ? period.ownershipMode === "issuerOnly"
         ? [{ issuedById: period.userId }]
+        : period.ownershipMode === "staffOnly"
+          ? [
+              { order: { attendantId: period.userId } },
+              { data: { path: ["attendantId"], equals: period.userId } },
+            ]
         : [
             { issuedById: period.userId },
             { order: { attendantId: period.userId } },

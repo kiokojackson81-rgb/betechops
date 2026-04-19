@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { computeOnlinePeriodCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
+import { computeOnlinePeriodCommission, resolveDirectCommissionMode, resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
 import { WeeklySaleStatus } from "@prisma/client";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   const period = getTradingPeriodFor(new Date());
   const start = startParam ?? period.start;
   const end = endParam ?? period.end;
+  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
 
   // marketplace totals from approved weeklySale manual/approved entries
   const entries = await prisma.weeklySale.findMany({
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
     start,
     end,
     userId: attendantId,
-    ownershipMode: "issuerOnly",
+    ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
   });
 
   const periodInputs = {
@@ -71,7 +72,6 @@ export async function GET(req: Request) {
     kilimallSales: marketplaceTotals.kilimall,
   };
 
-  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
   const result = computeOnlinePeriodCommission(periodInputs as any, {
     directCommissionMode: resolveDirectCommissionMode(user?.email),
   });

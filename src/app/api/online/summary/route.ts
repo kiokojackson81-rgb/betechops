@@ -8,6 +8,7 @@ import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { recomputeWeeklySummary } from "../../../../lib/jobs/recomputeWeeklySummaries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,10 @@ export async function GET(req: Request) {
   if (!targetUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { email: true },
+  });
 
   const url = new URL(req.url);
   if (url.searchParams.has("start") || url.searchParams.has("end")) {
@@ -46,7 +51,7 @@ export async function GET(req: Request) {
     start,
     end,
     userId: targetUserId,
-    ownershipMode: "issuerOnly",
+    ownershipMode: resolveOnlinePosOwnershipMode(targetUser?.email),
   });
 
   const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(targetUserId);

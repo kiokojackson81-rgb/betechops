@@ -89,12 +89,17 @@ function splitMarketplaceCommission(
 }
 
 export type DirectCommissionMode = "DEFAULT" | "BRENDAH" | "PROFIT_10";
+export type OnlinePosOwnershipMode = "issuerOnly" | "staffOnly";
 
 export function resolveDirectCommissionMode(email?: string | null): DirectCommissionMode {
   const normalized = (email ?? "").toLowerCase().trim();
   if (normalized === "brendah@betech.co.ke") return "BRENDAH";
   if (normalized === "stephen@betech.co.ke" || normalized === "benjamin@betech.co.ke") return "PROFIT_10";
   return "DEFAULT";
+}
+
+export function resolveOnlinePosOwnershipMode(email?: string | null): OnlinePosOwnershipMode {
+  return resolveDirectCommissionMode(email) === "PROFIT_10" ? "staffOnly" : "issuerOnly";
 }
 
 export function progressiveAmount(totalSales: Money): Money {

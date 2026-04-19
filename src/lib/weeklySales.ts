@@ -5,7 +5,12 @@ import { WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
-import { computeOnlinePeriodCommission, resolveDirectCommissionMode, type PeriodInputs } from "@/lib/onlineCommission";
+import {
+  computeOnlinePeriodCommission,
+  resolveDirectCommissionMode,
+  resolveOnlinePosOwnershipMode,
+  type PeriodInputs,
+} from "@/lib/onlineCommission";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 type PrismaOrTx = PrismaClient | Prisma.TransactionClient;
@@ -254,11 +259,12 @@ async function getMarketplaceTotals(userId: string, period: TradingPeriod, clien
 }
 
 async function getDirectSalesTotals(userId: string, period: TradingPeriod, client: PrismaOrTx) {
+  const user = await client.user.findUnique({ where: { id: userId }, select: { email: true } });
   const totals = await summarizePosReceiptsForPeriod({
     start: period.start,
     end: period.end,
     userId,
-    ownershipMode: "issuerOnly",
+    ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
   });
   return {
     sales: Number(totals.totalSales ?? 0),

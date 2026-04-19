@@ -13,6 +13,7 @@ import {
   computeOnlinePeriodCommission,
   resolveDirectCommissionMode,
 } from "@/lib/onlineCommission";
+import { resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
@@ -463,11 +464,12 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
 }
 
 async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
+  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
   const posSummary = await summarizePosReceiptsForPeriod({
     start: period.start,
     end: period.end,
     userId: attendantId,
-    ownershipMode: "issuerOnly",
+    ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
   });
 
   return {
