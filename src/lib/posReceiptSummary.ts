@@ -112,18 +112,25 @@ const isDateInRange = (value: Date | null | undefined, start: Date, end: Date) =
   return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
 };
 
-export async function summarizePosReceiptsForPeriod(period: { start: Date; end: Date; userId?: string | null }) {
+export async function summarizePosReceiptsForPeriod(period: {
+  start: Date;
+  end: Date;
+  userId?: string | null;
+  ownershipMode?: "hybrid" | "issuerOnly";
+}) {
   const ownerOr =
     period.userId && period.userId.length > 0
-      ? [
-          { issuedById: period.userId },
-          { order: { attendantId: period.userId } },
-          { data: { path: ["attendantId"], equals: period.userId } },
-        ]
+      ? period.ownershipMode === "issuerOnly"
+        ? [{ issuedById: period.userId }]
+        : [
+            { issuedById: period.userId },
+            { order: { attendantId: period.userId } },
+            { data: { path: ["attendantId"], equals: period.userId } },
+          ]
       : null;
 
   const supportDailyEntryWhere =
-    period.userId && period.userId.length > 0
+    period.userId && period.userId.length > 0 && period.ownershipMode !== "issuerOnly"
       ? { submittedById: period.userId }
       : {};
 

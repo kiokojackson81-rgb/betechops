@@ -46,6 +46,7 @@ export async function GET(req: Request) {
     start,
     end,
     userId: targetUserId,
+    ownershipMode: "issuerOnly",
   });
 
   const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(targetUserId);

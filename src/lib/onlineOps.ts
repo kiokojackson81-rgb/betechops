@@ -467,6 +467,7 @@ async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
     start: period.start,
     end: period.end,
     userId: attendantId,
+    ownershipMode: "issuerOnly",
   });
 
   return {

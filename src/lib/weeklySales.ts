@@ -258,6 +258,7 @@ async function getDirectSalesTotals(userId: string, period: TradingPeriod, clien
     start: period.start,
     end: period.end,
     userId,
+    ownershipMode: "issuerOnly",
   });
   return {
     sales: Number(totals.totalSales ?? 0),

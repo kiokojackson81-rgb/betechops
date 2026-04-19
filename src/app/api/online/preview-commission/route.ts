@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { computeOnlinePeriodCommission } from "@/lib/onlineCommission";
+import { computeOnlinePeriodCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
 import { WeeklySaleStatus } from "@prisma/client";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -52,30 +53,27 @@ export async function GET(req: Request) {
     { jumia: 0, kilimall: 0 },
   );
 
-  // direct sales from supportDailyEntry
-  const directEntries = await prisma.supportDailyEntry.findMany({
-    where: { submittedById: attendantId, date: { gte: start, lte: end } },
-    select: { totalSales: true, totalProfit: true },
+  // direct sales from POS receipts created by this attendant
+  const posSummary = await summarizePosReceiptsForPeriod({
+    start,
+    end,
+    userId: attendantId,
+    ownershipMode: "issuerOnly",
   });
-  const directTotals = directEntries.reduce(
-    (acc, e) => {
-      acc.sales += Number(e.totalSales ?? 0);
-      acc.profit += Number(e.totalProfit ?? 0);
-      return acc;
-    },
-    { sales: 0, profit: 0 },
-  );
 
   const periodInputs = {
     attendantId,
     periodStart: start,
     periodEnd: end,
-    directSales: directTotals.sales,
-    directProfit: directTotals.profit,
+    directSales: posSummary.totalSales,
+    directProfit: posSummary.totalProfit,
     jumiaSales: marketplaceTotals.jumia,
     kilimallSales: marketplaceTotals.kilimall,
   };
 
-  const result = computeOnlinePeriodCommission(periodInputs as any);
+  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+  const result = computeOnlinePeriodCommission(periodInputs as any, {
+    directCommissionMode: resolveDirectCommissionMode(user?.email),
+  });
   return NextResponse.json(composeIdentityResponse(meta, result as unknown as Record<string, unknown>));
 }
