@@ -61,6 +61,7 @@ export async function GET(req: Request) {
     userId: attendantId,
     ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
     supportPricingScope: "any",
+    profitRecognitionMode: "salesDate",
   });
 
   const periodInputs = {

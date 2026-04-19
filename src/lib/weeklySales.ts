@@ -266,6 +266,7 @@ async function getDirectSalesTotals(userId: string, period: TradingPeriod, clien
     userId,
     ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
     supportPricingScope: "any",
+    profitRecognitionMode: "salesDate",
   });
   return {
     sales: Number(totals.totalSales ?? 0),

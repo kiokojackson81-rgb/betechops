@@ -152,6 +152,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   userId?: string | null;
   ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay";
   supportPricingScope?: "user" | "any";
+  profitRecognitionMode?: "recognizedDate" | "salesDate";
 }) {
   const ownerOr =
     period.userId && period.userId.length > 0
@@ -408,7 +409,11 @@ export async function summarizePosReceiptsForPeriod(period: {
       }
     }
 
-    if (profit && isDateInRange(recognizedAt, period.start, period.end)) {
+    const profitIncluded =
+      period.profitRecognitionMode === "salesDate"
+        ? salesIncluded
+        : isDateInRange(recognizedAt, period.start, period.end);
+    if (profit && profitIncluded) {
       totalProfit += profit;
     }
   }

@@ -471,6 +471,7 @@ async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
     userId: attendantId,
     ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
     supportPricingScope: "any",
+    profitRecognitionMode: "salesDate",
   });
 
   return {
