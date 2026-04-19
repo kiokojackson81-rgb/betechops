@@ -2,7 +2,6 @@
 
 import { signOut, useSession } from "next-auth/react";
 import HeaderActions from "@/components/HeaderActions";
-import Link from "next/link";
 import Card from "@/app/_components/Card";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarIcon } from "lucide-react";
@@ -15,6 +14,7 @@ import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import { withImpersonateId } from "@/lib/impersonation";
+import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -50,6 +50,30 @@ const toLocalIsoDate = (d: Date) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
+
+const NAIROBI_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+const toNairobiDayBoundaryIso = (value: string, boundary: "start" | "end") => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  const hour = boundary === "start" ? 0 : 23;
+  const minute = boundary === "start" ? 0 : 59;
+  const second = boundary === "start" ? 0 : 59;
+  const millisecond = boundary === "start" ? 0 : 999;
+  const utcMillis =
+    Date.UTC(year, month - 1, day, hour, minute, second, millisecond) - NAIROBI_OFFSET_MS;
+  return new Date(utcMillis).toISOString();
+};
+
+const toStartOfDayIso = (value: string) => toNairobiDayBoundaryIso(value, "start");
+const toEndOfDayIso = (value: string) => toNairobiDayBoundaryIso(value, "end");
 
 const cardClasses =
   "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
@@ -111,6 +135,17 @@ export default function DailyReportFinal() {
     if (range === "period") {
       applyThisTradingPeriodRange();
       return;
+    }
+  };
+
+  const backToDashboard = () => {
+    setShowMyReceipts(false);
+    if (typeof window !== "undefined") {
+      const cleanUrl = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState(null, "", cleanUrl);
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
     }
   };
 
@@ -205,6 +240,7 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
   const [hasAuthoritativeCommission, setHasAuthoritativeCommission] = useState(false);
   const sessionResponse = useSession();
@@ -229,15 +265,50 @@ export default function DailyReportFinal() {
   const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
   const selectedPeriodKey = selectedPeriod.key;
   const selectedPeriodLabel = selectedPeriod.label;
+  const summaryProfitForFallback = Number(earningsSummary?.totalProfit ?? 0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     setImpersonateId(params.get("impersonateId"));
+    setImpersonationReady(true);
   }, []);
+
+  const fetchSavedReceiptsSummary = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!selectedPeriod?.start || !selectedPeriod?.end) return null;
+      const params = new URLSearchParams();
+      params.set("includeItems", "false");
+      params.set("size", "200");
+      const startIso = toStartOfDayIso(toLocalIsoDate(selectedPeriod.start));
+      const endIso = toEndOfDayIso(toLocalIsoDate(selectedPeriod.end));
+      if (startIso) params.set("start", startIso);
+      if (endIso) params.set("end", endIso);
+      if (impersonateId) params.set("impersonateId", impersonateId);
+
+      const res = await fetch(`/api/receipts?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      const rows = Array.isArray(data?.receipts) ? data.receipts : [];
+      return {
+        totalReceipts: rows.length,
+        totalSales: rows.reduce(
+          (sum: number, row: { total?: number | null }) => sum + Number(row?.total ?? 0),
+          0,
+        ),
+      };
+    },
+    [impersonateId, selectedPeriod],
+  );
 
   const loadEarnings = useCallback(
     async (signal?: AbortSignal) => {
+      if (!impersonationReady) return null;
       if (!selectedPeriodKey) return null;
       try {
         const basePath = "/api/attendant/earnings/summary";
@@ -274,6 +345,11 @@ export default function DailyReportFinal() {
         const payrollSales = Number(data.totalSales ?? 0);
         const payrollItems = Number(data.totalItems ?? 0);
         const payrollReceipts = Number(data.totalReceipts ?? 0);
+        const savedReceiptsSummary = prefersEarningsQuickStats
+          ? await fetchSavedReceiptsSummary(signal).catch(() => null)
+          : null;
+        const brendahSavedSales = Number(savedReceiptsSummary?.totalSales ?? payrollSales);
+        const brendahSavedReceipts = Number(savedReceiptsSummary?.totalReceipts ?? payrollReceipts);
 
         // Quick stats should reflect the daily-report submissions (the same page the user is on),
         // not marketing/support ledgers or POS-only views.
@@ -294,16 +370,17 @@ export default function DailyReportFinal() {
             const summarySales = hasPosSales ? Number(pos.totalSales ?? 0) : Number(qsData.totalSales ?? 0);
             const summaryItems = hasPosSales ? Number(pos.totalItems ?? 0) : Number(qsData.totalItems ?? 0);
             const summaryReceipts = hasPosSales ? Number(pos.totalReceipts ?? 0) : Number(qsData.totalReceipts ?? 0);
+
             const nextQuickStats = prefersEarningsQuickStats
               ? {
-                  totalSales: payrollSales,
+                  totalSales: brendahSavedSales,
                   totalItems: payrollItems,
                   totalNewProducts: Number(qsData.totalNewProducts ?? data.totalNewProducts ?? 0),
                   totalEditedProducts: Number(qsData.totalEditedProducts ?? data.totalEditedProducts ?? 0),
                   totalCopiedProducts: Number(qsData.totalCopiedProducts ?? data.totalCopiedProducts ?? 0),
                   walkInsServed: Number(qsData.walkInsServed ?? 0),
                   walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
-                  totalReceipts: payrollReceipts,
+                  totalReceipts: brendahSavedReceipts,
                 }
               : {
                   totalSales: Math.max(summarySales, payrollSales),
@@ -320,26 +397,34 @@ export default function DailyReportFinal() {
           } else {
             // fallback to earnings payload if daily-report summary isn't available
             setServerQuickStats({
-              totalSales: Number(data.totalSales ?? 0),
+              totalSales: prefersEarningsQuickStats
+                ? brendahSavedSales
+                : Number(data.totalSales ?? 0),
               totalItems: Number(data.totalItems ?? 0),
               totalNewProducts: Number(data.totalNewProducts ?? 0),
               totalEditedProducts: Number(data.totalEditedProducts ?? 0),
               totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
               walkInsServed: Number(data.walkInsServed ?? 0),
               walkInsPurchased: Number(data.walkInsPurchased ?? 0),
-              totalReceipts: Number(data.totalReceipts ?? 0),
+              totalReceipts: prefersEarningsQuickStats
+                ? brendahSavedReceipts
+                : Number(data.totalReceipts ?? 0),
             });
           }
         } catch {
           setServerQuickStats({
-            totalSales: Number(data.totalSales ?? 0),
+            totalSales: prefersEarningsQuickStats
+              ? brendahSavedSales
+              : Number(data.totalSales ?? 0),
             totalItems: Number(data.totalItems ?? 0),
             totalNewProducts: Number(data.totalNewProducts ?? 0),
             totalEditedProducts: Number(data.totalEditedProducts ?? 0),
             totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
             walkInsServed: Number(data.walkInsServed ?? 0),
             walkInsPurchased: Number(data.walkInsPurchased ?? 0),
-            totalReceipts: Number(data.totalReceipts ?? 0),
+            totalReceipts: prefersEarningsQuickStats
+              ? brendahSavedReceipts
+              : Number(data.totalReceipts ?? 0),
           });
         }
         return data;
@@ -349,18 +434,19 @@ export default function DailyReportFinal() {
         return null;
       }
     },
-    [impersonateId, selectedPeriodKey],
+    [fetchSavedReceiptsSummary, impersonateId, impersonationReady, selectedPeriodKey],
   );
 
   useEffect(() => {
-    if (!selectedPeriodKey) return;
+    if (!impersonationReady || !selectedPeriodKey) return;
     const controller = new AbortController();
     loadEarnings(controller.signal);
     return () => controller.abort();
-  }, [loadEarnings, selectedPeriodKey]);
+  }, [impersonationReady, loadEarnings, selectedPeriodKey]);
 
   const fetchPeriodSummary = useCallback(
     async (signal?: AbortSignal) => {
+      if (!impersonationReady) return null;
       if (!selectedPeriodKey || typeof window === "undefined") return null;
       try {
         const url = new URL("/api/marketing/report/summary", window.location.origin);
@@ -379,23 +465,59 @@ export default function DailyReportFinal() {
         const data = await res.json().catch(() => null);
         if (!data) return null;
         if (isBrendahView) {
+          const savedReceiptsSummary = await fetchSavedReceiptsSummary(signal).catch(() => null);
+          const summarySales = Number(
+            savedReceiptsSummary?.totalSales ?? data.aggregates?.totalSales ?? 0,
+          );
+          const summaryReceipts = Number(
+            savedReceiptsSummary?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0,
+          );
+          const fallbackBrendahCommission = computeBrendahDirectCommission(
+            summarySales,
+            summaryProfitForFallback,
+          ).amount;
           setServerQuickStats((prev) => ({
-            totalSales: Number(data.aggregates?.totalSales ?? 0),
+            totalSales: summarySales,
             totalItems: Number(data.aggregates?.totalItems ?? 0),
             totalNewProducts: Number(prev?.totalNewProducts ?? 0),
             totalEditedProducts: Number(prev?.totalEditedProducts ?? 0),
             totalCopiedProducts: Number(prev?.totalCopiedProducts ?? 0),
             walkInsServed: Number(prev?.walkInsServed ?? 0),
             walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
-            totalReceipts: Number(data.aggregates?.totalReceipts ?? 0),
+            totalReceipts: summaryReceipts,
           }));
+          if (fallbackBrendahCommission > 0) {
+            setCommissionForPeriod((prev) => Math.max(prev, Math.round(fallbackBrendahCommission)));
+            setEarningsSummary((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    salesCommission: Math.max(Number(prev.salesCommission ?? 0), Math.round(fallbackBrendahCommission)),
+                    grossCommission: Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)),
+                    commission: Math.max(Number(prev.commission ?? 0), Math.round(fallbackBrendahCommission)),
+                    totalEarnings:
+                      Number(prev.baseSalary ?? 0) +
+                      Number(prev.transportAllowance ?? 0) +
+                      Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)) +
+                      Number(prev.bonusTotal ?? 0),
+                    netPay:
+                      Number(prev.baseSalary ?? 0) +
+                      Number(prev.transportAllowance ?? 0) +
+                      Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)) +
+                      Number(prev.bonusTotal ?? 0) -
+                      Number(prev.totalDeductions ?? 0),
+                  }
+                : prev,
+            );
+          }
         }
         const commission = data?.aggregates?.commission?.commission;
         if (
           canResolveCommissionOwner &&
           isBrendahView &&
           typeof commission === "number" &&
-          Number.isFinite(commission)
+          Number.isFinite(commission) &&
+          commission > 0
         ) {
           const roundedCommission = Math.round(commission);
           setCommissionForPeriod(roundedCommission);
@@ -441,26 +563,20 @@ export default function DailyReportFinal() {
       date,
       hasAuthoritativeCommission,
       impersonateId,
+      impersonationReady,
       isBrendahView,
       selectedPeriodKey,
-      sessionStatus,
+      summaryProfitForFallback,
+      fetchSavedReceiptsSummary,
     ],
   );
 
-  const downloadPerformanceReceiptPdf = useCallback(() => {
-    const periodKey = selectedPeriodKey || currentPeriod.key;
-    const params = new URLSearchParams({ periodKey });
-    if (impersonateId) params.set("impersonateId", impersonateId);
-    const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [currentPeriod.key, impersonateId, selectedPeriodKey]);
-
   useEffect(() => {
-    if (!selectedPeriodKey) return;
+    if (!impersonationReady || !selectedPeriodKey) return;
     const controller = new AbortController();
     fetchPeriodSummary(controller.signal);
     return () => controller.abort();
-  }, [fetchPeriodSummary, selectedPeriodKey]);
+  }, [fetchPeriodSummary, impersonationReady, selectedPeriodKey]);
 
   const clamp0 = (value: unknown) => Math.max(0, Number(value ?? 0) || 0);
 
@@ -494,19 +610,53 @@ export default function DailyReportFinal() {
   const totalWalkinsPurchased = Number(walkinsPurchased || 0);
 
   const serverStats = serverQuickStats;
-  const displayedSalesKes = clamp0(serverStats?.totalSales) + totalSales;
-  const displayedItems = clamp0(serverStats?.totalItems) + totalItems;
-  const displayedReceipts = clamp0(serverStats?.totalReceipts) + totalReceipts;
-  const displayedNewProducts =
-    clamp0(serverStats?.totalNewProducts) + clamp0(productsUploaded);
-  const displayedEditedProducts =
-    clamp0(serverStats?.totalEditedProducts) + clamp0(productsEdited);
-  const displayedCopiedProducts =
-    clamp0(serverStats?.totalCopiedProducts) + clamp0(productsCopied);
-  const displayedWalkInsServed =
-    clamp0(serverStats?.walkInsServed) + clamp0(walkinsServed);
-  const displayedWalkInsPurchased =
-    clamp0(serverStats?.walkInsPurchased) + clamp0(walkinsPurchased);
+  const displayedSalesKes = serverStats ? clamp0(serverStats.totalSales) : totalSales;
+  const displayedItems = serverStats ? clamp0(serverStats.totalItems) : totalItems;
+  const displayedReceipts = serverStats ? clamp0(serverStats.totalReceipts) : totalReceipts;
+  const displayedNewProducts = serverStats
+    ? clamp0(serverStats.totalNewProducts)
+    : clamp0(productsUploaded);
+  const displayedEditedProducts = serverStats
+    ? clamp0(serverStats.totalEditedProducts)
+    : clamp0(productsEdited);
+  const displayedCopiedProducts = serverStats
+    ? clamp0(serverStats.totalCopiedProducts)
+    : clamp0(productsCopied);
+  const displayedWalkInsServed = serverStats
+    ? clamp0(serverStats.walkInsServed)
+    : clamp0(walkinsServed);
+  const displayedWalkInsPurchased = serverStats
+    ? clamp0(serverStats.walkInsPurchased)
+    : clamp0(walkinsPurchased);
+
+  const downloadPerformanceReceiptPdf = useCallback(() => {
+    const periodKey = selectedPeriodKey || currentPeriod.key;
+    const params = new URLSearchParams({ periodKey });
+    params.set("view", "print");
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    params.set("totalSales", String(displayedSalesKes));
+    params.set("totalReceipts", String(displayedReceipts));
+    params.set("totalNewProducts", String(displayedNewProducts));
+    params.set("totalEditedProducts", String(displayedEditedProducts));
+    params.set("totalCopiedProducts", String(displayedCopiedProducts));
+    params.set("walkInsServed", String(displayedWalkInsServed));
+    params.set("walkInsPurchased", String(displayedWalkInsPurchased));
+    params.set("commission", String(commissionForPeriod));
+    const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [
+    commissionForPeriod,
+    currentPeriod.key,
+    displayedCopiedProducts,
+    displayedEditedProducts,
+    displayedNewProducts,
+    displayedReceipts,
+    displayedSalesKes,
+    displayedWalkInsPurchased,
+    displayedWalkInsServed,
+    impersonateId,
+    selectedPeriodKey,
+  ]);
 
   // Build a public fallback earnings summary when the server restricts detailed
   // earnings data to authenticated attendants. This lets the UI show a card
@@ -754,12 +904,22 @@ export default function DailyReportFinal() {
               <h1 className="text-3xl font-semibold">Receipts history</h1>
               <p className="text-sm text-slate-300">Browse every receipt captured in the system. Use the range pills or custom dates to narrow the window.</p>
             </div>
-            <Link
-              href={withImpersonateId("/attendant/daily-report", impersonateId)}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Back to dashboard
-            </Link>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={downloadPerformanceReceiptPdf}
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15 disabled:opacity-60"
+              >
+                Download PDF
+              </button>
+              <button
+                type="button"
+                onClick={backToDashboard}
+                className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+              >
+                Back to dashboard
+              </button>
+            </div>
           </header>
 
           <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -867,7 +1027,7 @@ export default function DailyReportFinal() {
                 onClick={downloadPerformanceReceiptPdf}
                 className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
               >
-                Download performance receipt (PDF)
+                Print performance receipt
               </button>
               {/* Header actions extracted to shared component */}
               <HeaderActions
@@ -899,87 +1059,95 @@ export default function DailyReportFinal() {
         </div>
 
       <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-8">
-          <div className="flex-1">
-            <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Date</label>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Reporting day</p>
+            <h2 className="text-xl font-semibold text-slate-100">{dayOfWeek} checklist</h2>
+            <p className="text-sm text-slate-400">
+              Pick the reporting date, confirm the day, then complete the daily checklist on the left.
+            </p>
           </div>
 
-            <div className="md:flex md:items-center md:justify-end md:gap-3">
-              <div className="md:w-[150px]">{datePicker}</div>
-              <div className="mt-3 md:mt-0 md:w-[150px]">{dayOfWeekSelect}</div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:min-w-[360px] lg:max-w-[440px]">
+            <div className="space-y-2">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Date</label>
+              {datePicker}
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Day of week</label>
+              {dayOfWeekSelect}
             </div>
           </div>
-        </section>
+        </div>
+      </section>
       </section>
 
       {!showMyReceipts && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="xl:col-span-6">
-              <QuickStats
-                receipts={displayedReceipts}
-                salesKes={displayedSalesKes}
-                newProducts={displayedNewProducts}
-                editedProducts={displayedEditedProducts}
-                copiedProducts={displayedCopiedProducts}
-                walkInsServed={displayedWalkInsServed}
-                walkInsPurchased={displayedWalkInsPurchased}
-                commissionKes={commissionForPeriod}
-                periodLabel={selectedPeriodLabel}
-              />
-            </div>
+        <div className="grid gap-6 xl:grid-cols-12 items-start">
+          <div className="space-y-6 xl:col-span-7">
+            <DaySpecificBlocks
+              selectedDay={dayOfWeek}
+              walkIns={Number(walkinsServed || 0)}
+              onWalkInsChange={(val) => setWalkinsServed(val)}
+              neatness={shopNeatness}
+              onNeatnessChange={setShopNeatness}
+              productTasks={{
+                uploaded: productsUploaded,
+                edited: productsEdited,
+                copied: productsCopied,
+              }}
+              onProductTasksChange={(next) => {
+                setProductsUploaded(next.uploaded);
+                setProductsEdited(next.edited);
+                setProductsCopied(next.copied);
+              }}
+              communications={communications}
+              onCommunicationsChange={setCommunications}
+              marketplace={marketplace}
+              onMarketplaceChange={setMarketplace}
+              liveSession={liveSession}
+              onLiveSessionChange={setLiveSession}
+              thursdayActivities={thursdayActivities}
+              onThursdayActivitiesChange={setThursdayActivities}
+              fridayTasks={fridayTasks}
+              onFridayTasksChange={setFridayTasks}
+              saturdaySummary={saturdaySummary}
+              onSaturdaySummaryChange={setSaturdaySummary}
+            />
 
-            <div className="xl:col-span-6">
-              <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleResetDay}
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+              >
+                Reset day
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+              >
+                {isSubmitting ? "Submitting..." : "Submit report"}
+              </button>
             </div>
           </div>
 
-          <DaySpecificBlocks
-            selectedDay={dayOfWeek}
-            walkIns={Number(walkinsServed || 0)}
-            onWalkInsChange={(val) => setWalkinsServed(val)}
-            neatness={shopNeatness}
-            onNeatnessChange={setShopNeatness}
-            productTasks={{
-              uploaded: productsUploaded,
-              edited: productsEdited,
-              copied: productsCopied,
-            }}
-            onProductTasksChange={(next) => {
-              setProductsUploaded(next.uploaded);
-              setProductsEdited(next.edited);
-              setProductsCopied(next.copied);
-            }}
-            communications={communications}
-            onCommunicationsChange={setCommunications}
-            marketplace={marketplace}
-            onMarketplaceChange={setMarketplace}
-            liveSession={liveSession}
-            onLiveSessionChange={setLiveSession}
-            thursdayActivities={thursdayActivities}
-            onThursdayActivitiesChange={setThursdayActivities}
-            fridayTasks={fridayTasks}
-            onFridayTasksChange={setFridayTasks}
-            saturdaySummary={saturdaySummary}
-            onSaturdaySummaryChange={setSaturdaySummary}
-          />
+          <div className="space-y-6 xl:sticky xl:top-6 xl:col-span-5">
+            <QuickStats
+              receipts={displayedReceipts}
+              salesKes={displayedSalesKes}
+              newProducts={displayedNewProducts}
+              editedProducts={displayedEditedProducts}
+              copiedProducts={displayedCopiedProducts}
+              walkInsServed={displayedWalkInsServed}
+              walkInsPurchased={displayedWalkInsPurchased}
+              commissionKes={commissionForPeriod}
+              periodLabel={selectedPeriodLabel}
+            />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={handleResetDay}
-              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-            >
-              Reset day
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
-            >
-              {isSubmitting ? "Submitting..." : "Submit report"}
-            </button>
+            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
           </div>
         </div>
       )}
