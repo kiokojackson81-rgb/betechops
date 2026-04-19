@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { MarketplaceReturnStatus, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
-import { computeMarketplaceCommission } from "@/lib/onlineCommission";
+import { MarketplaceReturnStatus, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
@@ -33,6 +33,29 @@ const parseDateParam = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const allocateCombinedMarketplaceCommission = <
+  T extends {
+    sales: number;
+    chargedReturns?: number;
+  },
+>(
+  rows: T[],
+  totalCommission: number,
+) => {
+  const totalSales = rows.reduce((sum, row) => sum + Number(row.sales ?? 0), 0);
+  if (totalCommission <= 0 || totalSales <= 0) {
+    return rows.map((row) => Math.max(0, 0 - Number(row.chargedReturns ?? 0)));
+  }
+
+  let allocated = 0;
+  return rows.map((row, index) => {
+    const sales = Number(row.sales ?? 0);
+    const rawShare = index === rows.length - 1 ? totalCommission - allocated : Math.round((sales / totalSales) * totalCommission);
+    allocated += index === rows.length - 1 ? totalCommission - allocated : rawShare;
+    return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
+  });
+};
+
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, [
     "JUMIA_KILIMALL_OPS",
@@ -48,12 +71,19 @@ export async function GET(req: Request) {
   if (!targetUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { email: true },
+  });
+  const useCombinedMarketplaceLadder =
+    resolveDirectCommissionMode(targetUser?.email) === "PROFIT_10";
 
   const url = new URL(req.url);
-  if (url.searchParams.has("start") || url.searchParams.has("end")) {
-    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply start/end." }, { status: 400 });
-  }
-  const { start, end } = weekRangeForDate(new Date());
+  const startParam = parseDateParam(url.searchParams.get("start"));
+  const endParam = parseDateParam(url.searchParams.get("end"));
+  const defaultRange = weekRangeForDate(new Date());
+  const start = startParam ?? defaultRange.start;
+  const end = endParam ?? defaultRange.end;
 
   const rangeLabel = formatRangeLabel(start, end);
   const weekLabel = `${start.toLocaleDateString("en-KE", {
@@ -61,7 +91,11 @@ export async function GET(req: Request) {
     month: "short",
   })} - ${end.toLocaleDateString("en-KE", { day: "2-digit", month: "short" })}`;
 
-  const isAdmin = auth.role === "ADMIN" || auth.role === "SUPERVISOR";
+  const isAdminRole = auth.role === "ADMIN" || auth.role === "SUPERVISOR";
+  const isImpersonating = Boolean(identity.impersonateId);
+  // When impersonating, treat the request as attendant-scoped to prevent
+  // global leakage of sales across users.
+  const isAdmin = isAdminRole && !isImpersonating;
   let accountIds: string[] = [];
 
   if (isAdmin) {
@@ -127,12 +161,15 @@ export async function GET(req: Request) {
     }
   });
 
+  const manualWhere: Prisma.WeeklySaleWhereInput = {
+    status: WeeklySaleStatus.APPROVED,
+    source: WeeklySaleSource.MANUAL,
+    AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
+    ...(isAdmin ? {} : { userId: targetUserId }),
+  };
+
   const manualEntries = await prisma.weeklySale.findMany({
-    where: {
-      status: WeeklySaleStatus.APPROVED,
-      source: WeeklySaleSource.MANUAL,
-      AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
-    },
+    where: manualWhere,
     select: {
       id: true,
       shopId: true,
@@ -250,12 +287,6 @@ export async function GET(req: Request) {
       const manualSalesAmount = manualSalesByAccount.get(account.id) ?? 0;
       const manualEntryCount = manualEntriesCountByAccount.get(account.id) ?? 0;
       const totalSales = sales + manualSalesAmount;
-      // Use the canonical marketplace commission calculation so manual entries
-      // contribute to sales (and therefore ladder computation) rather than
-      // being treated as a direct commission amount. Subtract charged returns
-      // afterwards to reflect attendant-charged returns.
-      const commissionResult = computeMarketplaceCommission(totalSales);
-      const totalCommission = Math.max(0, Number(commissionResult.amount || 0) - chargedReturns);
 
       return {
         shopId: account.id,
@@ -265,14 +296,14 @@ export async function GET(req: Request) {
         weekStart: start.toISOString(),
         weekEnd: end.toISOString(),
         sales: totalSales,
-        commission: totalCommission,
+        commission: 0,
+        chargedReturns,
         orders: accountOrders.length + manualEntryCount,
       };
     })
     .sort((a, b) => b.sales - a.sales);
 
   const manualSummaryRows = Array.from(unmatchedManualByPlatform.entries()).map(([platform, data]) => {
-    const commissionResult = computeMarketplaceCommission(data.sales);
     return {
       shopId: `manual-${platform}-${start.toISOString()}`,
       shopName: `Manual ${platform}`,
@@ -281,12 +312,28 @@ export async function GET(req: Request) {
       weekStart: start.toISOString(),
       weekEnd: end.toISOString(),
       sales: data.sales,
-      commission: Number(commissionResult.amount || 0),
+      commission: 0,
+      chargedReturns: 0,
       orders: data.entries,
     };
   });
 
-  const finalRows = [...rows, ...manualSummaryRows].sort((a, b) => b.sales - a.sales);
+  const finalRowsBase = [...rows, ...manualSummaryRows].sort((a, b) => b.sales - a.sales);
+  const finalRows = useCombinedMarketplaceLadder
+    ? (() => {
+        const combinedCommission = Number(
+          computeMarketplaceCommission(finalRowsBase.reduce((sum, row) => sum + Number(row.sales ?? 0), 0)).amount || 0,
+        );
+        const rowCommissions = allocateCombinedMarketplaceCommission(finalRowsBase, combinedCommission);
+        return finalRowsBase.map((row, index) => ({
+          ...row,
+          commission: rowCommissions[index] ?? 0,
+        }));
+      })()
+    : finalRowsBase.map((row) => ({
+        ...row,
+        commission: Math.max(0, Number(computeMarketplaceCommission(row.sales).amount || 0) - Number(row.chargedReturns ?? 0)),
+      }));
 
   const totals = finalRows.reduce(
     (acc, row) => {

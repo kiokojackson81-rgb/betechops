@@ -34,11 +34,11 @@ export function QuickStatsCard({
 
   const rows = onlineOps
     ? [
-        { label: "Jumia sales total", value: formatKES(onlineOps.jumiaSales) },
-        { label: "Kilimall sales total", value: formatKES(onlineOps.kilimallSales) },
-        { label: "Direct sales", value: formatKES(onlineOps.directSales) },
-        { label: "Receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
-        { label: "Total sales", value: formatKES(onlineOps.totalSales) },
+        { label: "Direct sales (POS receipts)", value: formatKES(onlineOps.directSales) },
+        { label: "POS receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
+        { label: "Jumia sales (online performance)", value: formatKES(onlineOps.jumiaSales) },
+        { label: "Kilimall sales (online performance)", value: formatKES(onlineOps.kilimallSales) },
+        { label: "Total sales (all channels)", value: formatKES(onlineOps.totalSales) },
         // Prefer persisted commission_total from server (various field names), fall back to computed `commission`.
         {
           label: "Commission",
@@ -59,6 +59,9 @@ export function QuickStatsCard({
           <p className="text-xs text-slate-400">
             {onlineOps?.periodLabel ?? (loading ? "Loading." : "No data")}
             {loading ? "  Refreshing." : ""}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Direct sales come from POS receipts. Jumia and Kilimall totals come from online performance for your assigned marketplace accounts.
           </p>
         </div>
         <LockButton locked={locked} onToggle={toggle} />

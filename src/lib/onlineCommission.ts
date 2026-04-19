@@ -19,7 +19,13 @@ export type Channel = "DIRECT" | "MARKETPLACE";
 
 export interface CommissionResult {
   amount: Money;
-  mode: "direct_fallback" | "direct_progressive" | "marketplace_progressive" | "withheld" | "none";
+  mode:
+    | "direct_fallback"
+    | "direct_progressive"
+    | "direct_profit_share"
+    | "marketplace_progressive"
+    | "withheld"
+    | "none";
   reason?: string;
 }
 
@@ -57,6 +63,38 @@ export interface PeriodInputs {
 export interface PeriodCommissionResult {
   lines: ChannelLine[];
   totalCommission: Money;
+}
+
+function splitMarketplaceCommission(
+  jumiaSales: Money,
+  kilimallSales: Money,
+  totalCommission: Money,
+) {
+  const totalSales = Math.max(0, jumiaSales) + Math.max(0, kilimallSales);
+  if (totalCommission <= 0 || totalSales <= 0) {
+    return { jumiaCommission: 0, kilimallCommission: 0 };
+  }
+  if (jumiaSales <= 0) {
+    return { jumiaCommission: 0, kilimallCommission: Math.round(totalCommission) };
+  }
+  if (kilimallSales <= 0) {
+    return { jumiaCommission: Math.round(totalCommission), kilimallCommission: 0 };
+  }
+
+  const jumiaCommission = Math.round((Math.max(0, jumiaSales) / totalSales) * totalCommission);
+  return {
+    jumiaCommission,
+    kilimallCommission: Math.round(totalCommission) - jumiaCommission,
+  };
+}
+
+export type DirectCommissionMode = "DEFAULT" | "BRENDAH" | "PROFIT_10";
+
+export function resolveDirectCommissionMode(email?: string | null): DirectCommissionMode {
+  const normalized = (email ?? "").toLowerCase().trim();
+  if (normalized === "brendah@betech.co.ke") return "BRENDAH";
+  if (normalized === "stephen@betech.co.ke" || normalized === "benjamin@betech.co.ke") return "PROFIT_10";
+  return "DEFAULT";
 }
 
 export function progressiveAmount(totalSales: Money): Money {
@@ -147,6 +185,13 @@ export function computeBrendahDirectCommission(totalSales: Money, totalProfit: M
   return { amount, mode: "direct_progressive", reason };
 }
 
+export function computeDirectProfitShareCommission(totalSales: Money, totalProfit: Money, percent: number): CommissionResult {
+  if (totalSales <= 0) return { amount: 0, mode: "none" };
+  const profit = Math.max(totalProfit ?? 0, 0);
+  const amount = Math.round(profit * percent);
+  return { amount, mode: amount > 0 ? "direct_profit_share" : "none", reason: `${Math.round(percent * 100)}% profit share` };
+}
+
 export function computeMarketplaceCommission(
   totalSales: Money,
   flags?: {
@@ -164,18 +209,50 @@ export function computeMarketplaceCommission(
   return { amount: progressiveAmount(totalSales), mode: "marketplace_progressive" };
 }
 
-export function computeOnlinePeriodCommission(inputs: PeriodInputs): PeriodCommissionResult {
-  const direct = computeDirectCommission(inputs.directSales, inputs.directProfit);
-  const jumia = computeMarketplaceCommission(inputs.jumiaSales, {
+export function computeOnlinePeriodCommission(
+  inputs: PeriodInputs,
+  options?: { directCommissionMode?: DirectCommissionMode },
+): PeriodCommissionResult {
+  const directCommissionMode = options?.directCommissionMode ?? "DEFAULT";
+  const direct =
+    directCommissionMode === "BRENDAH"
+      ? computeBrendahDirectCommission(inputs.directSales, inputs.directProfit)
+      : directCommissionMode === "PROFIT_10"
+        ? computeDirectProfitShareCommission(inputs.directSales, inputs.directProfit, 0.1)
+        : computeDirectCommission(inputs.directSales, inputs.directProfit);
+  const sharedFlags = {
     abandonedDuties: inputs.abandonedDuties,
     grossMisconduct: inputs.grossMisconduct,
     resignedOrTerminated: inputs.resignedOrTerminated,
-  });
-  const kilimall = computeMarketplaceCommission(inputs.kilimallSales, {
-    abandonedDuties: inputs.abandonedDuties,
-    grossMisconduct: inputs.grossMisconduct,
-    resignedOrTerminated: inputs.resignedOrTerminated,
-  });
+  };
+
+  const combinedMarketplaceMode = directCommissionMode === "PROFIT_10";
+  const combinedMarketplaceSales = Math.max(0, inputs.jumiaSales) + Math.max(0, inputs.kilimallSales);
+  const combinedMarketplace = combinedMarketplaceMode
+    ? computeMarketplaceCommission(combinedMarketplaceSales, sharedFlags)
+    : null;
+  const combinedSplit = combinedMarketplace
+    ? splitMarketplaceCommission(inputs.jumiaSales, inputs.kilimallSales, combinedMarketplace.amount)
+    : null;
+
+  const jumia = combinedMarketplaceMode
+    ? {
+        amount: combinedSplit?.jumiaCommission ?? 0,
+        mode: combinedMarketplace?.mode ?? "none",
+        reason: combinedMarketplace?.amount
+          ? `Combined marketplace ladder on ${Math.round(combinedMarketplaceSales).toLocaleString("en-KE")} sales`
+          : combinedMarketplace?.reason,
+      }
+    : computeMarketplaceCommission(inputs.jumiaSales, sharedFlags);
+  const kilimall = combinedMarketplaceMode
+    ? {
+        amount: combinedSplit?.kilimallCommission ?? 0,
+        mode: combinedMarketplace?.mode ?? "none",
+        reason: combinedMarketplace?.amount
+          ? `Combined marketplace ladder on ${Math.round(combinedMarketplaceSales).toLocaleString("en-KE")} sales`
+          : combinedMarketplace?.reason,
+      }
+    : computeMarketplaceCommission(inputs.kilimallSales, sharedFlags);
 
   const lines: ChannelLine[] = [
     {

@@ -8,7 +8,11 @@ import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
-import { computeDirectCommission } from "@/lib/onlineCommission";
+import {
+  computeBrendahDirectCommission,
+  computeOnlinePeriodCommission,
+  resolveDirectCommissionMode,
+} from "@/lib/onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
@@ -268,7 +272,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
 
 export async function getOnlineEarningsSummary(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineEarningsSummary> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
-  const { accountIds, roles } = await getMarketplaceAssignmentsForUser(attendantId);
+  const { accountIds, roles, assignments } = await getMarketplaceAssignmentsForUser(attendantId);
 
   const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
@@ -293,18 +297,52 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
   ]);
 
-  const marketplaceSales = payoutWeeks.reduce((sum, w) => sum + Number((w as any).totalGross ?? 0), 0);
+  const accountPlatformById = new Map(
+    assignments.map((assignment) => [assignment.accountId, String(assignment.account?.platform ?? "").toUpperCase()]),
+  );
+  const payoutJumiaSales = payoutWeeks.reduce((sum, week) => {
+    return accountPlatformById.get((week as any).accountId) === "JUMIA" ? sum + Number((week as any).totalGross ?? 0) : sum;
+  }, 0);
+  const payoutKilimallSales = payoutWeeks.reduce((sum, week) => {
+    return accountPlatformById.get((week as any).accountId) === "KILIMALL"
+      ? sum + Number((week as any).totalGross ?? 0)
+      : sum;
+  }, 0);
+  const weeklyManualJumiaSales = Number((weeklyManual as any).jumiaSales ?? 0);
+  const weeklyManualKilimallSales = Number((weeklyManual as any).kilimallSales ?? 0);
   const weeklyManualSales = weeklyManual.totalSales;
+  const marketplaceSales = payoutJumiaSales + payoutKilimallSales + weeklyManualSales;
   const combinedDirectSales = directStats.sales + weeklyManualSales;
   const combinedDirectProfit = directStats.profit;
 
-  const marketplaceCommission = calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
   const isSupervisor = roles.includes("SUPERVISOR");
-  const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
 
   const summed = sumAdjustments(adjustments);
-  const isBrendah = (user?.email ?? "").toLowerCase() === "brendah@betech.co.ke";
+  const directCommissionMode = resolveDirectCommissionMode(user?.email);
+  const isBrendah = directCommissionMode === "BRENDAH";
+  const profit10Commission =
+    directCommissionMode === "PROFIT_10"
+      ? computeOnlinePeriodCommission(
+          {
+            attendantId,
+            periodStart: period.start,
+            periodEnd: period.end,
+            directSales: directStats.sales,
+            directProfit: directStats.profit,
+            jumiaSales: payoutJumiaSales + weeklyManualJumiaSales,
+            kilimallSales: payoutKilimallSales + weeklyManualKilimallSales,
+          },
+          { directCommissionMode },
+        )
+      : null;
+  const marketplaceCommission =
+    profit10Commission != null
+      ? profit10Commission.lines
+          .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
+          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      : calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
+  const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
 
   let directSalesCommission: number;
   let brendahComputedCommission: number | null = null;
@@ -344,7 +382,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       brendahMergedProfit += entry.profit;
     }
 
-    const direct = computeDirectCommission(brendahMergedSales, brendahMergedProfit);
+    const direct = computeBrendahDirectCommission(brendahMergedSales, brendahMergedProfit);
     directSalesCommission = direct.amount;
 
     const marketingTotals = (marketingSummary && marketingSummary.totals) || {};
@@ -358,9 +396,11 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     brendahComputedCommission = direct.amount + productCommissionTotal + summed.commissionTopUpTotal;
   } else {
     directSalesCommission =
-      combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
-        ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
-        : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
+      directCommissionMode === "PROFIT_10"
+        ? profit10Commission?.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0
+        : combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
+          ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
+          : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
   }
 
   const grossCommission = directSalesCommission + marketplaceCommission + supervisorBonus - returnsDeduction;
@@ -398,7 +438,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    directSales: combinedDirectSales,
+    directSales: directCommissionMode === "PROFIT_10" ? directStats.sales : combinedDirectSales,
     directProfit: directStats.profit,
     marketplaceSales,
     directCommission: directSalesCommission,
@@ -451,15 +491,33 @@ async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
 }
 
 async function getWeeklyManualSales(attendantId: string, period: TradingPeriod) {
-  const summary = await prisma.weeklySale.aggregate({
-    _sum: { amount: true },
-    _count: { _all: true },
-    where: {
-      userId: attendantId,
-      status: WeeklySaleStatus.APPROVED,
-      AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
-    },
-  });
+  const [summary, byPlatform] = await Promise.all([
+    prisma.weeklySale.aggregate({
+      _sum: { amount: true },
+      _count: { _all: true },
+      where: {
+        userId: attendantId,
+        status: WeeklySaleStatus.APPROVED,
+        AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+      },
+    }),
+    prisma.weeklySale.groupBy({
+      by: ["platform"],
+      _sum: { amount: true },
+      where: {
+        userId: attendantId,
+        status: WeeklySaleStatus.APPROVED,
+        AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+      },
+    }),
+  ]);
+
+  const jumiaSales = byPlatform
+    .filter((row) => String(row.platform).toUpperCase() === "JUMIA")
+    .reduce((sum, row) => sum + Number(row._sum?.amount ?? 0), 0);
+  const kilimallSales = byPlatform
+    .filter((row) => String(row.platform).toUpperCase() === "KILIMALL")
+    .reduce((sum, row) => sum + Number(row._sum?.amount ?? 0), 0);
 
   const entries =
     typeof summary._count === "number" ? summary._count : summary._count?._all ?? 0;
@@ -467,6 +525,8 @@ async function getWeeklyManualSales(attendantId: string, period: TradingPeriod) 
   return {
     totalSales: Number(summary._sum?.amount ?? 0),
     entries,
+    jumiaSales,
+    kilimallSales,
   };
 }
 
