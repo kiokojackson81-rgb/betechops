@@ -18,6 +18,7 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 
 type AssignmentWithAccount = any;
 
@@ -25,6 +26,27 @@ export type MarketplaceAssignmentSummary = {
   assignments: AssignmentWithAccount[];
   accountIds: string[];
   roles: MarketplaceAssignmentRole[];
+};
+
+export type AssignedMarketplaceAccountSales = {
+  accountId: string;
+  displayName: string | null;
+  platform: string;
+  payoutSales: number;
+  manualSales: number;
+  sales: number;
+  orders: number;
+  shopIds: string[];
+};
+
+export type AssignedMarketplaceSalesSummary = {
+  rows: AssignedMarketplaceAccountSales[];
+  totals: {
+    sales: number;
+    jumiaSales: number;
+    kilimallSales: number;
+    orders: number;
+  };
 };
 
 export type OnlineQuickStats = {
@@ -159,14 +181,27 @@ export async function findPreferredCommissionLedger(
 
 export async function getMarketplaceAssignmentsForUser(attendantId: string): Promise<MarketplaceAssignmentSummary> {
   const now = new Date();
-  const assignments = await prisma.marketplaceAccountAssignment.findMany({
+  const assignmentRows = await prisma.marketplaceAccountAssignment.findMany({
     where: {
       attendantId,
       OR: [{ endsAt: null }, { endsAt: { gt: now } }],
     },
     orderBy: [{ createdAt: "asc" }],
-    include: {
-      account: {
+    select: {
+      id: true,
+      accountId: true,
+      attendantId: true,
+      role: true,
+      startsAt: true,
+      endsAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  const accountIds = Array.from(new Set(assignmentRows.map((assignment) => assignment.accountId)));
+  const accounts = accountIds.length
+    ? await prisma.marketplaceAccount.findMany({
+        where: { id: { in: accountIds } },
         select: {
           id: true,
           platform: true,
@@ -177,46 +212,132 @@ export async function getMarketplaceAssignmentsForUser(attendantId: string): Pro
           kilimallShopCode: true,
           isActive: true,
         },
-      },
-    },
-  });
+      })
+    : [];
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const assignments = assignmentRows.map((assignment) => ({
+    ...assignment,
+    account: accountsById.get(assignment.accountId) ?? null,
+  }));
   return {
     assignments,
-    accountIds: assignments.map((a) => a.accountId),
+    accountIds,
     roles: assignments.map((a) => a.role),
   };
 }
 
+export async function getAssignedMarketplaceSalesForPeriod(
+  attendantId: string,
+  period: TradingPeriod,
+): Promise<AssignedMarketplaceSalesSummary> {
+  const { assignments } = await getMarketplaceAssignmentsForUser(attendantId);
+  const uniqueAssignments = assignments.filter(
+    (assignment, index, all) => all.findIndex((candidate) => candidate.accountId === assignment.accountId) === index,
+  );
+  if (!uniqueAssignments.length) {
+    return {
+      rows: [],
+      totals: { sales: 0, jumiaSales: 0, kilimallSales: 0, orders: 0 },
+    };
+  }
+
+  const payoutRows = await recomputeWeeklySummary(period.start, period.end);
+  const payoutByAccount = new Map<string, { sales: number; orders: number }>();
+  for (const row of payoutRows) {
+    payoutByAccount.set(row.accountId, {
+      sales: (payoutByAccount.get(row.accountId)?.sales ?? 0) + Number(row.totalGross ?? 0),
+      orders: (payoutByAccount.get(row.accountId)?.orders ?? 0) + 1,
+    });
+  }
+
+  const shopIdsByAccount = new Map<string, string[]>();
+  for (const assignment of uniqueAssignments) {
+    const shopIds = await resolveShopIdsForMarketplaceAccount(assignment.accountId);
+    shopIdsByAccount.set(assignment.accountId, Array.from(new Set(shopIds.filter(Boolean))));
+  }
+
+  const allShopIds = Array.from(
+    new Set(Array.from(shopIdsByAccount.values()).flatMap((shopIds) => shopIds)),
+  );
+  const manualRows = allShopIds.length
+    ? await prisma.weeklySale.findMany({
+        where: {
+          shopId: { in: allShopIds },
+          AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+        },
+        select: {
+          shopId: true,
+          amount: true,
+          weekStart: true,
+          weekEnd: true,
+          platform: true,
+          status: true,
+        },
+      })
+    : [];
+  const manualByShopId = new Map<string, { sales: number; orders: number }>();
+  for (const row of manualRows) {
+    if (String(row.status ?? "").toUpperCase() === "REJECTED") continue;
+    const shopId = String(row.shopId ?? "").trim();
+    if (!shopId) continue;
+    const current = manualByShopId.get(shopId) ?? { sales: 0, orders: 0 };
+    current.sales += Number(row.amount ?? 0);
+    current.orders += 1;
+    manualByShopId.set(shopId, current);
+  }
+
+  const rows = uniqueAssignments.map<AssignedMarketplaceAccountSales>((assignment) => {
+    const payout = payoutByAccount.get(assignment.accountId) ?? { sales: 0, orders: 0 };
+    const shopIds = shopIdsByAccount.get(assignment.accountId) ?? [];
+    const manual = shopIds.reduce(
+      (acc, shopId) => {
+        const stats = manualByShopId.get(shopId) ?? { sales: 0, orders: 0 };
+        acc.sales += stats.sales;
+        acc.orders += stats.orders;
+        return acc;
+      },
+      { sales: 0, orders: 0 },
+    );
+    const sales = payout.sales > 0 ? payout.sales : manual.sales;
+    const orders = payout.orders > 0 ? payout.orders : manual.orders;
+    return {
+      accountId: assignment.accountId,
+      displayName: assignment.account?.displayName ?? null,
+      platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
+      payoutSales: payout.sales,
+      manualSales: manual.sales,
+      sales,
+      orders,
+      shopIds,
+    };
+  });
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.sales += row.sales;
+      acc.orders += row.orders;
+      if (row.platform === "JUMIA") acc.jumiaSales += row.sales;
+      if (row.platform === "KILIMALL") acc.kilimallSales += row.sales;
+      return acc;
+    },
+    { sales: 0, jumiaSales: 0, kilimallSales: 0, orders: 0 },
+  );
+
+  return { rows, totals };
+}
+
 export async function getOnlineQuickStats(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineQuickStats> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
-  const { accountIds } = await getMarketplaceAssignmentsForUser(attendantId);
-
-  const [directStats, payoutWeeks, onlineOrdersCount, earnings, weeklyManual, commissionConfig] = await Promise.all([
+  const [directStats, marketplaceSalesSummary, earnings, commissionConfig] = await Promise.all([
     getDirectSalesStats(attendantId, period),
-    accountIds.length
-      ? (async () => {
-          const aggs = await recomputeWeeklySummary(period.start, period.end);
-          return aggs.filter((a) => accountIds.includes(a.accountId));
-        })()
-      : Promise.resolve([]),
-    accountIds.length
-      ? prisma.marketplaceOrder.count({
-          where: {
-            accountId: { in: accountIds },
-            orderedAt: { gte: period.start, lte: period.end },
-          },
-        })
-      : Promise.resolve(0),
+    getAssignedMarketplaceSalesForPeriod(attendantId, period),
     getOnlineEarningsSummary(attendantId, { period }),
-    getWeeklyManualSales(attendantId, period),
     getOrCreateCommissionPeriod(period.start),
   ]);
 
   const ledger = await findPreferredCommissionLedger(attendantId, period);
 
-  const payoutSales = payoutWeeks.reduce((sum, w) => sum + Number((w as any).totalGross ?? 0), 0);
-  const weeklyManualSales = weeklyManual.totalSales;
-  const marketplaceSales = payoutSales + weeklyManualSales;
+  const marketplaceSales = marketplaceSalesSummary.totals.sales;
   const totalTrackedSales = directStats.sales + marketplaceSales;
 
   const tiers = commissionConfig?.tiers ?? [];
@@ -259,11 +380,11 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    receipts: directStats.receipts + weeklyManual.entries,
+    receipts: directStats.receipts,
     salesKes: totalTrackedSales,
     commissionKes: commissionKesValue,
     commissionSource,
-    itemsSold: directStats.items + onlineOrdersCount + weeklyManual.entries,
+    itemsSold: directStats.items + marketplaceSalesSummary.totals.orders,
     directSales: directStats.sales,
     marketplaceSales,
     progressTarget: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
@@ -274,16 +395,11 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
 
 export async function getOnlineEarningsSummary(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineEarningsSummary> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
-  const { accountIds, roles, assignments } = await getMarketplaceAssignmentsForUser(attendantId);
+  const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  const [directStats, payoutWeeks, plan, adjustments, returns, weeklyManual, user] = await Promise.all([
+  const [directStats, marketplaceSalesSummary, plan, adjustments, returns, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
-    accountIds.length
-      ? (async () => {
-          const aggs = await recomputeWeeklySummary(period.start, period.end);
-          return aggs.filter((a) => accountIds.includes(a.accountId));
-        })()
-      : Promise.resolve([]),
+    getAssignedMarketplaceSalesForPeriod(attendantId, period),
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
     prisma.attendantPayrollAdjustment.findMany({
       where: { attendantId, periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) } },
@@ -295,26 +411,13 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
         dueAt: { gte: period.start, lte: period.end },
       },
     }),
-    getWeeklyManualSales(attendantId, period),
     prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
   ]);
 
-  const accountPlatformById = new Map(
-    assignments.map((assignment) => [assignment.accountId, String(assignment.account?.platform ?? "").toUpperCase()]),
-  );
-  const payoutJumiaSales = payoutWeeks.reduce((sum, week) => {
-    return accountPlatformById.get((week as any).accountId) === "JUMIA" ? sum + Number((week as any).totalGross ?? 0) : sum;
-  }, 0);
-  const payoutKilimallSales = payoutWeeks.reduce((sum, week) => {
-    return accountPlatformById.get((week as any).accountId) === "KILIMALL"
-      ? sum + Number((week as any).totalGross ?? 0)
-      : sum;
-  }, 0);
-  const weeklyManualJumiaSales = Number((weeklyManual as any).jumiaSales ?? 0);
-  const weeklyManualKilimallSales = Number((weeklyManual as any).kilimallSales ?? 0);
-  const weeklyManualSales = weeklyManual.totalSales;
-  const marketplaceSales = payoutJumiaSales + payoutKilimallSales + weeklyManualSales;
-  const combinedDirectSales = directStats.sales + weeklyManualSales;
+  const payoutJumiaSales = marketplaceSalesSummary.totals.jumiaSales;
+  const payoutKilimallSales = marketplaceSalesSummary.totals.kilimallSales;
+  const marketplaceSales = marketplaceSalesSummary.totals.sales;
+  const combinedDirectSales = directStats.sales;
   const combinedDirectProfit = directStats.profit;
 
   const isSupervisor = roles.includes("SUPERVISOR");
@@ -332,8 +435,8 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
             periodEnd: period.end,
             directSales: directStats.sales,
             directProfit: directStats.profit,
-            jumiaSales: payoutJumiaSales + weeklyManualJumiaSales,
-            kilimallSales: payoutKilimallSales + weeklyManualKilimallSales,
+            jumiaSales: payoutJumiaSales,
+            kilimallSales: payoutKilimallSales,
           },
           { directCommissionMode },
         )

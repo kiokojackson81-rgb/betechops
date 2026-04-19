@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { MarketplaceReturnStatus, Prisma, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+import { MarketplaceReturnStatus } from "@prisma/client";
 import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
-import { getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
+import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
@@ -33,12 +33,7 @@ const parseDateParam = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const allocateCombinedMarketplaceCommission = <
-  T extends {
-    sales: number;
-    chargedReturns?: number;
-  },
->(
+const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
   rows: T[],
   totalCommission: number,
 ) => {
@@ -91,25 +86,14 @@ export async function GET(req: Request) {
     month: "short",
   })} - ${end.toLocaleDateString("en-KE", { day: "2-digit", month: "short" })}`;
 
-  const isAdminRole = auth.role === "ADMIN" || auth.role === "SUPERVISOR";
-  const isImpersonating = Boolean(identity.impersonateId);
-  // When impersonating, treat the request as attendant-scoped to prevent
-  // global leakage of sales across users.
-  const isAdmin = isAdminRole && !isImpersonating;
-  let accountIds: string[] = [];
+  const marketplaceSalesSummary = await getAssignedMarketplaceSalesForPeriod(targetUserId, {
+    key: "custom",
+    label: rangeLabel,
+    start,
+    end,
+  });
 
-  if (isAdmin) {
-    const accounts = await prisma.marketplaceAccount.findMany({
-      where: { isActive: true },
-      select: { id: true },
-    });
-    accountIds = accounts.map((a) => a.id);
-  } else {
-    const assignments = await getMarketplaceAssignmentsForUser(targetUserId);
-    accountIds = assignments.accountIds;
-  }
-
-  if (!accountIds.length) {
+  if (!marketplaceSalesSummary.rows.length) {
     const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
@@ -117,147 +101,10 @@ export async function GET(req: Request) {
     };
     return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
-
-  const accounts = await prisma.marketplaceAccount.findMany({
-    where: { id: { in: accountIds }, isActive: true },
-    select: {
-      id: true,
-      displayName: true,
-      platform: true,
-      jumiaShopSid: true,
-      kilimallShopCode: true,
-    },
-    orderBy: [{ platform: "asc" }, { displayName: "asc" }],
-  });
-
-  if (!accounts.length) {
-    const emptyResponse = {
-      rangeLabel,
-      totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
-      rows: [],
-    };
-    return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
-  }
-
-  const normalizeName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
-  const normalizeApiKey = (value?: string | null) => value?.trim().toLowerCase() ?? "";
-  const accountById = new Map<string, string>();
-  const accountByName = new Map<string, string>();
-  const accountByJumiaSid = new Map<string, string>();
-  const accountByKilimallCode = new Map<string, string>();
-  accounts.forEach((account) => {
-    accountById.set(account.id, account.id);
-    const normalizedName = normalizeName(account.displayName);
-    if (normalizedName) {
-      accountByName.set(normalizedName, account.id);
-    }
-    const normalizedJumia = normalizeApiKey(account.jumiaShopSid);
-    if (normalizedJumia) {
-      accountByJumiaSid.set(normalizedJumia, account.id);
-    }
-    const normalizedKilimall = normalizeApiKey(account.kilimallShopCode);
-    if (normalizedKilimall) {
-      accountByKilimallCode.set(normalizedKilimall, account.id);
-    }
-  });
-
-  const manualWhere: Prisma.WeeklySaleWhereInput = {
-    status: WeeklySaleStatus.APPROVED,
-    source: WeeklySaleSource.MANUAL,
-    AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
-    ...(isAdmin ? {} : { userId: targetUserId }),
-  };
-
-  const manualEntries = await prisma.weeklySale.findMany({
-    where: manualWhere,
-    select: {
-      id: true,
-      shopId: true,
-      amount: true,
-      platform: true,
-      shop: {
-        select: {
-          id: true,
-          name: true,
-          platform: true,
-          apiConfig: { select: { apiKey: true } },
-        },
-      },
-    },
-  });
-
-  const unmatchedManualByPlatform = new Map<string, { sales: number; entries: number }>();
-
-  const manualSalesByAccount = new Map<string, number>();
-  const manualEntriesCountByAccount = new Map<string, number>();
-  manualEntries.forEach((entry) => {
-    const manualAmount = Number(entry.amount ?? 0);
-    if (!manualAmount) {
-      return;
-    }
-    let matchedAccountId = entry.shopId && accountById.has(entry.shopId) ? entry.shopId : undefined;
-    const normalizedShopName = normalizeName(entry.shop?.name);
-    const platformKey = (entry.platform ?? entry.shop?.platform ?? "").toUpperCase();
-    const apiKey = normalizeApiKey(entry.shop?.apiConfig?.apiKey);
-    if (!matchedAccountId && normalizedShopName && accountByName.has(normalizedShopName)) {
-      matchedAccountId = accountByName.get(normalizedShopName);
-    }
-    if (
-      !matchedAccountId &&
-      apiKey &&
-      platformKey === "JUMIA" &&
-      accountByJumiaSid.has(apiKey)
-    ) {
-      matchedAccountId = accountByJumiaSid.get(apiKey);
-    }
-    if (
-      !matchedAccountId &&
-      apiKey &&
-      platformKey === "KILIMALL" &&
-      accountByKilimallCode.has(apiKey)
-    ) {
-      matchedAccountId = accountByKilimallCode.get(apiKey);
-    }
-
-    if (!matchedAccountId) {
-      const key = platformKey || "UNKNOWN";
-      const current = unmatchedManualByPlatform.get(key) ?? { sales: 0, entries: 0 };
-      current.sales += manualAmount;
-      current.entries += 1;
-      unmatchedManualByPlatform.set(key, current);
-      return;
-    }
-
-    const amount = Number(entry.amount ?? 0);
-    if (!amount) {
-      return;
-    }
-
-    manualSalesByAccount.set(
-      matchedAccountId,
-      (manualSalesByAccount.get(matchedAccountId) ?? 0) + amount,
-    );
-    manualEntriesCountByAccount.set(
-      matchedAccountId,
-      (manualEntriesCountByAccount.get(matchedAccountId) ?? 0) + 1,
-    );
-  });
-
-  const orders = await prisma.marketplaceOrder.findMany({
-    where: {
-      accountId: { in: accounts.map((a) => a.id) },
-      orderedAt: { gte: start, lte: end },
-    },
-    select: {
-      accountId: true,
-      sellingPrice: true,
-      profit: true,
-    },
-  });
 
   const returns = await prisma.marketplaceReturn.findMany({
     where: {
-      accountId: { in: accounts.map((a) => a.id) },
+      accountId: { in: marketplaceSalesSummary.rows.map((row) => row.accountId) },
       dueAt: { gte: start, lte: end },
       status: MarketplaceReturnStatus.CHARGED_TO_ATTENDANT,
     },
@@ -267,58 +114,29 @@ export async function GET(req: Request) {
     },
   });
 
-  const rows = accounts
+  const rows = marketplaceSalesSummary.rows
     .map((account) => {
-      const accountOrders = orders.filter((order) => order.accountId === account.id);
-      const sales = accountOrders.reduce(
-        (sum, order) => sum + Number(order.sellingPrice ?? 0),
-        0,
-      );
-      const profit = accountOrders.reduce(
-        (sum, order) => sum + Number(order.profit ?? 0),
-        0,
-      );
-
-      const accountReturns = returns.filter((entry) => entry.accountId === account.id);
+      const accountReturns = returns.filter((entry) => entry.accountId === account.accountId);
       const chargedReturns = accountReturns.reduce(
         (sum, entry) => sum + Number(entry.expectedAmount ?? 0),
         0,
       );
-      const manualSalesAmount = manualSalesByAccount.get(account.id) ?? 0;
-      const manualEntryCount = manualEntriesCountByAccount.get(account.id) ?? 0;
-      const totalSales = sales + manualSalesAmount;
 
       return {
-        shopId: account.id,
+        shopId: account.accountId,
         shopName: account.displayName,
         platform: account.platform,
         weekLabel,
         weekStart: start.toISOString(),
         weekEnd: end.toISOString(),
-        sales: totalSales,
+        sales: Number(account.sales ?? 0),
         commission: 0,
         chargedReturns,
-        orders: accountOrders.length + manualEntryCount,
+        orders: Number(account.orders ?? 0),
       };
     })
     .sort((a, b) => b.sales - a.sales);
-
-  const manualSummaryRows = Array.from(unmatchedManualByPlatform.entries()).map(([platform, data]) => {
-    return {
-      shopId: `manual-${platform}-${start.toISOString()}`,
-      shopName: `Manual ${platform}`,
-      platform,
-      weekLabel,
-      weekStart: start.toISOString(),
-      weekEnd: end.toISOString(),
-      sales: data.sales,
-      commission: 0,
-      chargedReturns: 0,
-      orders: data.entries,
-    };
-  });
-
-  const finalRowsBase = [...rows, ...manualSummaryRows].sort((a, b) => b.sales - a.sales);
+  const finalRowsBase = rows;
   const finalRows = useCombinedMarketplaceLadder
     ? (() => {
         const combinedCommission = Number(

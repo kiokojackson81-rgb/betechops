@@ -3,9 +3,9 @@ import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { computeOnlinePeriodCommission, resolveDirectCommissionMode, resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
-import { WeeklySaleStatus } from "@prisma/client";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
 
 export const dynamic = "force-dynamic";
 
@@ -34,35 +34,23 @@ export async function GET(req: Request) {
   const end = endParam ?? period.end;
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
 
-  // marketplace totals from approved weeklySale manual/approved entries
-  const entries = await prisma.weeklySale.findMany({
-    where: {
-      userId: attendantId,
-      status: WeeklySaleStatus.APPROVED,
-      AND: [{ weekEnd: { gte: start } }, { weekStart: { lte: end } }],
-    },
-    select: { platform: true, amount: true },
-  });
-
-  const marketplaceTotals = entries.reduce(
-    (acc, e) => {
-      const value = Number(e.amount ?? 0);
-      if (e.platform === "JUMIA") acc.jumia += value;
-      if (e.platform === "KILIMALL") acc.kilimall += value;
-      return acc;
-    },
-    { jumia: 0, kilimall: 0 },
-  );
-
   // direct sales from POS receipts created by this attendant
-  const posSummary = await summarizePosReceiptsForPeriod({
-    start,
-    end,
-    userId: attendantId,
-    ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
-    supportPricingScope: "any",
-    profitRecognitionMode: "salesDate",
-  });
+  const [posSummary, marketplaceTotals] = await Promise.all([
+    summarizePosReceiptsForPeriod({
+      start,
+      end,
+      userId: attendantId,
+      ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
+      supportPricingScope: "any",
+      profitRecognitionMode: "salesDate",
+    }),
+    getAssignedMarketplaceSalesForPeriod(attendantId, {
+      key: "custom",
+      label: "Selected period",
+      start,
+      end,
+    }),
+  ]);
 
   const periodInputs = {
     attendantId,
@@ -70,8 +58,8 @@ export async function GET(req: Request) {
     periodEnd: end,
     directSales: posSummary.totalSales,
     directProfit: posSummary.totalProfit,
-    jumiaSales: marketplaceTotals.jumia,
-    kilimallSales: marketplaceTotals.kilimall,
+    jumiaSales: marketplaceTotals.totals.jumiaSales,
+    kilimallSales: marketplaceTotals.totals.kilimallSales,
   };
 
   const result = computeOnlinePeriodCommission(periodInputs as any, {
