@@ -372,7 +372,6 @@ export async function getAssignedMarketplaceSalesForPeriod(
       ? await (prisma as any).marketplaceProfitEntry.findMany({
           where: {
             accountId: { in: accountIds },
-            periodKey: period.key,
             weekStart: { lte: period.end },
             weekEnd: { gte: period.start },
           },
@@ -403,7 +402,6 @@ export async function getAssignedMarketplaceSalesForPeriod(
       ? await prisma.marketplaceStatementDraft.findMany({
           where: {
             accountId: { in: accountIds },
-            periodKey: period.key,
             weekStart: { lte: period.end },
             weekEnd: { gte: period.start },
           },
@@ -830,3 +828,4 @@ function computeSupervisorBonus(totalSales: number) {
   const over = Math.max(0, millions - 9);
   return over * 10_000;
 }
+
