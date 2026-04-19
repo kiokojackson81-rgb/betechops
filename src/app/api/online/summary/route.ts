@@ -56,6 +56,7 @@ export async function GET(req: Request) {
     end,
     userId: targetUserId,
     ownershipMode: resolveOnlinePosOwnershipMode(targetUser?.email),
+    supportPricingScope: "any",
   });
 
   const { assignments, accountIds } = await getMarketplaceAssignmentsForUser(targetUserId);

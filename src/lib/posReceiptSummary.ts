@@ -151,6 +151,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   end: Date;
   userId?: string | null;
   ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay";
+  supportPricingScope?: "user" | "any";
 }) {
   const ownerOr =
     period.userId && period.userId.length > 0
@@ -175,7 +176,10 @@ export async function summarizePosReceiptsForPeriod(period: {
       : null;
 
   const supportDailyEntryWhere =
-    period.userId && period.userId.length > 0 && period.ownershipMode !== "issuerOnly"
+    period.supportPricingScope !== "any" &&
+    period.userId &&
+    period.userId.length > 0 &&
+    period.ownershipMode !== "issuerOnly"
       ? { submittedById: period.userId }
       : {};
 
