@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { normalizeReceiptNumber } from "@/lib/receiptKey";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -304,7 +305,23 @@ export async function summarizePosReceiptsForPeriod(period: {
   const candidateReceiptNumbers = Array.from(
     new Set(
       filteredReceipts.flatMap((receipt) => {
-        return collectReceiptVariants(receipt.order?.orderNumber ?? undefined, receipt.receiptNumber ?? undefined);
+        const salesDate =
+          receipt.generatedAt instanceof Date
+            ? receipt.generatedAt
+            : receipt.createdAt instanceof Date
+              ? receipt.createdAt
+              : null;
+        const variants = collectReceiptVariants(
+          receipt.order?.orderNumber ?? undefined,
+          receipt.receiptNumber ?? undefined,
+        );
+        const datedKeys =
+          salesDate != null
+            ? variants
+                .map((variant) => buildDatedReceiptKey(salesDate, variant))
+                .filter((value): value is string => Boolean(value))
+            : [];
+        return [...variants, ...datedKeys];
       }),
     ),
   );
