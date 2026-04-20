@@ -8,7 +8,7 @@ import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
-import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { getOnlineOpsWeeksForTradingPeriod, getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -142,6 +142,10 @@ export default function AttendantOnlineClient() {
       end: wk.weekEndInclusive,
     }));
   }, [period]);
+  const marketplacePeriodWindow = useMemo(
+    () => getOnlineOpsWindowForTradingPeriod(period, period.end, 4),
+    [period],
+  );
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
   const [weeklyEarnings, setWeeklyEarnings] = useState<any | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -185,16 +189,16 @@ export default function AttendantOnlineClient() {
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
     if (keys.includes("period")) {
-      return { start: period.start, end: period.end };
+      return { start: marketplacePeriodWindow.start, end: marketplacePeriodWindow.end };
     }
     const selectedWeeks = tradingWeeks.filter((week) => keys.includes(week.key));
     if (!selectedWeeks.length) {
-      return { start: period.start, end: period.end };
+      return { start: marketplacePeriodWindow.start, end: marketplacePeriodWindow.end };
     }
     const start = new Date(Math.min(...selectedWeeks.map((week) => week.start.getTime())));
     const end = new Date(Math.max(...selectedWeeks.map((week) => week.end.getTime())));
     return { start, end };
-  }, [activeWeekKeys, tradingWeeks, period]);
+  }, [activeWeekKeys, tradingWeeks, marketplacePeriodWindow]);
 
   const loadWeeklyEarnings = useCallback(async () => {
     if (!userId) return;
