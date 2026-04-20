@@ -9,7 +9,7 @@ function formatKES(value: number) {
 
 type OnlineOpsQuickStats = {
   periodLabel: string;
-  jumiaSales: number;
+  marketplaceSales: number;
   kilimallSales: number;
   directSales: number;
   receiptsCount: number;
@@ -38,7 +38,7 @@ export function QuickStatsCard({
     ? [
         { label: "Direct sales (POS receipts)", value: formatKES(onlineOps.directSales) },
         { label: "POS receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
-        { label: "Jumia sales (online performance)", value: formatKES(onlineOps.jumiaSales) },
+        { label: "Jumia + Kilimall sales (selected range)", value: formatKES(onlineOps.marketplaceSales) },
         {
           label:
             onlineOps.marketplaceCommission != null

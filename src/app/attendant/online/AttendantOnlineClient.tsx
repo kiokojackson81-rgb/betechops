@@ -527,7 +527,7 @@ export default function AttendantOnlineClient() {
   const commissionBreakdown = onlineSummary?.commissions ?? null;
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
-    jumiaSales: quickJumiaSales,
+    marketplaceSales: quickMarketplaceSalesOnly,
     kilimallSales: quickKilimallSales,
     directSales,
     receiptsCount,
