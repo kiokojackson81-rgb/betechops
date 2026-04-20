@@ -469,8 +469,10 @@ export async function getAssignedMarketplaceSalesForPeriod(
       },
       { sales: 0, orders: 0 },
     );
-    const sales = profitEntry.sales > 0 ? profitEntry.sales : payout.sales > 0 ? payout.sales : manual.sales;
-    const orders = profitEntry.orders > 0 ? profitEntry.orders : payout.orders > 0 ? payout.orders : manual.orders;
+    // For attendant-facing marketplace totals, an unuploaded week should stay
+    // at zero until statement/profit rows are actually uploaded.
+    const sales = profitEntry.sales;
+    const orders = profitEntry.orders;
     return {
       accountId: assignment.accountId,
       displayName: assignment.account?.displayName ?? null,
