@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { computeOnlinePeriodCommission, resolveDirectCommissionMode, resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
@@ -28,10 +29,14 @@ export async function GET(req: Request) {
   }
   const startParam = parseDateParam(url.searchParams.get("start"));
   const endParam = parseDateParam(url.searchParams.get("end"));
+  const requestedPeriod = parseTradingPeriodKey(url.searchParams.get("periodKey") ?? undefined);
 
   const period = getTradingPeriodFor(new Date());
   const start = startParam ?? period.start;
   const end = endParam ?? period.end;
+  const marketplaceWindow = requestedPeriod
+    ? getOnlineOpsWindowForTradingPeriod(requestedPeriod, requestedPeriod.end, 4)
+    : { start, end };
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
 
   // direct sales from POS receipts created by this attendant
@@ -47,8 +52,8 @@ export async function GET(req: Request) {
     getAssignedMarketplaceSalesForPeriod(attendantId, {
       key: "custom",
       label: "Selected period",
-      start,
-      end,
+      start: marketplaceWindow.start,
+      end: marketplaceWindow.end,
     }),
   ]);
 

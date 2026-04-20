@@ -5,6 +5,7 @@ import { Prisma, WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
@@ -499,9 +500,15 @@ export async function getAssignedMarketplaceSalesForPeriod(
 
 export async function getOnlineQuickStats(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineQuickStats> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
   const [directStats, marketplaceSalesSummary, earnings, commissionConfig] = await Promise.all([
     getDirectSalesStats(attendantId, period),
-    getAssignedMarketplaceSalesForPeriod(attendantId, period),
+    getAssignedMarketplaceSalesForPeriod(attendantId, {
+      key: marketplaceWindow.key,
+      label: marketplaceWindow.label,
+      start: marketplaceWindow.start,
+      end: marketplaceWindow.end,
+    }),
     getOnlineEarningsSummary(attendantId, { period }),
     getOrCreateCommissionPeriod(period.start),
   ]);
@@ -566,11 +573,17 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
 
 export async function getOnlineEarningsSummary(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineEarningsSummary> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
   const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
   const [directStats, marketplaceSalesSummary, plan, adjustments, returns, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
-    getAssignedMarketplaceSalesForPeriod(attendantId, period),
+    getAssignedMarketplaceSalesForPeriod(attendantId, {
+      key: marketplaceWindow.key,
+      label: marketplaceWindow.label,
+      start: marketplaceWindow.start,
+      end: marketplaceWindow.end,
+    }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
     prisma.attendantPayrollAdjustment.findMany({
       where: { attendantId, periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) } },

@@ -468,6 +468,7 @@ export default function AttendantOnlineClient() {
         attendantId: userId,
         start: formatNairobiParam(period.start, false),
         end: formatNairobiParam(period.end, true),
+        periodKey: selectedPeriodKey,
       });
       appendImpersonateParam(params);
       const res = await fetch(`/api/online/preview-commission?${params.toString()}`, { cache: "no-store" });
@@ -484,7 +485,7 @@ export default function AttendantOnlineClient() {
     } catch (err) {
       setPreviewCommission(null);
     }
-  }, [userId, period, appendImpersonateParam]);
+  }, [userId, period, appendImpersonateParam, selectedPeriodKey]);
 
   useEffect(() => {
     if (!userId) return;

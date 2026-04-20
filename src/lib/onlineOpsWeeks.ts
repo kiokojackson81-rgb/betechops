@@ -24,6 +24,14 @@ export type OnlineOpsWeekCard = {
   key: string;
 };
 
+export type OnlineOpsWeeksWindow = {
+  weeks: OnlineOpsWeekCard[];
+  start: Date;
+  end: Date;
+  label: string;
+  key: string;
+};
+
 export function getOnlineOpsWeeksForTradingPeriod(
   period: { start: Date; end: Date },
   reference: Date = new Date(),
@@ -83,5 +91,27 @@ export function getOnlineOpsWeeksForTradingPeriod(
       key: window.weekStart.toISOString(),
     };
   });
+}
+
+export function getOnlineOpsWindowForTradingPeriod(
+  period: { start: Date; end: Date },
+  reference: Date = period.end,
+  count = 4,
+): OnlineOpsWeeksWindow {
+  const weeks = getOnlineOpsWeeksForTradingPeriod(period, reference, count);
+  const firstWeek = weeks[0];
+  const lastWeek = weeks.at(-1) ?? firstWeek;
+
+  const start = new Date(firstWeek.weekStart);
+  const end = new Date(lastWeek.weekEndInclusive);
+  const endInput = end.toISOString().slice(0, 10);
+
+  return {
+    weeks,
+    start,
+    end,
+    label: `${formatNairobiDate(start)} – ${formatNairobiDate(end)}`,
+    key: `${firstWeek.startInput}_${endInput}`,
+  };
 }
 

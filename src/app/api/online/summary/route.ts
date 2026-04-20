@@ -3,6 +3,7 @@ import { requireAttendant } from "@/lib/auth";
 import { getAssignedMarketplaceSalesForPeriod, getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
   await getOrCreateCommissionPeriod(period.start);
   const start = period.start;
   const end = period.end;
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
   const periodLabel = `${start.toLocaleDateString("en-KE", {
     day: "2-digit",
     month: "short",
@@ -55,7 +57,12 @@ export async function GET(req: Request) {
 
   const [{ assignments, accountIds }, marketplaceSalesSummary] = await Promise.all([
     getMarketplaceAssignmentsForUser(targetUserId),
-    getAssignedMarketplaceSalesForPeriod(targetUserId, period),
+    getAssignedMarketplaceSalesForPeriod(targetUserId, {
+      key: marketplaceWindow.key,
+      label: marketplaceWindow.label,
+      start: marketplaceWindow.start,
+      end: marketplaceWindow.end,
+    }),
   ]);
   if (!accountIds.length) {
     const emptyData = {
@@ -72,6 +79,12 @@ export async function GET(req: Request) {
         toNextTier: 0,
         tierProgress: 0,
         commissionInfo: {},
+        window: {
+          key: marketplaceWindow.key,
+          label: marketplaceWindow.label,
+          start: marketplaceWindow.start.toISOString(),
+          end: marketplaceWindow.end.toISOString(),
+        },
       },
       directReceipts: {
         totalSales: Number(directPosSummary.totalSales ?? 0),
@@ -148,6 +161,12 @@ export async function GET(req: Request) {
       toNextTier,
       tierProgress,
       commissionInfo,
+      window: {
+        key: marketplaceWindow.key,
+        label: marketplaceWindow.label,
+        start: marketplaceWindow.start.toISOString(),
+        end: marketplaceWindow.end.toISOString(),
+      },
     },
     directReceipts: {
       totalSales: Number(directPosSummary.totalSales ?? 0),
