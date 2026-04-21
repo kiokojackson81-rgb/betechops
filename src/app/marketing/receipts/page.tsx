@@ -18,6 +18,11 @@ type MarketingReceiptRow = {
   total?: number | null;
 };
 
+type MarketingReceiptSummary = {
+  totalSales: number;
+  receiptsCount: number;
+};
+
 const toDateInput = (value: Date) => value.toISOString().slice(0, 10);
 
 const formatKES = (value?: number | null) =>
@@ -36,21 +41,13 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
-const toStartOfDayIso = (value?: string) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setUTCHours(0, 0, 0, 0);
-  return date.toISOString();
-};
+const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
-const toEndOfDayIso = (value?: string) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setUTCHours(23, 59, 59, 999);
-  return date.toISOString();
-};
+const toNairobiStartParam = (value?: string) =>
+  value && dateInputPattern.test(value) ? `${value}T00:00:00+03:00` : null;
+
+const toNairobiEndParam = (value?: string) =>
+  value && dateInputPattern.test(value) ? `${value}T23:59:59.999+03:00` : null;
 
 const getWeekBounds = (reference: Date) => {
   const day = reference.getDay();
@@ -90,6 +87,10 @@ export default function MarketingReceiptsPage() {
   });
   const [rangeKey, setRangeKey] = useState<ReceiptRangeKey>("today");
   const [receipts, setReceipts] = useState<MarketingReceiptRow[]>([]);
+  const [summary, setSummary] = useState<MarketingReceiptSummary>({
+    totalSales: 0,
+    receiptsCount: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,21 +111,46 @@ export default function MarketingReceiptsPage() {
         params.set("includeItems", "false");
         params.set("size", "80");
         params.set("onlyPos", "1");
+        params.set("paidOnly", "1");
         params.set("scope", "mine");
-        const startIso = toStartOfDayIso(filters.start);
-        const endIso = toEndOfDayIso(filters.end);
+        const startIso = toNairobiStartParam(filters.start);
+        const endIso = toNairobiEndParam(filters.end);
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
         if (filters.query.trim()) {
           params.set("q", filters.query.trim());
         }
-        const res = await fetch(`/api/receipts?${params.toString()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const summaryParams = new URLSearchParams();
+        summaryParams.set("scope", "mine");
+        summaryParams.set("salesOnly", "true");
+        if (startIso) summaryParams.set("start", startIso);
+        if (endIso) summaryParams.set("end", endIso);
+        if (filters.query.trim()) {
+          summaryParams.set("q", filters.query.trim());
+        }
+
+        const [res, summaryRes] = await Promise.all([
+          fetch(`/api/receipts?${params.toString()}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          }),
+          fetch(`/api/admin/receipts/summary?${summaryParams.toString()}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          }),
+        ]);
+
         const data = await res.json().catch(() => ({}));
+        const summaryData = await summaryRes.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
+        if (!summaryRes.ok) {
+          throw new Error(summaryData?.error || "Failed to load receipts summary");
+        }
         if (!cancelled) {
+          setSummary({
+            totalSales: Number(summaryData?.totalSales ?? 0),
+            receiptsCount: Number(summaryData?.receiptsCount ?? 0),
+          });
           const firstPage = Array.isArray(data?.receipts) ? data.receipts : [];
           const totalPages = Math.max(1, Number(data?.paging?.totalPages ?? 1));
 
@@ -160,6 +186,7 @@ export default function MarketingReceiptsPage() {
         }
       } catch (err) {
         if (!cancelled) {
+          setSummary({ totalSales: 0, receiptsCount: 0 });
           setError(err instanceof Error ? err.message : "Unable to load receipts");
         }
       } finally {
@@ -175,17 +202,6 @@ export default function MarketingReceiptsPage() {
       controller.abort();
     };
   }, [filters]);
-
-  const summary = useMemo(() => {
-    const totalSales = receipts.reduce(
-      (sum, receipt) => sum + Number(receipt.total ?? 0),
-      0,
-    );
-    return {
-      totalSales,
-      count: receipts.length,
-    };
-  }, [receipts]);
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
@@ -249,7 +265,7 @@ export default function MarketingReceiptsPage() {
           <div>
             <h1 className="text-3xl font-semibold">Receipts history</h1>
             <p className="text-sm text-slate-300">
-              Browse your POS receipts and open the shared receipt detail page to print, send, or change payment method.
+              Browse your settled POS receipts and open the shared receipt detail page to print, send, or change payment method.
             </p>
           </div>
           <Link
@@ -266,7 +282,7 @@ export default function MarketingReceiptsPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
               <h2 className="text-lg font-semibold text-slate-100">My POS receipts</h2>
               <p className="text-sm text-slate-400">
-                Filter your POS receipts by date or search term. Only your logged-in receipts are shown here.
+                Filter your settled POS receipts by date or search term. Only your logged-in sales are shown here.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
@@ -329,8 +345,8 @@ export default function MarketingReceiptsPage() {
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
-              <p className="text-2xl font-semibold text-emerald-300">{summary.count}</p>
-              <p className="text-xs text-slate-400">Your POS receipts in the selected window</p>
+              <p className="text-2xl font-semibold text-emerald-300">{summary.receiptsCount}</p>
+              <p className="text-xs text-slate-400">Your settled POS receipts in the selected window</p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>

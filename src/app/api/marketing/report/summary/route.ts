@@ -7,11 +7,14 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { computeSalesCommissionFromTiers, getOrCreateCommissionPeriod } from "@/lib/commission";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
+import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from '@prisma/client';
 import { nowInNairobi } from "@/lib/timezone";
-import { summarizePosReceiptsForPeriod, type PosReceiptSummary } from "@/lib/posReceiptSummary";
-import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
+import { type PosReceiptSummary } from "@/lib/posReceiptSummary";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
+import { computeJenifferProratedCommission } from "@/lib/commission";
+import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +39,10 @@ export async function GET(req: Request) {
   });
   const targetUserEmail = targetUser?.email?.toLowerCase().trim() ?? null;
   const targetUserName = targetUser?.name ?? null;
-  const isBrendah = targetUserEmail === "brendah@betech.co.ke";
-  const isJeniffer = targetUserEmail === "jeniffer@betech.co.ke";
-  // POS receipts are the source-of-truth for DIRECT_SALES_OPS tracker stats.
-  // Jeniffer is a special global viewer: show global POS totals (not user-scoped).
-  const usePosTotals = isJeniffer || targetUser?.attendantCategory === "DIRECT_SALES_OPS";
+  const commissionConfig = await getUserCommissionConfigLike(targetUserId);
+  const usePosTotals = commissionConfig.posTotalsMode !== "NONE";
+  const isBrendah = commissionConfig.salesCommissionMode === "BRENDAH_DIRECT";
+  const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
 
   const today = nowInNairobi();
   const { tiers } = await getOrCreateCommissionPeriod(today);
@@ -85,23 +87,10 @@ export async function GET(req: Request) {
     }),
     getSupportPeriodAggregates({ userId: targetUserId, period: argPeriod }),
   ]);
-
-  // WeeklySale (approved) can be the authoritative source of totals for a period,
-  // especially when POS receipts are incomplete/backfilled and when not all
-  // sales were recorded as structured receipt rows.
-  const weeklySalesTotal = await prisma.weeklySale
-    .aggregate({
-      where: {
-        status: "APPROVED" as any,
-        // Include weeks that overlap the period window (not just those that start within it).
-        // Many weeks start before the trading period start but end inside it.
-        weekStart: { lte: argPeriod.end },
-        weekEnd: { gte: argPeriod.start },
-      },
-      _sum: { amount: true },
-    })
-    .then((res) => Number(res?._sum?.amount ?? 0))
-    .catch(() => 0);
+  // Note: WeeklySale totals are global (not per-attendant) so we do not mix them
+  // into attendant-scoped marketing tracker summaries. Keep a placeholder for
+  // debug payload compatibility.
+  const weeklySalesTotal = 0;
 
   const marketingTotals = marketingSummary?.totals ?? {
     totalSales: 0,
@@ -169,37 +158,34 @@ export async function GET(req: Request) {
   const mergedReceipts = merged.size;
 
   if (usePosTotals) {
-    // Jeniffer: global POS totals. Other DIRECT_SALES_OPS: user-scoped POS totals.
-    posSummary = await summarizePosReceiptsForPeriod({
+    const adminSummary = await computeAdminReceiptSummary({
       start: argPeriod.start,
       end: argPeriod.end,
-      userId: isJeniffer ? null : targetUserId,
+      scope: commissionConfig.posTotalsMode === "GLOBAL" ? "global" : "mine",
+      currentUserId: commissionConfig.posTotalsMode === "GLOBAL" ? undefined : targetUserId,
+      salesOnly: true,
     });
+    posSummary = {
+      totalSales: adminSummary.totalSales,
+      totalProfit: adminSummary.totalProfit,
+      totalItems: adminSummary.itemsCount,
+      totalReceipts: adminSummary.receiptsCount,
+      receiptKeys: [],
+      paymentStats: {
+        totalSalesMpesa: adminSummary.paymentTotals.mpesa.totalSales,
+        totalSalesCash: adminSummary.paymentTotals.cash.totalSales,
+        countMpesaReceipts: adminSummary.paymentTotals.mpesa.count,
+        countCashReceipts: adminSummary.paymentTotals.cash.count,
+      },
+    };
 
-    // Safety: POS receipts can undercount when backfilled or when `generatedAt` isn't
-    // representative. Prefer the best available total among merged (marketing+support)
-    // and weekly approved totals.
-    const posSales = posSummary.totalSales ?? 0;
-    const bestSales = Math.max(posSales, mergedSales, weeklySalesTotal);
-    const preferMergedOrWeekly = bestSales > 0 && bestSales > posSales;
-    if (preferMergedOrWeekly) {
-      totalSales = mergedSales;
-      totalProfit = mergedProfit;
-      totalItems = mergedItems;
-      totalReceipts = mergedReceipts;
-      mergedPaymentStats = mergedStats;
-      // If weeklySale is the best signal, prefer its totalSales but keep receipt/item
-      // counts from merged sources (WeeklySale has no receipt/item breakdown).
-      if (weeklySalesTotal > mergedSales) {
-        totalSales = weeklySalesTotal;
-      }
-    } else {
-      totalSales = posSummary.totalSales;
-      totalProfit = posSummary.totalProfit;
-      totalItems = posSummary.totalItems;
-      totalReceipts = posSummary.totalReceipts;
-      mergedPaymentStats = posSummary.paymentStats;
-    }
+    // For the tracker quick-stats we align with the POS receipts view (PDF/report).
+    // Avoid mixing in WeeklySale totals (global, not per attendant) for user-scoped views.
+    totalSales = posSummary.totalSales;
+    totalProfit = posSummary.totalProfit;
+    totalItems = posSummary.totalItems;
+    totalReceipts = posSummary.totalReceipts;
+    mergedPaymentStats = posSummary.paymentStats;
   } else {
     totalSales = mergedSales;
     totalProfit = mergedProfit;
@@ -209,17 +195,27 @@ export async function GET(req: Request) {
   }
 
   let commission = 0;
-  if (isBrendah) {
-    commission = computeBrendahDirectCommission(totalSales, totalProfit).amount;
-  } else if (usePosTotals && posSummary) {
-    commission = computeSalesCommissionFromTiers(
-      posSummary.totalSales,
-      posSummary.totalProfit,
-      tiers,
-      0,
-    );
+  if (usePosTotals && posSummary) {
+    if (isBrendah) {
+      commission = computeBrendahDirectCommission(posSummary.totalSales, posSummary.totalProfit).amount;
+    } else if (isJeniffer) {
+      const res = computeJenifferProratedCommission(
+        posSummary.totalSales,
+        tiers.map((t: any) => ({
+          minSales: Number(t.minSales),
+          maxSales: t.maxSales == null ? null : Number(t.maxSales),
+          payoutFlat: Number(t.payoutFlat),
+        })),
+      );
+      commission = Math.round(Number(res.commission ?? 0));
+    } else {
+      const fallbackPercent = posSummary.totalProfit > 0 ? 0.05 : 0;
+      commission = Math.round(computeSalesCommissionFromTiers(posSummary.totalSales, posSummary.totalProfit, tiers, fallbackPercent));
+    }
   } else if (totalSales > 0) {
-    commission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
+    commission = isBrendah
+      ? computeBrendahDirectCommission(totalSales, totalProfit).amount
+      : computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
   }
 
   try {
@@ -287,10 +283,7 @@ export async function GET(req: Request) {
       totalItems,
       paymentStats: mergedPaymentStats,
       commission: { commission },
-      totalReceiptRows:
-        isJeniffer && posSummary
-          ? posSummary.receiptKeys.length || posSummary.totalReceipts
-          : marketingSummary?.rawRowCount ?? 0,
+      totalReceiptRows: usePosTotals && posSummary ? posSummary.totalReceipts : marketingSummary?.rawRowCount ?? 0,
     },
   };
 
