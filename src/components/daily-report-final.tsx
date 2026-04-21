@@ -3,7 +3,7 @@
 import { signOut, useSession } from "next-auth/react";
 import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarIcon } from "lucide-react";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
@@ -239,6 +239,7 @@ export default function DailyReportFinal() {
   }>(null);
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
+  const commissionSourceRef = useRef<"none" | "fallback" | "authoritative">("none");
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
@@ -266,6 +267,11 @@ export default function DailyReportFinal() {
   const selectedPeriodKey = selectedPeriod.key;
   const selectedPeriodLabel = selectedPeriod.label;
   const summaryProfitForFallback = Number(earningsSummary?.totalProfit ?? 0);
+
+  useEffect(() => {
+    commissionSourceRef.current = "none";
+    setHasAuthoritativeCommission(false);
+  }, [impersonateId, selectedPeriodKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -339,9 +345,12 @@ export default function DailyReportFinal() {
           typeof data.attendantEmail === "string" ? data.attendantEmail.toLowerCase().trim() : null;
         const prefersEarningsQuickStats = nextAttendantEmail === "brendah@betech.co.ke";
         setResolvedAttendantEmail(nextAttendantEmail);
-        const grossCommission = Number(data.grossCommission ?? 0);
-        setCommissionForPeriod(Math.round(grossCommission));
-        setHasAuthoritativeCommission(Number.isFinite(grossCommission));
+        const authoritativeCommission = prefersEarningsQuickStats
+          ? Number(data.salesCommission ?? 0)
+          : Number(data.grossCommission ?? 0);
+        setCommissionForPeriod(Math.round(authoritativeCommission));
+        commissionSourceRef.current = Number.isFinite(authoritativeCommission) ? "authoritative" : "none";
+        setHasAuthoritativeCommission(Number.isFinite(authoritativeCommission));
         const payrollSales = Number(data.totalSales ?? 0);
         const payrollItems = Number(data.totalItems ?? 0);
         const payrollReceipts = Number(data.totalReceipts ?? 0);
@@ -486,70 +495,21 @@ export default function DailyReportFinal() {
             walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
             totalReceipts: summaryReceipts,
           }));
-          if (fallbackBrendahCommission > 0) {
-            setCommissionForPeriod((prev) => Math.max(prev, Math.round(fallbackBrendahCommission)));
-            setEarningsSummary((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    salesCommission: Math.max(Number(prev.salesCommission ?? 0), Math.round(fallbackBrendahCommission)),
-                    grossCommission: Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)),
-                    commission: Math.max(Number(prev.commission ?? 0), Math.round(fallbackBrendahCommission)),
-                    totalEarnings:
-                      Number(prev.baseSalary ?? 0) +
-                      Number(prev.transportAllowance ?? 0) +
-                      Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)) +
-                      Number(prev.bonusTotal ?? 0),
-                    netPay:
-                      Number(prev.baseSalary ?? 0) +
-                      Number(prev.transportAllowance ?? 0) +
-                      Math.max(Number(prev.grossCommission ?? 0), Math.round(fallbackBrendahCommission)) +
-                      Number(prev.bonusTotal ?? 0) -
-                      Number(prev.totalDeductions ?? 0),
-                  }
-                : prev,
-            );
+          if (fallbackBrendahCommission > 0 && commissionSourceRef.current !== "authoritative") {
+            commissionSourceRef.current = "fallback";
+            setCommissionForPeriod(Math.round(fallbackBrendahCommission));
           }
         }
         const commission = data?.aggregates?.commission?.commission;
         if (
-          canResolveCommissionOwner &&
-          isBrendahView &&
           typeof commission === "number" &&
           Number.isFinite(commission) &&
-          commission > 0
+          commission > 0 &&
+          commissionSourceRef.current !== "authoritative"
         ) {
           const roundedCommission = Math.round(commission);
+          commissionSourceRef.current = "fallback";
           setCommissionForPeriod(roundedCommission);
-          setEarningsSummary((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  salesCommission: roundedCommission,
-                  grossCommission: roundedCommission,
-                  commission: roundedCommission,
-                  totalEarnings:
-                    Number(prev.baseSalary ?? 0) +
-                    Number(prev.transportAllowance ?? 0) +
-                    roundedCommission +
-                    Number(prev.bonusTotal ?? 0),
-                  netPay:
-                    Number(prev.baseSalary ?? 0) +
-                    Number(prev.transportAllowance ?? 0) +
-                    roundedCommission +
-                    Number(prev.bonusTotal ?? 0) -
-                    Number(prev.totalDeductions ?? 0),
-                }
-              : prev,
-          );
-        }
-        if (
-          canResolveCommissionOwner &&
-          !hasAuthoritativeCommission &&
-          !isBrendahView &&
-          typeof commission === "number"
-        ) {
-          setCommissionForPeriod(Math.round(commission));
         }
         return data;
       } catch (err) {
@@ -980,8 +940,10 @@ export default function DailyReportFinal() {
                 end={endDate}
                 q={debouncedSearch}
                 attendantId={attendantId}
+                onlyPos={isBrendahView}
+                paidOnly={isBrendahView}
+                includeLedger={!isBrendahView}
                 hideHeader
-                onlyPos
                 onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
               />
             </div>
@@ -1150,7 +1112,16 @@ export default function DailyReportFinal() {
         </div>
       )}
 
-      {showMyReceipts && <DailyReportReceiptsPanel start={date} end={date} attendantId={attendantId} onlyPos />}
+      {showMyReceipts && (
+        <DailyReportReceiptsPanel
+          start={date}
+          end={date}
+          attendantId={attendantId}
+          onlyPos={isBrendahView}
+          paidOnly={isBrendahView}
+          includeLedger={!isBrendahView}
+        />
+      )}
       </div>
     </div>
   );
