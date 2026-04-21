@@ -36,6 +36,19 @@ export type AdminReceiptSummary = {
   hasCompleteCosts: boolean;
   awaitingPricingCount: number;
   paymentTotals: PaymentTotals;
+  debug?: {
+    start: string;
+    end: string;
+    includeLedger: boolean;
+    salesOnly: boolean;
+    rawPosReceipts: number;
+    rawPodReceipts: number;
+    rawNonPodReceipts: number;
+    includedReceipts: number;
+    excludedUnpaidPos: number;
+    excludedUnpaidPod: number;
+    excludedTotalSales: number;
+  };
 };
 
 export const normalizePaymentMethod = (value: string | null | undefined): "MPESA" | "CASH" | null => {
@@ -55,10 +68,13 @@ type SummaryOptions = {
   paymentMethod?: "MPESA" | "CASH" | null;
   search?: string;
   docType?: string;
+  includeLedger?: boolean;
+  salesOnly?: boolean;
   scope?: "mine" | "global";
   currentUserId?: string | null;
   customerType?: string;
   podStatus?: string;
+  debug?: boolean;
   onlyPos?: boolean;
 };
 
@@ -520,10 +536,13 @@ export async function computeAdminReceiptSummary({
   paymentMethod,
   search,
   docType,
+  includeLedger = false,
+  salesOnly = true,
   scope = "global",
   currentUserId,
   customerType,
   podStatus,
+  debug = false,
   onlyPos = false,
 }: SummaryOptions) {
   if (onlyPos) {
@@ -560,8 +579,8 @@ export async function computeAdminReceiptSummary({
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
-  const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
+  const includeMarketingReceipts = !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
+  const includeSupportReceipts = !onlyPos && (isSupportDocType || (includeLedger && !normalizedDocType));
   const normalizedCustomerType = customerType ? customerType.toLowerCase().trim() : undefined;
   const normalizedPodStatus = (() => {
     const value = podStatus ? podStatus.toLowerCase().trim() : undefined;
@@ -715,22 +734,57 @@ export async function computeAdminReceiptSummary({
   // - Default (customerType not 'pod'): exclude all POD receipts so POD workflows
   //   never affect normal POS summaries.
   // - When customerType='pod': include only POD receipts, optionally filtering by status.
+  const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
+  const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
+  const isPosPaid = (r: any) => {
+    const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
+    if (!paymentStatus) return false;
+    return paymentStatus === "PAID";
+  };
+  const isPodSettledForSales = (r: any) => {
+    if (!isPodReceipt(r)) return false;
+    if (podStatusOf(r) === "pending") return false;
+    return isPodPaid(r) || isPosPaid(r);
+  };
+
+  let excludedUnpaidPos = 0;
+  let excludedUnpaidPod = 0;
+  let excludedTotalSales = 0;
+
+  const applySalesOnly = (rows: any[]) => {
+    if (!salesOnly) return rows;
+    return rows.filter((r) => {
+      const sale = Number((r?.totals as any)?.total ?? r?.order?.totalAmount ?? 0);
+      if (isPodReceipt(r)) {
+        const keep = isPodSettledForSales(r);
+        if (!keep) {
+          excludedUnpaidPod += 1;
+          excludedTotalSales += sale;
+        }
+        return keep;
+      }
+      const keep = isPosPaid(r);
+      if (!keep) {
+        excludedUnpaidPos += 1;
+        excludedTotalSales += sale;
+      }
+      return keep;
+    });
+  };
+
   const posReceiptsFinal = (() => {
-    const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
-    const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
 
     if (normalizedCustomerType === "pod") {
       const onlyPods = (posReceipts as any[]).filter(isPodReceipt);
-      if (normalizedPodStatus) {
-        return onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus);
-      }
-      return onlyPods;
+      const byStatus = normalizedPodStatus ? onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus) : onlyPods;
+      return applySalesOnly(byStatus);
     }
 
     // Default: include all POS receipts (POD and non-POD) so the main summary
     // reflects the same receipts list shown on the page. The POD panel fetches
     // its own totals via customerType='pod'.
-    return posReceipts as any[];
+    return applySalesOnly(posReceipts as any[]);
   })();
 
   // Best-effort cost lookup: ProductCost.latest per productId (used when orderCosts are missing).
@@ -995,5 +1049,22 @@ export async function computeAdminReceiptSummary({
     hasCompleteCosts,
     awaitingPricingCount,
     paymentTotals,
+    ...(debug
+      ? {
+          debug: {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            includeLedger,
+            salesOnly,
+            rawPosReceipts: (posReceipts as any[]).length,
+            rawPodReceipts: (posReceipts as any[]).filter(isPodReceipt).length,
+            rawNonPodReceipts: (posReceipts as any[]).filter((r) => !isPodReceipt(r)).length,
+            includedReceipts: (posReceiptsFinal as any[]).length,
+            excludedUnpaidPos,
+            excludedUnpaidPod,
+            excludedTotalSales,
+          },
+        }
+      : {}),
   };
 }

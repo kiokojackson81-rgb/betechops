@@ -27,6 +27,8 @@ type Props = {
   attendantId: string | null | undefined;
   hideHeader?: boolean;
   onlyPos?: boolean;
+  paidOnly?: boolean;
+  includeLedger?: boolean;
   title?: string;
   subtitle?: string;
   emptyMessage?: string;
@@ -101,6 +103,8 @@ export default function DailyReportReceiptsPanel({
   attendantId,
   hideHeader,
   onlyPos = false,
+  paidOnly = false,
+  includeLedger,
   title,
   subtitle,
   emptyMessage,
@@ -150,6 +154,10 @@ export default function DailyReportReceiptsPanel({
         if (q) params.set("q", q);
         params.set("scope", "mine");
         if (onlyPos) params.set("onlyPos", "1");
+        if (paidOnly) params.set("paidOnly", "1");
+        if (typeof includeLedger === "boolean") {
+          params.set("includeLedger", includeLedger ? "true" : "false");
+        }
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
         let url = `/api/receipts?${params.toString()}`;
@@ -194,7 +202,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [start, end, q, localAttendantId]);
+  }, [start, end, q, localAttendantId, onlyPos, paidOnly, includeLedger]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
