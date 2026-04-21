@@ -6,7 +6,6 @@ import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
-import { recomputeWeeklySummary } from "@/lib/jobs/recomputeWeeklySummaries";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
 import {
@@ -20,7 +19,6 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
-import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 
 type AssignmentWithAccount = any;
 
@@ -120,45 +118,6 @@ function money(value: unknown): number {
 
 function normalize(value: unknown): string {
   return String(value ?? "").trim();
-}
-
-function draftTxn(row: any): string {
-  const direct = normalize(
-    row?.itemCreditTxn ??
-      row?.txn ??
-      row?.transactionNumber ??
-      row?.uniqueTxn ??
-      row?.uniqueNumber ??
-      row?.itemCreditTransaction,
-  ).toLowerCase();
-  if (direct) return direct;
-
-  return [
-    normalize(row?.orderNo ?? row?.orderId),
-    normalize(row?.orderItemNo ?? row?.orderItemId),
-    normalize(row?.dateUtc ?? row?.date),
-    String(money(row?.netPayout)),
-    normalize(row?.details ?? row?.productName),
-  ]
-    .filter(Boolean)
-    .join("|")
-    .toLowerCase();
-}
-
-function summarizeDraftRows(rows: any[]): { dedupNet: number; orderCount: number } {
-  let dedupNet = 0;
-  let orderCount = 0;
-  const seen = new Set<string>();
-  for (const row of rows) {
-    const txn = draftTxn(row);
-    if (txn) {
-      if (seen.has(txn)) continue;
-      seen.add(txn);
-    }
-    dedupNet += money((row as any)?.netPayout);
-    orderCount += 1;
-  }
-  return { dedupNet, orderCount };
 }
 
 function summarizeProfitRows(
@@ -353,15 +312,16 @@ export async function getAssignedMarketplaceSalesForPeriod(
         },
       })
     : [];
-  const manualByShopId = new Map<string, { sales: number; orders: number }>();
+  const manualByShopIdWeek = new Map<string, { sales: number; orders: number }>();
   for (const row of manualRows) {
     if (String(row.status ?? "").toUpperCase() === "REJECTED") continue;
     const shopId = String(row.shopId ?? "").trim();
     if (!shopId) continue;
-    const current = manualByShopId.get(shopId) ?? { sales: 0, orders: 0 };
+    const weekKey = `${shopId}::${new Date(row.weekStart).toISOString()}`;
+    const current = manualByShopIdWeek.get(weekKey) ?? { sales: 0, orders: 0 };
     current.sales += Number(row.amount ?? 0);
     current.orders += 1;
-    manualByShopId.set(shopId, current);
+    manualByShopIdWeek.set(weekKey, current);
   }
 
   const accountIds = uniqueAssignments.map((assignment) => assignment.accountId);
@@ -396,57 +356,69 @@ export async function getAssignedMarketplaceSalesForPeriod(
     });
   }
 
-  const profitEntryByAccount = new Map<string, { sales: number; orders: number }>();
-  for (const assignment of uniqueAssignments) {
+  const weeklyRows: AssignedMarketplaceAccountWeekSales[] = [];
+  const rows = uniqueAssignments.map<AssignedMarketplaceAccountSales>((assignment) => {
+    const shopIds = shopIdsByAccount.get(assignment.accountId) ?? [];
     const weekKeys = new Set<string>();
+
     for (const key of profitRowsByAccountWeek.keys()) {
       if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
     }
-
-    const totals = { sales: 0, orders: 0 };
-    for (const key of weekKeys) {
-      const profitSummary = summarizeProfitRows(profitRowsByAccountWeek.get(key) ?? []);
-      totals.sales += profitSummary.net;
-      totals.orders += profitSummary.orderCount;
+    for (const shopId of shopIds) {
+      for (const key of manualByShopIdWeek.keys()) {
+        if (key.startsWith(`${shopId}::`)) {
+          weekKeys.add(`${assignment.accountId}::${key.split("::")[1]}`);
+        }
+      }
     }
-    profitEntryByAccount.set(assignment.accountId, totals);
-  }
 
-  const payoutRows = await recomputeWeeklySummary(period.start, period.end);
-  const payoutByAccount = new Map<string, { sales: number; orders: number }>();
-  for (const row of payoutRows) {
-    payoutByAccount.set(row.accountId, {
-      sales: (payoutByAccount.get(row.accountId)?.sales ?? 0) + Number(row.totalPayout ?? 0),
-      orders: (payoutByAccount.get(row.accountId)?.orders ?? 0) + 1,
-    });
-  }
+    const sortedWeekKeys = Array.from(weekKeys).sort();
+    const totals = { payoutSales: 0, manualSales: 0, profitEntrySales: 0, sales: 0, orders: 0 };
 
-  const rows = uniqueAssignments.map<AssignedMarketplaceAccountSales>((assignment) => {
-    const profitEntry = profitEntryByAccount.get(assignment.accountId) ?? { sales: 0, orders: 0 };
-    const payout = payoutByAccount.get(assignment.accountId) ?? { sales: 0, orders: 0 };
-    const shopIds = shopIdsByAccount.get(assignment.accountId) ?? [];
-    const manual = shopIds.reduce(
-      (acc, shopId) => {
-        const stats = manualByShopId.get(shopId) ?? { sales: 0, orders: 0 };
-        acc.sales += stats.sales;
-        acc.orders += stats.orders;
-        return acc;
-      },
-      { sales: 0, orders: 0 },
-    );
-    // For attendant-facing marketplace totals, an unuploaded week should stay
-    // at zero until statement/profit rows are actually uploaded.
-    const sales = profitEntry.sales;
-    const orders = profitEntry.orders;
+    for (const key of sortedWeekKeys) {
+      const weekStartIso = key.split("::")[1];
+      const profitSummary = summarizeProfitRows(profitRowsByAccountWeek.get(key) ?? []);
+      const manual = shopIds.reduce(
+        (acc, shopId) => {
+          const stats = manualByShopIdWeek.get(`${shopId}::${weekStartIso}`) ?? { sales: 0, orders: 0 };
+          acc.sales += stats.sales;
+          acc.orders += stats.orders;
+          return acc;
+        },
+        { sales: 0, orders: 0 },
+      );
+      const sales = profitSummary.net > 0 ? profitSummary.net : manual.sales;
+      const orders = profitSummary.orderCount > 0 ? profitSummary.orderCount : manual.orders;
+
+      totals.manualSales += manual.sales;
+      totals.profitEntrySales += profitSummary.net;
+      totals.sales += sales;
+      totals.orders += orders;
+
+      weeklyRows.push({
+        accountId: assignment.accountId,
+        displayName: assignment.account?.displayName ?? null,
+        platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
+        weekStart: weekStartIso,
+        weekEnd: new Date(new Date(weekStartIso).getTime() + 7 * 24 * 3600 * 1000 - 1).toISOString(),
+        payoutSales: 0,
+        manualSales: manual.sales,
+        profitEntrySales: profitSummary.net,
+        sales,
+        orders,
+        shopIds,
+      });
+    }
+
     return {
       accountId: assignment.accountId,
       displayName: assignment.account?.displayName ?? null,
       platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
-      payoutSales: payout.sales,
-      manualSales: manual.sales,
-      profitEntrySales: profitEntry.sales,
-      sales,
-      orders,
+      payoutSales: totals.payoutSales,
+      manualSales: totals.manualSales,
+      profitEntrySales: totals.profitEntrySales,
+      sales: totals.sales,
+      orders: totals.orders,
       shopIds,
     };
   });
@@ -462,7 +434,7 @@ export async function getAssignedMarketplaceSalesForPeriod(
     { sales: 0, jumiaSales: 0, kilimallSales: 0, orders: 0 },
   );
 
-  return { rows, totals };
+  return { rows, weeklyRows, totals };
 }
 
 export async function getOnlineQuickStats(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineQuickStats> {
