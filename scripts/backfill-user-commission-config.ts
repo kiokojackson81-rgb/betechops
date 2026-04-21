@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { deriveDefaultCommissionConfigFromUser } from "@/lib/userCommissionConfig";
 
 async function main() {
+  const prismaAny = prisma as any;
+  if (!prismaAny.userCommissionConfig) {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: "userCommissionConfig model unavailable" }));
+    return;
+  }
+
   const users = await prisma.user.findMany({
     select: { id: true, email: true, attendantCategory: true },
   });
@@ -10,13 +17,13 @@ async function main() {
   let skipped = 0;
 
   for (const user of users) {
-    const existing = await prisma.userCommissionConfig.findUnique({ where: { userId: user.id } });
+    const existing = await prismaAny.userCommissionConfig.findUnique({ where: { userId: user.id } });
     if (existing) {
       skipped += 1;
       continue;
     }
     const derived = deriveDefaultCommissionConfigFromUser(user);
-    await prisma.userCommissionConfig.create({
+    await prismaAny.userCommissionConfig.create({
       data: {
         userId: user.id,
         ...derived,
