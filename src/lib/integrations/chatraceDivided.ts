@@ -116,6 +116,7 @@ export async function syncDividedChatraceContact(input: {
   fields: Record<string, string | number | null | undefined>;
   tagsToAdd?: string[];
   tagsToRemove?: string[];
+  tagDelayMs?: number;
 }) : Promise<ChatraceDividedResult> {
   const config = getConfig();
   const phone = normalizeRecipientPhone(input.phone);
@@ -163,7 +164,8 @@ export async function syncDividedChatraceContact(input: {
     return { ok: true, contactId, debug };
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const tagDelayMs = Number.isFinite(input.tagDelayMs) ? Math.max(0, Number(input.tagDelayMs)) : 300;
+  await new Promise((resolve) => setTimeout(resolve, tagDelayMs));
   const tagActions = [
     ...tagsToRemove.map((tagName) => ({ action: "remove_tag", tag_name: tagName })),
     ...tagsToAdd.map((tagName) => ({ action: "add_tag", tag_name: tagName })),
