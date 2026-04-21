@@ -125,7 +125,38 @@ export default function MarketingReceiptsPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
-          setReceipts(Array.isArray(data?.receipts) ? data.receipts : []);
+          const firstPage = Array.isArray(data?.receipts) ? data.receipts : [];
+          const totalPages = Math.max(1, Number(data?.paging?.totalPages ?? 1));
+
+          if (totalPages <= 1) {
+            setReceipts(firstPage);
+            return;
+          }
+
+          const pageRequests: Promise<Response>[] = [];
+          for (let page = 2; page <= totalPages; page += 1) {
+            const pageParams = new URLSearchParams(params);
+            pageParams.set("page", String(page));
+            pageRequests.push(
+              fetch(`/api/receipts?${pageParams.toString()}`, {
+                cache: "no-store",
+                signal: controller.signal,
+              }),
+            );
+          }
+
+          const pageResponses = await Promise.all(pageRequests);
+          const pagePayloads = await Promise.all(
+            pageResponses.map(async (response) => {
+              const payload = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                throw new Error(payload?.error || "Failed to load receipts");
+              }
+              return Array.isArray(payload?.receipts) ? payload.receipts : [];
+            }),
+          );
+
+          setReceipts([firstPage, ...pagePayloads].flat());
         }
       } catch (err) {
         if (!cancelled) {
