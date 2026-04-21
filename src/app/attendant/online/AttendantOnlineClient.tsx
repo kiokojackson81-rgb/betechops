@@ -35,6 +35,21 @@ type ShopSalesRow = {
   totalSales: number;
 };
 
+type MarketplaceOverviewRow = {
+  shopId: string;
+  accountId?: string;
+  shopIds?: string[];
+  shopName: string;
+  platform: string;
+  weekLabel: string;
+  weekStart: string;
+  weekEnd: string;
+  sales: number;
+  commission: number;
+  chargedReturns?: number;
+  orders: number;
+};
+
 type OnlineEarningsSummary = {
   periodLabel: string;
   salesCommission: number;
