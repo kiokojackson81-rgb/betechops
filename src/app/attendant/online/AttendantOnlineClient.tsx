@@ -69,6 +69,25 @@ const formatKES = (value: number | null | undefined) =>
 const safeNumber = (value?: number | null) => Number(value ?? 0);
 const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
 
+const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
+  rows: T[],
+  totalCommission: number,
+) => {
+  const totalSales = rows.reduce((sum, row) => sum + Number(row.sales ?? 0), 0);
+  if (totalCommission <= 0 || totalSales <= 0) {
+    return rows.map((row) => Math.max(0, 0 - Number(row.chargedReturns ?? 0)));
+  }
+
+  let allocated = 0;
+  return rows.map((row, index) => {
+    const sales = Number(row.sales ?? 0);
+    const rawShare =
+      index === rows.length - 1 ? totalCommission - allocated : Math.round((sales / totalSales) * totalCommission);
+    allocated += index === rows.length - 1 ? totalCommission - allocated : rawShare;
+    return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
+  });
+};
+
 function normalizeWeekKey(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
