@@ -51,6 +51,7 @@ const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
 const safeNumber = (value?: number | null) => Number(value ?? 0);
+const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
 
 
 const toInputDate = (date: Date) =>
@@ -496,18 +497,42 @@ export default function AttendantOnlineClient() {
     void loadCommissionPreview();
   }, [loadCommissionPreview, userId, period]);
 
+  const refreshAllOnlineStats = useCallback(async () => {
+    if (!userId) return;
+    await Promise.allSettled([
+      loadWeeklyEarnings(),
+      loadOnlineSummary(),
+      loadPayrollSummary(),
+      loadCommissionPreview(),
+    ]);
+  }, [loadCommissionPreview, loadOnlineSummary, loadPayrollSummary, loadWeeklyEarnings, userId]);
+
   useEffect(() => {
     if (!userId) return;
     void loadShopSales();
     void loadReceiptStats();
-    void loadPayrollSummary();
-    void loadOnlineSummary();
-  }, [loadShopSales, loadReceiptStats, loadPayrollSummary, userId]);
+    void refreshAllOnlineStats();
+  }, [loadReceiptStats, loadShopSales, refreshAllOnlineStats, userId]);
 
   useEffect(() => {
     if (!userId) return;
-    void loadWeeklyEarnings();
-  }, [loadWeeklyEarnings, userId]);
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    const refreshVisibleStats = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void refreshAllOnlineStats();
+    };
+
+    const intervalId = window.setInterval(refreshVisibleStats, ONLINE_STATS_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshVisibleStats);
+    document.addEventListener("visibilitychange", refreshVisibleStats);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshVisibleStats);
+      document.removeEventListener("visibilitychange", refreshVisibleStats);
+    };
+  }, [refreshAllOnlineStats, userId]);
 
     // earnings summary loader removed
 
@@ -560,6 +585,11 @@ export default function AttendantOnlineClient() {
         period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }),
       )}&end=${encodeURIComponent(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }))}`
     : "/receipts";
+  const performanceReportHref = (() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/online/summary/export?${params.toString()}`;
+  })();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -663,15 +693,28 @@ export default function AttendantOnlineClient() {
                       <p className="text-3xl font-semibold text-white">{formatKES(weeklyTotals.sales)}</p>
                       <p className="text-xs text-slate-500">Commission: {formatKES(weeklyTotals.commission)}</p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="px-4"
-                      onClick={() => void loadWeeklyEarnings()}
-                      disabled={weeklyLoading}
-                    >
-                      {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {userId ? (
+                        <a
+                          href={performanceReportHref}
+                          className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5"
+                        >
+                          Download full weeks PDF
+                        </a>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-4"
+                        onClick={() => {
+                          refreshLocalCaptureDrafts();
+                          void refreshAllOnlineStats();
+                        }}
+                        disabled={weeklyLoading}
+                      >
+                        {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
                     Click week chips to combine totals across multiple weeks or choose the marketplace period for everything.
@@ -749,7 +792,7 @@ export default function AttendantOnlineClient() {
           <div className="space-y-4 lg:col-span-4">
             <QuickStatsCard
               variant="onlineOps"
-              loading={receiptStatsLoading || weeklyLoading}
+              loading={receiptStatsLoading || weeklyLoading || onlineSummaryLoading || payrollLoading}
               onlineOps={quickStatsPayload}
             />
 

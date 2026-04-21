@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/api";
+import { requireAttendant } from "@/lib/auth";
 import { parseTradingPeriodKey, getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { generateOnlinePerformancePdfResponse } from "@/lib/onlinePerformanceExport";
 
@@ -6,19 +6,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const url = new URL(req.url);
-  const userId = String(url.searchParams.get("userId") ?? "").trim();
-  if (!userId) {
-    return Response.json({ error: "userId is required" }, { status: 400 });
-  }
-
   const period = parseTradingPeriodKey(url.searchParams.get("periodKey") ?? undefined) ?? getTradingPeriodFor(new Date());
-  return generateOnlinePerformancePdfResponse({
-    userId,
-    period,
-    enforceEligibleIndividual: true,
-  });
+  return generateOnlinePerformancePdfResponse({ userId: auth.user.id, period });
 }
