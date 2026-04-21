@@ -40,8 +40,23 @@ export type AssignedMarketplaceAccountSales = {
   shopIds: string[];
 };
 
+export type AssignedMarketplaceAccountWeekSales = {
+  accountId: string;
+  displayName: string | null;
+  platform: string;
+  weekStart: string;
+  weekEnd: string;
+  payoutSales: number;
+  manualSales: number;
+  profitEntrySales: number;
+  sales: number;
+  orders: number;
+  shopIds: string[];
+};
+
 export type AssignedMarketplaceSalesSummary = {
   rows: AssignedMarketplaceAccountSales[];
+  weeklyRows: AssignedMarketplaceAccountWeekSales[];
   totals: {
     sales: number;
     jumiaSales: number;
