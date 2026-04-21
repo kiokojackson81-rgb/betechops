@@ -358,9 +358,74 @@ export default function AttendantOnlineClient() {
 
   // receiptTotals derived state removed (Quick stats removed)
 
-  const weeklyTotals = weeklyEarnings?.totals ?? { orders: 0, sales: 0, commission: 0, shops: 0 };
+  const marketplaceOverviewRows = useMemo<MarketplaceOverviewRow[]>(() => {
+    const serverRows = Array.isArray(weeklyEarnings?.rows) ? (weeklyEarnings.rows as MarketplaceOverviewRow[]) : [];
+    const serverWeeklyRows = Array.isArray(weeklyEarnings?.weeklyRows) ? (weeklyEarnings.weeklyRows as MarketplaceOverviewRow[]) : [];
+    const selectedWeekKeys = activeWeekKeys.includes("period")
+      ? tradingWeeks.map((week) => week.key)
+      : activeWeekKeys.length
+        ? activeWeekKeys
+        : tradingWeeks.at(-1)?.key
+          ? [tradingWeeks.at(-1)!.key]
+          : [];
+    const serverWeeklyByAccountWeek = new Map<string, MarketplaceOverviewRow>();
+    for (const row of serverWeeklyRows) {
+      const weekKey = normalizeWeekKey(row.weekStart);
+      serverWeeklyByAccountWeek.set(`${row.accountId ?? row.shopId}::${weekKey}`, row);
+    }
+
+    const baseRows = serverRows.map((row) => {
+      const accountKey = String(row.accountId ?? row.shopId ?? "").trim();
+      const selectedWeeks = selectedWeekKeys.length ? selectedWeekKeys : [normalizeWeekKey(row.weekStart)];
+      let sales = 0;
+      let orders = 0;
+
+      for (const weekKey of selectedWeeks) {
+        const serverWeek = serverWeeklyByAccountWeek.get(`${accountKey}::${weekKey}`);
+        if (serverWeek) {
+          sales += Number(serverWeek.sales ?? 0);
+          orders += Number(serverWeek.orders ?? 0);
+        }
+      }
+
+      return {
+        ...row,
+        sales,
+        orders,
+      };
+    });
+
+    const useCombinedMarketplaceLadder = Boolean(weeklyEarnings?.useCombinedMarketplaceLadder);
+    if (useCombinedMarketplaceLadder) {
+      const combinedCommission = Number(computeMarketplaceCommission(baseRows.reduce((sum, row) => sum + Number(row.sales ?? 0), 0)).amount || 0);
+      const rowCommissions = allocateCombinedMarketplaceCommission(baseRows, combinedCommission);
+      return baseRows.map((row, index) => ({
+        ...row,
+        commission: rowCommissions[index] ?? 0,
+      }));
+    }
+
+    return baseRows.map((row) => ({
+      ...row,
+      commission: Math.max(0, Number(computeMarketplaceCommission(row.sales).amount || 0) - Number(row.chargedReturns ?? 0)),
+    }));
+  }, [activeWeekKeys, tradingWeeks, weeklyEarnings]);
+
+  const marketplaceOverviewTotals = useMemo(
+    () =>
+      marketplaceOverviewRows.reduce(
+        (acc, row) => {
+          acc.sales += Number(row.sales ?? 0);
+          acc.commission += Number(row.commission ?? 0);
+          acc.orders += Number(row.orders ?? 0);
+          return acc;
+        },
+        { sales: 0, commission: 0, orders: 0 },
+      ),
+    [marketplaceOverviewRows],
+  );
   const platformAggregates = useMemo(() => {
-    const rows = weeklyEarnings?.rows ?? [];
+    const rows = marketplaceOverviewRows ?? [];
     const map: Record<string, { key: string; name: string; orders: number; sales: number; commission: number }> = {};
     for (const r of rows) {
       const key = String(r.platform ?? "UNKNOWN").toUpperCase();
@@ -384,7 +449,7 @@ export default function AttendantOnlineClient() {
     ensurePlatform("KILIMALL", "Kilimall");
 
     return Object.values(map);
-  }, [weeklyEarnings]);
+  }, [marketplaceOverviewRows]);
 
   const platformTotals = useMemo(() => {
     const jumia = platformAggregates.find((p) => p.key === "JUMIA");
@@ -393,11 +458,11 @@ export default function AttendantOnlineClient() {
     return {
       jumiaSales: Number(jumia?.sales || 0),
       kilimallSales: Number(kilimall?.sales || 0),
-      marketplaceCommission: Number(weeklyTotals.commission || 0),
+      marketplaceCommission: Number(marketplaceOverviewTotals.commission || 0),
     };
-  }, [platformAggregates, weeklyTotals]);
+  }, [marketplaceOverviewTotals.commission, platformAggregates]);
 
-  const accountRows = weeklyEarnings?.rows ?? [];
+  const accountRows = marketplaceOverviewRows;
 
   const directReceiptsSummary = onlineSummary?.directReceipts ?? null;
   const posReceiptRows = useMemo(
@@ -690,8 +755,8 @@ export default function AttendantOnlineClient() {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales (selected range)</p>
-                      <p className="text-3xl font-semibold text-white">{formatKES(weeklyTotals.sales)}</p>
-                      <p className="text-xs text-slate-500">Commission: {formatKES(weeklyTotals.commission)}</p>
+                      <p className="text-3xl font-semibold text-white">{formatKES(marketplaceOverviewTotals.sales)}</p>
+                      <p className="text-xs text-slate-500">Commission: {formatKES(marketplaceOverviewTotals.commission)}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       {userId ? (
