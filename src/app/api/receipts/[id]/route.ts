@@ -23,6 +23,12 @@ function resolveParams(context: ParamsContext): Promise<{ id: string }> {
 }
 
 export async function GET(_req: NextRequest, context: ParamsContext) {
+  const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  if (!guard.ok) {
+    return guard.res;
+  }
+
+  const actorId = (guard.session?.user as any)?.id ?? null;
   const { id } = await resolveParams(context);
   const receipt = await prisma.receipt.findUnique({
     where: { id },
@@ -46,6 +52,21 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
+  if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const dataAttendantId =
+    receipt.data && typeof receipt.data === "object"
+      ? String((receipt.data as Record<string, unknown>).attendantId ?? "").trim() || null
+      : null;
+  const ownsReceipt =
+    Boolean(actorId) &&
+    (actorId === receipt.issuedById ||
+      actorId === receipt.order?.attendantId ||
+      actorId === dataAttendantId);
+  if (guard.role === "ATTENDANT" && !ownsReceipt) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
   try {
@@ -107,7 +128,6 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   } catch (e) {
     // best-effort; ignore support lookup failures
   }
-  if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ receipt, supportItems, supportReceiptSummary });
 }
 

@@ -15,7 +15,6 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -40,22 +39,22 @@ export async function GET(req: NextRequest) {
   const q = url.searchParams.get("q") || undefined;
   const phoneParam = url.searchParams.get("phone") || undefined;
   const docTypeParam = url.searchParams.get("docType") || undefined;
-  const requestedAttendantId = url.searchParams.get("attendantId") || undefined;
+  const includeLedgerParam = url.searchParams.get("includeLedger");
+  const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
+  const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
+  const attendantFilterParam = (url.searchParams.get("attendantId") || "").trim() || undefined;
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
-  const summaryView = (url.searchParams.get("summaryView") || "").toLowerCase();
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
-  const customerType = url.searchParams.get("customerType") || undefined;
-  const podStatus = url.searchParams.get("status") || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   const identity = await resolveTargetUserId(req);
   const meta = identity;
-  const resolvedUserId = identity.resolvedUserId;
-  if (!resolvedUserId) {
+  const attendantId = identity.resolvedUserId;
+  if (!attendantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -70,9 +69,9 @@ export async function GET(req: NextRequest) {
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
-  const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
-  const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
+  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
+  const includeSupportReceipts = !onlyPos && (isSupportDocType || (includeLedger && !normalizedDocType));
 
   const and: Prisma.ReceiptWhereInput[] = [];
   and.push({ generatedAt: { gte: startDate, lte: endDate } });
@@ -116,9 +115,7 @@ export async function GET(req: NextRequest) {
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
   const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
-  const allowGlobalScope =
-    specialGlobalViewer || (wantsGlobal && canGlobal);
+  const allowGlobalScope = wantsGlobal && canGlobal;
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
@@ -126,19 +123,40 @@ export async function GET(req: NextRequest) {
   if (scope === "mine") {
     const ownerOr: Prisma.ReceiptWhereInput[] = [];
     ownerOr.push(
-      { issuedById: resolvedUserId },
-      { order: { attendantId: resolvedUserId } },
-      { data: { path: ["attendantId"], equals: resolvedUserId } },
+      { issuedById: attendantId },
+      { order: { attendantId } },
+      { data: { path: ["attendantId"], equals: attendantId } },
     );
     // If issuerOnly requested, restrict to issuedById only
     if (issuerOnly) {
-      and.push({ issuedById: resolvedUserId });
+      and.push({ issuedById: attendantId });
+    } else {
+      and.push({ OR: ownerOr });
+    }
+  }
+  if (scope === "global" && attendantFilterParam) {
+    const ownerOr: Prisma.ReceiptWhereInput[] = [];
+    ownerOr.push(
+      { issuedById: attendantFilterParam },
+      { order: { attendantId: attendantFilterParam } },
+      { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
+      { data: { path: ["servedBy"], equals: attendantFilterParam } as any },
+      { data: { path: ["servedById"], equals: attendantFilterParam } as any },
+      { data: { path: ["issuedById"], equals: attendantFilterParam } as any },
+      { order: { metadata: { path: ["attendantId"], equals: attendantFilterParam } as any } },
+      { order: { metadata: { path: ["servedBy"], equals: attendantFilterParam } as any } },
+      { order: { metadata: { path: ["servedById"], equals: attendantFilterParam } as any } },
+    );
+    if (issuerOnly) {
+      and.push({ issuedById: attendantFilterParam });
     } else {
       and.push({ OR: ownerOr });
     }
   }
 
   // Optional filter: customerType=pod to show POD receipts only, with optional status filter
+  const customerType = url.searchParams.get('customerType') || undefined;
+  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
     if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
@@ -158,59 +176,45 @@ export async function GET(req: NextRequest) {
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
-    ? await (async () => {
-        const receiptIds =
-          onlyPos && summaryView === "profit"
-            ? await getPosProfitReceiptIdsForAdminFilters({
-                start: startDate,
-                end: endDate,
-                attendantId: scope === "mine" ? undefined : requestedAttendantId,
-                paymentMethod: paymentMethodParam,
-                search: q,
-                docType: normalizedDocType,
-                scope: scope as "mine" | "global",
-                currentUserId: scope === "mine" ? resolvedUserId : null,
-                customerType,
-                podStatus,
-                onlyPos: true,
-              })
-            : null;
-
-        if (receiptIds && receiptIds.length === 0) {
-          return [];
-        }
-
-        const effectiveWhere =
-          receiptIds && receiptIds.length > 0
-            ? {
-                AND: [
-                  ...and.filter((clause) => !("generatedAt" in clause)),
-                  { id: { in: receiptIds } },
-                ],
-              }
-            : where;
-
-        return prisma.receipt.findMany({
-          where: effectiveWhere,
-          include: {
-            order: includeItems
-              ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
-              : {
-                  select: {
-                    orderNumber: true,
-                    customerName: true,
-                    attendant: { select: { id: true, name: true } },
-                    status: true,
-                    paymentStatus: true,
-                    totalAmount: true,
-                  },
+    ? await prisma.receipt.findMany({
+        where,
+        include: {
+          order: includeItems
+            ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+            : {
+                select: {
+                  orderNumber: true,
+                  customerName: true,
+                  attendant: { select: { id: true, name: true } },
+                  status: true,
+                  paymentStatus: true,
+                  totalAmount: true,
                 },
-            issuedBy: { select: { id: true, name: true } },
-          },
-          orderBy: { generatedAt: "desc" },
-        });
-      })()
+              },
+          issuedBy: { select: { id: true, name: true } },
+        },
+        orderBy: { generatedAt: "desc" },
+      })
     : [];
+
+  const isPodPaidReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery?.paidAt);
+  const podStatusOf = (row: any) => ((row?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const isPodReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery);
+  const isPosPaidReceipt = (row: any) =>
+    ((row?.order?.paymentStatus ?? "").toString().toUpperCase().trim() === "PAID");
+  const isPodSettledForSales = (row: any) => {
+    if (!isPodReceipt(row)) return false;
+    if (podStatusOf(row) === "pending") return false;
+    return isPodPaidReceipt(row) || isPosPaidReceipt(row);
+  };
+  const filteredPosReceipts = paidOnly
+    ? posReceipts.filter((row: any) => {
+        if (isPodReceipt(row)) {
+          return isPodSettledForSales(row);
+        }
+        return isPosPaidReceipt(row);
+      })
+    : posReceipts;
 
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
@@ -256,7 +260,7 @@ export async function GET(req: NextRequest) {
       : undefined,
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     paymentStatus: "PAID",
-    detailUrl: null,
+    detailUrl: `/receipts/history/marketing/${receipt.id}`,
   });
 
   const mapSupportRow = (receipt: any) => ({
@@ -280,7 +284,7 @@ export async function GET(req: NextRequest) {
       : undefined,
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     paymentStatus: "PAID",
-    detailUrl: null,
+    detailUrl: `/receipts/history/support/${receipt.id}`,
   });
 
   const marketingFilter: any = {
@@ -288,8 +292,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && resolvedUserId) marketingFilter.dailyEntry.submittedById = resolvedUserId;
-  else if (scope === "global" && requestedAttendantId) marketingFilter.dailyEntry.submittedById = requestedAttendantId;
+  const marketingStaffId = scope === "mine" ? attendantId : attendantFilterParam;
+  if (marketingStaffId) marketingFilter.dailyEntry.submittedById = marketingStaffId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -304,8 +308,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && resolvedUserId) supportFilter.dailyEntry.submittedById = resolvedUserId;
-  else if (scope === "global" && requestedAttendantId) supportFilter.dailyEntry.submittedById = requestedAttendantId;
+  const supportStaffId = scope === "mine" ? attendantId : attendantFilterParam;
+  if (supportStaffId) supportFilter.dailyEntry.submittedById = supportStaffId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
@@ -348,7 +352,7 @@ export async function GET(req: NextRequest) {
     : [];
 
   const combined = [
-    ...posReceipts.map(mapPosRow),
+    ...filteredPosReceipts.map(mapPosRow),
     ...marketingReceipts.map(mapMarketingRow),
     ...supportReceipts.map(mapSupportRow),
   ];
@@ -1064,25 +1068,11 @@ export async function POST(req: NextRequest) {
         // Create a CommissionLedger entry for audit (best-effort)
         if (tx.commissionLedger) {
           try {
-            await tx.commissionLedger.upsert({
-              where: {
-                userId_periodStart_periodEnd: {
-                  userId: attendantId,
-                  periodStart: period.startDate,
-                  periodEnd: period.endDate,
-                },
-              },
-              create: {
+            await tx.commissionLedger.create({
+              data: {
                 userId: attendantId,
                 periodStart: period.startDate,
                 periodEnd: period.endDate,
-                grossCommission: Number(salesCommission),
-                penalties: 0,
-                netCommission: Number(salesCommission),
-                commissionTotal: Number(salesCommission),
-                detail: { reason: "Immediate release on threshold" },
-              },
-              update: {
                 grossCommission: Number(salesCommission),
                 penalties: 0,
                 netCommission: Number(salesCommission),

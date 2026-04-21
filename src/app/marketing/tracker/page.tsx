@@ -380,6 +380,8 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "40");
+        params.set("scope", "mine");
+        params.set("onlyPos", "1");
         params.set("start", filters.start);
         params.set("end", filters.end);
         if (filters.query.trim()) params.set("q", filters.query.trim());
@@ -452,7 +454,7 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
             <h2 className="text-lg font-semibold text-slate-100">Read-only receipts history</h2>
             <p className="text-sm text-slate-400">
-              Explore every receipt captured across the system and filter by date, range, or attendant.
+              Explore your POS receipts and filter by date range or search term.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
