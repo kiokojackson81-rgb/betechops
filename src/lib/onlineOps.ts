@@ -298,6 +298,7 @@ export async function getAssignedMarketplaceSalesForPeriod(
   if (!uniqueAssignments.length) {
     return {
       rows: [],
+      weeklyRows: [],
       totals: { sales: 0, jumiaSales: 0, kilimallSales: 0, orders: 0 },
     };
   }
