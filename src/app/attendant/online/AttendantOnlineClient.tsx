@@ -68,6 +68,16 @@ const formatKES = (value: number | null | undefined) =>
 const safeNumber = (value?: number | null) => Number(value ?? 0);
 const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
 
+function normalizeWeekKey(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw.slice(0, 10);
+  const shifted = new Date(parsed.getTime() + 3 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
+}
+
 
 const toInputDate = (date: Date) =>
   // produce a YYYY-MM-DD string in Nairobi local date so inputs and
