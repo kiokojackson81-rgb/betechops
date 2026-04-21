@@ -620,6 +620,7 @@ export default function MarketingTrackerPage() {
       commission: { commission: number };
     };
   }>(null);
+  const [downloadingPerformance, setDownloadingPerformance] = useState(false);
 
   // Background authoritative server summary used for Quick stats calculations.
   // We keep this separate from `periodSummary` which controls the visible
@@ -1443,12 +1444,17 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   };
 
   const downloadPerformancePdf = () => {
-    const periodKey = selectedPeriodKey || currentPeriod.key;
-    const params = new URLSearchParams({ periodKey });
-    const imp = impersonateIdFromWindow();
-    if (imp) params.set("impersonateId", imp);
-    const url = `/api/marketing/tracker/performance/pdf?${params.toString()}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      setDownloadingPerformance(true);
+      const params = new URLSearchParams();
+      if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
+      const imp = impersonateIdFromWindow();
+      if (imp) params.set("impersonateId", imp);
+      const url = `/api/marketing/report/performance-pdf?${params.toString()}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setTimeout(() => setDownloadingPerformance(false), 700);
+    }
   };
 
   return (
@@ -1486,11 +1492,13 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                 <p className="text-xs text-amber-300">Showing archived period.</p>
               )}
             </div>
-            <PeriodSwitcher
-              currentPeriod={currentPeriod}
-              selectedPeriod={selectedPeriod}
-              onSelectPeriod={setSelectedPeriod}
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <PeriodSwitcher
+                currentPeriod={currentPeriod}
+                selectedPeriod={selectedPeriod}
+                onSelectPeriod={setSelectedPeriod}
+              />
+            </div>
           </div>
         </div>
 
