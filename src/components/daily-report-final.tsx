@@ -249,6 +249,7 @@ export default function DailyReportFinal() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const commissionSourceRef = useRef<"none" | "fallback" | "authoritative">("none");
+  const earningsWarningShown = useRef(false);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
