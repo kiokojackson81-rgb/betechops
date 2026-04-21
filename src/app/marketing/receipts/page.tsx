@@ -23,7 +23,12 @@ type MarketingReceiptSummary = {
   receiptsCount: number;
 };
 
-const toDateInput = (value: Date) => value.toISOString().slice(0, 10);
+const toDateInput = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", {
