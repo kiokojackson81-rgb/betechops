@@ -366,8 +366,6 @@ export async function getAssignedMarketplaceSalesForPeriod(
 
   const accountIds = uniqueAssignments.map((assignment) => assignment.accountId);
   const profitEntryTableAvailable = await isMarketplaceProfitEntryTableAvailable();
-  const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
-
   const profitEntryRows =
     profitEntryTableAvailable && accountIds.length
       ? await (prisma as any).marketplaceProfitEntry.findMany({
@@ -398,48 +396,15 @@ export async function getAssignedMarketplaceSalesForPeriod(
     });
   }
 
-  const draftRows =
-    draftTableAvailable && accountIds.length
-      ? await prisma.marketplaceStatementDraft.findMany({
-          where: {
-            accountId: { in: accountIds },
-            weekStart: { lte: period.end },
-            weekEnd: { gte: period.start },
-          },
-          select: {
-            accountId: true,
-            weekStart: true,
-            rows: true,
-          },
-          take: 500,
-        })
-      : [];
-
-  const draftMetricsByAccountWeek = new Map<string, { dedupNet: number; orderCount: number }>();
-  for (const row of draftRows) {
-    const key = `${String(row.accountId)}::${new Date(row.weekStart).toISOString()}`;
-    if (draftMetricsByAccountWeek.has(key)) continue;
-    draftMetricsByAccountWeek.set(key, summarizeDraftRows(Array.isArray(row.rows) ? (row.rows as any[]) : []));
-  }
-
   const profitEntryByAccount = new Map<string, { sales: number; orders: number }>();
   for (const assignment of uniqueAssignments) {
     const weekKeys = new Set<string>();
     for (const key of profitRowsByAccountWeek.keys()) {
       if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
     }
-    for (const key of draftMetricsByAccountWeek.keys()) {
-      if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
-    }
 
     const totals = { sales: 0, orders: 0 };
     for (const key of weekKeys) {
-      const draftSummary = draftMetricsByAccountWeek.get(key);
-      if (draftSummary) {
-        totals.sales += draftSummary.dedupNet;
-        totals.orders += draftSummary.orderCount;
-        continue;
-      }
       const profitSummary = summarizeProfitRows(profitRowsByAccountWeek.get(key) ?? []);
       totals.sales += profitSummary.net;
       totals.orders += profitSummary.orderCount;
