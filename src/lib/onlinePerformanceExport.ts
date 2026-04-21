@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canDownloadOnlineSummaryIndividual } from "@/lib/onlineSummaryIndividuals";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
-import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 
@@ -25,8 +25,9 @@ const escapeHtml = (value: unknown) =>
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
-  periodLabel: string;
-  periodKey: string;
+  tradingPeriodLabel: string;
+  fullWeeksLabel: string;
+  fullWeeksKey: string;
   accountCount: number;
   weekCount: number;
   totalAmount: number;
@@ -104,9 +105,10 @@ function renderHtml(args: {
           <div>
             <h1>Online performance report</h1>
             <p class="muted" style="margin-top: 4px;">${escapeHtml(args.attendantName)} • ${escapeHtml(args.attendantEmail)}</p>
-            <p class="muted" style="margin-top: 4px;">Current period view: ${escapeHtml(args.periodLabel)}</p>
+            <p class="muted" style="margin-top: 4px;">Trading period: ${escapeHtml(args.tradingPeriodLabel)}</p>
+            <p class="muted" style="margin-top: 4px;">Full weeks shown: ${escapeHtml(args.fullWeeksLabel)}</p>
           </div>
-          <div class="pill">${escapeHtml(args.periodKey)}</div>
+          <div class="pill">${escapeHtml(args.fullWeeksKey)}</div>
         </div>
 
         <div class="cards">
@@ -162,7 +164,7 @@ function renderHtml(args: {
         </div>
 
         <p class="note">
-          Used amount prefers manual weekly sale when present for a week; otherwise it falls back to marketplace account net payout.
+          This report includes only the last 4 full marketplace weeks inside the trading period. Used amount prefers manual weekly sale when present for a week; otherwise it falls back to marketplace account net payout.
         </p>
       </body>
     </html>
@@ -175,7 +177,8 @@ export async function generateOnlinePerformancePdfResponse(opts: {
   enforceEligibleIndividual?: boolean;
 }) {
   const { userId, period, enforceEligibleIndividual = false } = opts;
-  const weeks = getOnlineOpsWeeksForTradingPeriod(period, period.end, 4);
+  const fullWeeksWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+  const weeks = fullWeeksWindow.weeks;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -326,8 +329,9 @@ export async function generateOnlinePerformancePdfResponse(opts: {
   const html = renderHtml({
     attendantName: user.name ?? user.email ?? user.id,
     attendantEmail: user.email ?? "",
-    periodLabel: period.label,
-    periodKey: period.key,
+    tradingPeriodLabel: period.label,
+    fullWeeksLabel: fullWeeksWindow.label,
+    fullWeeksKey: fullWeeksWindow.key,
     accountCount: uniqueAccounts.length,
     weekCount: weeks.length,
     totalAmount,
