@@ -706,10 +706,7 @@ export default function AttendantOnlineClient() {
                         type="button"
                         variant="secondary"
                         className="px-4"
-                        onClick={() => {
-                          refreshLocalCaptureDrafts();
-                          void refreshAllOnlineStats();
-                        }}
+                        onClick={() => void refreshAllOnlineStats()}
                         disabled={weeklyLoading}
                       >
                         {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
