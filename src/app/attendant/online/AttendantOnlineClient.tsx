@@ -406,6 +406,14 @@ export default function AttendantOnlineClient() {
   const marketplaceOverviewRows = useMemo<MarketplaceOverviewRow[]>(() => {
     const serverRows = Array.isArray(weeklyEarnings?.rows) ? (weeklyEarnings.rows as MarketplaceOverviewRow[]) : [];
     const serverWeeklyRows = Array.isArray(weeklyEarnings?.weeklyRows) ? (weeklyEarnings.weeklyRows as MarketplaceOverviewRow[]) : [];
+    if (!serverWeeklyRows.length) {
+      return serverRows.map((row) => ({
+        ...row,
+        sales: Number(row.sales ?? 0),
+        commission: Number(row.commission ?? 0),
+        orders: Number(row.orders ?? 0),
+      }));
+    }
     const selectedWeekKeys = activeWeekKeys.includes("period")
       ? tradingWeeks.map((week) => week.key)
       : activeWeekKeys.length
