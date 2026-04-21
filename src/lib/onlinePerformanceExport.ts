@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { MarketplaceReturnStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canDownloadOnlineSummaryIndividual } from "@/lib/onlineSummaryIndividuals";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
+import { getBranding } from "@/lib/branding";
+import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
 
 const money = (value: unknown) => {
   const amount = Number(value ?? 0);
@@ -22,15 +27,82 @@ const escapeHtml = (value: unknown) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
+  rows: T[],
+  totalCommission: number,
+) => {
+  const totalSales = rows.reduce((sum, row) => sum + Number(row.sales ?? 0), 0);
+  if (totalCommission <= 0 || totalSales <= 0) {
+    return rows.map((row) => Math.max(0, 0 - Number(row.chargedReturns ?? 0)));
+  }
+
+  let allocated = 0;
+  return rows.map((row, index) => {
+    const sales = Number(row.sales ?? 0);
+    const rawShare =
+      index === rows.length - 1
+        ? totalCommission - allocated
+        : Math.round((sales / totalSales) * totalCommission);
+    allocated += index === rows.length - 1 ? totalCommission - allocated : rawShare;
+    return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
+  });
+};
+
+async function resolveLetterheadDataUri(): Promise<string | null> {
+  const branding = await getBranding().catch(() => null);
+  const configured = String(branding?.letterheadUrl ?? "").trim();
+
+  if (/^https?:\/\//i.test(configured)) {
+    try {
+      const res = await fetch(configured, { cache: "no-store" });
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        const mime = res.headers.get("content-type") || "image/jpeg";
+        return `data:${mime};base64,${Buffer.from(arrayBuffer).toString("base64")}`;
+      }
+    } catch {
+      // fall through to local files
+    }
+  }
+
+  const relativeCandidates = [
+    configured.startsWith("/") ? configured.slice(1) : configured,
+    "letterhead.jpg",
+    "letterhead.jpeg",
+    "letterhead.png",
+  ].filter(Boolean);
+
+  for (const relative of relativeCandidates) {
+    const candidates = [
+      path.join(process.cwd(), "public", relative),
+      path.join(process.cwd(), relative),
+    ];
+    for (const absPath of candidates) {
+      try {
+        const buf = await fs.readFile(absPath);
+        const ext = path.extname(absPath).toLowerCase();
+        const mime = ext === ".png" ? "image/png" : "image/jpeg";
+        return `data:${mime};base64,${buf.toString("base64")}`;
+      } catch {
+        // try next
+      }
+    }
+  }
+
+  return null;
+}
+
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
+  letterheadDataUri: string | null;
   tradingPeriodLabel: string;
   fullWeeksLabel: string;
   fullWeeksKey: string;
   accountCount: number;
   weekCount: number;
   totalAmount: number;
+  commissionEarned: number;
   rows: Array<{
     platform: string;
     accountName: string;
@@ -45,6 +117,7 @@ function renderHtml(args: {
     platform: string;
     accountName: string;
     total: number;
+    commission: number;
   }>;
 }) {
   const weeklyRows = args.rows
@@ -71,6 +144,7 @@ function renderHtml(args: {
           <td>${escapeHtml(row.platform)}</td>
           <td>${escapeHtml(row.accountName)}</td>
           <td class="num strong">${escapeHtml(formatKes(row.total))}</td>
+          <td class="num strong">${escapeHtml(formatKes(row.commission))}</td>
         </tr>
       `;
     })
@@ -84,10 +158,11 @@ function renderHtml(args: {
         <style>
           body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; margin: 24px; }
           h1, h2, h3, p { margin: 0; }
+          .letterhead img { width: 100%; border-radius: 10px; margin-bottom: 16px; object-fit: cover; }
           .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
           .muted { color: #475569; }
           .pill { display: inline-block; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 12px; color: #334155; }
-          .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+          .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
           .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; background: #f8fafc; }
           .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; }
           .value { font-size: 22px; font-weight: 700; margin-top: 6px; }
@@ -101,6 +176,11 @@ function renderHtml(args: {
         </style>
       </head>
       <body>
+        ${
+          args.letterheadDataUri
+            ? `<div class="letterhead"><img src="${args.letterheadDataUri}" alt="Betech letterhead" /></div>`
+            : ""
+        }
         <div class="header">
           <div>
             <h1>Online performance report</h1>
@@ -124,6 +204,10 @@ function renderHtml(args: {
             <div class="label">Total Amount</div>
             <div class="value">${escapeHtml(formatKes(args.totalAmount))}</div>
           </div>
+          <div class="card">
+            <div class="label">Commission Earned</div>
+            <div class="value">${escapeHtml(formatKes(args.commissionEarned))}</div>
+          </div>
         </div>
 
         <div class="section">
@@ -133,11 +217,12 @@ function renderHtml(args: {
               <tr>
                 <th style="width: 110px;">Platform</th>
                 <th>Account</th>
-                <th class="num" style="width: 150px;">Total</th>
+                <th class="num" style="width: 150px;">Sales</th>
+                <th class="num" style="width: 150px;">Commission</th>
               </tr>
             </thead>
             <tbody>
-              ${accountTotalRows || `<tr><td colspan="3" class="muted">No assigned accounts found in this period.</td></tr>`}
+              ${accountTotalRows || `<tr><td colspan="4" class="muted">No assigned accounts found in this period.</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -164,7 +249,7 @@ function renderHtml(args: {
         </div>
 
         <p class="note">
-          This report includes only the last 4 full marketplace weeks inside the trading period. Used amount prefers manual weekly sale when present for a week; otherwise it falls back to marketplace account net payout.
+          This report includes only the last 4 full marketplace weeks inside the trading period. Commission earned reflects marketplace commission for the same full-weeks window. Used amount prefers manual weekly sale when present for a week; otherwise it falls back to marketplace account net payout.
         </p>
       </body>
     </html>
@@ -268,6 +353,23 @@ export async function generateOnlinePerformancePdfResponse(opts: {
       : Promise.resolve([]),
   ]);
 
+  const [returns, letterheadDataUri] = await Promise.all([
+    uniqueAccounts.length
+      ? prisma.marketplaceReturn.findMany({
+          where: {
+            accountId: { in: uniqueAccounts.map((account) => account.id) },
+            dueAt: { gte: fullWeeksWindow.start, lte: fullWeeksWindow.end },
+            status: MarketplaceReturnStatus.CHARGED_TO_ATTENDANT,
+          },
+          select: {
+            accountId: true,
+            expectedAmount: true,
+          },
+        })
+      : Promise.resolve([]),
+    resolveLetterheadDataUri(),
+  ]);
+
   const manualByAccountWeek = new Map<string, number>();
   for (const row of manualRows) {
     const shopId = row.shopId ? String(row.shopId) : "";
@@ -293,8 +395,9 @@ export async function generateOnlinePerformancePdfResponse(opts: {
     usedAmount: number;
     source: string;
   }> = [];
-  const accountTotals: Array<{ platform: string; accountName: string; total: number }> = [];
+  const accountTotals: Array<{ platform: string; accountName: string; total: number; chargedReturns: number; commission: number }> = [];
   let totalAmount = 0;
+  const useCombinedMarketplaceLadder = resolveDirectCommissionMode(user.email) === "PROFIT_10";
 
   for (const account of uniqueAccounts) {
     let accountTotal = 0;
@@ -318,25 +421,49 @@ export async function generateOnlinePerformancePdfResponse(opts: {
         source,
       });
     }
+    const chargedReturns = returns
+      .filter((entry) => entry.accountId === account.id)
+      .reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
     accountTotals.push({
       platform: account.platform,
       accountName: account.displayName,
       total: accountTotal,
+      chargedReturns,
+      commission: 0,
     });
     totalAmount += accountTotal;
   }
 
+  const rowCommissions = useCombinedMarketplaceLadder
+    ? allocateCombinedMarketplaceCommission(
+        accountTotals.map((row) => ({ sales: row.total, chargedReturns: row.chargedReturns })),
+        Number(computeMarketplaceCommission(totalAmount).amount || 0),
+      )
+    : accountTotals.map((row) =>
+        Math.max(0, Number(computeMarketplaceCommission(row.total).amount || 0) - Number(row.chargedReturns ?? 0)),
+      );
+
+  const finalAccountTotals = accountTotals.map((row, index) => ({
+    platform: row.platform,
+    accountName: row.accountName,
+    total: row.total,
+    commission: Number(rowCommissions[index] ?? 0),
+  }));
+  const commissionEarned = finalAccountTotals.reduce((sum, row) => sum + Number(row.commission ?? 0), 0);
+
   const html = renderHtml({
     attendantName: user.name ?? user.email ?? user.id,
     attendantEmail: user.email ?? "",
+    letterheadDataUri,
     tradingPeriodLabel: period.label,
     fullWeeksLabel: fullWeeksWindow.label,
     fullWeeksKey: fullWeeksWindow.key,
     accountCount: uniqueAccounts.length,
     weekCount: weeks.length,
     totalAmount,
+    commissionEarned,
     rows: weeklyRows,
-    accountTotals,
+    accountTotals: finalAccountTotals,
   });
 
   let browser: Awaited<ReturnType<typeof launchChromiumBrowser>> | null = null;
