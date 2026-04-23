@@ -26,6 +26,53 @@ type Adjustment = {
   kind?: string | null;
 };
 
+type PayrollAppraisal = {
+  companyCount: number;
+  categoryCount: number;
+  valueCreated: {
+    sales: number;
+    profit: number;
+    profitAfterPay: number;
+    marginPct: number;
+  };
+  companyRank: {
+    sales: number;
+    profit: number;
+    commission: number;
+    netPay: number;
+    receipts: number;
+    items: number;
+  };
+  categoryRank: {
+    sales: number;
+    profit: number;
+    commission: number;
+    netPay: number;
+  };
+  companyAverage: {
+    sales: number;
+    profit: number;
+    commission: number;
+    netPay: number;
+  };
+  categoryAverage: {
+    sales: number;
+    profit: number;
+    commission: number;
+    netPay: number;
+  };
+  companyShare: {
+    salesPct: number;
+    profitPct: number;
+    commissionPct: number;
+  };
+  contributionScorePct: number;
+};
+
+const formatCurrency = (value: number) => `KES ${Number(value ?? 0).toLocaleString("en-US")}`;
+const formatPercent = (value: number) => `${Number(value ?? 0).toFixed(1)}%`;
+const rankText = (rank: number, total: number) => `${rank}/${total}`;
+
 export default function PayrollClient({
   attendant,
   initialPlan,
@@ -35,6 +82,7 @@ export default function PayrollClient({
   initialSummary,
   ledger,
   previousLedger,
+  initialAppraisal,
 }: {
   attendant: { id: string; name?: string | null; email?: string | null };
   initialPlan: CompPlan | null;
@@ -50,6 +98,7 @@ export default function PayrollClient({
     commissionBreakdown?: Record<string, number | undefined>;
   } | null;
   previousLedger?: { netCommission?: number | null } | null;
+  initialAppraisal: PayrollAppraisal;
 }) {
   const [plan, setPlan] = useState<CompPlan | null>(
     initialPlan
@@ -66,6 +115,7 @@ export default function PayrollClient({
   );
   const [adjustments, setAdjustments] = useState<Adjustment[]>(initialAdjustments || []);
   const [summary, setSummary] = useState<any>(initialSummary || null);
+  const [appraisal] = useState<PayrollAppraisal>(initialAppraisal);
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
 
@@ -101,6 +151,12 @@ export default function PayrollClient({
   }, [ledger, summary]);
   const previousNetCommission = Number(previousLedger?.netCommission ?? 0);
   const netCommissionDelta = ledgerTotals.netCommission - previousNetCommission;
+  const performanceTone =
+    appraisal.contributionScorePct >= 75
+      ? "Strong"
+      : appraisal.contributionScorePct >= 45
+        ? "Solid"
+        : "Needs attention";
   const adjustmentTotals = useMemo(() => {
     const totals = {
       topUps: 0,
@@ -484,6 +540,143 @@ export default function PayrollClient({
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="border-slate-800 bg-slate-900/60">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Performance appraisal</h2>
+            <p className="text-xs text-slate-400">Admin view of business impact, peer comparison, and appraisal support for this period.</p>
+          </div>
+          <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+            {performanceTone} contribution · {formatPercent(appraisal.contributionScorePct)}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-slate-950/60 px-3 py-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Sales brought in</div>
+            <div className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(appraisal.valueCreated.sales)}</div>
+            <div className="text-xs text-slate-500">Company share {formatPercent(appraisal.companyShare.salesPct)}</div>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 px-3 py-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Profit brought in</div>
+            <div className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(appraisal.valueCreated.profit)}</div>
+            <div className="text-xs text-slate-500">Company share {formatPercent(appraisal.companyShare.profitPct)}</div>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 px-3 py-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Profit after payroll</div>
+            <div className={`mt-1 text-lg font-semibold ${appraisal.valueCreated.profitAfterPay >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+              {formatCurrency(appraisal.valueCreated.profitAfterPay)}
+            </div>
+            <div className="text-xs text-slate-500">Profit less this period&apos;s net pay</div>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 px-3 py-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Margin</div>
+            <div className="mt-1 text-lg font-semibold text-slate-100">{formatPercent(appraisal.valueCreated.marginPct)}</div>
+            <div className="text-xs text-slate-500">Profit as a share of sales</div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+            <h3 className="text-sm font-semibold text-slate-100">Company ranking</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Sales rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.sales, appraisal.companyCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Profit rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.profit, appraisal.companyCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Commission rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.commission, appraisal.companyCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Net pay rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.netPay, appraisal.companyCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Receipts rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.receipts, appraisal.companyCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Items rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.companyRank.items, appraisal.companyCount)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+            <h3 className="text-sm font-semibold text-slate-100">Category comparison</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Sales rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.categoryRank.sales, appraisal.categoryCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Profit rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.categoryRank.profit, appraisal.categoryCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Commission rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.categoryRank.commission, appraisal.categoryCount)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-900/50 px-3 py-2">
+                <div className="text-xs text-slate-400">Net pay rank</div>
+                <div className="font-semibold text-slate-100">{rankText(appraisal.categoryRank.netPay, appraisal.categoryCount)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+            <h3 className="text-sm font-semibold text-slate-100">Compared to company average</h3>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Sales</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.companyAverage.sales)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Profit</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.companyAverage.profit)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Commission</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.companyAverage.commission)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Net pay</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.companyAverage.netPay)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+            <h3 className="text-sm font-semibold text-slate-100">Compared to category average</h3>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Sales</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.categoryAverage.sales)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Profit</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.categoryAverage.profit)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Commission</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.categoryAverage.commission)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-900/50 px-3 py-2">
+                <span className="text-slate-400">Net pay</span>
+                <span className="font-semibold text-slate-100">{formatCurrency(appraisal.categoryAverage.netPay)}</span>
               </div>
             </div>
           </div>
