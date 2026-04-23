@@ -916,9 +916,9 @@ export default function AttendantOnlineOpsClient() {
                 {payrollLoading && !payrollSummary && !payrollRows ? (
                   <Card className="p-6 text-center">Loading payroll summary…</Card>
                 ) : payrollRows && payrollRows.length > 0 ? (
-                  <PayrollTableClient rows={payrollRows} periodLabel={receiptsPeriod.label} />
+                  <PayrollTableClient rows={payrollRows} periodLabel={receiptsPeriod.label} periodKey={receiptsPeriod.key} />
                 ) : payrollSummary ? (
-                  <PayrollTableClient rows={[mapPayrollToPayrollRow(payrollSummary)]} periodLabel={receiptsPeriod.label} />
+                  <PayrollTableClient rows={[mapPayrollToPayrollRow(payrollSummary)]} periodLabel={receiptsPeriod.label} periodKey={receiptsPeriod.key} />
                 ) : (
                   <Card className="p-6 text-center">Payroll data not available for this period.</Card>
                 )}

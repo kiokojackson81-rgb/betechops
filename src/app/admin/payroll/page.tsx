@@ -79,7 +79,7 @@ export default async function AdminPayrollPage({
           </div>
         </div>
       </header>
-      <PayrollTableClient rows={rows} periodLabel={period.label} />
+      <PayrollTableClient rows={rows} periodLabel={period.label} periodKey={period.key} />
     </div>
   );
 }

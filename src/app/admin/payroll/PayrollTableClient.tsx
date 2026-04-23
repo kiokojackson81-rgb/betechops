@@ -51,9 +51,11 @@ function PerformanceTile({ label, value, meta }: PerformanceTileProps) {
 export default function PayrollTableClient({
   rows,
   periodLabel,
+  periodKey,
 }: {
   rows: PayrollRow[];
   periodLabel: string;
+  periodKey: string;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
@@ -384,12 +386,20 @@ export default function PayrollTableClient({
                       <div className="text-lg font-semibold text-emerald-300">{formatCurrency(row.netPay)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link
-                        className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
-                        href={`/admin/attendants/${row.attendantId}/payroll`}
-                      >
-                        View
-                      </Link>
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                          href={`/api/admin/payroll/payslip?attendantId=${encodeURIComponent(row.attendantId)}&periodKey=${encodeURIComponent(periodKey)}`}
+                        >
+                          Payslip
+                        </Link>
+                        <Link
+                          className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                          href={`/admin/attendants/${row.attendantId}/payroll?period=${encodeURIComponent(periodKey)}`}
+                        >
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );
