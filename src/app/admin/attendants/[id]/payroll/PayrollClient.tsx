@@ -80,7 +80,6 @@ export default function PayrollClient({
     summary?._raw?.grossCommission ??
     summary?._raw?.salesCommission ??
     0;
-  const periodProfit = Number(summary?.totalProfit ?? summary?._raw?.totalProfit ?? 0);
   const periodReceipts = Number(summary?.totalReceipts ?? summary?._raw?.totalReceipts ?? 0);
   const periodItems = Number(summary?.totalItems ?? summary?._raw?.totalItems ?? 0);
   const ledgerTotals = useMemo(() => {
@@ -309,28 +308,15 @@ export default function PayrollClient({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Current period — {periodLabel}</h2>
+            <p className="text-xs text-slate-400">Structured payroll summary without buying-price or profit fields.</p>
           </div>
         </div>
 
         <div className="mt-3 space-y-3 text-sm">
-          <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
-            <span className="text-slate-300">Period sales</span>
-            <span className="font-semibold text-emerald-400">KES {summary?.sales?.toLocaleString?.() ?? 0}</span>
-          </div>
-          <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
-            <span className="text-slate-300">Commission</span>
-            <span className="font-semibold text-emerald-400">
-              KES {commissionValue.toLocaleString?.() ?? 0}
-            </span>
-          </div>
-          <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
-            <span className="text-slate-300">Net pay</span>
-            <span className="font-semibold text-emerald-400">KES {summary?.netPay?.toLocaleString?.() ?? 0}</span>
-          </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
-              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Profit</span>
-              <span className="font-semibold text-slate-100">KES {periodProfit.toLocaleString()}</span>
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Period sales</span>
+              <span className="font-semibold text-emerald-400">KES {summary?.sales?.toLocaleString?.() ?? 0}</span>
             </div>
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
               <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts</span>
@@ -339,6 +325,25 @@ export default function PayrollClient({
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
               <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Items</span>
               <span className="font-semibold text-slate-100">{periodItems.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Base salary</span>
+              <span className="font-semibold text-slate-100">KES {Number(summary?.baseSalary ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Transport</span>
+              <span className="font-semibold text-slate-100">KES {Number(summary?.transportAllowance ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Commission</span>
+              <span className="font-semibold text-emerald-400">KES {commissionValue.toLocaleString?.() ?? 0}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Net pay</span>
+              <span className="font-semibold text-emerald-400">KES {summary?.netPay?.toLocaleString?.() ?? 0}</span>
             </div>
           </div>
 

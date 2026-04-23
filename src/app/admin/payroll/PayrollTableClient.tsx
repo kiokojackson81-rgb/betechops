@@ -24,9 +24,10 @@ const getDisplayName = (row?: PayrollRow | null) => {
 
 type PerformanceSummary = {
   bestSales: PayrollRow;
-  bestProfit: PayrollRow;
   bestReceipts: PayrollRow;
   bestItems: PayrollRow;
+  bestCommission: PayrollRow;
+  bestNetPay: PayrollRow;
   bestProductWork: PayrollRow;
   productWorkCount: number;
 };
@@ -104,16 +105,18 @@ export default function PayrollTableClient({
       filteredRows.reduce((best, current) => (selector(current) > selector(best) ? current : best), filteredRows[0]);
 
     const bestSales = bestBy((row) => row.totalSales);
-    const bestProfit = bestBy((row) => row.totalProfit);
     const bestReceipts = bestBy((row) => row.totalReceipts);
     const bestItems = bestBy((row) => row.totalItems);
+    const bestCommission = bestBy((row) => row.commissionTotal);
+    const bestNetPay = bestBy((row) => row.netPay);
     const bestProductWork = bestBy(getProductActivity);
 
     return {
       bestSales,
-      bestProfit,
       bestReceipts,
       bestItems,
+      bestCommission,
+      bestNetPay,
       bestProductWork,
       productWorkCount: getProductActivity(bestProductWork),
     };
@@ -220,23 +223,23 @@ export default function PayrollTableClient({
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Performances</p>
               <h2 className="text-lg font-semibold text-slate-100">AI-curated performance menu</h2>
               <p className="text-xs text-slate-400">
-                Compares receipts, direct sales, Kilimall uploads/edits, and product actions to spotlight who is driving value.
+                Payroll-safe comparison across sales, commissions, receipts, items, and product actions.
               </p>
             </div>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200 uppercase tracking-wide">
               Compare
             </span>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <PerformanceTile
               label="Top sales"
               value={formatCurrency(performanceSummary.bestSales.totalSales)}
               meta={getDisplayName(performanceSummary.bestSales)}
             />
             <PerformanceTile
-              label="Highest profit"
-              value={formatCurrency(performanceSummary.bestProfit.totalProfit)}
-              meta={getDisplayName(performanceSummary.bestProfit)}
+              label="Top commission"
+              value={formatCurrency(performanceSummary.bestCommission.commissionTotal)}
+              meta={getDisplayName(performanceSummary.bestCommission)}
             />
             <PerformanceTile
               label="Most receipts"
@@ -247,6 +250,11 @@ export default function PayrollTableClient({
               label="Items sold"
               value={performanceSummary.bestItems.totalItems.toLocaleString("en-US")}
               meta={getDisplayName(performanceSummary.bestItems)}
+            />
+            <PerformanceTile
+              label="Top net pay"
+              value={formatCurrency(performanceSummary.bestNetPay.netPay)}
+              meta={getDisplayName(performanceSummary.bestNetPay)}
             />
             <PerformanceTile
               label="Product uploads/edits"
@@ -293,18 +301,6 @@ export default function PayrollTableClient({
                 const additionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "ADDITION");
                 const deductionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "DEDUCTION");
 
-                const profitText =
-                  row.totalProfit !== 0
-                    ? row.totalProfit.toLocaleString("en-US")
-                    : row.totalSales > 0 && row.totalReceipts > 0
-                    ? "— (no profit data)"
-                    : "0";
-
-                const profitTitle =
-                  row.totalProfit === 0 && row.totalSales > 0 && row.totalReceipts > 0
-                    ? "No per-receipt profit snapshots (check pricing)"
-                    : "";
-
                 return (
                   <tr
                     key={row.attendantId}
@@ -330,20 +326,7 @@ export default function PayrollTableClient({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right space-y-1">
-                      <div className="font-semibold text-slate-100">{row.totalSales.toLocaleString("en-US")}</div>
-                      <div className="text-[11px] text-slate-500" title={profitTitle}>
-                        Profit{' '}
-                        {row.totalProfit === 0 && row.totalSales > 0 && row.totalReceipts > 0 ? (
-                          <a
-                            className="underline text-slate-300"
-                            href={`/admin/receipts/missing-buying?attendantId=${row.attendantId}`}
-                          >
-                            {profitText}
-                          </a>
-                        ) : (
-                          profitText
-                        )}
-                      </div>
+                      <div className="font-semibold text-slate-100">{formatCurrency(row.totalSales)}</div>
                       <div className="text-[11px] text-slate-500">
                         {row.totalReceipts.toLocaleString("en-US")} receipts · {row.totalItems.toLocaleString("en-US")} items
                       </div>
@@ -354,7 +337,9 @@ export default function PayrollTableClient({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="font-semibold text-emerald-300">{formatCurrency(row.commission)}</div>
-                      <div className="text-[11px] text-slate-500">Gross {formatCurrency(row.commissionGross)}</div>
+                      <div className="text-[11px] text-slate-500">
+                        Direct {formatCurrency(row.commissionDirect)} · Jumia {formatCurrency(row.commissionMarketplaceJumia)} · Kilimall {formatCurrency(row.commissionMarketplaceKilimall)}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="text-slate-100">{formatCurrency(row.bonusTotal)}</div>
