@@ -4,12 +4,10 @@ import { redirect } from "next/navigation";
 import PayrollClient from "./PayrollClient";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
-import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
-import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
-import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +27,10 @@ export default async function PayrollPage({
 
   const awaitedParams = await params;
   const attendantId = awaitedParams.id;
-  const attendant = await prisma.user.findUnique({ where: { id: attendantId }, select: { id: true, name: true, email: true } });
+  const attendant = await prisma.user.findUnique({
+    where: { id: attendantId },
+    select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+  });
   if (!attendant) {
     return (
       <div className="p-6">
@@ -60,75 +61,39 @@ export default async function PayrollPage({
         },
       },
     })) ?? null;
-
-  // Prefer the more robust earnings summary implementation which tolerates
-  // multiple periodKey formats and honours payroll adjustment kinds. Fall
-  // back to the older marketing earnings helper if needed.
-  let summary: any = null;
-  try {
-    const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
-    const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
-    const ledgerDetail = currentLedgerRaw?.detail as Record<string, any> | undefined;
-    const marketingCommissionValue =
-      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
-    const supportCommissionValue =
-      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
-
-    const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
-
-    // For Jeniffer we must prefer the computed `userSummary.salesCommission`
-    // and not allow persisted ledger values to overwrite it. For other
-    // attendants prefer ledger-derived values when present.
-    let ledgerSalesCommission = 0;
-    if (!isJeniffer) {
-      ledgerSalesCommission = marketingCommissionValue + supportCommissionValue;
-      if (ledgerSalesCommission === 0 && currentLedgerRaw) {
-        ledgerSalesCommission = Number(currentLedgerRaw.grossCommission ?? 0);
-      }
-    }
-
-    if (ledgerSalesCommission === 0) {
-      ledgerSalesCommission = userSummary.salesCommission;
-    }
-
-    const grossCommission =
-      ledgerSalesCommission +
-      userSummary.newProductCommission +
-      userSummary.copiedCommission +
-      userSummary.editedCommission +
-      userSummary.commissionTopUpTotal;
-
-    const bonusTotal = userSummary.bonusTotal ?? 0;
-    const totalDeductions =
-      userSummary.chamaTotal +
-      userSummary.latenessTotal +
-      userSummary.disciplineTotal +
-      userSummary.otherDeductionsTotal;
-    const totalEarnings =
-      userSummary.baseSalary + userSummary.transportAllowance + grossCommission + bonusTotal;
-    const netPay = totalEarnings - totalDeductions;
-
-    summary = {
-      ...userSummary,
-      salesCommission: ledgerSalesCommission,
-      grossCommission,
-      totalEarnings,
-      totalDeductions,
-      netPay,
-      commission: grossCommission,
-      sales: userSummary.totalSales,
-    };
-    // expose jenifferProgress to client for UI display when present
-    (summary as any).jenifferProgress = (userSummary as any).jenifferProgress ?? null;
-  } catch (e) {
-    // fallback to existing implementation if the new helper fails for any reason
-    try {
-      const old = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });
-      summary = { sales: old.sales ?? 0, netPay: old.netPay ?? 0, _raw: old };
-    } catch (err) {
-      summary = { sales: 0, netPay: 0 };
-    }
-  }
+  const payrollRow = await buildPayrollRow(
+    {
+      id: attendant.id,
+      name: attendant.name,
+      email: attendant.email,
+      attendantCategory: attendant.attendantCategory ?? null,
+      isActive: attendant.isActive,
+    },
+    period,
+  );
+  const summary = {
+    sales: payrollRow.totalSales,
+    totalProfit: payrollRow.totalProfit,
+    totalReceipts: payrollRow.totalReceipts,
+    totalItems: payrollRow.totalItems,
+    baseSalary: payrollRow.baseSalary,
+    transportAllowance: payrollRow.transportAllowance,
+    commission: payrollRow.commissionTotal,
+    grossCommission: payrollRow.commissionGross,
+    netPay: payrollRow.netPay,
+    bonusTotal: payrollRow.adjustmentBreakdown.bonus + payrollRow.adjustmentBreakdown.commissionTopUp,
+    chamaTotal: payrollRow.adjustmentBreakdown.chama,
+    latenessTotal: payrollRow.adjustmentBreakdown.lateness,
+    disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
+    otherDeductionsTotal: payrollRow.adjustmentBreakdown.other,
+    totalEarnings: payrollRow.totalEarnings,
+    totalDeductions: payrollRow.totalDeductions,
+    commissionDirect: payrollRow.commissionDirect,
+    commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+    commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+    adjustmentBreakdown: payrollRow.adjustmentBreakdown,
+    adjustmentEntries: payrollRow.adjustmentEntries,
+  };
 
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   const adjustmentKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
@@ -138,12 +103,18 @@ export default async function PayrollPage({
   });
   const currentLedger =
     currentLedgerRaw === null
-      ? null
+      ? {
+          commissionDirect: payrollRow.commissionDirect,
+          commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+          commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+          netCommission: payrollRow.commissionTotal,
+          commissionBreakdown: (payrollRow.commissionBreakdown as Record<string, number | undefined>) ?? {},
+        }
       : {
-          commissionDirect: Number(currentLedgerRaw.commissionDirect ?? 0),
-          commissionMarketplaceJumia: Number(currentLedgerRaw.commissionMarketplaceJumia ?? 0),
-          commissionMarketplaceKilimall: Number(currentLedgerRaw.commissionMarketplaceKilimall ?? 0),
-          netCommission: Number(currentLedgerRaw.netCommission ?? 0),
+          commissionDirect: payrollRow.commissionDirect,
+          commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+          commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+          netCommission: Number(currentLedgerRaw.netCommission ?? payrollRow.commissionTotal ?? 0),
           commissionBreakdown:
             typeof currentLedgerRaw.commissionBreakdown === "object" && currentLedgerRaw.commissionBreakdown !== null
               ? (Object.fromEntries(
@@ -154,7 +125,7 @@ export default async function PayrollPage({
                       : Number(value ?? 0),
                   ]),
                 ) as Record<string, number>)
-              : {},
+              : ((payrollRow.commissionBreakdown as Record<string, number | undefined>) ?? {}),
         };
 
   const previousPeriod = getTradingPeriodFor(new Date(period.start.getTime() - 24 * 60 * 60 * 1000));

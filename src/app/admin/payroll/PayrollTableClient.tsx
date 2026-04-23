@@ -130,6 +130,13 @@ export default function PayrollTableClient({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="no-print rounded-full border border-white/10 bg-slate-900/50 px-3 py-1 text-slate-200 transition hover:bg-slate-800"
+          >
+            Print payroll
+          </button>
           <div className="rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-slate-200">Marketing Ops highlight</div>
           <div className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-rose-200">Brendah focus</div>
           <a
