@@ -62,12 +62,77 @@ type PaymentMethod = "MPESA" | "CASH" | "";
 
 // Preview commission from server (falls back to null until fetched)
 const COMMISSION_RATE = undefined as unknown as number;
+const MARKETPLACE_STEP_POINTS = [
+  2_000_000,
+  3_000_000,
+  4_000_000,
+  5_000_000,
+  6_000_000,
+  7_000_000,
+  8_000_000,
+  9_000_000,
+  10_000_000,
+];
 
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
 const safeNumber = (value?: number | null) => Number(value ?? 0);
 const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+type MarketplaceTierInfo = {
+  target: number;
+  remaining: number;
+  progress: number;
+  message: string;
+};
+
+function describeMarketplaceTier(sales: number): MarketplaceTierInfo {
+  const normalized = Math.max(0, Math.round(sales));
+
+  if (normalized < 500_000) {
+    const remaining = 500_000 - normalized;
+    return {
+      target: 500_000,
+      remaining,
+      progress: clamp01(normalized / 500_000),
+      message: `${formatKES(remaining)} to enter the ladder`,
+    };
+  }
+
+  if (normalized < 1_000_000) {
+    const remaining = 1_000_000 - normalized;
+    return {
+      target: 1_000_000,
+      remaining,
+      progress: clamp01((normalized - 500_000) / 500_000),
+      message: `${formatKES(remaining)} to finish the 500k-1M band`,
+    };
+  }
+
+  let previous = 1_000_000;
+  for (const point of MARKETPLACE_STEP_POINTS) {
+    if (normalized < point) {
+      const remaining = point - normalized;
+      const progress = clamp01((normalized - previous) / (point - previous));
+      return {
+        target: point,
+        remaining,
+        progress,
+        message: `${formatKES(remaining)} to reach the ${point / 1_000_000}M tier`,
+      };
+    }
+    previous = point;
+  }
+
+  return {
+    target: MARKETPLACE_STEP_POINTS[MARKETPLACE_STEP_POINTS.length - 1],
+    remaining: 0,
+    progress: 1,
+    message: "Max tier reached",
+  };
+}
 
 const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
   rows: T[],
@@ -664,24 +729,20 @@ export default function AttendantOnlineClient() {
 
     // earnings summary loader removed
 
-  // Prefer authoritative online summary (trading-period marketplace totals) when available.
+  // Keep quick stats aligned with the marketplace overview/PDF logic for the
+  // currently selected range instead of older period-wide summary totals.
   const quickStatsPeriodLabel =
     onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? selectedPeriod.label;
   const marketplace = onlineSummary?.marketplace ?? null;
   const aggregatorJumiaSales = platformTotals.jumiaSales;
   const aggregatorKilimallSales = platformTotals.kilimallSales;
   const aggregatorMarketplaceSalesOnly = aggregatorJumiaSales + aggregatorKilimallSales;
-  const quickJumiaSales =
-    marketplace && Number(marketplace.jumiaSales ?? 0) > 0 ? Number(marketplace.jumiaSales) : aggregatorJumiaSales;
-  const quickKilimallSales =
-    marketplace && Number(marketplace.kilimallSales ?? 0) > 0
-      ? Number(marketplace.kilimallSales)
-      : aggregatorKilimallSales;
-  const quickMarketplaceSalesOnly =
-    marketplace && Number(marketplace.marketplaceSalesOnly ?? 0) > 0
-      ? Number(marketplace.marketplaceSalesOnly)
-      : aggregatorMarketplaceSalesOnly;
+  const marketplaceTierInfo = describeMarketplaceTier(aggregatorMarketplaceSalesOnly);
+  const quickJumiaSales = aggregatorJumiaSales;
+  const quickKilimallSales = aggregatorKilimallSales;
+  const quickMarketplaceSalesOnly = aggregatorMarketplaceSalesOnly;
   const commissionBreakdown = onlineSummary?.commissions ?? null;
+  const quickMarketplaceCommission = platformTotals.marketplaceCommission;
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
     marketplaceSales: quickMarketplaceSalesOnly,
@@ -699,13 +760,14 @@ export default function AttendantOnlineClient() {
       ) || 0,
     marketplaceCommission:
       Number(
-        commissionBreakdown?.marketplaceCombined ??
+        quickMarketplaceCommission ??
+          commissionBreakdown?.marketplaceCombined ??
           payrollSummary?.marketplaceCommission ??
           0,
       ) || 0,
-    toNextTier: Number(marketplace?.toNextTier ?? toNextTier),
-    tierProgress: Number(marketplace?.tierProgress ?? 0),
-    tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
+    toNextTier: marketplaceTierInfo.remaining,
+    tierProgress: marketplaceTierInfo.progress,
+    tierMessage: marketplaceTierInfo.message,
   };
 
   const receiptsHistoryHref = userId
