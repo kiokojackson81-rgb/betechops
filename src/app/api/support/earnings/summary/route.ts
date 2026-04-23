@@ -5,6 +5,7 @@ import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(req: Request) {
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(new Date());
   const periodKey = period.key;
 
+  await ensurePayrollAdjustmentStorage();
   const [{ aggregates }, compPlan, adjustments, ledger] = await Promise.all([
     getSupportPeriodAggregates({ userId: auth.user.id, period }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId: auth.user.id } }),

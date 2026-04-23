@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 
 export const dynamic = "force-dynamic";
@@ -118,6 +119,7 @@ export default async function PayrollPage({
 
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   const adjustmentKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
+  await ensurePayrollAdjustmentStorage();
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
     where: { attendantId, periodKey: { in: adjustmentKeys } },
     orderBy: { createdAt: "desc" },

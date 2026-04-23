@@ -19,6 +19,7 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 type AssignmentWithAccount = any;
 
@@ -534,6 +535,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
   const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
+  await ensurePayrollAdjustmentStorage();
   const [directStats, marketplaceSalesSummary, plan, adjustments, returns, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     getAssignedMarketplaceSalesForPeriod(attendantId, {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function GET(req: Request, ctx: any) {
     });
   } catch {}
   try {
+    await ensurePayrollAdjustmentStorage();
     const where: any = { attendantId };
     if (periodKey) {
       const variants = getPeriodKeyVariants(periodKey);
@@ -89,6 +91,7 @@ export async function POST(req: Request, ctx: any) {
   if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   try {
+    await ensurePayrollAdjustmentStorage();
     const kindCandidate = String(adjustmentKind ?? "DEDUCTION").toUpperCase();
     const kind = kindCandidate === "ADDITION" ? "ADDITION" : "DEDUCTION";
     const created = await prisma.attendantPayrollAdjustment.create({
@@ -155,6 +158,7 @@ export async function DELETE(req: Request, ctx: any) {
     });
   } catch {}
   try {
+    await ensurePayrollAdjustmentStorage();
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (row.attendantId !== attendantId) return NextResponse.json({ error: "Mismatched attendant" }, { status: 403 });

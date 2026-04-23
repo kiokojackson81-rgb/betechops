@@ -118,6 +118,7 @@ export default function PayrollClient({
   const [appraisal] = useState<PayrollAppraisal>(initialAppraisal);
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [addingAdjustment, setAddingAdjustment] = useState(false);
 
   const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
     { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
@@ -271,6 +272,7 @@ export default function PayrollClient({
       showToast("Please fill type, label and amount", "error");
       return;
     }
+    setAddingAdjustment(true);
     try {
       const body = {
         periodKey,
@@ -290,11 +292,13 @@ export default function PayrollClient({
         throw new Error(err.error || "Failed to add adjustment");
       }
       showToast("Adjustment added", "success");
-      setNewAdjustment({ adjustmentType: "BONUS", label: "", amount: "" });
+      setNewAdjustment({ adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" });
       await fetchAdjustments();
       await fetchSummary();
     } catch (err: any) {
       showToast(err?.message || "Failed to add adjustment", "error");
+    } finally {
+      setAddingAdjustment(false);
     }
   };
 
@@ -537,7 +541,9 @@ export default function PayrollClient({
                     <label className="text-xs text-slate-400">Amount (KES)</label>
                     <div className="flex gap-2 items-center">
                       <Input type="number" value={String(newAdjustment.amount)} onChange={(e) => setNewAdjustment((s) => ({ ...s, amount: e.target.value === "" ? "" : Number(e.target.value) }))} />
-                      <Button variant="primary" onClick={addAdjustment}>Add</Button>
+                      <Button variant="primary" onClick={addAdjustment} disabled={addingAdjustment}>
+                        {addingAdjustment ? "Saving..." : "Save adjustment"}
+                      </Button>
                     </div>
                   </div>
                 </div>

@@ -7,6 +7,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { AdjustmentEntry, AdjustmentKind } from "@/app/admin/payroll/types";
 
 // Compatibility route for older clients that call /api/payroll/summary
@@ -57,6 +58,7 @@ export async function GET(req: Request) {
     const periodKeyIso = `${period.start.toISOString()}_${period.end.toISOString()}`;
     const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
     const periodFilterKeys = periodKeyVariants.length ? periodKeyVariants : [periodKeyIso];
+    await ensurePayrollAdjustmentStorage();
 
     const windowMs = 24 * 60 * 60 * 1000;
     const [plans, ledgers, adjustments] = await Promise.all([

@@ -18,6 +18,7 @@ import {
   getOrCreateCommissionPeriod,
 } from "@/lib/commission";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 
 type AttendantRecord = {
@@ -136,6 +137,7 @@ function isMarketingCategory(category?: string | null) {
 
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
+  await ensurePayrollAdjustmentStorage();
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({
