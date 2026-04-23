@@ -743,6 +743,18 @@ export default function AttendantOnlineClient() {
   const quickMarketplaceSalesOnly = aggregatorMarketplaceSalesOnly;
   const commissionBreakdown = onlineSummary?.commissions ?? null;
   const quickMarketplaceCommission = platformTotals.marketplaceCommission;
+  const directCommissionMode = String(commissionBreakdown?.directCommissionMode ?? "").toUpperCase();
+  const directCommissionFromSummary = [
+    Number(commissionBreakdown?.direct ?? Number.NaN),
+    Number(payrollSummary?.directCommission ?? Number.NaN),
+    Number(payrollSummary?.salesCommission ?? Number.NaN),
+  ].find((value) => Number.isFinite(value) && value > 0) ?? 0;
+  const profitShareDirectCommissionFallback =
+    directCommissionMode === "PROFIT_10"
+      ? Math.max(0, Math.round(Number(directReceiptsSummary?.totalProfit ?? 0) * 0.1))
+      : 0;
+  const quickDirectCommission =
+    directCommissionFromSummary > 0 ? directCommissionFromSummary : profitShareDirectCommissionFallback;
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
     marketplaceSales: quickMarketplaceSalesOnly,
@@ -752,12 +764,7 @@ export default function AttendantOnlineClient() {
     totalSales: quickMarketplaceSalesOnly + directSales,
     commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
     directCommission:
-      Number(
-        commissionBreakdown?.direct ??
-          payrollSummary?.directCommission ??
-          payrollSummary?.salesCommission ??
-          0,
-      ) || 0,
+      quickDirectCommission,
     marketplaceCommission:
       Number(
         quickMarketplaceCommission ??

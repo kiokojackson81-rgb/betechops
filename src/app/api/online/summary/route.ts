@@ -135,6 +135,7 @@ export async function GET(req: Request) {
     },
     { directCommissionMode: resolveDirectCommissionMode(targetUser?.email) },
   );
+  const directCommissionMode = resolveDirectCommissionMode(targetUser?.email);
   const directCommission = Number(
     commissionBreakdown.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0,
   );
@@ -188,6 +189,7 @@ export async function GET(req: Request) {
       direct: directCommission,
       marketplaceCombined: marketplaceCommission,
       total: Number(commissionBreakdown.totalCommission ?? 0),
+      directCommissionMode,
     },
   };
 
