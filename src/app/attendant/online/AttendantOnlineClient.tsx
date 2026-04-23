@@ -51,6 +51,25 @@ type MarketplaceOverviewRow = {
   orders: number;
 };
 
+type AccountSubmissionWeekStatus = {
+  accountId: string;
+  weekStart: string;
+  status: "SUBMITTED" | "LOADED" | "ZERO" | "NOT_SUBMITTED";
+  markedZero?: boolean;
+  hasDraft?: boolean;
+  hasProfitEntries?: boolean;
+  complete?: boolean;
+  missingPricing?: number;
+};
+
+type AccountStatusSummary = {
+  totalWeeks: number;
+  submitted: number;
+  loaded: number;
+  zero: number;
+  notSubmitted: number;
+};
+
 type OnlineEarningsSummary = {
   periodLabel: string;
   salesCommission: number;
@@ -132,6 +151,87 @@ function describeMarketplaceTier(sales: number): MarketplaceTierInfo {
     progress: 1,
     message: "Max tier reached",
   };
+}
+
+function formatAccountStatusLabel(status: AccountSubmissionWeekStatus["status"]) {
+  switch (status) {
+    case "SUBMITTED":
+      return "Submitted";
+    case "LOADED":
+      return "Loaded";
+    case "ZERO":
+      return "Zero";
+    default:
+      return "Not submitted";
+  }
+}
+
+function getAccountStatusBadgeClass(status: AccountSubmissionWeekStatus["status"]) {
+  switch (status) {
+    case "SUBMITTED":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+    case "LOADED":
+      return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+    case "ZERO":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+    default:
+      return "border-slate-700 bg-slate-900/80 text-slate-300";
+  }
+}
+
+function buildAccountStatusBadges(summary: AccountStatusSummary): Array<{
+  key: string;
+  label: string;
+  className: string;
+}> {
+  if (summary.totalWeeks <= 1) {
+    const singleStatus: AccountSubmissionWeekStatus["status"] =
+      summary.zero > 0
+        ? "ZERO"
+        : summary.submitted > 0
+          ? "SUBMITTED"
+          : summary.loaded > 0
+            ? "LOADED"
+            : "NOT_SUBMITTED";
+    return [
+      {
+        key: singleStatus,
+        label: formatAccountStatusLabel(singleStatus),
+        className: getAccountStatusBadgeClass(singleStatus),
+      },
+    ];
+  }
+
+  const badges: Array<{ key: string; label: string; className: string }> = [];
+  if (summary.submitted > 0) {
+    badges.push({
+      key: "submitted",
+      label: `Submitted ${summary.submitted}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("SUBMITTED"),
+    });
+  }
+  if (summary.loaded > 0) {
+    badges.push({
+      key: "loaded",
+      label: `Loaded ${summary.loaded}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("LOADED"),
+    });
+  }
+  if (summary.zero > 0) {
+    badges.push({
+      key: "zero",
+      label: `Zero ${summary.zero}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("ZERO"),
+    });
+  }
+  if (summary.notSubmitted > 0 || badges.length === 0) {
+    badges.push({
+      key: "not-submitted",
+      label: `Not submitted ${summary.notSubmitted}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("NOT_SUBMITTED"),
+    });
+  }
+  return badges;
 }
 
 const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
@@ -269,6 +369,18 @@ export default function AttendantOnlineClient() {
 
   const [payrollSummary, setPayrollSummary] = useState<any | null>(null);
   const [payrollLoading, setPayrollLoading] = useState(false);
+
+  const selectedMarketplaceWeekKeys = useMemo(
+    () =>
+      activeWeekKeys.includes("period")
+        ? tradingWeeks.map((week) => week.key)
+        : activeWeekKeys.length
+          ? activeWeekKeys
+          : tradingWeeks.at(-1)?.key
+            ? [tradingWeeks.at(-1)!.key]
+            : [],
+    [activeWeekKeys, tradingWeeks],
+  );
 
   const fetchUser = useCallback(async () => {
     try {
@@ -489,13 +601,6 @@ export default function AttendantOnlineClient() {
         orders: Number(row.orders ?? 0),
       }));
     }
-    const selectedWeekKeys = activeWeekKeys.includes("period")
-      ? tradingWeeks.map((week) => week.key)
-      : activeWeekKeys.length
-        ? activeWeekKeys
-        : tradingWeeks.at(-1)?.key
-          ? [tradingWeeks.at(-1)!.key]
-          : [];
     const serverWeeklyByAccountWeek = new Map<string, MarketplaceOverviewRow>();
     for (const row of serverWeeklyRows) {
       const weekKey = normalizeWeekKey(row.weekStart);
@@ -504,7 +609,7 @@ export default function AttendantOnlineClient() {
 
     const baseRows = serverRows.map((row) => {
       const accountKey = String(row.accountId ?? row.shopId ?? "").trim();
-      const selectedWeeks = selectedWeekKeys.length ? selectedWeekKeys : [normalizeWeekKey(row.weekStart)];
+      const selectedWeeks = selectedMarketplaceWeekKeys.length ? selectedMarketplaceWeekKeys : [normalizeWeekKey(row.weekStart)];
       let sales = 0;
       let orders = 0;
 
@@ -537,7 +642,55 @@ export default function AttendantOnlineClient() {
       ...row,
       commission: Math.max(0, Number(computeMarketplaceCommission(row.sales).amount || 0) - Number(row.chargedReturns ?? 0)),
     }));
-  }, [activeWeekKeys, tradingWeeks, weeklyEarnings]);
+  }, [selectedMarketplaceWeekKeys, weeklyEarnings]);
+
+  const accountSubmissionStatuses = useMemo<AccountSubmissionWeekStatus[]>(
+    () =>
+      Array.isArray(weeklyEarnings?.accountStatuses)
+        ? (weeklyEarnings.accountStatuses as AccountSubmissionWeekStatus[]).map((entry) => ({
+            ...entry,
+            accountId: String(entry.accountId ?? "").trim(),
+            weekStart: normalizeWeekKey(entry.weekStart),
+            status: (String(entry.status ?? "NOT_SUBMITTED").trim().toUpperCase() as AccountSubmissionWeekStatus["status"]),
+          }))
+        : [],
+    [weeklyEarnings],
+  );
+
+  const accountStatusSummaryById = useMemo(() => {
+    const summaryById = new Map<string, AccountStatusSummary>();
+    const explicitStatusByAccountWeek = new Map<string, AccountSubmissionWeekStatus["status"]>();
+
+    for (const entry of accountSubmissionStatuses) {
+      if (!entry.accountId || !entry.weekStart) continue;
+      explicitStatusByAccountWeek.set(`${entry.accountId}::${entry.weekStart}`, entry.status);
+    }
+
+    for (const row of marketplaceOverviewRows) {
+      const accountId = String(row.accountId ?? row.shopId ?? "").trim();
+      if (!accountId) continue;
+      const summary: AccountStatusSummary = {
+        totalWeeks: selectedMarketplaceWeekKeys.length || 1,
+        submitted: 0,
+        loaded: 0,
+        zero: 0,
+        notSubmitted: 0,
+      };
+
+      const weeks = selectedMarketplaceWeekKeys.length ? selectedMarketplaceWeekKeys : [normalizeWeekKey(row.weekStart)];
+      for (const weekKey of weeks) {
+        const status = explicitStatusByAccountWeek.get(`${accountId}::${weekKey}`) ?? "NOT_SUBMITTED";
+        if (status === "SUBMITTED") summary.submitted += 1;
+        else if (status === "LOADED") summary.loaded += 1;
+        else if (status === "ZERO") summary.zero += 1;
+        else summary.notSubmitted += 1;
+      }
+
+      summaryById.set(accountId, summary);
+    }
+
+    return summaryById;
+  }, [accountSubmissionStatuses, marketplaceOverviewRows, selectedMarketplaceWeekKeys]);
 
   const marketplaceOverviewTotals = useMemo(
     () =>
@@ -803,6 +956,23 @@ export default function AttendantOnlineClient() {
     return `/api/online/summary/export?${params.toString()}`;
   })();
 
+  const renderAccountStatusBadges = (summary?: AccountStatusSummary): ReactNode => {
+    if (!summary) return null;
+    const badges = buildAccountStatusBadges(summary);
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {badges.map((badge) => (
+          <span
+            key={badge.key}
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${badge.className}`}
+          >
+            {badge.label}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-6xl space-y-6 p-6">
@@ -985,6 +1155,9 @@ export default function AttendantOnlineClient() {
                         <div>
                           <p className="font-semibold text-white">{row.shopName}</p>
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">{row.platform}</p>
+                          {renderAccountStatusBadges(
+                            accountStatusSummaryById.get(String(row.accountId ?? row.shopId ?? "").trim()),
+                          )}
                         </div>
                         <div className="flex flex-col items-end text-right">
                           <span className="text-emerald-300">{formatKES(row.sales)}</span>

@@ -4,6 +4,7 @@ import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
+import { getPricingWeekSummary, type PricingWeekAccountStatus } from "@/lib/pricingWeekWhatsapp";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,13 @@ const allocateCombinedMarketplaceCommission = <T extends { sales: number; charge
   });
 };
 
+function getAccountSubmissionStatus(account: PricingWeekAccountStatus) {
+  if (account.markedZero) return "ZERO";
+  if (account.complete) return "SUBMITTED";
+  if (account.hasDraft || account.hasProfitEntries) return "LOADED";
+  return "NOT_SUBMITTED";
+}
+
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
@@ -106,6 +114,28 @@ export async function GET(req: Request) {
   const filteredWeeklyRows = selectedWeekKeys.size
     ? marketplaceSalesSummary.weeklyRows.filter((row) => selectedWeekKeys.has(normalizeWeekKey(row.weekStart)))
     : marketplaceSalesSummary.weeklyRows;
+  const accountIds = Array.from(new Set(marketplaceSalesSummary.rows.map((row) => String(row.accountId ?? "").trim()).filter(Boolean)));
+  const weekKeysForStatuses = selectedWeekKeys.size
+    ? Array.from(selectedWeekKeys)
+    : Array.from(new Set(filteredWeeklyRows.map((row) => normalizeWeekKey(row.weekStart)).filter(Boolean)));
+  const accountStatuses = accountIds.length && weekKeysForStatuses.length
+    ? (
+        await Promise.all(
+          weekKeysForStatuses.map((weekKey) => getPricingWeekSummary(weekKey, { accountIds })),
+        )
+      ).flatMap((summary) =>
+        summary.accounts.map((account) => ({
+          accountId: account.accountId,
+          weekStart: summary.week_start,
+          status: getAccountSubmissionStatus(account),
+          markedZero: account.markedZero,
+          hasDraft: account.hasDraft,
+          hasProfitEntries: account.hasProfitEntries,
+          complete: account.complete,
+          missingPricing: account.missingPricing,
+        })),
+      )
+    : [];
 
   if (!marketplaceSalesSummary.rows.length) {
     const emptyResponse = {
@@ -113,6 +143,7 @@ export async function GET(req: Request) {
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
       weeklyRows: [],
+      accountStatuses: [],
       useCombinedMarketplaceLadder,
     };
     return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
@@ -230,6 +261,7 @@ export async function GET(req: Request) {
       chargedReturns: 0,
       orders: Number(row.orders ?? 0),
     })),
+    accountStatuses,
     useCombinedMarketplaceLadder,
   };
 
