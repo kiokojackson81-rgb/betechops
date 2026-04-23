@@ -7,13 +7,21 @@ import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiW
 import { WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
+import { getPricingWeekSummary, type PricingWeekAccountStatus } from "@/lib/pricingWeekWhatsapp";
 
 export const dynamic = "force-dynamic";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-type SearchParams = { weekStart?: string; periodKey?: string; accountId?: string };
+type SearchParams = { weekStart?: string; periodKey?: string; accountId?: string; accountStatus?: string };
+
+function getAccountSubmissionStatus(account: PricingWeekAccountStatus) {
+  if (account.markedZero) return "ZERO";
+  if (account.complete) return "DONE";
+  if (account.hasDraft || account.hasProfitEntries) return "LOADED";
+  return "NOT LOADED";
+}
 
 export default async function OnlinePerformanceWeekPage({
   searchParams,
@@ -32,6 +40,7 @@ export default async function OnlinePerformanceWeekPage({
   const resolved = await Promise.resolve(searchParams ?? {});
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
   const accountId = (resolved.accountId ?? "").trim();
+  const accountStatusFilter = String(resolved.accountStatus ?? "all").trim().toLowerCase();
 
   const weekStartRaw = (resolved.weekStart ?? "").trim();
   const parsed = weekStartRaw ? parseDateOnlyUtc(weekStartRaw) : null;
@@ -50,6 +59,7 @@ export default async function OnlinePerformanceWeekPage({
   const canonicalStart = canonicalNairobiWeekStartUtc(parsed);
   const window = mondayToSundayNairobiWindow(canonicalStart);
   const endInclusive = new Date(window.weekEnd.getTime() - MS_PER_DAY);
+  const completion = await getPricingWeekSummary(weekStartRaw, accountId ? { accountIds: [accountId] } : undefined);
 
   const shopIdsForWeeklySales = accountId ? await resolveShopIdsForMarketplaceAccount(accountId) : [];
 
@@ -206,6 +216,28 @@ export default async function OnlinePerformanceWeekPage({
   const lossEntriesFlagged = rows.filter((e) => Boolean((e as any).isLoss));
   const missingPricingRows = rows.filter((e) => Number(e.buyingPrice ?? 0) <= 0);
   const missingPricingCount = missingPricingRows.length;
+  const accountRows = completion.accounts.map((account) => ({
+    ...account,
+    status: getAccountSubmissionStatus(account),
+  }));
+  const filteredAccounts = accountRows.filter((account) => {
+    switch (accountStatusFilter) {
+      case "submitted":
+        return account.complete;
+      case "not-submitted":
+        return !account.complete;
+      case "not-loaded":
+        return account.status === "NOT LOADED";
+      case "loaded":
+        return account.status === "LOADED";
+      case "zero":
+        return account.status === "ZERO";
+      default:
+        return true;
+    }
+  });
+  const filterHref = (filter: string) =>
+    `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(weekStartRaw)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}&accountStatus=${encodeURIComponent(filter)}#account-status`;
 
   return (
     <div className="space-y-8">
@@ -318,6 +350,120 @@ export default async function OnlinePerformanceWeekPage({
         <h2 className="text-lg font-semibold text-white">All entries</h2>
         <div className="mt-4">
           <WeekProfitEntriesClient rows={rows as any} emptyText="No profit entries captured for this week." variant="all" enableBulkDelete />
+        </div>
+      </section>
+
+      <section id="account-status" className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Account submission status</h2>
+            <p className="text-sm text-slate-400">
+              Accounts submitted includes fully priced accounts plus accounts marked zero.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold">
+            <Link
+              href={filterHref("all")}
+              className={`rounded-full border px-3 py-1.5 ${
+                accountStatusFilter === "all" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200" : "border-white/10 text-slate-300 hover:bg-white/5"
+              }`}
+            >
+              All ({accountRows.length})
+            </Link>
+            <Link
+              href={filterHref("submitted")}
+              className={`rounded-full border px-3 py-1.5 ${
+                accountStatusFilter === "submitted" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200" : "border-white/10 text-slate-300 hover:bg-white/5"
+              }`}
+            >
+              Submitted ({accountRows.filter((account) => account.complete).length})
+            </Link>
+            <Link
+              href={filterHref("not-submitted")}
+              className={`rounded-full border px-3 py-1.5 ${
+                accountStatusFilter === "not-submitted" ? "border-amber-400/50 bg-amber-500/10 text-amber-200" : "border-white/10 text-slate-300 hover:bg-white/5"
+              }`}
+            >
+              Not submitted ({accountRows.filter((account) => !account.complete).length})
+            </Link>
+            <Link
+              href={filterHref("not-loaded")}
+              className={`rounded-full border px-3 py-1.5 ${
+                accountStatusFilter === "not-loaded" ? "border-rose-400/50 bg-rose-500/10 text-rose-200" : "border-white/10 text-slate-300 hover:bg-white/5"
+              }`}
+            >
+              Not loaded ({accountRows.filter((account) => account.status === "NOT LOADED").length})
+            </Link>
+            <Link
+              href={filterHref("zero")}
+              className={`rounded-full border px-3 py-1.5 ${
+                accountStatusFilter === "zero" ? "border-slate-400/50 bg-slate-500/10 text-slate-100" : "border-white/10 text-slate-300 hover:bg-white/5"
+              }`}
+            >
+              Zero ({accountRows.filter((account) => account.status === "ZERO").length})
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[880px] text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-400">
+                <th className="py-2 pr-4">Account</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4 text-right">Required rows</th>
+                <th className="py-2 pr-4 text-right">Submitted rows</th>
+                <th className="py-2 pr-4 text-right">Missing pricing</th>
+                <th className="py-2 pr-4">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAccounts.map((account) => (
+                <tr key={account.accountId} className="border-t border-white/5">
+                  <td className="py-3 pr-4 text-slate-100">{account.displayName}</td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${
+                        account.status === "DONE"
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                          : account.status === "ZERO"
+                            ? "border-slate-400/40 bg-slate-500/10 text-slate-100"
+                            : account.status === "LOADED"
+                              ? "border-sky-400/40 bg-sky-500/10 text-sky-200"
+                              : "border-rose-400/40 bg-rose-500/10 text-rose-200"
+                      }`}
+                    >
+                      {account.status}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-right text-slate-200">{account.requiredRowCount}</td>
+                  <td className="py-3 pr-4 text-right text-slate-200">{account.submittedCount}</td>
+                  <td className={`py-3 pr-4 text-right font-semibold ${account.missingPricing > 0 ? "text-rose-300" : "text-emerald-200"}`}>
+                    {account.missingPricing}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Link
+                      href={
+                        account.shopIds[0]
+                          ? `/admin/online/performance/capture?shopId=${encodeURIComponent(account.shopIds[0])}&weekStart=${encodeURIComponent(weekStartRaw)}`
+                          : "/admin/online/performance/capture"
+                      }
+                      className="text-emerald-200 hover:text-emerald-100"
+                    >
+                      Open capture
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {filteredAccounts.length === 0 ? (
+                <tr>
+                  <td className="py-6 text-center text-slate-500" colSpan={6}>
+                    No accounts match this filter.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
 

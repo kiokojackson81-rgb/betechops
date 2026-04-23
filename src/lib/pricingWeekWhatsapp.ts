@@ -2,6 +2,7 @@ import { Prisma, WeeklySaleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWeekEndInputFromExclusive } from "@/lib/dividedReport";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
+import { getDraftCompletionStats, rowRequiresPricing } from "@/lib/marketplaceDraftCompletion";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { syncDividedChatraceContact } from "@/lib/integrations/chatraceDivided";
 import { canonicalNairobiWeekStartUtc, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
@@ -22,6 +23,8 @@ export type PricingWeekAccountStatus = {
   shopIds: string[];
   markedZero: boolean;
   hasDraft: boolean;
+  requiredRowCount: number;
+  submittedCount: number;
   draftComplete: boolean;
   hasProfitEntries: boolean;
   missingPricing: number;
@@ -136,7 +139,7 @@ export async function getPricingWeekSummary(weekStartRaw: string, opts?: { accou
       : Promise.resolve([]),
   ]);
 
-  const latestDraftByAccountId = new Map<string, { rowCount: number; submittedCount: number; updatedAt: number }>();
+  const latestDraftByAccountId = new Map<string, { rowCount: number; requiredRowCount: number; submittedCount: number; updatedAt: number }>();
   if (draftTableAvailable && (allShopIds.length || allAccountIds.length)) {
     try {
       const drafts = await prisma.marketplaceStatementDraft.findMany({
@@ -145,7 +148,7 @@ export async function getPricingWeekSummary(weekStartRaw: string, opts?: { accou
           weekEnd,
           OR: [{ shopId: { in: allShopIds } }, { accountId: { in: allAccountIds } }],
         },
-        select: { shopId: true, accountId: true, rowCount: true, submittedByTxn: true, updatedAt: true },
+        select: { shopId: true, accountId: true, rowCount: true, rows: true, submittedByTxn: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: Math.max(50, allAccountIds.length * 4),
       });
@@ -162,11 +165,15 @@ export async function getPricingWeekSummary(weekStartRaw: string, opts?: { accou
           "";
         if (!resolvedAccountId) continue;
         if (latestDraftByAccountId.has(resolvedAccountId)) continue;
-        const submittedCount =
-          draft.submittedByTxn && typeof draft.submittedByTxn === "object" ? Object.keys(draft.submittedByTxn as any).length : 0;
+        const stats = getDraftCompletionStats({
+          rows: draft.rows,
+          submittedByTxn: draft.submittedByTxn,
+          fallbackRowCount: Number(draft.rowCount ?? 0),
+        });
         latestDraftByAccountId.set(resolvedAccountId, {
           rowCount: Number(draft.rowCount ?? 0),
-          submittedCount,
+          requiredRowCount: stats.requiredRowCount,
+          submittedCount: stats.submittedCount,
           updatedAt: draft.updatedAt.getTime(),
         });
       }
@@ -205,10 +212,12 @@ export async function getPricingWeekSummary(weekStartRaw: string, opts?: { accou
     const markedZero = accountWeeklySales.length > 0 && accountWeeklySales.every((amount) => amount === 0);
     const draftState = latestDraftByAccountId.get(account.id) ?? null;
     const hasDraft = Boolean(draftState);
-    const draftComplete = Boolean(draftState && draftState.rowCount > 0 && draftState.submittedCount >= draftState.rowCount);
+    const requiredRowCount = draftState?.requiredRowCount ?? 0;
+    const submittedCount = draftState?.submittedCount ?? 0;
+    const draftComplete = Boolean(draftState && (requiredRowCount === 0 || submittedCount >= requiredRowCount));
     const hasProfitEntries = accountProfitRows.length > 0;
-    const missingPricing = markedZero ? 0 : accountProfitRows.filter((row) => row.buyingPrice <= 0).length;
-    const complete = markedZero || (missingPricing === 0 && ((hasDraft && draftComplete) || (!hasDraft && hasProfitEntries)));
+    const missingPricing = markedZero ? 0 : accountProfitRows.filter((row) => rowRequiresPricing(row) && row.buyingPrice <= 0).length;
+    const complete = markedZero || (hasDraft ? missingPricing === 0 : missingPricing === 0 && hasProfitEntries);
 
     return {
       accountId: account.id,
@@ -217,6 +226,8 @@ export async function getPricingWeekSummary(weekStartRaw: string, opts?: { accou
       shopIds,
       markedZero,
       hasDraft,
+      requiredRowCount,
+      submittedCount,
       draftComplete,
       hasProfitEntries,
       missingPricing,

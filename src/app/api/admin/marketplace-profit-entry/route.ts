@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRoleOrBenjamin } from "@/lib/api";
+import { requireRole } from "@/lib/api";
 import { mondayToSundayNairobiWindow } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { extractProfitTransactions } from "@/lib/marketplaceProfitExtractor";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const body = (await req.json().catch(() => null)) as
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
         orderId?: string | null;
         sku?: string | null;
         productName?: string | null;
-        allowDuplicates?: boolean;
       }
     | null;
 
@@ -58,27 +57,6 @@ export async function POST(req: NextRequest) {
 
   if (!Array.isArray(extractedList) || extractedList.length === 0) {
     return NextResponse.json({ error: "No transactions detected" }, { status: 400 });
-  }
-
-  if (!body.allowDuplicates) {
-    const txns = extractedList.map((e) => e.itemPriceCredit?.txn).filter(Boolean) as string[];
-    if (txns.length > 0) {
-      const existing = await (prisma as any).marketplaceProfitEntry.findMany({
-        where: { accountId: account.id, itemCreditTxn: { in: txns } },
-        select: { itemCreditTxn: true },
-        take: 25,
-      });
-      const existingTxns = existing.map((row: any) => String(row.itemCreditTxn));
-      if (existingTxns.length > 0) {
-        return NextResponse.json(
-          {
-            error: "Duplicate unique number detected. Confirm to continue.",
-            existingTxns,
-          },
-          { status: 409 },
-        );
-      }
-    }
   }
 
   const createdItems: any[] = [];

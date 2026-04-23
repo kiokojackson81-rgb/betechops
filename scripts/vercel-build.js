@@ -9,6 +9,9 @@ function isVercelProduction() {
 }
 
 try {
+  console.log("[vercel-build] checking repository for unresolved merge markers");
+  run("node scripts/precommit-check.js --all");
+
   if (process.env.VERCEL === "1") {
     console.log(`[vercel-build] vercel (${process.env.VERCEL_ENV ?? "unknown"}): running prisma migrate deploy`);
     run("npx prisma migrate deploy");

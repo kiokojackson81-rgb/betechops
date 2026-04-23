@@ -52,7 +52,6 @@ export default async function OnlinePerformancePage({
   let perWeekAgg: any[] = [];
   let perWeekLossCount: any[] = [];
   let perWeekWeeklySales: any[] = [];
-  let perWeekSubmittedAccounts: any[] = [];
   let perWeekMissingPricing: any[] = [];
   let dbReady = true;
   let isLossColumnReady = true;
@@ -60,7 +59,7 @@ export default async function OnlinePerformancePage({
   try {
     const shopIdsForWeeklySales = accountId ? await resolveShopIdsForMarketplaceAccount(accountId) : [];
 
-    [perWeekAgg, perWeekLossCount, perWeekWeeklySales, perWeekSubmittedAccounts, perWeekMissingPricing] = await Promise.all([
+    [perWeekAgg, perWeekLossCount, perWeekWeeklySales, perWeekMissingPricing] = await Promise.all([
       (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
         _sum: { netPayout: true, profit: true },
@@ -90,11 +89,6 @@ export default async function OnlinePerformancePage({
             : {}),
         },
         orderBy: { weekStart: "asc" },
-      }),
-      (prisma as any).marketplaceProfitEntry.groupBy({
-        by: ["weekStart", "accountId"],
-        where: { weekStart: { in: weekStarts }, periodKey: period.key, ...(accountId ? { accountId } : {}) },
-        orderBy: [{ weekStart: "asc" }, { accountId: "asc" }],
       }),
       (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
@@ -146,16 +140,6 @@ export default async function OnlinePerformancePage({
         orderBy: { weekStart: "asc" },
       });
 
-      try {
-        perWeekSubmittedAccounts = await (prisma as any).marketplaceProfitEntry.groupBy({
-          by: ["weekStart", "accountId"],
-          where: { weekStart: { in: weekStarts }, periodKey: period.key },
-          orderBy: [{ weekStart: "asc" }, { accountId: "asc" }],
-        });
-      } catch {
-        perWeekSubmittedAccounts = [];
-      }
-
       perWeekMissingPricing = await (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
         _count: { _all: true },
@@ -190,11 +174,6 @@ export default async function OnlinePerformancePage({
   const missingPricingMap = new Map(
     (perWeekMissingPricing as any[]).map((row) => [new Date(row.weekStart).toISOString(), Number(row._count?._all ?? 0)]),
   );
-  const submittedAccountsMap = new Map<string, number>();
-  for (const row of perWeekSubmittedAccounts as any[]) {
-    const key = new Date(row.weekStart).toISOString();
-    submittedAccountsMap.set(key, (submittedAccountsMap.get(key) ?? 0) + 1);
-  }
   const totalAccountsForCoverage = accountId ? 1 : accounts.length;
   const completionSummaries = accountId
     ? await Promise.all(weeks.map((wk) => getPricingWeekSummary(wk.startInput, { accountIds: [accountId] })))
@@ -318,8 +297,16 @@ export default async function OnlinePerformancePage({
             const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
             const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
             const completion = completionSummaryMap.get(wk.startInput) ?? null;
-            const submittedAccounts = completion?.accounts_completed ?? (submittedAccountsMap.get(wk.weekStart.toISOString()) ?? 0);
+            const submittedAccounts = completion?.accounts_completed ?? 0;
+            const totalAccounts = completion?.accounts_total ?? totalAccountsForCoverage;
             const missingPricingCount = completion?.missing_pricing ?? (missingPricingMap.get(wk.weekStart.toISOString()) ?? 0);
+            const notSubmittedAccounts = completion ? Math.max(0, totalAccounts - submittedAccounts) : 0;
+            const notLoadedAccounts = completion
+              ? completion.accounts.filter((account) => !account.markedZero && !account.hasDraft && !account.hasProfitEntries).length
+              : 0;
+            const submittedHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}&accountStatus=submitted#account-status`;
+            const notSubmittedHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}&accountStatus=not-submitted#account-status`;
+            const notLoadedHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}&accountStatus=not-loaded#account-status`;
             const sentAt = sentWeekMap.get(wk.startInput) ?? null;
             return (
               <div
@@ -336,15 +323,27 @@ export default async function OnlinePerformancePage({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Accounts submitted</span>
-                      <span className="font-semibold text-slate-100">
-                        {submittedAccounts}/{totalAccountsForCoverage}
-                      </span>
+                      <Link href={submittedHref} className="font-semibold text-slate-100 hover:text-emerald-200">
+                        {submittedAccounts}/{totalAccounts}
+                      </Link>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Missing pricing</span>
                       <span className={`font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
                         {missingPricingCount}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts not submitted</span>
+                      <Link href={notSubmittedHref} className="font-semibold text-amber-200 hover:text-amber-100">
+                        {notSubmittedAccounts}
+                      </Link>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts not loaded</span>
+                      <Link href={notLoadedHref} className="font-semibold text-rose-300 hover:text-rose-200">
+                        {notLoadedAccounts}
+                      </Link>
                     </div>
                     <div className="text-xs text-slate-500">Totals hidden for supervisor view. Open week to see per-order profit/loss.</div>
                   </div>
@@ -370,15 +369,27 @@ export default async function OnlinePerformancePage({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Accounts submitted</span>
-                      <span className="font-semibold text-slate-100">
-                        {submittedAccounts}/{totalAccountsForCoverage}
-                      </span>
+                      <Link href={submittedHref} className="font-semibold text-slate-100 hover:text-emerald-200">
+                        {submittedAccounts}/{totalAccounts}
+                      </Link>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Missing pricing</span>
                       <span className={`font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
                         {missingPricingCount}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts not submitted</span>
+                      <Link href={notSubmittedHref} className="font-semibold text-amber-200 hover:text-amber-100">
+                        {notSubmittedAccounts}
+                      </Link>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Accounts not loaded</span>
+                      <Link href={notLoadedHref} className="font-semibold text-rose-300 hover:text-rose-200">
+                        {notLoadedAccounts}
+                      </Link>
                     </div>
                     {completion ? (
                       <div className="flex items-center justify-between">
@@ -413,6 +424,7 @@ export default async function OnlinePerformancePage({
           <li>- Net payout is loaded via weekly statements (CSV) or manual weekly totals.</li>
           <li>- Net payout = item credit + commission + shipping (commission/shipping stored as negative).</li>
           <li>- Profit = net payout - buying price.</li>
+          <li>- Accounts submitted includes fully priced accounts plus accounts marked zero.</li>
         </ul>
       </section>
     </div>

@@ -1,11 +1,26 @@
 #!/usr/bin/env node
 /*
- Pre-commit guard: block commits containing merge-conflict markers in staged files.
- - Scans staged (added/modified/copied) files, reads staged blob content, and looks for <<<<<<<, =======, >>>>>>> markers.
- - Exits non-zero if any are found, printing a concise report.
+ Conflict-marker guard.
+ - Default mode scans staged files for merge-conflict markers and blocks commits.
+ - `--all` scans the working tree so CI/builds can fail before shipping unresolved merges.
 */
 
-const { execFileSync, execSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('child_process');
+
+const IGNORED_DIRS = new Set([
+  '.git',
+  '.next',
+  '.cache',
+  '.vercel',
+  'node_modules',
+  '.worker-dist',
+  'dist_temp',
+  'tmp',
+  'logs',
+  'backups',
+]);
 
 function run(cmd, args, opts = {}) {
   try {
@@ -32,8 +47,38 @@ function hasConflictMarkers(text) {
   // Quick binary check
   if (text.includes('\u0000')) return false;
   // Detect standard conflict markers at line starts
-  const re = /^(<<<<<<< |=======|>>>>>>> )/m;
+  const re = /^(<<<<<<< [^\n]+|=======|>>>>>>> [^\n]+)$/m;
   return re.test(text);
+}
+
+function walkFiles(rootDir) {
+  const out = [];
+  const stack = [rootDir];
+  while (stack.length) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (IGNORED_DIRS.has(entry.name)) continue;
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (entry.isFile()) out.push(fullPath);
+    }
+  }
+  return out;
+}
+
+function listWorkingTreeFiles(rootDir) {
+  return walkFiles(rootDir).map((file) => path.relative(rootDir, file));
+}
+
+function readWorkingTree(file, rootDir) {
+  try {
+    return fs.readFileSync(path.join(rootDir, file), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 function main() {
@@ -41,20 +86,23 @@ function main() {
   const repoCheck = run('git', ['rev-parse', '--is-inside-work-tree']);
   if (!repoCheck.ok) process.exit(0);
 
-  const files = listStagedFiles();
+  const repoRootRes = run('git', ['rev-parse', '--show-toplevel']);
+  const repoRoot = repoRootRes.ok ? repoRootRes.out.trim() : process.cwd();
+  const allMode = process.argv.includes('--all');
+  const files = allMode ? listWorkingTreeFiles(repoRoot) : listStagedFiles();
   if (files.length === 0) process.exit(0);
 
   const offenders = [];
   for (const f of files) {
-    const blob = readStaged(f);
+    const blob = allMode ? readWorkingTree(f, repoRoot) : readStaged(f);
     if (blob == null) continue;
     if (hasConflictMarkers(blob)) offenders.push(f);
   }
 
   if (offenders.length > 0) {
-    console.error('[pre-commit] Merge-conflict markers detected in staged files:');
+    console.error(allMode ? '[conflict-check] Merge-conflict markers detected in repository files:' : '[pre-commit] Merge-conflict markers detected in staged files:');
     for (const f of offenders) console.error(`  - ${f}`);
-    console.error('\nPlease resolve conflicts and stage the fixes before committing.');
+    console.error(allMode ? '\nResolve these files before building or deploying.' : '\nPlease resolve conflicts and stage the fixes before committing.');
     process.exit(1);
   }
 
