@@ -216,17 +216,86 @@ export async function GET(req: NextRequest) {
       })
     : posReceipts;
 
+  const canonicalPosReceiptNumbers = Array.from(
+    new Set(
+      filteredPosReceipts
+        .flatMap((row: any) => {
+          const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
+          const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
+          return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+        })
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const datedPosReceiptKeys = Array.from(
+    new Set(
+      filteredPosReceipts
+        .flatMap((row: any) => {
+          const createdAt = row?.generatedAt instanceof Date ? row.generatedAt : row?.createdAt instanceof Date ? row.createdAt : null;
+          const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
+          const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
+          if (!createdAt) return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+          const businessDate = createdAt.toISOString().slice(0, 10);
+          return [orderNumber, receiptNumber]
+            .filter((value): value is string => Boolean(value))
+            .map((value) => `${businessDate}:${value}`);
+        })
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const supportReceiptProfitRows =
+    canonicalPosReceiptNumbers.length || datedPosReceiptKeys.length
+      ? await prisma.supportReceipt.findMany({
+          where: {
+            OR: [
+              ...(canonicalPosReceiptNumbers.length ? [{ receiptNumber: { in: canonicalPosReceiptNumbers } }] : []),
+              ...(datedPosReceiptKeys.length ? [{ receiptKey: { in: datedPosReceiptKeys } }] : []),
+            ],
+          },
+          select: {
+            receiptNumber: true,
+            receiptKey: true,
+            buyingTotal: true,
+            items: { select: { buyingPrice: true } },
+          },
+        })
+      : [];
+  const supportBuyingTotalsByReceipt = new Map<string, number>();
+  for (const row of supportReceiptProfitRows) {
+    const itemsBuyingTotal = Array.isArray(row.items)
+      ? row.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0)
+      : 0;
+    const buyingTotal = Math.max(Number(row.buyingTotal ?? 0), itemsBuyingTotal);
+    if (!(buyingTotal > 0)) continue;
+    const keys = [
+      canonicalReceiptNumber(row.receiptNumber ?? ""),
+      canonicalReceiptNumber(row.receiptKey ?? ""),
+      canonicalReceiptNumber(String(row.receiptKey ?? "").split(":").pop() ?? ""),
+    ].filter((value): value is string => Boolean(value));
+    for (const key of keys) {
+      if (!supportBuyingTotalsByReceipt.has(key)) supportBuyingTotalsByReceipt.set(key, buyingTotal);
+    }
+  }
+
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
+    const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
+    const canonicalReceipt =
+      canonicalReceiptNumber((r.order as any)?.orderNumber ?? "") || canonicalReceiptNumber(r.receiptNumber ?? "");
+    const buyingTotal = canonicalReceipt ? Number(supportBuyingTotalsByReceipt.get(canonicalReceipt) ?? 0) : 0;
+    const profit = buyingTotal > 0 ? total - buyingTotal : null;
     return {
       id: r.id,
       source: "pos" as const,
       orderRef: r.order?.orderNumber,
+      receiptNumber: r.receiptNumber ?? null,
       docType: r.docType,
       createdAt: r.generatedAt,
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
-      total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
+      total,
+      buyingTotal: buyingTotal > 0 ? buyingTotal : null,
+      profit,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       status: r.order?.status ?? r.order?.paymentStatus ?? null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,

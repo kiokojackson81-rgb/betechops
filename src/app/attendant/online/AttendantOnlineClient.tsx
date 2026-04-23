@@ -633,6 +633,14 @@ export default function AttendantOnlineClient() {
     const union = new Set<string>([...serverKeys, ...localKeys]);
     return union.size;
   }, [directReceiptsSummary, payrollSummary, posReceiptRows, receiptRows, receiptStatsLoading]);
+  const directProfitFromReceiptRows = useMemo(
+    () =>
+      posReceiptRows.reduce((sum, row: any) => {
+        const profit = Number(row?.profit ?? 0);
+        return Number.isFinite(profit) ? sum + profit : sum;
+      }, 0),
+    [posReceiptRows],
+  );
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
@@ -749,9 +757,13 @@ export default function AttendantOnlineClient() {
     Number(payrollSummary?.directCommission ?? Number.NaN),
     Number(payrollSummary?.salesCommission ?? Number.NaN),
   ].find((value) => Number.isFinite(value) && value > 0) ?? 0;
+  const directProfitForCommission = Math.max(
+    Number(directReceiptsSummary?.totalProfit ?? 0),
+    Number(directProfitFromReceiptRows ?? 0),
+  );
   const profitShareDirectCommissionFallback =
-    directCommissionMode === "PROFIT_10"
-      ? Math.max(0, Math.round(Number(directReceiptsSummary?.totalProfit ?? 0) * 0.1))
+    directProfitForCommission > 0
+      ? Math.max(0, Math.round(directProfitForCommission * 0.1))
       : 0;
   const quickDirectCommission =
     directCommissionFromSummary > 0 ? directCommissionFromSummary : profitShareDirectCommissionFallback;
