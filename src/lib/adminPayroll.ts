@@ -10,6 +10,7 @@ import {
   resolveOnlinePosOwnershipMode,
 } from "@/lib/onlineCommission";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 
 type AttendantRecord = {
@@ -82,6 +83,14 @@ function summarizeAdjustments(adjustments: Array<{
 
 function isOnlineCategory(category?: string | null) {
   return category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS";
+}
+
+function isDirectSalesCategory(category?: string | null) {
+  return category === "DIRECT_SALES_OPS";
+}
+
+function isMarketingCategory(category?: string | null) {
+  return category === "MARKETING_OPS";
 }
 
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
@@ -196,6 +205,145 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     };
   }
 
+  if (isDirectSalesCategory(attendant.attendantCategory)) {
+    const [earningsSummary, receiptSummary] = await Promise.all([
+      getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
+      computeAdminReceiptSummary({
+        start: period.start,
+        end: period.end,
+        scope: "mine",
+        currentUserId: attendant.id,
+        attendantId: attendant.id,
+        salesOnly: true,
+      }),
+    ]);
+
+    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
+    const totalProfit = Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0));
+    const totalReceipts = Math.max(Number(receiptSummary.receiptsCount ?? 0), Number(earningsSummary.totalReceipts ?? 0));
+    const totalItems = Math.max(Number(receiptSummary.itemsCount ?? 0), Number(earningsSummary.totalItems ?? 0));
+    const commissionTotal = Number(earningsSummary.grossCommission ?? earningsSummary.salesCommission ?? 0);
+    const totalEarnings =
+      Number(earningsSummary.baseSalary ?? 0) +
+      Number(earningsSummary.transportAllowance ?? 0) +
+      commissionTotal +
+      Number(earningsSummary.bonusTotal ?? 0);
+    const totalDeductions =
+      Number(earningsSummary.chamaTotal ?? 0) +
+      Number(earningsSummary.latenessTotal ?? 0) +
+      Number(earningsSummary.disciplineTotal ?? 0) +
+      Number(earningsSummary.otherDeductionsTotal ?? 0) +
+      penalties;
+
+    return {
+      attendantId: attendant.id,
+      name: attendant.name,
+      email: attendant.email,
+      attendantCategory: attendant.attendantCategory,
+      isActive: attendant.isActive,
+      baseSalary: Number(earningsSummary.baseSalary ?? 0),
+      transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
+      commission: commissionTotal,
+      commissionGross: commissionTotal,
+      commissionDirect: Number(earningsSummary.salesCommission ?? commissionTotal),
+      commissionMarketplaceJumia: 0,
+      commissionMarketplaceKilimall: 0,
+      commissionTotal,
+      commissionBreakdown: {
+        direct: Number(earningsSummary.salesCommission ?? commissionTotal),
+        productWork:
+          Number(earningsSummary.newProductCommission ?? 0) +
+          Number(earningsSummary.copiedCommission ?? 0) +
+          Number(earningsSummary.editedCommission ?? 0),
+        total: commissionTotal,
+      },
+      bonusTotal: adjustmentSummary.totalBonus,
+      deductionTotal: totalDeductions,
+      totalEarnings,
+      totalDeductions,
+      netPay: totalEarnings - totalDeductions,
+      totalSales,
+      totalProfit,
+      totalReceipts,
+      totalItems,
+      newProducts: Number(earningsSummary.totalNewProducts ?? 0),
+      editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
+      copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
+      adjustmentBreakdown: adjustmentSummary.breakdown,
+      adjustmentEntries: adjustmentSummary.entries,
+    };
+  }
+
+  if (isMarketingCategory(attendant.attendantCategory)) {
+    const [earningsSummary, receiptSummary] = await Promise.all([
+      getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
+      computeAdminReceiptSummary({
+        start: period.start,
+        end: period.end,
+        scope: "mine",
+        currentUserId: attendant.id,
+        attendantId: attendant.id,
+        salesOnly: true,
+      }),
+    ]);
+
+    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
+    const totalReceipts = Math.max(
+      Number(receiptSummary.receiptsCount ?? 0),
+      Number(earningsSummary.totalReceipts ?? 0),
+    );
+    const commissionTotal = Number(earningsSummary.grossCommission ?? earningsSummary.salesCommission ?? 0);
+    const totalEarnings =
+      Number(earningsSummary.baseSalary ?? 0) +
+      Number(earningsSummary.transportAllowance ?? 0) +
+      commissionTotal +
+      Number(earningsSummary.bonusTotal ?? 0);
+    const totalDeductions =
+      Number(earningsSummary.chamaTotal ?? 0) +
+      Number(earningsSummary.latenessTotal ?? 0) +
+      Number(earningsSummary.disciplineTotal ?? 0) +
+      Number(earningsSummary.otherDeductionsTotal ?? 0) +
+      penalties;
+
+    return {
+      attendantId: attendant.id,
+      name: attendant.name,
+      email: attendant.email,
+      attendantCategory: attendant.attendantCategory,
+      isActive: attendant.isActive,
+      baseSalary: Number(earningsSummary.baseSalary ?? 0),
+      transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
+      commission: commissionTotal,
+      commissionGross: commissionTotal,
+      commissionDirect: Number(earningsSummary.salesCommission ?? commissionTotal),
+      commissionMarketplaceJumia: 0,
+      commissionMarketplaceKilimall: 0,
+      commissionTotal,
+      commissionBreakdown: {
+        direct: Number(earningsSummary.salesCommission ?? commissionTotal),
+        productWork:
+          Number(earningsSummary.newProductCommission ?? 0) +
+          Number(earningsSummary.copiedCommission ?? 0) +
+          Number(earningsSummary.editedCommission ?? 0),
+        total: commissionTotal,
+      },
+      bonusTotal: adjustmentSummary.totalBonus,
+      deductionTotal: totalDeductions,
+      totalEarnings,
+      totalDeductions,
+      netPay: totalEarnings - totalDeductions,
+      totalSales,
+      totalProfit: Number(earningsSummary.totalProfit ?? receiptSummary.totalProfit ?? 0),
+      totalReceipts,
+      totalItems: Number(earningsSummary.totalItems ?? 0),
+      newProducts: Number(earningsSummary.totalNewProducts ?? 0),
+      editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
+      copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
+      adjustmentBreakdown: adjustmentSummary.breakdown,
+      adjustmentEntries: adjustmentSummary.entries,
+    };
+  }
+
   const earningsSummary = await getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start });
   const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
   const detailProfitValue = Number(detail?.totalProfit ?? Number.NaN);
@@ -238,7 +386,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     totalEarnings,
     totalDeductions,
     netPay: totalEarnings - totalDeductions,
-    totalSales: Number(detail?.totalSales ?? earningsSummary?.totalSales ?? 0),
+    totalSales: Math.max(Number(detail?.totalSales ?? 0), Number(earningsSummary?.totalSales ?? 0)),
     totalProfit: resolvedProfit,
     totalReceipts: Number(earningsSummary?.totalReceipts ?? 0),
     totalItems: Number(earningsSummary?.totalItems ?? 0),
