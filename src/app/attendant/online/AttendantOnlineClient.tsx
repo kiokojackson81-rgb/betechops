@@ -250,6 +250,13 @@ export default function AttendantOnlineClient() {
     if (!userId) return;
     const { start, end } = getActiveWeekRange();
     if (!start || !end) return;
+    const selectedWeekKeys = activeWeekKeys.includes("period")
+      ? tradingWeeks.map((week) => week.key)
+      : activeWeekKeys.length
+        ? activeWeekKeys
+        : tradingWeeks.at(-1)?.key
+          ? [tradingWeeks.at(-1)!.key]
+          : [];
 
       setWeeklyLoading(true);
       try {
@@ -258,6 +265,9 @@ export default function AttendantOnlineClient() {
           start: formatNairobiParam(start, false),
           end: formatNairobiParam(end, true),
         });
+        for (const weekKey of selectedWeekKeys) {
+          if (weekKey && weekKey !== "period") params.append("weekStart", weekKey);
+        }
         appendImpersonateParam(params);
       const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
@@ -276,7 +286,7 @@ export default function AttendantOnlineClient() {
         setWeeklyLoading(false);
       }
     },
-    [getActiveWeekRange, userId, appendImpersonateParam],
+    [activeWeekKeys, appendImpersonateParam, getActiveWeekRange, tradingWeeks, userId],
   );
 
     const loadOnlineSummary = useCallback(async () => {
