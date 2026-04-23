@@ -387,12 +387,12 @@ export default function PayrollTableClient({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
-                        <Link
+                        <a
                           className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
                           href={`/api/admin/payroll/payslip?attendantId=${encodeURIComponent(row.attendantId)}&periodKey=${encodeURIComponent(periodKey)}`}
                         >
                           Payslip
-                        </Link>
+                        </a>
                         <Link
                           className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
                           href={`/admin/attendants/${row.attendantId}/payroll?period=${encodeURIComponent(periodKey)}`}

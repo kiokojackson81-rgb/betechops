@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { buildPayrollRow } from "@/lib/adminPayroll";
@@ -21,23 +21,14 @@ export async function GET(req: Request) {
   const periodKeyParam = url.searchParams.get("periodKey");
   const attendantIdParam = String(url.searchParams.get("attendantId") ?? "").trim();
 
-  let period: { start: Date; end: Date; label?: string };
+  let period;
   if (periodKeyParam) {
-    // Expecting format "<startIso>_<endIso>"
-    const parts = String(periodKeyParam).split("_");
-    if (parts.length === 2) {
-      const s = new Date(parts[0]);
-      const e = new Date(parts[1]);
-      period = { start: s, end: e };
-      period.label = `${s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${e.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
-    } else {
-      period = getTradingPeriodFor(new Date());
-    }
+    period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   } else if (startParam && endParam) {
     const s = new Date(startParam);
     const e = new Date(endParam);
-    period = { start: s, end: e };
-    period.label = `${s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${e.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
+    const label = `${s.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${e.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
+    period = { key: `${startParam}_${endParam}`, start: s, end: e, label };
   } else {
     period = getTradingPeriodFor(new Date());
   }

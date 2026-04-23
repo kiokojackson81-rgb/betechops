@@ -255,12 +255,12 @@ export default async function PayrollPage({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
+            <a
               href={`/api/admin/payroll/payslip?attendantId=${encodeURIComponent(attendantId)}&periodKey=${encodeURIComponent(period.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
             >
               Download payslip
-            </Link>
+            </a>
             <Link
               href={`/admin/attendants/${attendantId}/payroll?period=${encodeURIComponent(previousPeriod.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800"

@@ -62,12 +62,12 @@ export default async function AdminPayrollPage({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
+            <a
               href={`/api/admin/payroll/payslips?periodKey=${encodeURIComponent(period.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
             >
               Export all payslips
-            </Link>
+            </a>
             <Link
               href={`/admin/payroll?period=${encodeURIComponent(previousPeriod.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800"

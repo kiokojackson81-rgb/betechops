@@ -169,17 +169,18 @@ export default function PayrollClient({
     for (const adj of adjustments) {
       const amount = Number(adj.amount ?? 0);
       const type = adj.adjustmentType;
-      const isAddition = type === "BONUS" || type === "COMMISSION_TOPUP";
-      if (isAddition) {
-        totals.topUps += amount;
+      const kind = String(adj.adjustmentKind || adj.kind || (type === "BONUS" || type === "COMMISSION_TOPUP" ? "ADDITION" : "DEDUCTION")).toUpperCase();
+      const signedAmount = kind === "ADDITION" ? amount : -amount;
+
+      if (type === "BONUS" || type === "COMMISSION_TOPUP") {
+        totals.topUps += signedAmount;
+      } else {
+        totals.deductions += kind === "ADDITION" ? -amount : amount;
       }
-      if (!isAddition) {
-        totals.deductions += amount;
-      }
-      if (type === "CHAMA") totals.chama += amount;
-      if (type === "LATENESS") totals.lateness += amount;
-      if (type === "DISCIPLINE") totals.discipline += amount;
-      if (type === "OTHER") totals.other += amount;
+      if (type === "CHAMA") totals.chama += kind === "ADDITION" ? -amount : amount;
+      if (type === "LATENESS") totals.lateness += kind === "ADDITION" ? -amount : amount;
+      if (type === "DISCIPLINE") totals.discipline += kind === "ADDITION" ? -amount : amount;
+      if (type === "OTHER") totals.other += kind === "ADDITION" ? -amount : amount;
     }
     return totals;
   }, [adjustments]);
