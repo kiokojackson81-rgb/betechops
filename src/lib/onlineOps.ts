@@ -403,8 +403,11 @@ export async function getAssignedMarketplaceSalesForPeriod(
         },
         { sales: 0, orders: 0 },
       );
-      const sales = profitSummary.net > 0 ? profitSummary.net : manual.sales;
-      const orders = profitSummary.orderCount > 0 ? profitSummary.orderCount : manual.orders;
+      // Keep the dashboard aligned with the PDF export: prefer manual weekly
+      // sale data whenever it exists for the account/week, otherwise fall back
+      // to captured marketplace profit-entry net payout.
+      const sales = manual.sales !== 0 ? manual.sales : profitSummary.net;
+      const orders = manual.orders !== 0 ? manual.orders : profitSummary.orderCount;
 
       totals.manualSales += manual.sales;
       totals.profitEntrySales += profitSummary.net;
