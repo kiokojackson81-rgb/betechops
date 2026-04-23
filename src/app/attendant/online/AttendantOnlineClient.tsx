@@ -389,7 +389,6 @@ export default function AttendantOnlineClient() {
         start: formatNairobiParam(period.start, false),
         end: formatNairobiParam(period.end, true),
         onlyPos: "1",
-        paidOnly: "1",
         includeItems: "true",
         size: "200",
       });
@@ -599,18 +598,24 @@ export default function AttendantOnlineClient() {
     [receiptRows],
   );
   const directSales = useMemo(() => {
-    if (directReceiptsSummary) {
+    if (
+      directReceiptsSummary &&
+      (Number(directReceiptsSummary.totalSales ?? 0) > 0 || Number(directReceiptsSummary.totalReceipts ?? 0) > 0)
+    ) {
       return Number(directReceiptsSummary.totalSales ?? 0);
     }
     return posReceiptRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
   }, [directReceiptsSummary, posReceiptRows]);
 
   const receiptsCount = useMemo(() => {
-    if (directReceiptsSummary) {
-      return Number(directReceiptsSummary.totalReceipts ?? 0);
-    }
     if (!receiptStatsLoading && Array.isArray(receiptRows)) {
       return posReceiptRows.length;
+    }
+    if (
+      directReceiptsSummary &&
+      (Number(directReceiptsSummary.totalSales ?? 0) > 0 || Number(directReceiptsSummary.totalReceipts ?? 0) > 0)
+    ) {
+      return Number(directReceiptsSummary.totalReceipts ?? 0);
     }
     const serverKeys = (payrollSummary as any)?.perReceiptCanonicalKeys ?? [];
     const localKeys = posReceiptRows.map((r: any) => {
