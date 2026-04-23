@@ -653,8 +653,11 @@ export default function AttendantOnlineClient() {
 
   useEffect(() => {
     fetchUser();
-    const defaultKey = tradingWeeks.at(-1)?.key ?? tradingWeeks[0]?.key ?? "period";
-    setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
+    setActiveWeekKeys((prev) => {
+      if (prev.includes("period")) return prev;
+      const validKeys = prev.filter((key) => tradingWeeks.some((week) => week.key === key));
+      return validKeys.length ? validKeys : ["period"];
+    });
   }, [fetchUser, tradingWeeks]);
 
   // show a small banner when viewing as another attendant
