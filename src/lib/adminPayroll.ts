@@ -8,9 +8,16 @@ import {
   computeOnlinePeriodCommission,
   resolveDirectCommissionMode,
   resolveOnlinePosOwnershipMode,
+  computeBrendahDirectCommission,
 } from "@/lib/onlineCommission";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
+import {
+  computeJenifferProratedCommission,
+  computeSalesCommissionFromTiers,
+  getOrCreateCommissionPeriod,
+} from "@/lib/commission";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 
 type AttendantRecord = {
@@ -206,7 +213,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   }
 
   if (isDirectSalesCategory(attendant.attendantCategory)) {
-    const [earningsSummary, receiptSummary] = await Promise.all([
+    const [earningsSummary, receiptSummary, commissionConfig, commissionPeriod] = await Promise.all([
       getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
       computeAdminReceiptSummary({
         start: period.start,
@@ -216,13 +223,30 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
         attendantId: attendant.id,
         salesOnly: true,
       }),
+      getUserCommissionConfigLike(attendant.id),
+      getOrCreateCommissionPeriod(period.start),
     ]);
 
     const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
     const totalProfit = Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0));
     const totalReceipts = Math.max(Number(receiptSummary.receiptsCount ?? 0), Number(earningsSummary.totalReceipts ?? 0));
     const totalItems = Math.max(Number(receiptSummary.itemsCount ?? 0), Number(earningsSummary.totalItems ?? 0));
-    const commissionTotal = Number(earningsSummary.grossCommission ?? earningsSummary.salesCommission ?? 0);
+    const tiers = commissionPeriod.tiers.map((tier) => ({
+      minSales: Number(tier.minSales),
+      maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
+      payoutFlat: Number(tier.payoutFlat),
+    }));
+    const salesCommission =
+      commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
+        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
+        : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
+          ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
+          : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
+    const productWorkCommission =
+      Number(earningsSummary.newProductCommission ?? 0) +
+      Number(earningsSummary.copiedCommission ?? 0) +
+      Number(earningsSummary.editedCommission ?? 0);
+    const commissionTotal = salesCommission + productWorkCommission + Number(earningsSummary.commissionTopUpTotal ?? 0);
     const totalEarnings =
       Number(earningsSummary.baseSalary ?? 0) +
       Number(earningsSummary.transportAllowance ?? 0) +
@@ -245,16 +269,13 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
       commission: commissionTotal,
       commissionGross: commissionTotal,
-      commissionDirect: Number(earningsSummary.salesCommission ?? commissionTotal),
+      commissionDirect: salesCommission,
       commissionMarketplaceJumia: 0,
       commissionMarketplaceKilimall: 0,
       commissionTotal,
       commissionBreakdown: {
-        direct: Number(earningsSummary.salesCommission ?? commissionTotal),
-        productWork:
-          Number(earningsSummary.newProductCommission ?? 0) +
-          Number(earningsSummary.copiedCommission ?? 0) +
-          Number(earningsSummary.editedCommission ?? 0),
+        direct: salesCommission,
+        productWork: productWorkCommission,
         total: commissionTotal,
       },
       bonusTotal: adjustmentSummary.totalBonus,
@@ -275,7 +296,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   }
 
   if (isMarketingCategory(attendant.attendantCategory)) {
-    const [earningsSummary, receiptSummary] = await Promise.all([
+    const [earningsSummary, receiptSummary, commissionConfig, commissionPeriod] = await Promise.all([
       getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
       computeAdminReceiptSummary({
         start: period.start,
@@ -285,6 +306,8 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
         attendantId: attendant.id,
         salesOnly: true,
       }),
+      getUserCommissionConfigLike(attendant.id),
+      getOrCreateCommissionPeriod(period.start),
     ]);
 
     const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
@@ -292,7 +315,23 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       Number(receiptSummary.receiptsCount ?? 0),
       Number(earningsSummary.totalReceipts ?? 0),
     );
-    const commissionTotal = Number(earningsSummary.grossCommission ?? earningsSummary.salesCommission ?? 0);
+    const totalProfit = Number(earningsSummary.totalProfit ?? receiptSummary.totalProfit ?? 0);
+    const tiers = commissionPeriod.tiers.map((tier) => ({
+      minSales: Number(tier.minSales),
+      maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
+      payoutFlat: Number(tier.payoutFlat),
+    }));
+    const salesCommission =
+      commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
+        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
+        : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
+          ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
+          : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
+    const productWorkCommission =
+      Number(earningsSummary.newProductCommission ?? 0) +
+      Number(earningsSummary.copiedCommission ?? 0) +
+      Number(earningsSummary.editedCommission ?? 0);
+    const commissionTotal = salesCommission + productWorkCommission + Number(earningsSummary.commissionTopUpTotal ?? 0);
     const totalEarnings =
       Number(earningsSummary.baseSalary ?? 0) +
       Number(earningsSummary.transportAllowance ?? 0) +
@@ -315,16 +354,13 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
       commission: commissionTotal,
       commissionGross: commissionTotal,
-      commissionDirect: Number(earningsSummary.salesCommission ?? commissionTotal),
+      commissionDirect: salesCommission,
       commissionMarketplaceJumia: 0,
       commissionMarketplaceKilimall: 0,
       commissionTotal,
       commissionBreakdown: {
-        direct: Number(earningsSummary.salesCommission ?? commissionTotal),
-        productWork:
-          Number(earningsSummary.newProductCommission ?? 0) +
-          Number(earningsSummary.copiedCommission ?? 0) +
-          Number(earningsSummary.editedCommission ?? 0),
+        direct: salesCommission,
+        productWork: productWorkCommission,
         total: commissionTotal,
       },
       bonusTotal: adjustmentSummary.totalBonus,
@@ -333,7 +369,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       totalDeductions,
       netPay: totalEarnings - totalDeductions,
       totalSales,
-      totalProfit: Number(earningsSummary.totalProfit ?? receiptSummary.totalProfit ?? 0),
+      totalProfit,
       totalReceipts,
       totalItems: Number(earningsSummary.totalItems ?? 0),
       newProducts: Number(earningsSummary.totalNewProducts ?? 0),
