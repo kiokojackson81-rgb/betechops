@@ -213,10 +213,12 @@ export function renderPayslipDocumentHtml(args: { slips: PayslipPayload[]; docum
       return `
         <section class="payslip-page">
           ${letterheadBlock}
+          <div class="accent-bar" style="background:${escapeHtml(slip.brandColor)}"></div>
           <div class="topline">
             <div>
+              <div class="eyebrow">Payroll payslip</div>
               <div class="title" style="color:${escapeHtml(slip.brandColor)}">${escapeHtml(slip.siteTitle)}</div>
-              <div class="subtitle">Payroll payslip for ${escapeHtml(slip.periodLabel)}</div>
+              <div class="subtitle">${escapeHtml(slip.periodLabel)}</div>
             </div>
             <div style="text-align:right">
               <div class="badge" style="border-color:${escapeHtml(slip.brandColor)}33;background:${escapeHtml(slip.brandColor)}11;color:${escapeHtml(slip.brandColor)}">Payslip</div>
@@ -291,35 +293,38 @@ export function renderPayslipDocumentHtml(args: { slips: PayslipPayload[]; docum
         <meta charset="utf-8" />
         <title>${escapeHtml(args.documentTitle)}</title>
         <style>
-          @page { size: A4; margin: 16mm 14mm 16mm; }
-          body { font-family: Inter, system-ui, -apple-system, sans-serif; color: #0f172a; margin: 0; }
+          @page { size: A5 portrait; margin: 7mm 7mm 8mm; }
+          body { font-family: Inter, system-ui, -apple-system, sans-serif; color: #0f172a; margin: 0; background: #fff; }
           .payslip-page { page-break-after: always; break-after: page; padding: 0; }
           .payslip-page:last-child { page-break-after: auto; break-after: auto; }
-          .letterhead { margin-bottom: 12px; }
-          .letterhead img { width: 100%; max-height: 124px; object-fit: contain; object-position: left center; }
-          .topline { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-          .title { font-size: 26px; font-weight: 800; letter-spacing: 0.03em; }
-          .subtitle { font-size: 12px; color: #475569; }
-          .badge { display: inline-block; border: 1px solid; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; }
-          .panel { border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 14px; background: #ffffff; }
-          .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: #64748b; margin-bottom: 10px; font-weight: 700; }
-          .details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; font-size: 12px; }
-          .detail .label { color: #64748b; margin-bottom: 2px; }
-          .detail .value { font-weight: 700; }
-          .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-          .metric { border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; }
-          .metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: #64748b; margin-bottom: 4px; }
-          .metric .value { font-size: 18px; font-weight: 800; color: #0f172a; }
-          .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          td { padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+          .letterhead { margin-bottom: 4mm; }
+          .letterhead img { display: block; width: 100%; max-height: 34mm; object-fit: contain; object-position: left center; }
+          .accent-bar { height: 2.2mm; border-radius: 999px; margin: 0 0 4mm; }
+          .topline { display: flex; justify-content: space-between; gap: 8mm; margin-bottom: 4mm; align-items: flex-start; }
+          .eyebrow { font-size: 8px; text-transform: uppercase; letter-spacing: .22em; color: #64748b; margin-bottom: 1mm; }
+          .title { font-size: 17px; font-weight: 800; letter-spacing: 0.02em; line-height: 1.05; }
+          .subtitle { font-size: 9px; color: #475569; line-height: 1.35; }
+          .badge { display: inline-block; border: 1px solid; border-radius: 999px; padding: 4px 8px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+          .panel { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 9px; margin-bottom: 4mm; background: #ffffff; box-sizing: border-box; }
+          .panel-title { font-size: 8px; text-transform: uppercase; letter-spacing: .18em; color: #64748b; margin-bottom: 6px; font-weight: 700; }
+          .details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; font-size: 9px; }
+          .detail .label { color: #64748b; margin-bottom: 1px; }
+          .detail .value { font-weight: 700; line-height: 1.3; }
+          .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+          .metric { border-radius: 9px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 7px; box-sizing: border-box; }
+          .metric .label { font-size: 7px; text-transform: uppercase; letter-spacing: .11em; color: #64748b; margin-bottom: 3px; line-height: 1.25; }
+          .metric .value { font-size: 12px; font-weight: 800; color: #0f172a; line-height: 1.15; word-break: break-word; }
+          .split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          td { padding: 5px 0; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
           td.amount { text-align: right; font-weight: 700; }
           tr.total td { font-weight: 800; }
-          .net { border-radius: 18px; padding: 18px; color: #fff; display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
-          .net .label { font-size: 11px; text-transform: uppercase; letter-spacing: .2em; opacity: .8; }
-          .net .value { font-size: 34px; font-weight: 900; }
-          .footer { margin-top: 16px; font-size: 11px; color: #64748b; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-          .sign { border-top: 1px solid #cbd5e1; padding-top: 8px; margin-top: 26px; }
+          .net { border-radius: 12px; padding: 10px 12px; color: #fff; display: flex; justify-content: space-between; align-items: center; margin-top: 2mm; }
+          .net .label { font-size: 8px; text-transform: uppercase; letter-spacing: .18em; opacity: .8; }
+          .net .value { font-size: 22px; font-weight: 900; line-height: 1; }
+          .net-note { font-size: 8px; opacity: .85; line-height: 1.35; }
+          .footer { margin-top: 4mm; font-size: 8px; color: #64748b; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+          .sign { border-top: 1px solid #cbd5e1; padding-top: 5px; margin-top: 8px; }
         </style>
       </head>
       <body>${pagesHtml}</body>
