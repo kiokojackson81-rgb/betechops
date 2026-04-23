@@ -1214,9 +1214,16 @@ function PayrollEarningsCard({
   const bonusValue = Number(summary?.bonusTotal ?? 0);
   const totalDeductions = Number(summary?.totalDeductions ?? 0);
   let deductionBreakdown: [string, number][] = [];
+  let adjustmentBreakdown: [string, number][] = [];
   const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
     (summary?.adjustmentEntries ?? []);
   if (adjEntries && adjEntries.length > 0) {
+    adjustmentBreakdown = adjEntries.map((e) => [
+      String(e.label || e.adjustmentType),
+      String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION"
+        ? Number(e.amount ?? 0)
+        : -Math.abs(Number(e.amount ?? 0)),
+    ]) as [string, number][];
     deductionBreakdown = adjEntries
       .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
       .map((e) => [String(e.label || e.adjustmentType), Number(e.amount ?? 0)]) as [string, number][];
@@ -1234,7 +1241,7 @@ function PayrollEarningsCard({
   const rows = [
     { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
     { label: "Commission", value: commissionValue },
-    { label: "Chama", value: chamaValue },
+    { label: "Chama adjustment", value: chamaValue },
     { label: "Bonuses", value: bonusValue },
     { label: "Deductions", value: totalDeductions },
   ];
@@ -1278,6 +1285,21 @@ function PayrollEarningsCard({
                   {label} {locked ? "•••" : formatKES(Number(amount))}
                   {index < deductionBreakdown.length - 1 && " · "}
                 </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {adjustmentBreakdown.length > 0 && (
+          <div className="space-y-1 rounded-2xl bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
+            <p className="uppercase tracking-wide text-[10px]">Saved payroll adjustments</p>
+            <div className="space-y-1 text-sm text-slate-200">
+              {adjustmentBreakdown.map(([label, amount]) => (
+                <div key={label} className="flex items-center justify-between gap-3">
+                  <span>{label}</span>
+                  <span className={Number(amount) >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                    {locked ? "•••" : formatKES(Number(amount))}
+                  </span>
+                </div>
               ))}
             </div>
           </div>

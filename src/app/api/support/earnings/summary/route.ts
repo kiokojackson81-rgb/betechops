@@ -62,17 +62,29 @@ export async function GET(req: Request) {
   const baseSalary = compPlan?.baseSalary ?? 0;
   const transportAllowance = compPlan?.defaultTransportAllowance ?? 0;
 
-  const sumByType = (types: string[]) =>
+  const sumSigned = (types: string[], defaultKind: "ADDITION" | "DEDUCTION") =>
     adjustments
       .filter((adj) => types.includes(adj.adjustmentType))
-      .reduce((sum, adj) => sum + (adj.amount ?? 0), 0);
+      .reduce((sum, adj) => {
+        const amount = Number(adj.amount ?? 0);
+        const kind = String(adj.adjustmentKind ?? defaultKind).toUpperCase();
+        return sum + (kind === "ADDITION" ? amount : -amount);
+      }, 0);
+  const sumDeduction = (types: string[]) =>
+    adjustments
+      .filter((adj) => types.includes(adj.adjustmentType))
+      .reduce((sum, adj) => {
+        const amount = Number(adj.amount ?? 0);
+        const kind = String(adj.adjustmentKind ?? "DEDUCTION").toUpperCase();
+        return sum + (kind === "ADDITION" ? -amount : amount);
+      }, 0);
 
-  const bonusTotal = sumByType(["BONUS"]);
-  const commissionTopUpTotal = sumByType(["COMMISSION_TOPUP"]);
-  const chamaTotal = sumByType(["CHAMA"]);
-  const latenessTotal = sumByType(["LATENESS"]);
-  const disciplineTotal = sumByType(["DISCIPLINE"]);
-  const otherDeductionsTotal = sumByType(["OTHER"]);
+  const bonusTotal = sumSigned(["BONUS"], "ADDITION");
+  const commissionTopUpTotal = sumSigned(["COMMISSION_TOPUP"], "ADDITION");
+  const chamaTotal = sumDeduction(["CHAMA"]);
+  const latenessTotal = sumDeduction(["LATENESS"]);
+  const disciplineTotal = sumDeduction(["DISCIPLINE"]);
+  const otherDeductionsTotal = sumDeduction(["OTHER"]);
 
   const totalEarnings =
     baseSalary +

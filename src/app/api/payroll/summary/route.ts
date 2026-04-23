@@ -118,15 +118,42 @@ export async function GET(req: Request) {
       existing.entries.push(entry);
 
       if (kind === "ADDITION") {
-        existing.totalBonus += amount;
-        if (bonusType) existing.breakdown.bonus += amount;
-        if (topUpType) existing.breakdown.commissionTopUp += amount;
+        if (bonusType) {
+          existing.totalBonus += amount;
+          existing.breakdown.bonus += amount;
+        } else if (topUpType) {
+          existing.totalBonus += amount;
+          existing.breakdown.commissionTopUp += amount;
+        } else if (adjustment.adjustmentType === "CHAMA") {
+          existing.totalDeduction -= amount;
+          existing.breakdown.chama -= amount;
+        } else if (adjustment.adjustmentType === "LATENESS") {
+          existing.totalDeduction -= amount;
+          existing.breakdown.lateness -= amount;
+        } else if (adjustment.adjustmentType === "DISCIPLINE") {
+          existing.totalDeduction -= amount;
+          existing.breakdown.discipline -= amount;
+        } else if (adjustment.adjustmentType === "OTHER") {
+          existing.totalDeduction -= amount;
+          existing.breakdown.other -= amount;
+        } else {
+          existing.totalBonus += amount;
+          existing.breakdown.bonus += amount;
+        }
       } else {
-        existing.totalDeduction += amount;
-        if (adjustment.adjustmentType === "CHAMA") existing.breakdown.chama += amount;
-        if (adjustment.adjustmentType === "LATENESS") existing.breakdown.lateness += amount;
-        if (adjustment.adjustmentType === "DISCIPLINE") existing.breakdown.discipline += amount;
-        if (adjustment.adjustmentType === "OTHER") existing.breakdown.other += amount;
+        if (bonusType) {
+          existing.totalBonus -= amount;
+          existing.breakdown.bonus -= amount;
+        } else if (topUpType) {
+          existing.totalBonus -= amount;
+          existing.breakdown.commissionTopUp -= amount;
+        } else {
+          existing.totalDeduction += amount;
+          if (adjustment.adjustmentType === "CHAMA") existing.breakdown.chama += amount;
+          if (adjustment.adjustmentType === "LATENESS") existing.breakdown.lateness += amount;
+          if (adjustment.adjustmentType === "DISCIPLINE") existing.breakdown.discipline += amount;
+          if (adjustment.adjustmentType === "OTHER") existing.breakdown.other += amount;
+        }
       }
 
       adjustmentsByAttendant.set(adjustment.attendantId, existing);

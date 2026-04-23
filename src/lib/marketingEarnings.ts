@@ -100,16 +100,31 @@ export async function getEarningsSummaryForAttendant(opts: {
     where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
   });
 
-  const sum = (filterFn: (a: any) => boolean) =>
-    adjustments.filter(filterFn).reduce((acc, a) => acc + (a.amount ?? 0), 0);
+  const sumSigned = (filterFn: (a: any) => boolean, defaultKind: "ADDITION" | "DEDUCTION") =>
+    adjustments
+      .filter(filterFn)
+      .reduce((acc, a) => {
+        const amount = Number(a.amount ?? 0);
+        const kind = String(a.adjustmentKind ?? defaultKind).toUpperCase();
+        return acc + (kind === "ADDITION" ? amount : -amount);
+      }, 0);
+  const sumDeduction = (filterFn: (a: any) => boolean) =>
+    adjustments
+      .filter(filterFn)
+      .reduce((acc, a) => {
+        const amount = Number(a.amount ?? 0);
+        const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
+        return acc + (kind === "ADDITION" ? -amount : amount);
+      }, 0);
 
-  const bonusTotal = sum(
+  const bonusTotal = sumSigned(
     (a) => a.adjustmentType === "BONUS" || a.adjustmentType === "COMMISSION_TOPUP",
+    "ADDITION",
   );
-  const chamaTotal = sum((a) => a.adjustmentType === "CHAMA");
-  const latenessTotal = sum((a) => a.adjustmentType === "LATENESS");
-  const disciplineTotal = sum((a) => a.adjustmentType === "DISCIPLINE");
-  const otherDeductionsTotal = sum((a) => a.adjustmentType === "OTHER");
+  const chamaTotal = sumDeduction((a) => a.adjustmentType === "CHAMA");
+  const latenessTotal = sumDeduction((a) => a.adjustmentType === "LATENESS");
+  const disciplineTotal = sumDeduction((a) => a.adjustmentType === "DISCIPLINE");
+  const otherDeductionsTotal = sumDeduction((a) => a.adjustmentType === "OTHER");
 
   const totalEarnings = baseSalary + transportAllowance + commission + bonusTotal;
   const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;

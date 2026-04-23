@@ -778,18 +778,31 @@ function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {
   disciplineTotal: number;
   otherDeductionsTotal: number;
 } {
-  const sum = (types: PayrollAdjustmentType[]) =>
+  const sumSigned = (types: PayrollAdjustmentType[]) =>
     adjustments
       .filter((a) => types.includes(a.adjustmentType))
-      .reduce((acc, a) => acc + (a.amount ?? 0), 0);
+      .reduce((acc, a) => {
+        const amount = Number(a.amount ?? 0);
+        const kind = String(a.adjustmentKind ?? (types.includes("BONUS") || types.includes("COMMISSION_TOPUP") ? "ADDITION" : "DEDUCTION")).toUpperCase();
+        return acc + (kind === "ADDITION" ? amount : -amount);
+      }, 0);
+
+  const deductionSigned = (types: PayrollAdjustmentType[]) =>
+    adjustments
+      .filter((a) => types.includes(a.adjustmentType))
+      .reduce((acc, a) => {
+        const amount = Number(a.amount ?? 0);
+        const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
+        return acc + (kind === "ADDITION" ? -amount : amount);
+      }, 0);
 
   return {
-    bonusTotal: sum(["BONUS"]),
-    commissionTopUpTotal: sum(["COMMISSION_TOPUP"]),
-    chamaTotal: sum(["CHAMA"]),
-    latenessTotal: sum(["LATENESS"]),
-    disciplineTotal: sum(["DISCIPLINE"]),
-    otherDeductionsTotal: sum(["OTHER"]),
+    bonusTotal: sumSigned(["BONUS"]),
+    commissionTopUpTotal: sumSigned(["COMMISSION_TOPUP"]),
+    chamaTotal: deductionSigned(["CHAMA"]),
+    latenessTotal: deductionSigned(["LATENESS"]),
+    disciplineTotal: deductionSigned(["DISCIPLINE"]),
+    otherDeductionsTotal: deductionSigned(["OTHER"]),
   };
 }
 

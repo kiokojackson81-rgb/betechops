@@ -58,6 +58,11 @@ function summarizeAdjustments(adjustments: Array<{
     const amount = Number(adjustment.amount ?? 0);
     const bonusType = adjustment.adjustmentType === "BONUS";
     const topUpType = adjustment.adjustmentType === "COMMISSION_TOPUP";
+    const deductionType =
+      adjustment.adjustmentType === "CHAMA" ||
+      adjustment.adjustmentType === "LATENESS" ||
+      adjustment.adjustmentType === "DISCIPLINE" ||
+      adjustment.adjustmentType === "OTHER";
     const kind =
       (adjustment.adjustmentKind as AdjustmentKind | undefined) ??
       (bonusType || topUpType ? "ADDITION" : "DEDUCTION");
@@ -71,18 +76,47 @@ function summarizeAdjustments(adjustments: Array<{
     });
 
     if (kind === "ADDITION") {
-      summary.totalBonus += amount;
-      if (bonusType) summary.breakdown.bonus += amount;
-      if (topUpType) summary.breakdown.commissionTopUp += amount;
-      if (!bonusType && !topUpType) summary.breakdown.bonus += amount;
+      if (bonusType) {
+        summary.totalBonus += amount;
+        summary.breakdown.bonus += amount;
+      } else if (topUpType) {
+        summary.totalBonus += amount;
+        summary.breakdown.commissionTopUp += amount;
+      } else if (adjustment.adjustmentType === "CHAMA") {
+        summary.totalDeduction -= amount;
+        summary.breakdown.chama -= amount;
+      } else if (adjustment.adjustmentType === "LATENESS") {
+        summary.totalDeduction -= amount;
+        summary.breakdown.lateness -= amount;
+      } else if (adjustment.adjustmentType === "DISCIPLINE") {
+        summary.totalDeduction -= amount;
+        summary.breakdown.discipline -= amount;
+      } else if (adjustment.adjustmentType === "OTHER") {
+        summary.totalDeduction -= amount;
+        summary.breakdown.other -= amount;
+      } else {
+        summary.totalBonus += amount;
+        summary.breakdown.bonus += amount;
+      }
       continue;
     }
 
-    summary.totalDeduction += amount;
-    if (adjustment.adjustmentType === "CHAMA") summary.breakdown.chama += amount;
-    else if (adjustment.adjustmentType === "LATENESS") summary.breakdown.lateness += amount;
-    else if (adjustment.adjustmentType === "DISCIPLINE") summary.breakdown.discipline += amount;
-    else summary.breakdown.other += amount;
+    if (bonusType) {
+      summary.totalBonus -= amount;
+      summary.breakdown.bonus -= amount;
+    } else if (topUpType) {
+      summary.totalBonus -= amount;
+      summary.breakdown.commissionTopUp -= amount;
+    } else if (deductionType) {
+      summary.totalDeduction += amount;
+      if (adjustment.adjustmentType === "CHAMA") summary.breakdown.chama += amount;
+      else if (adjustment.adjustmentType === "LATENESS") summary.breakdown.lateness += amount;
+      else if (adjustment.adjustmentType === "DISCIPLINE") summary.breakdown.discipline += amount;
+      else summary.breakdown.other += amount;
+    } else {
+      summary.totalDeduction += amount;
+      summary.breakdown.other += amount;
+    }
   }
 
   return summary;

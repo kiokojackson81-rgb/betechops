@@ -576,6 +576,13 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
   ].filter((row) => row.amount !== 0);
   const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
     (summary?.adjustmentEntries ?? []);
+  const signedEntries = adjEntries.map((e) => ({
+    label: e.label || e.adjustmentType,
+    amount:
+      String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION"
+        ? Number(e.amount ?? 0)
+        : -Math.abs(Number(e.amount ?? 0)),
+  }));
   const debits = adjEntries && adjEntries.length > 0
     ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, amount: e.amount }))
     : [
@@ -629,6 +636,21 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
             </span>
           </div>
         ))}
+        {signedEntries.length > 0 ? (
+          <div className="rounded-xl bg-slate-950/40 px-3 py-3">
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">Saved adjustments</p>
+            <div className="space-y-2">
+              {signedEntries.map((row) => (
+                <div key={`${row.label}-${row.amount}`} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-300">{row.label}</span>
+                  <span className={`font-semibold ${row.amount >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                    {mask(`${row.amount >= 0 ? "" : "-"}${formatCurrency(Math.abs(row.amount))}`)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </Card>
   );
