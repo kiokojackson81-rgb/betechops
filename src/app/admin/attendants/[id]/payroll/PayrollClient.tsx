@@ -133,6 +133,10 @@ export default function PayrollClient({
     0;
   const periodReceipts = Number(summary?.totalReceipts ?? summary?._raw?.totalReceipts ?? 0);
   const periodItems = Number(summary?.totalItems ?? summary?._raw?.totalItems ?? 0);
+  const directCommissionLabel =
+    summary?.attendantCategory === "JUMIA_KILIMALL_OPS" || summary?.attendantCategory === "BETECH_OPS"
+      ? "POS commission"
+      : "Direct commission";
   const ledgerTotals = useMemo(() => {
     const breakdown = summary?.commissionBreakdown ?? ledger?.commissionBreakdown ?? {};
     return {
@@ -443,7 +447,7 @@ export default function PayrollClient({
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
-              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Direct commission</span>
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">{directCommissionLabel}</span>
               <span className="font-semibold text-slate-100">KES {ledgerTotals.direct.toLocaleString()}</span>
             </div>
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">

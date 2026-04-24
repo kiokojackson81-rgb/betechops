@@ -76,7 +76,7 @@ function buildCommissionLines(row: PayrollRow) {
       return [{ label: "Marketing commission", amount: row.commissionDirect || row.commissionTotal }];
     case "JUMIA_KILIMALL_OPS":
       return [
-        { label: "Direct POS commission", amount: row.commissionDirect },
+        { label: "POS commission", amount: row.commissionDirect },
         { label: "Jumia commission", amount: row.commissionMarketplaceJumia },
         { label: "Kilimall commission", amount: row.commissionMarketplaceKilimall },
       ];
@@ -84,7 +84,7 @@ function buildCommissionLines(row: PayrollRow) {
       return [{ label: "Support commission", amount: row.commissionDirect || row.commissionTotal }];
     case "BETECH_OPS":
       return [
-        { label: "Direct commission", amount: row.commissionDirect },
+        { label: "POS commission", amount: row.commissionDirect },
         { label: "Jumia commission", amount: row.commissionMarketplaceJumia },
         { label: "Kilimall commission", amount: row.commissionMarketplaceKilimall },
       ];

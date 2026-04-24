@@ -74,13 +74,13 @@ function commissionLines(summary: SummaryLike): EarningsCardLine[] {
         : [];
     case "JUMIA_KILIMALL_OPS":
       return [
-        { label: "Direct POS commission", amount: direct, kind: "earning" as const },
+        { label: "POS commission", amount: direct, kind: "earning" as const },
         { label: "Jumia commission", amount: jumia, kind: "earning" as const },
         { label: "Kilimall commission", amount: kilimall, kind: "earning" as const },
       ].filter((line) => line.amount !== 0);
     case "BETECH_OPS":
       return [
-        { label: "Direct commission", amount: direct, kind: "earning" as const },
+        { label: "POS commission", amount: direct, kind: "earning" as const },
         { label: "Jumia commission", amount: jumia, kind: "earning" as const },
         { label: "Kilimall commission", amount: kilimall, kind: "earning" as const },
       ].filter((line) => line.amount !== 0);

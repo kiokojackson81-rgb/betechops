@@ -16,6 +16,8 @@ const categoryOrder = [
 ];
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
+const getDirectCommissionLabel = (category?: string | null) =>
+  category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" ? "POS" : "Direct";
 
 const getDisplayName = (row?: PayrollRow | null) => {
   if (!row) return "—";
@@ -340,7 +342,7 @@ export default function PayrollTableClient({
                     <td className="px-4 py-3 text-right">
                       <div className="font-semibold text-emerald-300">{formatCurrency(row.commission)}</div>
                       <div className="text-[11px] text-slate-500">
-                        Direct {formatCurrency(row.commissionDirect)} · Jumia {formatCurrency(row.commissionMarketplaceJumia)} · Kilimall {formatCurrency(row.commissionMarketplaceKilimall)}
+                        {getDirectCommissionLabel(row.attendantCategory)} {formatCurrency(row.commissionDirect)} · Jumia {formatCurrency(row.commissionMarketplaceJumia)} · Kilimall {formatCurrency(row.commissionMarketplaceKilimall)}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
