@@ -19,16 +19,18 @@ function computeBrendahDirectCommission(totalSales, totalProfit){
     commission = Math.round(clamp01(progress) * 10000);
   } else {
     commission = 10000;
-    if (totalSales < 2000000){
-      const frac = (totalSales - 1000000) / 1000000;
-      const prorated = Math.round(clamp01(frac) * STEP_REWARDS[0]);
-      commission += prorated;
-    } else {
-      commission += STEP_REWARDS[0];
-      for (let i=1;i<STEP_POINTS.length;i++){
-        const point = STEP_POINTS[i]; const reward = STEP_REWARDS[i];
-        if (totalSales >= point) commission += reward; else break;
+    let previousPoint = 1000000;
+    for (let i=0;i<STEP_POINTS.length;i++){
+      const point = STEP_POINTS[i];
+      const reward = STEP_REWARDS[i];
+      if (totalSales >= point) {
+        commission += reward;
+        previousPoint = point;
+        continue;
       }
+      const frac = (totalSales - previousPoint) / (point - previousPoint);
+      commission += Math.round(clamp01(frac) * reward);
+      break;
     }
   }
 
