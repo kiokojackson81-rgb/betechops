@@ -14,6 +14,7 @@ import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -568,29 +569,7 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
   const { locked, toggle } = useCardLock("support:earnings");
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
-  const credits = [
-    { label: "Base salary", amount: summary.baseSalary },
-    { label: "Performance bonus", amount: summary.batteryEarnings },
-    { label: "Commission", amount: summary.salesCommission },
-    { label: "Bonuses", amount: summary.bonusTotal },
-  ].filter((row) => row.amount !== 0);
-  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
-    (summary?.adjustmentEntries ?? []);
-  const signedEntries = adjEntries.map((e) => ({
-    label: e.label || e.adjustmentType,
-    amount:
-      String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION"
-        ? Number(e.amount ?? 0)
-        : -Math.abs(Number(e.amount ?? 0)),
-  }));
-  const debits = adjEntries && adjEntries.length > 0
-    ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, amount: e.amount }))
-    : [
-        { label: "Chama", amount: summary.chamaTotal },
-        { label: "Lateness", amount: summary.latenessTotal },
-        { label: "Discipline", amount: summary.disciplineTotal },
-        { label: "Other deductions", amount: summary.otherDeductionsTotal },
-      ].filter((row) => row.amount !== 0);
+  const breakdown = buildEarningsCardBreakdown(summary);
 
   const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
 
@@ -609,48 +588,22 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
         <div className="text-right">
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Net pay</p>
           <p className="text-2xl font-semibold text-emerald-300">
-            {mask(formatCurrency(summary.netPay))}
+            {mask(formatCurrency(breakdown.netPay))}
           </p>
         </div>
       </div>
       <div className="space-y-2">
-        {credits.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2"
-          >
-            <span className="text-sm text-slate-300">{row.label}</span>
-            <span className="font-semibold text-emerald-300">
-              {mask(formatCurrency(row.amount))}
-            </span>
-          </div>
-        ))}
-        {debits.map((row) => (
+        {breakdown.lines.map((row) => (
           <div
             key={row.label}
             className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2"
           >
             <span className="text-sm text-slate-300">{row.label}</span>
-            <span className="font-semibold text-rose-300">
-              {mask(`-${formatCurrency(row.amount)}`)}
+            <span className={`font-semibold ${row.kind === "deduction" ? "text-rose-300" : "text-emerald-300"}`}>
+              {mask(`${row.kind === "deduction" ? "-" : ""}${formatCurrency(Math.abs(row.amount))}`)}
             </span>
           </div>
         ))}
-        {signedEntries.length > 0 ? (
-          <div className="rounded-xl bg-slate-950/40 px-3 py-3">
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">Saved adjustments</p>
-            <div className="space-y-2">
-              {signedEntries.map((row) => (
-                <div key={`${row.label}-${row.amount}`} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">{row.label}</span>
-                  <span className={`font-semibold ${row.amount >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                    {mask(`${row.amount >= 0 ? "" : "-"}${formatCurrency(Math.abs(row.amount))}`)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
     </Card>
   );

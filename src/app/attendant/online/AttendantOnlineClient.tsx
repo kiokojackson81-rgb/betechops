@@ -13,6 +13,7 @@ import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
 
@@ -1205,81 +1206,11 @@ function PayrollEarningsCard({
   periodLabel: string;
   fallbackCommission?: number;
 }) {
-  const commissionValue = Number(
-    summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? fallbackCommission ?? 0,
-  );
-  const attendantCategory = String(summary?.attendantCategory ?? "");
-  const directCommissionValue = Number(
-    summary?.commissionDirect ?? summary?.directCommission ?? 0,
-  );
-  const jumiaCommissionValue = Number(summary?.commissionMarketplaceJumia ?? 0);
-  const kilimallCommissionValue = Number(summary?.commissionMarketplaceKilimall ?? 0);
-  const marketplaceCommissionValue = Number(
-    summary?.marketplaceCommission ??
-      (jumiaCommissionValue + kilimallCommissionValue > 0
-        ? jumiaCommissionValue + kilimallCommissionValue
-        : 0),
-  );
-  const hasCommissionBreakdown =
-    directCommissionValue !== 0 || jumiaCommissionValue !== 0 || kilimallCommissionValue !== 0;
-  const directCommissionLabel =
-    attendantCategory === "BETECH_OPS" ? "Direct commission" : "Direct POS commission";
-  const chamaValue = Number(
-    summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,
-  );
-  const bonusValue = Number(summary?.bonusTotal ?? 0);
-  const topUpValue = Number(summary?.commissionTopUpTotal ?? 0);
-  const transportValue = Number(summary?.transportAllowance ?? 0);
-  const totalDeductions = Number(summary?.totalDeductions ?? 0);
-  let deductionBreakdown: [string, number][] = [];
-  let adjustmentBreakdown: [string, number][] = [];
-  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
-    (summary?.adjustmentEntries ?? []);
-  if (adjEntries && adjEntries.length > 0) {
-    adjustmentBreakdown = adjEntries.map((e) => [
-      String(e.label || e.adjustmentType),
-      String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION"
-        ? Number(e.amount ?? 0)
-        : -Math.abs(Number(e.amount ?? 0)),
-    ]) as [string, number][];
-    deductionBreakdown = adjEntries
-      .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
-      .map((e) => [String(e.label || e.adjustmentType), Number(e.amount ?? 0)]) as [string, number][];
-  } else {
-    const fallback: [string, number][] = [
-      ["Chama", chamaValue],
-      ["Lateness", Number(summary?.latenessTotal ?? 0)],
-      ["Discipline", Number(summary?.disciplineTotal ?? 0)],
-      ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
-      ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
-    ];
-    deductionBreakdown = fallback.filter(([, amount]) => Number(amount) > 0) as [string, number][];
-  }
-
-  const rows = [
-    { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
-    { label: "Transport allowance", value: transportValue },
-    ...(directCommissionValue > 0 ? [{ label: directCommissionLabel, value: directCommissionValue }] : []),
-    ...(jumiaCommissionValue > 0 ? [{ label: "Jumia commission", value: jumiaCommissionValue }] : []),
-    ...(kilimallCommissionValue > 0 ? [{ label: "Kilimall commission", value: kilimallCommissionValue }] : []),
-    ...(directCommissionValue <= 0 &&
-    jumiaCommissionValue <= 0 &&
-    kilimallCommissionValue <= 0 &&
-    marketplaceCommissionValue > 0
-      ? [{ label: "Marketplace commission", value: marketplaceCommissionValue }]
-      : []),
-    ...(!hasCommissionBreakdown ? [{ label: "Commission", value: commissionValue }] : []),
-    { label: "Chama adjustment", value: chamaValue },
-    { label: "Bonuses", value: bonusValue },
-    { label: "Top-ups", value: topUpValue },
-    { label: "Deductions", value: totalDeductions },
-  ].filter(
-    (row) =>
-      Number(row.value ?? 0) !== 0 ||
-      (!hasCommissionBreakdown && row.label === "Commission") ||
-      row.label === "Deductions",
-  );
-  const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
+  const breakdown = buildEarningsCardBreakdown({
+    ...summary,
+    commissionTotal:
+      summary?.commissionTotal ?? summary?.commission ?? summary?.salesCommission ?? fallbackCommission ?? 0,
+  });
   const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -1297,46 +1228,20 @@ function PayrollEarningsCard({
       {/** mask values when locked */}
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
         <span>NET PAY</span>
-        <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(netPay)}</span>
+        <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(breakdown.netPay)}</span>
       </div>
 
       <div className="space-y-2">
-        {rows.map((row) => (
+        {breakdown.lines.map((row) => (
           <div key={row.label} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
             <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
-            <span className="text-base font-semibold text-emerald-300">{locked ? "•••" : formatKES(row.value)}</span>
+            <span className={`text-base font-semibold ${row.kind === "deduction" ? "text-rose-300" : "text-emerald-300"}`}>
+              {locked ? "•••" : `${row.kind === "deduction" ? "-" : ""}${formatKES(Math.abs(row.amount))}`}
+            </span>
           </div>
         ))}
-        {rows.length === 0 && (
+        {breakdown.lines.length === 0 && (
           <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
-        )}
-        {deductionBreakdown.length > 0 && (
-          <div className="space-y-1 rounded-2xl bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
-            <p className="uppercase tracking-wide text-[10px]">Payroll deduction summary</p>
-            <div className="text-sm text-slate-200">
-              {deductionBreakdown.map(([label, amount], index) => (
-                <span key={label}>
-                  {label} {locked ? "•••" : formatKES(Number(amount))}
-                  {index < deductionBreakdown.length - 1 && " · "}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {adjustmentBreakdown.length > 0 && (
-          <div className="space-y-1 rounded-2xl bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
-            <p className="uppercase tracking-wide text-[10px]">Saved payroll adjustments</p>
-            <div className="space-y-1 text-sm text-slate-200">
-              {adjustmentBreakdown.map(([label, amount]) => (
-                <div key={label} className="flex items-center justify-between gap-3">
-                  <span>{label}</span>
-                  <span className={Number(amount) >= 0 ? "text-emerald-300" : "text-rose-300"}>
-                    {locked ? "•••" : formatKES(Number(amount))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
       </div>
     </Card>

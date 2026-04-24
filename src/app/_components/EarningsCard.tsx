@@ -3,6 +3,7 @@
 import Card from "./Card";
 import type { EarningsSummary } from "@/lib/earningsSummary";
 import { useCardLock, LockButton } from "./useCardLock";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
 
@@ -17,47 +18,7 @@ export default function EarningsCard({
 
   if (!summary) return null;
 
-  const typedSummary = summary as typeof summary & {
-    attendantCategory?: string | null;
-    commissionDirect?: number;
-    commissionMarketplaceJumia?: number;
-    commissionMarketplaceKilimall?: number;
-  };
-  const directCommission = Number(typedSummary.commissionDirect ?? 0);
-  const jumiaCommission = Number(typedSummary.commissionMarketplaceJumia ?? 0);
-  const kilimallCommission = Number(typedSummary.commissionMarketplaceKilimall ?? 0);
-  const hasCommissionBreakdown = directCommission !== 0 || jumiaCommission !== 0 || kilimallCommission !== 0;
-  const directCommissionLabel =
-    typedSummary.attendantCategory === "JUMIA_KILIMALL_OPS" || typedSummary.attendantCategory === "BETECH_OPS"
-      ? "Direct POS commission"
-      : "Direct commission";
-
-  const rows = [
-    { label: "Base salary", value: summary.baseSalary },
-    { label: "Transport allowance", value: summary.transportAllowance },
-    ...(hasCommissionBreakdown
-      ? [
-          { label: directCommissionLabel, value: directCommission },
-          { label: "Jumia commission", value: jumiaCommission },
-          { label: "Kilimall commission", value: kilimallCommission },
-        ]
-      : [{ label: "Sales commission", value: summary.salesCommission }]),
-    { label: "Battery earnings", value: summary.batteryEarnings ?? 0 },
-    { label: "New product commission", value: summary.newProductCommission },
-    { label: "Copied product commission", value: summary.copiedCommission },
-    { label: "Edited product commission", value: summary.editedCommission },
-    { label: "Commission top-up", value: summary.commissionTopUpTotal },
-    { label: "Bonuses", value: summary.bonusTotal },
-    { label: "Chama deduction", value: -summary.chamaTotal },
-    { label: "Lateness deductions", value: -summary.latenessTotal },
-    { label: "Discipline deductions", value: -summary.disciplineTotal },
-    { label: "Other deductions", value: -summary.otherDeductionsTotal },
-  ]
-    .filter((row) => row.value !== 0)
-    .map((row) => ({
-      ...row,
-      formatted: row.value < 0 ? `- ${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value),
-    }));
+  const breakdown = buildEarningsCardBreakdown(summary);
 
   const mask = (val: string) => (locked ? "•••" : val);
 
@@ -102,36 +63,24 @@ export default function EarningsCard({
         </div>
         {lockKey ? <LockButton locked={locked} onToggle={toggle} /> : null}
       </div>
-      <div className="rounded-2xl border border-emerald-500/30 bg-black/20 px-4 py-3">
+        <div className="rounded-2xl border border-emerald-500/30 bg-black/20 px-4 py-3">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Net pay</p>
-        <p className="text-2xl font-semibold text-emerald-300">{mask(formatCurrency(summary.netPay))}</p>
+        <p className="text-2xl font-semibold text-emerald-300">{mask(formatCurrency(breakdown.netPay))}</p>
       </div>
       <div className="space-y-3 text-sm text-slate-100">
         {renderJenifferProgress()}
-        {rows.map((row) => (
+        {breakdown.lines.map((row) => (
           <div key={row.label} className="flex items-center justify-between">
             <span className="text-slate-400">{row.label}</span>
-            <span>{mask(row.formatted)}</span>
+            <span>
+              {mask(
+                row.kind === "deduction"
+                  ? `- ${formatCurrency(Math.abs(row.amount))}`
+                  : formatCurrency(row.amount),
+              )}
+            </span>
           </div>
         ))}
-        {summary.adjustmentEntries && summary.adjustmentEntries.length > 0 ? (
-          <div className="pt-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Adjustments</p>
-            <div className="mt-2 space-y-2">
-              {summary.adjustmentEntries.map((e) => {
-                const isAddition = (String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "ADDITION");
-                const val = isAddition ? e.amount : -Math.abs(e.amount);
-                const formatted = val < 0 ? `- ${formatCurrency(Math.abs(val))}` : formatCurrency(val);
-                return (
-                  <div key={e.id} className="flex items-center justify-between">
-                    <span className="text-slate-400">{e.label}</span>
-                    <span>{mask(formatted)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
       </div>
     </Card>
   );

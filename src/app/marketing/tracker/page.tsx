@@ -29,6 +29,7 @@ import {
   type GroupedUnpricedSale,
   type ReceiptGroupingItem,
 } from "@/lib/unpricedReceiptGrouping";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 type MarketingDailyFormState = {
   date: string;
@@ -265,27 +266,10 @@ function EarningsCard({ summary }: EarningsCardProps) {
   const { locked, toggle } = useCardLock("marketing:earnings");
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
-
-  // Prefer explicit adjustment entries (admin-provided labels) when available.
-  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
-    (summary?.adjustmentEntries ?? []);
-
-  const deductionEntries = adjEntries && adjEntries.length > 0
-    ? adjEntries.filter(e => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION").map(e => ({ label: e.label || e.adjustmentType, type: 'deduction' as const, amount: e.amount }))
-    : [
-        { label: "Chama", type: "deduction", amount: summary.chamaTotal },
-        { label: "Lateness", type: "deduction", amount: summary.latenessTotal },
-        { label: "Disciplinary", type: "deduction", amount: summary.disciplineTotal },
-        { label: "Other deductions", type: "deduction", amount: summary.otherDeductionsTotal },
-      ];
-
-  const rows = [
-    { label: "Base salary", type: "earning", amount: summary.baseSalary },
-    { label: "Commission", type: "earning", amount: summary.commission },
-    { label: "Transport allowance", type: "earning", amount: summary.transportAllowance },
-    { label: "Bonuses / extras", type: "earning", amount: summary.bonusTotal },
-    ...deductionEntries,
-  ].filter((row) => row.amount && row.amount !== 0);
+  const breakdown = buildEarningsCardBreakdown({
+    ...summary,
+    commissionTotal: (summary as any).commission ?? (summary as any).salesCommission ?? 0,
+  });
 
   return (
     <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -299,7 +283,7 @@ function EarningsCard({ summary }: EarningsCardProps) {
         </div>
         <div className="text-right text-xs">
           <p className="text-slate-400 uppercase tracking-wide">Net pay</p>
-          <p className="text-xl font-semibold text-emerald-400">{mask(`KES ${summary.netPay.toLocaleString()}`)}</p>
+          <p className="text-xl font-semibold text-emerald-400">{mask(`KES ${breakdown.netPay.toLocaleString()}`)}</p>
         </div>
       </div>
 
@@ -318,7 +302,7 @@ function EarningsCard({ summary }: EarningsCardProps) {
                 <div className="mt-2 text-xs text-amber-300">Band progress: {Math.round(((summary as any).jenifferProgress.progressPercent ?? 0) * 10000) / 100}%</div>
               </div>
             ) : null}
-        {rows.map((row) => (
+        {breakdown.lines.map((row) => (
           <div
             key={row.label}
             className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2"
@@ -326,12 +310,12 @@ function EarningsCard({ summary }: EarningsCardProps) {
             <span className="text-slate-300">{row.label}</span>
             <span
               className={
-                row.type === "earning"
+                row.kind === "earning"
                   ? "font-semibold text-emerald-400"
                   : "font-semibold text-rose-400"
               }
             >
-              {mask(`${row.type === "deduction" ? "-" : ""}KES ${row.amount.toLocaleString()}`)}
+              {mask(`${row.kind === "deduction" ? "-" : ""}KES ${Math.abs(row.amount).toLocaleString()}`)}
             </span>
           </div>
         ))}
