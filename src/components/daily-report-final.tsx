@@ -15,6 +15,7 @@ import DailyReportReceiptsPanel from "./daily-report-receipts";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import { withImpersonateId } from "@/lib/impersonation";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
+import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -328,10 +329,10 @@ export default function DailyReportFinal() {
       if (!impersonationReady) return null;
       if (!selectedPeriodKey) return null;
       try {
-        const basePath = "/api/attendant/earnings/summary";
+        const basePath = "/api/payroll/summary";
         const params = new URLSearchParams({ periodKey: selectedPeriodKey });
         if (impersonateId) {
-          params.set("impersonateId", impersonateId);
+          params.set("attendantId", impersonateId);
         }
         const url = `${basePath}?${params.toString()}`;
         const res = await fetch(url, {
@@ -370,21 +371,25 @@ export default function DailyReportFinal() {
           earningsWarningShown.current = true;
         }
 
+        const row = data?.row ?? data?.rows?.[0] ?? null;
+        if (!row) return null;
+        const mapped = mapPayrollToEarningsSummary(row, Number(row.totalReceipts ?? 0)) as unknown as EarningsSummary;
+
         setEarningsError(null);
-        setEarningsSummary(data);
+        setEarningsSummary(mapped);
         const nextAttendantEmail =
-          typeof data.attendantEmail === "string" ? data.attendantEmail.toLowerCase().trim() : null;
+          typeof row.email === "string" ? row.email.toLowerCase().trim() : null;
         const prefersEarningsQuickStats = nextAttendantEmail === "brendah@betech.co.ke";
         setResolvedAttendantEmail(nextAttendantEmail);
         const authoritativeCommission = prefersEarningsQuickStats
-          ? Number(data.salesCommission ?? 0)
-          : Number(data.grossCommission ?? 0);
+          ? Number(mapped.salesCommission ?? 0)
+          : Number(mapped.grossCommission ?? 0);
         setCommissionForPeriod(Math.round(authoritativeCommission));
         commissionSourceRef.current = Number.isFinite(authoritativeCommission) ? "authoritative" : "none";
         setHasAuthoritativeCommission(Number.isFinite(authoritativeCommission));
-        const payrollSales = Number(data.totalSales ?? 0);
-        const payrollItems = Number(data.totalItems ?? 0);
-        const payrollReceipts = Number(data.totalReceipts ?? 0);
+        const payrollSales = Number(row.totalSales ?? 0);
+        const payrollItems = Number(row.totalItems ?? 0);
+        const payrollReceipts = Number(row.totalReceipts ?? 0);
         const savedReceiptsSummary = prefersEarningsQuickStats
           ? await fetchSavedReceiptsSummary(signal).catch(() => null)
           : null;
@@ -414,9 +419,9 @@ export default function DailyReportFinal() {
               ? {
                   totalSales: brendahSavedSales,
                   totalItems: payrollItems,
-                  totalNewProducts: Number(qsData.totalNewProducts ?? data.totalNewProducts ?? 0),
-                  totalEditedProducts: Number(qsData.totalEditedProducts ?? data.totalEditedProducts ?? 0),
-                  totalCopiedProducts: Number(qsData.totalCopiedProducts ?? data.totalCopiedProducts ?? 0),
+                  totalNewProducts: Number(qsData.totalNewProducts ?? row.newProducts ?? 0),
+                  totalEditedProducts: Number(qsData.totalEditedProducts ?? row.editedProducts ?? 0),
+                  totalCopiedProducts: Number(qsData.totalCopiedProducts ?? row.copiedProducts ?? 0),
                   walkInsServed: Number(qsData.walkInsServed ?? 0),
                   walkInsPurchased: Number(qsData.walkInsPurchased ?? 0),
                   totalReceipts: brendahSavedReceipts,
@@ -438,35 +443,35 @@ export default function DailyReportFinal() {
             setServerQuickStats({
               totalSales: prefersEarningsQuickStats
                 ? brendahSavedSales
-                : Number(data.totalSales ?? 0),
-              totalItems: Number(data.totalItems ?? 0),
-              totalNewProducts: Number(data.totalNewProducts ?? 0),
-              totalEditedProducts: Number(data.totalEditedProducts ?? 0),
-              totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
+                : Number(row.totalSales ?? 0),
+              totalItems: Number(row.totalItems ?? 0),
+              totalNewProducts: Number(row.newProducts ?? 0),
+              totalEditedProducts: Number(row.editedProducts ?? 0),
+              totalCopiedProducts: Number(row.copiedProducts ?? 0),
               walkInsServed: Number(data.walkInsServed ?? 0),
               walkInsPurchased: Number(data.walkInsPurchased ?? 0),
               totalReceipts: prefersEarningsQuickStats
                 ? brendahSavedReceipts
-                : Number(data.totalReceipts ?? 0),
+                : Number(row.totalReceipts ?? 0),
             });
           }
         } catch {
           setServerQuickStats({
             totalSales: prefersEarningsQuickStats
               ? brendahSavedSales
-              : Number(data.totalSales ?? 0),
-            totalItems: Number(data.totalItems ?? 0),
-            totalNewProducts: Number(data.totalNewProducts ?? 0),
-            totalEditedProducts: Number(data.totalEditedProducts ?? 0),
-            totalCopiedProducts: Number(data.totalCopiedProducts ?? 0),
+              : Number(row.totalSales ?? 0),
+            totalItems: Number(row.totalItems ?? 0),
+            totalNewProducts: Number(row.newProducts ?? 0),
+            totalEditedProducts: Number(row.editedProducts ?? 0),
+            totalCopiedProducts: Number(row.copiedProducts ?? 0),
             walkInsServed: Number(data.walkInsServed ?? 0),
             walkInsPurchased: Number(data.walkInsPurchased ?? 0),
             totalReceipts: prefersEarningsQuickStats
               ? brendahSavedReceipts
-                : Number(data.totalReceipts ?? 0),
+                : Number(row.totalReceipts ?? 0),
           });
         }
-        return data;
+        return mapped;
       } catch (err) {
         if ((err as Error).name === "AbortError") return null;
         console.error("Failed to load earnings summary", err);

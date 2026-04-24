@@ -6,6 +6,13 @@ export type PayrollSummary = {
   salary?: number;
   baseSalary?: number;
   transportAllowance?: number;
+  totalSales?: number;
+  totalProfit?: number;
+  totalItems?: number;
+  totalReceipts?: number;
+  newProducts?: number;
+  editedProducts?: number;
+  copiedProducts?: number;
   deductions?: number;
   chamaTotal?: number;
   latenessTotal?: number;
@@ -65,13 +72,13 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     periodKey: p.periodLabel ?? "",
     periodLabel: p.periodLabel ?? "",
     attendantCategory: p.attendantCategory ?? null,
-    totalSales: 0,
-    totalProfit: 0,
-    totalNewProducts: 0,
-    totalEditedProducts: 0,
-    totalCopiedProducts: 0,
-    totalItems: 0,
-    totalReceipts: receiptsCount,
+    totalSales: Number(p.totalSales ?? 0),
+    totalProfit: Number(p.totalProfit ?? 0),
+    totalNewProducts: Number(p.newProducts ?? 0),
+    totalEditedProducts: Number(p.editedProducts ?? 0),
+    totalCopiedProducts: Number(p.copiedProducts ?? 0),
+    totalItems: Number(p.totalItems ?? 0),
+    totalReceipts: Number(p.totalReceipts ?? receiptsCount),
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,

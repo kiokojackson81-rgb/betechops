@@ -15,6 +15,7 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
+import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -132,7 +133,7 @@ export default function SupportOpsPage() {
       const earningsParams = new URLSearchParams({ periodKey: selectedPeriodKey });
       const [summaryRes, earningsRes] = await Promise.all([
         fetch(`/api/support/report/summary?${summaryParams.toString()}`, { credentials: "same-origin" }),
-        fetch(`/api/support/earnings/summary?${earningsParams.toString()}`, { credentials: "same-origin" }),
+        fetch(`/api/payroll/summary?${earningsParams.toString()}`, { credentials: "same-origin" }),
       ]);
       if (summaryRes.ok) {
         const data = (await summaryRes.json().catch(() => null)) as
@@ -141,10 +142,13 @@ export default function SupportOpsPage() {
         if (data) setServerSummary(data);
       }
       if (earningsRes.ok) {
-        const data = (await earningsRes.json().catch(() => null)) as
-          | SupportEarningsSummary
-          | null;
-        if (data) setEarningsSummary(data);
+        const data = (await earningsRes.json().catch(() => null)) as any;
+        const row = data?.row ?? data?.rows?.[0] ?? null;
+        if (row) {
+          setEarningsSummary(
+            mapPayrollToEarningsSummary(row, Number(row.totalReceipts ?? 0)) as unknown as SupportEarningsSummary,
+          );
+        }
       }
     } catch {
       // no-op; UI already reflects optimistic data

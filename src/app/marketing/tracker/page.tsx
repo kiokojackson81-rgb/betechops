@@ -30,6 +30,7 @@ import {
   type ReceiptGroupingItem,
 } from "@/lib/unpricedReceiptGrouping";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
+import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 
 type MarketingDailyFormState = {
   date: string;
@@ -1117,13 +1118,16 @@ export default function MarketingTrackerPage() {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         const imp = impersonateIdFromWindow();
         const url = imp
-          ? `/api/marketing/earnings/summary?impersonateId=${encodeURIComponent(imp)}`
-          : "/api/marketing/earnings/summary";
+          ? `/api/payroll/summary?attendantId=${encodeURIComponent(imp)}&periodKey=${encodeURIComponent(selectedPeriod.key)}`
+          : `/api/payroll/summary?periodKey=${encodeURIComponent(selectedPeriod.key)}`;
         const res = await fetch(url, { credentials: "same-origin", signal: controller.signal });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!data) return;
-        const next = data.summary ?? null;
+        const row = data?.row ?? data?.rows?.[0] ?? null;
+        const next = row
+          ? (mapPayrollToEarningsSummary(row, Number(row.totalReceipts ?? 0)) as unknown as EarningsSummary)
+          : null;
         // shallow compare by JSON to avoid unnecessary updates
         const prevStr = earningsSummaryJsonRef.current;
         const nextStr = JSON.stringify(next ?? {});
@@ -1142,7 +1146,7 @@ export default function MarketingTrackerPage() {
       clearInterval(id);
       controller.abort();
     };
-  }, []);
+  }, [selectedPeriod.key]);
 
   useEffect(() => {
     const POLL_INTERVAL_MS = 20_000;

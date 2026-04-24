@@ -203,8 +203,8 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       commissionResult.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
     );
     const commissionTotal = Number(onlineSummary.commissionTotal ?? onlineSummary.grossCommission ?? 0);
-    const bonusTotal = Number(onlineSummary.bonusTotal ?? 0) + Number(onlineSummary.commissionTopUpTotal ?? 0);
-    const totalDeductions = Number(onlineSummary.totalDeductions ?? 0) + penalties;
+    const bonusTotal = adjustmentSummary.totalBonus;
+    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
     const totalEarnings =
       Number(onlineSummary.baseSalary ?? 0) +
       Number(onlineSummary.transportAllowance ?? 0) +
@@ -282,18 +282,13 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       Number(earningsSummary.newProductCommission ?? 0) +
       Number(earningsSummary.copiedCommission ?? 0) +
       Number(earningsSummary.editedCommission ?? 0);
-    const commissionTotal = salesCommission + productWorkCommission + Number(earningsSummary.commissionTopUpTotal ?? 0);
+    const commissionTotal = salesCommission + productWorkCommission;
     const totalEarnings =
       Number(earningsSummary.baseSalary ?? 0) +
       Number(earningsSummary.transportAllowance ?? 0) +
       commissionTotal +
-      Number(earningsSummary.bonusTotal ?? 0);
-    const totalDeductions =
-      Number(earningsSummary.chamaTotal ?? 0) +
-      Number(earningsSummary.latenessTotal ?? 0) +
-      Number(earningsSummary.disciplineTotal ?? 0) +
-      Number(earningsSummary.otherDeductionsTotal ?? 0) +
-      penalties;
+      adjustmentSummary.totalBonus;
+    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
     return {
       attendantId: attendant.id,
@@ -367,18 +362,13 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       Number(earningsSummary.newProductCommission ?? 0) +
       Number(earningsSummary.copiedCommission ?? 0) +
       Number(earningsSummary.editedCommission ?? 0);
-    const commissionTotal = salesCommission + productWorkCommission + Number(earningsSummary.commissionTopUpTotal ?? 0);
+    const commissionTotal = salesCommission + productWorkCommission;
     const totalEarnings =
       Number(earningsSummary.baseSalary ?? 0) +
       Number(earningsSummary.transportAllowance ?? 0) +
       commissionTotal +
-      Number(earningsSummary.bonusTotal ?? 0);
-    const totalDeductions =
-      Number(earningsSummary.chamaTotal ?? 0) +
-      Number(earningsSummary.latenessTotal ?? 0) +
-      Number(earningsSummary.disciplineTotal ?? 0) +
-      Number(earningsSummary.otherDeductionsTotal ?? 0) +
-      penalties;
+      adjustmentSummary.totalBonus;
+    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
     return {
       attendantId: attendant.id,
