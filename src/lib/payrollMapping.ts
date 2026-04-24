@@ -101,6 +101,7 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
 
 export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string | null): PayrollRow {
   const salary = p?.baseSalary ?? p?.salary ?? 0;
+  const transportAllowance = p?.transportAllowance ?? 0;
   const direct = p?.commissionDirect ?? p?.directCommission ?? 0;
   const marketplaceJumia = p?.commissionMarketplaceJumia ?? 0;
   const marketplaceKilimall = p?.commissionMarketplaceKilimall ?? 0;
@@ -116,6 +117,15 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
   const bonus = p?.bonusTotal ?? 0;
   const commissionTopUp = p?.commissionTopUpTotal ?? 0;
   const penalties = p?.penalties ?? 0;
+  const adjustmentEntries = Array.isArray(p?.adjustmentEntries)
+    ? p!.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: Number(entry.amount ?? 0),
+        adjustmentType: entry.adjustmentType,
+        kind: String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase() as "ADDITION" | "DEDUCTION",
+      }))
+    : [];
 
   const deductionTotal = chama + lateness + discipline + otherDeductions + penalties;
 
@@ -123,10 +133,10 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     attendantId: userId ?? "",
     name: undefined,
     email: undefined,
-    attendantCategory: "DIRECT_SALES_OPS",
+    attendantCategory: p?.attendantCategory ?? null,
     isActive: true,
     baseSalary: salary,
-    transportAllowance: 0,
+    transportAllowance,
     commission: totalCommission,
     commissionGross: totalCommission,
     commissionDirect: direct,
@@ -136,7 +146,7 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     commissionBreakdown: p?.commissionBreakdown ?? null,
     bonusTotal: bonus + commissionTopUp,
     deductionTotal: deductionTotal,
-    totalEarnings: salary + totalCommission + bonus + commissionTopUp,
+    totalEarnings: salary + transportAllowance + totalCommission + bonus + commissionTopUp,
     totalDeductions: deductionTotal,
     netPay: p?.netPay ?? 0,
     totalSales: 0,
@@ -155,7 +165,7 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
       commissionTopUp,
       penalties,
     },
-    adjustmentEntries: [],
+    adjustmentEntries,
   };
 }
 

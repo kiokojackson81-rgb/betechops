@@ -1208,6 +1208,7 @@ function PayrollEarningsCard({
   const commissionValue = Number(
     summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? fallbackCommission ?? 0,
   );
+  const attendantCategory = String(summary?.attendantCategory ?? "");
   const directCommissionValue = Number(
     summary?.commissionDirect ?? summary?.directCommission ?? 0,
   );
@@ -1219,6 +1220,10 @@ function PayrollEarningsCard({
         ? jumiaCommissionValue + kilimallCommissionValue
         : 0),
   );
+  const hasCommissionBreakdown =
+    directCommissionValue !== 0 || jumiaCommissionValue !== 0 || kilimallCommissionValue !== 0;
+  const directCommissionLabel =
+    attendantCategory === "BETECH_OPS" ? "Direct commission" : "Direct POS commission";
   const chamaValue = Number(
     summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,
   );
@@ -1254,7 +1259,7 @@ function PayrollEarningsCard({
   const rows = [
     { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
     { label: "Transport allowance", value: transportValue },
-    ...(directCommissionValue > 0 ? [{ label: "Direct POS commission", value: directCommissionValue }] : []),
+    ...(directCommissionValue > 0 ? [{ label: directCommissionLabel, value: directCommissionValue }] : []),
     ...(jumiaCommissionValue > 0 ? [{ label: "Jumia commission", value: jumiaCommissionValue }] : []),
     ...(kilimallCommissionValue > 0 ? [{ label: "Kilimall commission", value: kilimallCommissionValue }] : []),
     ...(directCommissionValue <= 0 &&
@@ -1263,12 +1268,17 @@ function PayrollEarningsCard({
     marketplaceCommissionValue > 0
       ? [{ label: "Marketplace commission", value: marketplaceCommissionValue }]
       : []),
-    { label: "Commission", value: commissionValue },
+    ...(!hasCommissionBreakdown ? [{ label: "Commission", value: commissionValue }] : []),
     { label: "Chama adjustment", value: chamaValue },
     { label: "Bonuses", value: bonusValue },
     { label: "Top-ups", value: topUpValue },
     { label: "Deductions", value: totalDeductions },
-  ].filter((row) => Number(row.value ?? 0) !== 0 || row.label === "Commission" || row.label === "Deductions");
+  ].filter(
+    (row) =>
+      Number(row.value ?? 0) !== 0 ||
+      (!hasCommissionBreakdown && row.label === "Commission") ||
+      row.label === "Deductions",
+  );
   const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
   const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
