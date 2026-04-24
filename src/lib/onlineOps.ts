@@ -119,6 +119,142 @@ export type OnlineEarningsSummary = {
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
 
+const normalizeReceiptNumber = (input: unknown) => {
+  if (input == null) return "";
+  return String(input).trim().toUpperCase().replace(/[\s\-_]+/g, "").replace(/[^A-Z0-9]/g, "");
+};
+
+const extractReceiptSales = (receipt: {
+  totals?: Record<string, unknown> | null;
+  data?: Record<string, unknown> | null;
+  order?: { totalAmount?: number | null } | null;
+}) => {
+  const totals = receipt.totals ?? {};
+  const data = receipt.data ?? {};
+  const candidates = [
+    totals.total,
+    totals.sellingTotal,
+    totals.grandTotal,
+    totals.amount,
+    totals.subtotal,
+    data.total,
+    data.amount,
+    receipt.order?.totalAmount,
+  ];
+  for (const value of candidates) {
+    const num = Number(value ?? 0);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return 0;
+};
+
+async function computeProfit10DirectProfitFallback(args: {
+  userId: string;
+  start: Date;
+  end: Date;
+}) {
+  const receipts = await prisma.receipt.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { generatedAt: { gte: args.start, lte: args.end } },
+            { createdAt: { gte: args.start, lte: args.end } },
+          ],
+        },
+        {
+          OR: [
+            { issuedById: args.userId },
+            { order: { attendantId: args.userId } },
+            { data: { path: ["attendantId"], equals: args.userId } },
+          ],
+        },
+      ],
+    },
+    select: {
+      receiptNumber: true,
+      generatedAt: true,
+      createdAt: true,
+      totals: true,
+      data: true,
+      order: {
+        select: {
+          orderNumber: true,
+          paymentStatus: true,
+          totalAmount: true,
+          attendantId: true,
+        },
+      },
+    },
+  });
+
+  const paidReceipts = receipts.filter((receipt) => {
+    const paymentStatus = String(receipt.order?.paymentStatus ?? "").trim().toUpperCase();
+    return paymentStatus === "PAID";
+  });
+
+  const receiptMeta = paidReceipts.map((receipt) => {
+    const salesDate = receipt.generatedAt ?? receipt.createdAt ?? args.start;
+    const canonical =
+      normalizeReceiptNumber(receipt.order?.orderNumber) ||
+      normalizeReceiptNumber(receipt.receiptNumber) ||
+      normalizeReceiptNumber((receipt.data as Record<string, unknown> | null)?.orderRef);
+    const ymd = salesDate.toISOString().slice(0, 10);
+    return {
+      canonical,
+      receiptKey: canonical ? `${ymd}:${canonical}` : "",
+      sales: extractReceiptSales(receipt as any),
+    };
+  });
+
+  const canonicalNumbers = Array.from(new Set(receiptMeta.map((item) => item.canonical).filter(Boolean)));
+  const receiptKeys = Array.from(new Set(receiptMeta.map((item) => item.receiptKey).filter(Boolean)));
+  if (!canonicalNumbers.length && !receiptKeys.length) return 0;
+
+  const supportReceipts = await prisma.supportReceipt.findMany({
+    where: {
+      OR: [
+        ...(canonicalNumbers.length ? [{ receiptNumber: { in: canonicalNumbers } }] : []),
+        ...(receiptKeys.length ? [{ receiptKey: { in: receiptKeys } }] : []),
+      ],
+    },
+    select: {
+      receiptNumber: true,
+      receiptKey: true,
+      buyingTotal: true,
+      items: {
+        select: {
+          buyingPrice: true,
+        },
+      },
+    },
+  });
+
+  const buyingByCanonical = new Map<string, number>();
+  for (const row of supportReceipts) {
+    const itemBuyingTotal = Array.isArray(row.items)
+      ? row.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0)
+      : 0;
+    const buyingTotal = Math.max(Number(row.buyingTotal ?? 0), itemBuyingTotal);
+    if (!(buyingTotal > 0)) continue;
+    const keys = [
+      normalizeReceiptNumber(row.receiptNumber),
+      normalizeReceiptNumber(row.receiptKey),
+      normalizeReceiptNumber(String(row.receiptKey ?? "").split(":").pop() ?? ""),
+    ].filter(Boolean);
+    for (const key of keys) {
+      if (!buyingByCanonical.has(key)) buyingByCanonical.set(key, buyingTotal);
+    }
+  }
+
+  return receiptMeta.reduce((sum, receipt) => {
+    if (!receipt.canonical || receipt.sales <= 0) return sum;
+    const buyingTotal = Number(buyingByCanonical.get(receipt.canonical) ?? 0);
+    if (!(buyingTotal > 0)) return sum;
+    return sum + (receipt.sales - buyingTotal);
+  }, 0);
+}
+
 type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
   select: {
     id: true;
@@ -572,7 +708,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const payoutKilimallSales = marketplaceSalesSummary.totals.kilimallSales;
   const marketplaceSales = marketplaceSalesSummary.totals.sales;
   const combinedDirectSales = directStats.sales;
-  const combinedDirectProfit = directStats.profit;
 
   const isSupervisor = roles.includes("SUPERVISOR");
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
@@ -580,6 +715,16 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const summed = sumAdjustments(adjustments);
   const directCommissionMode = resolveDirectCommissionMode(user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
+  const fallbackDirectProfit =
+    directCommissionMode === "PROFIT_10" &&
+    Number(directStats.sales ?? 0) > 0 &&
+    Number(directStats.profit ?? 0) <= 0
+      ? await computeProfit10DirectProfitFallback({ userId: attendantId, start: period.start, end: period.end })
+      : 0;
+  const effectiveDirectProfit =
+    directCommissionMode === "PROFIT_10" && fallbackDirectProfit > 0
+      ? fallbackDirectProfit
+      : directStats.profit;
   const profit10Commission =
     directCommissionMode === "PROFIT_10"
       ? computeOnlinePeriodCommission(
@@ -588,7 +733,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
             periodStart: period.start,
             periodEnd: period.end,
             directSales: directStats.sales,
-            directProfit: directStats.profit,
+            directProfit: effectiveDirectProfit,
             jumiaSales: payoutJumiaSales,
             kilimallSales: payoutKilimallSales,
           },
@@ -658,7 +803,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       directCommissionMode === "PROFIT_10"
         ? profit10Commission?.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0
         : combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
-          ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
+          ? Math.max(0, Math.round(effectiveDirectProfit * 0.05))
           : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
   }
 
@@ -701,7 +846,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     periodKey: period.key,
     periodLabel: period.label,
     directSales: directCommissionMode === "PROFIT_10" ? directStats.sales : combinedDirectSales,
-    directProfit: directStats.profit,
+    directProfit: effectiveDirectProfit,
     marketplaceSales,
     directCommission: directSalesCommission,
     commissionDirect: directSalesCommission,
