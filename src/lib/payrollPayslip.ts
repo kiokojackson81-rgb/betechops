@@ -68,6 +68,21 @@ function payslipNumber(attendantId: string, periodKey: string) {
   return `PS-${periodKey.replace(/[^0-9A-Za-z]/g, "")}-${attendantId.slice(-6).toUpperCase()}`;
 }
 
+function resolveAdjustmentLabel(entry: { label?: string | null; adjustmentType?: string | null }, kind: "ADDITION" | "DEDUCTION") {
+  const explicit = String(entry.label ?? "").trim();
+  if (explicit) return explicit;
+
+  const type = String(entry.adjustmentType ?? "").trim().toUpperCase();
+  if (type === "CHAMA") return "Chama";
+  if (type === "LATENESS") return "Lateness";
+  if (type === "DISCIPLINE") return "Discipline";
+  if (type === "OTHER") return kind === "ADDITION" ? "Additional" : "Deduction";
+  if (type === "BONUS" || type === "COMMISSION_TOPUP") {
+    return kind === "ADDITION" ? "Additional" : "Deduction";
+  }
+  return kind === "ADDITION" ? "Additional" : "Deduction";
+}
+
 function buildCommissionLines(row: PayrollRow) {
   switch (row.attendantCategory) {
     case "DIRECT_SALES_OPS":
@@ -97,32 +112,44 @@ function buildAdjustmentLines(row: PayrollRow) {
   const entries = Array.isArray(row.adjustmentEntries) ? row.adjustmentEntries : [];
   const additionLines = entries
     .filter((entry) => entry.kind === "ADDITION")
-    .map((entry) => ({ label: entry.label || entry.adjustmentType, amount: Number(entry.amount ?? 0) }));
+    .map((entry) => ({
+      label: resolveAdjustmentLabel(entry, "ADDITION"),
+      amount: Math.abs(Number(entry.amount ?? 0)),
+    }));
   const deductionLines = entries
     .filter((entry) => entry.kind === "DEDUCTION")
-    .map((entry) => ({ label: entry.label || entry.adjustmentType, amount: Number(entry.amount ?? 0) }));
+    .map((entry) => ({
+      label: resolveAdjustmentLabel(entry, "DEDUCTION"),
+      amount: Math.abs(Number(entry.amount ?? 0)),
+    }));
 
   const fallbackAdditions =
     additionLines.length > 0
       ? []
       : [
-          { label: "Bonus", amount: row.adjustmentBreakdown.bonus },
-          { label: "Top-up", amount: row.adjustmentBreakdown.commissionTopUp },
-        ].filter((line) => Number(line.amount ?? 0) !== 0);
+          { label: "Additional", amount: Math.max(0, Number(row.adjustmentBreakdown.bonus ?? 0)) },
+          { label: "Additional", amount: Math.max(0, Number(row.adjustmentBreakdown.commissionTopUp ?? 0)) },
+          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.chama ?? 0)) },
+          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.lateness ?? 0)) },
+          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.discipline ?? 0)) },
+          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.other ?? 0)) },
+        ].filter((line) => Number(line.amount ?? 0) > 0);
 
   const fallbackDeductions =
     deductionLines.length > 0
       ? []
       : [
-          { label: "Chama", amount: row.adjustmentBreakdown.chama },
-          { label: "Lateness", amount: row.adjustmentBreakdown.lateness },
-          { label: "Discipline", amount: row.adjustmentBreakdown.discipline },
-          { label: "Other deductions", amount: row.adjustmentBreakdown.other },
-        ].filter((line) => Number(line.amount ?? 0) !== 0);
+          { label: "Deduction", amount: Math.max(0, -Number(row.adjustmentBreakdown.bonus ?? 0)) },
+          { label: "Deduction", amount: Math.max(0, -Number(row.adjustmentBreakdown.commissionTopUp ?? 0)) },
+          { label: "Chama", amount: Math.max(0, Number(row.adjustmentBreakdown.chama ?? 0)) },
+          { label: "Lateness", amount: Math.max(0, Number(row.adjustmentBreakdown.lateness ?? 0)) },
+          { label: "Discipline", amount: Math.max(0, Number(row.adjustmentBreakdown.discipline ?? 0)) },
+          { label: "Other deductions", amount: Math.max(0, Number(row.adjustmentBreakdown.other ?? 0)) },
+        ].filter((line) => Number(line.amount ?? 0) > 0);
 
   const penaltiesLine =
     Number(row.adjustmentBreakdown.penalties ?? 0) !== 0
-      ? [{ label: "Penalties", amount: row.adjustmentBreakdown.penalties }]
+      ? [{ label: "Penalties", amount: Math.abs(Number(row.adjustmentBreakdown.penalties ?? 0)) }]
       : [];
 
   return {
@@ -182,6 +209,16 @@ export function buildPayslipPayload(args: {
   const generatedAt = args.generatedAt ?? new Date();
   const commissionLines = buildCommissionLines(args.row);
   const adjustmentLines = buildAdjustmentLines(args.row);
+  const earningsLines = [
+    { label: "Base salary", amount: args.row.baseSalary },
+    { label: "Transport allowance", amount: args.row.transportAllowance },
+    ...commissionLines,
+    ...adjustmentLines.additionLines,
+  ].filter((line) => Number(line.amount ?? 0) !== 0);
+  const deductionLines = adjustmentLines.deductionLines.filter((line) => Number(line.amount ?? 0) !== 0);
+  const totalEarnings = earningsLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
+  const totalDeductions = deductionLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
+  const netPay = totalEarnings - totalDeductions;
 
   return {
     siteTitle: args.branding.siteTitle || "BetechOps",
@@ -195,16 +232,11 @@ export function buildPayslipPayload(args: {
     categoryLabel: getCategoryLabel(args.attendant.attendantCategory),
     statusLabel: args.attendant.isActive ? "Active" : "Inactive",
     workSummary: buildWorkSummary(args.row),
-    earningsLines: [
-      { label: "Base salary", amount: args.row.baseSalary },
-      { label: "Transport allowance", amount: args.row.transportAllowance },
-      ...commissionLines,
-      ...adjustmentLines.additionLines,
-    ],
-    deductionLines: adjustmentLines.deductionLines,
-    totalEarnings: args.row.totalEarnings,
-    totalDeductions: args.row.totalDeductions,
-    netPay: args.row.netPay,
+    earningsLines,
+    deductionLines,
+    totalEarnings,
+    totalDeductions,
+    netPay,
   };
 }
 
