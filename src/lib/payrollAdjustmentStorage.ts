@@ -7,7 +7,8 @@ const globalForPayrollAdjustmentStorage = globalThis as unknown as {
 export async function ensurePayrollAdjustmentStorage() {
   if (globalForPayrollAdjustmentStorage.__payrollAdjustmentStorageReady) return;
 
-  await prisma.$executeRawUnsafe(`
+  const statements = [
+    `
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -16,7 +17,8 @@ BEGIN
     CREATE TYPE "PayrollAdjustmentType" AS ENUM ('CHAMA', 'LATENESS', 'DISCIPLINE', 'BONUS', 'COMMISSION_TOPUP', 'OTHER');
   END IF;
 END $$;
-
+`,
+    `
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -25,7 +27,8 @@ BEGIN
     CREATE TYPE "PayrollAdjustmentKind" AS ENUM ('ADDITION', 'DEDUCTION');
   END IF;
 END $$;
-
+`,
+    `
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -47,7 +50,8 @@ BEGIN
     );
   END IF;
 END $$;
-
+`,
+    `
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -61,10 +65,12 @@ BEGIN
     ADD COLUMN "adjustmentKind" "PayrollAdjustmentKind" NOT NULL DEFAULT 'DEDUCTION';
   END IF;
 END $$;
-
+`,
+    `
 CREATE INDEX IF NOT EXISTS "AttendantPayrollAdjustment_attendantId_periodKey_idx"
 ON "AttendantPayrollAdjustment"("attendantId", "periodKey");
-
+`,
+    `
 DO $$
 BEGIN
   IF EXISTS (
@@ -83,7 +89,12 @@ BEGIN
     ON DELETE RESTRICT ON UPDATE CASCADE;
   END IF;
 END $$;
-`);
+`,
+  ];
+
+  for (const statement of statements) {
+    await prisma.$executeRawUnsafe(statement);
+  }
 
   globalForPayrollAdjustmentStorage.__payrollAdjustmentStorageReady = true;
 }
