@@ -11,6 +11,7 @@ import PayrollTableClient from "@/app/admin/payroll/PayrollTableClient";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 import { mapPayrollToEarningsSummary as mapToEarnings, mapPayrollToPayrollRow as mapToPayrollRow } from "@/lib/payrollMapping";
 import { withImpersonateId } from "@/lib/impersonation";
+import { getPreviousTradingPeriod } from "@/lib/tradingPeriod";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -250,7 +251,10 @@ function getReceiptsPayrollPeriodFor(date: Date) {
     month: "short",
     year: "numeric",
   })} - ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
-  return { start, end, label, key: `${start.toISOString()}_${end.toISOString()}` };
+  const key = `${start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })}_${end.toLocaleDateString("en-CA", {
+    timeZone: "Africa/Nairobi",
+  })}`;
+  return { start, end, label, key };
 }
 
 function getMarketplaceTradingPeriodFor(date: Date) {
@@ -384,6 +388,10 @@ function MiniKpi({ label, value }: { label: string; value: ReactNode }) {
 
 export default function AttendantOnlineOpsClient() {
   const receiptsPeriod = useMemo(() => getReceiptsPayrollPeriodFor(new Date()), []);
+  const previousReceiptsPeriod = useMemo(
+    () => getPreviousTradingPeriod({ ...receiptsPeriod, key: receiptsPeriod.key }),
+    [receiptsPeriod],
+  );
   const marketplacePeriod = useMemo(() => getMarketplaceTradingPeriodFor(new Date()), []);
   const tradingWeeks = useMemo(() => buildTradingWeeks(marketplacePeriod.start), [marketplacePeriod.start]);
 
@@ -916,9 +924,21 @@ export default function AttendantOnlineOpsClient() {
                 {payrollLoading && !payrollSummary && !payrollRows ? (
                   <Card className="p-6 text-center">Loading payroll summary…</Card>
                 ) : payrollRows && payrollRows.length > 0 ? (
-                  <PayrollTableClient rows={payrollRows} periodLabel={receiptsPeriod.label} periodKey={receiptsPeriod.key} />
+                  <PayrollTableClient
+                    rows={payrollRows}
+                    periodLabel={receiptsPeriod.label}
+                    periodKey={receiptsPeriod.key}
+                    previousPeriodKey={previousReceiptsPeriod.key}
+                    printHref={`/api/admin/payroll/print?periodKey=${encodeURIComponent(receiptsPeriod.key)}`}
+                  />
                 ) : payrollSummary ? (
-                  <PayrollTableClient rows={[mapPayrollToPayrollRow(payrollSummary)]} periodLabel={receiptsPeriod.label} periodKey={receiptsPeriod.key} />
+                  <PayrollTableClient
+                    rows={[mapPayrollToPayrollRow(payrollSummary)]}
+                    periodLabel={receiptsPeriod.label}
+                    periodKey={receiptsPeriod.key}
+                    previousPeriodKey={previousReceiptsPeriod.key}
+                    printHref={`/api/admin/payroll/print?periodKey=${encodeURIComponent(receiptsPeriod.key)}`}
+                  />
                 ) : (
                   <Card className="p-6 text-center">Payroll data not available for this period.</Card>
                 )}

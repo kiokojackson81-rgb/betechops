@@ -54,10 +54,14 @@ export default function PayrollTableClient({
   rows,
   periodLabel,
   periodKey,
+  previousPeriodKey,
+  printHref,
 }: {
   rows: PayrollRow[];
   periodLabel: string;
   periodKey: string;
+  previousPeriodKey: string;
+  printHref: string;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
@@ -137,13 +141,14 @@ export default function PayrollTableClient({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => window.print()}
+          <a
+            href={printHref}
+            target="_blank"
+            rel="noreferrer"
             className="no-print rounded-full border border-white/10 bg-slate-900/50 px-3 py-1 text-slate-200 transition hover:bg-slate-800"
           >
             Print payroll
-          </button>
+          </a>
           <div className="rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-slate-200">Marketing Ops highlight</div>
           <div className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-rose-200">Brendah focus</div>
           <a
@@ -388,12 +393,18 @@ export default function PayrollTableClient({
                       <div className="text-lg font-semibold text-emerald-300">{formatCurrency(row.netPay)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <a
                           className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
                           href={`/api/admin/payroll/payslip?attendantId=${encodeURIComponent(row.attendantId)}&periodKey=${encodeURIComponent(periodKey)}`}
                         >
                           Payslip
+                        </a>
+                        <a
+                          className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                          href={`/api/admin/payroll/payslip?attendantId=${encodeURIComponent(row.attendantId)}&periodKey=${encodeURIComponent(previousPeriodKey)}`}
+                        >
+                          Prev slip
                         </a>
                         <Link
                           className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"

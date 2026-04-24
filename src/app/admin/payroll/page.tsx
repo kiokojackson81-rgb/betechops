@@ -98,7 +98,13 @@ export default async function AdminPayrollPage({
           </div>
         </div>
       </header>
-      <PayrollTableClient rows={rows} periodLabel={period.label} periodKey={period.key} />
+      <PayrollTableClient
+        rows={rows}
+        periodLabel={period.label}
+        periodKey={period.key}
+        previousPeriodKey={previousPeriod.key}
+        printHref={`/api/admin/payroll/print?periodKey=${encodeURIComponent(period.key)}`}
+      />
     </div>
   );
 }
