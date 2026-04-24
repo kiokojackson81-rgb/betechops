@@ -1286,12 +1286,14 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     [combinedPeriodSales],
   );
 
-  // Prefer the earnings summary commission only when it is non-zero; otherwise
-  // fall back to the cumulative ladder used by the tracker "tiers" UI.
+  // Jeniffer's quick stats should mirror the earnings card's direct sales
+  // commission, while other attendants continue to use the total commission.
+  const preferredEarningsCommission =
+    currentUserEmail === "jeniffer@betech.co.ke"
+      ? Number(earningsSummary?.salesCommission ?? 0)
+      : Number(earningsSummary?.commission ?? 0);
   const commissionKes =
-    typeof earningsSummary?.commission === "number" && earningsSummary.commission > 0
-      ? earningsSummary.commission
-      : commissionSummary.commission;
+    preferredEarningsCommission > 0 ? preferredEarningsCommission : commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
     periodSummary?.period.label ??
