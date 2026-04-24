@@ -5,6 +5,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import {
+  resolveDirectCommissionMode,
   resolveOnlinePosOwnershipMode,
   computeBrendahDirectCommission,
 } from "@/lib/onlineCommission";
@@ -171,19 +172,26 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       }),
     ]);
 
+    const directMode = resolveDirectCommissionMode(attendant.email);
     let directCommission = Number(onlineSummary.commissionDirect ?? onlineSummary.directCommission ?? 0);
     let jumiaCommission = Number(onlineSummary.commissionMarketplaceJumia ?? 0);
     let kilimallCommission = Number(onlineSummary.commissionMarketplaceKilimall ?? 0);
     let commissionTotal = Number(onlineSummary.commissionTotal ?? onlineSummary.grossCommission ?? 0);
 
-    // Prefer a persisted CommissionLedger when present and positive — this
-    // ensures the payslip/PDF matches ledger-reviewed values shown in the UI.
-    if (ledger && Number(ledger.commissionTotal ?? 0) > 0) {
+    // Only let the reviewed ledger override when it is not one of the POS-profit-share
+    // users, because for PROFIT_10 users the live online summary carries the rescued
+    // POS sales/profit fallback that stale ledgers can miss.
+    if (directMode !== "PROFIT_10" && ledger && Number(ledger.commissionTotal ?? 0) > 0) {
       commissionTotal = Number(ledger.commissionTotal ?? commissionTotal);
-      // Use ledger-specific breakdowns when available, otherwise keep computed values.
-      directCommission = Number(ledger.commissionDirect ?? directCommission);
-      jumiaCommission = Number(ledger.commissionMarketplaceJumia ?? jumiaCommission);
-      kilimallCommission = Number(ledger.commissionMarketplaceKilimall ?? kilimallCommission);
+      if (Number(ledger.commissionDirect ?? 0) > 0) {
+        directCommission = Number(ledger.commissionDirect ?? directCommission);
+      }
+      if (Number(ledger.commissionMarketplaceJumia ?? 0) > 0) {
+        jumiaCommission = Number(ledger.commissionMarketplaceJumia ?? jumiaCommission);
+      }
+      if (Number(ledger.commissionMarketplaceKilimall ?? 0) > 0) {
+        kilimallCommission = Number(ledger.commissionMarketplaceKilimall ?? kilimallCommission);
+      }
     }
     const bonusTotal = adjustmentSummary.totalBonus;
     const totalDeductions = adjustmentSummary.totalDeduction + penalties;
