@@ -2,8 +2,10 @@ import type { PayrollRow } from "@/app/admin/payroll/types";
 
 export type PayrollSummary = {
   periodLabel?: string;
+  attendantCategory?: string | null;
   salary?: number;
   baseSalary?: number;
+  transportAllowance?: number;
   deductions?: number;
   chamaTotal?: number;
   latenessTotal?: number;
@@ -21,6 +23,14 @@ export type PayrollSummary = {
   totalCommission?: number;
   grossCommission?: number;
   netPay?: number;
+  adjustmentEntries?: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind?: string;
+    kind?: "ADDITION" | "DEDUCTION";
+  }>;
   commissionBreakdown?: unknown | null;
 };
 
@@ -41,10 +51,20 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
   const bonusTotal = p.bonusTotal ?? 0;
   const commissionTopUpTotal = p.commissionTopUpTotal ?? 0;
   const penalties = p.penalties ?? 0;
+  const adjustmentEntries = Array.isArray(p.adjustmentEntries)
+    ? p.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: Number(entry.amount ?? 0),
+        adjustmentType: entry.adjustmentType,
+        adjustmentKind: String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase(),
+      }))
+    : [];
 
   return {
     periodKey: p.periodLabel ?? "",
     periodLabel: p.periodLabel ?? "",
+    attendantCategory: p.attendantCategory ?? null,
     totalSales: 0,
     totalProfit: 0,
     totalNewProducts: 0,
@@ -55,8 +75,11 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
-    transportAllowance: 0,
+    transportAllowance: p.transportAllowance ?? 0,
     salesCommission: totalCommission,
+    commissionDirect: direct,
+    commissionMarketplaceJumia: marketplaceJumia,
+    commissionMarketplaceKilimall: marketplaceKilimall,
     newProductCommission: 0,
     copiedCommission: 0,
     editedCommission: 0,
@@ -68,10 +91,11 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     latenessTotal: lateness,
     disciplineTotal: discipline,
     otherDeductionsTotal: otherDeductions,
-    totalEarnings: baseSalary + totalCommission + bonusTotal + commissionTopUpTotal,
+    totalEarnings: baseSalary + (p.transportAllowance ?? 0) + totalCommission + bonusTotal + commissionTopUpTotal,
     totalDeductions: chama + lateness + discipline + otherDeductions + penalties,
     netPay: p.netPay ?? 0,
     ledger: null,
+    adjustmentEntries,
   };
 }
 

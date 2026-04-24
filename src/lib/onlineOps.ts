@@ -88,6 +88,9 @@ export type OnlineEarningsSummary = {
   directProfit: number;
   marketplaceSales: number;
   directCommission: number;
+  commissionDirect?: number;
+  commissionMarketplaceJumia?: number;
+  commissionMarketplaceKilimall?: number;
   marketplaceCommission: number;
   supervisorBonus: number;
   returnsDeduction: number;
@@ -104,6 +107,13 @@ export type OnlineEarningsSummary = {
   totalDeductions: number;
   netPay: number;
   commissionTotal?: number;
+  adjustmentEntries?: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind: string;
+  }>;
 };
 
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
@@ -694,6 +704,11 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     directProfit: directStats.profit,
     marketplaceSales,
     directCommission: directSalesCommission,
+    commissionDirect: directSalesCommission,
+    commissionMarketplaceJumia:
+      profit10Commission?.lines.find((line) => line.channel === "JUMIA")?.commission ?? 0,
+    commissionMarketplaceKilimall:
+      profit10Commission?.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
     marketplaceCommission,
     supervisorBonus,
     returnsDeduction,
@@ -706,6 +721,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     latenessTotal: summed.latenessTotal,
     disciplineTotal: summed.disciplineTotal,
     otherDeductionsTotal: summed.otherDeductionsTotal,
+    adjustmentEntries: summed.adjustmentEntries,
     totalEarnings,
     totalDeductions,
     netPay,
@@ -779,6 +795,13 @@ function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {
   latenessTotal: number;
   disciplineTotal: number;
   otherDeductionsTotal: number;
+  adjustmentEntries: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind: string;
+  }>;
 } {
   const sumSigned = (types: PayrollAdjustmentType[]) =>
     adjustments
@@ -805,6 +828,13 @@ function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {
     latenessTotal: deductionSigned(["LATENESS"]),
     disciplineTotal: deductionSigned(["DISCIPLINE"]),
     otherDeductionsTotal: deductionSigned(["OTHER"]),
+    adjustmentEntries: adjustments.map((a) => ({
+      id: a.id,
+      label: a.label,
+      amount: Number(a.amount ?? 0),
+      adjustmentType: String(a.adjustmentType),
+      adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+    })),
   };
 }
 

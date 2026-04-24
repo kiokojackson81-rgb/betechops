@@ -93,6 +93,44 @@ function buildCommissionLines(row: PayrollRow) {
   }
 }
 
+function buildAdjustmentLines(row: PayrollRow) {
+  const entries = Array.isArray(row.adjustmentEntries) ? row.adjustmentEntries : [];
+  const additionLines = entries
+    .filter((entry) => entry.kind === "ADDITION")
+    .map((entry) => ({ label: entry.label || entry.adjustmentType, amount: Number(entry.amount ?? 0) }));
+  const deductionLines = entries
+    .filter((entry) => entry.kind === "DEDUCTION")
+    .map((entry) => ({ label: entry.label || entry.adjustmentType, amount: Number(entry.amount ?? 0) }));
+
+  const fallbackAdditions =
+    additionLines.length > 0
+      ? []
+      : [
+          { label: "Bonus", amount: row.adjustmentBreakdown.bonus },
+          { label: "Top-up", amount: row.adjustmentBreakdown.commissionTopUp },
+        ].filter((line) => Number(line.amount ?? 0) !== 0);
+
+  const fallbackDeductions =
+    deductionLines.length > 0
+      ? []
+      : [
+          { label: "Chama", amount: row.adjustmentBreakdown.chama },
+          { label: "Lateness", amount: row.adjustmentBreakdown.lateness },
+          { label: "Discipline", amount: row.adjustmentBreakdown.discipline },
+          { label: "Other deductions", amount: row.adjustmentBreakdown.other },
+        ].filter((line) => Number(line.amount ?? 0) !== 0);
+
+  const penaltiesLine =
+    Number(row.adjustmentBreakdown.penalties ?? 0) !== 0
+      ? [{ label: "Penalties", amount: row.adjustmentBreakdown.penalties }]
+      : [];
+
+  return {
+    additionLines: additionLines.length > 0 ? additionLines : fallbackAdditions,
+    deductionLines: [...(deductionLines.length > 0 ? deductionLines : fallbackDeductions), ...penaltiesLine],
+  };
+}
+
 function buildWorkSummary(row: PayrollRow) {
   switch (row.attendantCategory) {
     case "DIRECT_SALES_OPS":
@@ -143,6 +181,7 @@ export function buildPayslipPayload(args: {
 }): PayslipPayload {
   const generatedAt = args.generatedAt ?? new Date();
   const commissionLines = buildCommissionLines(args.row);
+  const adjustmentLines = buildAdjustmentLines(args.row);
 
   return {
     siteTitle: args.branding.siteTitle || "BetechOps",
@@ -160,16 +199,9 @@ export function buildPayslipPayload(args: {
       { label: "Base salary", amount: args.row.baseSalary },
       { label: "Transport allowance", amount: args.row.transportAllowance },
       ...commissionLines,
-      { label: "Bonus", amount: args.row.adjustmentBreakdown.bonus },
-      { label: "Top-up", amount: args.row.adjustmentBreakdown.commissionTopUp },
+      ...adjustmentLines.additionLines,
     ],
-    deductionLines: [
-      { label: "Chama", amount: args.row.adjustmentBreakdown.chama },
-      { label: "Lateness", amount: args.row.adjustmentBreakdown.lateness },
-      { label: "Discipline", amount: args.row.adjustmentBreakdown.discipline },
-      { label: "Other deductions", amount: args.row.adjustmentBreakdown.other },
-      { label: "Penalties", amount: args.row.adjustmentBreakdown.penalties },
-    ],
+    deductionLines: adjustmentLines.deductionLines,
     totalEarnings: args.row.totalEarnings,
     totalDeductions: args.row.totalDeductions,
     netPay: args.row.netPay,

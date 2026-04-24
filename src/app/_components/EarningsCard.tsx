@@ -17,10 +17,31 @@ export default function EarningsCard({
 
   if (!summary) return null;
 
+  const typedSummary = summary as typeof summary & {
+    attendantCategory?: string | null;
+    commissionDirect?: number;
+    commissionMarketplaceJumia?: number;
+    commissionMarketplaceKilimall?: number;
+  };
+  const directCommission = Number(typedSummary.commissionDirect ?? 0);
+  const jumiaCommission = Number(typedSummary.commissionMarketplaceJumia ?? 0);
+  const kilimallCommission = Number(typedSummary.commissionMarketplaceKilimall ?? 0);
+  const hasCommissionBreakdown = directCommission !== 0 || jumiaCommission !== 0 || kilimallCommission !== 0;
+  const directCommissionLabel =
+    typedSummary.attendantCategory === "JUMIA_KILIMALL_OPS" || typedSummary.attendantCategory === "BETECH_OPS"
+      ? "Direct POS commission"
+      : "Direct commission";
+
   const rows = [
     { label: "Base salary", value: summary.baseSalary },
     { label: "Transport allowance", value: summary.transportAllowance },
-    { label: "Sales commission", value: summary.salesCommission },
+    ...(hasCommissionBreakdown
+      ? [
+          { label: directCommissionLabel, value: directCommission },
+          { label: "Jumia commission", value: jumiaCommission },
+          { label: "Kilimall commission", value: kilimallCommission },
+        ]
+      : [{ label: "Sales commission", value: summary.salesCommission }]),
     { label: "Battery earnings", value: summary.batteryEarnings ?? 0 },
     { label: "New product commission", value: summary.newProductCommission },
     { label: "Copied product commission", value: summary.copiedCommission },
