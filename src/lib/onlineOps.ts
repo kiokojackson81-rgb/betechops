@@ -148,7 +148,7 @@ const extractReceiptSales = (receipt: {
   return 0;
 };
 
-async function computeProfit10DirectProfitFallback(args: {
+async function computeProfit10DirectReceiptFallback(args: {
   userId: string;
   start: Date;
   end: Date;
@@ -209,7 +209,9 @@ async function computeProfit10DirectProfitFallback(args: {
 
   const canonicalNumbers = Array.from(new Set(receiptMeta.map((item) => item.canonical).filter(Boolean)));
   const receiptKeys = Array.from(new Set(receiptMeta.map((item) => item.receiptKey).filter(Boolean)));
-  if (!canonicalNumbers.length && !receiptKeys.length) return 0;
+  if (!canonicalNumbers.length && !receiptKeys.length) {
+    return { sales: 0, profit: 0 };
+  }
 
   const supportReceipts = await prisma.supportReceipt.findMany({
     where: {
@@ -247,12 +249,21 @@ async function computeProfit10DirectProfitFallback(args: {
     }
   }
 
-  return receiptMeta.reduce((sum, receipt) => {
-    if (!receipt.canonical || receipt.sales <= 0) return sum;
-    const buyingTotal = Number(buyingByCanonical.get(receipt.canonical) ?? 0);
-    if (!(buyingTotal > 0)) return sum;
-    return sum + (receipt.sales - buyingTotal);
-  }, 0);
+  const totals = receiptMeta.reduce(
+    (acc, receipt) => {
+      if (receipt.sales > 0) {
+        acc.sales += receipt.sales;
+      }
+      if (!receipt.canonical || receipt.sales <= 0) return acc;
+      const buyingTotal = Number(buyingByCanonical.get(receipt.canonical) ?? 0);
+      if (!(buyingTotal > 0)) return acc;
+      acc.profit += receipt.sales - buyingTotal;
+      return acc;
+    },
+    { sales: 0, profit: 0 },
+  );
+
+  return totals;
 }
 
 type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
@@ -707,7 +718,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const payoutJumiaSales = marketplaceSalesSummary.totals.jumiaSales;
   const payoutKilimallSales = marketplaceSalesSummary.totals.kilimallSales;
   const marketplaceSales = marketplaceSalesSummary.totals.sales;
-  const combinedDirectSales = directStats.sales;
 
   const isSupervisor = roles.includes("SUPERVISOR");
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
@@ -715,15 +725,18 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const summed = sumAdjustments(adjustments);
   const directCommissionMode = resolveDirectCommissionMode(user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
-  const fallbackDirectProfit =
+  const fallbackDirectReceiptSummary =
     directCommissionMode === "PROFIT_10" &&
-    Number(directStats.sales ?? 0) > 0 &&
-    Number(directStats.profit ?? 0) <= 0
-      ? await computeProfit10DirectProfitFallback({ userId: attendantId, start: period.start, end: period.end })
-      : 0;
+    (Number(directStats.sales ?? 0) <= 0 || Number(directStats.profit ?? 0) <= 0)
+      ? await computeProfit10DirectReceiptFallback({ userId: attendantId, start: period.start, end: period.end })
+      : { sales: 0, profit: 0 };
+  const effectiveDirectSales =
+    directCommissionMode === "PROFIT_10" && Number(directStats.sales ?? 0) <= 0 && fallbackDirectReceiptSummary.sales > 0
+      ? fallbackDirectReceiptSummary.sales
+      : directStats.sales;
   const effectiveDirectProfit =
-    directCommissionMode === "PROFIT_10" && fallbackDirectProfit > 0
-      ? fallbackDirectProfit
+    directCommissionMode === "PROFIT_10" && Number(directStats.profit ?? 0) <= 0 && fallbackDirectReceiptSummary.profit > 0
+      ? fallbackDirectReceiptSummary.profit
       : directStats.profit;
   const profit10Commission =
     directCommissionMode === "PROFIT_10"
@@ -732,7 +745,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
             attendantId,
             periodStart: period.start,
             periodEnd: period.end,
-            directSales: directStats.sales,
+            directSales: effectiveDirectSales,
             directProfit: effectiveDirectProfit,
             jumiaSales: payoutJumiaSales,
             kilimallSales: payoutKilimallSales,
@@ -802,9 +815,9 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     directSalesCommission =
       directCommissionMode === "PROFIT_10"
         ? profit10Commission?.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0
-        : combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
+        : effectiveDirectSales < DIRECT_SALES_TIER_THRESHOLD
           ? Math.max(0, Math.round(effectiveDirectProfit * 0.05))
-          : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
+          : calculateCumulativeCommission(Math.max(0, effectiveDirectSales)).commission;
   }
 
   const grossCommission = directSalesCommission + marketplaceCommission + supervisorBonus - returnsDeduction;
@@ -845,7 +858,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    directSales: directCommissionMode === "PROFIT_10" ? directStats.sales : combinedDirectSales,
+    directSales: directCommissionMode === "PROFIT_10" ? effectiveDirectSales : directStats.sales,
     directProfit: effectiveDirectProfit,
     marketplaceSales,
     directCommission: directSalesCommission,
