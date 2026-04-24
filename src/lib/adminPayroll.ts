@@ -2,11 +2,9 @@ import { prisma } from "@/lib/prisma";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
-import { getOnlineEarningsSummary, getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
+import { getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import {
-  computeOnlinePeriodCommission,
-  resolveDirectCommissionMode,
   resolveOnlinePosOwnershipMode,
   computeBrendahDirectCommission,
 } from "@/lib/onlineCommission";
@@ -161,14 +159,8 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
 
   if (isOnlineCategory(attendant.attendantCategory)) {
     const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
-    const [onlineSummary, marketplaceSalesSummary, posSummary] = await Promise.all([
+    const [onlineSummary, posSummary] = await Promise.all([
       getOnlineEarningsSummary(attendant.id, { period }),
-      getAssignedMarketplaceSalesForPeriod(attendant.id, {
-        key: marketplaceWindow.key,
-        label: marketplaceWindow.label,
-        start: marketplaceWindow.start,
-        end: marketplaceWindow.end,
-      }),
       summarizePosReceiptsForPeriod({
         start: period.start,
         end: period.end,
@@ -179,30 +171,20 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       }),
     ]);
 
-    const directMode = resolveDirectCommissionMode(attendant.email);
-    const commissionResult = computeOnlinePeriodCommission(
-      {
-        attendantId: attendant.id,
-        periodStart: period.start,
-        periodEnd: period.end,
-        directSales: Number(posSummary.totalSales ?? 0),
-        directProfit: Number(posSummary.totalProfit ?? 0),
-        jumiaSales: Number(marketplaceSalesSummary.totals.jumiaSales ?? 0),
-        kilimallSales: Number(marketplaceSalesSummary.totals.kilimallSales ?? 0),
-      },
-      { directCommissionMode: directMode },
-    );
+    let directCommission = Number(onlineSummary.commissionDirect ?? onlineSummary.directCommission ?? 0);
+    let jumiaCommission = Number(onlineSummary.commissionMarketplaceJumia ?? 0);
+    let kilimallCommission = Number(onlineSummary.commissionMarketplaceKilimall ?? 0);
+    let commissionTotal = Number(onlineSummary.commissionTotal ?? onlineSummary.grossCommission ?? 0);
 
-    const directCommission = Number(
-      commissionResult.lines.find((line) => line.channel === "DIRECT")?.commission ?? onlineSummary.directCommission ?? 0,
-    );
-    const jumiaCommission = Number(
-      commissionResult.lines.find((line) => line.channel === "JUMIA")?.commission ?? 0,
-    );
-    const kilimallCommission = Number(
-      commissionResult.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
-    );
-    const commissionTotal = Number(onlineSummary.commissionTotal ?? onlineSummary.grossCommission ?? 0);
+    // Prefer a persisted CommissionLedger when present and positive — this
+    // ensures the payslip/PDF matches ledger-reviewed values shown in the UI.
+    if (ledger && Number(ledger.commissionTotal ?? 0) > 0) {
+      commissionTotal = Number(ledger.commissionTotal ?? commissionTotal);
+      // Use ledger-specific breakdowns when available, otherwise keep computed values.
+      directCommission = Number(ledger.commissionDirect ?? directCommission);
+      jumiaCommission = Number(ledger.commissionMarketplaceJumia ?? jumiaCommission);
+      kilimallCommission = Number(ledger.commissionMarketplaceKilimall ?? kilimallCommission);
+    }
     const bonusTotal = adjustmentSummary.totalBonus;
     const totalDeductions = adjustmentSummary.totalDeduction + penalties;
     const totalEarnings =
@@ -225,12 +207,13 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       commissionMarketplaceJumia: jumiaCommission,
       commissionMarketplaceKilimall: kilimallCommission,
       commissionTotal,
-      commissionBreakdown: {
-        direct: directCommission,
-        jumia: jumiaCommission,
-        kilimall: kilimallCommission,
-        total: commissionTotal,
-      },
+      commissionBreakdown:
+        ledger?.commissionBreakdown ?? {
+          direct: directCommission,
+          jumia: jumiaCommission,
+          kilimall: kilimallCommission,
+          total: commissionTotal,
+        },
       bonusTotal,
       deductionTotal: totalDeductions,
       totalEarnings,
