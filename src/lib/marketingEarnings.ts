@@ -15,6 +15,7 @@ export type EarningsSummary = {
 
   baseSalary: number;
   transportAllowance: number;
+  salesCommission: number;
   commission: number;
   bonusTotal: number;
   chamaTotal: number;
@@ -149,6 +150,7 @@ export async function getEarningsSummaryForAttendant(opts: {
 
     baseSalary,
     transportAllowance,
+    salesCommission: commission,
     commission,
     bonusTotal,
     chamaTotal,
