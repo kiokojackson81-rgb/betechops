@@ -4,15 +4,18 @@ import Card from "./Card";
 import type { EarningsSummary } from "@/lib/earningsSummary";
 import { useCardLock, LockButton } from "./useCardLock";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
+import Link from "next/link";
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
 
 export default function EarningsCard({
   summary,
   lockKey,
+  downloadHref,
 }: {
   summary: EarningsSummary | null;
   lockKey?: string;
+  downloadHref?: string;
 }) {
   const { locked, toggle } = useCardLock(lockKey ?? "earnings:default");
 
@@ -82,6 +85,16 @@ export default function EarningsCard({
           </div>
         ))}
       </div>
+      {downloadHref ? (
+        <div className="pt-1">
+          <Link
+            href={downloadHref}
+            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"
+          >
+            Download payslip
+          </Link>
+        </div>
+      ) : null}
     </Card>
   );
 }

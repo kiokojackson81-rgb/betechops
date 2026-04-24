@@ -92,6 +92,7 @@ export default function SupportOpsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
   const selectedPeriodKey = selectedPeriod.key;
   const tradingPeriodLabel = selectedPeriod.label;
+  const payslipHref = useMemo(() => `/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriodKey)}`, [selectedPeriodKey]);
 
   // Guard route for support attendants
   useEffect(() => {
@@ -439,7 +440,7 @@ export default function SupportOpsPage() {
               nextTarget={commissionSummary.nextTarget ?? null}
             />
 
-            <SupportEarningsCard summary={earningsSummary} />
+            <SupportEarningsCard summary={earningsSummary} downloadHref={payslipHref} />
           </div>
         </div>
       </form>
@@ -569,7 +570,13 @@ function SupportQuickStats({
   );
 }
 
-function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | null }) {
+function SupportEarningsCard({
+  summary,
+  downloadHref,
+}: {
+  summary: SupportEarningsSummary | null;
+  downloadHref?: string;
+}) {
   const { locked, toggle } = useCardLock("support:earnings");
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
@@ -609,6 +616,16 @@ function SupportEarningsCard({ summary }: { summary: SupportEarningsSummary | nu
           </div>
         ))}
       </div>
+      {downloadHref ? (
+        <div className="pt-1">
+          <Link
+            href={downloadHref}
+            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"
+          >
+            Download payslip
+          </Link>
+        </div>
+      ) : null}
     </Card>
   );
 }

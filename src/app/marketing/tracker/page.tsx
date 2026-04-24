@@ -261,9 +261,10 @@ function StatsCard({
 
 type EarningsCardProps = {
   summary: EarningsSummary | null;
+  downloadHref?: string;
 };
 
-function EarningsCard({ summary }: EarningsCardProps) {
+function EarningsCard({ summary, downloadHref }: EarningsCardProps) {
   const { locked, toggle } = useCardLock("marketing:earnings");
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
@@ -321,6 +322,16 @@ function EarningsCard({ summary }: EarningsCardProps) {
           </div>
         ))}
       </div>
+      {downloadHref ? (
+      <div className="mt-4">
+        <Link
+          href={downloadHref}
+          className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"
+        >
+          Download payslip
+        </Link>
+      </div>
+      ) : null}
     </Card>
   );
 }
@@ -1823,7 +1834,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />
-            <EarningsCard summary={earningsSummary} />
+            <EarningsCard
+              summary={earningsSummary}
+              downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
+            />
             {currentUserEmail === "jeniffer@betech.co.ke" && (
               <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
                 <div className="mb-3 flex flex-col gap-2">

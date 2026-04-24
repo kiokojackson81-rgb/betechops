@@ -278,6 +278,11 @@ export default function DailyReportFinal() {
   const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
   const selectedPeriodKey = selectedPeriod.key;
   const selectedPeriodLabel = selectedPeriod.label;
+  const payslipHref = useMemo(() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/payslip?${params.toString()}`;
+  }, [impersonateId, selectedPeriodKey]);
   const summaryProfitForFallback = Number(earningsSummary?.totalProfit ?? 0);
 
   useEffect(() => {
@@ -1149,7 +1154,11 @@ export default function DailyReportFinal() {
               periodLabel={selectedPeriodLabel}
             />
 
-            <EarningsCard summary={earningsSummary ?? publicFallbackSummary} lockKey="dailyreport:earnings" />
+            <EarningsCard
+              summary={earningsSummary ?? publicFallbackSummary}
+              lockKey="dailyreport:earnings"
+              downloadHref={payslipHref}
+            />
           </aside>
         </div>
       )}
