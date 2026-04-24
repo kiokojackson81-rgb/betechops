@@ -40,6 +40,7 @@ export type EarningsSummary = {
   latenessTotal: number;
   disciplineTotal: number;
   otherDeductionsTotal: number;
+  cashAdvanceTotal: number;
 
   totalEarnings: number;
   totalDeductions: number;
@@ -195,6 +196,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   let latenessTotal = 0;
   let disciplineTotal = 0;
   let otherDeductionsTotal = 0;
+  let cashAdvanceTotal = 0;
 
   const adjustmentEntries = adjustments.map((a) => ({
     id: a.id,
@@ -222,6 +224,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
       if (!isAddition) disciplineTotal += amt; else disciplineTotal -= amt;
     } else if (t === "OTHER") {
       if (!isAddition) otherDeductionsTotal += amt; else otherDeductionsTotal -= amt;
+    } else if (t === "CASH_ADVANCE") {
+      if (!isAddition) cashAdvanceTotal += amt; else cashAdvanceTotal -= amt;
     } else {
       // unknown types: treat as deduction by default
       if (!isAddition) otherDeductionsTotal += amt; else bonusTotal += amt;
@@ -332,7 +336,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   }
 
   const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
-  const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
+  const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal + cashAdvanceTotal;
   const netPay = totalEarnings - totalDeductions;
 
   return {
@@ -363,6 +367,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     latenessTotal,
     disciplineTotal,
     otherDeductionsTotal,
+    cashAdvanceTotal,
     totalEarnings,
     totalDeductions,
     netPay,

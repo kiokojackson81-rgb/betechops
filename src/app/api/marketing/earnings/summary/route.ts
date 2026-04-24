@@ -5,6 +5,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,18 @@ export async function GET(req: Request) {
   const periodLabel = period.label;
 
   try {
-    const userSummary = await getEarningsSummaryForUser({ userId: attendantId });
+    const attendant = await prisma.user.findUnique({
+      where: { id: attendantId },
+      select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+    });
+    if (!attendant) {
+      return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
+    }
+
+    const [userSummary, payrollRow] = await Promise.all([
+      getEarningsSummaryForUser({ userId: attendantId }),
+      buildPayrollRow(attendant, period),
+    ]);
 
     const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
     const usePosTotals = commissionConfig.posTotalsMode !== "NONE";
@@ -96,26 +108,41 @@ export async function GET(req: Request) {
       userSummary.chamaTotal +
       userSummary.latenessTotal +
       userSummary.disciplineTotal +
-      userSummary.otherDeductionsTotal;
+      userSummary.otherDeductionsTotal +
+      Number((userSummary as any).cashAdvanceTotal ?? 0);
     const netPay = totalEarnings - totalDeductions;
 
     const summary = {
       periodKey,
       periodLabel,
       sales: userSummary.totalSales,
-      baseSalary: userSummary.baseSalary,
-      transportAllowance: userSummary.transportAllowance,
+      attendantCategory: payrollRow.attendantCategory,
+      baseSalary: payrollRow.baseSalary,
+      transportAllowance: payrollRow.transportAllowance,
       jenifferProgress: (userSummary as any).jenifferProgress ?? null,
-      commission: grossCommission,
-      bonusTotal: userSummary.bonusTotal,
-      chamaTotal: userSummary.chamaTotal,
-      latenessTotal: userSummary.latenessTotal,
-      disciplineTotal: userSummary.disciplineTotal,
-      otherDeductionsTotal: userSummary.otherDeductionsTotal,
-      adjustmentEntries: userSummary.adjustmentEntries ?? [],
-      totalEarnings,
-      totalDeductions,
-      netPay,
+      salesCommission: payrollRow.commissionDirect || payrollRow.commissionTotal,
+      commissionDirect: payrollRow.commissionDirect,
+      commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+      commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+      commission: payrollRow.commissionTotal,
+      grossCommission: payrollRow.commissionGross,
+      bonusTotal: payrollRow.adjustmentBreakdown.bonus,
+      commissionTopUpTotal: payrollRow.adjustmentBreakdown.commissionTopUp,
+      chamaTotal: payrollRow.adjustmentBreakdown.chama,
+      latenessTotal: payrollRow.adjustmentBreakdown.lateness,
+      disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
+      otherDeductionsTotal: payrollRow.adjustmentBreakdown.other,
+      cashAdvanceTotal: payrollRow.adjustmentBreakdown.cashAdvance,
+      adjustmentEntries: payrollRow.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: entry.amount,
+        adjustmentType: entry.adjustmentType,
+        adjustmentKind: entry.kind,
+      })),
+      totalEarnings: payrollRow.totalEarnings,
+      totalDeductions: payrollRow.totalDeductions,
+      netPay: payrollRow.netPay,
     };
 
     return NextResponse.json({ periodKey, periodLabel, summary });

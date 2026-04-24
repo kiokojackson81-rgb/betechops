@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import type { Role } from "@prisma/client";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,11 @@ export async function GET(req: Request) {
 
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
   });
+  if (!targetUser) {
+    return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
+  }
 
   const now = new Date();
   const url = new URL(req.url);
@@ -29,7 +33,7 @@ export async function GET(req: Request) {
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
   await getOrCreateCommissionPeriod(period.start);
 
-  const [summary, marketingSummary, supportSummary, ledger] = await Promise.all([
+  const [summary, marketingSummary, supportSummary, ledger, payrollRow] = await Promise.all([
     getEarningsSummaryForUser({ userId, asOf: period.start }),
     summarizeMarketingReportsForPeriod({ userId, userEmail: targetUser?.email ?? null, period }),
     getSupportPeriodAggregates({ userId, period }),
@@ -42,6 +46,7 @@ export async function GET(req: Request) {
         },
       },
     }),
+    buildPayrollRow(targetUser, period),
   ]);
   // Merge per-receipt maps from marketing and support to expose canonical keys
   // for clients (dedupe helpers). POS totals and commission come from
@@ -90,7 +95,11 @@ export async function GET(req: Request) {
     : summary.baseSalary + summary.transportAllowance + grossCommission + summary.bonusTotal;
   const totalDeductions = usesSpecialComputedCommission
     ? Number(summary.totalDeductions ?? 0)
-    : summary.chamaTotal + summary.latenessTotal + summary.disciplineTotal + summary.otherDeductionsTotal;
+    : summary.chamaTotal +
+      summary.latenessTotal +
+      summary.disciplineTotal +
+      summary.otherDeductionsTotal +
+      Number(summary.cashAdvanceTotal ?? 0);
   const netPay = usesSpecialComputedCommission
     ? Number(summary.netPay ?? 0)
     : totalEarnings - totalDeductions;
@@ -99,17 +108,37 @@ export async function GET(req: Request) {
     // expose canonical per-receipt keys for clients to dedupe local receipts
     perReceiptCanonicalKeys: Array.from(merged.keys()),
     ...summary,
+    attendantCategory: payrollRow.attendantCategory,
+    baseSalary: payrollRow.baseSalary,
+    transportAllowance: payrollRow.transportAllowance,
     totalNewProducts: marketingSummary.totals.totalNewProducts,
     totalEditedProducts: marketingSummary.totals.totalEditedProducts,
     totalCopiedProducts: marketingSummary.totals.totalCopiedProducts,
-    salesCommission,
-    grossCommission,
-    totalEarnings,
-    totalDeductions,
-    netPay,
+    salesCommission: payrollRow.commissionDirect || payrollRow.commissionTotal,
+    commissionDirect: payrollRow.commissionDirect,
+    commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+    commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+    grossCommission: payrollRow.commissionGross,
+    commission: payrollRow.commissionTotal,
+    bonusTotal: payrollRow.adjustmentBreakdown.bonus,
+    commissionTopUpTotal: payrollRow.adjustmentBreakdown.commissionTopUp,
+    chamaTotal: payrollRow.adjustmentBreakdown.chama,
+    latenessTotal: payrollRow.adjustmentBreakdown.lateness,
+    disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
+    otherDeductionsTotal: payrollRow.adjustmentBreakdown.other,
+    cashAdvanceTotal: payrollRow.adjustmentBreakdown.cashAdvance,
+    adjustmentEntries: payrollRow.adjustmentEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      amount: entry.amount,
+      adjustmentType: entry.adjustmentType,
+      adjustmentKind: entry.kind,
+    })),
+    totalEarnings: payrollRow.totalEarnings,
+    totalDeductions: payrollRow.totalDeductions,
+    netPay: payrollRow.netPay,
     walkInsServed: marketingSummary.totals.walkInsServed,
     walkInsPurchased: marketingSummary.totals.walkInsPurchased,
-    commission: grossCommission,
     ledger: ledger
       ? {
           grossCommission: Number(ledger.grossCommission),

@@ -2,13 +2,23 @@ import type { PayrollRow } from "@/app/admin/payroll/types";
 
 export type PayrollSummary = {
   periodLabel?: string;
+  attendantCategory?: string | null;
   salary?: number;
   baseSalary?: number;
+  transportAllowance?: number;
+  totalSales?: number;
+  totalProfit?: number;
+  totalItems?: number;
+  totalReceipts?: number;
+  newProducts?: number;
+  editedProducts?: number;
+  copiedProducts?: number;
   deductions?: number;
   chamaTotal?: number;
   latenessTotal?: number;
   disciplineTotal?: number;
   otherDeductionsTotal?: number;
+  cashAdvanceTotal?: number;
   bonusTotal?: number;
   commissionTopUpTotal?: number;
   penalties?: number;
@@ -21,6 +31,14 @@ export type PayrollSummary = {
   totalCommission?: number;
   grossCommission?: number;
   netPay?: number;
+  adjustmentEntries?: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind?: string;
+    kind?: "ADDITION" | "DEDUCTION";
+  }>;
   commissionBreakdown?: unknown | null;
 };
 
@@ -38,25 +56,39 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
   const lateness = p.latenessTotal ?? 0;
   const discipline = p.disciplineTotal ?? 0;
   const otherDeductions = p.otherDeductionsTotal ?? 0;
+  const cashAdvance = p.cashAdvanceTotal ?? 0;
   const bonusTotal = p.bonusTotal ?? 0;
   const commissionTopUpTotal = p.commissionTopUpTotal ?? 0;
   const penalties = p.penalties ?? 0;
+  const adjustmentEntries = Array.isArray(p.adjustmentEntries)
+    ? p.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: Number(entry.amount ?? 0),
+        adjustmentType: entry.adjustmentType,
+        adjustmentKind: String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase(),
+      }))
+    : [];
 
   return {
     periodKey: p.periodLabel ?? "",
     periodLabel: p.periodLabel ?? "",
-    totalSales: 0,
-    totalProfit: 0,
-    totalNewProducts: 0,
-    totalEditedProducts: 0,
-    totalCopiedProducts: 0,
-    totalItems: 0,
-    totalReceipts: receiptsCount,
+    attendantCategory: p.attendantCategory ?? null,
+    totalSales: Number(p.totalSales ?? 0),
+    totalProfit: Number(p.totalProfit ?? 0),
+    totalNewProducts: Number(p.newProducts ?? 0),
+    totalEditedProducts: Number(p.editedProducts ?? 0),
+    totalCopiedProducts: Number(p.copiedProducts ?? 0),
+    totalItems: Number(p.totalItems ?? 0),
+    totalReceipts: Number(p.totalReceipts ?? receiptsCount),
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
-    transportAllowance: 0,
+    transportAllowance: p.transportAllowance ?? 0,
     salesCommission: totalCommission,
+    commissionDirect: direct,
+    commissionMarketplaceJumia: marketplaceJumia,
+    commissionMarketplaceKilimall: marketplaceKilimall,
     newProductCommission: 0,
     copiedCommission: 0,
     editedCommission: 0,
@@ -68,15 +100,18 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     latenessTotal: lateness,
     disciplineTotal: discipline,
     otherDeductionsTotal: otherDeductions,
-    totalEarnings: baseSalary + totalCommission + bonusTotal + commissionTopUpTotal,
-    totalDeductions: chama + lateness + discipline + otherDeductions + penalties,
+    cashAdvanceTotal: cashAdvance,
+    totalEarnings: baseSalary + (p.transportAllowance ?? 0) + totalCommission + bonusTotal + commissionTopUpTotal,
+    totalDeductions: chama + lateness + discipline + otherDeductions + cashAdvance + penalties,
     netPay: p.netPay ?? 0,
     ledger: null,
+    adjustmentEntries,
   };
 }
 
 export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string | null): PayrollRow {
   const salary = p?.baseSalary ?? p?.salary ?? 0;
+  const transportAllowance = p?.transportAllowance ?? 0;
   const direct = p?.commissionDirect ?? p?.directCommission ?? 0;
   const marketplaceJumia = p?.commissionMarketplaceJumia ?? 0;
   const marketplaceKilimall = p?.commissionMarketplaceKilimall ?? 0;
@@ -89,20 +124,30 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
   const lateness = p?.latenessTotal ?? 0;
   const discipline = p?.disciplineTotal ?? 0;
   const otherDeductions = p?.otherDeductionsTotal ?? 0;
+  const cashAdvance = p?.cashAdvanceTotal ?? 0;
   const bonus = p?.bonusTotal ?? 0;
   const commissionTopUp = p?.commissionTopUpTotal ?? 0;
   const penalties = p?.penalties ?? 0;
+  const adjustmentEntries = Array.isArray(p?.adjustmentEntries)
+    ? p!.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: Number(entry.amount ?? 0),
+        adjustmentType: entry.adjustmentType,
+        kind: String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase() as "ADDITION" | "DEDUCTION",
+      }))
+    : [];
 
-  const deductionTotal = chama + lateness + discipline + otherDeductions + penalties;
+  const deductionTotal = chama + lateness + discipline + otherDeductions + cashAdvance + penalties;
 
   return {
     attendantId: userId ?? "",
     name: undefined,
     email: undefined,
-    attendantCategory: "DIRECT_SALES_OPS",
+    attendantCategory: p?.attendantCategory ?? null,
     isActive: true,
     baseSalary: salary,
-    transportAllowance: 0,
+    transportAllowance,
     commission: totalCommission,
     commissionGross: totalCommission,
     commissionDirect: direct,
@@ -112,7 +157,7 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     commissionBreakdown: p?.commissionBreakdown ?? null,
     bonusTotal: bonus + commissionTopUp,
     deductionTotal: deductionTotal,
-    totalEarnings: salary + totalCommission + bonus + commissionTopUp,
+    totalEarnings: salary + transportAllowance + totalCommission + bonus + commissionTopUp,
     totalDeductions: deductionTotal,
     netPay: p?.netPay ?? 0,
     totalSales: 0,
@@ -127,11 +172,12 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
       lateness,
       discipline,
       other: otherDeductions,
+      cashAdvance: p?.cashAdvanceTotal ?? 0,
       bonus,
       commissionTopUp,
       penalties,
     },
-    adjustmentEntries: [],
+    adjustmentEntries,
   };
 }
 

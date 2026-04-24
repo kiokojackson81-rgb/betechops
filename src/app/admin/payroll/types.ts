@@ -3,6 +3,7 @@ export type AdjustmentBreakdown = {
   lateness: number;
   discipline: number;
   other: number;
+  cashAdvance: number;
   bonus: number;
   commissionTopUp: number;
   penalties: number;
