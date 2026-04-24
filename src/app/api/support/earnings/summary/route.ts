@@ -6,6 +6,7 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +18,16 @@ export async function GET(req: Request) {
   const periodKeyParam = url.searchParams.get("periodKey");
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(new Date());
   const periodKey = period.key;
+  const attendant = await prisma.user.findUnique({
+    where: { id: auth.user.id },
+    select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+  });
+  if (!attendant) {
+    return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
+  }
 
   await ensurePayrollAdjustmentStorage();
-  const [{ aggregates }, compPlan, adjustments, ledger] = await Promise.all([
+  const [{ aggregates }, compPlan, adjustments, ledger, payrollRow] = await Promise.all([
     getSupportPeriodAggregates({ userId: auth.user.id, period }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId: auth.user.id } }),
     prisma.attendantPayrollAdjustment.findMany({
@@ -37,6 +45,7 @@ export async function GET(req: Request) {
         },
       },
     }),
+    buildPayrollRow(attendant, period),
   ]);
 
   const periodSales = aggregates.totalSales;
@@ -108,28 +117,38 @@ export async function GET(req: Request) {
   return NextResponse.json({
     periodKey,
     periodLabel: period.label,
+    attendantCategory: payrollRow.attendantCategory,
     totalSales: periodSales,
     totalProfit: periodProfit,
     totalNewProducts: 0,
     totalEditedProducts: 0,
     totalCopiedProducts: 0,
-    baseSalary,
-    transportAllowance,
-    salesCommission,
+    baseSalary: payrollRow.baseSalary,
+    transportAllowance: payrollRow.transportAllowance,
+    salesCommission: payrollRow.commissionDirect || payrollRow.commissionTotal,
+    commissionDirect: payrollRow.commissionDirect,
+    commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+    commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
     newProductCommission: 0,
     copiedCommission: 0,
     editedCommission: 0,
-    grossCommission: salesCommission + batteryEarnings + commissionTopUpTotal,
-    bonusTotal,
-    commissionTopUpTotal,
-    chamaTotal,
-    latenessTotal,
-    disciplineTotal,
-    otherDeductionsTotal,
-    totalEarnings,
-    totalDeductions,
-    netPay,
+    grossCommission: payrollRow.commissionGross,
+    bonusTotal: payrollRow.adjustmentBreakdown.bonus,
+    commissionTopUpTotal: payrollRow.adjustmentBreakdown.commissionTopUp,
+    chamaTotal: payrollRow.adjustmentBreakdown.chama,
+    latenessTotal: payrollRow.adjustmentBreakdown.lateness,
+    disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
+    otherDeductionsTotal: payrollRow.adjustmentBreakdown.other,
+    totalEarnings: payrollRow.totalEarnings,
+    totalDeductions: payrollRow.totalDeductions,
+    netPay: payrollRow.netPay,
     batteryEarnings,
-    adjustmentEntries,
+    adjustmentEntries: payrollRow.adjustmentEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      amount: entry.amount,
+      adjustmentType: entry.adjustmentType,
+      adjustmentKind: entry.kind,
+    })),
   });
 }

@@ -3,6 +3,8 @@ import { requireAttendant } from "@/lib/auth";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import { prisma } from "@/lib/prisma";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,47 @@ export async function GET(req: Request) {
         }
       : requestedPeriod ?? getTradingPeriodFor(new Date());
 
-  const summary = await getOnlineEarningsSummary(attendantId, { period });
-  return NextResponse.json(composeIdentityResponse(identity, summary as unknown as Record<string, unknown>));
+  const attendant = await prisma.user.findUnique({
+    where: { id: attendantId },
+    select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+  });
+  if (!attendant) {
+    return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
+  }
+
+  const [summary, payrollRow] = await Promise.all([
+    getOnlineEarningsSummary(attendantId, { period }),
+    buildPayrollRow(attendant, period),
+  ]);
+
+  const payload = {
+    ...summary,
+    attendantCategory: payrollRow.attendantCategory,
+    baseSalary: payrollRow.baseSalary,
+    transportAllowance: payrollRow.transportAllowance,
+    directCommission: payrollRow.commissionDirect,
+    commissionDirect: payrollRow.commissionDirect,
+    commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
+    commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
+    commissionTotal: payrollRow.commissionTotal,
+    grossCommission: payrollRow.commissionGross,
+    bonusTotal: payrollRow.adjustmentBreakdown.bonus,
+    commissionTopUpTotal: payrollRow.adjustmentBreakdown.commissionTopUp,
+    chamaTotal: payrollRow.adjustmentBreakdown.chama,
+    latenessTotal: payrollRow.adjustmentBreakdown.lateness,
+    disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
+    otherDeductionsTotal: payrollRow.adjustmentBreakdown.other,
+    totalEarnings: payrollRow.totalEarnings,
+    totalDeductions: payrollRow.totalDeductions,
+    netPay: payrollRow.netPay,
+    adjustmentEntries: payrollRow.adjustmentEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      amount: entry.amount,
+      adjustmentType: entry.adjustmentType,
+      adjustmentKind: entry.kind,
+    })),
+  };
+
+  return NextResponse.json(composeIdentityResponse(identity, payload as unknown as Record<string, unknown>));
 }
