@@ -3,7 +3,11 @@ import React from "react";
 import { redirect } from "next/navigation";
 import PayrollClient from "./PayrollClient";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import {
+  getNextTradingPeriod,
+  getTradingPeriodFor,
+  parseTradingPeriodKey,
+} from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
@@ -152,6 +156,7 @@ export default async function PayrollPage({
         };
 
   const previousPeriod = getTradingPeriodFor(new Date(period.start.getTime() - 24 * 60 * 60 * 1000));
+  const nextPeriod = period.key === currentPeriod.key ? null : getNextTradingPeriod(period);
   const previousLedgerRaw = await prisma.commissionLedger.findUnique({
     where: {
       userId_periodStart_periodEnd: {
@@ -269,6 +274,14 @@ export default async function PayrollPage({
             >
               View previous period
             </Link>
+            {nextPeriod && (
+              <Link
+                href={`/admin/attendants/${attendantId}/payroll?period=${encodeURIComponent(nextPeriod.key)}`}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800"
+              >
+                View next period
+              </Link>
+            )}
             {period.key !== currentPeriod.key && (
               <Link
                 href={`/admin/attendants/${attendantId}/payroll`}

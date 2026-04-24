@@ -5,11 +5,12 @@ import Link from "next/link";
 import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
+import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import Input from "@/app/_components/Input";
 import Textarea from "@/app/_components/Textarea";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
-import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { type TradingPeriod } from "@/lib/tradingPeriod";
 import {
   DayName,
   marketingDayConfigs,
@@ -636,9 +637,8 @@ export default function MarketingTrackerPage() {
       commission: { commission: number };
     };
   }>(null);
-  const currentPeriod = getTradingPeriodFor(new Date());
-  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
-  const selectedPeriodKey = selectedPeriod.key;
+  const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
+    useTradingPeriodQueryState();
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const earningsSummaryJsonRef = useRef<string>("");
   const [rawUnpricedSales, setRawUnpricedSales] = useState<UnpricedSale[]>([]);

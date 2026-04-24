@@ -2,7 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import {
+  getNextTradingPeriod,
+  getTradingPeriodFor,
+  parseTradingPeriodKey,
+} from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { PayrollRow } from "./types";
@@ -31,6 +35,7 @@ export default async function AdminPayrollPage({
   const period = requestedPeriod ?? currentPeriod;
   const isCurrentPeriod = period.key === currentPeriod.key;
   const previousPeriod = getTradingPeriodFor(new Date(period.start.getTime() - 24 * 60 * 60 * 1000));
+  const nextPeriod = isCurrentPeriod ? null : getNextTradingPeriod(period);
 
   const attendants = await prisma.user.findMany({
     where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
@@ -74,6 +79,14 @@ export default async function AdminPayrollPage({
             >
               View previous period
             </Link>
+            {nextPeriod && (
+              <Link
+                href={`/admin/payroll?period=${encodeURIComponent(nextPeriod.key)}`}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800"
+              >
+                View next period
+              </Link>
+            )}
             {!isCurrentPeriod && (
               <Link
                 href="/admin/payroll"

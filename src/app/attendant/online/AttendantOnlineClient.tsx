@@ -7,7 +7,7 @@ import Button from "@/app/_components/Button";
 import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
-import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { getOnlineOpsWeeksForTradingPeriod, getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
@@ -277,10 +277,9 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
 
 export default function AttendantOnlineClient() {
   const router = useRouter();
-  const currentPeriod = getTradingPeriodFor(new Date());
-  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
+  const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
+    useTradingPeriodQueryState();
   const period = selectedPeriod;
-  const selectedPeriodKey = selectedPeriod.key;
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);

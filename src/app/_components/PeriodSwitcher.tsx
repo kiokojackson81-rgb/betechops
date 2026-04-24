@@ -1,7 +1,11 @@
 "use client";
 
 import Button from "@/app/_components/Button";
-import { getPreviousTradingPeriod, type TradingPeriod } from "@/lib/tradingPeriod";
+import {
+  getNextTradingPeriod,
+  getPreviousTradingPeriod,
+  type TradingPeriod,
+} from "@/lib/tradingPeriod";
 
 export default function PeriodSwitcher({
   currentPeriod,
@@ -14,6 +18,7 @@ export default function PeriodSwitcher({
 }) {
   const previousPeriod = getPreviousTradingPeriod(selectedPeriod);
   const viewingCurrent = selectedPeriod.key === currentPeriod.key;
+  const nextPeriod = viewingCurrent ? null : getNextTradingPeriod(selectedPeriod);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -24,6 +29,15 @@ export default function PeriodSwitcher({
       >
         View previous period
       </Button>
+      {nextPeriod && (
+        <Button
+          variant="secondary"
+          onClick={() => onSelectPeriod(nextPeriod)}
+          className="px-4 text-sm"
+        >
+          View next period
+        </Button>
+      )}
       {!viewingCurrent && (
         <Button
           variant="secondary"

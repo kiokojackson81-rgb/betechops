@@ -10,7 +10,7 @@ import SensitiveValue from "@/components/SensitiveValue";
 import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
-import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
@@ -88,9 +88,8 @@ export default function SupportOpsPage() {
   const [earningsSummary, setEarningsSummary] = useState<SupportEarningsSummary | null>(
     null,
   );
-  const currentPeriod = getTradingPeriodFor(new Date());
-  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
-  const selectedPeriodKey = selectedPeriod.key;
+  const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
+    useTradingPeriodQueryState();
   const tradingPeriodLabel = selectedPeriod.label;
   const payslipHref = useMemo(() => `/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriodKey)}`, [selectedPeriodKey]);
 

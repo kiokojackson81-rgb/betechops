@@ -13,6 +13,7 @@ import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
+import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { withImpersonateId } from "@/lib/impersonation";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
@@ -274,9 +275,8 @@ export default function DailyReportFinal() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const currentPeriod = getTradingPeriodFor(new Date());
-  const [selectedPeriod, setSelectedPeriod] = useState<TradingPeriod>(currentPeriod);
-  const selectedPeriodKey = selectedPeriod.key;
+  const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
+    useTradingPeriodQueryState();
   const selectedPeriodLabel = selectedPeriod.label;
   const payslipHref = useMemo(() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
