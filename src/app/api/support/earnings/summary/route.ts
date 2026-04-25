@@ -5,6 +5,7 @@ import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
 
+  await ensurePayrollAdjustmentStorage();
   const [{ aggregates }, compPlan, adjustments, ledger, payrollRow] = await Promise.all([
     getSupportPeriodAggregates({ userId: auth.user.id, period }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId: auth.user.id } }),

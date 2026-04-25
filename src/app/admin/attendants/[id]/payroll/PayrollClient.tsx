@@ -115,6 +115,7 @@ export default function PayrollClient({
     const totals = {
       topUps: 0,
       deductions: 0,
+      cashAdvance: 0,
       chama: 0,
       lateness: 0,
       discipline: 0,
@@ -130,6 +131,7 @@ export default function PayrollClient({
       if (!isAddition) {
         totals.deductions += amount;
       }
+      if (type === "CASH_ADVANCE") totals.cashAdvance += amount;
       if (type === "CHAMA") totals.chama += amount;
       if (type === "LATENESS") totals.lateness += amount;
       if (type === "DISCIPLINE") totals.discipline += amount;
@@ -414,6 +416,10 @@ export default function PayrollClient({
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.lateness.toLocaleString()}</span>
             </div>
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Cash advance</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.cashAdvance.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
               <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Chama</span>
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.chama.toLocaleString()}</span>
             </div>
@@ -595,6 +601,7 @@ export default function PayrollClient({
                       <option value="DISCIPLINE">Disciplinary</option>
                       <option value="BONUS">Bonus</option>
                       <option value="COMMISSION_TOPUP">Top up</option>
+                      <option value="CASH_ADVANCE">Cash advance</option>
                       <option value="OTHER">Others</option>
                     </select>
                   </div>

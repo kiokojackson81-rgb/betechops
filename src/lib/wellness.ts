@@ -266,7 +266,7 @@ export async function applyDueCashAdvanceInstallments(input: {
           attendantId: fresh.cashAdvance.userId,
           periodKey: fresh.periodKey,
           periodLabel: fresh.periodLabel,
-          adjustmentType: "OTHER",
+          adjustmentType: "CASH_ADVANCE",
           label: `Cash advance repayment ${fresh.sequenceNumber}/${fresh.cashAdvance.repaymentPeriod ?? "?"}`,
           amount: fresh.amount,
           createdById: input.actorId,

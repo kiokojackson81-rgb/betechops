@@ -74,7 +74,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
               attendantId: existing.userId,
               periodKey: String(body?.periodKey ?? firstPeriod.key).trim() || firstPeriod.key,
               periodLabel: String(body?.periodLabel ?? firstPeriod.label).trim() || firstPeriod.label,
-              adjustmentType: "OTHER",
+              adjustmentType: "CASH_ADVANCE",
               adjustmentKind: "DEDUCTION",
               label: "Cash advance",
               amount: approvedAmount,
