@@ -34,7 +34,13 @@ type CashAdvanceRow = {
 type PayrollSummary = {
   netPay?: number;
   totalDeductions?: number;
-  cashAdvanceTotal?: number;
+  adjustmentEntries?: Array<{
+    id: string;
+    label?: string;
+    amount?: number;
+    adjustmentKind?: string;
+    kind?: string;
+  }>;
 };
 
 const formatKes = (value: number | null | undefined) =>
@@ -62,6 +68,15 @@ export default function CashAdvanceClient() {
     () => rows.reduce((sum, row) => sum + Number(row.remainingBalance ?? 0), 0),
     [rows],
   );
+  const postedThisPeriod = useMemo(() => {
+    const entries = Array.isArray(summary?.adjustmentEntries) ? summary.adjustmentEntries : [];
+    return entries.reduce((sum, entry) => {
+      const label = String(entry.label ?? "").toLowerCase();
+      const kind = String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase();
+      if (kind !== "DEDUCTION" || !label.includes("cash advance")) return sum;
+      return sum + Number(entry.amount ?? 0);
+    }, 0);
+  }, [summary]);
 
   async function loadData() {
     setLoading(true);
@@ -146,9 +161,9 @@ export default function CashAdvanceClient() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-slate-800 bg-slate-900/80">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">This payroll deduction</p>
-          <p className="mt-3 text-3xl font-semibold text-rose-300">{formatKes(summary?.cashAdvanceTotal ?? 0)}</p>
-          <p className="mt-2 text-sm text-slate-400">Approved cash advances already posted to payroll this period.</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Posted this period</p>
+          <p className="mt-3 text-3xl font-semibold text-rose-300">{formatKes(postedThisPeriod)}</p>
+          <p className="mt-2 text-sm text-slate-400">Cash-advance deductions already posted in this payroll window.</p>
         </Card>
         <Card className="border-slate-800 bg-slate-900/80">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Outstanding balance</p>

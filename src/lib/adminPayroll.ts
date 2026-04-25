@@ -17,7 +17,6 @@ import {
   getOrCreateCommissionPeriod,
 } from "@/lib/commission";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 
 type AttendantRecord = {
@@ -63,8 +62,7 @@ function summarizeAdjustments(adjustments: Array<{
       adjustment.adjustmentType === "CHAMA" ||
       adjustment.adjustmentType === "LATENESS" ||
       adjustment.adjustmentType === "DISCIPLINE" ||
-      adjustment.adjustmentType === "OTHER" ||
-      adjustment.adjustmentType === "CASH_ADVANCE";
+      adjustment.adjustmentType === "OTHER";
     const kind =
       (adjustment.adjustmentKind as AdjustmentKind | undefined) ??
       (bonusType || topUpType ? "ADDITION" : "DEDUCTION");
@@ -93,9 +91,6 @@ function summarizeAdjustments(adjustments: Array<{
       } else if (adjustment.adjustmentType === "DISCIPLINE") {
         summary.totalDeduction -= amount;
         summary.breakdown.discipline -= amount;
-      } else if (adjustment.adjustmentType === "CASH_ADVANCE") {
-        summary.totalDeduction -= amount;
-        summary.breakdown.cashAdvance -= amount;
       } else if (adjustment.adjustmentType === "OTHER") {
         summary.totalDeduction -= amount;
         summary.breakdown.other -= amount;
@@ -117,7 +112,6 @@ function summarizeAdjustments(adjustments: Array<{
       if (adjustment.adjustmentType === "CHAMA") summary.breakdown.chama += amount;
       else if (adjustment.adjustmentType === "LATENESS") summary.breakdown.lateness += amount;
       else if (adjustment.adjustmentType === "DISCIPLINE") summary.breakdown.discipline += amount;
-      else if (adjustment.adjustmentType === "CASH_ADVANCE") summary.breakdown.cashAdvance += amount;
       else summary.breakdown.other += amount;
     } else {
       summary.totalDeduction += amount;
@@ -142,7 +136,6 @@ function isMarketingCategory(category?: string | null) {
 
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  await ensurePayrollAdjustmentStorage();
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({

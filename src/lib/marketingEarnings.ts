@@ -5,7 +5,6 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
 import { getPeriodKeyVariants } from "./payrollPeriodKey";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -99,7 +98,6 @@ export async function getEarningsSummaryForAttendant(opts: {
   // 4) All adjustments for this period
   const variants = getPeriodKeyVariants(periodKey);
   const adjustmentFilterKeys = variants.length ? variants : [periodKey];
-  await ensurePayrollAdjustmentStorage();
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
     where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
   });
