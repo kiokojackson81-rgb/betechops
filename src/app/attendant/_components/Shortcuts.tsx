@@ -11,7 +11,6 @@ const items = [
   { href: "/attendant/online", label: "Online Ops" },
   // New shortcut for submitting daily reports
   { href: "/attendant/daily-report", label: "Daily Report" },
-  { href: "/attendant/cash-advance", label: "Cash Advance" },
 ];
 
 export default function Shortcuts() {
