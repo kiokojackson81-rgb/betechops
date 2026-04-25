@@ -50,8 +50,6 @@ model User {
   marketplaceProfitEntries             MarketplaceProfitEntry[]       @relation("MarketplaceProfitEntryEnteredBy")
   marketplaceStatementDraftsCreated    MarketplaceStatementDraft[]    @relation("MarketplaceStatementDraftCreatedBy")
   managedShops                         Shop[]                         @relation("ManagedBy")
-  cashAdvanceRequests                  CashAdvanceRequest[]           @relation("CashAdvanceRequestUser")
-  approvedCashAdvanceRequests          CashAdvanceRequest[]           @relation("CashAdvanceRequestApprover")
 }
 
 model AttendantActivity {
@@ -807,26 +805,6 @@ model ActionLog {
   @@index([entity, entityId])
 }
 
-model CashAdvanceRequest {
-  id                  String                   @id @default(cuid())
-  userId              String
-  requestedAmount     Int
-  approvedAmount      Int?
-  status              CashAdvanceRequestStatus @default(PENDING)
-  reason              String
-  adminComment        String?
-  payrollAdjustmentId String?
-  approvedById        String?
-  approvedAt          DateTime?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
-  user                User                     @relation("CashAdvanceRequestUser", fields: [userId], references: [id], onDelete: Cascade)
-  approvedBy          User?                    @relation("CashAdvanceRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-
-  @@index([userId, createdAt])
-  @@index([status, createdAt])
-}
-
 model UserShop {
   id         String         @id @default(cuid())
   userId     String
@@ -1430,12 +1408,6 @@ enum PayrollAdjustmentType {
   BONUS
   COMMISSION_TOPUP
   OTHER
-}
-
-enum CashAdvanceRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 enum PayrollAdjustmentKind {
