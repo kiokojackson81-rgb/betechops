@@ -1,0 +1,55 @@
+name: "Preview: App-only Vercel Deploy"
+
+on:
+  push:
+    branches: ["cash-advance-safe-push"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: vercel-preview-app-only-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@35
+
+      - name: Pull preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
+
+      - name: Build app without schema migration
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_RUN_MIGRATIONS: "0"
+        run: vercel build --token "$VERCEL_TOKEN"
+
+      - name: Deploy preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          DEPLOY_URL=$(vercel deploy --prebuilt --token "$VERCEL_TOKEN")
+          echo "Preview deployment: $DEPLOY_URL"
