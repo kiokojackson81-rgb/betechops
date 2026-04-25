@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
-import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
+import { computeBrendahDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
@@ -29,6 +29,7 @@ export type EarningsSummary = {
   newProductCommission: number;
   copiedCommission: number;
   editedCommission: number;
+  posProductCommission?: number;
   grossCommission: number;
   commission?: number;
   batteryEarnings: number;
@@ -60,7 +61,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const periodKey = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
   const periodLabel = tradingPeriod.label;
 
-  const { period, tiers, tradingPeriod: periodInfo } = await getOrCreateCommissionPeriod(now);
+  const { tiers, tradingPeriod: periodInfo } = await getOrCreateCommissionPeriod(now);
   const start = (periodInfo as any).startDate ?? (periodInfo as any).start;
   const end = (periodInfo as any).endDate ?? (periodInfo as any).end;
 
@@ -115,8 +116,6 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     userEmail: user?.email ?? null,
     period: tradingPeriod,
   });
-  const marketingTotals = marketingSummary.totals;
-
   // Also include support aggregates and dedupe per-receipt to avoid double-counting
   const supportSummary = await getSupportPeriodAggregates({ userId: opts.userId, period: tradingPeriod });
   const marketingPer = (marketingSummary as any)?.perReceipts ?? {};
@@ -228,6 +227,27 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     }
   }
 
+  const releasedPosCommissionRows = await prisma.commissionEarning.findMany({
+    where: {
+      staffId: opts.userId,
+      createdAt: { gte: start, lte: end },
+      status: { in: ["RELEASED", "APPROVED"] },
+    },
+    select: {
+      amount: true,
+      basis: true,
+      calcDetail: true,
+    },
+  });
+
+  const posProductCommission = releasedPosCommissionRows.reduce((sum, row) => {
+    const detail = (row.calcDetail as Record<string, unknown> | null) ?? null;
+    const isPosCommission =
+      row.basis === "product_flat" ||
+      (detail && typeof detail === "object" && detail.reason === "pos_product_commission");
+    return isPosCommission ? sum + Number(row.amount ?? 0) : sum;
+  }, 0);
+
   // Load any existing CommissionLedger for this attendant/period. Prefer
   // the most-recent ledger (by `createdAt`) and favour ledgers that have a
   // persisted `commissionTotal` > 0 so recomputes/upserts are shown in the UI.
@@ -271,7 +291,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
 
       if (Array.isArray(candidates) && candidates.length > 0) {
         // Prefer first candidate that has a positive commissionTotal
-        let chosen = candidates.find((c) => Number(c.commissionTotal ?? 0) > 0) || candidates[0];
+        const chosen = candidates.find((c) => Number(c.commissionTotal ?? 0) > 0) || candidates[0];
         ledger = {
           grossCommission: Number(chosen.grossCommission ?? 0),
           netCommission: Number(chosen.netCommission ?? 0),
@@ -308,7 +328,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     editedProducts,
   });
 
-  let computedGrossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
+  let computedGrossCommission =
+    salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal + posProductCommission;
 
   if (isBrendah) {
     const direct = computeBrendahDirectCommission(totalSales, totalProfit);
@@ -326,9 +347,9 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   if (isBrendah || isJeniffer) {
     finalGrossCommission = computedGrossCommission;
   } else if (ledgerPersistedCommission > 0) {
-    finalGrossCommission = ledgerPersistedCommission;
+    finalGrossCommission = ledgerPersistedCommission + posProductCommission;
   } else {
-    finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission : computedGrossCommission;
+    finalGrossCommission = ledger && !isJeniffer ? ledger.grossCommission + posProductCommission : computedGrossCommission;
   }
 
   const totalEarnings = baseSalary + transportAllowance + finalGrossCommission + bonusTotal;
@@ -354,6 +375,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     newProductCommission,
     copiedCommission,
     editedCommission,
+    posProductCommission,
     grossCommission: finalGrossCommission,
     commission: finalGrossCommission,
     batteryEarnings: 0,

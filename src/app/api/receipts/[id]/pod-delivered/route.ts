@@ -115,11 +115,27 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   try {
     await prisma.$transaction(async (tx) => {
       const deliveredOrder = desiredStatus === 'delivered'
-        ? await tx.order.findUnique({ where: { id: receipt.orderId! }, include: { items: true } })
+        ? await tx.order.findUnique({
+            where: { id: receipt.orderId! },
+            include: {
+              items: {
+                include: {
+                  product: true,
+                  orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
+                },
+              },
+            },
+          })
         : null;
       const deliveredReceiptItems = (deliveredOrder?.items || []).map((it: any) => ({
-        productName: String(it.title || it.productName || 'Item').trim(),
-        buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
+        productName: resolveOrderItemName(it),
+        buyingPrice: Math.max(
+          0,
+          Math.round(
+            Number(it.orderCosts?.[0]?.unitCost ?? it.product?.lastBuyingPrice ?? 0) *
+              Math.max(1, Number(it.quantity ?? 1)),
+          ),
+        ),
       }));
       const deliveredBuyingTotal = deliveredReceiptItems.reduce((sum: number, item: any) => sum + Number(item.buyingPrice || 0), 0);
       const deliveredSellingTotal = Math.round(Number(deliveredOrder?.totalAmount ?? receipt.order?.totalAmount ?? 0));
@@ -201,12 +217,25 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
               const orderWithItems = await tx.order.findUnique({
                 where: { id: receipt.orderId },
-                include: { items: { include: { product: true } } },
+                include: {
+                  items: {
+                    include: {
+                      product: true,
+                      orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
+                    },
+                  },
+                },
               });
               const receiptSellingTotal = Math.round(Number(orderWithItems?.totalAmount ?? receipt.order?.totalAmount ?? 0));
               const receiptItemsPayload = (orderWithItems?.items || []).map((it: any) => ({
                 productName: resolveOrderItemName(it),
-                buyingPrice: Math.max(0, Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0))),
+                buyingPrice: Math.max(
+                  0,
+                  Math.round(
+                    Number(it.orderCosts?.[0]?.unitCost ?? it.product?.lastBuyingPrice ?? 0) *
+                      Math.max(1, Number(it.quantity ?? 1)),
+                  ),
+                ),
               }));
               const receiptBuyingTotal = receiptItemsPayload.reduce((s: number, i: any) => s + i.buyingPrice, 0);
 

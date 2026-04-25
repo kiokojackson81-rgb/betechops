@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod, Prisma, type SupportReceipt } from "@prisma/client";
+import { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseNumber, parseIntLike } from "@/lib/parseNumber";
 import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
@@ -12,7 +12,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { generateRandomId } from "@/lib/id";
 import { normalizeReceiptSerial } from "@/lib/receipts/serial";
 import { sendReceiptChannels } from "@/workers/receiptSender";
-import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
+import { notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
@@ -486,26 +486,44 @@ export async function POST(req: NextRequest) {
       }
       if (!shopId) throw new Error("No active shop found for receipt");
 
-      // ensure products exist for items (create lightweight product records if needed)
+      // ensure products exist for items (prefer selected catalog products, otherwise create lightweight manual records)
       const createdItems: any[] = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.name || "Item").slice(0, 255);
-        let product = await tx.product.findFirst({ where: { name: title } });
+        const selectedProductId = typeof it.productId === "string" ? it.productId.trim() : "";
+        let product = selectedProductId
+          ? await tx.product.findUnique({ where: { id: selectedProductId } })
+          : await tx.product.findFirst({ where: { name: title } });
         if (!product) {
-          product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
+          product = await tx.product.create({
+            data: {
+              sku: `manual-${generateRandomId()}`,
+              name: title,
+              category: "manual",
+              sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
+            },
+          });
         }
         const quantity = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
         const itemSerial = typeof it.serial === "string" ? it.serial.trim() || null : null;
         const itemWarranty = typeof it.warranty === "string" ? it.warranty.trim() || null : null;
+        const unitBuyingPrice = parseNumber(it.costPrice ?? it.buyingPrice ?? product.lastBuyingPrice ?? 0);
+        const commissionEnabled = Boolean((product as any).commissionEnabled);
+        const commissionAmount = commissionEnabled ? parseNumber((product as any).commissionAmount ?? 0) : 0;
+        const commissionRequiresApproval = Boolean((product as any).commissionRequiresApproval);
         createdItems.push({
           product,
+          selectedProductId: selectedProductId || null,
           quantity,
           unitPrice,
           serial: itemSerial,
           warranty: itemWarranty,
           title,
-          costPrice: parseNumber(it.costPrice ?? it.buyingPrice ?? 0),
+          costPrice: unitBuyingPrice,
+          commissionEnabled,
+          commissionAmount,
+          commissionRequiresApproval,
         });
       }
 
@@ -546,6 +564,7 @@ export async function POST(req: NextRequest) {
       await tx.orderItem.deleteMany({ where: { orderId: orderUpsert.id } });
 
       const createdOrderItems: any[] = [];
+      let totalBuying = 0;
       for (const it of createdItems) {
         // Ensure numeric and integer types are strictly coerced for Prisma
         const qty = Math.max(1, Math.trunc(Number(it.quantity ?? 1)));
@@ -629,6 +648,21 @@ export async function POST(req: NextRequest) {
           }
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
+          const unitCost = Number(it.costPrice || 0);
+          totalBuying += unitCost * qty;
+          if (unitCost > 0 && (tx as any).orderCost) {
+            try {
+              await (tx as any).orderCost.create({
+                data: {
+                  orderItemId: item.id,
+                  unitCost,
+                  costSource: it.selectedProductId ? "POS_CATALOG" : "MANUAL_RECEIPT",
+                },
+              });
+            } catch {
+              // best-effort for DBs without the relation available
+            }
+          }
         } catch (orderItemError) {
           const orderItemErrorMsg = (orderItemError as any)?.message ?? String(orderItemError);
           console.error('[receipts] failed to persist order item', {
@@ -687,14 +721,30 @@ export async function POST(req: NextRequest) {
         paymentDetailsShown: Boolean(payload?.paymentDetailsShown),
         notes: payload?.notes ?? null,
         warrantyText: payload?.warrantyText ?? null,
-        totals: { subtotal, tax: taxAmount, total, balance },
+        totals: {
+          subtotal,
+          tax: taxAmount,
+          total,
+          balance,
+          buyingTotal: totalBuying,
+          profit: totalBuying > 0 ? total - totalBuying : 0,
+        },
         data: {
           ...payload,
           orderRef: serial,
-          totals: { subtotal, tax: taxAmount, total, balance },
+          totals: {
+            subtotal,
+            tax: taxAmount,
+            total,
+            balance,
+            buyingTotal: totalBuying,
+            profit: totalBuying > 0 ? total - totalBuying : 0,
+          },
           attendantId,
           issuedById,
           items,
+          buyingTotal: totalBuying,
+          profit: totalBuying > 0 ? total - totalBuying : 0,
           ...(isPodDelivery
             ? {
                 podDelivery: {
@@ -751,40 +801,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
-      if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
-        try {
-          if (!isPodDelivery) {
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
-                calcDetail: { reason: "receipt_seed", total },
-              })),
-            });
-          } else {
-            // For POD receipts, seed earnings as PENDING so no immediate releases occur
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: "PENDING",
-                calcDetail: { reason: "receipt_seed_pod", total },
-              })),
-            });
-          }
-        } catch (e) {
-          // ignore if tx mock doesn't implement commissionEarning
-        }
-      }
-
       // Record support daily entry + receipt so support commission ledger can include this sale
       if (attendantId && !isPodDelivery) {
         const startOfDay = new Date(entryDate);
@@ -802,7 +818,7 @@ export async function POST(req: NextRequest) {
 
             const supportReceiptItems = createdItems.map((it) => ({
               productName: String(it.title || "Item").trim(),
-              buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
+              buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
             }));
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
             const supportSellingTotal = Math.round(Number(total) || 0);
@@ -899,7 +915,7 @@ export async function POST(req: NextRequest) {
           const receiptSellingTotal = Math.round(Number(total) || 0);
           const receiptItemsPayload = createdItems.map((it) => ({
             productName: String(it.title || "Item").trim(),
-            buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
+            buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
           }));
           const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
           const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
@@ -998,32 +1014,47 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Seed CommissionEarning rows (gross-based) for this order's items; recompute jobs can overwrite
+      // Seed per-product POS commission rows when configured on the selected catalog products.
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          if (!isPodDelivery) {
-            const perItemEarnings = createdOrderItems.map((it) => {
-              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
-              const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
-              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status, calcDetail: { reason: "receipt_seed", total } };
-            });
-            await tx.commissionEarning.createMany({ data: perItemEarnings });
+          const perItemEarnings = createdOrderItems
+            .map((orderItem, index) => {
+              const sourceItem = createdItems[index];
+              const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
+              if (!sourceItem?.commissionEnabled || amount <= 0) return null;
+              const requiresApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+              return {
+                staffId: attendantId,
+                orderItemId: orderItem.id,
+                basis: "product_flat",
+                qty: orderItem.quantity,
+                amount,
+                status: requiresApproval ? "PENDING_APPROVAL" : "RELEASED",
+                calcDetail: {
+                  reason: "pos_product_commission",
+                  productId: sourceItem.product.id,
+                  productName: sourceItem.title,
+                  orderNumber: serial,
+                  receiptId: receipt.id,
+                  requiresApproval,
+                  unitCommission: Number(sourceItem.commissionAmount || 0),
+                  customerType: payload?.customerType ?? null,
+                },
+              };
+            })
+            .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-            // If immediate threshold hit, also release commission record now
-            if (total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
-              try {
-                await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
-              } catch (e) {
-                // ignore in partial mocks
-              }
-            }
-          } else {
-            // For POD receipts, create per-item earnings but leave as PENDING (no immediate releases)
-            const perItemEarnings = createdOrderItems.map((it) => {
-              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
-              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status: "PENDING", calcDetail: { reason: "receipt_seed_pod", total } };
-            });
+          if (perItemEarnings.length) {
             await tx.commissionEarning.createMany({ data: perItemEarnings });
+          }
+
+          // If immediate threshold hit, also release commission record now
+          if (!isPodDelivery && total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
+            try {
+              await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
+            } catch (e) {
+              // ignore in partial mocks
+            }
           }
         } catch (e) {
           // ignore commission earnings in partial tx mocks
