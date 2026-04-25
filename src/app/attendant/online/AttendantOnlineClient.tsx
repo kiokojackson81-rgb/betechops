@@ -727,12 +727,6 @@ export default function AttendantOnlineClient() {
             >
               Receipts
             </Link>
-            <Link
-              href="/attendant/cash-advance"
-              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-            >
-              Cash advance
-            </Link>
             {isBenjaminSupervisor ? (
               <>
                 <button

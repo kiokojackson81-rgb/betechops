@@ -26,16 +26,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     repaymentPeriod?: number;
     hrComment?: string;
     firstDeductionDate?: string;
-    deductImmediately?: boolean;
-    periodKey?: string;
-    periodLabel?: string;
   } | null;
 
   const decision = String(body?.decision ?? body?.status ?? "").trim().toUpperCase();
   const approvedAmount = Math.trunc(Number(body?.approvedAmount ?? 0));
   const repaymentPeriod = Math.trunc(Number(body?.repaymentPeriod ?? 0));
   const hrComment = String(body?.hrComment ?? "").trim() || null;
-  const deductImmediately = Boolean(body?.deductImmediately);
 
   if (!advanceDecisionValues.includes(decision as (typeof advanceDecisionValues)[number])) {
     return NextResponse.json({ error: "decision must be APPROVED or REJECTED" }, { status: 400 });
@@ -60,36 +56,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         sequenceNumber: number;
         amount: number;
       }> = [];
-      let immediateAdjustmentId: string | null = null;
 
       if (decision === "APPROVED") {
         if (approvedAmount <= 0 || repaymentPeriod <= 0) {
           throw new Error("approvedAmount and repaymentPeriod must be greater than zero");
         }
         const firstReferenceDate = body?.firstDeductionDate ? new Date(body.firstDeductionDate) : new Date();
-        const firstPeriod = getTradingPeriodFor(firstReferenceDate);
-        if (deductImmediately) {
-          const createdAdjustment = await tx.attendantPayrollAdjustment.create({
-            data: {
-              attendantId: existing.userId,
-              periodKey: String(body?.periodKey ?? firstPeriod.key).trim() || firstPeriod.key,
-              periodLabel: String(body?.periodLabel ?? firstPeriod.label).trim() || firstPeriod.label,
-              adjustmentType: "CASH_ADVANCE",
-              adjustmentKind: "DEDUCTION",
-              label: "Cash advance",
-              amount: approvedAmount,
-              createdById: actorId,
-            },
-            select: { id: true },
-          });
-          immediateAdjustmentId = createdAdjustment.id;
-        } else {
-          schedules = buildCashAdvanceInstallments({
-            approvedAmount,
-            repaymentPeriod,
-            firstPeriod,
-          });
-        }
+        schedules = buildCashAdvanceInstallments({
+          approvedAmount,
+          repaymentPeriod,
+          firstPeriod: getTradingPeriodFor(firstReferenceDate),
+        });
       }
 
       if (existing.installments.some((item) => item.isPaid)) {
@@ -108,11 +85,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           repaymentPeriod: decision === "APPROVED" ? repaymentPeriod : existing.repaymentPeriod,
           installmentAmount:
             decision === "APPROVED"
-              ? deductImmediately
-                ? approvedAmount
-                : Math.max(...schedules.map((item) => item.amount))
+              ? Math.max(...schedules.map((item) => item.amount))
               : null,
-          remainingBalance: decision === "APPROVED" ? (deductImmediately ? 0 : approvedAmount) : 0,
+          remainingBalance: decision === "APPROVED" ? approvedAmount : 0,
           hrComment,
           approvedById: actorId,
           approvedAt: new Date(),
@@ -142,8 +117,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           after: {
             ...updated,
             schedules,
-            deductImmediately,
-            payrollAdjustmentId: immediateAdjustmentId,
           } as Prisma.InputJsonValue,
         },
       });

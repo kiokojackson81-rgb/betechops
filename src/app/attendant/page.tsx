@@ -224,12 +224,12 @@ export default function AttendantDashboard() {
             <Button
               onClick={() => {
                 const params = new URLSearchParams(window.location.search);
-                window.location.href = withImpersonateId("/attendant/cash-advance", params.get("impersonateId"));
+                window.location.href = withImpersonateId("/attendant/wellness", params.get("impersonateId"));
               }}
               variant="secondary"
               className="w-full text-center sm:w-auto"
             >
-              Cash advance
+              Open wellness
             </Button>
             <Button
               onClick={() => {
