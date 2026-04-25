@@ -290,6 +290,12 @@ export default function SupportOpsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/attendant/cash-advance"
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Cash advance
+            </Link>
             {currentUserId ? (
               <Link
                 href={`/receipts?attendantId=${encodeURIComponent(currentUserId)}`}

@@ -26,6 +26,18 @@ type Adjustment = {
   kind?: string | null;
 };
 
+type CashAdvanceRequest = {
+  id: string;
+  requestedAmount: number;
+  approvedAmount?: number | null;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  hrComment?: string | null;
+  remainingBalance?: number | null;
+  createdAt: string;
+  approvedAt?: string | null;
+};
+
 export default function PayrollClient({
   attendant,
   initialPlan,
@@ -68,6 +80,9 @@ export default function PayrollClient({
   const [summary, setSummary] = useState<any>(initialSummary || null);
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [cashAdvances, setCashAdvances] = useState<CashAdvanceRequest[]>([]);
+  const [loadingCashAdvances, setLoadingCashAdvances] = useState(false);
+  const [advanceDrafts, setAdvanceDrafts] = useState<Record<string, { approvedAmount: string; comment: string; saving: boolean }>>({});
 
   const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
     { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
@@ -100,6 +115,7 @@ export default function PayrollClient({
     const totals = {
       topUps: 0,
       deductions: 0,
+      cashAdvance: 0,
       chama: 0,
       lateness: 0,
       discipline: 0,
@@ -115,6 +131,7 @@ export default function PayrollClient({
       if (!isAddition) {
         totals.deductions += amount;
       }
+      if (type === "CASH_ADVANCE") totals.cashAdvance += amount;
       if (type === "CHAMA") totals.chama += amount;
       if (type === "LATENESS") totals.lateness += amount;
       if (type === "DISCIPLINE") totals.discipline += amount;
@@ -126,6 +143,7 @@ export default function PayrollClient({
   useEffect(() => {
     // fetch fresh adjustments and summary on mount
     fetchAdjustments();
+    fetchCashAdvances();
     fetchSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -143,6 +161,36 @@ export default function PayrollClient({
       showToast(err?.message || "Failed to load adjustments", "error");
     } finally {
       setLoadingAdjustments(false);
+    }
+  }
+
+  async function fetchCashAdvances() {
+    setLoadingCashAdvances(true);
+    try {
+      const url = `/api/cash-advance?impersonateId=${encodeURIComponent(attendant.id)}`;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Failed to load cash advances");
+      const payload = await res.json().catch(() => null);
+      const data = payload?.data ?? payload;
+      const rows = Array.isArray(data?.rows) ? data.rows : [];
+      setCashAdvances(rows);
+      setAdvanceDrafts((current) => {
+        const next = { ...current };
+        for (const row of rows) {
+          if (!next[row.id]) {
+            next[row.id] = {
+              approvedAmount: String(row.requestedAmount ?? ""),
+              comment: String(row.hrComment ?? ""),
+              saving: false,
+            };
+          }
+        }
+        return next;
+      });
+    } catch (err: any) {
+      showToast(err?.message || "Failed to load cash advances", "error");
+    } finally {
+      setLoadingCashAdvances(false);
     }
   }
 
@@ -225,6 +273,49 @@ export default function PayrollClient({
       await fetchSummary();
     } catch (err: any) {
       showToast(err?.message || "Failed to delete adjustment", "error");
+    }
+  };
+
+  const decideCashAdvance = async (requestId: string, decision: "APPROVED" | "REJECTED") => {
+    const draft = advanceDrafts[requestId] ?? { approvedAmount: "", comment: "", saving: false };
+    if (decision === "APPROVED" && Number(draft.approvedAmount || 0) <= 0) {
+      showToast("Approved amount must be greater than zero", "error");
+      return;
+    }
+
+    setAdvanceDrafts((current) => ({
+      ...current,
+      [requestId]: { ...draft, saving: true },
+    }));
+
+    try {
+      const res = await fetch(`/api/cash-advance/${requestId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision,
+          approvedAmount: Number(draft.approvedAmount || 0),
+          repaymentPeriod: 1,
+          hrComment: draft.comment,
+          firstDeductionDate: new Date().toISOString(),
+          deductImmediately: decision === "APPROVED",
+          periodKey,
+          periodLabel,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to update cash advance");
+      }
+      showToast(decision === "APPROVED" ? "Cash advance approved" : "Cash advance rejected", "success");
+      await Promise.all([fetchCashAdvances(), fetchAdjustments(), fetchSummary()]);
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update cash advance", "error");
+    } finally {
+      setAdvanceDrafts((current) => ({
+        ...current,
+        [requestId]: { ...(current[requestId] ?? draft), saving: false },
+      }));
     }
   };
 
@@ -325,6 +416,10 @@ export default function PayrollClient({
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.lateness.toLocaleString()}</span>
             </div>
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Cash advance</span>
+              <span className="font-semibold text-slate-100">KES {adjustmentTotals.cashAdvance.toLocaleString()}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
               <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Chama</span>
               <span className="font-semibold text-slate-100">KES {adjustmentTotals.chama.toLocaleString()}</span>
             </div>
@@ -356,6 +451,96 @@ export default function PayrollClient({
               <span className={`font-semibold ${netCommissionDelta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                 {netCommissionDelta >= 0 ? "+" : "-"}KES {Math.abs(netCommissionDelta).toLocaleString()}
               </span>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Cash advance requests</h3>
+            <div className="mt-2 space-y-3">
+              {loadingCashAdvances ? <div className="text-xs text-slate-400">Loading requests...</div> : null}
+              {!loadingCashAdvances && cashAdvances.length === 0 ? (
+                <div className="text-xs text-slate-400">No cash advance requests for this attendant.</div>
+              ) : null}
+              {cashAdvances.map((item) => {
+                const draft = advanceDrafts[item.id] ?? {
+                  approvedAmount: String(item.requestedAmount ?? ""),
+                  comment: String(item.hrComment ?? ""),
+                  saving: false,
+                };
+                const isPending = item.status === "PENDING";
+                return (
+                  <div key={item.id} className="rounded-xl bg-slate-950/60 px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-100">
+                          Requested KES {Number(item.requestedAmount ?? 0).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleString()}</div>
+                      </div>
+                      <div
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                          item.status === "APPROVED"
+                            ? "bg-emerald-700 text-emerald-100"
+                            : item.status === "REJECTED"
+                              ? "bg-rose-800 text-rose-100"
+                              : "bg-amber-700 text-amber-100"
+                        }`}
+                      >
+                        {item.status}
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm text-slate-300">{item.reason}</p>
+                    {item.approvedAmount ? (
+                      <p className="mt-2 text-xs text-emerald-300">
+                        Approved: KES {Number(item.approvedAmount).toLocaleString()}
+                      </p>
+                    ) : null}
+                    {typeof item.remainingBalance === "number" ? (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Remaining balance: KES {Number(item.remainingBalance).toLocaleString()}
+                      </p>
+                    ) : null}
+                    {item.hrComment ? <p className="mt-2 text-xs text-slate-400">Comment: {item.hrComment}</p> : null}
+                    {isPending ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end">
+                        <div>
+                          <label className="text-xs text-slate-400">Approved amount</label>
+                          <Input
+                            type="number"
+                            value={draft.approvedAmount}
+                            onChange={(e) =>
+                              setAdvanceDrafts((current) => ({
+                                ...current,
+                                [item.id]: { ...(current[item.id] ?? draft), approvedAmount: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-400">Comment</label>
+                          <Input
+                            value={draft.comment}
+                            onChange={(e) =>
+                              setAdvanceDrafts((current) => ({
+                                ...current,
+                                [item.id]: { ...(current[item.id] ?? draft), comment: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" onClick={() => decideCashAdvance(item.id, "REJECTED")} disabled={draft.saving}>
+                            Reject
+                          </Button>
+                          <Button variant="primary" onClick={() => decideCashAdvance(item.id, "APPROVED")} disabled={draft.saving}>
+                            {draft.saving ? "Saving..." : "Approve"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -416,6 +601,7 @@ export default function PayrollClient({
                       <option value="DISCIPLINE">Disciplinary</option>
                       <option value="BONUS">Bonus</option>
                       <option value="COMMISSION_TOPUP">Top up</option>
+                      <option value="CASH_ADVANCE">Cash advance</option>
                       <option value="OTHER">Others</option>
                     </select>
                   </div>
