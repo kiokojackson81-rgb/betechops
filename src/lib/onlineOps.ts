@@ -19,7 +19,6 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 type AssignmentWithAccount = any;
 
@@ -88,9 +87,6 @@ export type OnlineEarningsSummary = {
   directProfit: number;
   marketplaceSales: number;
   directCommission: number;
-  commissionDirect?: number;
-  commissionMarketplaceJumia?: number;
-  commissionMarketplaceKilimall?: number;
   marketplaceCommission: number;
   supervisorBonus: number;
   returnsDeduction: number;
@@ -103,169 +99,14 @@ export type OnlineEarningsSummary = {
   latenessTotal: number;
   disciplineTotal: number;
   otherDeductionsTotal: number;
-  cashAdvanceTotal: number;
   totalEarnings: number;
   totalDeductions: number;
   netPay: number;
   commissionTotal?: number;
-  adjustmentEntries?: Array<{
-    id: string;
-    label: string;
-    amount: number;
-    adjustmentType: string;
-    adjustmentKind: string;
-  }>;
 };
 
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
-
-const normalizeReceiptNumber = (input: unknown) => {
-  if (input == null) return "";
-  return String(input).trim().toUpperCase().replace(/[\s\-_]+/g, "").replace(/[^A-Z0-9]/g, "");
-};
-
-const extractReceiptSales = (receipt: {
-  totals?: Record<string, unknown> | null;
-  data?: Record<string, unknown> | null;
-  order?: { totalAmount?: number | null } | null;
-}) => {
-  const totals = receipt.totals ?? {};
-  const data = receipt.data ?? {};
-  const candidates = [
-    totals.total,
-    totals.sellingTotal,
-    totals.grandTotal,
-    totals.amount,
-    totals.subtotal,
-    data.total,
-    data.amount,
-    receipt.order?.totalAmount,
-  ];
-  for (const value of candidates) {
-    const num = Number(value ?? 0);
-    if (Number.isFinite(num) && num > 0) return num;
-  }
-  return 0;
-};
-
-async function computeProfit10DirectReceiptFallback(args: {
-  userId: string;
-  start: Date;
-  end: Date;
-}) {
-  const receipts = await prisma.receipt.findMany({
-    where: {
-      AND: [
-        {
-          OR: [
-            { generatedAt: { gte: args.start, lte: args.end } },
-            { createdAt: { gte: args.start, lte: args.end } },
-          ],
-        },
-        {
-          OR: [
-            { issuedById: args.userId },
-            { order: { attendantId: args.userId } },
-            { data: { path: ["attendantId"], equals: args.userId } },
-          ],
-        },
-      ],
-    },
-    select: {
-      receiptNumber: true,
-      generatedAt: true,
-      createdAt: true,
-      totals: true,
-      data: true,
-      order: {
-        select: {
-          orderNumber: true,
-          paymentStatus: true,
-          totalAmount: true,
-          attendantId: true,
-        },
-      },
-    },
-  });
-
-  const paidReceipts = receipts.filter((receipt) => {
-    const paymentStatus = String(receipt.order?.paymentStatus ?? "").trim().toUpperCase();
-    return paymentStatus === "PAID";
-  });
-
-  const receiptMeta = paidReceipts.map((receipt) => {
-    const salesDate = receipt.generatedAt ?? receipt.createdAt ?? args.start;
-    const canonical =
-      normalizeReceiptNumber(receipt.order?.orderNumber) ||
-      normalizeReceiptNumber(receipt.receiptNumber) ||
-      normalizeReceiptNumber((receipt.data as Record<string, unknown> | null)?.orderRef);
-    const ymd = salesDate.toISOString().slice(0, 10);
-    return {
-      canonical,
-      receiptKey: canonical ? `${ymd}:${canonical}` : "",
-      sales: extractReceiptSales(receipt as any),
-    };
-  });
-
-  const canonicalNumbers = Array.from(new Set(receiptMeta.map((item) => item.canonical).filter(Boolean)));
-  const receiptKeys = Array.from(new Set(receiptMeta.map((item) => item.receiptKey).filter(Boolean)));
-  if (!canonicalNumbers.length && !receiptKeys.length) {
-    return { sales: 0, profit: 0 };
-  }
-
-  const supportReceipts = await prisma.supportReceipt.findMany({
-    where: {
-      OR: [
-        ...(canonicalNumbers.length ? [{ receiptNumber: { in: canonicalNumbers } }] : []),
-        ...(receiptKeys.length ? [{ receiptKey: { in: receiptKeys } }] : []),
-      ],
-    },
-    select: {
-      receiptNumber: true,
-      receiptKey: true,
-      buyingTotal: true,
-      items: {
-        select: {
-          buyingPrice: true,
-        },
-      },
-    },
-  });
-
-  const buyingByCanonical = new Map<string, number>();
-  for (const row of supportReceipts) {
-    const itemBuyingTotal = Array.isArray(row.items)
-      ? row.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0)
-      : 0;
-    const buyingTotal = Math.max(Number(row.buyingTotal ?? 0), itemBuyingTotal);
-    if (!(buyingTotal > 0)) continue;
-    const keys = [
-      normalizeReceiptNumber(row.receiptNumber),
-      normalizeReceiptNumber(row.receiptKey),
-      normalizeReceiptNumber(String(row.receiptKey ?? "").split(":").pop() ?? ""),
-    ].filter(Boolean);
-    for (const key of keys) {
-      if (!buyingByCanonical.has(key)) buyingByCanonical.set(key, buyingTotal);
-    }
-  }
-
-  const totals = receiptMeta.reduce(
-    (acc, receipt) => {
-      if (receipt.sales > 0) {
-        acc.sales += receipt.sales;
-      }
-      if (!receipt.canonical || receipt.sales <= 0) return acc;
-      const buyingTotal = Number(buyingByCanonical.get(receipt.canonical) ?? 0);
-      if (!(buyingTotal > 0)) return acc;
-      acc.profit += receipt.sales - buyingTotal;
-      return acc;
-    },
-    { sales: 0, profit: 0 },
-  );
-
-  return totals;
-}
 
 type PreferredLedger = Prisma.CommissionLedgerGetPayload<{
   select: {
@@ -562,11 +403,8 @@ export async function getAssignedMarketplaceSalesForPeriod(
         },
         { sales: 0, orders: 0 },
       );
-      // Keep the dashboard aligned with the PDF export: prefer manual weekly
-      // sale data whenever it exists for the account/week, otherwise fall back
-      // to captured marketplace profit-entry net payout.
-      const sales = manual.sales !== 0 ? manual.sales : profitSummary.net;
-      const orders = manual.orders !== 0 ? manual.orders : profitSummary.orderCount;
+      const sales = profitSummary.net > 0 ? profitSummary.net : manual.sales;
+      const orders = profitSummary.orderCount > 0 ? profitSummary.orderCount : manual.orders;
 
       totals.manualSales += manual.sales;
       totals.profitEntrySales += profitSummary.net;
@@ -693,7 +531,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
   const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  await ensurePayrollAdjustmentStorage();
   const [directStats, marketplaceSalesSummary, plan, adjustments, returns, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     getAssignedMarketplaceSalesForPeriod(attendantId, {
@@ -719,6 +556,8 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const payoutJumiaSales = marketplaceSalesSummary.totals.jumiaSales;
   const payoutKilimallSales = marketplaceSalesSummary.totals.kilimallSales;
   const marketplaceSales = marketplaceSalesSummary.totals.sales;
+  const combinedDirectSales = directStats.sales;
+  const combinedDirectProfit = directStats.profit;
 
   const isSupervisor = roles.includes("SUPERVISOR");
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
@@ -726,19 +565,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const summed = sumAdjustments(adjustments);
   const directCommissionMode = resolveDirectCommissionMode(user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
-  const fallbackDirectReceiptSummary =
-    directCommissionMode === "PROFIT_10" &&
-    (Number(directStats.sales ?? 0) <= 0 || Number(directStats.profit ?? 0) <= 0)
-      ? await computeProfit10DirectReceiptFallback({ userId: attendantId, start: period.start, end: period.end })
-      : { sales: 0, profit: 0 };
-  const effectiveDirectSales =
-    directCommissionMode === "PROFIT_10" && Number(directStats.sales ?? 0) <= 0 && fallbackDirectReceiptSummary.sales > 0
-      ? fallbackDirectReceiptSummary.sales
-      : directStats.sales;
-  const effectiveDirectProfit =
-    directCommissionMode === "PROFIT_10" && Number(directStats.profit ?? 0) <= 0 && fallbackDirectReceiptSummary.profit > 0
-      ? fallbackDirectReceiptSummary.profit
-      : directStats.profit;
   const profit10Commission =
     directCommissionMode === "PROFIT_10"
       ? computeOnlinePeriodCommission(
@@ -746,8 +572,8 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
             attendantId,
             periodStart: period.start,
             periodEnd: period.end,
-            directSales: effectiveDirectSales,
-            directProfit: effectiveDirectProfit,
+            directSales: directStats.sales,
+            directProfit: directStats.profit,
             jumiaSales: payoutJumiaSales,
             kilimallSales: payoutKilimallSales,
           },
@@ -816,9 +642,9 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     directSalesCommission =
       directCommissionMode === "PROFIT_10"
         ? profit10Commission?.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0
-        : effectiveDirectSales < DIRECT_SALES_TIER_THRESHOLD
-          ? Math.max(0, Math.round(effectiveDirectProfit * 0.05))
-          : calculateCumulativeCommission(Math.max(0, effectiveDirectSales)).commission;
+        : combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
+          ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
+          : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
   }
 
   const grossCommission = directSalesCommission + marketplaceCommission + supervisorBonus - returnsDeduction;
@@ -826,12 +652,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
   const totalEarnings = baseSalary + transportAllowance + grossCommission + summed.bonusTotal + summed.commissionTopUpTotal;
-  const totalDeductions =
-    summed.chamaTotal +
-    summed.latenessTotal +
-    summed.disciplineTotal +
-    summed.otherDeductionsTotal +
-    summed.cashAdvanceTotal;
+  const totalDeductions = summed.chamaTotal + summed.latenessTotal + summed.disciplineTotal + summed.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
   // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
@@ -864,15 +685,10 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   return {
     periodKey: period.key,
     periodLabel: period.label,
-    directSales: directCommissionMode === "PROFIT_10" ? effectiveDirectSales : directStats.sales,
-    directProfit: effectiveDirectProfit,
+    directSales: directCommissionMode === "PROFIT_10" ? directStats.sales : combinedDirectSales,
+    directProfit: directStats.profit,
     marketplaceSales,
     directCommission: directSalesCommission,
-    commissionDirect: directSalesCommission,
-    commissionMarketplaceJumia:
-      profit10Commission?.lines.find((line) => line.channel === "JUMIA")?.commission ?? 0,
-    commissionMarketplaceKilimall:
-      profit10Commission?.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
     marketplaceCommission,
     supervisorBonus,
     returnsDeduction,
@@ -885,8 +701,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     latenessTotal: summed.latenessTotal,
     disciplineTotal: summed.disciplineTotal,
     otherDeductionsTotal: summed.otherDeductionsTotal,
-    cashAdvanceTotal: summed.cashAdvanceTotal,
-    adjustmentEntries: summed.adjustmentEntries,
     totalEarnings,
     totalDeductions,
     netPay,
@@ -960,48 +774,19 @@ function sumAdjustments(adjustments: AttendantPayrollAdjustment[]): {
   latenessTotal: number;
   disciplineTotal: number;
   otherDeductionsTotal: number;
-  cashAdvanceTotal: number;
-  adjustmentEntries: Array<{
-    id: string;
-    label: string;
-    amount: number;
-    adjustmentType: string;
-    adjustmentKind: string;
-  }>;
 } {
-  const sumSigned = (types: PayrollAdjustmentType[]) =>
+  const sum = (types: PayrollAdjustmentType[]) =>
     adjustments
       .filter((a) => types.includes(a.adjustmentType))
-      .reduce((acc, a) => {
-        const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? (types.includes("BONUS") || types.includes("COMMISSION_TOPUP") ? "ADDITION" : "DEDUCTION")).toUpperCase();
-        return acc + (kind === "ADDITION" ? amount : -amount);
-      }, 0);
-
-  const deductionSigned = (types: PayrollAdjustmentType[]) =>
-    adjustments
-      .filter((a) => types.includes(a.adjustmentType))
-      .reduce((acc, a) => {
-        const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
-        return acc + (kind === "ADDITION" ? -amount : amount);
-      }, 0);
+      .reduce((acc, a) => acc + (a.amount ?? 0), 0);
 
   return {
-    bonusTotal: sumSigned(["BONUS"]),
-    commissionTopUpTotal: sumSigned(["COMMISSION_TOPUP"]),
-    chamaTotal: deductionSigned(["CHAMA"]),
-    latenessTotal: deductionSigned(["LATENESS"]),
-    disciplineTotal: deductionSigned(["DISCIPLINE"]),
-    otherDeductionsTotal: deductionSigned(["OTHER"]),
-    cashAdvanceTotal: deductionSigned(["CASH_ADVANCE"]),
-    adjustmentEntries: adjustments.map((a) => ({
-      id: a.id,
-      label: a.label,
-      amount: Number(a.amount ?? 0),
-      adjustmentType: String(a.adjustmentType),
-      adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
-    })),
+    bonusTotal: sum(["BONUS"]),
+    commissionTopUpTotal: sum(["COMMISSION_TOPUP"]),
+    chamaTotal: sum(["CHAMA"]),
+    latenessTotal: sum(["LATENESS"]),
+    disciplineTotal: sum(["DISCIPLINE"]),
+    otherDeductionsTotal: sum(["OTHER"]),
   };
 }
 

@@ -5,7 +5,6 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
 import { getPeriodKeyVariants } from "./payrollPeriodKey";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -15,14 +14,12 @@ export type EarningsSummary = {
 
   baseSalary: number;
   transportAllowance: number;
-  salesCommission: number;
   commission: number;
   bonusTotal: number;
   chamaTotal: number;
   latenessTotal: number;
   disciplineTotal: number;
   otherDeductionsTotal: number;
-  cashAdvanceTotal: number;
 
   totalEarnings: number;   // base + transport + commission + bonus
   totalDeductions: number; // chama + lateness + discipline + other
@@ -99,40 +96,23 @@ export async function getEarningsSummaryForAttendant(opts: {
   // 4) All adjustments for this period
   const variants = getPeriodKeyVariants(periodKey);
   const adjustmentFilterKeys = variants.length ? variants : [periodKey];
-  await ensurePayrollAdjustmentStorage();
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
     where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
   });
 
-  const sumSigned = (filterFn: (a: any) => boolean, defaultKind: "ADDITION" | "DEDUCTION") =>
-    adjustments
-      .filter(filterFn)
-      .reduce((acc, a) => {
-        const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? defaultKind).toUpperCase();
-        return acc + (kind === "ADDITION" ? amount : -amount);
-      }, 0);
-  const sumDeduction = (filterFn: (a: any) => boolean) =>
-    adjustments
-      .filter(filterFn)
-      .reduce((acc, a) => {
-        const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
-        return acc + (kind === "ADDITION" ? -amount : amount);
-      }, 0);
+  const sum = (filterFn: (a: any) => boolean) =>
+    adjustments.filter(filterFn).reduce((acc, a) => acc + (a.amount ?? 0), 0);
 
-  const bonusTotal = sumSigned(
+  const bonusTotal = sum(
     (a) => a.adjustmentType === "BONUS" || a.adjustmentType === "COMMISSION_TOPUP",
-    "ADDITION",
   );
-  const chamaTotal = sumDeduction((a) => a.adjustmentType === "CHAMA");
-  const latenessTotal = sumDeduction((a) => a.adjustmentType === "LATENESS");
-  const disciplineTotal = sumDeduction((a) => a.adjustmentType === "DISCIPLINE");
-  const otherDeductionsTotal = sumDeduction((a) => a.adjustmentType === "OTHER");
-  const cashAdvanceTotal = sumDeduction((a) => a.adjustmentType === "CASH_ADVANCE");
+  const chamaTotal = sum((a) => a.adjustmentType === "CHAMA");
+  const latenessTotal = sum((a) => a.adjustmentType === "LATENESS");
+  const disciplineTotal = sum((a) => a.adjustmentType === "DISCIPLINE");
+  const otherDeductionsTotal = sum((a) => a.adjustmentType === "OTHER");
 
   const totalEarnings = baseSalary + transportAllowance + commission + bonusTotal;
-  const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal + cashAdvanceTotal;
+  const totalDeductions = chamaTotal + latenessTotal + disciplineTotal + otherDeductionsTotal;
 
   const netPay = totalEarnings - totalDeductions;
 
@@ -152,14 +132,12 @@ export async function getEarningsSummaryForAttendant(opts: {
 
     baseSalary,
     transportAllowance,
-    salesCommission: commission,
     commission,
     bonusTotal,
     chamaTotal,
     latenessTotal,
     disciplineTotal,
     otherDeductionsTotal,
-    cashAdvanceTotal,
 
     totalEarnings,
     totalDeductions,

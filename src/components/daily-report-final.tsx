@@ -686,7 +686,6 @@ export default function DailyReportFinal() {
     latenessTotal: 0,
     disciplineTotal: 0,
     otherDeductionsTotal: 0,
-    cashAdvanceTotal: 0,
     totalEarnings: commissionForPeriod,
     totalDeductions: 0,
     netPay: commissionForPeriod,

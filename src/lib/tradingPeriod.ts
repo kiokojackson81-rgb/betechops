@@ -137,8 +137,3 @@ export function getPreviousTradingPeriod(period: TradingPeriod): TradingPeriod {
   const previousDay = new Date(period.start.getTime() - 24 * 60 * 60 * 1000);
   return getTradingPeriodFor(previousDay);
 }
-
-export function getNextTradingPeriod(period: TradingPeriod): TradingPeriod {
-  const nextDay = new Date(period.end.getTime() + 24 * 60 * 60 * 1000);
-  return getTradingPeriodFor(nextDay);
-}
