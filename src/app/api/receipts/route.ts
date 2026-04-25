@@ -801,6 +801,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
+      if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
+        try {
+          if (!isPodDelivery) {
+            await tx.commissionEarning.createMany({
+              data: createdOrderItems.map((it) => ({
+                staffId: attendantId,
+                orderItemId: it.id,
+                basis: "gross",
+                qty: it.quantity,
+                amount: 0,
+                status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
+                calcDetail: { reason: "receipt_seed", total },
+              })),
+            });
+          } else {
+            // For POD receipts, seed earnings as PENDING so no immediate releases occur
+            await tx.commissionEarning.createMany({
+              data: createdOrderItems.map((it) => ({
+                staffId: attendantId,
+                orderItemId: it.id,
+                basis: "gross",
+                qty: it.quantity,
+                amount: 0,
+                status: "PENDING",
+                calcDetail: { reason: "receipt_seed_pod", total },
+              })),
+            });
+          }
+        } catch (e) {
+          // ignore if tx mock doesn't implement commissionEarning
+        }
+      }
+
       // Record support daily entry + receipt so support commission ledger can include this sale
       if (attendantId && !isPodDelivery) {
         const startOfDay = new Date(entryDate);
@@ -1014,29 +1048,60 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Seed per-product POS commission rows when configured on the selected catalog products.
+      // Preserve the existing gross-based commission seed behavior, then add POS product commissions.
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          const perItemEarnings = createdOrderItems
+          if (!isPodDelivery) {
+            const perItemEarnings = createdOrderItems.map((it) => {
+              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
+              const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
+              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status, calcDetail: { reason: "receipt_seed", total } };
+            });
+            await tx.commissionEarning.createMany({ data: perItemEarnings });
+
+            // If immediate threshold hit, also release commission record now
+            if (total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
+              try {
+                await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
+              } catch (e) {
+                // ignore in partial mocks
+              }
+            }
+          } else {
+            // For POD receipts, create per-item earnings but leave as PENDING (no immediate releases)
+            const perItemEarnings = createdOrderItems.map((it) => {
+              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
+              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status: "PENDING", calcDetail: { reason: "receipt_seed_pod", total } };
+            });
+            await tx.commissionEarning.createMany({ data: perItemEarnings });
+          }
+
+          const posProductEarnings = createdOrderItems
             .map((orderItem, index) => {
               const sourceItem = createdItems[index];
               const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
               if (!sourceItem?.commissionEnabled || amount <= 0) return null;
-              const requiresApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+              const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+              const status =
+                requiresAdminApproval
+                  ? "PENDING_APPROVAL"
+                  : docType === "LAYAWAY"
+                    ? "PENDING"
+                    : "RELEASED";
               return {
                 staffId: attendantId,
                 orderItemId: orderItem.id,
                 basis: "product_flat",
                 qty: orderItem.quantity,
                 amount,
-                status: requiresApproval ? "PENDING_APPROVAL" : "RELEASED",
+                status,
                 calcDetail: {
                   reason: "pos_product_commission",
                   productId: sourceItem.product.id,
                   productName: sourceItem.title,
                   orderNumber: serial,
                   receiptId: receipt.id,
-                  requiresApproval,
+                  requiresApproval: requiresAdminApproval,
                   unitCommission: Number(sourceItem.commissionAmount || 0),
                   customerType: payload?.customerType ?? null,
                 },
@@ -1044,17 +1109,8 @@ export async function POST(req: NextRequest) {
             })
             .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-          if (perItemEarnings.length) {
-            await tx.commissionEarning.createMany({ data: perItemEarnings });
-          }
-
-          // If immediate threshold hit, also release commission record now
-          if (!isPodDelivery && total >= IMMEDIATE_THRESHOLD && tx.commissionRecord) {
-            try {
-              await tx.commissionRecord.update({ where: { id: provisional.id }, data: { status: "RELEASED", amount: String(total), releasedAt: new Date() } });
-            } catch (e) {
-              // ignore in partial mocks
-            }
+          if (posProductEarnings.length) {
+            await tx.commissionEarning.createMany({ data: posProductEarnings });
           }
         } catch (e) {
           // ignore commission earnings in partial tx mocks

@@ -6,6 +6,7 @@ export async function GET(req: Request) {
   const q = (searchParams.get("search") || "").trim();
   const activeOnly = ["1", "true", "yes"].includes((searchParams.get("activeOnly") || "").toLowerCase());
   const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit") || "10")));
+  if (!q && !activeOnly) return NextResponse.json([]);
 
   const products = await prisma.product.findMany({
     where: {
