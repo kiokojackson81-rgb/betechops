@@ -227,18 +227,21 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     }
   }
 
-  const releasedPosCommissionRows = await prisma.commissionEarning.findMany({
-    where: {
-      staffId: opts.userId,
-      createdAt: { gte: start, lte: end },
-      status: { in: ["RELEASED", "APPROVED"] },
-    },
-    select: {
-      amount: true,
-      basis: true,
-      calcDetail: true,
-    },
-  });
+  const releasedPosCommissionRows =
+    prisma.commissionEarning && typeof prisma.commissionEarning.findMany === "function"
+      ? await prisma.commissionEarning.findMany({
+          where: {
+            staffId: opts.userId,
+            createdAt: { gte: start, lte: end },
+            status: { in: ["RELEASED", "APPROVED"] },
+          },
+          select: {
+            amount: true,
+            basis: true,
+            calcDetail: true,
+          },
+        })
+      : [];
 
   const posProductCommission = releasedPosCommissionRows.reduce((sum, row) => {
     const detail = (row.calcDetail as Record<string, unknown> | null) ?? null;

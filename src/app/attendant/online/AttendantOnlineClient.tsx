@@ -87,7 +87,6 @@ const allocateCombinedMarketplaceCommission = <T extends { sales: number; charge
     return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
   });
 };
-
 function normalizeWeekKey(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
