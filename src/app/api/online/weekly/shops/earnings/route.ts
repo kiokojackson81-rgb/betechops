@@ -4,6 +4,7 @@ import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
+import { getPricingWeekSummary, type PricingWeekAccountStatus } from "@/lib/pricingWeekWhatsapp";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,15 @@ const parseDateParam = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const normalizeWeekKey = (value: string | null | undefined) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw.slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+};
+
 const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
   rows: T[],
   totalCommission: number,
@@ -51,6 +61,13 @@ const allocateCombinedMarketplaceCommission = <T extends { sales: number; charge
     return Math.max(0, rawShare - Number(row.chargedReturns ?? 0));
   });
 };
+
+function getAccountSubmissionStatus(account: PricingWeekAccountStatus) {
+  if (account.markedZero) return "ZERO";
+  if (account.complete) return "SUBMITTED";
+  if (account.hasDraft || account.hasProfitEntries) return "LOADED";
+  return "NOT_SUBMITTED";
+}
 
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
@@ -71,6 +88,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const startParam = parseDateParam(url.searchParams.get("start"));
   const endParam = parseDateParam(url.searchParams.get("end"));
+  const selectedWeekKeys = new Set(
+    url.searchParams
+      .getAll("weekStart")
+      .map((value) => normalizeWeekKey(value))
+      .filter(Boolean),
+  );
   const defaultRange = weekRangeForDate(new Date());
   const start = startParam ?? defaultRange.start;
   const end = endParam ?? defaultRange.end;
@@ -88,19 +111,63 @@ export async function GET(req: Request) {
     end,
   });
 
+  const filteredWeeklyRows = selectedWeekKeys.size
+    ? marketplaceSalesSummary.weeklyRows.filter((row) => selectedWeekKeys.has(normalizeWeekKey(row.weekStart)))
+    : marketplaceSalesSummary.weeklyRows;
+  const accountIds = Array.from(
+    new Set(marketplaceSalesSummary.rows.map((row) => String(row.accountId ?? "").trim()).filter(Boolean)),
+  );
+  const weekKeysForStatuses = selectedWeekKeys.size
+    ? Array.from(selectedWeekKeys)
+    : Array.from(new Set(filteredWeeklyRows.map((row) => normalizeWeekKey(row.weekStart)).filter(Boolean)));
+  const accountStatuses =
+    accountIds.length && weekKeysForStatuses.length
+      ? (
+          await Promise.all(
+            weekKeysForStatuses.map((weekKey) => getPricingWeekSummary(weekKey, { accountIds })),
+          )
+        ).flatMap((summary) =>
+          summary.accounts.map((account) => ({
+            accountId: account.accountId,
+            weekStart: summary.week_start,
+            status: getAccountSubmissionStatus(account),
+            markedZero: account.markedZero,
+            hasDraft: account.hasDraft,
+            hasProfitEntries: account.hasProfitEntries,
+            complete: account.complete,
+            missingPricing: account.missingPricing,
+          })),
+        )
+      : [];
+
   if (!marketplaceSalesSummary.rows.length) {
     const emptyResponse = {
       rangeLabel,
       totals: { sales: 0, commission: 0, orders: 0, shops: 0 },
       rows: [],
+      weeklyRows: [],
+      accountStatuses: [],
+      useCombinedMarketplaceLadder,
     };
     return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
+  const returnWhere = selectedWeekKeys.size
+    ? {
+        OR: Array.from(selectedWeekKeys).map((weekKey) => {
+          const weekStart = new Date(`${weekKey}T00:00:00.000Z`);
+          const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+          return { dueAt: { gte: weekStart, lte: weekEnd } };
+        }),
+      }
+    : {
+        dueAt: { gte: start, lte: end },
+      };
+
   const returns = await prisma.marketplaceReturn.findMany({
     where: {
       accountId: { in: marketplaceSalesSummary.rows.map((row) => row.accountId) },
-      dueAt: { gte: start, lte: end },
+      ...returnWhere,
       status: MarketplaceReturnStatus.CHARGED_TO_ATTENDANT,
     },
     select: {
@@ -109,22 +176,46 @@ export async function GET(req: Request) {
     },
   });
 
+  const weeklyByAccountId = new Map<string, { sales: number; orders: number; weekStarts: Set<string>; weekEnds: Set<string> }>();
+  for (const row of filteredWeeklyRows) {
+    const accountKey = String(row.accountId ?? "").trim();
+    if (!accountKey) continue;
+    const current = weeklyByAccountId.get(accountKey) ?? {
+      sales: 0,
+      orders: 0,
+      weekStarts: new Set<string>(),
+      weekEnds: new Set<string>(),
+    };
+    current.sales += Number(row.sales ?? 0);
+    current.orders += Number(row.orders ?? 0);
+    if (row.weekStart) current.weekStarts.add(new Date(row.weekStart).toISOString());
+    if (row.weekEnd) current.weekEnds.add(new Date(row.weekEnd).toISOString());
+    weeklyByAccountId.set(accountKey, current);
+  }
+
   const rows = marketplaceSalesSummary.rows
     .map((account) => {
       const accountReturns = returns.filter((entry) => entry.accountId === account.accountId);
       const chargedReturns = accountReturns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
+      const weeklyTotals = weeklyByAccountId.get(account.accountId);
+      const sales = weeklyTotals ? Number(weeklyTotals.sales ?? 0) : Number(account.sales ?? 0);
+      const orders = weeklyTotals ? Number(weeklyTotals.orders ?? 0) : Number(account.orders ?? 0);
+      const defaultWeekStart = start.toISOString();
+      const defaultWeekEnd = end.toISOString();
 
       return {
         shopId: account.accountId,
+        accountId: account.accountId,
+        shopIds: account.shopIds,
         shopName: account.displayName,
         platform: account.platform,
         weekLabel,
-        weekStart: start.toISOString(),
-        weekEnd: end.toISOString(),
-        sales: Number(account.sales ?? 0),
+        weekStart: weeklyTotals?.weekStarts.size === 1 ? Array.from(weeklyTotals.weekStarts)[0] : defaultWeekStart,
+        weekEnd: weeklyTotals?.weekEnds.size === 1 ? Array.from(weeklyTotals.weekEnds)[0] : defaultWeekEnd,
+        sales,
         commission: 0,
         chargedReturns,
-        orders: Number(account.orders ?? 0),
+        orders,
       };
     })
     .sort((a, b) => b.sales - a.sales);
@@ -159,6 +250,22 @@ export async function GET(req: Request) {
     rangeLabel,
     totals: { ...totals, shops: finalRows.length },
     rows: finalRows,
+    weeklyRows: filteredWeeklyRows.map((row) => ({
+      shopId: row.accountId,
+      accountId: row.accountId,
+      shopIds: row.shopIds,
+      shopName: row.displayName,
+      platform: row.platform,
+      weekLabel,
+      weekStart: row.weekStart,
+      weekEnd: row.weekEnd,
+      sales: Number(row.sales ?? 0),
+      commission: 0,
+      chargedReturns: 0,
+      orders: Number(row.orders ?? 0),
+    })),
+    accountStatuses,
+    useCombinedMarketplaceLadder,
   };
 
   return NextResponse.json(composeIdentityResponse(meta, data));
