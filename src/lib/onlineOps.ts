@@ -172,6 +172,65 @@ function resolveOnlineCommissionTotal(args: {
   return { commissionTotal: args.grossCommission, commissionSourceLabel: "computed-gross" };
 }
 
+async function computeBrendahCommissionContext(args: {
+  attendantId: string;
+  period: TradingPeriod;
+  commissionTopUpTotal: number;
+}) {
+  const [marketingSummary, supportSummary] = await Promise.all([
+    summarizeMarketingReportsForPeriod({ userId: args.attendantId, period: args.period }),
+    getSupportPeriodAggregates({ userId: args.attendantId, period: args.period }),
+  ]);
+
+  const marketingPer = (marketingSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
+  const supportPer = (supportSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
+  const merged = new Map<string, { sales: number; profit: number; items: number }>();
+  const normalize = (entry: ReceiptRecord) => ({
+    sales: Number(entry.sales ?? 0),
+    profit: Number(entry.profit ?? 0),
+    items: Number(entry.items ?? 0),
+  });
+
+  for (const [key, value] of Object.entries(marketingPer)) {
+    merged.set(key, normalize(value));
+  }
+  for (const [key, value] of Object.entries(supportPer)) {
+    const normalized = normalize(value);
+    if (merged.has(key)) {
+      const existing = merged.get(key)!;
+      if ((existing.profit ?? 0) <= 0 && normalized.profit > 0) {
+        merged.set(key, normalized);
+      }
+      continue;
+    }
+    merged.set(key, normalized);
+  }
+
+  let mergedSales = 0;
+  let mergedProfit = 0;
+  for (const entry of merged.values()) {
+    if ((entry.profit ?? 0) <= 0) continue;
+    mergedSales += entry.sales;
+    mergedProfit += entry.profit;
+  }
+
+  const direct = computeBrendahDirectCommission(mergedSales, mergedProfit);
+  const marketingTotals = marketingSummary?.totals ?? {};
+  const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
+    newProducts: marketingTotals.totalNewProducts ?? 0,
+    copiedProducts: marketingTotals.totalCopiedProducts ?? 0,
+    editedProducts: marketingTotals.totalEditedProducts ?? 0,
+  });
+  const productCommissionTotal = newProductCommission + copiedCommission + editedCommission;
+
+  return {
+    directSalesCommission: direct.amount,
+    commissionTotal: direct.amount + productCommissionTotal + args.commissionTopUpTotal,
+    mergedSales,
+    mergedProfit,
+  };
+}
+
 const normalizeReceiptNumber = (input: unknown) => {
   if (input == null) return "";
   return String(input).trim().toUpperCase().replace(/[\s\-_]+/g, "").replace(/[^A-Z0-9]/g, "");
@@ -793,50 +852,15 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   let brendahMergedProfit = 0;
 
   if (isBrendah) {
-    const marketingSummary = await summarizeMarketingReportsForPeriod({ userId: attendantId, period });
-    const supportSummary = await getSupportPeriodAggregates({ userId: attendantId, period });
-    const marketingPer = (marketingSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
-    const supportPer = (supportSummary?.perReceipts ?? {}) as Record<string, ReceiptRecord>;
-    const merged = new Map<string, { sales: number; profit: number; items: number }>();
-    const normalize = (entry: ReceiptRecord) => ({
-      sales: Number(entry.sales ?? 0),
-      profit: Number(entry.profit ?? 0),
-      items: Number(entry.items ?? 0),
+    const brendahContext = await computeBrendahCommissionContext({
+      attendantId,
+      period,
+      commissionTopUpTotal: summed.commissionTopUpTotal,
     });
-
-    for (const [key, value] of Object.entries(marketingPer)) {
-      merged.set(key, normalize(value));
-    }
-    for (const [key, value] of Object.entries(supportPer)) {
-      const normalized = normalize(value);
-      if (merged.has(key)) {
-        const existing = merged.get(key)!;
-        if ((existing.profit ?? 0) <= 0 && normalized.profit > 0) {
-          merged.set(key, normalized);
-        }
-        continue;
-      }
-      merged.set(key, normalized);
-    }
-
-    for (const entry of merged.values()) {
-      if ((entry.profit ?? 0) <= 0) continue;
-      brendahMergedSales += entry.sales;
-      brendahMergedProfit += entry.profit;
-    }
-
-    const direct = computeBrendahDirectCommission(brendahMergedSales, brendahMergedProfit);
-    directSalesCommission = direct.amount;
-
-    const marketingTotals = (marketingSummary && marketingSummary.totals) || {};
-    const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
-      newProducts: marketingTotals.totalNewProducts ?? 0,
-      copiedProducts: marketingTotals.totalCopiedProducts ?? 0,
-      editedProducts: marketingTotals.totalEditedProducts ?? 0,
-    });
-
-    const productCommissionTotal = newProductCommission + copiedCommission + editedCommission;
-    brendahComputedCommission = direct.amount + productCommissionTotal + summed.commissionTopUpTotal;
+    directSalesCommission = brendahContext.directSalesCommission;
+    brendahComputedCommission = brendahContext.commissionTotal;
+    brendahMergedSales = brendahContext.mergedSales;
+    brendahMergedProfit = brendahContext.mergedProfit;
   } else {
     directSalesCommission =
       directCommissionMode === "PROFIT_10"
