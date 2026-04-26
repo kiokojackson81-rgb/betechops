@@ -27,6 +27,14 @@ export function middleware(req: NextRequest) {
     // mismatched runtime constraints in edge environments. The primary goal
     // is to avoid creating redirect cycles — actual auth decisions are still
     // handled by the app routes and post-login logic.
+    // If this is an API request, mark responses as no-store to prevent
+    // build-time or CDN caching of JSON payloads that must be runtime-accurate.
+    if (pathname.startsWith("/api/")) {
+      const res = NextResponse.next();
+      res.headers.set("Cache-Control", "no-store");
+      return res;
+    }
+
     return NextResponse.next();
   } catch (e) {
     return NextResponse.next();
@@ -36,4 +44,4 @@ export function middleware(req: NextRequest) {
 // Apply middleware to the attendant and marketing routes where rehydration
 // was previously observed. Keep matcher minimal to avoid affecting unrelated
 // paths.
-export const config = { matcher: ["/marketing/:path*", "/attendant/:path*", "/auth/post-login"] };
+export const config = { matcher: ["/api/:path*", "/marketing/:path*", "/attendant/:path*", "/auth/post-login"] };
