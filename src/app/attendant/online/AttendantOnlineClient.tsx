@@ -57,15 +57,6 @@ type AccountStatusSummary = {
   notSubmitted: number;
 };
 
-type OnlineEarningsSummary = {
-  periodLabel: string;
-  salesCommission: number;
-  otherBonuses: number;
-  netPay: number;
-};
-
-type PaymentMethod = "MPESA" | "CASH" | "";
-
 const MARKETPLACE_STEP_POINTS = [
   2_000_000,
   3_000_000,
@@ -80,8 +71,6 @@ const MARKETPLACE_STEP_POINTS = [
 
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
-
-const safeNumber = (value?: number | null) => Number(value ?? 0);
 const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -261,8 +250,6 @@ export default function AttendantOnlineClient() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);
-  const [impersonated, setImpersonated] = useState<boolean>(false);
-  const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
 
   const appendImpersonateParam = useCallback(
@@ -368,14 +355,6 @@ export default function AttendantOnlineClient() {
       if (payload?.user?.id) setUserId(payload.user.id);
       if (payload?.user?.role) setUserRole(payload.user.role);
       setSupervisorPerformanceTools(Boolean(payload?.flags?.supervisorPerformanceTools));
-      // capture impersonation metadata when present so UI can surface it
-      if (payload?.impersonated) {
-        setImpersonated(true);
-        setImpersonatedBy(payload?.impersonatedBy ?? null);
-      } else {
-        setImpersonated(false);
-        setImpersonatedBy(null);
-      }
     } catch (err) {
       console.warn("[attendant/online] failed to load user", err);
     }
@@ -742,28 +721,13 @@ export default function AttendantOnlineClient() {
     [posReceiptRows],
   );
 
-  const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
-
   const commission = payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? 0;
-
-  const nextTierTarget = 1000000;
-  const toNextTier = Math.max(0, nextTierTarget - totalSales);
 
   useEffect(() => {
     fetchUser();
     const defaultKey = tradingWeeks.at(-1)?.key ?? tradingWeeks[0]?.key ?? "period";
     setActiveWeekKeys((prev) => (prev.length ? prev : [defaultKey]));
   }, [fetchUser, tradingWeeks]);
-
-  // show a small banner when viewing as another attendant
-  const ImpersonationBanner = () => {
-    if (!impersonated) return null;
-    return (
-      <div className="rounded-md border border-amber-600 bg-amber-900/30 px-3 py-2 text-sm text-amber-100">
-        Viewing as another attendant{impersonatedBy ? ` (impersonated by ${impersonatedBy})` : ""} — some data may not match your account.
-      </div>
-    );
-  };
 
   const refreshAllOnlineStats = useCallback(async () => {
     if (!userId) return;
@@ -806,13 +770,10 @@ export default function AttendantOnlineClient() {
   // currently selected range instead of older period-wide summary totals.
   const quickStatsPeriodLabel =
     onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? selectedPeriod.label;
-  const marketplace = onlineSummary?.marketplace ?? null;
   const aggregatorJumiaSales = platformTotals.jumiaSales;
   const aggregatorKilimallSales = platformTotals.kilimallSales;
   const aggregatorMarketplaceSalesOnly = aggregatorJumiaSales + aggregatorKilimallSales;
   const marketplaceTierInfo = describeMarketplaceTier(aggregatorMarketplaceSalesOnly);
-  const quickJumiaSales = aggregatorJumiaSales;
-  const quickKilimallSales = aggregatorKilimallSales;
   const quickMarketplaceSalesOnly = aggregatorMarketplaceSalesOnly;
   const commissionBreakdown = onlineSummary?.commissions ?? null;
   const quickMarketplaceCommission = platformTotals.marketplaceCommission;
@@ -834,7 +795,7 @@ export default function AttendantOnlineClient() {
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
     marketplaceSales: quickMarketplaceSalesOnly,
-    kilimallSales: quickKilimallSales,
+    kilimallSales: aggregatorKilimallSales,
     directSales,
     receiptsCount,
     totalSales: quickMarketplaceSalesOnly + directSales,
