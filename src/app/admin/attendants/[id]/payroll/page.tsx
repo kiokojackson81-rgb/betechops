@@ -4,12 +4,10 @@ import { redirect } from "next/navigation";
 import PayrollClient from "./PayrollClient";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
-import { getEarningsSummaryForAttendant } from "@/lib/marketingEarnings";
-import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
-import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
+import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +47,16 @@ export default async function PayrollPage({
   const period = requestedPeriod ?? currentPeriod;
   const periodKey = period.key;
   const periodLabel = period.label;
+  const summary = await buildPayrollRow(
+    {
+      id: attendant.id,
+      name: attendant.name,
+      email: attendant.email,
+      attendantCategory: null,
+      isActive: true,
+    },
+    period,
+  );
 
   const currentLedgerRaw =
     (await prisma.commissionLedger.findUnique({
@@ -60,75 +68,6 @@ export default async function PayrollPage({
         },
       },
     })) ?? null;
-
-  // Prefer the more robust earnings summary implementation which tolerates
-  // multiple periodKey formats and honours payroll adjustment kinds. Fall
-  // back to the older marketing earnings helper if needed.
-  let summary: any = null;
-  try {
-    const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
-    const userSummary = await getEarningsSummaryForUser({ userId: attendantId, asOf: period.start });
-    const ledgerDetail = currentLedgerRaw?.detail as Record<string, any> | undefined;
-    const marketingCommissionValue =
-      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.marketing?.commission ?? 0) : 0;
-    const supportCommissionValue =
-      ledgerDetail && typeof ledgerDetail === "object" ? Number(ledgerDetail.support?.commission ?? 0) : 0;
-
-    const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
-
-    // For Jeniffer we must prefer the computed `userSummary.salesCommission`
-    // and not allow persisted ledger values to overwrite it. For other
-    // attendants prefer ledger-derived values when present.
-    let ledgerSalesCommission = 0;
-    if (!isJeniffer) {
-      ledgerSalesCommission = marketingCommissionValue + supportCommissionValue;
-      if (ledgerSalesCommission === 0 && currentLedgerRaw) {
-        ledgerSalesCommission = Number(currentLedgerRaw.grossCommission ?? 0);
-      }
-    }
-
-    if (ledgerSalesCommission === 0) {
-      ledgerSalesCommission = userSummary.salesCommission;
-    }
-
-    const grossCommission =
-      ledgerSalesCommission +
-      userSummary.newProductCommission +
-      userSummary.copiedCommission +
-      userSummary.editedCommission +
-      userSummary.commissionTopUpTotal;
-
-    const bonusTotal = userSummary.bonusTotal ?? 0;
-    const totalDeductions =
-      userSummary.chamaTotal +
-      userSummary.latenessTotal +
-      userSummary.disciplineTotal +
-      userSummary.otherDeductionsTotal;
-    const totalEarnings =
-      userSummary.baseSalary + userSummary.transportAllowance + grossCommission + bonusTotal;
-    const netPay = totalEarnings - totalDeductions;
-
-    summary = {
-      ...userSummary,
-      salesCommission: ledgerSalesCommission,
-      grossCommission,
-      totalEarnings,
-      totalDeductions,
-      netPay,
-      commission: grossCommission,
-      sales: userSummary.totalSales,
-    };
-    // expose jenifferProgress to client for UI display when present
-    (summary as any).jenifferProgress = (userSummary as any).jenifferProgress ?? null;
-  } catch (e) {
-    // fallback to existing implementation if the new helper fails for any reason
-    try {
-      const old = await getEarningsSummaryForAttendant({ attendantId, periodKey, periodLabel });
-      summary = { sales: old.sales ?? 0, netPay: old.netPay ?? 0, _raw: old };
-    } catch (err) {
-      summary = { sales: 0, netPay: 0 };
-    }
-  }
 
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   const adjustmentKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];

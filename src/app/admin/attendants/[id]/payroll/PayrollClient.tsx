@@ -73,16 +73,17 @@ export default function PayrollClient({
     { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
   );
   const commissionValue =
-    initialSummary?.commission ??
-    initialSummary?.grossCommission ??
-    initialSummary?.salesCommission ??
-    initialSummary?._raw?.commission ??
-    initialSummary?._raw?.grossCommission ??
-    initialSummary?._raw?.salesCommission ??
+    summary?.commission ??
+    summary?.grossCommission ??
+    summary?.salesCommission ??
+    summary?.commissionTotal ??
+    summary?._raw?.commission ??
+    summary?._raw?.grossCommission ??
+    summary?._raw?.salesCommission ??
     0;
-  const periodProfit = Number(initialSummary?.totalProfit ?? initialSummary?._raw?.totalProfit ?? 0);
-  const periodReceipts = Number(initialSummary?.totalReceipts ?? initialSummary?._raw?.totalReceipts ?? 0);
-  const periodItems = Number(initialSummary?.totalItems ?? initialSummary?._raw?.totalItems ?? 0);
+  const periodProfit = Number(summary?.totalProfit ?? summary?._raw?.totalProfit ?? 0);
+  const periodReceipts = Number(summary?.totalReceipts ?? summary?._raw?.totalReceipts ?? 0);
+  const periodItems = Number(summary?.totalItems ?? summary?._raw?.totalItems ?? 0);
   const ledgerTotals = useMemo(() => {
     const breakdown = ledger?.commissionBreakdown ?? {};
     return {
@@ -91,9 +92,9 @@ export default function PayrollClient({
       kilimall: Number(
         ledger?.commissionMarketplaceKilimall ?? breakdown?.kilimall ?? breakdown?.["marketplace:kilimall"] ?? 0,
       ),
-      netCommission: Number(ledger?.netCommission ?? initialSummary?._raw?.netCommission ?? 0),
+      netCommission: Number(ledger?.netCommission ?? summary?._raw?.netCommission ?? summary?.commissionTotal ?? 0),
     };
-  }, [ledger, initialSummary]);
+  }, [ledger, summary]);
   const previousNetCommission = Number(previousLedger?.netCommission ?? 0);
   const netCommissionDelta = ledgerTotals.netCommission - previousNetCommission;
   const adjustmentTotals = useMemo(() => {
@@ -148,11 +149,12 @@ export default function PayrollClient({
 
   async function fetchSummary() {
     try {
-      const url = `/api/marketing/earnings/summary?attendantId=${encodeURIComponent(attendant.id)}`;
+      const url = `/api/payroll/summary?attendantId=${encodeURIComponent(attendant.id)}&periodKey=${encodeURIComponent(periodKey)}`;
       const res = await fetch(url, { credentials: "same-origin" });
       if (!res.ok) return;
       const data = await res.json().catch(() => null);
-      if (data?.summary) setSummary(data.summary);
+      if (data?.row) setSummary(data.row);
+      else if (Array.isArray(data?.rows) && data.rows[0]) setSummary(data.rows[0]);
     } catch (err) {
       // ignore
     }
@@ -284,7 +286,7 @@ export default function PayrollClient({
         <div className="mt-3 space-y-3 text-sm">
           <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
             <span className="text-slate-300">Period sales</span>
-            <span className="font-semibold text-emerald-400">KES {initialSummary?.sales?.toLocaleString?.() ?? 0}</span>
+            <span className="font-semibold text-emerald-400">KES {(summary?.sales ?? summary?.totalSales ?? 0).toLocaleString?.() ?? 0}</span>
           </div>
           <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
             <span className="text-slate-300">Commission</span>
@@ -294,7 +296,7 @@ export default function PayrollClient({
           </div>
           <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex items-center justify-between">
             <span className="text-slate-300">Net pay</span>
-            <span className="font-semibold text-emerald-400">KES {initialSummary?.netPay?.toLocaleString?.() ?? 0}</span>
+            <span className="font-semibold text-emerald-400">KES {summary?.netPay?.toLocaleString?.() ?? 0}</span>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl bg-slate-950/60 px-3 py-2 flex flex-col gap-1">
