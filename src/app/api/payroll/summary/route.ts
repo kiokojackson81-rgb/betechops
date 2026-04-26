@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
@@ -18,10 +18,13 @@ import type { AdjustmentEntry, AdjustmentKind } from "@/app/admin/payroll/types"
 export const dynamic = "force-dynamic";
 
 function parsePeriod(url: URL) {
-  // Enforce server-resolved trading period for payroll/dashboard totals.
-  // Do NOT accept arbitrary `start`, `end` or `periodKey` from clients.
-  if (url.searchParams.has("start") || url.searchParams.has("end") || url.searchParams.has("periodKey")) {
-    throw new Error("This endpoint requires a server-resolved trading period; do not supply start/end/periodKey.");
+  const periodKey = url.searchParams.get("periodKey");
+  const parsedPeriod = parseTradingPeriodKey(periodKey ?? undefined);
+  if (parsedPeriod) {
+    return parsedPeriod;
+  }
+  if (url.searchParams.has("start") || url.searchParams.has("end")) {
+    throw new Error("This endpoint supports `periodKey` for archived payroll periods, not arbitrary start/end.");
   }
   return getTradingPeriodFor(new Date());
 }

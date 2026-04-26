@@ -13,6 +13,7 @@ import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
 
@@ -51,6 +52,25 @@ type MarketplaceOverviewRow = {
   orders: number;
 };
 
+type AccountSubmissionWeekStatus = {
+  accountId: string;
+  weekStart: string;
+  status: "SUBMITTED" | "LOADED" | "ZERO" | "NOT_SUBMITTED";
+  markedZero?: boolean;
+  hasDraft?: boolean;
+  hasProfitEntries?: boolean;
+  complete?: boolean;
+  missingPricing?: number;
+};
+
+type AccountStatusSummary = {
+  totalWeeks: number;
+  submitted: number;
+  loaded: number;
+  zero: number;
+  notSubmitted: number;
+};
+
 type OnlineEarningsSummary = {
   periodLabel: string;
   salesCommission: number;
@@ -62,12 +82,158 @@ type PaymentMethod = "MPESA" | "CASH" | "";
 
 // Preview commission from server (falls back to null until fetched)
 const COMMISSION_RATE = undefined as unknown as number;
+const MARKETPLACE_STEP_POINTS = [
+  2_000_000,
+  3_000_000,
+  4_000_000,
+  5_000_000,
+  6_000_000,
+  7_000_000,
+  8_000_000,
+  9_000_000,
+  10_000_000,
+];
 
 const formatKES = (value: number | null | undefined) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
 const safeNumber = (value?: number | null) => Number(value ?? 0);
 const ONLINE_STATS_REFRESH_INTERVAL_MS = 15_000;
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+type MarketplaceTierInfo = {
+  target: number;
+  remaining: number;
+  progress: number;
+  message: string;
+};
+
+function describeMarketplaceTier(sales: number): MarketplaceTierInfo {
+  const normalized = Math.max(0, Math.round(sales));
+
+  if (normalized < 500_000) {
+    const remaining = 500_000 - normalized;
+    return {
+      target: 500_000,
+      remaining,
+      progress: clamp01(normalized / 500_000),
+      message: `${formatKES(remaining)} to enter the ladder`,
+    };
+  }
+
+  if (normalized < 1_000_000) {
+    const remaining = 1_000_000 - normalized;
+    return {
+      target: 1_000_000,
+      remaining,
+      progress: clamp01((normalized - 500_000) / 500_000),
+      message: `${formatKES(remaining)} to finish the 500k-1M band`,
+    };
+  }
+
+  let previous = 1_000_000;
+  for (const point of MARKETPLACE_STEP_POINTS) {
+    if (normalized < point) {
+      const remaining = point - normalized;
+      const progress = clamp01((normalized - previous) / (point - previous));
+      return {
+        target: point,
+        remaining,
+        progress,
+        message: `${formatKES(remaining)} to reach the ${point / 1_000_000}M tier`,
+      };
+    }
+    previous = point;
+  }
+
+  return {
+    target: MARKETPLACE_STEP_POINTS[MARKETPLACE_STEP_POINTS.length - 1],
+    remaining: 0,
+    progress: 1,
+    message: "Max tier reached",
+  };
+}
+
+function formatAccountStatusLabel(status: AccountSubmissionWeekStatus["status"]) {
+  switch (status) {
+    case "SUBMITTED":
+      return "Submitted";
+    case "LOADED":
+      return "Loaded";
+    case "ZERO":
+      return "Zero";
+    default:
+      return "Not submitted";
+  }
+}
+
+function getAccountStatusBadgeClass(status: AccountSubmissionWeekStatus["status"]) {
+  switch (status) {
+    case "SUBMITTED":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+    case "LOADED":
+      return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+    case "ZERO":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+    default:
+      return "border-slate-700 bg-slate-900/80 text-slate-300";
+  }
+}
+
+function buildAccountStatusBadges(summary: AccountStatusSummary): Array<{
+  key: string;
+  label: string;
+  className: string;
+}> {
+  if (summary.totalWeeks <= 1) {
+    const singleStatus: AccountSubmissionWeekStatus["status"] =
+      summary.zero > 0
+        ? "ZERO"
+        : summary.submitted > 0
+          ? "SUBMITTED"
+          : summary.loaded > 0
+            ? "LOADED"
+            : "NOT_SUBMITTED";
+    return [
+      {
+        key: singleStatus,
+        label: formatAccountStatusLabel(singleStatus),
+        className: getAccountStatusBadgeClass(singleStatus),
+      },
+    ];
+  }
+
+  const badges: Array<{ key: string; label: string; className: string }> = [];
+  if (summary.submitted > 0) {
+    badges.push({
+      key: "submitted",
+      label: `Submitted ${summary.submitted}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("SUBMITTED"),
+    });
+  }
+  if (summary.loaded > 0) {
+    badges.push({
+      key: "loaded",
+      label: `Loaded ${summary.loaded}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("LOADED"),
+    });
+  }
+  if (summary.zero > 0) {
+    badges.push({
+      key: "zero",
+      label: `Zero ${summary.zero}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("ZERO"),
+    });
+  }
+  if (summary.notSubmitted > 0 || badges.length === 0) {
+    badges.push({
+      key: "not-submitted",
+      label: `Not submitted ${summary.notSubmitted}/${summary.totalWeeks}`,
+      className: getAccountStatusBadgeClass("NOT_SUBMITTED"),
+    });
+  }
+  return badges;
+}
 
 const allocateCombinedMarketplaceCommission = <T extends { sales: number; chargedReturns?: number }>(
   rows: T[],
@@ -203,6 +369,23 @@ export default function AttendantOnlineClient() {
 
   const [payrollSummary, setPayrollSummary] = useState<any | null>(null);
   const [payrollLoading, setPayrollLoading] = useState(false);
+  const payslipHref = useMemo(() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/payslip?${params.toString()}`;
+  }, [impersonateId, selectedPeriodKey]);
+
+  const selectedMarketplaceWeekKeys = useMemo(
+    () =>
+      activeWeekKeys.includes("period")
+        ? tradingWeeks.map((week) => week.key)
+        : activeWeekKeys.length
+          ? activeWeekKeys
+          : tradingWeeks.at(-1)?.key
+            ? [tradingWeeks.at(-1)!.key]
+            : [],
+    [activeWeekKeys, tradingWeeks],
+  );
 
   const fetchUser = useCallback(async () => {
     try {
@@ -249,6 +432,13 @@ export default function AttendantOnlineClient() {
     if (!userId) return;
     const { start, end } = getActiveWeekRange();
     if (!start || !end) return;
+    const selectedWeekKeys = activeWeekKeys.includes("period")
+      ? tradingWeeks.map((week) => week.key)
+      : activeWeekKeys.length
+        ? activeWeekKeys
+        : tradingWeeks.at(-1)?.key
+          ? [tradingWeeks.at(-1)!.key]
+          : [];
 
       setWeeklyLoading(true);
       try {
@@ -257,6 +447,9 @@ export default function AttendantOnlineClient() {
           start: formatNairobiParam(start, false),
           end: formatNairobiParam(end, true),
         });
+        for (const weekKey of selectedWeekKeys) {
+          if (weekKey && weekKey !== "period") params.append("weekStart", weekKey);
+        }
         appendImpersonateParam(params);
       const res = await fetch(`/api/online/weekly/shops/earnings?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
@@ -275,7 +468,7 @@ export default function AttendantOnlineClient() {
         setWeeklyLoading(false);
       }
     },
-    [getActiveWeekRange, userId, appendImpersonateParam],
+    [activeWeekKeys, appendImpersonateParam, getActiveWeekRange, tradingWeeks, userId],
   );
 
     const loadOnlineSummary = useCallback(async () => {
@@ -463,6 +656,54 @@ export default function AttendantOnlineClient() {
     }));
   }, [activeWeekKeys, tradingWeeks, weeklyEarnings]);
 
+  const accountSubmissionStatuses = useMemo<AccountSubmissionWeekStatus[]>(
+    () =>
+      Array.isArray(weeklyEarnings?.accountStatuses)
+        ? (weeklyEarnings.accountStatuses as AccountSubmissionWeekStatus[]).map((entry) => ({
+            ...entry,
+            accountId: String(entry.accountId ?? "").trim(),
+            weekStart: normalizeWeekKey(entry.weekStart),
+            status: (String(entry.status ?? "NOT_SUBMITTED").trim().toUpperCase() as AccountSubmissionWeekStatus["status"]),
+          }))
+        : [],
+    [weeklyEarnings],
+  );
+
+  const accountStatusSummaryById = useMemo(() => {
+    const summaryById = new Map<string, AccountStatusSummary>();
+    const explicitStatusByAccountWeek = new Map<string, AccountSubmissionWeekStatus["status"]>();
+
+    for (const entry of accountSubmissionStatuses) {
+      if (!entry.accountId || !entry.weekStart) continue;
+      explicitStatusByAccountWeek.set(`${entry.accountId}::${entry.weekStart}`, entry.status);
+    }
+
+    for (const row of marketplaceOverviewRows) {
+      const accountId = String(row.accountId ?? row.shopId ?? "").trim();
+      if (!accountId) continue;
+      const summary: AccountStatusSummary = {
+        totalWeeks: selectedMarketplaceWeekKeys.length || 1,
+        submitted: 0,
+        loaded: 0,
+        zero: 0,
+        notSubmitted: 0,
+      };
+
+      const weeks = selectedMarketplaceWeekKeys.length ? selectedMarketplaceWeekKeys : [normalizeWeekKey(row.weekStart)];
+      for (const weekKey of weeks) {
+        const status = explicitStatusByAccountWeek.get(`${accountId}::${weekKey}`) ?? "NOT_SUBMITTED";
+        if (status === "SUBMITTED") summary.submitted += 1;
+        else if (status === "LOADED") summary.loaded += 1;
+        else if (status === "ZERO") summary.zero += 1;
+        else summary.notSubmitted += 1;
+      }
+
+      summaryById.set(accountId, summary);
+    }
+
+    return summaryById;
+  }, [accountSubmissionStatuses, marketplaceOverviewRows, selectedMarketplaceWeekKeys]);
+
   const marketplaceOverviewTotals = useMemo(
     () =>
       marketplaceOverviewRows.reduce(
@@ -510,6 +751,8 @@ export default function AttendantOnlineClient() {
     return {
       jumiaSales: Number(jumia?.sales || 0),
       kilimallSales: Number(kilimall?.sales || 0),
+      jumiaCommission: Number(jumia?.commission || 0),
+      kilimallCommission: Number(kilimall?.commission || 0),
       marketplaceCommission: Number(marketplaceOverviewTotals.commission || 0),
     };
   }, [marketplaceOverviewTotals.commission, platformAggregates]);
@@ -557,6 +800,14 @@ export default function AttendantOnlineClient() {
     const union = new Set<string>([...serverKeys, ...localKeys]);
     return union.size;
   }, [directReceiptsSummary, payrollSummary, posReceiptRows, receiptRows, receiptStatsLoading]);
+  const directProfitFromReceiptRows = useMemo(
+    () =>
+      posReceiptRows.reduce((sum, row: any) => {
+        const profit = Number(row?.profit ?? 0);
+        return Number.isFinite(profit) ? sum + profit : sum;
+      }, 0),
+    [posReceiptRows],
+  );
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
@@ -653,24 +904,35 @@ export default function AttendantOnlineClient() {
 
     // earnings summary loader removed
 
-  // Prefer authoritative online summary (trading-period marketplace totals) when available.
+  // Keep quick stats aligned with the marketplace overview/PDF logic for the
+  // currently selected range instead of older period-wide summary totals.
   const quickStatsPeriodLabel =
     onlineSummary?.period?.label ?? weeklyEarnings?.rangeLabel ?? selectedPeriod.label;
   const marketplace = onlineSummary?.marketplace ?? null;
   const aggregatorJumiaSales = platformTotals.jumiaSales;
   const aggregatorKilimallSales = platformTotals.kilimallSales;
   const aggregatorMarketplaceSalesOnly = aggregatorJumiaSales + aggregatorKilimallSales;
-  const quickJumiaSales =
-    marketplace && Number(marketplace.jumiaSales ?? 0) > 0 ? Number(marketplace.jumiaSales) : aggregatorJumiaSales;
-  const quickKilimallSales =
-    marketplace && Number(marketplace.kilimallSales ?? 0) > 0
-      ? Number(marketplace.kilimallSales)
-      : aggregatorKilimallSales;
-  const quickMarketplaceSalesOnly =
-    marketplace && Number(marketplace.marketplaceSalesOnly ?? 0) > 0
-      ? Number(marketplace.marketplaceSalesOnly)
-      : aggregatorMarketplaceSalesOnly;
+  const marketplaceTierInfo = describeMarketplaceTier(aggregatorMarketplaceSalesOnly);
+  const quickJumiaSales = aggregatorJumiaSales;
+  const quickKilimallSales = aggregatorKilimallSales;
+  const quickMarketplaceSalesOnly = aggregatorMarketplaceSalesOnly;
   const commissionBreakdown = onlineSummary?.commissions ?? null;
+  const quickMarketplaceCommission = platformTotals.marketplaceCommission;
+  const directCommissionFromSummary = [
+    Number(commissionBreakdown?.direct ?? Number.NaN),
+    Number(payrollSummary?.directCommission ?? Number.NaN),
+    Number(payrollSummary?.salesCommission ?? Number.NaN),
+  ].find((value) => Number.isFinite(value) && value > 0) ?? 0;
+  const directProfitForCommission = Math.max(
+    Number(directReceiptsSummary?.totalProfit ?? 0),
+    Number(directProfitFromReceiptRows ?? 0),
+  );
+  const profitShareDirectCommissionFallback =
+    directProfitForCommission > 0
+      ? Math.max(0, Math.round(directProfitForCommission * 0.1))
+      : 0;
+  const quickDirectCommission =
+    directCommissionFromSummary > 0 ? directCommissionFromSummary : profitShareDirectCommissionFallback;
   const quickStatsPayload = {
     periodLabel: quickStatsPeriodLabel,
     marketplaceSales: quickMarketplaceSalesOnly,
@@ -679,23 +941,30 @@ export default function AttendantOnlineClient() {
     receiptsCount,
     totalSales: quickMarketplaceSalesOnly + directSales,
     commission: payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? commission,
-    directCommission:
-      Number(
-        commissionBreakdown?.direct ??
-          payrollSummary?.directCommission ??
-          payrollSummary?.salesCommission ??
-          0,
-      ) || 0,
+    directCommission: quickDirectCommission,
     marketplaceCommission:
       Number(
-        commissionBreakdown?.marketplaceCombined ??
+        quickMarketplaceCommission ??
+          commissionBreakdown?.marketplaceCombined ??
           payrollSummary?.marketplaceCommission ??
           0,
       ) || 0,
-    toNextTier: Number(marketplace?.toNextTier ?? toNextTier),
-    tierProgress: Number(marketplace?.tierProgress ?? 0),
-    tierMessage: marketplace?.commissionInfo?.nextTarget ? undefined : "Max tier reached",
+    toNextTier: marketplaceTierInfo.remaining,
+    tierProgress: marketplaceTierInfo.progress,
+    tierMessage: marketplaceTierInfo.message,
   };
+  const payrollCardSummary = useMemo(
+    () => ({
+      ...payrollSummary,
+      attendantCategory: payrollSummary?.attendantCategory ?? "BETECH_OPS",
+      commissionDirect: Number(payrollSummary?.directCommission ?? commissionBreakdown?.direct ?? 0),
+      commissionMarketplaceJumia: Number(payrollSummary?.commissionMarketplaceJumia ?? platformTotals.jumiaCommission ?? 0),
+      commissionMarketplaceKilimall: Number(
+        payrollSummary?.commissionMarketplaceKilimall ?? platformTotals.kilimallCommission ?? 0,
+      ),
+    }),
+    [commissionBreakdown?.direct, payrollSummary, platformTotals.jumiaCommission, platformTotals.kilimallCommission],
+  );
 
   const receiptsHistoryHref = userId
     ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
@@ -707,6 +976,22 @@ export default function AttendantOnlineClient() {
     if (impersonateId) params.set("impersonateId", impersonateId);
     return `/api/online/summary/export?${params.toString()}`;
   })();
+  const renderAccountStatusBadges = (summary?: AccountStatusSummary): ReactNode => {
+    if (!summary) return null;
+    const badges = buildAccountStatusBadges(summary);
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {badges.map((badge) => (
+          <span
+            key={badge.key}
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${badge.className}`}
+          >
+            {badge.label}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -890,6 +1175,9 @@ export default function AttendantOnlineClient() {
                         <div>
                           <p className="font-semibold text-white">{row.shopName}</p>
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">{row.platform}</p>
+                          {renderAccountStatusBadges(
+                            accountStatusSummaryById.get(String(row.accountId ?? row.shopId ?? "").trim()),
+                          )}
                         </div>
                         <div className="flex flex-col items-end text-right">
                           <span className="text-emerald-300">{formatKES(row.sales)}</span>
@@ -911,10 +1199,11 @@ export default function AttendantOnlineClient() {
             />
 
             <PayrollEarningsCard
-              summary={payrollSummary}
+              summary={payrollCardSummary}
               loading={payrollLoading}
               periodLabel={period.label}
               fallbackCommission={commission}
+              downloadHref={payslipHref}
             />
 
             {/* Marketplace Assigned shops card removed as requested */}
@@ -931,46 +1220,19 @@ function PayrollEarningsCard({
   loading,
   periodLabel,
   fallbackCommission = 0,
+  downloadHref,
 }: {
   summary: any | null;
   loading: boolean;
   periodLabel: string;
   fallbackCommission?: number;
+  downloadHref?: string;
 }) {
-  const commissionValue = Number(
-    summary?.commission ?? summary?.commissionTotal ?? summary?.salesCommission ?? fallbackCommission ?? 0,
-  );
-  const chamaValue = Number(
-    summary?.chamaTotal ?? summary?.chama ?? summary?.adjustmentBreakdown?.chama ?? 0,
-  );
-  const bonusValue = Number(summary?.bonusTotal ?? 0);
-  const totalDeductions = Number(summary?.totalDeductions ?? 0);
-  let deductionBreakdown: [string, number][] = [];
-  const adjEntries: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[] =
-    (summary?.adjustmentEntries ?? []);
-  if (adjEntries && adjEntries.length > 0) {
-    deductionBreakdown = adjEntries
-      .filter((e) => String(e.adjustmentKind || "DEDUCTION").toUpperCase() === "DEDUCTION")
-      .map((e) => [String(e.label || e.adjustmentType), Number(e.amount ?? 0)]) as [string, number][];
-  } else {
-    const fallback: [string, number][] = [
-      ["Chama", chamaValue],
-      ["Lateness", Number(summary?.latenessTotal ?? 0)],
-      ["Discipline", Number(summary?.disciplineTotal ?? 0)],
-      ["Other", Number(summary?.otherDeductionsTotal ?? 0)],
-      ["Penalties", Number(summary?.adjustmentBreakdown?.penalties ?? 0)],
-    ];
-    deductionBreakdown = fallback.filter(([, amount]) => Number(amount) > 0) as [string, number][];
-  }
-
-  const rows = [
-    { label: "Base salary", value: Number(summary?.baseSalary ?? 0) },
-    { label: "Commission", value: commissionValue },
-    { label: "Chama", value: chamaValue },
-    { label: "Bonuses", value: bonusValue },
-    { label: "Deductions", value: totalDeductions },
-  ];
-  const netPay = summary?.netPay ?? summary?.netPayTotal ?? 0;
+  const breakdown = buildEarningsCardBreakdown({
+    ...summary,
+    commissionTotal:
+      summary?.commissionTotal ?? summary?.commission ?? summary?.salesCommission ?? fallbackCommission ?? 0,
+  });
   const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -988,33 +1250,32 @@ function PayrollEarningsCard({
       {/** mask values when locked */}
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
         <span>NET PAY</span>
-        <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(netPay)}</span>
+        <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(breakdown.netPay)}</span>
       </div>
 
       <div className="space-y-2">
-        {rows.map((row) => (
+        {breakdown.lines.map((row) => (
           <div key={row.label} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
             <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
-            <span className="text-base font-semibold text-emerald-300">{locked ? "•••" : formatKES(row.value)}</span>
+            <span className={`text-base font-semibold ${row.kind === "deduction" ? "text-rose-300" : "text-emerald-300"}`}>
+              {locked ? "•••" : `${row.kind === "deduction" ? "-" : ""}${formatKES(Math.abs(row.amount))}`}
+            </span>
           </div>
         ))}
-        {rows.length === 0 && (
+        {breakdown.lines.length === 0 && (
           <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
         )}
-        {deductionBreakdown.length > 0 && (
-          <div className="space-y-1 rounded-2xl bg-slate-950/60 px-3 py-3 text-xs text-slate-400">
-            <p className="uppercase tracking-wide text-[10px]">Payroll deduction summary</p>
-            <div className="text-sm text-slate-200">
-              {deductionBreakdown.map(([label, amount], index) => (
-                <span key={label}>
-                  {label} {locked ? "•••" : formatKES(Number(amount))}
-                  {index < deductionBreakdown.length - 1 && " · "}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
+      {downloadHref ? (
+        <div className="pt-1">
+          <Link
+            href={downloadHref}
+            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"
+          >
+            Download payslip
+          </Link>
+        </div>
+      ) : null}
     </Card>
   );
 }
