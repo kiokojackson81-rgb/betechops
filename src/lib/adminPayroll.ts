@@ -26,6 +26,33 @@ type AttendantRecord = {
   isActive: boolean;
 };
 
+type PayrollMetrics = Pick<
+  PayrollRow,
+  | "baseSalary"
+  | "transportAllowance"
+  | "commission"
+  | "commissionGross"
+  | "commissionDirect"
+  | "commissionMarketplaceJumia"
+  | "commissionMarketplaceKilimall"
+  | "commissionTotal"
+  | "commissionBreakdown"
+  | "bonusTotal"
+  | "deductionTotal"
+  | "totalEarnings"
+  | "totalDeductions"
+  | "netPay"
+  | "totalSales"
+  | "totalProfit"
+  | "totalReceipts"
+  | "totalItems"
+  | "newProducts"
+  | "editedProducts"
+  | "copiedProducts"
+  | "adjustmentBreakdown"
+  | "adjustmentEntries"
+>;
+
 function baseAdjustmentSummary() {
   return {
     totalBonus: 0,
@@ -132,6 +159,17 @@ function isMarketingCategory(category?: string | null) {
   return category === "MARKETING_OPS";
 }
 
+function createPayrollRow(attendant: AttendantRecord, metrics: PayrollMetrics): PayrollRow {
+  return {
+    attendantId: attendant.id,
+    name: attendant.name,
+    email: attendant.email,
+    attendantCategory: attendant.attendantCategory,
+    isActive: attendant.isActive,
+    ...metrics,
+  };
+}
+
 async function buildTieredSalesPayrollRow(args: {
   attendant: AttendantRecord;
   period: TradingPeriod;
@@ -180,12 +218,7 @@ async function buildTieredSalesPayrollRow(args: {
     adjustmentSummary.totalBonus;
   const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
-  return {
-    attendantId: attendant.id,
-    name: attendant.name,
-    email: attendant.email,
-    attendantCategory: attendant.attendantCategory,
-    isActive: attendant.isActive,
+  return createPayrollRow(attendant, {
     baseSalary: Number(earningsSummary.baseSalary ?? 0),
     transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
     commission: commissionTotal,
@@ -213,7 +246,7 @@ async function buildTieredSalesPayrollRow(args: {
     copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
     adjustmentBreakdown: adjustmentSummary.breakdown,
     adjustmentEntries: adjustmentSummary.entries,
-  };
+  });
 }
 
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
@@ -279,12 +312,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       commissionTotal +
       bonusTotal;
 
-    return {
-      attendantId: attendant.id,
-      name: attendant.name,
-      email: attendant.email,
-      attendantCategory: attendant.attendantCategory,
-      isActive: attendant.isActive,
+    return createPayrollRow(attendant, {
       baseSalary: Number(onlineSummary.baseSalary ?? 0),
       transportAllowance: Number(onlineSummary.transportAllowance ?? 0),
       commission: commissionTotal,
@@ -314,7 +342,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       copiedProducts: 0,
       adjustmentBreakdown: adjustmentSummary.breakdown,
       adjustmentEntries: adjustmentSummary.entries,
-    };
+    });
   }
 
   if (isDirectSalesCategory(attendant.attendantCategory)) {
@@ -347,12 +375,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     adjustmentSummary.totalBonus;
   const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
-  return {
-    attendantId: attendant.id,
-    name: attendant.name,
-    email: attendant.email,
-    attendantCategory: attendant.attendantCategory,
-    isActive: attendant.isActive,
+  return createPayrollRow(attendant, {
     baseSalary: Number(plan?.baseSalary ?? 0),
     transportAllowance: Number(plan?.defaultTransportAllowance ?? 0),
     commission: commissionTotal,
@@ -376,5 +399,5 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     copiedProducts: Number(earningsSummary?.totalCopiedProducts ?? 0),
     adjustmentBreakdown: adjustmentSummary.breakdown,
     adjustmentEntries: adjustmentSummary.entries,
-  };
+  });
 }
