@@ -23,20 +23,6 @@ type ReceiptStatsRow = {
   items?: any[];
 };
 
-type ShopSalesRow = {
-  id: string;
-  name: string;
-  platform: string;
-  country: string;
-  currency: string;
-  status: string;
-  codeLabel: string;
-  handlerName: string;
-  handlerRole: string;
-  periodLabel: string;
-  totalSales: number;
-};
-
 type MarketplaceOverviewRow = {
   shopId: string;
   accountId?: string;
@@ -80,8 +66,6 @@ type OnlineEarningsSummary = {
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
-// Preview commission from server (falls back to null until fetched)
-const COMMISSION_RATE = undefined as unknown as number;
 const MARKETPLACE_STEP_POINTS = [
   2_000_000,
   3_000_000,
@@ -263,12 +247,6 @@ function normalizeWeekKey(value: string | null | undefined) {
   return shifted.toISOString().slice(0, 10);
 }
 
-
-const toInputDate = (date: Date) =>
-  // produce a YYYY-MM-DD string in Nairobi local date so inputs and
-  // range builders are consistent with server-side Nairobi midnights
-  date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
-
 const formatNairobiParam = (date: Date, endOfDay = false) => {
   const ymd = date.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
   return endOfDay ? `${ymd}T23:59:59.999+03:00` : `${ymd}T00:00:00+03:00`;
@@ -334,15 +312,6 @@ export default function AttendantOnlineClient() {
   );
 
   // receipt totals & quick stats removed from right column
-
-  const [shopSalesRows, setShopSalesRows] = useState<ShopSalesRow[]>([]);
-  const [shopSalesLoading, setShopSalesLoading] = useState(false);
-  const [shopRange, setShopRange] = useState<"period" | "this-week" | "last-week" | "all">(
-    "period",
-  );
-  const [shopPeriodLabel, setShopPeriodLabel] = useState(period.label);
-  const [shopPeriodTotal, setShopPeriodTotal] = useState(0);
-  const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
   const tradingWeeks = useMemo<TradingWeekChip[]>(() => {
     const weeks = getOnlineOpsWeeksForTradingPeriod(period, period.end, 4);
@@ -556,39 +525,6 @@ export default function AttendantOnlineClient() {
   }, [userId, period, appendImpersonateParam, selectedPeriodKey, parseIdentityResponse]);
 
   // receiptTotals loader removed
-
-  const loadShopSales = useCallback(async () => {
-    if (!userId) return;
-    setShopSalesLoading(true);
-    try {
-      const { start, end } = computeRangeDates(shopRange, period);
-      const params = new URLSearchParams({
-        range: shopRange,
-        attendantId: userId,
-      });
-      if (start) params.set("start", start);
-      if (end) params.set("end", end);
-      appendImpersonateParam(params);
-
-      const res = await fetch(`/api/online/shops/sales?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load shop sales");
-      const payload = await parseIdentityResponse(res);
-      if (!payload) throw new Error("Failed to load shop sales");
-      setShopSalesRows(Array.isArray(payload.rows) ? payload.rows : []);
-      setShopPeriodLabel(payload.periodLabel ?? period.label);
-      setShopPeriodTotal(payload.periodTotal ?? 0);
-      setShopAllTimeTotal(payload.totalToDate ?? 0);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to load shop sales";
-      showToast(message, "error");
-    } finally {
-      setShopSalesLoading(false);
-    }
-  }, [period, shopRange, userId, appendImpersonateParam]);
-
 
   // receiptTotals derived state removed (Quick stats removed)
 
@@ -874,10 +810,9 @@ export default function AttendantOnlineClient() {
 
   useEffect(() => {
     if (!userId) return;
-    void loadShopSales();
     void loadReceiptStats();
     void refreshAllOnlineStats();
-  }, [loadReceiptStats, loadShopSales, refreshAllOnlineStats, userId]);
+  }, [loadReceiptStats, refreshAllOnlineStats, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -1275,43 +1210,4 @@ function PayrollEarningsCard({
       ) : null}
     </Card>
   );
-}
-
-function computeRangeDates(
-  range: "period" | "this-week" | "last-week" | "all",
-  period: { start: Date; end: Date; label: string },
-) {
-  if (range === "period") {
-    return {
-      start: formatNairobiParam(period.start, false),
-      end: formatNairobiParam(period.end, true),
-    };
-  }
-  if (range === "this-week") {
-    const now = new Date();
-    const day = now.getDay();
-    const diffToMonday = day === 0 ? 6 : day - 1;
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - diffToMonday);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
-    return { start: formatNairobiParam(weekStart, false), end: formatNairobiParam(weekEnd, true) };
-  }
-  if (range === "last-week") {
-    const now = new Date();
-    const day = now.getDay();
-    const diffToMonday = day === 0 ? 6 : day - 1;
-    const thisWeekStart = new Date(now);
-    thisWeekStart.setDate(now.getDate() - diffToMonday);
-    thisWeekStart.setHours(0, 0, 0, 0);
-    const lastWeekStart = new Date(thisWeekStart);
-    lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-    const lastWeekEnd = new Date(lastWeekStart);
-    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-    lastWeekEnd.setHours(23, 59, 59, 999);
-    return { start: formatNairobiParam(lastWeekStart, false), end: formatNairobiParam(lastWeekEnd, true) };
-  }
-  return { start: "", end: "" };
 }
