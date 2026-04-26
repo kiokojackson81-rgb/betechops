@@ -137,6 +137,41 @@ type ReceiptRecord = {
   items?: number;
 };
 
+type OnlineCommissionBreakdown = ReturnType<typeof computeOnlinePeriodCommission>;
+
+function sumOnlineCommissionLines(
+  breakdown: OnlineCommissionBreakdown | null,
+  channels: Array<"DIRECT" | "JUMIA" | "KILIMALL">,
+) {
+  if (!breakdown) return 0;
+  return breakdown.lines
+    .filter((line) => channels.includes(line.channel as "DIRECT" | "JUMIA" | "KILIMALL"))
+    .reduce((sum, line) => sum + Number(line.commission ?? 0), 0);
+}
+
+function resolveOnlineCommissionTotal(args: {
+  directCommissionMode: string;
+  ledger: PreferredLedger | null;
+  grossCommission: number;
+  brendahComputedCommission: number | null;
+}) {
+  const ledgerCommissionValue = args.ledger ? Number(args.ledger.commissionTotal ?? 0) : 0;
+
+  if (args.directCommissionMode === "PROFIT_10") {
+    return { commissionTotal: args.grossCommission, commissionSourceLabel: "computed-profit10" };
+  }
+  if (ledgerCommissionValue > 0) {
+    return {
+      commissionTotal: ledgerCommissionValue,
+      commissionSourceLabel: `ledger${args.ledger?.id ? ` (${args.ledger.id})` : ""}`,
+    };
+  }
+  if (args.brendahComputedCommission != null) {
+    return { commissionTotal: args.brendahComputedCommission, commissionSourceLabel: "computed-brendah" };
+  }
+  return { commissionTotal: args.grossCommission, commissionSourceLabel: "computed-gross" };
+}
+
 const normalizeReceiptNumber = (input: unknown) => {
   if (input == null) return "";
   return String(input).trim().toUpperCase().replace(/[\s\-_]+/g, "").replace(/[^A-Z0-9]/g, "");
@@ -740,21 +775,15 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       : null;
   const marketplaceCommission =
     profit10Commission != null
-      ? profit10Commission.lines
-          .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
-          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      ? sumOnlineCommissionLines(profit10Commission, ["JUMIA", "KILIMALL"])
       : calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
   const marketplaceCommissionJumia =
     profit10Commission != null
-      ? profit10Commission.lines
-          .filter((line) => line.channel === "JUMIA")
-          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      ? sumOnlineCommissionLines(profit10Commission, ["JUMIA"])
       : calculateCumulativeCommission(Math.max(0, payoutJumiaSales)).commission;
   const marketplaceCommissionKilimall =
     profit10Commission != null
-      ? profit10Commission.lines
-          .filter((line) => line.channel === "KILIMALL")
-          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      ? sumOnlineCommissionLines(profit10Commission, ["KILIMALL"])
       : calculateCumulativeCommission(Math.max(0, payoutKilimallSales)).commission;
   const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
 
@@ -811,7 +840,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   } else {
     directSalesCommission =
       directCommissionMode === "PROFIT_10"
-        ? profit10Commission?.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0
+        ? sumOnlineCommissionLines(profit10Commission, ["DIRECT"])
         : combinedDirectSales < DIRECT_SALES_TIER_THRESHOLD
           ? Math.max(0, Math.round(combinedDirectProfit * 0.05))
           : calculateCumulativeCommission(Math.max(0, combinedDirectSales)).commission;
@@ -825,25 +854,13 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const totalDeductions = summed.chamaTotal + summed.latenessTotal + summed.disciplineTotal + summed.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
-  // Prefer persisted CommissionLedger `commissionTotal` when present for this period.
   const ledger = await findPreferredCommissionLedger(attendantId, period);
-  const ledgerCommissionValue = ledger ? Number(ledger.commissionTotal ?? 0) : 0;
-  let commissionTotal: number;
-  let commissionSourceLabel: string;
-
-  if (directCommissionMode === "PROFIT_10") {
-    commissionTotal = grossCommission;
-    commissionSourceLabel = "computed-profit10";
-  } else if (ledgerCommissionValue > 0) {
-    commissionTotal = ledgerCommissionValue;
-    commissionSourceLabel = `ledger${ledger?.id ? ` (${ledger.id})` : ""}`;
-  } else if (isBrendah && brendahComputedCommission != null) {
-    commissionTotal = brendahComputedCommission;
-    commissionSourceLabel = "computed-brendah";
-  } else {
-    commissionTotal = grossCommission;
-    commissionSourceLabel = "computed-gross";
-  }
+  const { commissionTotal, commissionSourceLabel } = resolveOnlineCommissionTotal({
+    directCommissionMode,
+    ledger,
+    grossCommission,
+    brendahComputedCommission: isBrendah ? brendahComputedCommission : null,
+  });
 
   const brendahDebug = isBrendah ? ` dedupSales=${brendahMergedSales} dedupProfit=${brendahMergedProfit}` : "";
   console.info(
