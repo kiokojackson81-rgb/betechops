@@ -166,7 +166,7 @@ const extractReceiptSales = (receipt: {
   return 0;
 };
 
-async function computeProfit10DirectProfitFallback(args: {
+export async function computeProfit10DirectProfitFallback(args: {
   userId: string;
   start: Date;
   end: Date;
