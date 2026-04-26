@@ -439,6 +439,105 @@ function summarizeProfitRows(
   return { net, orderCount };
 }
 
+function collectAssignmentWeekKeys(args: {
+  accountId: string;
+  shopIds: string[];
+  manualByShopIdWeek: Map<string, { sales: number; orders: number }>;
+  profitRowsByAccountWeek: Map<string, Array<{ itemCreditTxn: string; netPayout: number }>>;
+}) {
+  const weekKeys = new Set<string>();
+
+  for (const key of args.profitRowsByAccountWeek.keys()) {
+    if (key.startsWith(`${args.accountId}::`)) weekKeys.add(key);
+  }
+  for (const shopId of args.shopIds) {
+    for (const key of args.manualByShopIdWeek.keys()) {
+      if (key.startsWith(`${shopId}::`)) {
+        weekKeys.add(`${args.accountId}::${key.split("::")[1]}`);
+      }
+    }
+  }
+
+  return Array.from(weekKeys).sort();
+}
+
+function summarizeManualWeekSales(args: {
+  shopIds: string[];
+  weekStartIso: string;
+  manualByShopIdWeek: Map<string, { sales: number; orders: number }>;
+}) {
+  return args.shopIds.reduce(
+    (acc, shopId) => {
+      const stats = args.manualByShopIdWeek.get(`${shopId}::${args.weekStartIso}`) ?? { sales: 0, orders: 0 };
+      acc.sales += stats.sales;
+      acc.orders += stats.orders;
+      return acc;
+    },
+    { sales: 0, orders: 0 },
+  );
+}
+
+function buildAssignedMarketplaceAccountRows(args: {
+  assignment: AssignmentWithAccount;
+  shopIds: string[];
+  manualByShopIdWeek: Map<string, { sales: number; orders: number }>;
+  profitRowsByAccountWeek: Map<string, Array<{ itemCreditTxn: string; netPayout: number }>>;
+}) {
+  const weeklyRows: AssignedMarketplaceAccountWeekSales[] = [];
+  const totals = { payoutSales: 0, manualSales: 0, profitEntrySales: 0, sales: 0, orders: 0 };
+  const sortedWeekKeys = collectAssignmentWeekKeys({
+    accountId: args.assignment.accountId,
+    shopIds: args.shopIds,
+    manualByShopIdWeek: args.manualByShopIdWeek,
+    profitRowsByAccountWeek: args.profitRowsByAccountWeek,
+  });
+
+  for (const key of sortedWeekKeys) {
+    const weekStartIso = key.split("::")[1];
+    const profitSummary = summarizeProfitRows(args.profitRowsByAccountWeek.get(key) ?? []);
+    const manual = summarizeManualWeekSales({
+      shopIds: args.shopIds,
+      weekStartIso,
+      manualByShopIdWeek: args.manualByShopIdWeek,
+    });
+    const sales = profitSummary.net > 0 ? profitSummary.net : manual.sales;
+    const orders = profitSummary.orderCount > 0 ? profitSummary.orderCount : manual.orders;
+
+    totals.manualSales += manual.sales;
+    totals.profitEntrySales += profitSummary.net;
+    totals.sales += sales;
+    totals.orders += orders;
+
+    weeklyRows.push({
+      accountId: args.assignment.accountId,
+      displayName: args.assignment.account?.displayName ?? null,
+      platform: String(args.assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
+      weekStart: weekStartIso,
+      weekEnd: new Date(new Date(weekStartIso).getTime() + 7 * 24 * 3600 * 1000 - 1).toISOString(),
+      payoutSales: 0,
+      manualSales: manual.sales,
+      profitEntrySales: profitSummary.net,
+      sales,
+      orders,
+      shopIds: args.shopIds,
+    });
+  }
+
+  const row: AssignedMarketplaceAccountSales = {
+    accountId: args.assignment.accountId,
+    displayName: args.assignment.account?.displayName ?? null,
+    platform: String(args.assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
+    payoutSales: totals.payoutSales,
+    manualSales: totals.manualSales,
+    profitEntrySales: totals.profitEntrySales,
+    sales: totals.sales,
+    orders: totals.orders,
+    shopIds: args.shopIds,
+  };
+
+  return { row, weeklyRows };
+}
+
 let marketplaceProfitEntryTableAvailable: Promise<boolean> | null = null;
 
 async function isMarketplaceProfitEntryTableAvailable(): Promise<boolean> {
@@ -658,72 +757,16 @@ export async function getAssignedMarketplaceSalesForPeriod(
     });
   }
 
-  const weeklyRows: AssignedMarketplaceAccountWeekSales[] = [];
-  const rows = uniqueAssignments.map<AssignedMarketplaceAccountSales>((assignment) => {
-    const shopIds = shopIdsByAccount.get(assignment.accountId) ?? [];
-    const weekKeys = new Set<string>();
-
-    for (const key of profitRowsByAccountWeek.keys()) {
-      if (key.startsWith(`${assignment.accountId}::`)) weekKeys.add(key);
-    }
-    for (const shopId of shopIds) {
-      for (const key of manualByShopIdWeek.keys()) {
-        if (key.startsWith(`${shopId}::`)) {
-          weekKeys.add(`${assignment.accountId}::${key.split("::")[1]}`);
-        }
-      }
-    }
-
-    const sortedWeekKeys = Array.from(weekKeys).sort();
-    const totals = { payoutSales: 0, manualSales: 0, profitEntrySales: 0, sales: 0, orders: 0 };
-
-    for (const key of sortedWeekKeys) {
-      const weekStartIso = key.split("::")[1];
-      const profitSummary = summarizeProfitRows(profitRowsByAccountWeek.get(key) ?? []);
-      const manual = shopIds.reduce(
-        (acc, shopId) => {
-          const stats = manualByShopIdWeek.get(`${shopId}::${weekStartIso}`) ?? { sales: 0, orders: 0 };
-          acc.sales += stats.sales;
-          acc.orders += stats.orders;
-          return acc;
-        },
-        { sales: 0, orders: 0 },
-      );
-      const sales = profitSummary.net > 0 ? profitSummary.net : manual.sales;
-      const orders = profitSummary.orderCount > 0 ? profitSummary.orderCount : manual.orders;
-
-      totals.manualSales += manual.sales;
-      totals.profitEntrySales += profitSummary.net;
-      totals.sales += sales;
-      totals.orders += orders;
-
-      weeklyRows.push({
-        accountId: assignment.accountId,
-        displayName: assignment.account?.displayName ?? null,
-        platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
-        weekStart: weekStartIso,
-        weekEnd: new Date(new Date(weekStartIso).getTime() + 7 * 24 * 3600 * 1000 - 1).toISOString(),
-        payoutSales: 0,
-        manualSales: manual.sales,
-        profitEntrySales: profitSummary.net,
-        sales,
-        orders,
-        shopIds,
-      });
-    }
-
-    return {
-      accountId: assignment.accountId,
-      displayName: assignment.account?.displayName ?? null,
-      platform: String(assignment.account?.platform ?? "UNKNOWN").toUpperCase(),
-      payoutSales: totals.payoutSales,
-      manualSales: totals.manualSales,
-      profitEntrySales: totals.profitEntrySales,
-      sales: totals.sales,
-      orders: totals.orders,
-      shopIds,
-    };
-  });
+  const accountSummaries = uniqueAssignments.map((assignment) =>
+    buildAssignedMarketplaceAccountRows({
+      assignment,
+      shopIds: shopIdsByAccount.get(assignment.accountId) ?? [],
+      manualByShopIdWeek,
+      profitRowsByAccountWeek,
+    }),
+  );
+  const rows = accountSummaries.map((summary) => summary.row);
+  const weeklyRows = accountSummaries.flatMap((summary) => summary.weeklyRows);
 
   const totals = rows.reduce(
     (acc, row) => {
