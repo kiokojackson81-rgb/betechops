@@ -3,7 +3,6 @@ import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getOnlineEarningsSummary } from "@/lib/onlineOps";
-import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import {
   resolveDirectCommissionMode,
   resolveOnlinePosOwnershipMode,
@@ -133,6 +132,90 @@ function isMarketingCategory(category?: string | null) {
   return category === "MARKETING_OPS";
 }
 
+async function buildTieredSalesPayrollRow(args: {
+  attendant: AttendantRecord;
+  period: TradingPeriod;
+  adjustmentSummary: ReturnType<typeof summarizeAdjustments>;
+  penalties: number;
+}): Promise<PayrollRow> {
+  const { attendant, period, adjustmentSummary, penalties } = args;
+  const [earningsSummary, receiptSummary, commissionConfig, commissionPeriod] = await Promise.all([
+    getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
+    computeAdminReceiptSummary({
+      start: period.start,
+      end: period.end,
+      scope: "mine",
+      currentUserId: attendant.id,
+      attendantId: attendant.id,
+      salesOnly: true,
+    }),
+    getUserCommissionConfigLike(attendant.id),
+    getOrCreateCommissionPeriod(period.start),
+  ]);
+
+  const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
+  const totalProfit = Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0));
+  const totalReceipts = Math.max(Number(receiptSummary.receiptsCount ?? 0), Number(earningsSummary.totalReceipts ?? 0));
+  const totalItems = Math.max(Number(receiptSummary.itemsCount ?? 0), Number(earningsSummary.totalItems ?? 0));
+  const tiers = commissionPeriod.tiers.map((tier) => ({
+    minSales: Number(tier.minSales),
+    maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
+    payoutFlat: Number(tier.payoutFlat),
+  }));
+  const salesCommission =
+    commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
+      ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
+      : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
+        ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
+        : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
+  const productWorkCommission =
+    Number(earningsSummary.newProductCommission ?? 0) +
+    Number(earningsSummary.copiedCommission ?? 0) +
+    Number(earningsSummary.editedCommission ?? 0);
+  const commissionTotal = salesCommission + productWorkCommission;
+  const totalEarnings =
+    Number(earningsSummary.baseSalary ?? 0) +
+    Number(earningsSummary.transportAllowance ?? 0) +
+    commissionTotal +
+    adjustmentSummary.totalBonus;
+  const totalDeductions = adjustmentSummary.totalDeduction + penalties;
+
+  return {
+    attendantId: attendant.id,
+    name: attendant.name,
+    email: attendant.email,
+    attendantCategory: attendant.attendantCategory,
+    isActive: attendant.isActive,
+    baseSalary: Number(earningsSummary.baseSalary ?? 0),
+    transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
+    commission: commissionTotal,
+    commissionGross: commissionTotal,
+    commissionDirect: salesCommission,
+    commissionMarketplaceJumia: 0,
+    commissionMarketplaceKilimall: 0,
+    commissionTotal,
+    commissionBreakdown: {
+      direct: salesCommission,
+      productWork: productWorkCommission,
+      total: commissionTotal,
+    },
+    bonusTotal: adjustmentSummary.totalBonus,
+    deductionTotal: totalDeductions,
+    totalEarnings,
+    totalDeductions,
+    netPay: totalEarnings - totalDeductions,
+    totalSales,
+    totalProfit,
+    totalReceipts,
+    totalItems,
+    newProducts: Number(earningsSummary.totalNewProducts ?? 0),
+    editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
+    copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
+    adjustmentBreakdown: adjustmentSummary.breakdown,
+    adjustmentEntries: adjustmentSummary.entries,
+  };
+}
+
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   const [plan, ledger, adjustments] = await Promise.all([
@@ -157,7 +240,6 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   adjustmentSummary.breakdown.penalties = penalties;
 
   if (isOnlineCategory(attendant.attendantCategory)) {
-    const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
     const [onlineSummary, posSummary] = await Promise.all([
       getOnlineEarningsSummary(attendant.id, { period }),
       summarizePosReceiptsForPeriod({
@@ -236,161 +318,11 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   }
 
   if (isDirectSalesCategory(attendant.attendantCategory)) {
-    const [earningsSummary, receiptSummary, commissionConfig, commissionPeriod] = await Promise.all([
-      getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
-      computeAdminReceiptSummary({
-        start: period.start,
-        end: period.end,
-        scope: "mine",
-        currentUserId: attendant.id,
-        attendantId: attendant.id,
-        salesOnly: true,
-      }),
-      getUserCommissionConfigLike(attendant.id),
-      getOrCreateCommissionPeriod(period.start),
-    ]);
-
-    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
-    const totalProfit = Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0));
-    const totalReceipts = Math.max(Number(receiptSummary.receiptsCount ?? 0), Number(earningsSummary.totalReceipts ?? 0));
-    const totalItems = Math.max(Number(receiptSummary.itemsCount ?? 0), Number(earningsSummary.totalItems ?? 0));
-    const tiers = commissionPeriod.tiers.map((tier) => ({
-      minSales: Number(tier.minSales),
-      maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
-      payoutFlat: Number(tier.payoutFlat),
-    }));
-    const salesCommission =
-      commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
-        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
-        : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
-          ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
-          : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
-    const productWorkCommission =
-      Number(earningsSummary.newProductCommission ?? 0) +
-      Number(earningsSummary.copiedCommission ?? 0) +
-      Number(earningsSummary.editedCommission ?? 0);
-    const commissionTotal = salesCommission + productWorkCommission;
-    const totalEarnings =
-      Number(earningsSummary.baseSalary ?? 0) +
-      Number(earningsSummary.transportAllowance ?? 0) +
-      commissionTotal +
-      adjustmentSummary.totalBonus;
-    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
-
-    return {
-      attendantId: attendant.id,
-      name: attendant.name,
-      email: attendant.email,
-      attendantCategory: attendant.attendantCategory,
-      isActive: attendant.isActive,
-      baseSalary: Number(earningsSummary.baseSalary ?? 0),
-      transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
-      commission: commissionTotal,
-      commissionGross: commissionTotal,
-      commissionDirect: salesCommission,
-      commissionMarketplaceJumia: 0,
-      commissionMarketplaceKilimall: 0,
-      commissionTotal,
-      commissionBreakdown: {
-        direct: salesCommission,
-        productWork: productWorkCommission,
-        total: commissionTotal,
-      },
-      bonusTotal: adjustmentSummary.totalBonus,
-      deductionTotal: totalDeductions,
-      totalEarnings,
-      totalDeductions,
-      netPay: totalEarnings - totalDeductions,
-      totalSales,
-      totalProfit,
-      totalReceipts,
-      totalItems,
-      newProducts: Number(earningsSummary.totalNewProducts ?? 0),
-      editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
-      copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
-      adjustmentBreakdown: adjustmentSummary.breakdown,
-      adjustmentEntries: adjustmentSummary.entries,
-    };
+    return buildTieredSalesPayrollRow({ attendant, period, adjustmentSummary, penalties });
   }
 
   if (isMarketingCategory(attendant.attendantCategory)) {
-    const [earningsSummary, receiptSummary, commissionConfig, commissionPeriod] = await Promise.all([
-      getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
-      computeAdminReceiptSummary({
-        start: period.start,
-        end: period.end,
-        scope: "mine",
-        currentUserId: attendant.id,
-        attendantId: attendant.id,
-        salesOnly: true,
-      }),
-      getUserCommissionConfigLike(attendant.id),
-      getOrCreateCommissionPeriod(period.start),
-    ]);
-
-    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
-    const totalReceipts = Math.max(
-      Number(receiptSummary.receiptsCount ?? 0),
-      Number(earningsSummary.totalReceipts ?? 0),
-    );
-    const totalProfit = Number(earningsSummary.totalProfit ?? receiptSummary.totalProfit ?? 0);
-    const tiers = commissionPeriod.tiers.map((tier) => ({
-      minSales: Number(tier.minSales),
-      maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
-      payoutFlat: Number(tier.payoutFlat),
-    }));
-    const salesCommission =
-      commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
-        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
-        : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
-          ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
-          : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
-    const productWorkCommission =
-      Number(earningsSummary.newProductCommission ?? 0) +
-      Number(earningsSummary.copiedCommission ?? 0) +
-      Number(earningsSummary.editedCommission ?? 0);
-    const commissionTotal = salesCommission + productWorkCommission;
-    const totalEarnings =
-      Number(earningsSummary.baseSalary ?? 0) +
-      Number(earningsSummary.transportAllowance ?? 0) +
-      commissionTotal +
-      adjustmentSummary.totalBonus;
-    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
-
-    return {
-      attendantId: attendant.id,
-      name: attendant.name,
-      email: attendant.email,
-      attendantCategory: attendant.attendantCategory,
-      isActive: attendant.isActive,
-      baseSalary: Number(earningsSummary.baseSalary ?? 0),
-      transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
-      commission: commissionTotal,
-      commissionGross: commissionTotal,
-      commissionDirect: salesCommission,
-      commissionMarketplaceJumia: 0,
-      commissionMarketplaceKilimall: 0,
-      commissionTotal,
-      commissionBreakdown: {
-        direct: salesCommission,
-        productWork: productWorkCommission,
-        total: commissionTotal,
-      },
-      bonusTotal: adjustmentSummary.totalBonus,
-      deductionTotal: totalDeductions,
-      totalEarnings,
-      totalDeductions,
-      netPay: totalEarnings - totalDeductions,
-      totalSales,
-      totalProfit,
-      totalReceipts,
-      totalItems: Number(earningsSummary.totalItems ?? 0),
-      newProducts: Number(earningsSummary.totalNewProducts ?? 0),
-      editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
-      copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
-      adjustmentBreakdown: adjustmentSummary.breakdown,
-      adjustmentEntries: adjustmentSummary.entries,
-    };
+    return buildTieredSalesPayrollRow({ attendant, period, adjustmentSummary, penalties });
   }
 
   const earningsSummary = await getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start });
