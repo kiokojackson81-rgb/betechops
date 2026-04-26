@@ -172,6 +172,51 @@ function resolveOnlineCommissionTotal(args: {
   return { commissionTotal: args.grossCommission, commissionSourceLabel: "computed-gross" };
 }
 
+function resolveQuickStatsTierProgress(args: {
+  totalTrackedSales: number;
+  tiers: Array<{ minSales: number; maxSales: number | null }>;
+}) {
+  let nextTierThreshold = COMMISSION_PROGRESS_TARGET;
+  if (args.tiers.length) {
+    const sorted = [...args.tiers].sort((a, b) => a.minSales - b.minSales);
+    const upcomingTier = sorted.find((tier) => args.totalTrackedSales < tier.minSales);
+    if (upcomingTier) {
+      nextTierThreshold = upcomingTier.minSales;
+    } else {
+      const lastTier = sorted[sorted.length - 1];
+      nextTierThreshold = lastTier.maxSales ?? lastTier.minSales;
+      if (args.totalTrackedSales > nextTierThreshold) {
+        nextTierThreshold = args.totalTrackedSales;
+      }
+    }
+  }
+  return {
+    nextTierThreshold: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
+    remainingToNextTier: Math.max(0, nextTierThreshold - args.totalTrackedSales),
+  };
+}
+
+function resolveQuickStatsCommissionDisplay(args: {
+  earningsCommission: number;
+  grossCommission: number;
+  ledger: PreferredLedger | null;
+}) {
+  const ledgerCommission = args.ledger
+    ? Number(args.ledger.commissionTotal ?? args.ledger.netCommission ?? args.ledger.grossCommission ?? 0)
+    : 0;
+
+  if (args.earningsCommission > 0) {
+    return { commissionKesValue: args.earningsCommission, commissionSource: "earnings" };
+  }
+  if (ledgerCommission > 0) {
+    return {
+      commissionKesValue: ledgerCommission,
+      commissionSource: args.ledger?.id ? `ledger ${args.ledger.id}` : "ledger",
+    };
+  }
+  return { commissionKesValue: args.grossCommission, commissionSource: "computed" };
+}
+
 async function computeBrendahCommissionContext(args: {
   attendantId: string;
   period: TradingPeriod;
@@ -714,36 +759,18 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
   const marketplaceSales = marketplaceSalesSummary.totals.sales;
   const totalTrackedSales = directStats.sales + marketplaceSales;
 
-  const tiers = commissionConfig?.tiers ?? [];
-  let nextTierThreshold = COMMISSION_PROGRESS_TARGET;
-  if (tiers.length) {
-    const sorted = [...tiers].sort((a, b) => a.minSales - b.minSales);
-    const upcomingTier = sorted.find((tier) => totalTrackedSales < tier.minSales);
-    if (upcomingTier) {
-      nextTierThreshold = upcomingTier.minSales;
-    } else {
-      const lastTier = sorted[sorted.length - 1];
-      nextTierThreshold = lastTier.maxSales ?? lastTier.minSales;
-      if (totalTrackedSales > nextTierThreshold) {
-        nextTierThreshold = totalTrackedSales;
-      }
-    }
-  }
-  const remainingToNextTier = Math.max(0, nextTierThreshold - totalTrackedSales);
-
-  // Prefer authoritative `earnings.commissionTotal` first (set by getOnlineEarningsSummary),
-  // otherwise fall back to a persisted ledger value, or finally the computed earnings.grossCommission.
-  const earningsCommission = Number(earnings.commissionTotal ?? 0);
-  const ledgerCommission = ledger ? Number(ledger.commissionTotal ?? ledger.netCommission ?? ledger.grossCommission ?? 0) : 0;
-  const commissionKesValue = earningsCommission > 0 ? earningsCommission : ledgerCommission > 0 ? ledgerCommission : earnings.grossCommission;
-  const commissionSource =
-    earningsCommission > 0
-      ? "earnings"
-      : ledgerCommission > 0
-      ? ledger?.id
-        ? `ledger ${ledger.id}`
-        : "ledger"
-      : "computed";
+  const { nextTierThreshold, remainingToNextTier } = resolveQuickStatsTierProgress({
+    totalTrackedSales,
+    tiers: (commissionConfig?.tiers ?? []).map((tier) => ({
+      minSales: tier.minSales,
+      maxSales: tier.maxSales ?? null,
+    })),
+  });
+  const { commissionKesValue, commissionSource } = resolveQuickStatsCommissionDisplay({
+    earningsCommission: Number(earnings.commissionTotal ?? 0),
+    grossCommission: earnings.grossCommission,
+    ledger,
+  });
 
   console.info(
     `[onlineQuickStats] user=${attendantId} period=${period.key} ledger=${ledger?.id ?? "none"} source=${commissionSource} value=${commissionKesValue.toFixed(
@@ -761,8 +788,8 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
     itemsSold: directStats.items + marketplaceSalesSummary.totals.orders,
     directSales: directStats.sales,
     marketplaceSales,
-    progressTarget: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
-    nextTierThreshold: nextTierThreshold || COMMISSION_PROGRESS_TARGET,
+    progressTarget: nextTierThreshold,
+    nextTierThreshold,
     remainingToNextTier,
   };
 }
