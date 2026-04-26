@@ -270,10 +270,18 @@ export async function generateOnlinePerformancePdfResponse(opts: {
     select: { id: true, name: true, email: true },
   });
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const r = NextResponse.json({ error: "User not found" }, { status: 404 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return r;
   }
   if (enforceEligibleIndividual && !canDownloadOnlineSummaryIndividual(user.email)) {
-    return NextResponse.json({ error: "This export is only available for eligible individual attendants" }, { status: 403 });
+    const r = NextResponse.json({ error: "This export is only available for eligible individual attendants" }, { status: 403 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return r;
   }
 
   const assignments = await prisma.marketplaceAccountAssignment.findMany({
@@ -523,9 +531,10 @@ export async function generateOnlinePerformancePdfResponse(opts: {
     if (browser) await browser.close().catch(() => null);
     console.error("[online-summary-individual-export] failed", err);
     const detail = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { error: "Failed to generate PDF", detail },
-      { status: 500 },
-    );
+    const r = NextResponse.json({ error: "Failed to generate PDF", detail }, { status: 500 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return r;
   }
 }

@@ -60,7 +60,11 @@ const ROLE_LABELS = new Set(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
 export async function requireAttendant(req: Request, allowed: string[] = []): Promise<AttendantGuardSuccess | AttendantGuardFailure> {
   const session = await auth();
   if (!session) {
-    return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return { ok: false, res: r };
   }
 
   const sessionRole = (session.user as { role?: string } | undefined)?.role ?? null;
@@ -123,7 +127,11 @@ export async function requireAttendant(req: Request, allowed: string[] = []): Pr
   }
 
   if (!targetUser) {
-    return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return { ok: false, res: r };
   }
 
   const normalizedCategory = normalizeCategory(targetUser.attendantCategory);
@@ -142,7 +150,11 @@ export async function requireAttendant(req: Request, allowed: string[] = []): Pr
       : isCategoryAllowed(normalizedCategory ?? targetUser.attendantCategory, allowedCategories);
 
   if (!roleAllowed && !categoryAllowed) {
-    return { ok: false, res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    const r = NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    try {
+      r.headers.set("Cache-Control", "no-store");
+    } catch {}
+    return { ok: false, res: r };
   }
 
   return {

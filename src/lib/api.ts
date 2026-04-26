@@ -12,9 +12,9 @@ export function isBenjaminSupervisorEmail(email: unknown) {
 export async function requireRole(min: Role | Role[]) {
   const session = await auth();
   const role = (session?.user as unknown as { role?: Role })?.role;
-  if (!role) return { ok: false as const, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  if (!role) return { ok: false as const, res: noStoreJson({ error: "Unauthorized" }, { status: 401 }) };
   const allowed = Array.isArray(min) ? min : [min];
-  if (!allowed.includes(role)) return { ok: false as const, res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (!allowed.includes(role)) return { ok: false as const, res: noStoreJson({ error: "Forbidden" }, { status: 403 }) };
   return { ok: true as const, role, session };
 }
 
@@ -22,10 +22,10 @@ export async function requireRoleOrBenjamin(min: Role | Role[]) {
   const session = await auth();
   const role = (session?.user as unknown as { role?: Role })?.role;
   const email = (session?.user as { email?: string } | undefined)?.email;
-  if (!role) return { ok: false as const, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  if (!role) return { ok: false as const, res: noStoreJson({ error: "Unauthorized" }, { status: 401 }) };
   const allowed = Array.isArray(min) ? min : [min];
   if (!allowed.includes(role) && !isBenjaminSupervisorEmail(email)) {
-    return { ok: false as const, res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    return { ok: false as const, res: noStoreJson({ error: "Forbidden" }, { status: 403 }) };
   }
   return { ok: true as const, role, session, isBenjamin: isBenjaminSupervisorEmail(email) };
 }
