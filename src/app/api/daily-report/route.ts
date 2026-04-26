@@ -91,19 +91,31 @@ export async function GET(req: Request) {
       totalCommissionEarned: agg._sum.commissionEarned ? Number(agg._sum.commissionEarned) : 0,
     };
 
-    return NextResponse.json({ reports, summary, totalCount });
+    const r = NextResponse.json({ reports, summary, totalCount });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? "Server error");
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const r = NextResponse.json({ error: msg }, { status: 500 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 }
 
 export async function POST(req: Request) {
   const auth = await requireRole("ATTENDANT");
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
   const actorId = await getActorId();
   if (!actorId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
   try {
     const {
@@ -126,7 +138,9 @@ export async function POST(req: Request) {
       concerns,
     } = await req.json();
     if (!day) {
-      return NextResponse.json({ error: "day is required" }, { status: 400 });
+      const r = NextResponse.json({ error: "day is required" }, { status: 400 });
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+      return r;
     }
 
     const normalizedMetrics = {
@@ -183,12 +197,16 @@ export async function POST(req: Request) {
       const normalized = canonicalReceiptNumber(typeof sale?.receiptNumber === "string" ? sale.receiptNumber : "");
       if (!normalized) continue;
       if (seenReceipts.has(normalized)) {
-        return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+        const r = NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+        r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+        return r;
       }
       seenReceipts.add(normalized);
       const owner = await findReceiptOwner(normalized);
       if (owner) {
-        return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+        const r = NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+        r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+        return r;
       }
     }
     const derivedProfit =
@@ -268,7 +286,7 @@ export async function POST(req: Request) {
       periodTotals = ledgerResult.totals;
     });
 
-    return NextResponse.json(
+    const r = NextResponse.json(
       {
         report: savedReport!,
         commission: periodCommission,
@@ -276,6 +294,8 @@ export async function POST(req: Request) {
       },
       { status: 201 },
     );
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? "Server error");
     return NextResponse.json({ error: msg }, { status: 500 });

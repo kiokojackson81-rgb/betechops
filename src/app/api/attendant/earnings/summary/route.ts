@@ -15,7 +15,9 @@ export async function GET(req: Request) {
   const meta = identity;
   const userId = identity.resolvedUserId;
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const targetUser = await prisma.user.findUnique({
@@ -120,5 +122,7 @@ export async function GET(req: Request) {
       : null,
   };
 
-  return NextResponse.json(composeIdentityResponse(meta, payload));
+  const r = NextResponse.json(composeIdentityResponse(meta, payload));
+  r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return r;
 }

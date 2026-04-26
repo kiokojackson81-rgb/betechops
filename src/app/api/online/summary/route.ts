@@ -70,13 +70,21 @@ function summarizeCommissionBreakdown(breakdown: ReturnType<typeof computeOnline
 
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
 
   const identity = await resolveTargetUserId(req);
   const meta = identity;
   const targetUserId = identity.resolvedUserId;
   if (!targetUserId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
@@ -85,10 +93,12 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   if (url.searchParams.has("start") || url.searchParams.has("end")) {
-    return NextResponse.json(
+    const bad = NextResponse.json(
       { error: "This endpoint requires a server-resolved trading period; do not supply start/end." },
       { status: 400 },
     );
+    bad.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return bad;
   }
   const periodKeyParam = url.searchParams.get("periodKey");
   const requestedPeriod = parseTradingPeriodKey(periodKeyParam ?? undefined);
@@ -153,7 +163,9 @@ export async function GET(req: Request) {
         totalItems: Number(directPosSummary.totalItems ?? 0),
       },
     };
-    return NextResponse.json(composeIdentityResponse(meta, emptyData));
+    const r = NextResponse.json(composeIdentityResponse(meta, emptyData));
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const platforms = summarizePlatforms(marketplaceSalesSummary.rows);
@@ -232,5 +244,7 @@ export async function GET(req: Request) {
     },
   };
 
-  return NextResponse.json(composeIdentityResponse(meta, data));
+  const r = NextResponse.json(composeIdentityResponse(meta, data));
+  r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return r;
 }

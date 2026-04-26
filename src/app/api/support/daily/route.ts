@@ -54,18 +54,28 @@ const normalizePaymentMethod = (value: string | undefined): PaymentMethod => {
 
 export async function POST(req: Request) {
   const auth = await requireAttendant(req, ["SUPPORT_OPS", "ADMIN"]);
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    const r = NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const parsed = PayloadSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
+    const r = NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const {
@@ -120,17 +130,23 @@ export async function POST(req: Request) {
     const normalized = canonicalReceiptNumber(receipt.receiptNumber || undefined);
     if (!normalized) continue;
     if (seenReceipts.has(normalized)) {
-      return NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+      const r = NextResponse.json({ error: `Duplicate receipt ${normalized} in submission` }, { status: 409 });
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+      return r;
     }
     seenReceipts.add(normalized);
     const owner = await findReceiptOwner(normalized);
     if (owner) {
-      return NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+      const r = NextResponse.json({ error: buildDuplicateMessage(normalized, owner) }, { status: 409 });
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+      return r;
     }
   }
 
   if (normalizedReceipts.length === 0) {
-    return NextResponse.json({ error: "At least one receipt is required" }, { status: 400 });
+    const r = NextResponse.json({ error: "At least one receipt is required" }, { status: 400 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   let totalSales = 0;
@@ -223,7 +239,7 @@ export async function POST(req: Request) {
       console.error('[support/daily] admin notify failed', notifyErr);
     }
 
-    return NextResponse.json(
+    const r = NextResponse.json(
       {
         entryId: entry.id,
         period: {
@@ -239,8 +255,12 @@ export async function POST(req: Request) {
       },
       { status: 201 }
     );
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save support entry";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const r = NextResponse.json({ error: message }, { status: 500 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 }

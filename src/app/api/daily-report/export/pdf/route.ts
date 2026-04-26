@@ -17,7 +17,11 @@ export async function GET(req: Request) {
   const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'http://localhost:3000';
   const apiUrl = `${base}/api/daily-report${qs ? `?${qs}` : ''}`;
   const resp = await fetch(apiUrl, { method: 'GET' });
-  if (!resp.ok) return NextResponse.json({ error: 'Failed to fetch reports from API' }, { status: 500 });
+  if (!resp.ok) {
+    const r = NextResponse.json({ error: 'Failed to fetch reports from API' }, { status: 500 });
+    r.headers.set('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+    return r;
+  }
   const data = await resp.json();
 
   let puppeteer: any;
@@ -26,10 +30,14 @@ export async function GET(req: Request) {
     const mod = await import('puppeteer').catch(() => null);
     puppeteer = (mod && (mod as any).default) ? (mod as any).default : mod;
     if (!puppeteer) {
-      return NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
+      const r = NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
+      r.headers.set('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+      return r;
     }
   } catch (err) {
-    return NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
+    const r = NextResponse.json({ error: 'Server-side PDF generation requires `puppeteer`. Install it or use client-side print.' }, { status: 501 });
+    r.headers.set('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+    return r;
   }
 
   const reports = data.reports || [];
@@ -181,6 +189,8 @@ export async function GET(req: Request) {
     return res;
   } catch (err: any) {
     if (browser) await browser.close();
-    return NextResponse.json({ error: 'Failed to generate PDF', detail: String(err) }, { status: 500 });
+    const r = NextResponse.json({ error: 'Failed to generate PDF', detail: String(err) }, { status: 500 });
+    r.headers.set('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate');
+    return r;
   }
 }

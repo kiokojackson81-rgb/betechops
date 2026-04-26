@@ -22,6 +22,17 @@ export function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
+    // If this is an API request, force responses to be non-cacheable so
+    // preview and production always show live data. Keep this lightweight
+    // to avoid expensive processing in the edge runtime.
+    if (pathname.startsWith("/api/")) {
+      const res = NextResponse.next();
+      try {
+        res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+      } catch {}
+      return res;
+    }
+
     // Default: pass through. We intentionally do not attempt to rehydrate or
     // inspect auth state here to keep the middleware lightweight and avoid
     // mismatched runtime constraints in edge environments. The primary goal
@@ -36,4 +47,4 @@ export function middleware(req: NextRequest) {
 // Apply middleware to the attendant and marketing routes where rehydration
 // was previously observed. Keep matcher minimal to avoid affecting unrelated
 // paths.
-export const config = { matcher: ["/marketing/:path*", "/attendant/:path*", "/auth/post-login"] };
+export const config = { matcher: ["/marketing/:path*", "/attendant/:path*", "/auth/post-login", "/api/:path*"] };

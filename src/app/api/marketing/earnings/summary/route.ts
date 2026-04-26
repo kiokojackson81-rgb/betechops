@@ -10,7 +10,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
 
   const url = new URL(req.url);
   const impersonate = url.searchParams.get("impersonateId") || url.searchParams.get("attendantId");
@@ -26,14 +32,20 @@ export async function GET(req: Request) {
     attendantId = await getActorId();
   }
 
-  if (!attendantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!attendantId) {
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
+  }
 
   const period = getTradingPeriodFor(new Date());
   // Enforce server-resolved trading period for dashboard totals.
   // Do not accept client-supplied `periodKey` or `periodLabel`.
   const urlObj = new URL(req.url);
   if (urlObj.searchParams.has("periodKey") || urlObj.searchParams.has("periodLabel")) {
-    return NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply periodKey/periodLabel." }, { status: 400 });
+    const r = NextResponse.json({ error: "This endpoint requires a server-resolved trading period; do not supply periodKey/periodLabel." }, { status: 400 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const periodKey = period.key;
@@ -118,9 +130,13 @@ export async function GET(req: Request) {
       netPay,
     };
 
-    return NextResponse.json({ periodKey, periodLabel, summary });
+    const r = NextResponse.json({ periodKey, periodLabel, summary });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to compute earnings";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const r = NextResponse.json({ error: msg }, { status: 500 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 }

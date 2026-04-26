@@ -14,12 +14,20 @@ const parseDateParam = (value: string | null) => {
 
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
 
   const identity = await resolveTargetUserId(req);
   const attendantId = identity.resolvedUserId;
   if (!attendantId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const r = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    return r;
   }
 
   const url = new URL(req.url);
@@ -39,5 +47,7 @@ export async function GET(req: Request) {
       : requestedPeriod ?? getTradingPeriodFor(new Date());
 
   const summary = await getOnlineEarningsSummary(attendantId, { period });
-  return NextResponse.json(composeIdentityResponse(identity, summary as unknown as Record<string, unknown>));
+  const r = NextResponse.json(composeIdentityResponse(identity, summary as unknown as Record<string, unknown>));
+  r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return r;
 }

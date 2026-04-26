@@ -9,7 +9,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["SUPPORT_OPS", "ADMIN"]);
-  if (!auth.ok) return auth.res;
+  if (!auth.ok) {
+    const r = auth.res;
+    try {
+      r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    } catch {}
+    return r;
+  }
 
   let basisDate = new Date();
   try {
@@ -30,7 +36,7 @@ export async function GET(req: Request) {
 
   const commission = getCommissionSummaryForSales(aggregates.totalSales);
 
-  return NextResponse.json({
+  const r = NextResponse.json({
     period: {
       key: period.key,
       label: period.label,
@@ -44,4 +50,6 @@ export async function GET(req: Request) {
       nextTarget: commission.nextTarget,
     },
   });
+  r.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  return r;
 }
