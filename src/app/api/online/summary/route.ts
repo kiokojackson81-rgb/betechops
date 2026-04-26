@@ -20,6 +20,54 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function summarizePlatforms(rows: Array<{ platform: string; sales?: number; orders?: number }>) {
+  return Array.from(
+    rows.reduce((map, row) => {
+      const key = row.platform;
+      const bucket = map.get(key) ?? {
+        key,
+        name: key,
+        sales: 0,
+        commission: 0,
+        orders: 0,
+      };
+      bucket.sales += Number(row.sales ?? 0);
+      bucket.orders += Number(row.orders ?? 0);
+      map.set(key, bucket);
+      return map;
+    }, new Map<string, { key: string; name: string; sales: number; commission: number; orders: number }>()),
+  ).map(([, value]) => value);
+}
+
+function summarizeMarketplaceSalesRows(
+  rows: Array<{ payoutSales?: number; manualSales?: number }>,
+) {
+  return rows.reduce<{ payoutSales: number; weeklyManualSales: number }>(
+    (acc, row) => {
+      acc.payoutSales += Number(row.payoutSales ?? 0);
+      acc.weeklyManualSales += Number(row.manualSales ?? 0);
+      return acc;
+    },
+    { payoutSales: 0, weeklyManualSales: 0 },
+  );
+}
+
+function summarizeCommissionBreakdown(breakdown: ReturnType<typeof computeOnlinePeriodCommission>) {
+  const directCommission = Number(
+    breakdown.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0,
+  );
+  const marketplaceCommission = Number(
+    breakdown.lines
+      .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
+      .reduce((sum, line) => sum + Number(line.commission ?? 0), 0),
+  );
+  return {
+    directCommission,
+    marketplaceCommission,
+    totalCommission: Number(breakdown.totalCommission ?? 0),
+  };
+}
+
 export async function GET(req: Request) {
   const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
@@ -108,25 +156,8 @@ export async function GET(req: Request) {
     return NextResponse.json(composeIdentityResponse(meta, emptyData));
   }
 
-  const platforms = Array.from(
-    marketplaceSalesSummary.rows.reduce((map, row) => {
-      const key = row.platform;
-      const bucket = map.get(key) ?? {
-        key,
-        name: key,
-        sales: 0,
-        commission: 0,
-        orders: 0,
-      };
-      bucket.sales += Number(row.sales ?? 0);
-      bucket.orders += Number(row.orders ?? 0);
-      map.set(key, bucket);
-      return map;
-    }, new Map<string, { key: string; name: string; sales: number; commission: number; orders: number }>()),
-  ).map(([, value]) => value);
-
-  const payoutSales = marketplaceSalesSummary.rows.reduce((sum, row) => sum + Number(row.payoutSales ?? 0), 0);
-  const weeklyManualSales = marketplaceSalesSummary.rows.reduce((sum, row) => sum + Number(row.manualSales ?? 0), 0);
+  const platforms = summarizePlatforms(marketplaceSalesSummary.rows);
+  const { payoutSales, weeklyManualSales } = summarizeMarketplaceSalesRows(marketplaceSalesSummary.rows);
   const marketplaceSalesOnly = marketplaceSalesSummary.totals.sales;
   const fallbackDirectProfit =
     directCommissionMode === "PROFIT_10" &&
@@ -150,14 +181,8 @@ export async function GET(req: Request) {
     },
     { directCommissionMode },
   );
-  const directCommission = Number(
-    commissionBreakdown.lines.find((line) => line.channel === "DIRECT")?.commission ?? 0,
-  );
-  const marketplaceCommission = Number(
-    commissionBreakdown.lines
-      .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
-      .reduce((sum, line) => sum + Number(line.commission ?? 0), 0),
-  );
+  const { directCommission, marketplaceCommission, totalCommission } =
+    summarizeCommissionBreakdown(commissionBreakdown);
 
   const commissionInfo = getCommissionSummaryForSales(marketplaceSalesOnly);
   const nextTarget = commissionInfo.nextTarget ?? null;
@@ -169,7 +194,7 @@ export async function GET(req: Request) {
     totals: {
       orders: marketplaceSalesSummary.totals.orders,
       sales: marketplaceSalesSummary.totals.sales,
-      commission: Number(commissionBreakdown.totalCommission ?? 0),
+      commission: totalCommission,
     },
     platforms,
     assignedAccounts: assignments.map((a) => ({
@@ -202,7 +227,7 @@ export async function GET(req: Request) {
     commissions: {
       direct: directCommission,
       marketplaceCombined: marketplaceCommission,
-      total: Number(commissionBreakdown.totalCommission ?? 0),
+      total: totalCommission,
       directCommissionMode,
     },
   };
