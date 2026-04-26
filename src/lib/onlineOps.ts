@@ -83,10 +83,14 @@ export type OnlineQuickStats = {
 export type OnlineEarningsSummary = {
   periodKey: string;
   periodLabel: string;
+  attendantCategory?: string | null;
   directSales: number;
   directProfit: number;
   marketplaceSales: number;
   directCommission: number;
+  commissionDirect?: number;
+  commissionMarketplaceJumia?: number;
+  commissionMarketplaceKilimall?: number;
   marketplaceCommission: number;
   supervisorBonus: number;
   returnsDeduction: number;
@@ -103,6 +107,13 @@ export type OnlineEarningsSummary = {
   totalDeductions: number;
   netPay: number;
   commissionTotal?: number;
+  adjustmentEntries?: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind: string;
+  }>;
 };
 
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
@@ -678,6 +689,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
     prisma.attendantPayrollAdjustment.findMany({
       where: { attendantId, periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
     prisma.marketplaceReturn.findMany({
       where: {
@@ -686,7 +698,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
         dueAt: { gte: period.start, lte: period.end },
       },
     }),
-    prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
+    prisma.user.findUnique({ where: { id: attendantId }, select: { email: true, attendantCategory: true } }),
   ]);
 
   const payoutJumiaSales = marketplaceSalesSummary.totals.jumiaSales;
@@ -732,6 +744,18 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
           .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
           .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
       : calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
+  const marketplaceCommissionJumia =
+    profit10Commission != null
+      ? profit10Commission.lines
+          .filter((line) => line.channel === "JUMIA")
+          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      : calculateCumulativeCommission(Math.max(0, payoutJumiaSales)).commission;
+  const marketplaceCommissionKilimall =
+    profit10Commission != null
+      ? profit10Commission.lines
+          .filter((line) => line.channel === "KILIMALL")
+          .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
+      : calculateCumulativeCommission(Math.max(0, payoutKilimallSales)).commission;
   const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
 
   let directSalesCommission: number;
@@ -828,13 +852,30 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     )}${brendahDebug}`,
   );
 
+  const adjustmentEntries = adjustments.map((adjustment) => ({
+    id: adjustment.id,
+    label: String(adjustment.label ?? adjustment.adjustmentType ?? "Adjustment"),
+    amount: Number(adjustment.amount ?? 0),
+    adjustmentType: String(adjustment.adjustmentType ?? "OTHER"),
+    adjustmentKind: String(
+      adjustment.adjustmentKind ??
+        (adjustment.adjustmentType === "BONUS" || adjustment.adjustmentType === "COMMISSION_TOPUP"
+          ? "ADDITION"
+          : "DEDUCTION"),
+    ).toUpperCase(),
+  }));
+
   return {
     periodKey: period.key,
     periodLabel: period.label,
+    attendantCategory: user?.attendantCategory ?? null,
     directSales: directCommissionMode === "PROFIT_10" ? directStats.sales : combinedDirectSales,
     directProfit: directCommissionMode === "PROFIT_10" ? effectiveDirectProfit : directStats.profit,
     marketplaceSales,
     directCommission: directSalesCommission,
+    commissionDirect: directSalesCommission,
+    commissionMarketplaceJumia: marketplaceCommissionJumia,
+    commissionMarketplaceKilimall: marketplaceCommissionKilimall,
     marketplaceCommission,
     supervisorBonus,
     returnsDeduction,
@@ -851,6 +892,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     totalDeductions,
     netPay,
     commissionTotal,
+    adjustmentEntries,
   };
 }
 

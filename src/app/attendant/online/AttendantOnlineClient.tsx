@@ -530,10 +530,12 @@ export default function AttendantOnlineClient() {
     try {
       const params = new URLSearchParams({
         attendantId: userId,
-        periodKey: selectedPeriodKey,
+        start: formatNairobiParam(period.start, false),
+        end: formatNairobiParam(period.end, true),
       });
       appendImpersonateParam(params);
-      const res = await fetch(`/api/payroll/summary?${params.toString()}`, { cache: "no-store" });
+      params.set("periodKey", selectedPeriodKey);
+      const res = await fetch(`/api/online/earnings/summary?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         setPayrollSummary(null);
         return;
@@ -543,7 +545,7 @@ export default function AttendantOnlineClient() {
         setPayrollSummary(null);
         return;
       }
-      setPayrollSummary(payload.row ?? payload.rows?.[0] ?? payload);
+      setPayrollSummary(payload);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to load payroll summary";
       showToast(msg, "error");
@@ -551,7 +553,7 @@ export default function AttendantOnlineClient() {
     } finally {
       setPayrollLoading(false);
     }
-  }, [userId, appendImpersonateParam, selectedPeriodKey, parseIdentityResponse]);
+  }, [userId, period, appendImpersonateParam, selectedPeriodKey, parseIdentityResponse]);
 
   // receiptTotals loader removed
 
