@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import React from 'react';
 import ReturnPickForm from './_components/ReturnPickForm';
 import { prisma } from '@/lib/prisma';
