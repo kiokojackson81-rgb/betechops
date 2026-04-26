@@ -744,9 +744,7 @@ export default function AttendantOnlineClient() {
 
   const totalSales = directSales + platformTotals.jumiaSales + platformTotals.kilimallSales;
 
-  const [previewCommission, setPreviewCommission] = useState<number | null>(null);
-
-  const commission = payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? previewCommission ?? 0;
+  const commission = payrollSummary?.commissionTotal ?? payrollSummary?.commission ?? 0;
 
   const nextTierTarget = 1000000;
   const toNextTier = Math.max(0, nextTierTarget - totalSales);
@@ -767,46 +765,14 @@ export default function AttendantOnlineClient() {
     );
   };
 
-  const loadCommissionPreview = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const params = new URLSearchParams({
-        attendantId: userId,
-        start: formatNairobiParam(period.start, false),
-        end: formatNairobiParam(period.end, true),
-        periodKey: selectedPeriodKey,
-      });
-      appendImpersonateParam(params);
-      const res = await fetch(`/api/online/preview-commission?${params.toString()}`, { cache: "no-store" });
-      if (!res.ok) {
-        setPreviewCommission(null);
-        return;
-      }
-      const payload = await parseIdentityResponse(res);
-      if (!payload) {
-        setPreviewCommission(null);
-        return;
-      }
-      setPreviewCommission(Number(payload.totalCommission ?? 0));
-    } catch (err) {
-      setPreviewCommission(null);
-    }
-  }, [userId, period, appendImpersonateParam, selectedPeriodKey]);
-
-  useEffect(() => {
-    if (!userId) return;
-    void loadCommissionPreview();
-  }, [loadCommissionPreview, userId, period]);
-
   const refreshAllOnlineStats = useCallback(async () => {
     if (!userId) return;
     await Promise.allSettled([
       loadWeeklyEarnings(),
       loadOnlineSummary(),
       loadPayrollSummary(),
-      loadCommissionPreview(),
     ]);
-  }, [loadCommissionPreview, loadOnlineSummary, loadPayrollSummary, loadWeeklyEarnings, userId]);
+  }, [loadOnlineSummary, loadPayrollSummary, loadWeeklyEarnings, userId]);
 
   useEffect(() => {
     if (!userId) return;
