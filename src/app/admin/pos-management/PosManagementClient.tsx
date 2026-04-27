@@ -67,6 +67,7 @@ export default function PosManagementClient() {
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   const loadData = useCallback(async (productQuery = query) => {
@@ -150,6 +151,28 @@ export default function PosManagementClient() {
     });
   };
 
+  const deleteProduct = async (product: PosProduct) => {
+    const confirmed = window.confirm(`Delete "${product.name}" from the POS catalog?`);
+    if (!confirmed) return;
+    setDeletingId(product.id);
+    try {
+      const res = await fetch(`/api/admin/pos-products/${product.id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to delete product");
+      if (draft.id === product.id) {
+        setDraft(emptyDraft);
+      }
+      showToast("Product deleted", "success");
+      await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to delete product", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const updateApproval = async (id: string, action: "approve" | "reject") => {
     try {
       const res = await fetch(`/api/admin/pos-commissions/${id}/${action}`, { method: "POST" });
@@ -163,153 +186,179 @@ export default function PosManagementClient() {
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">
+    <div className="space-y-6">
       <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-        <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
-            <h2 className="text-xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
-          </div>
-          {draft.id ? (
-            <button
-              type="button"
-              className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-              onClick={() => setDraft(emptyDraft)}
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
+                <h2 className="text-2xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
+                <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                  Set up POS products first, then manage the live catalog below. Keep pricing, SKU, and commission settings together in one place.
+                </p>
+              </div>
+              {draft.id ? (
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+                  onClick={() => setDraft(emptyDraft)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-slate-300">
-            Product name
-            <input className={`${fieldClass} mt-1`} value={draft.name} onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))} />
-          </label>
-          <label className="text-sm text-slate-300">
-            SKU
-            <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
-          </label>
-          <label className="text-sm text-slate-300">
-            Category
-            <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
-          </label>
-          <label className="text-sm text-slate-300">
-            Selling price
-            <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
-          </label>
-          <label className="text-sm text-slate-300">
-            Buying price
-            <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
-          </label>
-          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked }))} />
-              Active in POS catalog
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
-              Enable product commission
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={draft.commissionRequiresApproval}
-                onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
-                disabled={!draft.commissionEnabled}
-              />
-              Require approval
-            </label>
-          </div>
-        </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="text-sm text-slate-300">
+                Product name
+                <input className={`${fieldClass} mt-1`} value={draft.name} onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))} />
+              </label>
+              <label className="text-sm text-slate-300">
+                SKU
+                <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
+              </label>
+              <label className="text-sm text-slate-300">
+                Category
+                <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
+              </label>
+              <label className="text-sm text-slate-300">
+                Selling price
+                <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
+              </label>
+              <label className="text-sm text-slate-300">
+                Buying price
+                <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+              </label>
+              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked }))} />
+                  Active in POS catalog
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
+                  Enable product commission
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={draft.commissionRequiresApproval}
+                    onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
+                    disabled={!draft.commissionEnabled}
+                  />
+                  Require approval
+                </label>
+              </div>
+            </div>
 
-        {draft.commissionEnabled ? (
-          <div className="mt-4">
-            <label className="text-sm text-slate-300">
-              Commission per sold item
-              <input
-                className={`${fieldClass} mt-1`}
-                type="number"
-                min="0"
-                value={draft.commissionAmount}
-                onChange={(e) => setDraft((s) => ({ ...s, commissionAmount: e.target.value }))}
-              />
-            </label>
-          </div>
-        ) : null}
+            {draft.commissionEnabled ? (
+              <div className="mt-4">
+                <label className="text-sm text-slate-300">
+                  Commission per sold item
+                  <input
+                    className={`${fieldClass} mt-1`}
+                    type="number"
+                    min="0"
+                    value={draft.commissionAmount}
+                    onChange={(e) => setDraft((s) => ({ ...s, commissionAmount: e.target.value }))}
+                  />
+                </label>
+              </div>
+            ) : null}
 
-        <div className="mt-5">
-          <button
-            type="button"
-            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => void submitDraft()}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : draft.id ? "Update product" : "Create product"}
-          </button>
+            <div className="mt-5">
+              <button
+                type="button"
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void submitDraft()}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : draft.id ? "Update product" : "Create product"}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
+              <div className="mt-3 text-3xl font-semibold text-white">{products.length}</div>
+              <div className="mt-1 text-sm text-slate-400">Products currently loaded in the POS catalog view.</div>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Active products</div>
+              <div className="mt-3 text-3xl font-semibold text-emerald-300">{products.filter((product) => product.isActive).length}</div>
+              <div className="mt-1 text-sm text-slate-400">Available for product selection at the receipts desk.</div>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
+              <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
+              <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <div className="space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
-              <h2 className="text-xl font-semibold text-white">POS products</h2>
-            </div>
-            <input
-              className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              placeholder="Search products"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
+            <h2 className="text-2xl font-semibold text-white">POS products</h2>
+            <p className="mt-2 text-sm text-slate-400">Edit, delete, or review the products currently available to the POS catalog.</p>
           </div>
+          <input
+            className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+            placeholder="Search products"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
 
-          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800">
-            <table className="min-w-full divide-y divide-slate-800 text-sm">
-              <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
+          <table className="min-w-full divide-y divide-slate-800 text-sm">
+            <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="px-4 py-3">Product</th>
+                <th className="px-4 py-3">Prices</th>
+                <th className="px-4 py-3">Commission</th>
+                <th className="px-4 py-3">State</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 bg-slate-950/40">
+              {loading ? (
                 <tr>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Prices</th>
-                  <th className="px-4 py-3">Commission</th>
-                  <th className="px-4 py-3">State</th>
-                  <th className="px-4 py-3 text-right">Action</th>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 bg-slate-950/40">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
-                  </tr>
-                ) : products.length ? (
-                  products.map((product) => (
-                    <tr key={product.id}>
-                      <td className="px-4 py-3 align-top">
-                        <div className="font-semibold text-white">{product.name}</div>
-                        <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-200">
-                        <div>Selling: {formatMoney(product.sellingPrice)}</div>
-                        <div className="text-xs text-slate-400">Buying: {formatMoney(product.lastBuyingPrice)}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-slate-200">
-                        {product.commissionEnabled ? (
-                          <>
-                            <div>{formatMoney(product.commissionAmount)}</div>
-                            <div className="text-xs text-slate-400">
-                              {product.commissionRequiresApproval ? "Approval required" : "Auto release"}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-slate-500">Disabled</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
-                          {product.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right align-top">
+              ) : products.length ? (
+                products.map((product) => (
+                  <tr key={product.id}>
+                    <td className="px-4 py-3 align-top">
+                      <div className="max-w-xl font-semibold leading-8 text-white">{product.name}</div>
+                      <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-slate-200">
+                      <div>Selling: {formatMoney(product.sellingPrice)}</div>
+                      <div className="text-xs text-slate-400">Buying: {formatMoney(product.lastBuyingPrice)}</div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-slate-200">
+                      {product.commissionEnabled ? (
+                        <>
+                          <div>{formatMoney(product.commissionAmount)}</div>
+                          <div className="text-xs text-slate-400">
+                            {product.commissionRequiresApproval ? "Approval required" : "Auto release"}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-slate-500">Disabled</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
+                        {product.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right align-top">
+                      <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
@@ -317,19 +366,29 @@ export default function PosManagementClient() {
                         >
                           Edit
                         </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
+                        <button
+                          type="button"
+                          className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void deleteProduct(product)}
+                          disabled={deletingId === product.id}
+                        >
+                          {deletingId === product.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
+      <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
           <div className="flex items-start justify-between gap-3">
             <div>

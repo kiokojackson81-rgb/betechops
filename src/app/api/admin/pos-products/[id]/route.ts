@@ -1,5 +1,6 @@
 import { noStoreJson, requireRole, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -91,4 +92,46 @@ export async function PATCH(req: Request, context: ParamsContext) {
   }
 
   return noStoreJson({ ok: true, item: updated });
+}
+
+export async function DELETE(_: Request, context: ParamsContext) {
+  const auth = await requireRole(["ADMIN"]);
+  if (!auth.ok) return auth.res;
+
+  const id = await resolveId(context);
+  const existing = await prisma.product.findUnique({ where: { id } });
+  if (!existing) return noStoreJson({ error: "Product not found" }, { status: 404 });
+
+  const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
+
+  try {
+    await prisma.product.delete({
+      where: { id },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2003" || error.code === "P2014")
+    ) {
+      return noStoreJson(
+        { error: "This product is already linked to receipts or orders. Edit or deactivate it instead." },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+
+  if (actorId) {
+    await prisma.actionLog.create({
+      data: {
+        actorId,
+        entity: "Product",
+        entityId: existing.id,
+        action: "POS_PRODUCT_DELETE",
+        before: existing,
+      },
+    });
+  }
+
+  return noStoreJson({ ok: true });
 }
