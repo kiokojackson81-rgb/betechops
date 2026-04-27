@@ -24,6 +24,12 @@ model User {
   attendantCommissions                 AttendantCommission[]
   attendantCompPlan                    AttendantCompPlan?
   attendantPayrollAdjustments          AttendantPayrollAdjustment[]
+  leaveRequests                        LeaveRequest[]                 @relation("LeaveRequestUser")
+  approvedLeaveRequests                LeaveRequest[]                 @relation("LeaveRequestApprover")
+  leaveBalance                         LeaveBalance?
+  cashAdvances                         CashAdvance[]                  @relation("CashAdvanceUser")
+  approvedCashAdvances                 CashAdvance[]                  @relation("CashAdvanceApprover")
+  leaveBalancesUpdated                 LeaveBalance[]                 @relation("LeaveBalanceUpdatedBy")
   balance                              Balance?
   commissionConfig                     UserCommissionConfig?
   commissionEarnings                   CommissionEarning[]
@@ -97,6 +103,86 @@ model AttendantPayrollAdjustment {
   attendant      User                  @relation(fields: [attendantId], references: [id])
 
   @@index([attendantId, periodKey])
+}
+
+model LeaveBalance {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  annualEntitlement    Int      @default(21)
+  sickEntitlement      Int      @default(10)
+  emergencyEntitlement Int      @default(5)
+  annualUsed           Int      @default(0)
+  sickUsed             Int      @default(0)
+  emergencyUsed        Int      @default(0)
+  updatedById          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedBy            User?    @relation("LeaveBalanceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+model LeaveRequest {
+  id                    String                @id @default(cuid())
+  userId                String
+  startDate             DateTime              @db.Date
+  endDate               DateTime              @db.Date
+  type                  LeaveRequestType
+  status                WellnessRequestStatus @default(PENDING)
+  daysRequested         Int
+  reason                String
+  supportingDocumentUrl String?
+  managerComment        String?
+  approvedById          String?
+  decidedAt             DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  user                  User                  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy            User?                 @relation("LeaveRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model CashAdvance {
+  id                String                  @id @default(cuid())
+  userId            String
+  requestedAmount   Int
+  approvedAmount    Int?
+  status            WellnessRequestStatus   @default(PENDING)
+  reason            String
+  repaymentPeriod   Int?
+  installmentAmount Int?
+  remainingBalance  Int                     @default(0)
+  hrComment         String?
+  approvedById      String?
+  approvedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  user              User                    @relation("CashAdvanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy        User?                   @relation("CashAdvanceApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  installments      CashAdvanceInstallment[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model CashAdvanceInstallment {
+  id                  String      @id @default(cuid())
+  cashAdvanceId       String
+  dueDate             DateTime    @db.Date
+  periodKey           String
+  periodLabel         String
+  sequenceNumber      Int
+  amount              Int
+  isPaid              Boolean     @default(false)
+  deductedAt          DateTime?
+  payrollAdjustmentId String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  cashAdvance         CashAdvance @relation(fields: [cashAdvanceId], references: [id], onDelete: Cascade)
+
+  @@index([cashAdvanceId, dueDate])
+  @@index([isPaid, dueDate])
 }
 
 model UserCommissionConfig {
@@ -1411,6 +1497,21 @@ enum PayrollAdjustmentType {
   BONUS
   COMMISSION_TOPUP
   OTHER
+  CASH_ADVANCE
+}
+
+enum LeaveRequestType {
+  ANNUAL
+  SICK
+  EMERGENCY
+  UNPAID
+  OTHER
+}
+
+enum WellnessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum PayrollAdjustmentKind {
