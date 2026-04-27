@@ -32,6 +32,7 @@ import {
 } from "@/lib/unpricedReceiptGrouping";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
+import { withImpersonateId } from "@/lib/impersonation";
 
 type MarketingDailyFormState = {
   date: string;
@@ -1478,6 +1479,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             <HeaderActions
               receiptsHref="/marketing/receipts"
               createHref={`/receipts?start=${form.date}&end=${form.date}`}
+              wellnessHref={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
               onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
               showDot={false}
             />

@@ -1014,6 +1014,7 @@ export default function DailyReportFinal() {
               <HeaderActions
                 receiptsHref="#my-receipts"
                 createHref={`/receipts?view=create`}
+                wellnessHref={withImpersonateId("/attendant/wellness", impersonateId)}
                 onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
                 onReceiptsClick={() => setShowMyReceipts(true)}
                 showDot={true}

@@ -16,6 +16,7 @@ import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
+import { withImpersonateId } from "@/lib/impersonation";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
 
@@ -71,6 +72,7 @@ const safeLocale = (value?: number | null, fallback = "0") => {
 
 export default function SupportOpsPage() {
   const router = useRouter();
+  const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dayOfWeek, setDayOfWeek] = useState(() =>
     new Date().toLocaleDateString("en-KE", { weekday: "long" })
@@ -92,6 +94,16 @@ export default function SupportOpsPage() {
     useTradingPeriodQueryState();
   const tradingPeriodLabel = selectedPeriod.label;
   const payslipHref = useMemo(() => `/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriodKey)}`, [selectedPeriodKey]);
+  const wellnessHref = useMemo(
+    () => withImpersonateId("/attendant/wellness", impersonateId),
+    [impersonateId],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setImpersonateId(params.get("impersonateId"));
+  }, []);
 
   // Guard route for support attendants
   useEffect(() => {
@@ -303,6 +315,12 @@ export default function SupportOpsPage() {
                 Receipts
               </Link>
             ) : null}
+            <Link
+              href={wellnessHref}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Wellness
+            </Link>
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: "/attendant/login" })}

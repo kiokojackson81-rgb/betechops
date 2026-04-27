@@ -8,6 +8,7 @@ import React from "react";
 type Props = {
   receiptsHref?: string;
   createHref?: string;
+  wellnessHref?: string;
   onSignOut?: () => void;
   onReceiptsClick?: () => void;
   showDot?: boolean;
@@ -16,6 +17,7 @@ type Props = {
 export default function HeaderActions({
   receiptsHref = "/marketing/receipts",
   createHref = "/receipts",
+  wellnessHref = "/attendant/wellness",
   onSignOut,
   onReceiptsClick,
   showDot = false,
@@ -43,6 +45,12 @@ export default function HeaderActions({
           aria-label="Create receipt"
         >
           Create receipt
+        </Link>
+        <Link
+          href={wellnessHref}
+          className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+        >
+          Wellness
         </Link>
         <button
           type="button"
