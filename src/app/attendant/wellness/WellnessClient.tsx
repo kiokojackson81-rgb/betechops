@@ -50,6 +50,8 @@ type OverviewResponse = {
     annual: { entitlement: number; used: number; remaining: number };
     sick: { entitlement: number; used: number; remaining: number };
     emergency: { entitlement: number; used: number; remaining: number };
+    totalEntitlement: number;
+    totalUsed: number;
     totalRemaining: number;
   };
   leaveRequests: LeaveRow[];
@@ -243,7 +245,7 @@ export default function WellnessClient() {
                   <p className={sectionEyebrow}>Leave Request</p>
                   <h2 className="text-2xl font-semibold text-white">Submit Leave</h2>
                   <p className="max-w-2xl text-sm leading-6 text-slate-400">
-                    Annual, sick, emergency, or unpaid leave requests with optional evidence upload.
+                    Everyone has a shared 10-day paid leave allowance. Annual, sick, and emergency requests all draw from the same pool.
                   </p>
                 </div>
                 <span className="inline-flex h-fit rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
@@ -252,9 +254,9 @@ export default function WellnessClient() {
               </div>
 
               <div className="mb-5 grid gap-3 md:grid-cols-3">
-                <MiniInfoCard label="Annual" value={String(overview?.leaveBalance.annual.remaining ?? 0)} />
-                <MiniInfoCard label="Sick" value={String(overview?.leaveBalance.sick.remaining ?? 0)} />
-                <MiniInfoCard label="Emergency" value={String(overview?.leaveBalance.emergency.remaining ?? 0)} />
+                <MiniInfoCard label="Total allowance" value={String(overview?.leaveBalance.totalEntitlement ?? 10)} />
+                <MiniInfoCard label="Used" value={String(overview?.leaveBalance.totalUsed ?? 0)} />
+                <MiniInfoCard label="Remaining" value={String(overview?.leaveBalance.totalRemaining ?? 0)} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -401,11 +403,19 @@ export default function WellnessClient() {
           <div className="space-y-6">
             <section className={surfaceClass}>
               <p className={sectionEyebrow}>Balances</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Leave Balances</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Leave Balance</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Paid leave is capped at 10 days total per person. Leave type does not create extra paid days.
+              </p>
               <div className="mt-4 grid gap-3">
-                <BalanceRow label="Annual" data={overview?.leaveBalance.annual} />
-                <BalanceRow label="Sick" data={overview?.leaveBalance.sick} />
-                <BalanceRow label="Emergency" data={overview?.leaveBalance.emergency} />
+                <BalanceRow
+                  label="Total paid leave"
+                  data={{
+                    entitlement: overview?.leaveBalance.totalEntitlement ?? 10,
+                    used: overview?.leaveBalance.totalUsed ?? 0,
+                    remaining: overview?.leaveBalance.totalRemaining ?? 0,
+                  }}
+                />
               </div>
             </section>
 

@@ -4,11 +4,31 @@ import { getNextTradingPeriod, getTradingPeriodFor, type TradingPeriod } from "@
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
+export const TOTAL_PAID_LEAVE_DAYS = 10;
+
 const DEFAULT_LEAVE_ENTITLEMENTS = {
-  annual: 21,
-  sick: 10,
-  emergency: 5,
+  annual: TOTAL_PAID_LEAVE_DAYS,
+  sick: 0,
+  emergency: 0,
 } as const;
+
+type LeaveUsageSnapshot = Pick<
+  LeaveBalance,
+  "annualUsed" | "sickUsed" | "emergencyUsed" | "annualEntitlement" | "sickEntitlement" | "emergencyEntitlement"
+>;
+
+function getPaidLeaveUsed(balance: Pick<LeaveBalance, "annualUsed" | "sickUsed" | "emergencyUsed">) {
+  return Math.max(0, balance.annualUsed) + Math.max(0, balance.sickUsed) + Math.max(0, balance.emergencyUsed);
+}
+
+export function normalizePaidLeaveEntitlements<T extends LeaveUsageSnapshot>(balance: T) {
+  return {
+    ...balance,
+    annualEntitlement: TOTAL_PAID_LEAVE_DAYS,
+    sickEntitlement: 0,
+    emergencyEntitlement: 0,
+  };
+}
 
 function startOfDay(value: Date | string) {
   const date = value instanceof Date ? new Date(value) : new Date(value);
@@ -36,27 +56,28 @@ export function calculateLeaveDays(startDate: Date | string, endDate: Date | str
 }
 
 export function buildLeaveBalanceSummary(balance: LeaveBalance) {
-  const annualRemaining = Math.max(0, balance.annualEntitlement - balance.annualUsed);
-  const sickRemaining = Math.max(0, balance.sickEntitlement - balance.sickUsed);
-  const emergencyRemaining = Math.max(0, balance.emergencyEntitlement - balance.emergencyUsed);
+  const totalUsed = getPaidLeaveUsed(balance);
+  const totalRemaining = Math.max(0, TOTAL_PAID_LEAVE_DAYS - totalUsed);
 
   return {
     annual: {
-      entitlement: balance.annualEntitlement,
+      entitlement: TOTAL_PAID_LEAVE_DAYS,
       used: balance.annualUsed,
-      remaining: annualRemaining,
+      remaining: totalRemaining,
     },
     sick: {
-      entitlement: balance.sickEntitlement,
+      entitlement: TOTAL_PAID_LEAVE_DAYS,
       used: balance.sickUsed,
-      remaining: sickRemaining,
+      remaining: totalRemaining,
     },
     emergency: {
-      entitlement: balance.emergencyEntitlement,
+      entitlement: TOTAL_PAID_LEAVE_DAYS,
       used: balance.emergencyUsed,
-      remaining: emergencyRemaining,
+      remaining: totalRemaining,
     },
-    totalRemaining: annualRemaining + sickRemaining + emergencyRemaining,
+    totalEntitlement: TOTAL_PAID_LEAVE_DAYS,
+    totalUsed,
+    totalRemaining,
   };
 }
 
@@ -98,14 +119,10 @@ export function assertLeaveBalanceCanCover(
   daysRequested: number,
 ) {
   const summary = buildLeaveBalanceSummary(balance);
-  if (type === "ANNUAL" && summary.annual.remaining < daysRequested) {
-    throw new Error(`Annual leave balance is only ${summary.annual.remaining} day(s)`);
-  }
-  if (type === "SICK" && summary.sick.remaining < daysRequested) {
-    throw new Error(`Sick leave balance is only ${summary.sick.remaining} day(s)`);
-  }
-  if (type === "EMERGENCY" && summary.emergency.remaining < daysRequested) {
-    throw new Error(`Emergency leave balance is only ${summary.emergency.remaining} day(s)`);
+  if (type === "ANNUAL" || type === "SICK" || type === "EMERGENCY") {
+    if (summary.totalRemaining < daysRequested) {
+      throw new Error(`Paid leave balance is only ${summary.totalRemaining} day(s)`);
+    }
   }
 }
 

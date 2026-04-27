@@ -3,6 +3,7 @@ import { Prisma, type WellnessRequestStatus } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
+  assertLeaveBalanceCanCover,
   buildLeaveBalanceSummary,
   ensureLeaveBalance,
   syncApprovedLeaveBalance,
@@ -45,18 +46,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
       if (decision === "APPROVED" && existing.status !== "APPROVED") {
         const balance = await ensureLeaveBalance(existing.userId, tx);
-        const nextAnnual = balance.annualEntitlement - balance.annualUsed;
-        const nextSick = balance.sickEntitlement - balance.sickUsed;
-        const nextEmergency = balance.emergencyEntitlement - balance.emergencyUsed;
-        if (existing.type === "ANNUAL" && nextAnnual < existing.daysRequested) {
-          throw new Error(`Annual leave balance is only ${nextAnnual} day(s)`);
-        }
-        if (existing.type === "SICK" && nextSick < existing.daysRequested) {
-          throw new Error(`Sick leave balance is only ${nextSick} day(s)`);
-        }
-        if (existing.type === "EMERGENCY" && nextEmergency < existing.daysRequested) {
-          throw new Error(`Emergency leave balance is only ${nextEmergency} day(s)`);
-        }
+        assertLeaveBalanceCanCover(balance, existing.type, existing.daysRequested);
       }
 
       const updated = await tx.leaveRequest.update({

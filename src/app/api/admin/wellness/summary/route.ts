@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { ensureLeaveBalance } from "@/lib/wellness";
+import { ensureLeaveBalance, normalizePaidLeaveEntitlements } from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +57,7 @@ export async function GET() {
     staff.map(async (user) => {
       const balance = user.leaveBalance ?? (await ensureLeaveBalance(user.id));
       return {
-        ...balance,
+        ...normalizePaidLeaveEntitlements(balance),
         user: {
           id: user.id,
           name: user.name,

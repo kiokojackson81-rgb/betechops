@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { buildLeaveBalanceSummary, ensureLeaveBalance } from "@/lib/wellness";
+import { TOTAL_PAID_LEAVE_DAYS, buildLeaveBalanceSummary, ensureLeaveBalance, normalizePaidLeaveEntitlements } from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ userId: string }>
   const params = await Promise.resolve(ctx.params);
   const balance = await ensureLeaveBalance(params.userId);
   return NextResponse.json({
-    balance,
+    balance: normalizePaidLeaveEntitlements(balance),
     summary: buildLeaveBalanceSummary(balance),
   });
 }
@@ -37,12 +37,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ userId: string 
 
   const existing = await ensureLeaveBalance(params.userId);
   const patch = {
-    annualEntitlement: body?.annualEntitlement == null ? existing.annualEntitlement : Math.max(0, Math.trunc(Number(body.annualEntitlement))),
-    sickEntitlement: body?.sickEntitlement == null ? existing.sickEntitlement : Math.max(0, Math.trunc(Number(body.sickEntitlement))),
-    emergencyEntitlement:
-      body?.emergencyEntitlement == null
-        ? existing.emergencyEntitlement
-        : Math.max(0, Math.trunc(Number(body.emergencyEntitlement))),
+    annualEntitlement: TOTAL_PAID_LEAVE_DAYS,
+    sickEntitlement: 0,
+    emergencyEntitlement: 0,
     annualUsed: body?.annualUsed == null ? existing.annualUsed : Math.max(0, Math.trunc(Number(body.annualUsed))),
     sickUsed: body?.sickUsed == null ? existing.sickUsed : Math.max(0, Math.trunc(Number(body.sickUsed))),
     emergencyUsed:
@@ -67,7 +64,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ userId: string 
   });
 
   return NextResponse.json({
-    balance: updated,
+    balance: normalizePaidLeaveEntitlements(updated),
     summary: buildLeaveBalanceSummary(updated),
   });
 }
