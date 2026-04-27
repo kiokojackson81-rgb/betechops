@@ -42,6 +42,7 @@ export default function BrendahProductDesk() {
   const [showInactive, setShowInactive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const formRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -126,6 +127,32 @@ export default function BrendahProductDesk() {
     }
   };
 
+  const polishProductName = async () => {
+    if (!draft.name.trim()) {
+      showToast("Enter a product name first", "error");
+      return;
+    }
+
+    setAiBusy(true);
+    try {
+      const response = await fetch("/api/ai/receipt-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawDescription: draft.name }),
+      });
+      if (!response.ok) throw new Error("AI description failed");
+      const data = await response.json().catch(() => null);
+      if (data?.description) {
+        setDraft((current) => ({ ...current, name: String(data.description) }));
+        showToast("Product description updated", "success");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI description failed", "error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const startEdit = (product: PosProduct) => {
     setDraft({
       id: product.id,
@@ -167,7 +194,17 @@ export default function BrendahProductDesk() {
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="text-sm text-slate-300 md:col-span-2">
-                Product name
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span>Product name</span>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100 hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void polishProductName()}
+                    disabled={aiBusy}
+                  >
+                    {aiBusy ? "AI..." : "✨ AI format"}
+                  </button>
+                </div>
                 <textarea
                   ref={nameInputRef}
                   rows={4}
