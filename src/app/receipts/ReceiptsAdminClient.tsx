@@ -67,6 +67,7 @@ type ReceiptDetailPayload = {
   receipt: any;
   supportItems?: SupportItemDetail[];
   supportReceiptSummary?: { id: string; buyingTotal?: number | null } | null;
+  posCommissionTotal?: number;
 };
 
 type ItemWithCost = {
@@ -1300,8 +1301,9 @@ export default function ReceiptsAdminClient({
   };
   const { itemsWithCost, supportBuyingTotal, hasCompleteCosts, hasAuthoritativeBuyingTotal } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
+  const posCommissionTotal = Number(detail?.posCommissionTotal ?? 0);
   const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal;
-  const profitAmount = canShowReceiptProfit ? receiptGrandTotal - supportBuyingTotal : 0;
+  const profitAmount = canShowReceiptProfit ? receiptGrandTotal - supportBuyingTotal - posCommissionTotal : 0;
   const profitColor =
     canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
@@ -1873,6 +1875,10 @@ export default function ReceiptsAdminClient({
                       <div>
                         <p className="text-xs text-slate-500">Buying total</p>
                         <p className="font-semibold text-white">{formatCurrency(supportBuyingTotal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">POS commission</p>
+                        <p className="font-semibold text-white">{formatCurrency(posCommissionTotal)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-500">Profit</p>

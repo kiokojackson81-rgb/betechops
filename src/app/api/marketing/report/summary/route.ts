@@ -15,6 +15,7 @@ import { type PosReceiptSummary } from "@/lib/posReceiptSummary";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { computeJenifferProratedCommission } from "@/lib/commission";
 import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
+import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -267,6 +268,16 @@ export async function GET(req: Request) {
     } catch {
       // ignore
     }
+  }
+
+  const releasedPosCommission = await getReleasedPosProductCommissionForStaffPeriod(
+    targetUserId,
+    argPeriod.start,
+    argPeriod.end,
+  );
+  if (releasedPosCommission > 0) {
+    totalProfit -= releasedPosCommission;
+    commission += releasedPosCommission;
   }
 
   // base response

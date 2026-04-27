@@ -3,6 +3,7 @@ import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { getReleasedPosProductCommissionTotalsByOrderItemIds } from "@/lib/posProductCommission";
 import {
   cleanupMarketingReceipts,
   cleanupSupportReceipts,
@@ -70,6 +71,12 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
+  const orderItemIds = (receipt.order?.items ?? []).map((item) => item.id);
+  const posCommissionByOrderItemId = await getReleasedPosProductCommissionTotalsByOrderItemIds(orderItemIds);
+  const posCommissionTotal = Array.from(posCommissionByOrderItemId.values()).reduce(
+    (sum, amount) => sum + Number(amount ?? 0),
+    0,
+  );
   try {
     if (receipt?.order?.orderNumber) {
       const candidates = new Set<string>();
@@ -130,7 +137,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   } catch (e) {
     // best-effort; ignore support lookup failures
   }
-  return NextResponse.json({ receipt, supportItems, supportReceiptSummary });
+  return NextResponse.json({ receipt, supportItems, supportReceiptSummary, posCommissionTotal });
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {

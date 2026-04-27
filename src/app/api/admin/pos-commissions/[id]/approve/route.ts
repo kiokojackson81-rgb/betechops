@@ -29,6 +29,7 @@ export async function POST(_req: Request, context: ParamsContext) {
       calcDetail: {
         ...detail,
         approvedAt: new Date().toISOString(),
+        releasedAt: new Date().toISOString(),
         approvedById: actorId,
       },
     },
