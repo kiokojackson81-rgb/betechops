@@ -617,6 +617,7 @@ model Product {
   category        String
   sellingPrice    Float
   lastBuyingPrice Float?
+  defaultWarranty String?
   commissionEnabled Boolean   @default(false)
   commissionAmount Decimal?   @db.Decimal(12, 2)
   commissionRequiresApproval Boolean @default(false)

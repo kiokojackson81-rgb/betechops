@@ -14,6 +14,7 @@ const updateSchema = z.object({
   category: z.string().trim().min(1).max(120).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
+  defaultWarranty: z.string().trim().max(50).nullable().optional(),
   isActive: z.boolean().optional(),
   commissionEnabled: z.boolean().optional(),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
@@ -67,6 +68,10 @@ export async function PATCH(req: Request, context: ParamsContext) {
       category: data.category,
       sellingPrice: data.sellingPrice,
       lastBuyingPrice: data.lastBuyingPrice,
+      defaultWarranty:
+        data.defaultWarranty === undefined
+          ? undefined
+          : data.defaultWarranty?.trim() || null,
       isActive: data.isActive,
       commissionEnabled: data.commissionEnabled,
       commissionAmount:

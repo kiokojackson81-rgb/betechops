@@ -10,6 +10,7 @@ type PosProduct = {
   category: string;
   sellingPrice: number;
   lastBuyingPrice?: number | null;
+  defaultWarranty?: string | null;
   isActive: boolean;
   commissionEnabled: boolean;
   commissionAmount?: number | string | null;
@@ -35,6 +36,7 @@ type ProductDraft = {
   category: string;
   sellingPrice: string;
   lastBuyingPrice: string;
+  defaultWarranty: string;
   isActive: boolean;
   commissionEnabled: boolean;
   commissionAmount: string;
@@ -47,6 +49,7 @@ const emptyDraft: ProductDraft = {
   category: "pos",
   sellingPrice: "",
   lastBuyingPrice: "",
+  defaultWarranty: "",
   isActive: true,
   commissionEnabled: false,
   commissionAmount: "",
@@ -55,6 +58,8 @@ const emptyDraft: ProductDraft = {
 
 const fieldClass =
   "w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
+
+const warrantyOptions = ["", "1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
 
 function formatMoney(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
@@ -164,6 +169,7 @@ export default function PosManagementClient() {
         category: draft.category,
         sellingPrice: Number(draft.sellingPrice || 0),
         lastBuyingPrice: draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+        defaultWarranty: draft.defaultWarranty.trim() || null,
         isActive: draft.isActive,
         commissionEnabled: draft.commissionEnabled,
         commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
@@ -197,6 +203,7 @@ export default function PosManagementClient() {
       category: product.category,
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
+      defaultWarranty: product.defaultWarranty ?? "",
       isActive: Boolean(product.isActive),
       commissionEnabled: Boolean(product.commissionEnabled),
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
@@ -214,6 +221,7 @@ export default function PosManagementClient() {
       category: product.category,
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
+      defaultWarranty: product.defaultWarranty ?? "",
       isActive: Boolean(product.isActive),
       commissionEnabled: true,
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
@@ -392,6 +400,21 @@ export default function PosManagementClient() {
               <label className="text-sm text-slate-300">
                 Buying price
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+              </label>
+              <label className="text-sm text-slate-300">
+                Default receipt warranty
+                <select
+                  className={`${fieldClass} mt-1`}
+                  value={draft.defaultWarranty}
+                  onChange={(e) => setDraft((s) => ({ ...s, defaultWarranty: e.target.value }))}
+                >
+                  <option value="">No default warranty</option>
+                  {warrantyOptions.filter(Boolean).map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
               <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
                 <label className="flex items-center gap-2 text-sm text-slate-200">
@@ -622,6 +645,9 @@ export default function PosManagementClient() {
                     <td className="px-4 py-3 align-top text-slate-200">
                       <div>Selling: {formatMoney(product.sellingPrice)}</div>
                       <div className="text-xs text-slate-400">Buying: {formatMoney(product.lastBuyingPrice)}</div>
+                      <div className="text-xs text-slate-400">
+                        Warranty: {product.defaultWarranty || "None"}
+                      </div>
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       {product.commissionEnabled ? (

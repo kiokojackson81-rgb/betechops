@@ -29,6 +29,7 @@ type CatalogProduct = {
   category?: string | null;
   sellingPrice: number;
   lastBuyingPrice?: number | null;
+  defaultWarranty?: string | null;
   isActive?: boolean;
   commissionEnabled?: boolean;
   commissionAmount?: number | string | null;
@@ -168,6 +169,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const addCatalogProduct = (product: CatalogProduct) => {
+    const defaultWarranty = typeof product.defaultWarranty === "string" ? product.defaultWarranty.trim() : "";
     setItems((current) => [
       ...current,
       {
@@ -183,8 +185,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         commissionEnabled: Boolean(product.commissionEnabled),
         commissionAmount: product.commissionAmount == null ? 0 : Number(product.commissionAmount),
         commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+        warranty: defaultWarranty,
       },
     ]);
+    if (defaultWarranty) {
+      setShowWarranty(true);
+    }
     setCatalogOpen(false);
     setCatalogQuery("");
   };

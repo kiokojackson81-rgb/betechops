@@ -28,6 +28,7 @@ export async function GET(req: Request) {
       category: true,
       sellingPrice: true,
       lastBuyingPrice: true,
+      defaultWarranty: true,
       isActive: true,
       commissionEnabled: true,
       commissionAmount: true,
