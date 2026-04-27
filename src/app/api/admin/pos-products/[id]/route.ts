@@ -6,8 +6,10 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const MAX_SKU_LENGTH = 80;
+
 const updateSchema = z.object({
-  sku: z.string().trim().min(1).max(80).optional(),
+  sku: z.string().trim().min(1).max(255).optional(),
   name: z.string().trim().min(1).max(255).optional(),
   category: z.string().trim().min(1).max(120).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
@@ -23,7 +25,8 @@ function normalizeSku(input: string) {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_SKU_LENGTH);
 }
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };

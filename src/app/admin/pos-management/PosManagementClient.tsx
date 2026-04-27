@@ -61,6 +61,34 @@ function formatMoney(value: number | string | null | undefined) {
   return `KES ${Number.isFinite(amount) ? amount.toLocaleString("en-KE", { maximumFractionDigits: 0 }) : "0"}`;
 }
 
+function getApiErrorMessage(json: unknown, fallback: string) {
+  if (!json || typeof json !== "object") return fallback;
+
+  const error = (json as { error?: unknown }).error;
+  if (typeof error === "string" && error.trim()) return error;
+
+  if (error && typeof error === "object") {
+    const formErrors = Array.isArray((error as { formErrors?: unknown }).formErrors)
+      ? (error as { formErrors: unknown[] }).formErrors.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    const fieldErrorsRaw = (error as { fieldErrors?: Record<string, unknown> }).fieldErrors;
+    const fieldErrors = fieldErrorsRaw && typeof fieldErrorsRaw === "object"
+      ? Object.entries(fieldErrorsRaw)
+          .flatMap(([field, value]) =>
+            Array.isArray(value)
+              ? value
+                  .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+                  .map((message) => `${field}: ${message}`)
+              : [],
+          )
+      : [];
+    const combined = [...formErrors, ...fieldErrors];
+    if (combined.length) return combined.join(". ");
+  }
+
+  return fallback;
+}
+
 export default function PosManagementClient() {
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
@@ -150,7 +178,7 @@ export default function PosManagementClient() {
         body: JSON.stringify(payload),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to save product");
+      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to save product"));
       showToast(draft.id ? "Product updated" : "Product created", "success");
       setDraft(emptyDraft);
       await loadData(query);
@@ -204,7 +232,7 @@ export default function PosManagementClient() {
         method: "DELETE",
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to delete product");
+      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to delete product"));
       if (draft.id === product.id) {
         setDraft(emptyDraft);
       }
@@ -222,7 +250,7 @@ export default function PosManagementClient() {
     try {
       const res = await fetch(`/api/admin/pos-commissions/${id}/${action}`, { method: "POST" });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || `Failed to ${action} commission`);
+      if (!res.ok) throw new Error(getApiErrorMessage(json, `Failed to ${action} commission`));
       showToast(`Commission ${action}d`, "success");
       await loadData(query);
     } catch (err) {
@@ -267,7 +295,7 @@ export default function PosManagementClient() {
       body: JSON.stringify({ ids, action }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || `Failed to ${action} selected products`);
+    if (!res.ok) throw new Error(getApiErrorMessage(json, `Failed to ${action} selected products`));
     return json;
   };
 

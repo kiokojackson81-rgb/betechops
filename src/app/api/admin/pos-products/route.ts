@@ -4,8 +4,10 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const MAX_SKU_LENGTH = 80;
+
 const productSchema = z.object({
-  sku: z.string().trim().min(1).max(80).optional(),
+  sku: z.string().trim().min(1).max(255).optional(),
   name: z.string().trim().min(1).max(255),
   category: z.string().trim().min(1).max(120).default("pos"),
   sellingPrice: z.coerce.number().min(0),
@@ -21,8 +23,14 @@ function slugifySku(input: string) {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return normalized || `POS-${Date.now().toString(36).toUpperCase()}`;
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_SKU_LENGTH);
+  return normalized || `POS-${Date.now().toString(36).toUpperCase()}`.slice(0, MAX_SKU_LENGTH);
+}
+
+function withSkuSuffix(base: string, suffix: number) {
+  const suffixText = `-${suffix}`;
+  return `${base.slice(0, Math.max(1, MAX_SKU_LENGTH - suffixText.length))}${suffixText}`;
 }
 
 export async function GET(req: Request) {
@@ -71,7 +79,7 @@ export async function POST(req: Request) {
   let sku = skuBase;
   let suffix = 1;
   while (await prisma.product.findUnique({ where: { sku }, select: { id: true } })) {
-    sku = `${skuBase}-${suffix}`;
+    sku = withSkuSuffix(skuBase, suffix);
     suffix += 1;
   }
 
