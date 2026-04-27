@@ -69,6 +69,8 @@ export default function PosManagementClient() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
@@ -109,6 +111,16 @@ export default function PosManagementClient() {
     nameInputRef.current?.focus();
     nameInputRef.current?.select();
   }, [draft.id]);
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next: Record<string, boolean> = {};
+      for (const product of products) {
+        if (current[product.id]) next[product.id] = true;
+      }
+      return next;
+    });
+  }, [products]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -217,6 +229,114 @@ export default function PosManagementClient() {
       showToast(err instanceof Error ? err.message : `Failed to ${action} commission`, "error");
     } finally {
       setApprovalBusyId(null);
+    }
+  };
+
+  const visibleSelectedProducts = products.filter((product) => selectedIds[product.id]);
+  const selectedCount = visibleSelectedProducts.length;
+  const allOnPageSelected = products.length > 0 && selectedCount === products.length;
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = { ...current };
+      if (next[id]) delete next[id];
+      else next[id] = true;
+      return next;
+    });
+  };
+
+  const toggleAllOnPage = () => {
+    setSelectedIds((current) => {
+      const next = { ...current };
+      if (allOnPageSelected) {
+        for (const product of products) delete next[product.id];
+      } else {
+        for (const product of products) next[product.id] = true;
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds({});
+
+  const updateProductState = async (productId: string, isActive: boolean) => {
+    const res = await fetch(`/api/admin/pos-products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error || "Failed to update product");
+    return json;
+  };
+
+  const bulkUpdateState = async (isActive: boolean) => {
+    if (!selectedCount) return showToast("Select at least one product", "error");
+    const action = isActive ? "activate" : "archive";
+    setBulkBusy(action);
+    try {
+      const results = await Promise.allSettled(
+        visibleSelectedProducts.map((product) => updateProductState(product.id, isActive)),
+      );
+      const successCount = results.filter((result) => result.status === "fulfilled").length;
+      const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
+      if (successCount > 0) {
+        showToast(
+          isActive
+            ? `${successCount} product${successCount === 1 ? "" : "s"} activated`
+            : `${successCount} product${successCount === 1 ? "" : "s"} archived`,
+          "success",
+        );
+      }
+      if (firstError) {
+        showToast(firstError.reason instanceof Error ? firstError.reason.message : "Some products failed to update", "error");
+      }
+      clearSelection();
+      await loadData(query);
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  const bulkDeleteProducts = async () => {
+    if (!selectedCount) return showToast("Select at least one product", "error");
+    const confirmed = window.confirm(
+      `Delete ${selectedCount} selected product${selectedCount === 1 ? "" : "s"}? Linked products will be archived so historical POS receipts remain unchanged.`,
+    );
+    if (!confirmed) return;
+    setBulkBusy("delete");
+    try {
+      const results = await Promise.allSettled(
+        visibleSelectedProducts.map((product) =>
+          fetch(`/api/admin/pos-products/${product.id}`, { method: "DELETE" }).then(async (res) => {
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json?.error || "Failed to delete product");
+            return json;
+          }),
+        ),
+      );
+      const successCount = results.filter((result) => result.status === "fulfilled").length;
+      const archivedCount = results.filter(
+        (result) => result.status === "fulfilled" && Boolean((result as PromiseFulfilledResult<{ archived?: boolean }>).value?.archived),
+      ).length;
+      const deletedCount = successCount - archivedCount;
+      const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
+      if (successCount > 0) {
+        const parts: string[] = [];
+        if (deletedCount > 0) parts.push(`${deletedCount} deleted`);
+        if (archivedCount > 0) parts.push(`${archivedCount} archived`);
+        showToast(`Bulk catalog cleanup complete: ${parts.join(", ")}`, "success");
+      }
+      if (firstError) {
+        showToast(firstError.reason instanceof Error ? firstError.reason.message : "Some products failed to delete", "error");
+      }
+      if (draft.id && selectedIds[draft.id]) {
+        setDraft(emptyDraft);
+      }
+      clearSelection();
+      await loadData(query);
+    } finally {
+      setBulkBusy(null);
     }
   };
 
@@ -350,22 +470,67 @@ export default function PosManagementClient() {
             <h2 className="text-2xl font-semibold text-white">POS products</h2>
             <p className="mt-2 text-sm text-slate-400">Edit, delete, or review the products currently available to the POS catalog.</p>
           </div>
-          <input
-            className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-            placeholder="Search products"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-            Show archived products
-          </label>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <input
+              className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              placeholder="Search products"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show archived products
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+          <div className="text-sm text-slate-300">
+            {selectedCount ? `${selectedCount} selected` : "Select products to update or clean up the catalog in bulk."}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
+              onClick={toggleAllOnPage}
+              disabled={!products.length || !!bulkBusy}
+            >
+              {allOnPageSelected ? "Clear page" : "Select page"}
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-emerald-500/40 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void bulkUpdateState(true)}
+              disabled={!selectedCount || !!bulkBusy}
+            >
+              {bulkBusy === "activate" ? "Activating..." : "Enable selected"}
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-amber-400/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void bulkUpdateState(false)}
+              disabled={!selectedCount || !!bulkBusy}
+            >
+              {bulkBusy === "archive" ? "Archiving..." : "Disable selected"}
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void bulkDeleteProducts()}
+              disabled={!selectedCount || !!bulkBusy}
+            >
+              {bulkBusy === "delete" ? "Deleting..." : "Delete selected"}
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
           <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
+                <th className="px-4 py-3">
+                  <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!products.length || !!bulkBusy} />
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Prices</th>
                 <th className="px-4 py-3">Commission</th>
@@ -376,11 +541,19 @@ export default function PosManagementClient() {
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
               ) : products.length ? (
                 products.map((product) => (
                   <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
+                    <td className="px-4 py-3 align-top">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedIds[product.id])}
+                        onChange={() => toggleSelected(product.id)}
+                        disabled={!!bulkBusy}
+                      />
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <div className="max-w-xl font-semibold leading-8 text-white">{product.name}</div>
                       <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>
@@ -436,7 +609,7 @@ export default function PosManagementClient() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
                 </tr>
               )}
             </tbody>
