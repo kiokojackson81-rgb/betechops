@@ -1,0 +1,389 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { showToast } from "@/lib/ui/toast";
+
+type PosProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  sellingPrice: number;
+  lastBuyingPrice?: number | null;
+  isActive: boolean;
+  commissionEnabled: boolean;
+  commissionAmount?: number | string | null;
+  commissionRequiresApproval: boolean;
+};
+
+type CommissionApproval = {
+  id: string;
+  amount: number | string;
+  status: string;
+  createdAt: string;
+  staff?: { name?: string | null; email?: string | null } | null;
+  orderItem?: {
+    product?: { name?: string | null; sku?: string | null } | null;
+    order?: { orderNumber?: string | null; customerName?: string | null } | null;
+  } | null;
+};
+
+type ProductDraft = {
+  id?: string;
+  sku: string;
+  name: string;
+  category: string;
+  sellingPrice: string;
+  lastBuyingPrice: string;
+  isActive: boolean;
+  commissionEnabled: boolean;
+  commissionAmount: string;
+  commissionRequiresApproval: boolean;
+};
+
+const emptyDraft: ProductDraft = {
+  sku: "",
+  name: "",
+  category: "pos",
+  sellingPrice: "",
+  lastBuyingPrice: "",
+  isActive: true,
+  commissionEnabled: false,
+  commissionAmount: "",
+  commissionRequiresApproval: false,
+};
+
+const fieldClass =
+  "w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
+
+function formatMoney(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return `KES ${Number.isFinite(amount) ? amount.toLocaleString("en-KE", { maximumFractionDigits: 0 }) : "0"}`;
+}
+
+export default function PosManagementClient() {
+  const [products, setProducts] = useState<PosProduct[]>([]);
+  const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
+  const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const loadData = useCallback(async (productQuery = query) => {
+    setLoading(true);
+    try {
+      const [productsRes, approvalsRes] = await Promise.all([
+        fetch(`/api/admin/pos-products?q=${encodeURIComponent(productQuery)}&includeInactive=1&limit=200`, { cache: "no-store" }),
+        fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
+      ]);
+
+      const productsJson = await productsRes.json().catch(() => ({ items: [] }));
+      const approvalsJson = await approvalsRes.json().catch(() => ({ items: [] }));
+      setProducts(Array.isArray(productsJson.items) ? productsJson.items : []);
+      setApprovals(Array.isArray(approvalsJson.items) ? approvalsJson.items : []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to load POS management data", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [query]);
+
+  useEffect(() => {
+    void loadData("");
+  }, [loadData]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      void loadData(query);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query, loadData]);
+
+  const submitDraft = async () => {
+    if (!draft.name.trim()) return showToast("Product name is required", "error");
+    if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
+    setSaving(true);
+    try {
+      const payload = {
+        sku: draft.sku || undefined,
+        name: draft.name,
+        category: draft.category,
+        sellingPrice: Number(draft.sellingPrice || 0),
+        lastBuyingPrice: draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+        isActive: draft.isActive,
+        commissionEnabled: draft.commissionEnabled,
+        commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
+        commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
+      };
+
+      const url = draft.id ? `/api/admin/pos-products/${draft.id}` : "/api/admin/pos-products";
+      const method = draft.id ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to save product");
+      showToast(draft.id ? "Product updated" : "Product created", "success");
+      setDraft(emptyDraft);
+      await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save product", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEdit = (product: PosProduct) => {
+    setDraft({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      sellingPrice: String(product.sellingPrice ?? ""),
+      lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
+      isActive: Boolean(product.isActive),
+      commissionEnabled: Boolean(product.commissionEnabled),
+      commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
+      commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+    });
+  };
+
+  const updateApproval = async (id: string, action: "approve" | "reject") => {
+    try {
+      const res = await fetch(`/api/admin/pos-commissions/${id}/${action}`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `Failed to ${action} commission`);
+      showToast(`Commission ${action}d`, "success");
+      await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : `Failed to ${action} commission`, "error");
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">
+      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
+            <h2 className="text-xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
+          </div>
+          {draft.id ? (
+            <button
+              type="button"
+              className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+              onClick={() => setDraft(emptyDraft)}
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <label className="text-sm text-slate-300">
+            Product name
+            <input className={`${fieldClass} mt-1`} value={draft.name} onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))} />
+          </label>
+          <label className="text-sm text-slate-300">
+            SKU
+            <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
+          </label>
+          <label className="text-sm text-slate-300">
+            Category
+            <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
+          </label>
+          <label className="text-sm text-slate-300">
+            Selling price
+            <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
+          </label>
+          <label className="text-sm text-slate-300">
+            Buying price
+            <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+          </label>
+          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked }))} />
+              Active in POS catalog
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
+              Enable product commission
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={draft.commissionRequiresApproval}
+                onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
+                disabled={!draft.commissionEnabled}
+              />
+              Require approval
+            </label>
+          </div>
+        </div>
+
+        {draft.commissionEnabled ? (
+          <div className="mt-4">
+            <label className="text-sm text-slate-300">
+              Commission per sold item
+              <input
+                className={`${fieldClass} mt-1`}
+                type="number"
+                min="0"
+                value={draft.commissionAmount}
+                onChange={(e) => setDraft((s) => ({ ...s, commissionAmount: e.target.value }))}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        <div className="mt-5">
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => void submitDraft()}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : draft.id ? "Update product" : "Create product"}
+          </button>
+        </div>
+      </section>
+
+      <div className="space-y-6">
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
+              <h2 className="text-xl font-semibold text-white">POS products</h2>
+            </div>
+            <input
+              className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              placeholder="Search products"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800">
+            <table className="min-w-full divide-y divide-slate-800 text-sm">
+              <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Product</th>
+                  <th className="px-4 py-3">Prices</th>
+                  <th className="px-4 py-3">Commission</th>
+                  <th className="px-4 py-3">State</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-950/40">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  </tr>
+                ) : products.length ? (
+                  products.map((product) => (
+                    <tr key={product.id}>
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-semibold text-white">{product.name}</div>
+                        <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-200">
+                        <div>Selling: {formatMoney(product.sellingPrice)}</div>
+                        <div className="text-xs text-slate-400">Buying: {formatMoney(product.lastBuyingPrice)}</div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-slate-200">
+                        {product.commissionEnabled ? (
+                          <>
+                            <div>{formatMoney(product.commissionAmount)}</div>
+                            <div className="text-xs text-slate-400">
+                              {product.commissionRequiresApproval ? "Approval required" : "Auto release"}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-slate-500">Disabled</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
+                          {product.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right align-top">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
+                          onClick={() => startEdit(product)}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Approvals</p>
+              <h2 className="text-xl font-semibold text-white">Pending POS commissions</h2>
+            </div>
+            <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+              {approvals.length} pending
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {approvals.length ? (
+              approvals.map((approval) => (
+                <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="font-semibold text-white">
+                        {approval.orderItem?.product?.name || "Product"} · {formatMoney(approval.amount)}
+                      </div>
+                      <div className="text-sm text-slate-300">
+                        Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-black hover:brightness-95"
+                        onClick={() => void updateApproval(approval.id, "approve")}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10"
+                        onClick={() => void updateApproval(approval.id, "reject")}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
+                No commission approvals are waiting right now.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}

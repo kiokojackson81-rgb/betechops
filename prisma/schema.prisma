@@ -531,6 +531,9 @@ model Product {
   category        String
   sellingPrice    Float
   lastBuyingPrice Float?
+  commissionEnabled Boolean   @default(false)
+  commissionAmount Decimal?   @db.Decimal(12, 2)
+  commissionRequiresApproval Boolean @default(false)
   minStockLevel   Int         @default(5)
   stockQuantity   Int         @default(0)
   isActive        Boolean     @default(true)
