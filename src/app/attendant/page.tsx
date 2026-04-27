@@ -220,16 +220,28 @@ export default function AttendantDashboard() {
           <Sparkline values={recentReports.map((r) => r.productsCount)} color="var(--primary)" />
         </div>
         <div className="w-full sm:w-auto sm:ml-auto">
-          <Button
-            onClick={() => {
-              const params = new URLSearchParams(window.location.search);
-              window.location.href = withImpersonateId("/attendant/daily-report", params.get("impersonateId"));
-            }}
-            variant="primary"
-            className="w-full text-center sm:w-auto"
-          >
-            Open daily report
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                window.location.href = withImpersonateId("/attendant/wellness", params.get("impersonateId"));
+              }}
+              variant="secondary"
+              className="w-full text-center sm:w-auto"
+            >
+              Open wellness
+            </Button>
+            <Button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                window.location.href = withImpersonateId("/attendant/daily-report", params.get("impersonateId"));
+              }}
+              variant="primary"
+              className="w-full text-center sm:w-auto"
+            >
+              Open daily report
+            </Button>
+          </div>
         </div>
       </div>
 
