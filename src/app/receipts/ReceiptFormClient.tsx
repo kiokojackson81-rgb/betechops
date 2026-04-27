@@ -717,15 +717,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                           Catalog
                         </span>
                         <span>{it.sku || "SKU"}</span>
-                        {it.buyingPrice && Number(it.buyingPrice) > 0 ? (
-                          <span>Buying KES {Number(it.buyingPrice).toLocaleString()}</span>
-                        ) : null}
-                        {it.commissionEnabled && (it.commissionAmount ?? 0) > 0 ? (
-                          <span>
-                            Commission KES {Number(it.commissionAmount || 0).toLocaleString()}
-                            {it.commissionRequiresApproval ? " · approval" : ""}
-                          </span>
-                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -829,7 +820,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 <p className="text-xs uppercase tracking-[0.25em] text-slate-400">POS Catalog</p>
                 <h2 className="text-xl font-semibold text-white">Select product</h2>
                 <p className="text-sm text-slate-400">
-                  Pick an admin-managed product to pull its selling and buying price into this receipt.
+                  Pick an admin-managed product to attach it to this receipt.
                 </p>
               </div>
               <button
@@ -870,19 +861,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         {product.category ? ` · ${product.category}` : ""}
                       </div>
                       <div className="text-xs text-slate-400">
-                        Buying: KES {Number(product.lastBuyingPrice || 0).toLocaleString()} · Selling: KES{" "}
-                        {Number(product.sellingPrice || 0).toLocaleString()}
+                        Selling: KES {Number(product.sellingPrice || 0).toLocaleString()}
                       </div>
-                    </div>
-                    <div className="space-y-1 text-right text-xs text-slate-300">
-                      {product.commissionEnabled && Number(product.commissionAmount || 0) > 0 ? (
-                        <div>
-                          Commission: KES {Number(product.commissionAmount || 0).toLocaleString()}
-                          {product.commissionRequiresApproval ? " · approval" : ""}
-                        </div>
-                      ) : (
-                        <div>No product commission</div>
-                      )}
                     </div>
                   </button>
                 ))
