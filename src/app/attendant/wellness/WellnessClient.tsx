@@ -104,6 +104,17 @@ function toDateInput(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function buildInstallmentPreview(total: number, periods: number) {
+  const normalizedTotal = Math.max(0, Math.trunc(Number(total ?? 0)));
+  const normalizedPeriods = Math.max(1, Math.trunc(Number(periods ?? 1)));
+  if (normalizedTotal <= 0) {
+    return Array.from({ length: normalizedPeriods }, () => 0);
+  }
+  const base = Math.floor(normalizedTotal / normalizedPeriods);
+  const remainder = normalizedTotal % normalizedPeriods;
+  return Array.from({ length: normalizedPeriods }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
 async function requestWellnessOverview(impersonateId: string | null) {
   const params = new URLSearchParams();
   if (impersonateId) params.set("impersonateId", impersonateId);
@@ -136,6 +147,20 @@ export default function WellnessClient() {
     repaymentPeriod: String(MAX_CASH_ADVANCE_REPAYMENT_PERIOD),
     reason: "",
   });
+  const requestedAdvanceAmount = Math.max(0, Math.trunc(Number(advanceForm.requestedAmount ?? 0)));
+  const requestedRepaymentMonths = Math.min(
+    MAX_CASH_ADVANCE_REPAYMENT_PERIOD,
+    Math.max(1, Math.trunc(Number(advanceForm.repaymentPeriod ?? 1) || 1)),
+  );
+  const requestedInstallments = buildInstallmentPreview(requestedAdvanceAmount, requestedRepaymentMonths);
+  const projectedAvailableAfterRequest = Math.max(
+    0,
+    Number(overview?.cashAdvanceCapacity.availableToBorrow ?? 0) - requestedAdvanceAmount,
+  );
+  const requestExcessAmount = Math.max(
+    0,
+    requestedAdvanceAmount - Number(overview?.cashAdvanceCapacity.availableToBorrow ?? 0),
+  );
 
   const fetchOverview = async () => {
     setLoading(true);
@@ -391,8 +416,26 @@ export default function WellnessClient() {
                 <MiniInfoCard label="Salary cap" value={currency.format(overview?.cashAdvanceCapacity.salary ?? 0)} />
                 <MiniInfoCard label="Outstanding" value={currency.format(overview?.outstandingAdvanceBalance ?? 0)} />
                 <MiniInfoCard label="Available" value={currency.format(overview?.cashAdvanceCapacity.availableToBorrow ?? 0)} />
+                <MiniInfoCard label="After request" value={currency.format(projectedAvailableAfterRequest)} />
+                <MiniInfoCard label="Current payroll" value={currency.format(requestedInstallments[0] ?? 0)} />
+                <MiniInfoCard label="Next period" value={currency.format(requestedInstallments[1] ?? 0)} />
                 <MiniInfoCard label="Upcoming due" value={String(overview?.upcomingInstallments.length ?? 0)} />
               </div>
+              {requestedAdvanceAmount > 0 ? (
+                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/55 px-4 py-3 text-sm text-slate-300">
+                  <div>
+                    Preview: {currency.format(requestedInstallments[0] ?? 0)} will be deducted from the current payroll
+                    {requestedRepaymentMonths > 1
+                      ? ` and ${currency.format(requestedInstallments[1] ?? 0)} will be deducted at the beginning of the next trading period.`
+                      : "."}
+                  </div>
+                  {requestExcessAmount > 0 ? (
+                    <div className="mt-2 text-rose-300">
+                      This request exceeds the available borrowing limit by {currency.format(requestExcessAmount)}.
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={() => void submitCashAdvance()}
