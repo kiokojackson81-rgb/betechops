@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 
 type PosProduct = {
@@ -68,7 +68,9 @@ export default function PosManagementClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const formSectionRef = useRef<HTMLElement | null>(null);
 
   const loadData = useCallback(async (productQuery = query) => {
     setLoading(true);
@@ -103,6 +105,9 @@ export default function PosManagementClient() {
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
+    if (draft.commissionEnabled && !draft.commissionAmount.trim()) {
+      return showToast("Commission amount is required when product commission is enabled", "error");
+    }
     setSaving(true);
     try {
       const payload = {
@@ -149,6 +154,23 @@ export default function PosManagementClient() {
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
     });
+    formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const startCommissionEdit = (product: PosProduct) => {
+    setDraft({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      sellingPrice: String(product.sellingPrice ?? ""),
+      lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
+      isActive: Boolean(product.isActive),
+      commissionEnabled: true,
+      commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
+      commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+    });
+    formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const deleteProduct = async (product: PosProduct) => {
@@ -174,6 +196,7 @@ export default function PosManagementClient() {
   };
 
   const updateApproval = async (id: string, action: "approve" | "reject") => {
+    setApprovalBusyId(id);
     try {
       const res = await fetch(`/api/admin/pos-commissions/${id}/${action}`, { method: "POST" });
       const json = await res.json().catch(() => ({}));
@@ -182,12 +205,14 @@ export default function PosManagementClient() {
       await loadData(query);
     } catch (err) {
       showToast(err instanceof Error ? err.message : `Failed to ${action} commission`, "error");
+    } finally {
+      setApprovalBusyId(null);
     }
   };
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+      <section ref={formSectionRef} className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <div>
             <div className="flex items-start justify-between gap-3">
@@ -266,7 +291,7 @@ export default function PosManagementClient() {
               </div>
             ) : null}
 
-            <div className="mt-5">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
@@ -275,6 +300,11 @@ export default function PosManagementClient() {
               >
                 {saving ? "Saving..." : draft.id ? "Update product" : "Create product"}
               </button>
+              {draft.id ? (
+                <div className="text-sm text-emerald-200">
+                  Editing: <span className="font-semibold text-white">{draft.name || draft.sku || "POS product"}</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -358,13 +388,20 @@ export default function PosManagementClient() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right align-top">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
                           className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
                           onClick={() => startEdit(product)}
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
+                          onClick={() => startCommissionEdit(product)}
+                        >
+                          {product.commissionEnabled ? "Edit commission" : "Assign commission"}
                         </button>
                         <button
                           type="button"
@@ -419,17 +456,19 @@ export default function PosManagementClient() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-black hover:brightness-95"
+                        className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => void updateApproval(approval.id, "approve")}
+                        disabled={approvalBusyId === approval.id}
                       >
-                        Approve
+                        {approvalBusyId === approval.id ? "Working..." : "Approve"}
                       </button>
                       <button
                         type="button"
-                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10"
+                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => void updateApproval(approval.id, "reject")}
+                        disabled={approvalBusyId === approval.id}
                       >
-                        Reject
+                        {approvalBusyId === approval.id ? "Working..." : "Reject"}
                       </button>
                     </div>
                   </div>
