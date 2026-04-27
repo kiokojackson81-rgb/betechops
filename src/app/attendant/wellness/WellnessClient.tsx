@@ -65,6 +65,11 @@ type OverviewResponse = {
     cashAdvance: { id: string; approvedAmount?: number | null; remainingBalance: number };
   }>;
   outstandingAdvanceBalance: number;
+  cashAdvanceCapacity: {
+    salary: number;
+    outstandingBalance: number;
+    availableToBorrow: number;
+  };
 };
 
 const currency = new Intl.NumberFormat("en-KE", {
@@ -342,7 +347,7 @@ export default function WellnessClient() {
                 <p className={sectionEyebrow}>Cash Advance</p>
                 <h2 className="text-2xl font-semibold text-white">Request Cash Advance</h2>
                 <p className="text-sm leading-6 text-slate-400">
-                  Ask for an advance and propose how many payroll cycles you want for repayment.
+                  You cannot borrow more than your salary. Existing approved balances also count against that limit.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -378,9 +383,10 @@ export default function WellnessClient() {
                 />
               </label>
               <div className="mt-5 grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/55 p-4 sm:grid-cols-3">
+                <MiniInfoCard label="Salary cap" value={currency.format(overview?.cashAdvanceCapacity.salary ?? 0)} />
                 <MiniInfoCard label="Outstanding" value={currency.format(overview?.outstandingAdvanceBalance ?? 0)} />
+                <MiniInfoCard label="Available" value={currency.format(overview?.cashAdvanceCapacity.availableToBorrow ?? 0)} />
                 <MiniInfoCard label="Upcoming due" value={String(overview?.upcomingInstallments.length ?? 0)} />
-                <MiniInfoCard label="Requests made" value={String(overview?.cashAdvances.length ?? 0)} />
               </div>
               <div className="mt-5 flex justify-end">
                 <Button

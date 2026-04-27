@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { assertCashAdvanceWithinSalaryCap } from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
   }
 
   try {
+    await assertCashAdvanceWithinSalaryCap(userId, requestedAmount);
+
     const created = await prisma.cashAdvance.create({
       data: {
         userId,

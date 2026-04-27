@@ -196,10 +196,71 @@ export function buildCashAdvanceInstallments(input: {
   });
 }
 
+export async function getCashAdvanceCapacity(
+  userId: string,
+  input?: { db?: DbClient; excludeAdvanceId?: string | null },
+) {
+  const db = input?.db ?? prisma;
+  const [user, approvedAdvances] = await Promise.all([
+    db.user.findUnique({
+      where: { id: userId },
+      select: {
+        attendantCompPlan: {
+          select: {
+            baseSalary: true,
+            isActive: true,
+          },
+        },
+      },
+    }),
+    db.cashAdvance.findMany({
+      where: {
+        userId,
+        status: "APPROVED",
+        ...(input?.excludeAdvanceId ? { id: { not: input.excludeAdvanceId } } : {}),
+      },
+      select: {
+        id: true,
+        remainingBalance: true,
+      },
+    }),
+  ]);
+
+  const salary = Math.max(0, Number(user?.attendantCompPlan?.baseSalary ?? 0));
+  const outstandingBalance = approvedAdvances.reduce((sum, item) => sum + Math.max(0, Number(item.remainingBalance ?? 0)), 0);
+  const availableToBorrow = Math.max(0, salary - outstandingBalance);
+
+  return {
+    salary,
+    outstandingBalance,
+    availableToBorrow,
+  };
+}
+
+export async function assertCashAdvanceWithinSalaryCap(
+  userId: string,
+  amount: number,
+  input?: { db?: DbClient; excludeAdvanceId?: string | null },
+) {
+  const requestedAmount = Math.max(0, Math.trunc(Number(amount ?? 0)));
+  const capacity = await getCashAdvanceCapacity(userId, input);
+
+  if (capacity.salary <= 0) {
+    throw new Error("Cash advance is unavailable because no base salary is set");
+  }
+  if (requestedAmount > capacity.availableToBorrow) {
+    throw new Error(
+      `Cash advance exceeds salary limit. Salary is KES ${capacity.salary.toLocaleString()} and available borrowing is KES ${capacity.availableToBorrow.toLocaleString()}`,
+    );
+  }
+
+  return capacity;
+}
+
 export async function getEmployeeWellnessOverview(userId: string, db: DbClient = prisma) {
   const balance = await ensureLeaveBalance(userId, db);
 
-  const [leaveRequests, cashAdvances, upcomingInstallments] = await Promise.all([
+  const [leaveRequests, cashAdvances, upcomingInstallments, cashAdvanceCapacity] = await Promise.all([
     db.leaveRequest.findMany({
       where: { userId },
       orderBy: [{ createdAt: "desc" }],
@@ -235,6 +296,7 @@ export async function getEmployeeWellnessOverview(userId: string, db: DbClient =
       orderBy: [{ dueDate: "asc" }],
       take: 6,
     }),
+    getCashAdvanceCapacity(userId, { db }),
   ]);
 
   return {
@@ -243,6 +305,7 @@ export async function getEmployeeWellnessOverview(userId: string, db: DbClient =
     cashAdvances,
     upcomingInstallments,
     outstandingAdvanceBalance: cashAdvances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
+    cashAdvanceCapacity,
   };
 }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma, type WellnessRequestStatus } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { buildCashAdvanceInstallments } from "@/lib/wellness";
+import { assertCashAdvanceWithinSalaryCap, buildCashAdvanceInstallments } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +61,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (approvedAmount <= 0 || repaymentPeriod <= 0) {
           throw new Error("approvedAmount and repaymentPeriod must be greater than zero");
         }
+        await assertCashAdvanceWithinSalaryCap(existing.userId, approvedAmount, {
+          db: tx,
+          excludeAdvanceId: existing.id,
+        });
         const firstReferenceDate = body?.firstDeductionDate ? new Date(body.firstDeductionDate) : new Date();
         schedules = buildCashAdvanceInstallments({
           approvedAmount,
