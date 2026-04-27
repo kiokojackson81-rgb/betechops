@@ -950,6 +950,12 @@ export default function AttendantOnlineClient() {
         period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }),
       )}&end=${encodeURIComponent(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }))}`
     : "/receipts";
+  const wellnessHref = (() => {
+    const params = new URLSearchParams();
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    const query = params.toString();
+    return query ? `/attendant/wellness?${query}` : "/attendant/wellness";
+  })();
   const performanceReportHref = (() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
     if (impersonateId) params.set("impersonateId", impersonateId);
@@ -990,6 +996,12 @@ export default function AttendantOnlineClient() {
               className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
             >
               Receipts
+            </Link>
+            <Link
+              href={wellnessHref}
+              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+            >
+              Wellness
             </Link>
             {isBenjaminSupervisor ? (
               <>
