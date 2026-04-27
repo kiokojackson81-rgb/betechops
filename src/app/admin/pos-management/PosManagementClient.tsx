@@ -438,6 +438,64 @@ export default function PosManagementClient() {
         </div>
       </section>
 
+      <div className="space-y-6">
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Approvals</p>
+              <h2 className="text-xl font-semibold text-white">Pending POS commissions</h2>
+            </div>
+            <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+              {approvals.length} pending
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {approvals.length ? (
+              approvals.map((approval) => (
+                <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="font-semibold text-white">
+                        {approval.orderItem?.product?.name || "Product"} · {formatMoney(approval.amount)}
+                      </div>
+                      <div className="text-sm text-slate-300">
+                        Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void updateApproval(approval.id, "approve")}
+                        disabled={approvalBusyId === approval.id}
+                      >
+                        {approvalBusyId === approval.id ? "Working..." : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void updateApproval(approval.id, "reject")}
+                        disabled={approvalBusyId === approval.id}
+                      >
+                        {approvalBusyId === approval.id ? "Working..." : "Reject"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
+                No commission approvals are waiting right now.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
       <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -591,64 +649,6 @@ export default function PosManagementClient() {
           </table>
         </div>
       </section>
-
-      <div className="space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Approvals</p>
-              <h2 className="text-xl font-semibold text-white">Pending POS commissions</h2>
-            </div>
-            <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
-              {approvals.length} pending
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {approvals.length ? (
-              approvals.map((approval) => (
-                <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="font-semibold text-white">
-                        {approval.orderItem?.product?.name || "Product"} · {formatMoney(approval.amount)}
-                      </div>
-                      <div className="text-sm text-slate-300">
-                        Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => void updateApproval(approval.id, "approve")}
-                        disabled={approvalBusyId === approval.id}
-                      >
-                        {approvalBusyId === approval.id ? "Working..." : "Approve"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => void updateApproval(approval.id, "reject")}
-                        disabled={approvalBusyId === approval.id}
-                      >
-                        {approvalBusyId === approval.id ? "Working..." : "Reject"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
-                No commission approvals are waiting right now.
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
     </div>
   );
 }
