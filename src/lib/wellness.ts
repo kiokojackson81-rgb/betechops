@@ -1,11 +1,9 @@
 import { Prisma, type LeaveBalance, type LeaveRequestType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getNextTradingPeriod, getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD, TOTAL_PAID_LEAVE_DAYS } from "@/lib/wellnessPolicy";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
-
-export const TOTAL_PAID_LEAVE_DAYS = 10;
-export const MAX_CASH_ADVANCE_REPAYMENT_PERIOD = 2;
 
 const DEFAULT_LEAVE_ENTITLEMENTS = {
   annual: TOTAL_PAID_LEAVE_DAYS,

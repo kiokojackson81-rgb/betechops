@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { TOTAL_PAID_LEAVE_DAYS, buildLeaveBalanceSummary, ensureLeaveBalance, normalizePaidLeaveEntitlements } from "@/lib/wellness";
+import { buildLeaveBalanceSummary, ensureLeaveBalance, normalizePaidLeaveEntitlements } from "@/lib/wellness";
+import { TOTAL_PAID_LEAVE_DAYS } from "@/lib/wellnessPolicy";
 
 export const dynamic = "force-dynamic";
 

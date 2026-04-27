@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import { toast } from "@/lib/toast";
-import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellness";
+import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellnessPolicy";
 
 type LeaveRequest = {
   id: string;

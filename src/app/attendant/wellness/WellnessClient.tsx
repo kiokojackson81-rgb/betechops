@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Button from "@/app/_components/Button";
 import { toast } from "@/lib/toast";
-import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellness";
+import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellnessPolicy";
 
 type LeaveRow = {
   id: string;
