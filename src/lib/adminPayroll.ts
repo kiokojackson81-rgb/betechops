@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { TradingPeriod } from "@/lib/tradingPeriod";
+import { getPreviousTradingPeriod, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getOnlineEarningsSummary } from "@/lib/onlineOps";
@@ -26,6 +26,11 @@ type AttendantRecord = {
   email?: string | null;
   attendantCategory?: string | null;
   isActive: boolean;
+};
+
+type PayrollBuildOptions = {
+  cache: Map<string, Promise<PayrollRow>>;
+  carryDepth: number;
 };
 
 function baseAdjustmentSummary() {
@@ -134,7 +139,53 @@ function isMarketingCategory(category?: string | null) {
   return category === "MARKETING_OPS";
 }
 
-export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
+function withNegativeBalanceCarry(row: PayrollRow, amount: number, sourcePeriod: TradingPeriod): PayrollRow {
+  if (amount <= 0) return row;
+
+  return {
+    ...row,
+    deductionTotal: row.deductionTotal + amount,
+    totalDeductions: row.totalDeductions + amount,
+    netPay: row.netPay - amount,
+    adjustmentBreakdown: {
+      ...row.adjustmentBreakdown,
+      other: Number(row.adjustmentBreakdown.other ?? 0) + amount,
+    },
+    adjustmentEntries: [
+      ...row.adjustmentEntries,
+      {
+        id: `negative-balance:${row.attendantId}:${sourcePeriod.key}`,
+        label: `Negative balance carried forward (${sourcePeriod.label})`,
+        amount,
+        adjustmentType: "NEGATIVE_BALANCE",
+        kind: "DEDUCTION",
+      },
+    ],
+  };
+}
+
+async function applyPreviousNegativeBalanceCarry(
+  attendant: AttendantRecord,
+  period: TradingPeriod,
+  row: PayrollRow,
+  options: PayrollBuildOptions,
+) {
+  if (options.carryDepth >= 24) return row;
+
+  const previousPeriod = getPreviousTradingPeriod(period);
+  const previousRow = await buildPayrollRowInternal(attendant, previousPeriod, {
+    cache: options.cache,
+    carryDepth: options.carryDepth + 1,
+  });
+  const carriedNegativeBalance = Math.max(0, -Number(previousRow.netPay ?? 0));
+  return withNegativeBalanceCarry(row, carriedNegativeBalance, previousPeriod);
+}
+
+async function buildPayrollRowResolved(
+  attendant: AttendantRecord,
+  period: TradingPeriod,
+  options: PayrollBuildOptions,
+): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   await ensurePayrollAdjustmentStorage();
   const [plan, ledger, adjustments] = await Promise.all([
@@ -201,7 +252,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       commissionTotal +
       bonusTotal;
 
-    return {
+    const row = {
       attendantId: attendant.id,
       name: attendant.name,
       email: attendant.email,
@@ -237,6 +288,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       adjustmentBreakdown: adjustmentSummary.breakdown,
       adjustmentEntries: adjustmentSummary.entries,
     };
+    return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
   }
 
   if (isDirectSalesCategory(attendant.attendantCategory)) {
@@ -281,7 +333,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       adjustmentSummary.totalBonus;
     const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
-    return {
+    const row = {
       attendantId: attendant.id,
       name: attendant.name,
       email: attendant.email,
@@ -315,6 +367,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       adjustmentBreakdown: adjustmentSummary.breakdown,
       adjustmentEntries: adjustmentSummary.entries,
     };
+    return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
   }
 
   if (isMarketingCategory(attendant.attendantCategory)) {
@@ -361,7 +414,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       adjustmentSummary.totalBonus;
     const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
-    return {
+    const row = {
       attendantId: attendant.id,
       name: attendant.name,
       email: attendant.email,
@@ -395,6 +448,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
       adjustmentBreakdown: adjustmentSummary.breakdown,
       adjustmentEntries: adjustmentSummary.entries,
     };
+    return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
   }
 
   const earningsSummary = await getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start });
@@ -419,7 +473,7 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     adjustmentSummary.totalBonus;
   const totalDeductions = adjustmentSummary.totalDeduction + penalties;
 
-  return {
+  const row = {
     attendantId: attendant.id,
     name: attendant.name,
     email: attendant.email,
@@ -449,4 +503,26 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     adjustmentBreakdown: adjustmentSummary.breakdown,
     adjustmentEntries: adjustmentSummary.entries,
   };
+  return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
+}
+
+function buildPayrollRowInternal(
+  attendant: AttendantRecord,
+  period: TradingPeriod,
+  options: PayrollBuildOptions,
+): Promise<PayrollRow> {
+  const cacheKey = `${attendant.id}:${period.key}:carry-${options.carryDepth}`;
+  const cached = options.cache.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = buildPayrollRowResolved(attendant, period, options);
+  options.cache.set(cacheKey, promise);
+  return promise;
+}
+
+export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
+  return buildPayrollRowInternal(attendant, period, {
+    cache: new Map<string, Promise<PayrollRow>>(),
+    carryDepth: 0,
+  });
 }
