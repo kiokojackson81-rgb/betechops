@@ -17,6 +17,7 @@ import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryS
 import { withImpersonateId } from "@/lib/impersonation";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
+import BrendahProductDesk from "@/components/BrendahProductDesk";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -1122,6 +1123,8 @@ export default function DailyReportFinal() {
               saturdaySummary={saturdaySummary}
               onSaturdaySummaryChange={setSaturdaySummary}
             />
+
+            {isBrendahView ? <BrendahProductDesk /> : null}
 
             <div className="flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
               <button
