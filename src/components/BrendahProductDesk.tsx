@@ -42,7 +42,6 @@ export default function BrendahProductDesk() {
   const [showInactive, setShowInactive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const formRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -135,29 +134,6 @@ export default function BrendahProductDesk() {
     });
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
-  };
-
-  const deleteProduct = async (product: PosProduct) => {
-    const confirmed = window.confirm(
-      `Delete "${product.name}"? Historical POS receipts will stay unchanged and linked products will be archived.`,
-    );
-    if (!confirmed) return;
-
-    setDeletingId(product.id);
-    try {
-      const res = await fetch(`/api/attendant/pos-products/${product.id}`, {
-        method: "DELETE",
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to delete product");
-      if (draft.id === product.id) setDraft(emptyDraft);
-      showToast(json?.message || "Product deleted", "success");
-      await loadProducts(query);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to delete product", "error");
-    } finally {
-      setDeletingId(null);
-    }
   };
 
   return (
@@ -258,7 +234,7 @@ export default function BrendahProductDesk() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
             <h2 className="text-2xl font-semibold text-white">Manage products</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Create, edit, or remove products. Historical POS receipts remain unchanged if an old product is archived.
+              Create and edit products here. Buying price and delete access stay under admin control.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -285,7 +261,6 @@ export default function BrendahProductDesk() {
               <tr>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Selling</th>
-                <th className="px-4 py-3">Buying</th>
                 <th className="px-4 py-3">Commission</th>
                 <th className="px-4 py-3">State</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -294,7 +269,7 @@ export default function BrendahProductDesk() {
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                     Loading products...
                   </td>
                 </tr>
@@ -309,11 +284,6 @@ export default function BrendahProductDesk() {
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       {formatMoney(product.sellingPrice)}
-                    </td>
-                    <td className="px-4 py-3 align-top text-slate-200">
-                      {product.lastBuyingPrice != null ? formatMoney(product.lastBuyingPrice) : (
-                        <span className="text-slate-500">Admin pending</span>
-                      )}
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       {product.commissionEnabled ? (
@@ -347,21 +317,13 @@ export default function BrendahProductDesk() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void deleteProduct(product)}
-                          disabled={deletingId === product.id}
-                        >
-                          {deletingId === product.id ? "Deleting..." : "Delete"}
-                        </button>
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                     No products found.
                   </td>
                 </tr>
