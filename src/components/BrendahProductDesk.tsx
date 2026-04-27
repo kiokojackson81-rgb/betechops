@@ -44,7 +44,14 @@ export default function BrendahProductDesk() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const formRef = useRef<HTMLElement | null>(null);
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const nameInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const resizeNameField = useCallback(() => {
+    const el = nameInputRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.max(el.scrollHeight, 112)}px`;
+  }, []);
 
   const loadProducts = useCallback(async (productQuery = query) => {
     setLoading(true);
@@ -78,7 +85,12 @@ export default function BrendahProductDesk() {
     if (!draft.id) return;
     nameInputRef.current?.focus();
     nameInputRef.current?.select();
-  }, [draft.id]);
+    resizeNameField();
+  }, [draft.id, resizeNameField]);
+
+  useEffect(() => {
+    resizeNameField();
+  }, [draft.name, resizeNameField]);
 
   const activeCount = useMemo(
     () => products.filter((product) => product.isActive).length,
@@ -180,11 +192,14 @@ export default function BrendahProductDesk() {
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="text-sm text-slate-300 md:col-span-2">
                 Product name
-                <input
+                <textarea
                   ref={nameInputRef}
-                  className={`${fieldClass} mt-1`}
+                  rows={4}
+                  className={`${fieldClass} mt-1 min-h-[112px] resize-y`}
                   value={draft.name}
                   onChange={(e) => setDraft((current) => ({ ...current, name: e.target.value }))}
+                  onInput={resizeNameField}
+                  placeholder="Enter full product name or a longer product description"
                 />
               </label>
               <label className="text-sm text-slate-300">
@@ -287,7 +302,7 @@ export default function BrendahProductDesk() {
                 products.map((product) => (
                   <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">
-                      <div className="font-semibold leading-7 text-white">{product.name}</div>
+                      <div className="max-w-xl whitespace-normal font-semibold leading-7 text-white">{product.name}</div>
                       <div className="text-xs uppercase tracking-wide text-slate-400">
                         {product.sku}
                       </div>

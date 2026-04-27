@@ -7,19 +7,25 @@ import React from "react";
 
 type Props = {
   receiptsHref?: string;
+  productDeskHref?: string;
   createHref?: string;
   wellnessHref?: string;
   onSignOut?: () => void;
   onReceiptsClick?: () => void;
+  onProductDeskClick?: () => void;
+  showProductDesk?: boolean;
   showDot?: boolean;
 };
 
 export default function HeaderActions({
   receiptsHref = "/marketing/receipts",
+  productDeskHref,
   createHref = "/receipts",
   wellnessHref = "/attendant/wellness",
   onSignOut,
   onReceiptsClick,
+  onProductDeskClick,
+  showProductDesk = false,
   showDot = false,
 }: Props) {
   return (
@@ -39,6 +45,16 @@ export default function HeaderActions({
           )}
           Receipts
         </Link>
+        {showProductDesk && productDeskHref ? (
+          <Link
+            href={productDeskHref}
+            aria-label="Product desk"
+            onClick={onProductDeskClick}
+            className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+          >
+            Product Desk
+          </Link>
+        ) : null}
         <Link
           href={createHref}
           className="flex items-center gap-2 rounded-full border-2 border-emerald-400 bg-transparent px-6 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition-shadow duration-150 hover:shadow-[0_6px_18px_rgba(16,185,129,0.12)] hover:bg-emerald-600/5"
