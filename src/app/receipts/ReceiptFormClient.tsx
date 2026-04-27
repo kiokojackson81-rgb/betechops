@@ -14,6 +14,25 @@ type ItemRow = {
   serial?: string;
   warranty?: string;
   isDeliveryFee?: boolean;
+  productId?: string;
+  sku?: string;
+  buyingPrice?: number | "";
+  commissionEnabled?: boolean;
+  commissionAmount?: number;
+  commissionRequiresApproval?: boolean;
+};
+
+type CatalogProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  category?: string | null;
+  sellingPrice: number;
+  lastBuyingPrice?: number | null;
+  isActive?: boolean;
+  commissionEnabled?: boolean;
+  commissionAmount?: number | string | null;
+  commissionRequiresApproval?: boolean;
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
@@ -24,6 +43,7 @@ const newItem = (): ItemRow => ({
   unitPrice: "",
   serial: "",
   warranty: "",
+  buyingPrice: "",
 });
 
 const sanitizeNumericInput = (value: string): number | "" => {
@@ -74,6 +94,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [descLoadingId, setDescLoadingId] = useState<string | null>(null);
   const [cashPaid, setCashPaid] = useState<number | "">(0);
   const [mpesaPaid, setMpesaPaid] = useState<number | "">(0);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +146,48 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         isDeliveryFee: true,
       },
     ]);
+
+  const searchCatalog = async (query: string) => {
+    setCatalogLoading(true);
+    try {
+      const params = new URLSearchParams({
+        activeOnly: "1",
+        limit: "20",
+      });
+      if (query.trim()) params.set("search", query.trim());
+      const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load catalog");
+      const data = await response.json().catch(() => []);
+      setCatalogResults(Array.isArray(data) ? data : []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to load catalog", "error");
+      setCatalogResults([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const addCatalogProduct = (product: CatalogProduct) => {
+    setItems((current) => [
+      ...current,
+      {
+        ...newItem(),
+        title: product.name,
+        unitPrice: Number(product.sellingPrice || 0),
+        productId: product.id,
+        sku: product.sku,
+        buyingPrice:
+          product.lastBuyingPrice == null || Number(product.lastBuyingPrice) <= 0
+            ? ""
+            : Number(product.lastBuyingPrice),
+        commissionEnabled: Boolean(product.commissionEnabled),
+        commissionAmount: product.commissionAmount == null ? 0 : Number(product.commissionAmount),
+        commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      },
+    ]);
+    setCatalogOpen(false);
+    setCatalogQuery("");
+  };
 
   const aiDescription = async (row: ItemRow) => {
     if (!row.title.trim()) return;
@@ -223,6 +289,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       setMpesaPaid(Math.max(0, total - cash));
     }
   }, [total, cashPaid, mpesaPaid]);
+
+  useEffect(() => {
+    if (!catalogOpen) return;
+    const handle = setTimeout(() => {
+      void searchCatalog(catalogQuery);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [catalogOpen, catalogQuery]);
 
   const buildDraft = (resolvedPaymentMethod: "MPESA" | "CASH") => ({
     items,
@@ -365,6 +439,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setNotes("");
     setSerial(generateReceiptSerial());
     setDocType("RECEIPT");
+    setCatalogOpen(false);
+    setCatalogQuery("");
+    setCatalogResults([]);
   };
 
   const handleSave = async () => {
@@ -390,6 +467,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       unitPrice: Number(it.unitPrice || 0),
       serial: showSerials ? it.serial || null : null,
       warranty: showWarranty ? it.warranty || null : null,
+      productId: it.productId || null,
+      sku: it.sku || null,
+      buyingPrice: Number(it.buyingPrice || 0),
+      commissionEnabled: Boolean(it.commissionEnabled),
+      commissionAmount: Number(it.commissionAmount || 0),
+      commissionRequiresApproval: Boolean(it.commissionRequiresApproval),
     }));
     const hasInvalidItem = normalizedItems.some((it) => !it.title || it.unitPrice <= 0);
     if (hasInvalidItem) {
@@ -456,7 +539,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const labelClass = "text-xs uppercase tracking-wide text-slate-400";
   const fieldClass = "mt-1 w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
-  const compactFieldClass = "rounded-xl border border-slate-800 bg-slate-950/80 px-2 py-1 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
   const checkboxClass = "h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500";
 
   return (
@@ -629,6 +711,23 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                       placeholder="Item description"
                       rows={2}
                     />
+                    {it.productId ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">
+                          Catalog
+                        </span>
+                        <span>{it.sku || "SKU"}</span>
+                        {it.buyingPrice && Number(it.buyingPrice) > 0 ? (
+                          <span>Buying KES {Number(it.buyingPrice).toLocaleString()}</span>
+                        ) : null}
+                        {it.commissionEnabled && (it.commissionAmount ?? 0) > 0 ? (
+                          <span>
+                            Commission KES {Number(it.commissionAmount || 0).toLocaleString()}
+                            {it.commissionRequiresApproval ? " · approval" : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <button
@@ -697,6 +796,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </button>
           <button
             type="button"
+            className="rounded-xl border border-sky-400/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-500/10"
+            onClick={() => {
+              setCatalogOpen(true);
+              void searchCatalog(catalogQuery);
+            }}
+          >
+            + Select product
+          </button>
+          <button
+            type="button"
             className="rounded-xl border border-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-500 hover:bg-emerald-500 hover:text-black"
             onClick={addDeliveryFeeRow}
           >
@@ -711,6 +820,81 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </button>
         </div>
       </section>
+
+      {catalogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">POS Catalog</p>
+                <h2 className="text-xl font-semibold text-white">Select product</h2>
+                <p className="text-sm text-slate-400">
+                  Pick an admin-managed product to pull its selling and buying price into this receipt.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+                onClick={() => setCatalogOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <input
+                value={catalogQuery}
+                onChange={(e) => setCatalogQuery(e.target.value)}
+                placeholder="Search by product name, SKU, or category"
+                className={fieldClass}
+              />
+            </div>
+
+            <div className="mt-4 max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {catalogLoading ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
+                  Loading products...
+                </div>
+              ) : catalogResults.length ? (
+                catalogResults.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    className="flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-left hover:border-emerald-500/40 hover:bg-slate-950"
+                    onClick={() => addCatalogProduct(product)}
+                  >
+                    <div className="space-y-1">
+                      <div className="font-semibold text-white">{product.name}</div>
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                        {product.sku}
+                        {product.category ? ` · ${product.category}` : ""}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Buying: KES {Number(product.lastBuyingPrice || 0).toLocaleString()} · Selling: KES{" "}
+                        {Number(product.sellingPrice || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-right text-xs text-slate-300">
+                      {product.commissionEnabled && Number(product.commissionAmount || 0) > 0 ? (
+                        <div>
+                          Commission: KES {Number(product.commissionAmount || 0).toLocaleString()}
+                          {product.commissionRequiresApproval ? " · approval" : ""}
+                        </div>
+                      ) : (
+                        <div>No product commission</div>
+                      )}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
+                  No products found.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {(showAddressInput || customerType === "delivery") && (
         <div className="mt-3">
