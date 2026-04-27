@@ -20,6 +20,14 @@ function getPaidLeaveUsed(balance: Pick<LeaveBalance, "annualUsed" | "sickUsed" 
   return Math.max(0, balance.annualUsed) + Math.max(0, balance.sickUsed) + Math.max(0, balance.emergencyUsed);
 }
 
+function isSharedAnnualLeaveType(type: LeaveRequestType) {
+  return type === "ANNUAL" || type === "SICK" || type === "EMERGENCY" || type === "OTHER";
+}
+
+function getCurrentLeaveYear() {
+  return new Date().getFullYear();
+}
+
 export function normalizePaidLeaveEntitlements<T extends LeaveUsageSnapshot>(balance: T) {
   return {
     ...balance,
@@ -81,7 +89,7 @@ export function buildLeaveBalanceSummary(balance: LeaveBalance) {
 }
 
 export async function ensureLeaveBalance(userId: string, db: DbClient = prisma) {
-  return db.leaveBalance.upsert({
+  const balance = await db.leaveBalance.upsert({
     where: { userId },
     update: {},
     create: {
@@ -91,6 +99,22 @@ export async function ensureLeaveBalance(userId: string, db: DbClient = prisma) 
       emergencyEntitlement: DEFAULT_LEAVE_ENTITLEMENTS.emergency,
     },
   });
+
+  if (balance.updatedAt.getFullYear() < getCurrentLeaveYear()) {
+    return db.leaveBalance.update({
+      where: { userId },
+      data: {
+        annualEntitlement: DEFAULT_LEAVE_ENTITLEMENTS.annual,
+        sickEntitlement: DEFAULT_LEAVE_ENTITLEMENTS.sick,
+        emergencyEntitlement: DEFAULT_LEAVE_ENTITLEMENTS.emergency,
+        annualUsed: 0,
+        sickUsed: 0,
+        emergencyUsed: 0,
+      },
+    });
+  }
+
+  return balance;
 }
 
 function adjustLeaveUsageByType(
@@ -100,14 +124,8 @@ function adjustLeaveUsageByType(
   current: Pick<LeaveBalance, "annualUsed" | "sickUsed" | "emergencyUsed">,
 ) {
   const delta = mode === "add" ? days : -days;
-  if (type === "ANNUAL") {
+  if (isSharedAnnualLeaveType(type)) {
     return { annualUsed: Math.max(0, current.annualUsed + delta) };
-  }
-  if (type === "SICK") {
-    return { sickUsed: Math.max(0, current.sickUsed + delta) };
-  }
-  if (type === "EMERGENCY") {
-    return { emergencyUsed: Math.max(0, current.emergencyUsed + delta) };
   }
   return {};
 }
@@ -118,9 +136,9 @@ export function assertLeaveBalanceCanCover(
   daysRequested: number,
 ) {
   const summary = buildLeaveBalanceSummary(balance);
-  if (type === "ANNUAL" || type === "SICK" || type === "EMERGENCY") {
+  if (isSharedAnnualLeaveType(type)) {
     if (summary.totalRemaining < daysRequested) {
-      throw new Error(`Paid leave balance is only ${summary.totalRemaining} day(s)`);
+      throw new Error(`Annual leave balance for ${getCurrentLeaveYear()} is only ${summary.totalRemaining} day(s)`);
     }
   }
 }

@@ -204,7 +204,7 @@ export default function AdminWellnessClient() {
             <p className="text-xs uppercase tracking-[0.35em] text-emerald-200/80">Admin Wellness</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight">Review staff wellness requests and keep payroll deductions aligned.</h1>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Pending requests, leave balances, and outstanding salary advances are grouped here so HR and supervisors can act without jumping across payroll screens.
+              Staff have a shared 10-day annual leave allowance per year. Sick, emergency, and other leave requests draw from the same yearly balance.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

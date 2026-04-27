@@ -251,7 +251,7 @@ export default function WellnessClient() {
                   <p className={sectionEyebrow}>Leave Request</p>
                   <h2 className="text-2xl font-semibold text-white">Submit Leave</h2>
                   <p className="max-w-2xl text-sm leading-6 text-slate-400">
-                    Everyone has a shared 10-day paid leave allowance. Annual, sick, and emergency requests all draw from the same pool.
+                    Everyone has 10 annual leave days per year. Sick, emergency, and other leave requests all draw from that same yearly allowance. Unpaid leave does not.
                   </p>
                 </div>
                 <span className="inline-flex h-fit rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
@@ -413,7 +413,7 @@ export default function WellnessClient() {
               <p className={sectionEyebrow}>Balances</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Leave Balance</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Paid leave is capped at 10 days total per person. Leave type does not create extra paid days.
+                This is a shared 10-day annual leave allowance for the current year. Sick, emergency, and other leave requests use the same balance.
               </p>
               <div className="mt-4 grid gap-3">
                 <BalanceRow
