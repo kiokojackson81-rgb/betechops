@@ -259,14 +259,15 @@ export default function PosManagementClient() {
 
   const clearSelection = () => setSelectedIds({});
 
-  const updateProductState = async (productId: string, isActive: boolean) => {
-    const res = await fetch(`/api/admin/pos-products/${productId}`, {
-      method: "PATCH",
+  const bulkRequest = async (action: "activate" | "archive" | "delete") => {
+    const ids = visibleSelectedProducts.map((product) => product.id);
+    const res = await fetch("/api/admin/pos-products/bulk", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive }),
+      body: JSON.stringify({ ids, action }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to update product");
+    if (!res.ok) throw new Error(json?.error || `Failed to ${action} selected products`);
     return json;
   };
 
@@ -275,24 +276,18 @@ export default function PosManagementClient() {
     const action = isActive ? "activate" : "archive";
     setBulkBusy(action);
     try {
-      const results = await Promise.allSettled(
-        visibleSelectedProducts.map((product) => updateProductState(product.id, isActive)),
+      const json = await bulkRequest(action);
+      showToast(
+        json?.message ||
+          (isActive
+            ? `${selectedCount} product${selectedCount === 1 ? "" : "s"} activated`
+            : `${selectedCount} product${selectedCount === 1 ? "" : "s"} archived`),
+        "success",
       );
-      const successCount = results.filter((result) => result.status === "fulfilled").length;
-      const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-      if (successCount > 0) {
-        showToast(
-          isActive
-            ? `${successCount} product${successCount === 1 ? "" : "s"} activated`
-            : `${successCount} product${successCount === 1 ? "" : "s"} archived`,
-          "success",
-        );
-      }
-      if (firstError) {
-        showToast(firstError.reason instanceof Error ? firstError.reason.message : "Some products failed to update", "error");
-      }
       clearSelection();
       await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update selected products", "error");
     } finally {
       setBulkBusy(null);
     }
@@ -306,35 +301,15 @@ export default function PosManagementClient() {
     if (!confirmed) return;
     setBulkBusy("delete");
     try {
-      const results = await Promise.allSettled(
-        visibleSelectedProducts.map((product) =>
-          fetch(`/api/admin/pos-products/${product.id}`, { method: "DELETE" }).then(async (res) => {
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(json?.error || "Failed to delete product");
-            return json;
-          }),
-        ),
-      );
-      const successCount = results.filter((result) => result.status === "fulfilled").length;
-      const archivedCount = results.filter(
-        (result) => result.status === "fulfilled" && Boolean((result as PromiseFulfilledResult<{ archived?: boolean }>).value?.archived),
-      ).length;
-      const deletedCount = successCount - archivedCount;
-      const firstError = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-      if (successCount > 0) {
-        const parts: string[] = [];
-        if (deletedCount > 0) parts.push(`${deletedCount} deleted`);
-        if (archivedCount > 0) parts.push(`${archivedCount} archived`);
-        showToast(`Bulk catalog cleanup complete: ${parts.join(", ")}`, "success");
-      }
-      if (firstError) {
-        showToast(firstError.reason instanceof Error ? firstError.reason.message : "Some products failed to delete", "error");
-      }
+      const json = await bulkRequest("delete");
+      showToast(json?.message || "Bulk catalog cleanup complete", "success");
       if (draft.id && selectedIds[draft.id]) {
         setDraft(emptyDraft);
       }
       clearSelection();
       await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to delete selected products", "error");
     } finally {
       setBulkBusy(null);
     }
