@@ -1,5 +1,6 @@
 import { noStoreJson, requireRole, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -78,6 +79,39 @@ export async function PATCH(req: Request, context: ParamsContext) {
     },
   });
 
+  const nextBuyingPrice = Number(updated.lastBuyingPrice ?? 0);
+  let backfilledItems = 0;
+  let recomputedOrders = 0;
+  if (Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
+    const itemsMissingCosts = await prisma.orderItem.findMany({
+      where: {
+        productId: id,
+        orderCosts: { none: {} },
+      },
+      select: {
+        id: true,
+        orderId: true,
+      },
+    });
+
+    if (itemsMissingCosts.length > 0) {
+      await prisma.orderCost.createMany({
+        data: itemsMissingCosts.map((item) => ({
+          orderItemId: item.id,
+          unitCost: nextBuyingPrice,
+          costSource: "product_catalog_sync",
+        })),
+      });
+      backfilledItems = itemsMissingCosts.length;
+
+      const touchedOrderIds = Array.from(new Set(itemsMissingCosts.map((item) => item.orderId).filter(Boolean)));
+      for (const orderId of touchedOrderIds) {
+        await recomputeOrderEconomics(orderId);
+      }
+      recomputedOrders = touchedOrderIds.length;
+    }
+  }
+
   if (actorId) {
     await prisma.actionLog.create({
       data: {
@@ -91,7 +125,14 @@ export async function PATCH(req: Request, context: ParamsContext) {
     });
   }
 
-  return noStoreJson({ ok: true, item: updated });
+  return noStoreJson({
+    ok: true,
+    item: updated,
+    backfill: {
+      items: backfilledItems,
+      orders: recomputedOrders,
+    },
+  });
 }
 
 export async function DELETE(_: Request, context: ParamsContext) {
