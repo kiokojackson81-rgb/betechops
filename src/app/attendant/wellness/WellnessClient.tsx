@@ -350,6 +350,9 @@ export default function WellnessClient() {
                 <p className="text-sm leading-6 text-slate-400">
                   You cannot borrow more than your salary, and repayment cannot exceed {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} months.
                 </p>
+                <p className="text-sm leading-6 text-slate-400">
+                  Once approved, the first deduction goes to the current payroll immediately and the next one starts in the next trading period.
+                </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm">

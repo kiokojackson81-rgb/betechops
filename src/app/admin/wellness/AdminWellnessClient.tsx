@@ -303,6 +303,9 @@ export default function AdminWellnessClient() {
                 <div className="mt-2 text-xs text-slate-400">
                   Maximum repayment period is {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month(s).
                 </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  Approval deducts the first installment immediately and schedules the next one for the next trading period.
+                </div>
               </div>
             ))}
             {!data?.pendingCashAdvances?.length && !loading ? <EmptyCard label="No pending cash advances." /> : null}

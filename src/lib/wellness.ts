@@ -190,6 +190,7 @@ export function buildCashAdvanceInstallments(input: {
   approvedAmount: number;
   repaymentPeriod: number;
   firstPeriod?: TradingPeriod;
+  firstDeductionDate?: Date;
 }) {
   const approvedAmount = Math.trunc(Number(input.approvedAmount ?? 0));
   const repaymentPeriod = Math.trunc(Number(input.repaymentPeriod ?? 0));
@@ -200,10 +201,11 @@ export function buildCashAdvanceInstallments(input: {
   }
 
   let currentPeriod = input.firstPeriod ?? getTradingPeriodFor(new Date());
+  const firstDeductionDate = sanitizeDateOnly(input.firstDeductionDate ?? new Date());
   const roundedAmounts = roundInstallmentAmounts(approvedAmount, repaymentPeriod);
 
   return roundedAmounts.map((amount, index) => {
-    const dueDate = sanitizeDateOnly(currentPeriod.end);
+    const dueDate = index === 0 ? firstDeductionDate : sanitizeDateOnly(currentPeriod.start);
     const item = {
       dueDate,
       periodKey: currentPeriod.key,
@@ -363,34 +365,37 @@ export async function applyDueCashAdvanceInstallments(input: {
 
   for (const installment of dueInstallments) {
     const existingAdjustmentId = installment.payrollAdjustmentId?.trim();
-    if (existingAdjustmentId) continue;
 
     const adjustment = await prisma.$transaction(async (tx) => {
       const fresh = await tx.cashAdvanceInstallment.findUnique({
         where: { id: installment.id },
         include: { cashAdvance: true },
       });
-      if (!fresh || fresh.isPaid || fresh.payrollAdjustmentId) return null;
+      if (!fresh || fresh.isPaid) return null;
 
-      const createdAdjustment = await tx.attendantPayrollAdjustment.create({
-        data: {
-          attendantId: fresh.cashAdvance.userId,
-          periodKey: fresh.periodKey,
-          periodLabel: fresh.periodLabel,
-          adjustmentType: "CASH_ADVANCE",
-          label: `Cash advance repayment ${fresh.sequenceNumber}/${fresh.cashAdvance.repaymentPeriod ?? "?"}`,
-          amount: fresh.amount,
-          createdById: input.actorId,
-          adjustmentKind: "DEDUCTION",
-        },
-      });
+      const adjustmentId =
+        fresh.payrollAdjustmentId?.trim() ||
+        (
+          await tx.attendantPayrollAdjustment.create({
+            data: {
+              attendantId: fresh.cashAdvance.userId,
+              periodKey: fresh.periodKey,
+              periodLabel: fresh.periodLabel,
+              adjustmentType: "CASH_ADVANCE",
+              label: `Cash advance repayment ${fresh.sequenceNumber}/${fresh.cashAdvance.repaymentPeriod ?? "?"}`,
+              amount: fresh.amount,
+              createdById: input.actorId,
+              adjustmentKind: "DEDUCTION",
+            },
+          })
+        ).id;
 
       await tx.cashAdvanceInstallment.update({
         where: { id: fresh.id },
         data: {
           isPaid: true,
           deductedAt: new Date(),
-          payrollAdjustmentId: createdAdjustment.id,
+          payrollAdjustmentId: adjustmentId,
         },
       });
 
@@ -409,14 +414,17 @@ export async function applyDueCashAdvanceInstallments(input: {
           action: "DEDUCTION_APPLIED",
           after: {
             cashAdvanceId: fresh.cashAdvanceId,
-            payrollAdjustmentId: createdAdjustment.id,
+            payrollAdjustmentId: adjustmentId,
             amount: fresh.amount,
             dueDate: fresh.dueDate.toISOString(),
           },
         },
       });
 
-      return createdAdjustment;
+      return {
+        id: adjustmentId,
+        amount: fresh.amount,
+      };
     });
 
     if (adjustment) {

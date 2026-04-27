@@ -75,6 +75,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           approvedAmount,
           repaymentPeriod: normalizedRepaymentPeriod,
           firstPeriod: getTradingPeriodFor(firstReferenceDate),
+          firstDeductionDate: firstReferenceDate,
         });
       }
 
@@ -104,16 +105,80 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         },
       });
 
+      const createdInstallments: Array<{
+        id: string;
+        periodKey: string;
+        periodLabel: string;
+        sequenceNumber: number;
+        amount: number;
+      }> = [];
       if (schedules.length > 0) {
-        await tx.cashAdvanceInstallment.createMany({
-          data: schedules.map((item) => ({
-            cashAdvanceId: updated.id,
-            dueDate: item.dueDate,
-            periodKey: item.periodKey,
-            periodLabel: item.periodLabel,
-            sequenceNumber: item.sequenceNumber,
-            amount: item.amount,
-          })),
+        for (const item of schedules) {
+          const installment = await tx.cashAdvanceInstallment.create({
+            data: {
+              cashAdvanceId: updated.id,
+              dueDate: item.dueDate,
+              periodKey: item.periodKey,
+              periodLabel: item.periodLabel,
+              sequenceNumber: item.sequenceNumber,
+              amount: item.amount,
+            },
+          });
+          createdInstallments.push(installment);
+        }
+      }
+
+      if (decision === "APPROVED" && createdInstallments.length > 0) {
+        const immediateInstallment = createdInstallments[0];
+        const immediateAdjustment = await tx.attendantPayrollAdjustment.create({
+          data: {
+            attendantId: updated.userId,
+            periodKey: immediateInstallment.periodKey,
+            periodLabel: immediateInstallment.periodLabel,
+            adjustmentType: "CASH_ADVANCE",
+            label: `Cash advance repayment ${immediateInstallment.sequenceNumber}/${updated.repaymentPeriod ?? "?"}`,
+            amount: immediateInstallment.amount,
+            createdById: actorId,
+            adjustmentKind: "DEDUCTION",
+          },
+        });
+
+        await tx.cashAdvanceInstallment.update({
+          where: { id: immediateInstallment.id },
+          data: {
+            isPaid: true,
+            deductedAt: new Date(),
+            payrollAdjustmentId: immediateAdjustment.id,
+          },
+        });
+
+        for (const installment of createdInstallments.slice(1)) {
+          const scheduledAdjustment = await tx.attendantPayrollAdjustment.create({
+            data: {
+              attendantId: updated.userId,
+              periodKey: installment.periodKey,
+              periodLabel: installment.periodLabel,
+              adjustmentType: "CASH_ADVANCE",
+              label: `Cash advance repayment ${installment.sequenceNumber}/${updated.repaymentPeriod ?? "?"}`,
+              amount: installment.amount,
+              createdById: actorId,
+              adjustmentKind: "DEDUCTION",
+            },
+          });
+
+          await tx.cashAdvanceInstallment.update({
+            where: { id: installment.id },
+            data: {
+              payrollAdjustmentId: scheduledAdjustment.id,
+            },
+          });
+        }
+
+        await tx.cashAdvance.update({
+          where: { id: updated.id },
+          data: {
+            remainingBalance: Math.max(0, approvedAmount - immediateInstallment.amount),
+          },
         });
       }
 
