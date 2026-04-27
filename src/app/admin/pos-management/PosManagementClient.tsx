@@ -70,13 +70,15 @@ export default function PosManagementClient() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadData = useCallback(async (productQuery = query) => {
     setLoading(true);
     try {
       const [productsRes, approvalsRes] = await Promise.all([
-        fetch(`/api/admin/pos-products?q=${encodeURIComponent(productQuery)}&includeInactive=1&limit=200`, { cache: "no-store" }),
+        fetch(`/api/admin/pos-products?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" }),
         fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
       ]);
 
@@ -89,7 +91,7 @@ export default function PosManagementClient() {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, showInactive]);
 
   useEffect(() => {
     void loadData("");
@@ -101,6 +103,12 @@ export default function PosManagementClient() {
     }, 250);
     return () => clearTimeout(handle);
   }, [query, loadData]);
+
+  useEffect(() => {
+    if (!draft.id) return;
+    nameInputRef.current?.focus();
+    nameInputRef.current?.select();
+  }, [draft.id]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -155,6 +163,7 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast(`Editing ${product.name}`, "success");
   };
 
   const startCommissionEdit = (product: PosProduct) => {
@@ -171,6 +180,7 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast(`${product.commissionEnabled ? "Editing" : "Assigning"} commission for ${product.name}`, "success");
   };
 
   const deleteProduct = async (product: PosProduct) => {
@@ -186,7 +196,7 @@ export default function PosManagementClient() {
       if (draft.id === product.id) {
         setDraft(emptyDraft);
       }
-      showToast("Product deleted", "success");
+      showToast(json?.message || "Product deleted", "success");
       await loadData(query);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to delete product", "error");
@@ -237,7 +247,12 @@ export default function PosManagementClient() {
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="text-sm text-slate-300">
                 Product name
-                <input className={`${fieldClass} mt-1`} value={draft.name} onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))} />
+                <input
+                  ref={nameInputRef}
+                  className={`${fieldClass} mt-1`}
+                  value={draft.name}
+                  onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))}
+                />
               </label>
               <label className="text-sm text-slate-300">
                 SKU
@@ -341,6 +356,10 @@ export default function PosManagementClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+            Show archived products
+          </label>
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
@@ -361,7 +380,7 @@ export default function PosManagementClient() {
                 </tr>
               ) : products.length ? (
                 products.map((product) => (
-                  <tr key={product.id}>
+                  <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">
                       <div className="max-w-xl font-semibold leading-8 text-white">{product.name}</div>
                       <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>

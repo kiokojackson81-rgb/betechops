@@ -103,6 +103,39 @@ export async function DELETE(_: Request, context: ParamsContext) {
   if (!existing) return noStoreJson({ error: "Product not found" }, { status: 404 });
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
+  const linkedOrderItems = await prisma.orderItem.count({ where: { productId: id } });
+
+  if (linkedOrderItems > 0) {
+    const archived =
+      existing.isActive
+        ? await prisma.product.update({
+            where: { id },
+            data: { isActive: false },
+          })
+        : existing;
+
+    if (actorId) {
+      await prisma.actionLog.create({
+        data: {
+          actorId,
+          entity: "Product",
+          entityId: existing.id,
+          action: "POS_PRODUCT_ARCHIVE",
+          before: existing,
+          after: archived,
+        },
+      });
+    }
+
+    return noStoreJson({
+      ok: true,
+      archived: true,
+      item: archived,
+      message: existing.isActive
+        ? "Product archived. Historical POS receipts remain unchanged."
+        : "Product is already archived. Historical POS receipts remain unchanged.",
+    });
+  }
 
   try {
     await prisma.product.delete({
@@ -114,7 +147,7 @@ export async function DELETE(_: Request, context: ParamsContext) {
       (error.code === "P2003" || error.code === "P2014")
     ) {
       return noStoreJson(
-        { error: "This product is already linked to receipts or orders. Edit or deactivate it instead." },
+        { error: "This product is linked to historical receipts. Archive it instead so receipts remain unchanged." },
         { status: 409 },
       );
     }
