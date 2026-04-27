@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { Prisma, type WellnessRequestStatus } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { assertCashAdvanceWithinSalaryCap, buildCashAdvanceInstallments } from "@/lib/wellness";
+import {
+  assertCashAdvanceRepaymentPeriod,
+  assertCashAdvanceWithinSalaryCap,
+  buildCashAdvanceInstallments,
+} from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +65,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (approvedAmount <= 0 || repaymentPeriod <= 0) {
           throw new Error("approvedAmount and repaymentPeriod must be greater than zero");
         }
+        const normalizedRepaymentPeriod = assertCashAdvanceRepaymentPeriod(repaymentPeriod);
         await assertCashAdvanceWithinSalaryCap(existing.userId, approvedAmount, {
           db: tx,
           excludeAdvanceId: existing.id,
@@ -68,7 +73,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         const firstReferenceDate = body?.firstDeductionDate ? new Date(body.firstDeductionDate) : new Date();
         schedules = buildCashAdvanceInstallments({
           approvedAmount,
-          repaymentPeriod,
+          repaymentPeriod: normalizedRepaymentPeriod,
           firstPeriod: getTradingPeriodFor(firstReferenceDate),
         });
       }
@@ -86,7 +91,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         data: {
           status: decision as WellnessRequestStatus,
           approvedAmount: decision === "APPROVED" ? approvedAmount : null,
-          repaymentPeriod: decision === "APPROVED" ? repaymentPeriod : existing.repaymentPeriod,
+          repaymentPeriod:
+            decision === "APPROVED" ? assertCashAdvanceRepaymentPeriod(repaymentPeriod) : existing.repaymentPeriod,
           installmentAmount:
             decision === "APPROVED"
               ? Math.max(...schedules.map((item) => item.amount))

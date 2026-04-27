@@ -5,6 +5,7 @@ import { getNextTradingPeriod, getTradingPeriodFor, type TradingPeriod } from "@
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
 export const TOTAL_PAID_LEAVE_DAYS = 10;
+export const MAX_CASH_ADVANCE_REPAYMENT_PERIOD = 2;
 
 const DEFAULT_LEAVE_ENTITLEMENTS = {
   annual: TOTAL_PAID_LEAVE_DAYS,
@@ -178,6 +179,9 @@ export function buildCashAdvanceInstallments(input: {
   const repaymentPeriod = Math.trunc(Number(input.repaymentPeriod ?? 0));
   if (approvedAmount <= 0) throw new Error("Approved amount must be greater than zero");
   if (repaymentPeriod <= 0) throw new Error("Repayment period must be greater than zero");
+  if (repaymentPeriod > MAX_CASH_ADVANCE_REPAYMENT_PERIOD) {
+    throw new Error(`Repayment period cannot exceed ${MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month(s)`);
+  }
 
   let currentPeriod = input.firstPeriod ?? getTradingPeriodFor(new Date());
   const roundedAmounts = roundInstallmentAmounts(approvedAmount, repaymentPeriod);
@@ -235,6 +239,17 @@ export async function getCashAdvanceCapacity(
     outstandingBalance,
     availableToBorrow,
   };
+}
+
+export function assertCashAdvanceRepaymentPeriod(period: number) {
+  const repaymentPeriod = Math.trunc(Number(period ?? 0));
+  if (repaymentPeriod <= 0) {
+    throw new Error("Repayment period must be greater than zero");
+  }
+  if (repaymentPeriod > MAX_CASH_ADVANCE_REPAYMENT_PERIOD) {
+    throw new Error(`Repayment period cannot exceed ${MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month(s)`);
+  }
+  return repaymentPeriod;
 }
 
 export async function assertCashAdvanceWithinSalaryCap(

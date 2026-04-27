@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { assertCashAdvanceWithinSalaryCap } from "@/lib/wellness";
+import { assertCashAdvanceRepaymentPeriod, assertCashAdvanceWithinSalaryCap } from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +61,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const normalizedRepaymentPeriod = repaymentPeriod > 0 ? assertCashAdvanceRepaymentPeriod(repaymentPeriod) : null;
     await assertCashAdvanceWithinSalaryCap(userId, requestedAmount);
 
     const created = await prisma.cashAdvance.create({
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
         userId,
         requestedAmount,
         reason,
-        repaymentPeriod: repaymentPeriod > 0 ? repaymentPeriod : null,
+        repaymentPeriod: normalizedRepaymentPeriod,
       },
       include: {
         installments: true,

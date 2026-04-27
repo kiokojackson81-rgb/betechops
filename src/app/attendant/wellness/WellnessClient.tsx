@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Button from "@/app/_components/Button";
 import { toast } from "@/lib/toast";
+import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellness";
 
 type LeaveRow = {
   id: string;
@@ -132,7 +133,7 @@ export default function WellnessClient() {
   });
   const [advanceForm, setAdvanceForm] = useState({
     requestedAmount: "",
-    repaymentPeriod: "3",
+    repaymentPeriod: String(MAX_CASH_ADVANCE_REPAYMENT_PERIOD),
     reason: "",
   });
 
@@ -190,7 +191,7 @@ export default function WellnessClient() {
       const body = await res.json();
       if (!res.ok) throw new Error(String(body?.error ?? "Failed to submit cash advance"));
       toast("Cash advance request submitted", "success");
-      setAdvanceForm({ requestedAmount: "", repaymentPeriod: "3", reason: "" });
+      setAdvanceForm({ requestedAmount: "", repaymentPeriod: String(MAX_CASH_ADVANCE_REPAYMENT_PERIOD), reason: "" });
       await fetchOverview();
     } catch (error) {
       toast(error instanceof Error ? error.message : "Failed to submit cash advance", "error");
@@ -347,7 +348,7 @@ export default function WellnessClient() {
                 <p className={sectionEyebrow}>Cash Advance</p>
                 <h2 className="text-2xl font-semibold text-white">Request Cash Advance</h2>
                 <p className="text-sm leading-6 text-slate-400">
-                  You cannot borrow more than your salary. Existing approved balances also count against that limit.
+                  You cannot borrow more than your salary, and repayment cannot exceed {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} months.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -363,10 +364,11 @@ export default function WellnessClient() {
                   />
                 </label>
                 <label className="space-y-2 text-sm">
-                  <span className="font-medium text-slate-300">Repayment cycles</span>
+                  <span className="font-medium text-slate-300">Repayment months</span>
                   <input
                     type="number"
                     min={1}
+                    max={MAX_CASH_ADVANCE_REPAYMENT_PERIOD}
                     className={inputClass}
                     value={advanceForm.repaymentPeriod}
                     onChange={(e) => setAdvanceForm((state) => ({ ...state, repaymentPeriod: e.target.value }))}
@@ -563,7 +565,7 @@ function HistorySection({
                 <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Approved: {currency.format(row.approvedAmount ?? 0)}</div>
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Remaining: {currency.format(row.remainingBalance ?? 0)}</div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Cycles: {row.repaymentPeriod ?? "-"}</div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Months: {row.repaymentPeriod ?? "-"}</div>
                 </div>
                 {row.hrComment ? <div className="mt-2 text-sm text-amber-200">HR: {row.hrComment}</div> : null}
               </div>

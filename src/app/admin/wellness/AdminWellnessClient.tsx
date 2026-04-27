@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import { toast } from "@/lib/toast";
+import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD } from "@/lib/wellness";
 
 type LeaveRequest = {
   id: string;
@@ -95,7 +96,7 @@ export default function AdminWellnessClient() {
     for (const row of data.pendingCashAdvances) {
       nextAdvanceForms[row.id] = {
         approvedAmount: String(row.requestedAmount ?? ""),
-        repaymentPeriod: String(row.repaymentPeriod ?? 3),
+        repaymentPeriod: String(row.repaymentPeriod ?? MAX_CASH_ADVANCE_REPAYMENT_PERIOD),
         hrComment: "",
       };
     }
@@ -275,8 +276,8 @@ export default function AdminWellnessClient() {
                     }
                   />
                   <Field
-                    label="Cycles"
-                    value={advanceForms[row.id]?.repaymentPeriod ?? "3"}
+                    label="Months"
+                    value={advanceForms[row.id]?.repaymentPeriod ?? String(MAX_CASH_ADVANCE_REPAYMENT_PERIOD)}
                     onChange={(value) =>
                       setAdvanceForms((state) => ({
                         ...state,
@@ -298,6 +299,9 @@ export default function AdminWellnessClient() {
                 <div className="mt-3 flex gap-3">
                   <Button onClick={() => void decideAdvance(row.id, "APPROVED")}>Approve</Button>
                   <Button variant="secondary" onClick={() => void decideAdvance(row.id, "REJECTED")}>Reject</Button>
+                </div>
+                <div className="mt-2 text-xs text-slate-400">
+                  Maximum repayment period is {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month(s).
                 </div>
               </div>
             ))}
@@ -372,7 +376,7 @@ export default function AdminWellnessClient() {
                       Approved {currency.format(row.approvedAmount ?? 0)} · Remaining {currency.format(row.remainingBalance)}
                     </div>
                   </div>
-                  <div className="text-xs text-slate-400">{row.repaymentPeriod ?? 0} cycles</div>
+                    <div className="text-xs text-slate-400">{row.repaymentPeriod ?? 0} month(s)</div>
                 </div>
                 <div className="mt-3 space-y-2">
                   {(row.installments ?? []).map((item) => (
