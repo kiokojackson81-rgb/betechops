@@ -106,6 +106,9 @@ export default function PosManagementClient() {
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [buyingPriceFilter, setBuyingPriceFilter] = useState<"all" | "missing" | "set">("all");
+  const [commissionFilter, setCommissionFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [warrantyFilter, setWarrantyFilter] = useState<"all" | "with" | "without">("all");
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -154,6 +157,19 @@ export default function PosManagementClient() {
       return next;
     });
   }, [products]);
+
+  const filteredProducts = products.filter((product) => {
+    const hasBuyingPrice = Number(product.lastBuyingPrice ?? 0) > 0;
+    const hasWarranty = Boolean(product.defaultWarranty?.trim());
+
+    if (buyingPriceFilter === "missing" && hasBuyingPrice) return false;
+    if (buyingPriceFilter === "set" && !hasBuyingPrice) return false;
+    if (commissionFilter === "enabled" && !product.commissionEnabled) return false;
+    if (commissionFilter === "disabled" && product.commissionEnabled) return false;
+    if (warrantyFilter === "with" && !hasWarranty) return false;
+    if (warrantyFilter === "without" && hasWarranty) return false;
+    return true;
+  });
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -268,9 +284,9 @@ export default function PosManagementClient() {
     }
   };
 
-  const visibleSelectedProducts = products.filter((product) => selectedIds[product.id]);
+  const visibleSelectedProducts = filteredProducts.filter((product) => selectedIds[product.id]);
   const selectedCount = visibleSelectedProducts.length;
-  const allOnPageSelected = products.length > 0 && selectedCount === products.length;
+  const allOnPageSelected = filteredProducts.length > 0 && selectedCount === filteredProducts.length;
 
   const toggleSelected = (id: string) => {
     setSelectedIds((current) => {
@@ -285,9 +301,9 @@ export default function PosManagementClient() {
     setSelectedIds((current) => {
       const next = { ...current };
       if (allOnPageSelected) {
-        for (const product of products) delete next[product.id];
+        for (const product of filteredProducts) delete next[product.id];
       } else {
-        for (const product of products) next[product.id] = true;
+        for (const product of filteredProducts) next[product.id] = true;
       }
       return next;
     });
@@ -472,12 +488,12 @@ export default function PosManagementClient() {
           <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
-              <div className="mt-3 text-3xl font-semibold text-white">{products.length}</div>
+              <div className="mt-3 text-3xl font-semibold text-white">{filteredProducts.length}</div>
               <div className="mt-1 text-sm text-slate-400">Products currently loaded in the POS catalog view.</div>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Active products</div>
-              <div className="mt-3 text-3xl font-semibold text-emerald-300">{products.filter((product) => product.isActive).length}</div>
+              <div className="mt-3 text-3xl font-semibold text-emerald-300">{filteredProducts.filter((product) => product.isActive).length}</div>
               <div className="mt-1 text-sm text-slate-400">Available for product selection at the receipts desk.</div>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
@@ -561,6 +577,33 @@ export default function PosManagementClient() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+            <select
+              className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              value={buyingPriceFilter}
+              onChange={(e) => setBuyingPriceFilter(e.target.value as "all" | "missing" | "set")}
+            >
+              <option value="all">All buying prices</option>
+              <option value="missing">Without buying price</option>
+              <option value="set">With buying price</option>
+            </select>
+            <select
+              className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              value={commissionFilter}
+              onChange={(e) => setCommissionFilter(e.target.value as "all" | "enabled" | "disabled")}
+            >
+              <option value="all">All commissions</option>
+              <option value="enabled">With commission</option>
+              <option value="disabled">Without commission</option>
+            </select>
+            <select
+              className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              value={warrantyFilter}
+              onChange={(e) => setWarrantyFilter(e.target.value as "all" | "with" | "without")}
+            >
+              <option value="all">All warranties</option>
+              <option value="with">With warranty</option>
+              <option value="without">Without warranty</option>
+            </select>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show archived products
@@ -577,7 +620,7 @@ export default function PosManagementClient() {
               type="button"
               className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
               onClick={toggleAllOnPage}
-              disabled={!products.length || !!bulkBusy}
+              disabled={!filteredProducts.length || !!bulkBusy}
             >
               {allOnPageSelected ? "Clear page" : "Select page"}
             </button>
@@ -613,7 +656,7 @@ export default function PosManagementClient() {
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-3">
-                  <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!products.length || !!bulkBusy} />
+                  <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
                 </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Prices</th>
@@ -627,8 +670,8 @@ export default function PosManagementClient() {
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
-              ) : products.length ? (
-                products.map((product) => (
+              ) : filteredProducts.length ? (
+                filteredProducts.map((product) => (
                   <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">
                       <input
@@ -696,7 +739,7 @@ export default function PosManagementClient() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No POS products found.</td>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>
