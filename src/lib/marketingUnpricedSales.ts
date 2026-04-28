@@ -31,6 +31,11 @@ type LinkedReceiptOrderItem = {
   hasCost: boolean;
 };
 
+type LinkedReceiptContext = {
+  items: LinkedReceiptOrderItem[];
+  aggregateBuyingTotal: number;
+};
+
 function isMeaningfulProductName(value: string | null | undefined): value is string {
   const normalized = String(value ?? "").trim();
   if (!normalized) return false;
@@ -129,6 +134,12 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
           where: { orderNumber: { in: receiptNumberCandidates } },
           select: {
             orderNumber: true,
+            receipt: {
+              select: {
+                totals: true,
+                data: true,
+              },
+            },
             items: {
               select: {
                 product: { select: { name: true } },
@@ -140,7 +151,7 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         })
       : [];
 
-  const orderItemsByReceiptNumber = new Map<string, LinkedReceiptOrderItem[]>();
+  const orderItemsByReceiptNumber = new Map<string, LinkedReceiptContext>();
   for (const order of receiptOrderItems) {
     const linkedItems = order.items
       .map((item) => ({
@@ -151,18 +162,29 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
     if (!linkedItems.length) continue;
     const raw = order.orderNumber?.trim();
     const canonical = canonicalReceiptNumber(order.orderNumber ?? undefined);
-    if (raw) orderItemsByReceiptNumber.set(raw, linkedItems);
-    if (canonical) orderItemsByReceiptNumber.set(canonical, linkedItems);
+    const totals = (order as { receipt?: { totals?: any; data?: any } | null }).receipt?.totals as any;
+    const dataTotals = ((order as { receipt?: { totals?: any; data?: any } | null }).receipt?.data as any)?.totals as any;
+    const aggregateBuyingTotal = Number(totals?.buyingTotal ?? dataTotals?.buyingTotal ?? 0);
+    const context: LinkedReceiptContext = {
+      items: linkedItems,
+      aggregateBuyingTotal: Number.isFinite(aggregateBuyingTotal) ? aggregateBuyingTotal : 0,
+    };
+    if (raw) orderItemsByReceiptNumber.set(raw, context);
+    if (canonical) orderItemsByReceiptNumber.set(canonical, context);
   }
 
   const supportSales: UnpricedSale[] = supportReceipts
     .map((receipt) => {
       const entry = receipt.dailyEntry;
       const receiptNumber = receipt.receiptNumber?.trim() ?? "";
-      const linkedReceiptItems =
+      const linkedReceiptContext =
         orderItemsByReceiptNumber.get(receiptNumber) ??
         orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
-        [];
+        null;
+      if (Number(receipt.buyingTotal ?? 0) > 0 || Number(linkedReceiptContext?.aggregateBuyingTotal ?? 0) > 0) {
+        return null;
+      }
+      const linkedReceiptItems = linkedReceiptContext?.items ?? [];
       const pendingItems = (receipt.items || []).filter((item, index) => {
         if (Number(item.buyingPrice ?? 0) > 0) return false;
         const itemName = normalizeProductName(item.productName);
