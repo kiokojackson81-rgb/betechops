@@ -75,7 +75,7 @@ export default function AdminNavContainer() {
         </div>
       </button>
       <Link href="/admin" className="font-semibold tracking-tight text-base md:text-lg shrink-0 whitespace-nowrap">BetechOps — Unified Admin</Link>
-      <div className="flex-1 hidden md:block overflow-hidden"><AdminTopNav /></div>
+      <div className="flex-1 hidden md:block overflow-visible"><AdminTopNav /></div>
       <div className="hidden md:flex items-center gap-2">
         <AdminTopbarBadges />
         <AdminUserMenu />

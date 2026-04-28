@@ -44,7 +44,12 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
   return (
     <nav
       ref={navRef}
-      className={"flex gap-1 overflow-x-auto top-nav-scroll " + (mobile ? "px-2" : "px-2 md:px-0") + " " + className}
+      className={
+        "flex gap-1 top-nav-scroll " +
+        (mobile ? "overflow-x-auto px-2" : "overflow-visible px-2 md:px-0") +
+        " " +
+        className
+      }
       aria-label="Admin primary"
       role="navigation"
     >
