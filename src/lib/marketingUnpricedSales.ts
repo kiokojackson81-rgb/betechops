@@ -26,6 +26,11 @@ export type UnpricedSale = {
   itemsTotal?: number;
 };
 
+type LinkedReceiptOrderItem = {
+  name: string;
+  hasCost: boolean;
+};
+
 function isMeaningfulProductName(value: string | null | undefined): value is string {
   const normalized = String(value ?? "").trim();
   if (!normalized) return false;
@@ -37,6 +42,15 @@ function summarizeReceiptProductName(names: string[], receiptNumber: string | nu
   if (uniqueNames.length === 1) return uniqueNames[0];
   if (uniqueNames.length > 1) return `${uniqueNames[0]} +${uniqueNames.length - 1} more`;
   return `Receipt ${receiptNumber || ""}`.trim() || "Support receipt";
+}
+
+function normalizeProductName(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedSale[]> {
@@ -118,34 +132,48 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
             items: {
               select: {
                 product: { select: { name: true } },
+                orderCosts: { select: { id: true }, take: 1 },
+                profitSnapshots: { select: { id: true }, take: 1 },
               },
             },
           },
         })
       : [];
 
-  const orderItemNamesByReceiptNumber = new Map<string, string[]>();
+  const orderItemsByReceiptNumber = new Map<string, LinkedReceiptOrderItem[]>();
   for (const order of receiptOrderItems) {
-    const itemNames = order.items
-      .map((item) => String(item.product?.name || "").trim())
-      .filter(isMeaningfulProductName);
-    if (!itemNames.length) continue;
+    const linkedItems = order.items
+      .map((item) => ({
+        name: String(item.product?.name || "").trim(),
+        hasCost: (item.orderCosts?.length ?? 0) > 0 || (item.profitSnapshots?.length ?? 0) > 0,
+      }))
+      .filter((item) => isMeaningfulProductName(item.name));
+    if (!linkedItems.length) continue;
     const raw = order.orderNumber?.trim();
     const canonical = canonicalReceiptNumber(order.orderNumber ?? undefined);
-    if (raw) orderItemNamesByReceiptNumber.set(raw, itemNames);
-    if (canonical) orderItemNamesByReceiptNumber.set(canonical, itemNames);
+    if (raw) orderItemsByReceiptNumber.set(raw, linkedItems);
+    if (canonical) orderItemsByReceiptNumber.set(canonical, linkedItems);
   }
 
   const supportSales: UnpricedSale[] = supportReceipts
     .map((receipt) => {
       const entry = receipt.dailyEntry;
-      const pendingItems = (receipt.items || []).filter((item) => Number(item.buyingPrice ?? 0) <= 0);
-      if (!pendingItems.length) return null;
       const receiptNumber = receipt.receiptNumber?.trim() ?? "";
-      const fallbackItemNames =
-        orderItemNamesByReceiptNumber.get(receiptNumber) ??
-        orderItemNamesByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
+      const linkedReceiptItems =
+        orderItemsByReceiptNumber.get(receiptNumber) ??
+        orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         [];
+      const pendingItems = (receipt.items || []).filter((item, index) => {
+        if (Number(item.buyingPrice ?? 0) > 0) return false;
+        const itemName = normalizeProductName(item.productName);
+        const matchedLinkedItem =
+          (itemName
+            ? linkedReceiptItems.find((linked) => normalizeProductName(linked.name) === itemName)
+            : undefined) ?? linkedReceiptItems[index];
+        return !matchedLinkedItem?.hasCost;
+      });
+      if (!pendingItems.length) return null;
+      const fallbackItemNames = linkedReceiptItems.map((item) => item.name);
       const resolvedReceiptItems = pendingItems.map((item, index) => {
         const resolvedName = isMeaningfulProductName(item.productName) ? item.productName.trim() : fallbackItemNames[index] || fallbackItemNames[0] || "Item";
         return {
