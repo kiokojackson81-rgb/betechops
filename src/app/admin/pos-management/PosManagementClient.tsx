@@ -100,6 +100,7 @@ export default function PosManagementClient() {
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
@@ -269,6 +270,36 @@ export default function PosManagementClient() {
     }
   };
 
+  const formatProductName = async () => {
+    if (!draft.name.trim()) {
+      showToast("Enter a product name first", "error");
+      return;
+    }
+
+    setAiBusy(true);
+    try {
+      const response = await fetch("/api/ai/receipt-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawDescription: draft.name }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(getApiErrorMessage(json, "AI formatting failed"));
+
+      const nextName = typeof json?.description === "string" ? json.description.trim() : "";
+      if (!nextName) {
+        throw new Error("AI formatting returned no product name");
+      }
+
+      setDraft((current) => ({ ...current, name: nextName }));
+      showToast("Product name cleaned up", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI formatting failed", "error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const updateApproval = async (id: string, action: "approve" | "reject") => {
     setApprovalBusyId(id);
     try {
@@ -392,15 +423,28 @@ export default function PosManagementClient() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="text-sm text-slate-300">
-                Product name
+              <div className="text-sm text-slate-300">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Product name</span>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void formatProductName()}
+                    disabled={aiBusy}
+                  >
+                    {aiBusy ? "AI..." : "✨ AI format"}
+                  </button>
+                </div>
                 <input
                   ref={nameInputRef}
                   className={`${fieldClass} mt-1`}
                   value={draft.name}
                   onChange={(e) => setDraft((s) => ({ ...s, name: e.target.value }))}
                 />
-              </label>
+                <div className="mt-1 text-xs text-slate-500">
+                  Fix spelling and clean up formatting before saving.
+                </div>
+              </div>
               <label className="text-sm text-slate-300">
                 SKU
                 <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
