@@ -26,6 +26,7 @@ import {
   Wallet,
 } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
+import AdminPrivacyToggle from "@/app/admin/_components/AdminPrivacyToggle";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
@@ -85,6 +86,8 @@ const subtleCard =
 
 const sectionPill =
   "rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200";
+
+const sensitiveClass = "admin-sensitive-value";
 
 const formatKES = (value: number) =>
   `KES ${Math.round(value || 0).toLocaleString("en-KE")}`;
@@ -196,7 +199,7 @@ function StatCard({
       <div className="relative flex items-start justify-between gap-4">
         <div className="space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{title}</div>
-          <div className="text-2xl font-semibold text-white">{value}</div>
+          <div className={`text-2xl font-semibold text-white ${sensitiveClass}`}>{value}</div>
           <div className="text-sm text-slate-400">{sub}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-emerald-200">
@@ -234,15 +237,15 @@ function ChannelCard({
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div>
           <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Sales</div>
-          <div className="mt-1 text-xl font-semibold text-white">{formatCompactKES(sales)}</div>
+          <div className={`mt-1 text-xl font-semibold text-white ${sensitiveClass}`}>{formatCompactKES(sales)}</div>
         </div>
         <div>
           <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Profit</div>
-          <div className={`mt-1 text-xl font-semibold ${scoreTone(profit)}`}>{formatCompactKES(profit)}</div>
+          <div className={`mt-1 text-xl font-semibold ${scoreTone(profit)} ${sensitiveClass}`}>{formatCompactKES(profit)}</div>
         </div>
         <div>
           <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Volume</div>
-          <div className="mt-1 text-xl font-semibold text-white">{volume}</div>
+          <div className={`mt-1 text-xl font-semibold text-white ${sensitiveClass}`}>{volume}</div>
         </div>
       </div>
     </Link>
@@ -279,7 +282,7 @@ function ActionItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold text-white">{title}</div>
-          <div className="text-lg font-semibold text-white">{value}</div>
+          <div className={`text-lg font-semibold text-white ${sensitiveClass}`}>{value}</div>
         </div>
         <div className="mt-1 text-sm text-slate-400">{note}</div>
       </div>
@@ -312,8 +315,8 @@ function TrendCard({ points }: { points: TrendPoint[] }) {
               </div>
               <div className="text-center">
                 <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{point.label}</div>
-                <div className="mt-1 text-sm font-semibold text-white">{formatCompactKES(point.total)}</div>
-                <div className="mt-1 text-[11px] text-slate-500">
+                <div className={`mt-1 text-sm font-semibold text-white ${sensitiveClass}`}>{formatCompactKES(point.total)}</div>
+                <div className={`mt-1 text-[11px] text-slate-500 ${sensitiveClass}`}>
                   POS {formatCompactKES(point.pos)} · Desk {formatCompactKES(point.desk)} · Online {formatCompactKES(point.online)}
                 </div>
               </div>
@@ -744,12 +747,12 @@ export default async function AdminOverviewPage() {
               </div>
               <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">Today recorded sales</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatKES(dashboard.todaySales)}</div>
+                <div className={`mt-2 text-2xl font-semibold text-white ${sensitiveClass}`}>{formatKES(dashboard.todaySales)}</div>
                 <div className="mt-2 text-sm text-cyan-100/80">Across POS, support, marketing desk, and marketplace channels.</div>
               </div>
               <div className="rounded-[24px] border border-fuchsia-500/20 bg-fuchsia-500/10 p-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200">Net payroll due</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatKES(dashboard.payroll.net)}</div>
+                <div className={`mt-2 text-2xl font-semibold text-white ${sensitiveClass}`}>{formatKES(dashboard.payroll.net)}</div>
                 <div className="mt-2 text-sm text-fuchsia-100/80">Current period pay after deductions, commission, and top-ups.</div>
               </div>
             </div>
@@ -925,27 +928,33 @@ export default async function AdminOverviewPage() {
             <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-400">Top sales performer</div>
             <div className="mt-3 text-2xl font-semibold text-white">{dashboard.payroll.topSalesRow?.name || "No data"}</div>
             <div className="mt-2 text-sm text-slate-400">
-              {dashboard.payroll.topSalesRow
-                ? `${formatKES(Number(dashboard.payroll.topSalesRow.totalSales ?? 0))} sales this period`
-                : "Waiting for payroll-linked sales data."}
+              {dashboard.payroll.topSalesRow ? (
+                <span className={sensitiveClass}>{`${formatKES(Number(dashboard.payroll.topSalesRow.totalSales ?? 0))} sales this period`}</span>
+              ) : (
+                "Waiting for payroll-linked sales data."
+              )}
             </div>
           </div>
           <div className={`${subtleCard} p-5`}>
             <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-400">Top commission</div>
             <div className="mt-3 text-2xl font-semibold text-white">{dashboard.payroll.topCommissionRow?.name || "No data"}</div>
             <div className="mt-2 text-sm text-slate-400">
-              {dashboard.payroll.topCommissionRow
-                ? `${formatKES(Number(dashboard.payroll.topCommissionRow.commissionTotal ?? 0))} commission due`
-                : "Waiting for commission summary."}
+              {dashboard.payroll.topCommissionRow ? (
+                <span className={sensitiveClass}>{`${formatKES(Number(dashboard.payroll.topCommissionRow.commissionTotal ?? 0))} commission due`}</span>
+              ) : (
+                "Waiting for commission summary."
+              )}
             </div>
           </div>
           <div className={`${subtleCard} p-5`}>
             <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-400">Best net pay</div>
             <div className="mt-3 text-2xl font-semibold text-white">{dashboard.payroll.topNetRow?.name || "No data"}</div>
             <div className="mt-2 text-sm text-slate-400">
-              {dashboard.payroll.topNetRow
-                ? `${formatKES(Number(dashboard.payroll.topNetRow.netPay ?? 0))} projected net pay`
-                : "Waiting for payroll projection."}
+              {dashboard.payroll.topNetRow ? (
+                <span className={sensitiveClass}>{`${formatKES(Number(dashboard.payroll.topNetRow.netPay ?? 0))} projected net pay`}</span>
+              ) : (
+                "Waiting for payroll projection."
+              )}
             </div>
           </div>
         </div>
@@ -956,6 +965,7 @@ export default async function AdminOverviewPage() {
           eyebrow="Company links"
           title="Quick access boards for the whole company"
           description="These grouped links make the homepage a real control room. Money, people, operations, and system controls each get their own board."
+          action={<AdminPrivacyToggle />}
         />
         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
           {quickLinks.map((group) => (
@@ -979,7 +989,7 @@ export default async function AdminOverviewPage() {
             <div className="rounded-2xl bg-cyan-500/10 p-3 text-cyan-200"><ChartColumnBig className="h-5 w-5" /></div>
             <div>
               <div className="text-sm font-semibold text-white">Marketplace split</div>
-              <div className="text-sm text-slate-400">Jumia {formatCompactKES(dashboard.marketplace.jumiaSales)} · Kilimall {formatCompactKES(dashboard.marketplace.kilimallSales)}</div>
+              <div className={`text-sm text-slate-400 ${sensitiveClass}`}>Jumia {formatCompactKES(dashboard.marketplace.jumiaSales)} · Kilimall {formatCompactKES(dashboard.marketplace.kilimallSales)}</div>
             </div>
           </div>
         </div>
@@ -988,7 +998,7 @@ export default async function AdminOverviewPage() {
             <div className="rounded-2xl bg-fuchsia-500/10 p-3 text-fuchsia-200"><ShieldCheck className="h-5 w-5" /></div>
             <div>
               <div className="text-sm font-semibold text-white">Wellness approvals</div>
-              <div className="text-sm text-slate-400">{dashboard.counts.pendingLeave} leave · {dashboard.counts.pendingCashAdvance} cash advance</div>
+              <div className={`text-sm text-slate-400 ${sensitiveClass}`}>{dashboard.counts.pendingLeave} leave · {dashboard.counts.pendingCashAdvance} cash advance</div>
             </div>
           </div>
         </div>

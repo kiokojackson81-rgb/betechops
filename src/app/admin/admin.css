@@ -36,3 +36,16 @@ body.overflow-hidden { overflow: hidden; }
 
 /* reserve underline space to avoid layout shift */
 .nav-link { padding-bottom: 8px; }
+
+.admin-sensitive-value {
+  transition: filter 180ms ease, opacity 180ms ease, color 180ms ease;
+}
+
+html[data-admin-sensitive-hidden="true"] .admin-sensitive-value {
+  color: transparent !important;
+  filter: blur(8px);
+  opacity: 0.3;
+  user-select: none;
+  pointer-events: none;
+  text-shadow: 0 0 12px rgba(148, 163, 184, 0.65);
+}
