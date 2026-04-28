@@ -116,27 +116,38 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
               onMouseEnter={() => setOpenMenu(href)}
               onMouseLeave={() => setOpenMenu((current) => (current === href ? null : current))}
             >
-              <button
-                type="button"
-                aria-expanded={openMenu === href}
-                onClick={() => setOpenMenu((current) => (current === href ? null : href))}
+              <div
                 className={
-                  "nav-link group relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium border transition-colors whitespace-nowrap pb-2 " +
+                  "nav-link group relative flex items-center rounded-md border transition-colors whitespace-nowrap pb-2 " +
                   (active
                     ? "bg-white/10 border-white/20 text-white"
                     : "border-transparent text-slate-200 hover:text-white hover:bg-white/5")
                 }
               >
-                <Icon className="h-4 w-4 opacity-80 group-hover:opacity-100" />
-                <span>{label}</span>
-                <ChevronDown className={"h-4 w-4 transition-transform " + (openMenu === href ? "rotate-180" : "")} />
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium"
+                >
+                  <Icon className="h-4 w-4 opacity-80 group-hover:opacity-100" />
+                  <span>{label}</span>
+                </Link>
+                <button
+                  type="button"
+                  aria-label={`Open ${label} submenu`}
+                  aria-expanded={openMenu === href}
+                  onClick={() => setOpenMenu((current) => (current === href ? null : href))}
+                  className="px-2 py-2 text-slate-300 hover:text-white"
+                >
+                  <ChevronDown className={"h-4 w-4 transition-transform " + (openMenu === href ? "rotate-180" : "")} />
+                </button>
                 <span
                   className={
                     "absolute left-2 right-2 -bottom-[2px] h-[2px] rounded bg-gradient-to-r from-indigo-400 via-pink-400 to-violet-400 transform transition-all origin-left " +
                     (active ? "scale-x-100 opacity-90" : "scale-x-0 opacity-0 group-hover:opacity-60 group-hover:scale-x-100")
                   }
                 />
-              </button>
+              </div>
               {openMenu === href ? (
                 <div className="absolute left-0 top-full z-50 mt-2 min-w-[240px] rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur">
                   {children.map((child) => {

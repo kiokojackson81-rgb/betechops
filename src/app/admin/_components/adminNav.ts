@@ -16,14 +16,14 @@ export const NAV: AdminNavItem[] = [
   { href: "/admin/attendants", label: "Staffs", icon: Store },
   { href: "/admin/orders", label: "Orders", icon: Package },
   {
-    href: "/admin/pos-management",
+    href: "/admin/receipts",
     label: "POS Management",
     icon: WalletCards,
     children: [
-      { href: "/admin/pos-management", label: "Product setup" },
       { href: "/admin/receipts", label: "Receipts" },
+      { href: "/admin/pos-management", label: "Catalogue" },
       { href: "/admin/marketing-report?impersonateId=cmimxqf9t0003v5mcjdq8x61p", label: "SalesOps" },
-      { href: "/admin/pending-pricing", label: "Pending pricing" },
+      { href: "/admin/pending-pricing", label: "Pricing" },
       { href: "/admin/returns", label: "Returns" },
     ],
   },
