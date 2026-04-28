@@ -203,9 +203,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const addCatalogProduct = (product: CatalogProduct) => {
+  const buildCatalogRow = (product: CatalogProduct): ItemRow => {
     const defaultWarranty = typeof product.defaultWarranty === "string" ? product.defaultWarranty.trim() : "";
-    const nextRow: ItemRow = {
+    return {
       ...newItem(),
       title: product.name,
       unitPrice: Number(product.sellingPrice || 0),
@@ -220,6 +220,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       warranty: defaultWarranty,
     };
+  };
+
+  const applyCatalogProductToRow = (rowId: string, product: CatalogProduct) => {
+    const nextRow = buildCatalogRow(product);
+    setItems((current) => current.map((row) => (row.id === rowId ? { ...row, ...nextRow, id: row.id } : row)));
+    if (nextRow.warranty) {
+      setShowWarranty(true);
+    }
+  };
+
+  const addCatalogProduct = (product: CatalogProduct) => {
+    const nextRow = buildCatalogRow(product);
 
     setItems((current) => {
       const blankRowIndex = current.findIndex(isBlankReceiptRow);
@@ -229,7 +241,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       return current.map((row, index) => (index === blankRowIndex ? { ...row, ...nextRow, id: row.id } : row));
     });
-    if (defaultWarranty) {
+    if (nextRow.warranty) {
       setShowWarranty(true);
     }
     setCatalogOpen(false);
@@ -804,7 +816,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                               <button
                                 type="button"
                                 className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
-                                onClick={() => addCatalogProduct(match)}
+                                onClick={() => applyCatalogProductToRow(it.id, match)}
                               >
                                 Use this · {Math.round(score * 100)}%
                               </button>
