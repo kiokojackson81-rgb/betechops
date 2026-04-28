@@ -33,10 +33,21 @@ export async function GET(req: Request) {
       commissionEnabled: true,
       commissionAmount: true,
       commissionRequiresApproval: true,
+      _count: {
+        select: {
+          orders: true,
+        },
+      },
     },
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     take: limit,
   }).catch(() => []);
 
-  return NextResponse.json(products);
+  return NextResponse.json(
+    products.map((product) => ({
+      ...product,
+      soldCount: Number(product._count?.orders ?? 0),
+      _count: undefined,
+    })),
+  );
 }

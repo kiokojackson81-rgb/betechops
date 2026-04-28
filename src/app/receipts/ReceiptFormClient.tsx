@@ -35,6 +35,7 @@ type CatalogProduct = {
   commissionEnabled?: boolean;
   commissionAmount?: number | string | null;
   commissionRequiresApproval?: boolean;
+  soldCount?: number;
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
@@ -372,7 +373,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     return [...catalogResults].sort((left, right) => {
       const rightScore = getProductSimilarityScore(catalogQuery, right.name);
       const leftScore = getProductSimilarityScore(catalogQuery, left.name);
-      return rightScore - leftScore || left.name.localeCompare(right.name);
+      return (
+        rightScore - leftScore ||
+        Number(right.soldCount ?? 0) - Number(left.soldCount ?? 0) ||
+        left.name.localeCompare(right.name)
+      );
     });
   }, [catalogQuery, catalogResults]);
 
