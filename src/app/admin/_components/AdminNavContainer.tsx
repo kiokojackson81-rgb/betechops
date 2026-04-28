@@ -60,7 +60,8 @@ export default function AdminNavContainer() {
   }, [open]);
 
   return (
-    <div className="max-w-7xl mx-auto px-2 md:px-4 py-2 flex items-center gap-3">
+    <div className="max-w-7xl mx-auto px-2 md:px-4 py-3">
+      <div className="flex items-center gap-3">
       <button
         data-nav-toggle="1"
         aria-label="Toggle navigation menu"
@@ -75,10 +76,13 @@ export default function AdminNavContainer() {
         </div>
       </button>
       <Link href="/admin" className="font-semibold tracking-tight text-base md:text-lg shrink-0 whitespace-nowrap">BetechOps — Unified Admin</Link>
-      <div className="flex-1 hidden md:block overflow-visible"><AdminTopNav /></div>
-      <div className="hidden md:flex items-center gap-2">
+      <div className="ml-auto hidden md:flex items-center gap-2">
         <AdminTopbarBadges />
         <AdminUserMenu />
+      </div>
+      </div>
+      <div className="mt-3 hidden md:block overflow-visible">
+        <AdminTopNav />
       </div>
 
       {/* Mobile drawer */}
