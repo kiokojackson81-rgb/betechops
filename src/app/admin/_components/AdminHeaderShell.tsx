@@ -6,25 +6,58 @@ export default function AdminHeaderShell({ children }: { children: React.ReactNo
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    let lastY = window.scrollY;
+    let revealTimer: ReturnType<typeof setTimeout> | null = null;
 
     function onScroll() {
       const currentY = window.scrollY;
-      const delta = currentY - lastY;
 
       if (currentY <= 24) {
         setHidden(false);
-      } else if (delta > 8) {
-        setHidden(true);
-      } else if (delta < -8) {
-        setHidden(false);
+        if (revealTimer) {
+          clearTimeout(revealTimer);
+          revealTimer = null;
+        }
+        return;
       }
 
-      lastY = currentY;
+      setHidden(true);
+
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+      }
+
+      revealTimer = setTimeout(() => {
+        setHidden(false);
+        revealTimer = null;
+      }, 180);
+    }
+
+    function onPointerLeaveViewport() {
+      if (window.scrollY <= 24) {
+        setHidden(false);
+        return;
+      }
+
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+        revealTimer = null;
+      }
+
+      setHidden(false);
     }
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("mouseup", onPointerLeaveViewport);
+    window.addEventListener("touchend", onPointerLeaveViewport);
+
+    return () => {
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+      }
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("mouseup", onPointerLeaveViewport);
+      window.removeEventListener("touchend", onPointerLeaveViewport);
+    };
   }, []);
 
   return (
