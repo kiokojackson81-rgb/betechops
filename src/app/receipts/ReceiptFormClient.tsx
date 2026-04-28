@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
+import { getProductSimilarityScore } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
@@ -270,6 +271,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const normalizedTaxRate = Number.isFinite(taxRate) ? taxRate : 0;
   const normalizedDiscount = Number.isFinite(discount) ? discount : 0;
+  const rankedCatalogResults = useMemo(() => {
+    if (!catalogQuery.trim()) return catalogResults;
+
+    return [...catalogResults].sort((left, right) => {
+      const rightScore = getProductSimilarityScore(catalogQuery, right.name);
+      const leftScore = getProductSimilarityScore(catalogQuery, left.name);
+      return rightScore - leftScore || left.name.localeCompare(right.name);
+    });
+  }, [catalogQuery, catalogResults]);
 
   const toNumber = (value: number | "") => (typeof value === "number" ? value : 0);
 
@@ -826,7 +836,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 <p className="text-xs uppercase tracking-[0.25em] text-slate-400">POS Catalog</p>
                 <h2 className="text-xl font-semibold text-white">Select product</h2>
                 <p className="text-sm text-slate-400">
-                  Pick an admin-managed product to attach it to this receipt.
+                  Pick an admin-managed product to attach it to this receipt. Similar catalog products are ranked first so you can reuse existing items before adding new ones.
                 </p>
               </div>
               <button
@@ -852,26 +862,37 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
                   Loading products...
                 </div>
-              ) : catalogResults.length ? (
-                catalogResults.map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    className="flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-left hover:border-emerald-500/40 hover:bg-slate-950"
-                    onClick={() => addCatalogProduct(product)}
-                  >
-                    <div className="space-y-1">
-                      <div className="font-semibold text-white">{product.name}</div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">
-                        {product.sku}
-                        {product.category ? ` · ${product.category}` : ""}
+              ) : rankedCatalogResults.length ? (
+                rankedCatalogResults.map((product) => {
+                  const similarityScore = catalogQuery.trim()
+                    ? getProductSimilarityScore(catalogQuery, product.name)
+                    : 0;
+
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className="flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-left hover:border-emerald-500/40 hover:bg-slate-950"
+                      onClick={() => addCatalogProduct(product)}
+                    >
+                      <div className="space-y-1">
+                        <div className="font-semibold text-white">{product.name}</div>
+                        <div className="text-xs uppercase tracking-wide text-slate-400">
+                          {product.sku}
+                          {product.category ? ` · ${product.category}` : ""}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Selling: KES {Number(product.sellingPrice || 0).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Selling: KES {Number(product.sellingPrice || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </button>
-                ))
+                      {similarityScore >= 0.5 ? (
+                        <div className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100">
+                          {Math.round(similarityScore * 100)}% similar
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
                   No products found.

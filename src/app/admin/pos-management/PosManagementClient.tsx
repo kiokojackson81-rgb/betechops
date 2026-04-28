@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 
 type PosProduct = {
@@ -171,6 +172,15 @@ export default function PosManagementClient() {
     if (warrantyFilter === "without" && hasWarranty) return false;
     return true;
   });
+
+  const duplicateMatches = useMemo(
+    () =>
+      findSimilarProducts(
+        draft.name,
+        products.filter((product) => product.id !== draft.id),
+      ),
+    [draft.id, draft.name, products],
+  );
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -444,6 +454,31 @@ export default function PosManagementClient() {
                 <div className="mt-1 text-xs text-slate-500">
                   Fix spelling and clean up formatting before saving.
                 </div>
+                {duplicateMatches.length ? (
+                  <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
+                      Possible Duplicates
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {duplicateMatches.map(({ item, score }) => (
+                        <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 text-sm">
+                          <div>
+                            <div className="font-medium text-white">{item.name}</div>
+                            <div className="text-xs text-slate-300">
+                              {item.sku} · Selling {formatMoney(item.sellingPrice)}
+                            </div>
+                          </div>
+                          <div className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100">
+                            {Math.round(score * 100)}% similar
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-amber-100/80">
+                      This product looks similar to items already in the catalog. Edit or reuse an existing product where possible.
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <label className="text-sm text-slate-300">
                 SKU
