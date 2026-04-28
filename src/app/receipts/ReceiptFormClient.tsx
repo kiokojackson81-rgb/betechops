@@ -170,7 +170,32 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   }, []);
 
   const addRow = () => setItems((s) => [...s, newItem()]);
-  const removeRow = (id: string) => setItems((s) => (s.length > 1 ? s.filter((r) => r.id !== id) : s));
+  const clearRow = (id: string) =>
+    setItems((rows) =>
+      rows.map((row) =>
+        row.id === id
+          ? {
+              ...newItem(),
+              id: row.id,
+            }
+          : row,
+      ),
+    );
+  const removeRow = (id: string) =>
+    setItems((rows) => {
+      if (rows.length > 1) {
+        return rows.filter((row) => row.id !== id);
+      }
+
+      return rows.map((row) =>
+        row.id === id
+          ? {
+              ...newItem(),
+              id: row.id,
+            }
+          : row,
+      );
+    });
   const updateRow = (id: string, patch: Partial<ItemRow>) => setItems((s) => s.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const updateTitleRow = (id: string, title: string) =>
     setItems((rows) =>
