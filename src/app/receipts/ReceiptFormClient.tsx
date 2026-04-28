@@ -55,6 +55,16 @@ const sanitizeNumericInput = (value: string): number | "" => {
   return Number.isFinite(parsed) ? parsed : "";
 };
 
+const isBlankReceiptRow = (row: ItemRow) =>
+  !row.isDeliveryFee &&
+  !row.productId &&
+  !row.title.trim() &&
+  Number(row.quantity || 1) === 1 &&
+  (row.unitPrice === "" || Number(row.unitPrice || 0) === 0) &&
+  (!row.serial || !row.serial.trim()) &&
+  (!row.warranty || !row.warranty.trim()) &&
+  (row.buyingPrice === "" || Number(row.buyingPrice || 0) === 0);
+
 
 type ReceiptFormProps = {
   onCreated?: (receipt: any) => void;
@@ -171,24 +181,30 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const addCatalogProduct = (product: CatalogProduct) => {
     const defaultWarranty = typeof product.defaultWarranty === "string" ? product.defaultWarranty.trim() : "";
-    setItems((current) => [
-      ...current,
-      {
-        ...newItem(),
-        title: product.name,
-        unitPrice: Number(product.sellingPrice || 0),
-        productId: product.id,
-        sku: product.sku,
-        buyingPrice:
-          product.lastBuyingPrice == null || Number(product.lastBuyingPrice) <= 0
-            ? ""
-            : Number(product.lastBuyingPrice),
-        commissionEnabled: Boolean(product.commissionEnabled),
-        commissionAmount: product.commissionAmount == null ? 0 : Number(product.commissionAmount),
-        commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
-        warranty: defaultWarranty,
-      },
-    ]);
+    const nextRow: ItemRow = {
+      ...newItem(),
+      title: product.name,
+      unitPrice: Number(product.sellingPrice || 0),
+      productId: product.id,
+      sku: product.sku,
+      buyingPrice:
+        product.lastBuyingPrice == null || Number(product.lastBuyingPrice) <= 0
+          ? ""
+          : Number(product.lastBuyingPrice),
+      commissionEnabled: Boolean(product.commissionEnabled),
+      commissionAmount: product.commissionAmount == null ? 0 : Number(product.commissionAmount),
+      commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      warranty: defaultWarranty,
+    };
+
+    setItems((current) => {
+      const blankRowIndex = current.findIndex(isBlankReceiptRow);
+      if (blankRowIndex === -1) {
+        return [...current, nextRow];
+      }
+
+      return current.map((row, index) => (index === blankRowIndex ? { ...row, ...nextRow, id: row.id } : row));
+    });
     if (defaultWarranty) {
       setShowWarranty(true);
     }
