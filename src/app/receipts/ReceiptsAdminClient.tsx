@@ -381,6 +381,7 @@ export default function ReceiptsAdminClient({
   const [triggerSummaryResult, setTriggerSummaryResult] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<string | null>(null);
   const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
   const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [editState, setEditState] = useState<{ open: boolean; draft: EditDraft | null; saving: boolean }>({
@@ -831,6 +832,42 @@ export default function ReceiptsAdminClient({
     setDetail(null);
     setDetailLoading(false);
   };
+
+  const handleRecalculateReceiptCosts = useCallback(
+    async (receiptId: string) => {
+      setRecalculatingReceiptId(receiptId);
+      try {
+        const res = await fetch(`/api/receipts/${receiptId}/recalculate-costs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(payload?.error || "Failed to recalculate receipt costs");
+        }
+        const updatedItems = Number(payload?.updatedItems ?? 0);
+        const buyingTotal = formatCurrency(payload?.buyingTotal ?? 0);
+        showToast(
+          updatedItems > 0
+            ? `Recalculated ${updatedItems} item cost${updatedItems === 1 ? "" : "s"}. Buying total ${buyingTotal}.`
+            : `No newer buying prices were found. Current buying total ${buyingTotal}.`,
+          "success",
+        );
+        await loadRows(page, { silent: true });
+        await fetchSummary();
+        if (selected?.id === receiptId) {
+          await fetchReceiptDetail(receiptId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to recalculate receipt costs";
+        showToast(message, "error");
+      } finally {
+        setRecalculatingReceiptId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
 
   const handleSend = async (channel: "email" | "whatsapp") => {
     if (!selected) return;
@@ -1816,7 +1853,19 @@ export default function ReceiptsAdminClient({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipt detail</p>
-                <h2 className="text-xl font-semibold text-white">{selected?.orderRef || selected?.id}</h2>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-semibold text-white">{selected?.orderRef || selected?.id}</h2>
+                  {allowEdit && selected?.id ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRecalculateReceiptCosts(selected.id)}
+                      disabled={recalculatingReceiptId === selected.id}
+                      className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      {recalculatingReceiptId === selected.id ? "Recalculating..." : "Recalculate cost"}
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
@@ -2032,6 +2081,16 @@ export default function ReceiptsAdminClient({
                       className="rounded-xl border border-emerald-500/70 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/40 disabled:opacity-50"
                     >
                       {podActionId === detail.receipt.id ? "Processing..." : "Mark Paid"}
+                    </button>
+                  )}
+                  {allowEdit && (
+                    <button
+                      type="button"
+                      onClick={() => selected?.id && void handleRecalculateReceiptCosts(selected.id)}
+                      disabled={!selected?.id || recalculatingReceiptId === selected?.id}
+                      className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+                    >
+                      {recalculatingReceiptId === selected?.id ? "Recalculating..." : "Recalculate buying price"}
                     </button>
                   )}
                   {allowEdit && (
