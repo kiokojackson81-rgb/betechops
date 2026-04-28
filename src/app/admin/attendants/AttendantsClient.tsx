@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import getLandingPage, { getAdminLandingPage } from "@/lib/getLandingPage";
@@ -106,12 +107,18 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
-                    <button className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800" onClick={() => router.push(`/admin/attendants/${a.id}`)}>
+                    <Link
+                      href={`/admin/attendants/${a.id}`}
+                      className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                    >
                       Edit
-                    </button>
-                    <button className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800" onClick={() => router.push(`/admin/attendants/${a.id}/payroll`)}>
+                    </Link>
+                    <Link
+                      href={`/admin/attendants/${a.id}/payroll`}
+                      className="text-xs rounded-full border border-slate-600 px-3 py-1 hover:bg-slate-800"
+                    >
                       Payroll
-                    </button>
+                    </Link>
                     <a
                       href={`${getLandingPage(a.attendantCategory || null)}?impersonateId=${a.id}`}
                       target="_blank"

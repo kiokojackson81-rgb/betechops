@@ -18,6 +18,15 @@ import type { PayrollRow } from "@/app/admin/payroll/types";
 export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
+type MaybePromise<T> = T | Promise<T>;
+
+async function resolveMaybePromise<T>(value: MaybePromise<T> | undefined) {
+  if (!value) return undefined;
+  if (typeof (value as Promise<T>).then === "function") {
+    return await (value as Promise<T>);
+  }
+  return value as T;
+}
 
 function rankBy(rows: PayrollRow[], attendantId: string, selector: (row: PayrollRow) => number) {
   const sorted = [...rows].sort((a, b) => selector(b) - selector(a));
@@ -43,15 +52,22 @@ export default async function PayrollPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<SearchParams | undefined>;
+  params: MaybePromise<{ id: string }>;
+  searchParams?: MaybePromise<SearchParams | undefined>;
 }) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) {
     redirect("/admin/login");
   }
 
-  const awaitedParams = await params;
+  const awaitedParams = await resolveMaybePromise(params);
+  if (!awaitedParams?.id) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-500/30 bg-red-900/10">Attendant not found</Card>
+      </div>
+    );
+  }
   const attendantId = awaitedParams.id;
   const attendant = await prisma.user.findUnique({
     where: { id: attendantId },
@@ -67,7 +83,7 @@ export default async function PayrollPage({
 
   const plan = await prisma.attendantCompPlan.findUnique({ where: { attendantId } });
 
-  const resolvedSearchParams = (await searchParams) ?? {};
+  const resolvedSearchParams = (await resolveMaybePromise(searchParams)) ?? {};
   const rawPeriodParam = Array.isArray(resolvedSearchParams.period)
     ? resolvedSearchParams.period[0]
     : resolvedSearchParams.period;
