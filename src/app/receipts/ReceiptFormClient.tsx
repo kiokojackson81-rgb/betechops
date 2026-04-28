@@ -153,7 +153,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       try {
         const params = new URLSearchParams({
           activeOnly: "1",
-          limit: "200",
+          limit: "2000",
         });
         const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Failed to load product duplicate checks");

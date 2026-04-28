@@ -15,45 +15,94 @@ function getTokens(value: string) {
   return normalizeProductText(value).split(" ").filter(Boolean);
 }
 
-function isNumericToken(token: string) {
-  return /\d/.test(token);
+function getNumericPart(token: string) {
+  const match = token.match(/\d+(?:\.\d+)?/g);
+  return match ? match.join("") : "";
+}
+
+function tokensMatch(left: string, right: string) {
+  if (left === right) return true;
+
+  const leftNumeric = getNumericPart(left);
+  const rightNumeric = getNumericPart(right);
+  if (leftNumeric && rightNumeric && leftNumeric === rightNumeric) return true;
+
+  if (left.length >= 3 && right.length >= 3) {
+    if (left.includes(right) || right.includes(left)) return true;
+  }
+
+  return false;
+}
+
+function getTokenOverlapCount(aTokens: string[], bTokens: string[]) {
+  if (!aTokens.length || !bTokens.length) return 0;
+
+  const remaining = [...bTokens];
+  let overlap = 0;
+
+  for (const token of aTokens) {
+    const index = remaining.findIndex((candidate) => tokensMatch(token, candidate));
+    if (index >= 0) {
+      overlap += 1;
+      remaining.splice(index, 1);
+    }
+  }
+
+  return overlap;
 }
 
 function getTokenScore(a: string, b: string) {
-  const aTokens = new Set(getTokens(a));
-  const bTokens = new Set(getTokens(b));
-  if (!aTokens.size || !bTokens.size) return 0;
+  const aTokens = Array.from(new Set(getTokens(a)));
+  const bTokens = Array.from(new Set(getTokens(b)));
+  if (!aTokens.length || !bTokens.length) return 0;
 
-  let overlap = 0;
-  for (const token of aTokens) {
-    if (bTokens.has(token)) overlap += 1;
-  }
+  const overlap = getTokenOverlapCount(aTokens, bTokens);
 
-  return (2 * overlap) / (aTokens.size + bTokens.size);
+  return (2 * overlap) / (aTokens.length + bTokens.length);
 }
 
 function getCoverageScore(query: string, candidate: string) {
   const queryTokens = getTokens(query);
-  const candidateTokens = new Set(getTokens(candidate));
-  if (!queryTokens.length || !candidateTokens.size) return 0;
+  const candidateTokens = getTokens(candidate);
+  if (!queryTokens.length || !candidateTokens.length) return 0;
 
-  let overlap = 0;
-  for (const token of queryTokens) {
-    if (candidateTokens.has(token)) overlap += 1;
-  }
-
+  const overlap = getTokenOverlapCount(queryTokens, candidateTokens);
   return overlap / queryTokens.length;
 }
 
 function getNumericTokenScore(query: string, candidate: string) {
-  const queryNumeric = Array.from(new Set(getTokens(query).filter(isNumericToken)));
+  const queryNumeric = Array.from(
+    new Set(getTokens(query).map(getNumericPart).filter(Boolean)),
+  );
   if (!queryNumeric.length) return 0;
-  const candidateTokens = new Set(getTokens(candidate));
+  const candidateTokens = new Set(getTokens(candidate).map(getNumericPart).filter(Boolean));
   let overlap = 0;
   for (const token of queryNumeric) {
     if (candidateTokens.has(token)) overlap += 1;
   }
   return overlap / queryNumeric.length;
+}
+
+function getSequentialTokenScore(query: string, candidate: string) {
+  const queryTokens = getTokens(query);
+  const candidateTokens = getTokens(candidate);
+  if (!queryTokens.length || !candidateTokens.length) return 0;
+
+  let bestRun = 0;
+  for (let start = 0; start < candidateTokens.length; start += 1) {
+    let run = 0;
+    for (
+      let queryIndex = 0, candidateIndex = start;
+      queryIndex < queryTokens.length && candidateIndex < candidateTokens.length;
+      queryIndex += 1, candidateIndex += 1
+    ) {
+      if (!tokensMatch(queryTokens[queryIndex], candidateTokens[candidateIndex])) break;
+      run += 1;
+    }
+    if (run > bestRun) bestRun = run;
+  }
+
+  return bestRun / queryTokens.length;
 }
 
 function getNgrams(value: string, size = 3) {
@@ -100,16 +149,18 @@ export function getProductSimilarityScore(a: string, b: string) {
   const ngramScore = getNgramScore(normalizedA, normalizedB);
   const coverageScore = getCoverageScore(normalizedA, normalizedB);
   const numericTokenScore = getNumericTokenScore(normalizedA, normalizedB);
+  const sequentialTokenScore = getSequentialTokenScore(normalizedA, normalizedB);
   const containsBoost =
     normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA)
-      ? 0.92
+      ? 0.95
       : 0;
 
   const blendedScore =
-    tokenScore * 0.35 +
-    ngramScore * 0.2 +
-    coverageScore * 0.35 +
-    numericTokenScore * 0.1;
+    coverageScore * 0.38 +
+    tokenScore * 0.26 +
+    sequentialTokenScore * 0.16 +
+    numericTokenScore * 0.12 +
+    ngramScore * 0.08;
 
   return Math.max(containsBoost, blendedScore);
 }
