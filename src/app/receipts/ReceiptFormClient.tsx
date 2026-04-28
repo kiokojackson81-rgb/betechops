@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
-import { getProductSimilarityScore } from "@/lib/posProductSimilarity";
+import { findSimilarProducts, getProductSimilarityScore } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
@@ -110,6 +110,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
+  const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +144,29 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          activeOnly: "1",
+          limit: "200",
+        });
+        const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Failed to load product duplicate checks");
+        const data = await response.json().catch(() => []);
+        if (cancelled) return;
+        setDuplicateCatalogPool(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setDuplicateCatalogPool([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const addRow = () => setItems((s) => [...s, newItem()]);
@@ -734,6 +758,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <div className="space-y-2">
             {items.map((it) => (
               <div key={it.id} className="w-full border-b border-slate-800 pb-3 last:border-none last:pb-0">
+                {(() => {
+                  const duplicateMatches =
+                    it.productId || !it.title.trim()
+                      ? []
+                      : findSimilarProducts(
+                          it.title,
+                          duplicateCatalogPool.filter((product) => product.id !== it.productId),
+                          0.5,
+                          3,
+                        );
+
+                  return (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <textarea
@@ -749,6 +785,35 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                           Catalog
                         </span>
                         <span>{it.sku || "SKU"}</span>
+                      </div>
+                    ) : null}
+                    {duplicateMatches.length ? (
+                      <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                          Possible existing products
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          {duplicateMatches.map(({ item: match, score }) => (
+                            <div key={match.id} className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white">{match.name}</div>
+                                <div className="text-xs text-slate-300">
+                                  {match.sku} · Selling KES {Number(match.sellingPrice || 0).toLocaleString()}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
+                                onClick={() => addCatalogProduct(match)}
+                              >
+                                Use this · {Math.round(score * 100)}%
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-amber-100/80">
+                          This description is close to products already in the POS catalog. Reuse one where possible before adding a new manual item.
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -805,6 +870,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                     </button>
                   </div>
                 </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
