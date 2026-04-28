@@ -3,6 +3,7 @@ import React from "react";
 import Link from "next/link";
 import AdminStatusBanner from "./_components/AdminStatusBanner";
 import AdminNavContainer from "./_components/AdminNavContainer";
+import AdminHeaderShell from "./_components/AdminHeaderShell";
 import AdminTips from "./_components/AdminTips";
 import "./admin.css";
 
@@ -14,12 +15,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100">
       {/* Sticky top system status + nav bar */}
-      <div className="sticky top-0 z-50 shadow-lg shadow-black/30">
+      <AdminHeaderShell>
         <AdminStatusBanner />
         <div className="border-b border-white/10 bg-[var(--panel,#121723)] backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--panel)#121723,transparent_15%)]">
           <AdminNavContainer />
         </div>
-      </div>
+      </AdminHeaderShell>
 
       {/* Page body */}
       <div className="page-shell py-6 space-y-6">
