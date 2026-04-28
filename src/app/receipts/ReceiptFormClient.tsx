@@ -172,6 +172,24 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const addRow = () => setItems((s) => [...s, newItem()]);
   const removeRow = (id: string) => setItems((s) => (s.length > 1 ? s.filter((r) => r.id !== id) : s));
   const updateRow = (id: string, patch: Partial<ItemRow>) => setItems((s) => s.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const updateTitleRow = (id: string, title: string) =>
+    setItems((rows) =>
+      rows.map((row) => {
+        if (row.id !== id) return row;
+        if (!row.productId) return { ...row, title };
+
+        return {
+          ...row,
+          title,
+          productId: undefined,
+          sku: undefined,
+          buyingPrice: "",
+          commissionEnabled: undefined,
+          commissionAmount: undefined,
+          commissionRequiresApproval: undefined,
+        };
+      }),
+    );
   const addDeliveryFeeRow = () =>
     setItems((s) => [
       ...s,
@@ -787,7 +805,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                     <textarea
                       className="w-full min-h-[48px] px-3 py-2 rounded-md bg-[#060b1b] border border-gray-700 text-gray-200 resize-y"
                       value={it.title}
-                      onChange={(e) => updateRow(it.id, { title: e.target.value })}
+                      onChange={(e) => updateTitleRow(it.id, e.target.value)}
                       placeholder="Item description"
                       rows={2}
                     />
