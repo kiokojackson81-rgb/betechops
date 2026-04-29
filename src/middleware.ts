@@ -1,3 +1,48 @@
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+// Lightweight middleware to block unauthenticated access to support APIs.
+// This checks for the common next-auth session cookie names and returns
+// 401 when missing. Routes still perform full auth server-side using
+// `requireAttendant`; this middleware provides an early, fast-fail layer.
+
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Only apply guard to support API endpoints
+  if (!pathname.startsWith("/api/support")) return NextResponse.next();
+
+  // Common cookie names used by next-auth depending on environment
+  const cookieCandidates = [
+    "__Secure-next-auth.session-token",
+    "__Host-next-auth.session-token",
+    "next-auth.session-token",
+  ];
+
+  const cookies = req.cookies;
+  let tokenFound = false;
+  for (const name of cookieCandidates) {
+    const c = cookies.get(name);
+    if (c && c.value) {
+      tokenFound = true;
+      break;
+    }
+  }
+
+  if (!tokenFound) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    "/api/support/:path*",
+    "/api/admin/:path*",
+    "/api/pos-commissions/:path*",
+  ],
+};
 // Disabled duplicate middleware. Root-level middleware.ts is the single source of truth.
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
