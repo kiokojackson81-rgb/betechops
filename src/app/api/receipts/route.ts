@@ -30,13 +30,14 @@ const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD ||
 
 export async function GET(req: NextRequest) {
   try {
-    await auth(); // soft guard: require session but allow attendants/supervisors/admins
-  } catch (e) {
-    // allow unauthenticated fetch to still fall through if middleware handled already
-  }
+    try {
+      await auth(); // soft guard: require session but allow attendants/supervisors/admins
+    } catch (e) {
+      // allow unauthenticated fetch to still fall through if middleware handled already
+    }
 
-  const url = new URL(req.url);
-  const q = url.searchParams.get("q") || undefined;
+    const url = new URL(req.url);
+    const q = url.searchParams.get("q") || undefined;
   const phoneParam = url.searchParams.get("phone") || undefined;
   const docTypeParam = url.searchParams.get("docType") || undefined;
   const includeLedgerParam = url.searchParams.get("includeLedger");
@@ -456,8 +457,15 @@ export async function GET(req: NextRequest) {
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
-  const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
-  return NextResponse.json(composeIdentityResponse(metaWithScope, data));
+    const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
+    return NextResponse.json(composeIdentityResponse(metaWithScope, data));
+  } catch (err: any) {
+    // Log and return error details to help debugging during development
+    // eslint-disable-next-line no-console
+    console.error("/api/receipts GET error:", err);
+    const body = { error: String(err?.message ?? err), stack: err?.stack ?? null };
+    return NextResponse.json(body, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
