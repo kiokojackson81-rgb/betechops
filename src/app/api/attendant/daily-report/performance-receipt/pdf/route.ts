@@ -164,6 +164,105 @@ const resolveLedgerReceiptProfit = (entry: LedgerReceiptRow) => {
   return sellingTotal - buyingTotal;
 };
 
+const applyProfitFallback = (row: PerformanceReceiptRow, profit: number) => {
+  if (profit > 0 || row.profit <= 0) {
+    row.profit = profit;
+  }
+};
+
+async function getReceiptProfitFallbacks(args: {
+  userId: string;
+  start: Date;
+  end: Date;
+  receiptNumbers: string[];
+}) {
+  const variants = Array.from(
+    new Set(
+      args.receiptNumbers
+        .flatMap((value) => [value, normalizeReceiptNumber(value)])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const profitByReceipt = new Map<string, number>();
+  if (variants.length === 0) return profitByReceipt;
+
+  const addProfit = (receiptNumber: string | null | undefined, profit: number) => {
+    const canonical = normalizeReceiptNumber(receiptNumber);
+    if (!canonical || !Number.isFinite(profit) || profit <= 0) return;
+    profitByReceipt.set(canonical, Math.max(profitByReceipt.get(canonical) ?? 0, profit));
+  };
+
+  const [marketingSales, supportSales, marketingReceipts, supportReceipts] = await Promise.all([
+    prisma.marketingSale.findMany({
+      where: {
+        receiptNumber: { in: variants },
+        entry: { submittedById: args.userId, date: { gte: args.start, lte: args.end } },
+      },
+      select: { receiptNumber: true, sellingPrice: true, buyingPrice: true },
+    }),
+    prisma.supportSale.findMany({
+      where: {
+        receiptNumber: { in: variants },
+        entry: { submittedById: args.userId, date: { gte: args.start, lte: args.end } },
+      },
+      select: { receiptNumber: true, sellingPrice: true, buyingPrice: true },
+    }),
+    prisma.marketingReceipt.findMany({
+      where: {
+        OR: [{ receiptNumber: { in: variants } }, { receiptKey: { in: variants } }],
+        dailyEntry: { submittedById: args.userId, date: { gte: args.start, lte: args.end } },
+      },
+      select: {
+        receiptNumber: true,
+        receiptKey: true,
+        sellingTotal: true,
+        buyingTotal: true,
+        items: { select: { buyingPrice: true } },
+      },
+    }),
+    prisma.supportReceipt.findMany({
+      where: {
+        OR: [{ receiptNumber: { in: variants } }, { receiptKey: { in: variants } }],
+        dailyEntry: { submittedById: args.userId, date: { gte: args.start, lte: args.end } },
+      },
+      select: {
+        receiptNumber: true,
+        receiptKey: true,
+        sellingTotal: true,
+        buyingTotal: true,
+        items: { select: { buyingPrice: true } },
+      },
+    }),
+  ]);
+
+  const salesProfitByReceipt = new Map<string, number>();
+  for (const sale of [...marketingSales, ...supportSales]) {
+    const canonical = normalizeReceiptNumber(sale.receiptNumber);
+    const buying = Number(sale.buyingPrice ?? 0);
+    if (!canonical || buying <= 0) continue;
+    salesProfitByReceipt.set(
+      canonical,
+      (salesProfitByReceipt.get(canonical) ?? 0) + (Number(sale.sellingPrice ?? 0) - buying),
+    );
+  }
+  for (const [receiptNumber, profit] of salesProfitByReceipt.entries()) {
+    addProfit(receiptNumber, profit);
+  }
+
+  for (const receipt of [...marketingReceipts, ...supportReceipts]) {
+    const aggregateBuying = Number(receipt.buyingTotal ?? 0);
+    const itemBuying = receipt.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+    const buyingTotal = aggregateBuying > 0 ? aggregateBuying : itemBuying;
+    if (buyingTotal <= 0) continue;
+    const profit = Number(receipt.sellingTotal ?? 0) - buyingTotal;
+    addProfit(receipt.receiptNumber, profit);
+    addProfit(receipt.receiptKey, profit);
+  }
+
+  return profitByReceipt;
+}
+
 function computeReceiptCommissionForTotals(args: {
   attendantEmail?: string | null;
   salesCommissionMode: string;
@@ -668,6 +767,18 @@ export async function GET(req: Request) {
         productCommission: 0,
       });
     }
+  }
+
+  const profitFallbacks = await getReceiptProfitFallbacks({
+    userId,
+    start: period.start,
+    end: period.end,
+    receiptNumbers: rows.map((row) => row.receiptNumber),
+  });
+  for (const row of rows) {
+    const canonical = normalizeReceiptNumber(row.receiptNumber);
+    if (!canonical) continue;
+    applyProfitFallback(row, profitFallbacks.get(canonical) ?? 0);
   }
 
   const [commissionConfig, commissionPeriod, productCommissions, payrollRow] = await Promise.all([
