@@ -97,6 +97,8 @@ type PayrollAdjustmentRequestRow = {
   decidedBy?: { id: string; name?: string | null; email: string; attendantCategory?: string | null } | null;
 };
 
+type WellnessTab = "leave" | "cash" | "discipline" | "history" | "balances";
+
 const currency = new Intl.NumberFormat("en-KE", {
   style: "currency",
   currency: "KES",
@@ -172,6 +174,7 @@ export default function WellnessClient() {
   const [submittingAdjustment, setSubmittingAdjustment] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<WellnessTab>("leave");
   const [leaveForm, setLeaveForm] = useState({
     type: "ANNUAL",
     startDate: toDateInput(new Date()),
@@ -195,6 +198,23 @@ export default function WellnessClient() {
     evidenceUrl: "",
   });
   const canSubmitAdjustmentRequest = Boolean(overview?.canSubmitPayrollAdjustmentRequest);
+  const tabs: Array<{ id: WellnessTab; label: string; meta: string }> = [
+    { id: "leave", label: "Leave", meta: `${overview?.leaveBalance.totalRemaining ?? "-"} days left` },
+    { id: "cash", label: "Cash advance", meta: currency.format(overview?.cashAdvanceCapacity.availableToBorrow ?? 0) },
+    ...(canSubmitAdjustmentRequest
+      ? [{ id: "discipline" as WellnessTab, label: "Payroll discipline", meta: "Approval required" }]
+      : []),
+    {
+      id: "history",
+      label: "History",
+      meta: String(
+        (overview?.leaveRequests.length ?? 0) +
+          (overview?.cashAdvances.length ?? 0) +
+          (overview?.payrollAdjustmentRequests?.length ?? 0),
+      ),
+    },
+    { id: "balances", label: "Balances", meta: currency.format(overview?.outstandingAdvanceBalance ?? 0) },
+  ];
   const requestedAdvanceAmount = Math.max(0, Math.trunc(Number(advanceForm.requestedAmount ?? 0)));
   const requestedRepaymentMonths = Math.min(
     MAX_CASH_ADVANCE_REPAYMENT_PERIOD,
@@ -224,6 +244,12 @@ export default function WellnessClient() {
   useEffect(() => {
     void fetchOverview();
   }, [impersonateId]);
+
+  useEffect(() => {
+    if (activeTab === "discipline" && !canSubmitAdjustmentRequest) {
+      setActiveTab("leave");
+    }
+  }, [activeTab, canSubmitAdjustmentRequest]);
 
   const submitLeave = async () => {
     setSubmittingLeave(true);
@@ -353,8 +379,10 @@ export default function WellnessClient() {
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(340px,.82fr)]">
-          <div className="space-y-6">
+        <WellnessMenu tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+
+        <div className="space-y-6">
+            {activeTab === "leave" ? (
             <section className={surfaceClass}>
               <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-2">
@@ -452,7 +480,9 @@ export default function WellnessClient() {
                 </Button>
               </div>
             </section>
+            ) : null}
 
+            {activeTab === "cash" ? (
             <section className={surfaceClass}>
               <div className="mb-6 space-y-2">
                 <p className={sectionEyebrow}>Cash Advance</p>
@@ -531,8 +561,9 @@ export default function WellnessClient() {
                 </Button>
               </div>
             </section>
+            ) : null}
 
-            {canSubmitAdjustmentRequest ? (
+            {canSubmitAdjustmentRequest && activeTab === "discipline" ? (
               <section className={surfaceClass}>
                 <div className="mb-6 space-y-2">
                   <p className={sectionEyebrow}>Payroll Discipline</p>
@@ -649,15 +680,17 @@ export default function WellnessClient() {
               </section>
             ) : null}
 
+            {activeTab === "history" ? (
             <HistorySection
               leaveRequests={overview?.leaveRequests ?? []}
               cashAdvances={overview?.cashAdvances ?? []}
               payrollAdjustmentRequests={overview?.payrollAdjustmentRequests ?? []}
               loading={loading}
             />
-          </div>
+            ) : null}
 
-          <div className="space-y-6">
+          {activeTab === "balances" ? (
+          <div className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">
             <section className={surfaceClass}>
               <p className={sectionEyebrow}>Balances</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Leave Balance</h2>
@@ -707,9 +740,45 @@ export default function WellnessClient() {
               </div>
             </section>
           </div>
+          ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+function WellnessMenu({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: Array<{ id: WellnessTab; label: string; meta: string }>;
+  activeTab: WellnessTab;
+  onChange: (tab: WellnessTab) => void;
+}) {
+  return (
+    <section className="rounded-[28px] border border-slate-800/90 bg-slate-950/70 p-2 shadow-[0_20px_60px_rgba(2,6,23,.28)]">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((tab) => {
+          const active = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange(tab.id)}
+              className={`min-h-20 min-w-[170px] flex-1 rounded-3xl border px-4 py-3 text-left transition ${
+                active
+                  ? "border-amber-300/70 bg-amber-300 text-slate-950 shadow-[0_12px_34px_rgba(251,191,36,.22)]"
+                  : "border-slate-800 bg-slate-900/75 text-slate-200 hover:border-slate-600 hover:bg-slate-900"
+              }`}
+            >
+              <div className="text-sm font-semibold">{tab.label}</div>
+              <div className={`mt-2 text-xs ${active ? "text-slate-800" : "text-slate-400"}`}>{tab.meta}</div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
