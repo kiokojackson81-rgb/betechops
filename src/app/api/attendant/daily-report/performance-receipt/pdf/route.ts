@@ -52,6 +52,7 @@ type LedgerReceiptRow = {
   sellingTotal: number;
   buyingTotal?: number | null;
   paymentMethod: "MPESA" | "CASH";
+  items?: Array<{ buyingPrice: number | null }>;
 };
 
 type PerformanceReceiptRow = {
@@ -150,6 +151,17 @@ const extractReceiptProfit = (row: PosReceiptRow, sales: number) => {
   const buyingTotal = toNumber((totals as any).buyingTotal) || toNumber((data as any).buyingTotal);
   if (buyingTotal > 0) return sales - buyingTotal;
   return 0;
+};
+
+const resolveLedgerReceiptProfit = (entry: LedgerReceiptRow) => {
+  const sellingTotal = Number(entry.sellingTotal ?? 0);
+  const aggregateBuying = Number(entry.buyingTotal ?? 0);
+  const itemBuying = Array.isArray(entry.items)
+    ? entry.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0)
+    : 0;
+  const buyingTotal = aggregateBuying > 0 ? aggregateBuying : itemBuying;
+  if (buyingTotal <= 0) return 0;
+  return sellingTotal - buyingTotal;
 };
 
 function computeReceiptCommissionForTotals(args: {
@@ -563,6 +575,7 @@ export async function GET(req: Request) {
         sellingTotal: true,
         buyingTotal: true,
         paymentMethod: true,
+        items: { select: { buyingPrice: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 1200,
@@ -580,6 +593,7 @@ export async function GET(req: Request) {
         sellingTotal: true,
         buyingTotal: true,
         paymentMethod: true,
+        items: { select: { buyingPrice: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 1200,
@@ -601,7 +615,7 @@ export async function GET(req: Request) {
         sortAt: entry.createdAt.toISOString(),
         receiptNumber: entry.receiptNumber || entry.receiptKey || canonical,
         amount: Number(entry.sellingTotal ?? 0),
-        profit: Number(entry.sellingTotal ?? 0) - Number(entry.buyingTotal ?? 0),
+        profit: resolveLedgerReceiptProfit(entry),
         paymentMethod: method,
         status,
         commissionImpact: 0,
