@@ -20,6 +20,11 @@ import {
   resolveDirectCommissionMode,
 } from "@/lib/onlineCommission";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
+import { buildPayrollRow } from "@/lib/adminPayroll";
+import {
+  getReleasedPosCommissionEffectiveAt,
+  isPosProductCommissionEntry,
+} from "@/lib/posProductCommission";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +63,26 @@ type PerformanceReceiptRow = {
   paymentMethod: "MPESA" | "CASH";
   status: string;
   commissionImpact: number;
+  productCommission: number;
+};
+
+type PosProductCommissionRow = {
+  id: string;
+  amount: unknown;
+  basis?: string | null;
+  calcDetail?: unknown;
+  createdAt?: Date | null;
+  orderItem?: {
+    quantity?: number | null;
+    sellingPrice?: number | null;
+    product?: { name?: string | null; sku?: string | null } | null;
+    order?: {
+      orderNumber?: string | null;
+      totalAmount?: number | null;
+      createdAt?: Date | null;
+      receipt?: { receiptNumber?: string | null; generatedAt?: Date | null; createdAt?: Date | null } | null;
+    } | null;
+  } | null;
 };
 
 const escapeHtml = (value: unknown) =>
@@ -192,6 +217,84 @@ function attachReceiptCommissionImpact(args: {
   }));
 }
 
+const releasedProductCommissionStatuses = ["RELEASED", "APPROVED"];
+
+async function getPosProductCommissionsForPdf(args: {
+  userId: string;
+  start: Date;
+  end: Date;
+}) {
+  const rows = (await prisma.commissionEarning.findMany({
+    where: {
+      staffId: args.userId,
+      status: { in: releasedProductCommissionStatuses },
+      basis: "product_flat",
+    },
+    include: {
+      orderItem: {
+        include: {
+          product: { select: { name: true, sku: true } },
+          order: {
+            select: {
+              orderNumber: true,
+              totalAmount: true,
+              createdAt: true,
+              receipt: { select: { receiptNumber: true, generatedAt: true, createdAt: true } },
+            },
+          },
+        },
+      },
+    },
+  })) as PosProductCommissionRow[];
+
+  const byReceipt = new Map<
+    string,
+    {
+      receiptNumber: string;
+      sortAt: string;
+      dateIso: string;
+      amount: number;
+      orderTotal: number;
+      products: string[];
+    }
+  >();
+
+  for (const row of rows) {
+    if (!isPosProductCommissionEntry(row)) continue;
+    const effectiveAt = getReleasedPosCommissionEffectiveAt(row);
+    if (!effectiveAt) continue;
+    const effectiveTime = effectiveAt.getTime();
+    if (effectiveTime < args.start.getTime() || effectiveTime > args.end.getTime()) continue;
+
+    const order = row.orderItem?.order;
+    const receiptNumber = order?.receipt?.receiptNumber || order?.orderNumber || "";
+    const canonical = normalizeReceiptNumber(receiptNumber);
+    if (!canonical) continue;
+
+    const sortDate = order?.receipt?.generatedAt ?? order?.receipt?.createdAt ?? order?.createdAt ?? effectiveAt;
+    const productName = row.orderItem?.product?.name || row.orderItem?.product?.sku || "POS product";
+    const amount = Number(row.amount ?? 0);
+    const existing = byReceipt.get(canonical);
+    if (existing) {
+      existing.amount += amount;
+      if (!existing.products.includes(productName)) existing.products.push(productName);
+      existing.orderTotal = Math.max(existing.orderTotal, Number(order?.totalAmount ?? 0));
+      continue;
+    }
+
+    byReceipt.set(canonical, {
+      receiptNumber,
+      sortAt: sortDate.toISOString(),
+      dateIso: sortDate.toISOString().slice(0, 10),
+      amount,
+      orderTotal: Number(order?.totalAmount ?? 0),
+      products: [productName],
+    });
+  }
+
+  return byReceipt;
+}
+
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
@@ -213,6 +316,7 @@ function renderHtml(args: {
     receiptNumber: string;
     amount: number;
     commissionImpact: number;
+    productCommission: number;
     paymentMethod: "MPESA" | "CASH";
     status: string;
   }>;
@@ -225,6 +329,8 @@ function renderHtml(args: {
         <td>${escapeHtml(r.receiptNumber)}</td>
         <td style="text-align:right">${escapeHtml(formatKes(r.amount))}</td>
         <td style="text-align:right">${escapeHtml(formatKes(r.commissionImpact))}</td>
+        <td style="text-align:right">${escapeHtml(formatKes(r.productCommission))}</td>
+        <td style="text-align:right">${escapeHtml(formatKes(r.commissionImpact + r.productCommission))}</td>
         <td>${escapeHtml(r.paymentMethod)}</td>
         <td>${escapeHtml(r.status)}</td>
       </tr>
@@ -314,18 +420,20 @@ function renderHtml(args: {
             <th style="width:110px;">Date</th>
             <th>Receipt #</th>
             <th style="text-align:right; width:130px;">Amount</th>
-            <th style="text-align:right; width:130px;">POS commission</th>
+            <th style="text-align:right; width:105px;">Sales comm.</th>
+            <th style="text-align:right; width:105px;">Product comm.</th>
+            <th style="text-align:right; width:105px;">Total comm.</th>
             <th style="width:80px;">Method</th>
             <th style="width:110px;">Status</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || `<tr><td colspan="6" class="muted">No receipts found in this period.</td></tr>`}
+          ${rowsHtml || `<tr><td colspan="8" class="muted">No receipts found in this period.</td></tr>`}
         </tbody>
       </table>
 
       <div class="note">
-        POS commission is shown as each receipt's marginal contribution to the period sales commission. Product/listing work commission remains in the summary total above. This report intentionally excludes profit and buying price values.
+        Sales commission is each receipt's marginal contribution to the period sales commission. Product commission comes from POS management product commissions assigned to the receipt items. This report intentionally excludes profit and buying price values.
       </div>
     </body>
   </html>
@@ -344,7 +452,7 @@ export async function GET(req: Request) {
   const [user, earnings, reportAgg, letterheadDataUri] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, attendantCategory: true },
+      select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
     }),
     getEarningsSummaryForUser({ userId, asOf: period.start }),
     prisma.dailyReport.aggregate({
@@ -435,6 +543,7 @@ export async function GET(req: Request) {
       paymentMethod,
       status,
       commissionImpact: 0,
+      productCommission: 0,
     });
   }
 
@@ -496,6 +605,7 @@ export async function GET(req: Request) {
         paymentMethod: method,
         status,
         commissionImpact: 0,
+        productCommission: 0,
       });
     }
   };
@@ -541,14 +651,54 @@ export async function GET(req: Request) {
         paymentMethod: value.method,
         status: "SUBMITTED",
         commissionImpact: 0,
+        productCommission: 0,
       });
     }
   }
 
-  const [commissionConfig, commissionPeriod] = await Promise.all([
+  const [commissionConfig, commissionPeriod, productCommissions, payrollRow] = await Promise.all([
     getUserCommissionConfigLike(userId),
     getOrCreateCommissionPeriod(period.start),
+    getPosProductCommissionsForPdf({ userId, start: period.start, end: period.end }),
+    user
+      ? buildPayrollRow(
+          {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            attendantCategory: user.attendantCategory,
+            isActive: user.isActive,
+          },
+          period,
+        )
+      : null,
   ]);
+
+  for (const productCommission of productCommissions.values()) {
+    const canonical = normalizeReceiptNumber(productCommission.receiptNumber);
+    if (!canonical) continue;
+    const existing = rows.find((row) => normalizeReceiptNumber(row.receiptNumber) === canonical);
+    if (existing) {
+      existing.productCommission += productCommission.amount;
+      if (existing.amount <= 0 && productCommission.orderTotal > 0) {
+        existing.amount = productCommission.orderTotal;
+      }
+      continue;
+    }
+
+    rows.push({
+      dateIso: productCommission.dateIso,
+      sortAt: productCommission.sortAt,
+      receiptNumber: productCommission.receiptNumber,
+      amount: productCommission.orderTotal,
+      profit: 0,
+      paymentMethod: "MPESA",
+      status: "PRODUCT COMMISSION",
+      commissionImpact: 0,
+      productCommission: productCommission.amount,
+    });
+  }
+
   const tiers = commissionPeriod.tiers.map((tier) => ({
     minSales: Number(tier.minSales),
     maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
@@ -571,7 +721,7 @@ export async function GET(req: Request) {
     totalSales: Number(earnings.totalSales ?? 0),
     totalReceipts: Number(earnings.totalReceipts ?? 0),
     totalItems: Number(earnings.totalItems ?? 0),
-    commission: Number((earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
+    commission: Number(payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(reportAgg._sum.productsEdited ?? 0),
     totalCopiedProducts: Number(reportAgg._sum.copiesUploaded ?? 0),
