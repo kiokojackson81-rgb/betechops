@@ -183,8 +183,10 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
-  const posReceipts = includePosReceipts
-    ? await prisma.receipt.findMany({
+  let posReceipts: any[] = [];
+  if (includePosReceipts) {
+    try {
+      posReceipts = await prisma.receipt.findMany({
         where,
         include: {
           order: includeItems
@@ -202,8 +204,18 @@ export async function GET(req: NextRequest) {
           issuedBy: { select: { id: true, name: true } },
         },
         orderBy: { generatedAt: "desc" },
-      })
-    : [];
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to query receipts table:", msg);
+      if (msg.includes("does not exist")) {
+        posReceipts = [];
+      } else {
+        throw err;
+      }
+    }
+  }
 
   const isPodPaidReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery?.paidAt);
   const podStatusOf = (row: any) => ((row?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
@@ -251,23 +263,34 @@ export async function GET(req: NextRequest) {
         .filter((value): value is string => Boolean(value)),
     ),
   );
-  const supportReceiptProfitRows =
-    canonicalPosReceiptNumbers.length || datedPosReceiptKeys.length
-      ? await prisma.supportReceipt.findMany({
-          where: {
-            OR: [
-              ...(canonicalPosReceiptNumbers.length ? [{ receiptNumber: { in: canonicalPosReceiptNumbers } }] : []),
-              ...(datedPosReceiptKeys.length ? [{ receiptKey: { in: datedPosReceiptKeys } }] : []),
-            ],
-          },
-          select: {
-            receiptNumber: true,
-            receiptKey: true,
-            buyingTotal: true,
-            items: { select: { buyingPrice: true } },
-          },
-        })
-      : [];
+  let supportReceiptProfitRows: any[] = [];
+  if (canonicalPosReceiptNumbers.length || datedPosReceiptKeys.length) {
+    try {
+      supportReceiptProfitRows = await prisma.supportReceipt.findMany({
+        where: {
+          OR: [
+            ...(canonicalPosReceiptNumbers.length ? [{ receiptNumber: { in: canonicalPosReceiptNumbers } }] : []),
+            ...(datedPosReceiptKeys.length ? [{ receiptKey: { in: datedPosReceiptKeys } }] : []),
+          ],
+        },
+        select: {
+          receiptNumber: true,
+          receiptKey: true,
+          buyingTotal: true,
+          items: { select: { buyingPrice: true } },
+        },
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to query supportReceipt table:", msg);
+      if (msg.includes("does not exist")) {
+        supportReceiptProfitRows = [];
+      } else {
+        throw err;
+      }
+    }
+  }
   const supportBuyingTotalsByReceipt = new Map<string, number>();
   for (const row of supportReceiptProfitRows) {
     const itemsBuyingTotal = Array.isArray(row.items)
@@ -400,8 +423,10 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const marketingReceipts = includeMarketingReceipts
-    ? await prisma.marketingReceipt.findMany({
+  let marketingReceipts: any[] = [];
+  if (includeMarketingReceipts) {
+    try {
+      marketingReceipts = await prisma.marketingReceipt.findMany({
         where: marketingFilter,
         include: {
           items: true,
@@ -411,8 +436,18 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-      })
-    : [];
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to query marketingReceipt table:", msg);
+      if (msg.includes("does not exist")) {
+        marketingReceipts = [];
+      } else {
+        throw err;
+      }
+    }
+  }
 
   const supportReceipts = includeSupportReceipts
     ? await prisma.supportReceipt.findMany({
