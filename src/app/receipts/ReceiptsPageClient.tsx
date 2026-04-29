@@ -48,6 +48,7 @@ export default function ReceiptsPageClient({
   const [historyStart, setHistoryStart] = useState<string>(defaultPeriodStart);
   const [historyEnd, setHistoryEnd] = useState<string>(defaultPeriodEnd);
   const [historySearch, setHistorySearch] = useState("");
+  const [attendantInput, setAttendantInput] = useState("");
   const [debouncedHistorySearch, setDebouncedHistorySearch] = useState("");
   const [historySummary, setHistorySummary] = useState<{ count: number; totalSales: number }>({
     count: 0,
@@ -359,6 +360,35 @@ export default function ReceiptsPageClient({
             </button>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {!attendantId && (
+              <div className="col-span-1">
+                <label className="text-xs uppercase tracking-wide text-slate-400">
+                  Attendant ID
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter attendant id"
+                      value={attendantInput}
+                      onChange={(e) => setAttendantInput(e.target.value)}
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (attendantInput.trim()) {
+                          setAttendantId(attendantInput.trim());
+                          setView("list");
+                          void doSearch({ page: 1 });
+                        }
+                      }}
+                      className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black"
+                    >
+                      Load
+                    </button>
+                  </div>
+                </label>
+              </div>
+            )}
             <div className="col-span-2">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-2">
