@@ -53,7 +53,14 @@ export async function GET(req: NextRequest) {
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
   const identity = await resolveTargetUserId(req);
   const meta = identity;
-  const attendantId = identity.resolvedUserId;
+  // Allow public callers to specify an attendantId via querystring so
+  // the receipts listing can be viewed without a session (public page).
+  // Prefer resolved session user id when present, otherwise use explicit param.
+  const explicitAttendant = url.searchParams.get("attendantId") || undefined;
+  let attendantId = identity.resolvedUserId ?? undefined;
+  if (!attendantId && explicitAttendant) {
+    attendantId = explicitAttendant;
+  }
   if (!attendantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
