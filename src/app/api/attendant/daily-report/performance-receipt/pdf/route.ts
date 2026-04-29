@@ -9,6 +9,17 @@ import { resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
+import {
+  computeJenifferProratedCommission,
+  computeSalesCommissionFromTiers,
+  getOrCreateCommissionPeriod,
+} from "@/lib/commission";
+import {
+  computeBrendahDirectCommission,
+  computeDirectProfitShareCommission,
+  resolveDirectCommissionMode,
+} from "@/lib/onlineCommission";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +45,19 @@ type LedgerReceiptRow = {
   receiptNumber: string | null;
   receiptKey?: string | null;
   sellingTotal: number;
+  buyingTotal?: number | null;
   paymentMethod: "MPESA" | "CASH";
+};
+
+type PerformanceReceiptRow = {
+  dateIso: string;
+  sortAt: string;
+  receiptNumber: string;
+  amount: number;
+  profit: number;
+  paymentMethod: "MPESA" | "CASH";
+  status: string;
+  commissionImpact: number;
 };
 
 const escapeHtml = (value: unknown) =>
@@ -93,6 +116,82 @@ const extractReceiptAmount = (row: PosReceiptRow) => {
   );
 };
 
+const extractReceiptProfit = (row: PosReceiptRow, sales: number) => {
+  const totals = row.totals ?? {};
+  const data = row.data ?? {};
+  const explicitProfit = toNumber((totals as any).profit) || toNumber((data as any).profit);
+  if (explicitProfit !== 0) return explicitProfit;
+
+  const buyingTotal = toNumber((totals as any).buyingTotal) || toNumber((data as any).buyingTotal);
+  if (buyingTotal > 0) return sales - buyingTotal;
+  return 0;
+};
+
+function computeReceiptCommissionForTotals(args: {
+  attendantEmail?: string | null;
+  salesCommissionMode: string;
+  totalSales: number;
+  totalProfit: number;
+  tiers: { minSales: number; maxSales: number; payoutFlat: number }[];
+}) {
+  const directMode = resolveDirectCommissionMode(args.attendantEmail);
+  if (directMode === "PROFIT_10") {
+    return computeDirectProfitShareCommission(args.totalSales, args.totalProfit, 0.1).amount;
+  }
+  if (directMode === "BRENDAH" || args.salesCommissionMode === "BRENDAH_DIRECT") {
+    return computeBrendahDirectCommission(args.totalSales, args.totalProfit).amount;
+  }
+  if (args.salesCommissionMode === "JENIFFER_PRORATED") {
+    return Math.round(computeJenifferProratedCommission(args.totalSales, args.tiers).commission);
+  }
+  return Math.round(
+    computeSalesCommissionFromTiers(
+      args.totalSales,
+      args.totalProfit,
+      args.tiers,
+      args.totalProfit > 0 ? 0.05 : 0,
+    ),
+  );
+}
+
+function attachReceiptCommissionImpact(args: {
+  rows: PerformanceReceiptRow[];
+  attendantEmail?: string | null;
+  salesCommissionMode: string;
+  tiers: { minSales: number; maxSales: number; payoutFlat: number }[];
+}) {
+  const chronological = [...args.rows].sort((a, b) => {
+    const dateCompare = a.sortAt.localeCompare(b.sortAt);
+    if (dateCompare !== 0) return dateCompare;
+    return a.receiptNumber.localeCompare(b.receiptNumber);
+  });
+
+  let cumulativeSales = 0;
+  let cumulativeProfit = 0;
+  let previousCommission = 0;
+  const impactByKey = new Map<string, number>();
+
+  for (const row of chronological) {
+    cumulativeSales += Math.max(0, Number(row.amount ?? 0));
+    cumulativeProfit += Number(row.profit ?? 0);
+    const nextCommission = computeReceiptCommissionForTotals({
+      attendantEmail: args.attendantEmail,
+      salesCommissionMode: args.salesCommissionMode,
+      totalSales: cumulativeSales,
+      totalProfit: cumulativeProfit,
+      tiers: args.tiers,
+    });
+    const impact = Math.max(0, nextCommission - previousCommission);
+    previousCommission = nextCommission;
+    impactByKey.set(`${row.sortAt}|${row.receiptNumber}|${row.paymentMethod}`, impact);
+  }
+
+  return args.rows.map((row) => ({
+    ...row,
+    commissionImpact: impactByKey.get(`${row.sortAt}|${row.receiptNumber}|${row.paymentMethod}`) ?? 0,
+  }));
+}
+
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
@@ -113,6 +212,7 @@ function renderHtml(args: {
     dateIso: string;
     receiptNumber: string;
     amount: number;
+    commissionImpact: number;
     paymentMethod: "MPESA" | "CASH";
     status: string;
   }>;
@@ -124,6 +224,7 @@ function renderHtml(args: {
         <td>${escapeHtml(r.dateIso)}</td>
         <td>${escapeHtml(r.receiptNumber)}</td>
         <td style="text-align:right">${escapeHtml(formatKes(r.amount))}</td>
+        <td style="text-align:right">${escapeHtml(formatKes(r.commissionImpact))}</td>
         <td>${escapeHtml(r.paymentMethod)}</td>
         <td>${escapeHtml(r.status)}</td>
       </tr>
@@ -213,17 +314,18 @@ function renderHtml(args: {
             <th style="width:110px;">Date</th>
             <th>Receipt #</th>
             <th style="text-align:right; width:130px;">Amount</th>
+            <th style="text-align:right; width:130px;">POS commission</th>
             <th style="width:80px;">Method</th>
             <th style="width:110px;">Status</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || `<tr><td colspan="5" class="muted">No receipts found in this period.</td></tr>`}
+          ${rowsHtml || `<tr><td colspan="6" class="muted">No receipts found in this period.</td></tr>`}
         </tbody>
       </table>
 
       <div class="note">
-        This report intentionally excludes profit and buying price values.
+        POS commission is shown as each receipt's marginal contribution to the period sales commission. Product/listing work commission remains in the summary total above. This report intentionally excludes profit and buying price values.
       </div>
     </body>
   </html>
@@ -242,7 +344,7 @@ export async function GET(req: Request) {
   const [user, earnings, reportAgg, letterheadDataUri] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true },
+      select: { name: true, email: true, attendantCategory: true },
     }),
     getEarningsSummaryForUser({ userId, asOf: period.start }),
     prisma.dailyReport.aggregate({
@@ -302,13 +404,7 @@ export async function GET(req: Request) {
     take: 1200,
   })) as PosReceiptRow[];
 
-  const rows: Array<{
-    dateIso: string;
-    receiptNumber: string;
-    amount: number;
-    paymentMethod: "MPESA" | "CASH";
-    status: string;
-  }> = [];
+  const rows: PerformanceReceiptRow[] = [];
   const seen = new Set<string>();
 
   for (const row of receipts) {
@@ -320,6 +416,7 @@ export async function GET(req: Request) {
     const dateIso = new Date(date).toISOString().slice(0, 10);
     const receiptNumber = row.receiptNumber || row.order?.orderNumber || canonical;
     const amount = extractReceiptAmount(row);
+    const profit = extractReceiptProfit(row, amount);
     const paymentMethod = normalizePaymentMethod(
       (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
     );
@@ -329,7 +426,16 @@ export async function GET(req: Request) {
     const status =
       (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN";
 
-    rows.push({ dateIso, receiptNumber, amount, paymentMethod, status });
+    rows.push({
+      dateIso,
+      sortAt: date.toISOString(),
+      receiptNumber,
+      amount,
+      profit,
+      paymentMethod,
+      status,
+      commissionImpact: 0,
+    });
   }
 
   // Include marketing/support ledger receipts for attendants whose authoritative
@@ -346,6 +452,7 @@ export async function GET(req: Request) {
         receiptNumber: true,
         receiptKey: true,
         sellingTotal: true,
+        buyingTotal: true,
         paymentMethod: true,
       },
       orderBy: { createdAt: "desc" },
@@ -362,6 +469,7 @@ export async function GET(req: Request) {
         receiptNumber: true,
         receiptKey: true,
         sellingTotal: true,
+        buyingTotal: true,
         paymentMethod: true,
       },
       orderBy: { createdAt: "desc" },
@@ -381,10 +489,13 @@ export async function GET(req: Request) {
       seen.add(dedupeKey);
       rows.push({
         dateIso: entry.createdAt.toISOString().slice(0, 10),
+        sortAt: entry.createdAt.toISOString(),
         receiptNumber: entry.receiptNumber || entry.receiptKey || canonical,
         amount: Number(entry.sellingTotal ?? 0),
+        profit: Number(entry.sellingTotal ?? 0) - Number(entry.buyingTotal ?? 0),
         paymentMethod: method,
         status,
+        commissionImpact: 0,
       });
     }
   };
@@ -404,7 +515,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: 1200,
     });
-    const perReceipt = new Map<string, { amount: number; method: "MPESA" | "CASH"; dateIso: string }>();
+    const perReceipt = new Map<string, { amount: number; method: "MPESA" | "CASH"; dateIso: string; sortAt: string }>();
     for (const sale of salesRows) {
       const key = normalizeReceiptNumber(sale.receiptNumber) || `sale-${sale.createdAt.toISOString()}`;
       const existing = perReceipt.get(key);
@@ -417,18 +528,38 @@ export async function GET(req: Request) {
         amount: nextAmount,
         method: normalizePaymentMethod(sale.paymentMethod ?? "MPESA"),
         dateIso: sale.createdAt.toISOString().slice(0, 10),
+        sortAt: sale.createdAt.toISOString(),
       });
     }
     for (const [receiptNumber, value] of perReceipt) {
       rows.push({
         dateIso: value.dateIso,
+        sortAt: value.sortAt,
         receiptNumber,
         amount: value.amount,
+        profit: 0,
         paymentMethod: value.method,
         status: "SUBMITTED",
+        commissionImpact: 0,
       });
     }
   }
+
+  const [commissionConfig, commissionPeriod] = await Promise.all([
+    getUserCommissionConfigLike(userId),
+    getOrCreateCommissionPeriod(period.start),
+  ]);
+  const tiers = commissionPeriod.tiers.map((tier) => ({
+    minSales: Number(tier.minSales),
+    maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
+    payoutFlat: Number(tier.payoutFlat),
+  }));
+  const rowsWithCommission = attachReceiptCommissionImpact({
+    rows,
+    attendantEmail: user?.email ?? null,
+    salesCommissionMode: commissionConfig.salesCommissionMode,
+    tiers,
+  }).sort((a, b) => (a.sortAt < b.sortAt ? 1 : -1));
 
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
@@ -446,7 +577,7 @@ export async function GET(req: Request) {
     totalCopiedProducts: Number(reportAgg._sum.copiesUploaded ?? 0),
     walkInsServed: Number(reportAgg._sum.walkInServed ?? 0),
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
-    rows,
+    rows: rowsWithCommission,
   });
 
   let browser: any = null;
