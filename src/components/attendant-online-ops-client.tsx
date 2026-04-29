@@ -428,6 +428,12 @@ export default function AttendantOnlineOpsClient() {
   const [payrollRows, setPayrollRows] = useState<PayrollRow[] | null>(null);
   const [payrollLoading, setPayrollLoading] = useState(false);
 
+  const performanceReportHref = useMemo(() => {
+    const params = new URLSearchParams({ periodKey: receiptsPeriod.key });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+  }, [impersonateId, receiptsPeriod.key]);
+
   const mapPayrollToEarningsSummary = (p: PayrollSummary | null) => mapToEarnings(p, receiptsCount);
 
   const mapPayrollToPayrollRow = (p: PayrollSummary | null): PayrollRow => mapToPayrollRow(p, userId);
@@ -741,6 +747,14 @@ export default function AttendantOnlineOpsClient() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <a
+              href={performanceReportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+            >
+              Download performance PDF
+            </a>
             <Button
               type="button"
               variant="secondary"

@@ -94,6 +94,11 @@ export default function SupportOpsPage() {
     useTradingPeriodQueryState();
   const tradingPeriodLabel = selectedPeriod.label;
   const payslipHref = useMemo(() => `/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriodKey)}`, [selectedPeriodKey]);
+  const performanceReportHref = useMemo(() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+  }, [impersonateId, selectedPeriodKey]);
   const wellnessHref = useMemo(
     () => withImpersonateId("/attendant/wellness", impersonateId),
     [impersonateId],
@@ -340,11 +345,21 @@ export default function SupportOpsPage() {
                 <p className="text-xs text-amber-300">Showing archived period.</p>
               )}
             </div>
-            <PeriodSwitcher
-              currentPeriod={currentPeriod}
-              selectedPeriod={selectedPeriod}
-              onSelectPeriod={setSelectedPeriod}
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href={performanceReportHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+              >
+                Download PDF
+              </Link>
+              <PeriodSwitcher
+                currentPeriod={currentPeriod}
+                selectedPeriod={selectedPeriod}
+                onSelectPeriod={setSelectedPeriod}
+              />
+            </div>
           </div>
         </div>
 

@@ -120,6 +120,14 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                       Payroll
                     </Link>
                     <a
+                      href={`/api/attendant/daily-report/performance-receipt/pdf?impersonateId=${encodeURIComponent(a.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs rounded-full border border-emerald-700 px-3 py-1 text-emerald-200 hover:bg-slate-800 inline-flex items-center justify-center"
+                    >
+                      Performance PDF
+                    </a>
+                    <a
                       href={`${getLandingPage(a.attendantCategory || null)}?impersonateId=${a.id}`}
                       target="_blank"
                       rel="noopener noreferrer"

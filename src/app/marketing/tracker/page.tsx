@@ -1452,7 +1452,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
       const imp = impersonateIdFromWindow();
       if (imp) params.set("impersonateId", imp);
-      const url = `/api/marketing/report/performance-pdf?${params.toString()}`;
+      const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
       setTimeout(() => setDownloadingPerformance(false), 700);
@@ -1507,7 +1507,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                     if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
                     const imp = impersonateIdFromWindow();
                     if (imp) params.set("impersonateId", imp);
-                    const url = `/api/marketing/report/performance-pdf?${params.toString()}`;
+                    const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
                     window.open(url, "_blank", "noopener,noreferrer");
                   } finally {
                     setTimeout(() => setDownloadingPerformance(false), 700);
