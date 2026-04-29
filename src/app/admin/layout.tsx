@@ -1,5 +1,7 @@
 // src/app/admin/layout.tsx
 import React from "react";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import Link from "next/link";
 import AdminStatusBanner from "./_components/AdminStatusBanner";
 import AdminNavContainer from "./_components/AdminNavContainer";
@@ -11,7 +13,11 @@ export const dynamic = "force-dynamic";
 
 // NAV items live in _components/adminNav.ts now.
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  if (!session) {
+    redirect("/admin/login");
+  }
   return (
     <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100">
       {/* Sticky top system status + nav bar */}
