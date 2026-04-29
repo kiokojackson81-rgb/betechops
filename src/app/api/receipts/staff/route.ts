@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAttendant } from "@/lib/auth";
 
 export async function GET(request: Request) {
-  const guard = await requireAttendant(request);
-  if (!guard.ok) {
-    return guard.res;
-  }
-
+  // Allow public, read-only access to the staff list so the receipts
+  // page can render a selectable staff dropdown even when unauthenticated.
+  // Only return minimal, non-sensitive fields.
   const staff = await prisma.user.findMany({
     where: {
       role: { in: ["ATTENDANT", "SUPERVISOR"] },
