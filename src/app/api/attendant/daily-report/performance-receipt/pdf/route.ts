@@ -18,11 +18,13 @@ import {
   computeBrendahDirectCommission,
   computeDirectProfitShareCommission,
   resolveDirectCommissionMode,
+  resolveOnlinePosOwnershipMode,
 } from "@/lib/onlineCommission";
 import { getAssignedMarketplaceSalesForPeriod, getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import {
   getReleasedPosCommissionEffectiveAt,
   isPosProductCommissionEntry,
@@ -101,6 +103,8 @@ type PerformanceSummaryLine = {
   commission: number;
   note: string;
 };
+
+type PosReceiptPeriodSummary = Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>>;
 
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
@@ -482,6 +486,7 @@ async function getPerformanceSummaryLines(args: {
   period: { key: string; label: string; start: Date; end: Date };
   attendantCategory?: string | null;
   payrollRow: Awaited<ReturnType<typeof buildPayrollRow>> | null;
+  onlinePosSummary?: PosReceiptPeriodSummary | null;
 }) {
   const directLine: PerformanceSummaryLine = {
     label: "POS direct sales",
@@ -494,6 +499,13 @@ async function getPerformanceSummaryLines(args: {
     args.attendantCategory === "JUMIA_KILIMALL_OPS" || args.attendantCategory === "BETECH_OPS";
   if (!isOnlineCategory) {
     return directLine.sales > 0 || directLine.commission > 0 ? [directLine] : [];
+  }
+
+  if (args.onlinePosSummary) {
+    directLine.sales = Number(args.onlinePosSummary.totalSales ?? 0);
+    directLine.note = `${Number(args.onlinePosSummary.totalReceipts ?? 0)} POS receipts / ${Number(
+      args.onlinePosSummary.totalItems ?? 0,
+    )} POS items`;
   }
 
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(args.period, args.period.end, 4);
@@ -509,6 +521,12 @@ async function getPerformanceSummaryLines(args: {
 
   const jumiaSales = Number(marketplaceSales.totals.jumiaSales ?? 0);
   const kilimallSales = Number(marketplaceSales.totals.kilimallSales ?? 0);
+  const jumiaOrders = marketplaceSales.rows
+    .filter((row) => row.platform === "JUMIA")
+    .reduce((sum, row) => sum + Number(row.orders ?? 0), 0);
+  const kilimallOrders = marketplaceSales.rows
+    .filter((row) => row.platform === "KILIMALL")
+    .reduce((sum, row) => sum + Number(row.orders ?? 0), 0);
   const split = splitMarketplaceCommissionBySales({
     jumiaSales,
     kilimallSales,
@@ -517,7 +535,7 @@ async function getPerformanceSummaryLines(args: {
     totalMarketplaceCommission: Number(onlineSummary.marketplaceCommission ?? 0),
   });
 
-  directLine.sales = Number(onlineSummary.directSales ?? 0);
+  directLine.sales = Number(args.onlinePosSummary?.totalSales ?? onlineSummary.directSales ?? 0);
   directLine.commission = Number(args.payrollRow?.commissionDirect ?? onlineSummary.commissionDirect ?? 0);
 
   return [
@@ -526,13 +544,13 @@ async function getPerformanceSummaryLines(args: {
       label: "Jumia",
       sales: jumiaSales,
       commission: split.jumiaCommission,
-      note: marketplaceWindow.label,
+      note: `${marketplaceWindow.label} / ${jumiaOrders} orders`,
     },
     {
       label: "Kilimall",
       sales: kilimallSales,
       commission: split.kilimallCommission,
-      note: marketplaceWindow.label,
+      note: `${marketplaceWindow.label} / ${kilimallOrders} orders`,
     },
   ].filter((line) => line.sales > 0 || line.commission > 0);
 }
@@ -544,6 +562,9 @@ function renderHtml(args: {
   periodLabel: string;
   periodStartIso: string;
   periodEndIso: string;
+  salesLabel?: string;
+  receiptsLabel?: string;
+  itemsLabel?: string;
   totalSales: number;
   totalReceipts: number;
   totalItems: number;
@@ -636,15 +657,15 @@ function renderHtml(args: {
 
       <div class="grid">
         <div class="card">
-          <div class="label">Sales</div>
+          <div class="label">${escapeHtml(args.salesLabel ?? "Sales")}</div>
           <div class="value">${escapeHtml(formatKes(args.totalSales))}</div>
         </div>
         <div class="card">
-          <div class="label">Receipts</div>
+          <div class="label">${escapeHtml(args.receiptsLabel ?? "Receipts")}</div>
           <div class="value">${escapeHtml(args.totalReceipts)}</div>
         </div>
         <div class="card">
-          <div class="label">Items</div>
+          <div class="label">${escapeHtml(args.itemsLabel ?? "Items")}</div>
           <div class="value">${escapeHtml(args.totalItems)}</div>
         </div>
         <div class="card">
@@ -979,7 +1000,10 @@ export async function GET(req: Request) {
     applyProfitFallback(row, profitFallbacks.get(canonical) ?? 0);
   }
 
-  const [commissionConfig, commissionPeriod, productCommissions, payrollRow] = await Promise.all([
+  const isOnlineCategory =
+    user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
+
+  const [commissionConfig, commissionPeriod, productCommissions, payrollRow, onlinePosSummary] = await Promise.all([
     getUserCommissionConfigLike(userId),
     getOrCreateCommissionPeriod(period.start),
     getPosProductCommissionsForPdf({ userId, start: period.start, end: period.end }),
@@ -995,6 +1019,16 @@ export async function GET(req: Request) {
           period,
         )
       : null,
+    isOnlineCategory
+      ? summarizePosReceiptsForPeriod({
+          start: period.start,
+          end: period.end,
+          userId,
+          ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
+          supportPricingScope: "any",
+          profitRecognitionMode: "salesDate",
+        })
+      : Promise.resolve(null),
   ]);
 
   for (const productCommission of productCommissions.values()) {
@@ -1032,6 +1066,7 @@ export async function GET(req: Request) {
     period,
     attendantCategory: user?.attendantCategory ?? null,
     payrollRow,
+    onlinePosSummary,
   });
   const rowsWithCommission = attachReceiptCommissionImpact({
     rows,
@@ -1047,9 +1082,18 @@ export async function GET(req: Request) {
     periodLabel: period.label,
     periodStartIso: period.start.toISOString().slice(0, 10),
     periodEndIso: period.end.toISOString().slice(0, 10),
-    totalSales: Number(payrollRow?.totalSales ?? earnings.totalSales ?? 0),
-    totalReceipts: Number(payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
-    totalItems: Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
+    salesLabel: isOnlineCategory ? "POS sales" : "Sales",
+    receiptsLabel: isOnlineCategory ? "POS receipts" : "Receipts",
+    itemsLabel: isOnlineCategory ? "POS items" : "Items",
+    totalSales: isOnlineCategory
+      ? Number(onlinePosSummary?.totalSales ?? 0)
+      : Number(payrollRow?.totalSales ?? earnings.totalSales ?? 0),
+    totalReceipts: isOnlineCategory
+      ? Number(onlinePosSummary?.totalReceipts ?? 0)
+      : Number(payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
+    totalItems: isOnlineCategory
+      ? Number(onlinePosSummary?.totalItems ?? 0)
+      : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
     commission: Number(payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(payrollRow?.editedProducts ?? reportAgg._sum.productsEdited ?? 0),
