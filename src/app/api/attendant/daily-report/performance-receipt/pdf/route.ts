@@ -41,6 +41,13 @@ type PosReceiptRow = {
     status: string | null;
     paymentStatus: string | null;
     totalAmount: number | null;
+    items?: Array<{
+      quantity?: number | null;
+      sellingPrice?: number | null;
+      orderCosts?: Array<{ unitCost?: unknown } | null> | null;
+      profitSnapshots?: Array<{ profit?: unknown; unitCost?: unknown; qty?: unknown } | null> | null;
+      product?: { lastBuyingPrice?: unknown } | null;
+    }>;
   } | null;
 };
 
@@ -150,6 +157,29 @@ const extractReceiptProfit = (row: PosReceiptRow, sales: number) => {
 
   const buyingTotal = toNumber((totals as any).buyingTotal) || toNumber((data as any).buyingTotal);
   if (buyingTotal > 0) return sales - buyingTotal;
+
+  const items = row.order?.items ?? [];
+  if (items.length > 0) {
+    const snapshotProfit = items.reduce((sum, item) => {
+      const latest = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+      return sum + toNumber(latest?.profit);
+    }, 0);
+    if (snapshotProfit !== 0) return snapshotProfit;
+
+    const itemBuyingTotal = items.reduce((sum, item) => {
+      const qty = Math.max(1, Math.trunc(toNumber(item?.quantity) || 1));
+      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+      const explicitUnitCost = costs.reduce((costSum, cost) => costSum + toNumber(cost?.unitCost), 0);
+      const latest = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+      const snapshotUnitCost = toNumber(latest?.unitCost);
+      const productLastBuying = toNumber(item?.product?.lastBuyingPrice);
+      const unitCost =
+        explicitUnitCost > 0 ? explicitUnitCost : snapshotUnitCost > 0 ? snapshotUnitCost : productLastBuying;
+      return sum + unitCost * qty;
+    }, 0);
+    if (itemBuyingTotal > 0) return sales - itemBuyingTotal;
+  }
+
   return 0;
 };
 
@@ -579,11 +609,30 @@ export async function GET(req: Request) {
     resolveLetterheadDataUri(),
   ]);
 
-  const ownerOr = [
+  const attendantName = (user?.name ?? user?.email ?? userId).toString();
+  const attendantEmail = user?.email ?? null;
+  const ownerOr: Prisma.ReceiptWhereInput[] = [
     { issuedById: userId },
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
+    { data: { path: ["servedBy"], equals: userId } },
+    { data: { path: ["servedById"], equals: userId } },
+    { data: { path: ["issuedById"], equals: userId } },
+    { order: { metadata: { path: ["attendantId"], equals: userId } as any } },
+    { order: { metadata: { path: ["servedBy"], equals: userId } as any } },
+    { order: { metadata: { path: ["servedById"], equals: userId } as any } },
+    { data: { path: ["attendantName"], equals: attendantName } },
+    { data: { path: ["issuedByName"], equals: attendantName } },
   ];
+  if (attendantEmail) {
+    ownerOr.push(
+      { issuedBy: { email: attendantEmail } },
+      { order: { attendant: { email: attendantEmail } } },
+      { data: { path: ["attendantEmail"], equals: attendantEmail } },
+      { data: { path: ["servedByEmail"], equals: attendantEmail } },
+      { data: { path: ["issuedByEmail"], equals: attendantEmail } },
+    );
+  }
 
   const receipts = (await prisma.receipt.findMany({
     where: {
@@ -616,6 +665,19 @@ export async function GET(req: Request) {
           status: true,
           paymentStatus: true,
           totalAmount: true,
+          items: {
+            select: {
+              quantity: true,
+              sellingPrice: true,
+              orderCosts: { select: { unitCost: true } },
+              profitSnapshots: {
+                orderBy: { computedAt: "desc" },
+                take: 1,
+                select: { profit: true, unitCost: true, qty: true },
+              },
+              product: { select: { lastBuyingPrice: true } },
+            },
+          },
         },
       },
     },
@@ -843,13 +905,13 @@ export async function GET(req: Request) {
     periodLabel: period.label,
     periodStartIso: period.start.toISOString().slice(0, 10),
     periodEndIso: period.end.toISOString().slice(0, 10),
-    totalSales: Number(earnings.totalSales ?? 0),
-    totalReceipts: Number(earnings.totalReceipts ?? 0),
-    totalItems: Number(earnings.totalItems ?? 0),
+    totalSales: Number(payrollRow?.totalSales ?? earnings.totalSales ?? 0),
+    totalReceipts: Number(payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
+    totalItems: Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
     commission: Number(payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
-    totalNewProducts: Number(reportAgg._sum.newProducts ?? 0),
-    totalEditedProducts: Number(reportAgg._sum.productsEdited ?? 0),
-    totalCopiedProducts: Number(reportAgg._sum.copiesUploaded ?? 0),
+    totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
+    totalEditedProducts: Number(payrollRow?.editedProducts ?? reportAgg._sum.productsEdited ?? 0),
+    totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
     walkInsServed: Number(reportAgg._sum.walkInServed ?? 0),
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
     rows: rowsWithCommission,
