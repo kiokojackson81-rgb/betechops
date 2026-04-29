@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requireRole } from "@/lib/api";
+import { requireRole, requireRoleOrBenjamin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
   adjustmentTypeForOffense,
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? null;

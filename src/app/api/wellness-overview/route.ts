@@ -3,6 +3,7 @@ import type { Role } from "@prisma/client";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { prisma } from "@/lib/prisma";
 import { getEmployeeWellnessOverview } from "@/lib/wellness";
+import { canSubmitPayrollAdjustmentRequest } from "@/lib/payrollAdjustmentRequests";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const canSubmitAdjustments = canSubmitPayrollAdjustmentRequest(user);
+
   const [overview, payrollAdjustmentRequests, staff] = await Promise.all([
     getEmployeeWellnessOverview(userId),
     (prisma as any).payrollAdjustmentRequest.findMany({
@@ -43,7 +46,7 @@ export async function GET(req: Request) {
       orderBy: [{ createdAt: "desc" }],
       take: 20,
     }),
-    user.role === "ADMIN" || user.role === "SUPERVISOR"
+    canSubmitAdjustments
       ? prisma.user.findMany({
           where: {
             isActive: true,
@@ -60,6 +63,7 @@ export async function GET(req: Request) {
     composeIdentityResponse(identity, {
       ...overview,
       user,
+      canSubmitPayrollAdjustmentRequest: canSubmitAdjustments,
       payrollAdjustmentRequests,
       staff,
     }),

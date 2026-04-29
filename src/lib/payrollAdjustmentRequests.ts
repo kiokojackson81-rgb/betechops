@@ -16,6 +16,22 @@ export const payrollAdjustmentOffenseTypes = [
 
 export type PayrollAdjustmentOffenseType = (typeof payrollAdjustmentOffenseTypes)[number];
 
+export function canSubmitPayrollAdjustmentRequest(user?: {
+  role?: string | null;
+  email?: string | null;
+  attendantCategory?: string | null;
+}) {
+  const role = String(user?.role ?? "").toUpperCase();
+  const email = String(user?.email ?? "").trim().toLowerCase();
+  const category = String(user?.attendantCategory ?? "").toUpperCase();
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    email === "benjamin@betech.co.ke" ||
+    category === "BETECH_OPS"
+  );
+}
+
 export function normalizePayrollAdjustmentKind(value: unknown): PayrollAdjustmentKind {
   const kind = String(value ?? "").trim().toUpperCase();
   return kind === "ADDITION" ? "ADDITION" : "DEDUCTION";

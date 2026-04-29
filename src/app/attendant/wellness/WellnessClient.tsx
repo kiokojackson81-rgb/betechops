@@ -48,6 +48,7 @@ type OverviewResponse = {
     role?: string | null;
     attendantCategory?: string | null;
   };
+  canSubmitPayrollAdjustmentRequest?: boolean;
   staff?: Array<{ id: string; name?: string | null; email: string; attendantCategory?: string | null }>;
   payrollAdjustmentRequests?: PayrollAdjustmentRequestRow[];
   leaveBalance: {
@@ -193,7 +194,7 @@ export default function WellnessClient() {
     details: "",
     evidenceUrl: "",
   });
-  const canSubmitAdjustmentRequest = overview?.user?.role === "ADMIN" || overview?.user?.role === "SUPERVISOR";
+  const canSubmitAdjustmentRequest = Boolean(overview?.canSubmitPayrollAdjustmentRequest);
   const requestedAdvanceAmount = Math.max(0, Math.trunc(Number(advanceForm.requestedAmount ?? 0)));
   const requestedRepaymentMonths = Math.min(
     MAX_CASH_ADVANCE_REPAYMENT_PERIOD,
