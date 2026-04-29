@@ -19,6 +19,8 @@ import {
   computeDirectProfitShareCommission,
   resolveDirectCommissionMode,
 } from "@/lib/onlineCommission";
+import { getAssignedMarketplaceSalesForPeriod, getOnlineEarningsSummary } from "@/lib/onlineOps";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import {
@@ -91,6 +93,13 @@ type PosProductCommissionRow = {
       receipt?: { receiptNumber?: string | null; generatedAt?: Date | null; createdAt?: Date | null } | null;
     } | null;
   } | null;
+};
+
+type PerformanceSummaryLine = {
+  label: string;
+  sales: number;
+  commission: number;
+  note: string;
 };
 
 const escapeHtml = (value: unknown) =>
@@ -436,6 +445,98 @@ async function getPosProductCommissionsForPdf(args: {
   return byReceipt;
 }
 
+function splitMarketplaceCommissionBySales(args: {
+  jumiaSales: number;
+  kilimallSales: number;
+  jumiaCommission: number;
+  kilimallCommission: number;
+  totalMarketplaceCommission: number;
+}) {
+  const explicitJumia = Number(args.jumiaCommission ?? 0);
+  const explicitKilimall = Number(args.kilimallCommission ?? 0);
+  if (explicitJumia > 0 || explicitKilimall > 0) {
+    return { jumiaCommission: explicitJumia, kilimallCommission: explicitKilimall };
+  }
+
+  const totalSales = Math.max(0, args.jumiaSales) + Math.max(0, args.kilimallSales);
+  const totalCommission = Math.max(0, Number(args.totalMarketplaceCommission ?? 0));
+  if (totalSales <= 0 || totalCommission <= 0) {
+    return { jumiaCommission: 0, kilimallCommission: 0 };
+  }
+  if (args.jumiaSales <= 0) {
+    return { jumiaCommission: 0, kilimallCommission: Math.round(totalCommission) };
+  }
+  if (args.kilimallSales <= 0) {
+    return { jumiaCommission: Math.round(totalCommission), kilimallCommission: 0 };
+  }
+
+  const jumiaCommission = Math.round((Math.max(0, args.jumiaSales) / totalSales) * totalCommission);
+  return {
+    jumiaCommission,
+    kilimallCommission: Math.round(totalCommission) - jumiaCommission,
+  };
+}
+
+async function getPerformanceSummaryLines(args: {
+  userId: string;
+  period: { key: string; label: string; start: Date; end: Date };
+  attendantCategory?: string | null;
+  payrollRow: Awaited<ReturnType<typeof buildPayrollRow>> | null;
+}) {
+  const directLine: PerformanceSummaryLine = {
+    label: "POS direct sales",
+    sales: Number(args.payrollRow?.totalSales ?? 0),
+    commission: Number(args.payrollRow?.commissionDirect ?? 0),
+    note: "POS receipts and direct-sales commission",
+  };
+
+  const isOnlineCategory =
+    args.attendantCategory === "JUMIA_KILIMALL_OPS" || args.attendantCategory === "BETECH_OPS";
+  if (!isOnlineCategory) {
+    return directLine.sales > 0 || directLine.commission > 0 ? [directLine] : [];
+  }
+
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(args.period, args.period.end, 4);
+  const [onlineSummary, marketplaceSales] = await Promise.all([
+    getOnlineEarningsSummary(args.userId, { period: args.period }),
+    getAssignedMarketplaceSalesForPeriod(args.userId, {
+      key: marketplaceWindow.key,
+      label: marketplaceWindow.label,
+      start: marketplaceWindow.start,
+      end: marketplaceWindow.end,
+    }),
+  ]);
+
+  const jumiaSales = Number(marketplaceSales.totals.jumiaSales ?? 0);
+  const kilimallSales = Number(marketplaceSales.totals.kilimallSales ?? 0);
+  const split = splitMarketplaceCommissionBySales({
+    jumiaSales,
+    kilimallSales,
+    jumiaCommission: Number(args.payrollRow?.commissionMarketplaceJumia ?? onlineSummary.commissionMarketplaceJumia ?? 0),
+    kilimallCommission: Number(args.payrollRow?.commissionMarketplaceKilimall ?? onlineSummary.commissionMarketplaceKilimall ?? 0),
+    totalMarketplaceCommission: Number(onlineSummary.marketplaceCommission ?? 0),
+  });
+
+  directLine.sales = Number(onlineSummary.directSales ?? 0);
+  directLine.commission = Number(args.payrollRow?.commissionDirect ?? onlineSummary.commissionDirect ?? 0);
+
+  return [
+    directLine,
+    {
+      label: "Jumia",
+      sales: jumiaSales,
+      commission: split.jumiaCommission,
+      note: marketplaceWindow.label,
+    },
+    {
+      label: "Kilimall",
+      sales: kilimallSales,
+      commission: split.kilimallCommission,
+      note: marketplaceWindow.label,
+    },
+  ].filter((line) => line.sales > 0 || line.commission > 0);
+}
+
 function renderHtml(args: {
   attendantName: string;
   attendantEmail: string;
@@ -452,6 +553,7 @@ function renderHtml(args: {
   totalCopiedProducts: number;
   walkInsServed: number;
   walkInsPurchased: number;
+  summaryLines: PerformanceSummaryLine[];
   rows: Array<{
     dateIso: string;
     receiptNumber: string;
@@ -462,6 +564,19 @@ function renderHtml(args: {
     status: string;
   }>;
 }) {
+  const summaryRowsHtml = args.summaryLines
+    .map(
+      (line) => `
+      <tr>
+        <td>${escapeHtml(line.label)}</td>
+        <td style="text-align:right">${escapeHtml(formatKes(line.sales))}</td>
+        <td style="text-align:right">${escapeHtml(formatKes(line.commission))}</td>
+        <td>${escapeHtml(line.note)}</td>
+      </tr>
+    `,
+    )
+    .join("\n");
+
   const rowsHtml = args.rows
     .map((r) => {
       return `
@@ -553,6 +668,27 @@ function renderHtml(args: {
           <div class="value">${escapeHtml(`${args.walkInsServed}/${args.walkInsPurchased}`)}</div>
         </div>
       </div>
+
+      ${
+        args.summaryLines.length > 0
+          ? `
+      <h2 style="margin-top:16px;">Performance summary</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th style="text-align:right; width:140px;">Sales</th>
+            <th style="text-align:right; width:140px;">Commission</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRowsHtml}
+        </tbody>
+      </table>
+      `
+          : ""
+      }
 
       <h2 style="margin-top:16px;">Receipts list</h2>
       <table>
@@ -891,6 +1027,12 @@ export async function GET(req: Request) {
     maxSales: tier.maxSales == null ? Number(tier.minSales) : Number(tier.maxSales),
     payoutFlat: Number(tier.payoutFlat),
   }));
+  const summaryLines = await getPerformanceSummaryLines({
+    userId,
+    period,
+    attendantCategory: user?.attendantCategory ?? null,
+    payrollRow,
+  });
   const rowsWithCommission = attachReceiptCommissionImpact({
     rows,
     attendantEmail: user?.email ?? null,
@@ -914,6 +1056,7 @@ export async function GET(req: Request) {
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
     walkInsServed: Number(reportAgg._sum.walkInServed ?? 0),
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
+    summaryLines,
     rows: rowsWithCommission,
   });
 

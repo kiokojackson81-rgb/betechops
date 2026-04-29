@@ -959,6 +959,11 @@ export default function AttendantOnlineClient() {
   const performanceReportHref = (() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
     if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+  })();
+  const marketplaceWeeksExportHref = (() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
     return `/api/online/summary/export?${params.toString()}`;
   })();
 
@@ -1052,11 +1057,21 @@ export default function AttendantOnlineClient() {
                 <p className="text-xs text-amber-300">Showing archived period.</p>
               )}
             </div>
-            <PeriodSwitcher
-              currentPeriod={currentPeriod}
-              selectedPeriod={selectedPeriod}
-              onSelectPeriod={setSelectedPeriod}
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <a
+                href={performanceReportHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+              >
+                Download performance report
+              </a>
+              <PeriodSwitcher
+                currentPeriod={currentPeriod}
+                selectedPeriod={selectedPeriod}
+                onSelectPeriod={setSelectedPeriod}
+              />
+            </div>
           </div>
         </div>
 
@@ -1090,7 +1105,7 @@ export default function AttendantOnlineClient() {
                     <div className="flex flex-wrap items-center gap-3">
                       {userId ? (
                         <a
-                          href={performanceReportHref}
+                          href={marketplaceWeeksExportHref}
                           className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5"
                         >
                           Download full weeks PDF
