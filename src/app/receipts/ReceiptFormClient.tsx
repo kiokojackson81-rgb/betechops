@@ -129,17 +129,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           .filter((u: any) => u && u.id)
           .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id, email: u.email ?? null }));
         setStaffMembers(mapped);
-        if (mapped.length) {
-          setStaffId((prev) => {
-            if (prev) return prev;
-            const preferredNames = ["jeniffer", "jennifer", "jenifer"];
-            const defaultStaff = mapped.find((item) => {
-              const haystack = `${item.name || ""} ${item.email || ""}`.toLowerCase();
-              return preferredNames.some((needle) => haystack.includes(needle));
-            });
-            return (defaultStaff ?? mapped[0]).id;
-          });
-        }
       } catch (e) {
         // ignore
       }
@@ -528,6 +517,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const handlePreview = (autoPrint = false) => {
+    if (!staffId) {
+      showToast("Select staff before previewing", "error");
+      return;
+    }
     if (!hasPaymentMethodSelection) {
       showToast("Select a payment method before previewing", "error");
       return;
@@ -558,6 +551,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCatalogOpen(false);
     setCatalogQuery("");
     setCatalogResults([]);
+    setStaffId(null);
   };
 
   const handleSave = async () => {
@@ -672,11 +666,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className={labelClass}>Staff</label>
+          <label className={labelClass}>Staff*</label>
           <select
             value={staffId ?? ""}
             onChange={(e) => setStaffId(e.target.value || null)}
             className={`${fieldClass} appearance-none`}
+            required
           >
             <option value="">Select staff</option>
             {staffMembers.map((a) => (
