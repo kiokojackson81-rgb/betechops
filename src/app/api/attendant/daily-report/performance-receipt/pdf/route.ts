@@ -71,6 +71,7 @@ type PerformanceReceiptRow = {
   sortAt: string;
   receiptNumber: string;
   amount: number;
+  itemCount: number;
   profit: number;
   paymentMethod: "MPESA" | "CASH";
   status: string;
@@ -579,6 +580,7 @@ function renderHtml(args: {
     dateIso: string;
     receiptNumber: string;
     amount: number;
+    itemCount: number;
     commissionImpact: number;
     productCommission: number;
     paymentMethod: "MPESA" | "CASH";
@@ -768,6 +770,8 @@ export async function GET(req: Request) {
 
   const attendantName = (user?.name ?? user?.email ?? userId).toString();
   const attendantEmail = user?.email ?? null;
+  const isOnlineCategory =
+    user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
   const ownerOr: Prisma.ReceiptWhereInput[] = [
     { issuedById: userId },
     { order: { attendantId: userId } },
@@ -801,12 +805,16 @@ export async function GET(req: Request) {
           ],
         },
         { OR: ownerOr },
-        {
-          OR: [
-            { data: { path: ["podDelivery"], equals: Prisma.JsonNull } },
-            { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } },
-          ],
-        },
+        ...(isOnlineCategory
+          ? []
+          : [
+              {
+                OR: [
+                  { data: { path: ["podDelivery"], equals: Prisma.JsonNull } },
+                  { NOT: { data: { path: ["podDelivery", "status"], equals: "pending" } } },
+                ],
+              },
+            ]),
       ],
     },
     select: {
@@ -858,6 +866,10 @@ export async function GET(req: Request) {
     const paymentMethod = normalizePaymentMethod(
       (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
     );
+    const itemCount = (row.order?.items ?? []).reduce(
+      (sum, item) => sum + Math.max(1, Math.trunc(toNumber(item?.quantity) || 1)),
+      0,
+    );
     const dedupeKey = `${canonical}|${paymentMethod}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
@@ -869,6 +881,7 @@ export async function GET(req: Request) {
       sortAt: date.toISOString(),
       receiptNumber,
       amount,
+      itemCount,
       profit,
       paymentMethod,
       status,
@@ -933,6 +946,7 @@ export async function GET(req: Request) {
         sortAt: entry.createdAt.toISOString(),
         receiptNumber: entry.receiptNumber || entry.receiptKey || canonical,
         amount: Number(entry.sellingTotal ?? 0),
+        itemCount: Array.isArray(entry.items) ? entry.items.length : 0,
         profit: resolveLedgerReceiptProfit(entry),
         paymentMethod: method,
         status,
@@ -957,17 +971,22 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: 1200,
     });
-    const perReceipt = new Map<string, { amount: number; method: "MPESA" | "CASH"; dateIso: string; sortAt: string }>();
+    const perReceipt = new Map<
+      string,
+      { amount: number; items: number; method: "MPESA" | "CASH"; dateIso: string; sortAt: string }
+    >();
     for (const sale of salesRows) {
       const key = normalizeReceiptNumber(sale.receiptNumber) || `sale-${sale.createdAt.toISOString()}`;
       const existing = perReceipt.get(key);
       const nextAmount = Number(sale.price ?? 0);
       if (existing) {
         existing.amount += nextAmount;
+        existing.items += 1;
         continue;
       }
       perReceipt.set(key, {
         amount: nextAmount,
+        items: 1,
         method: normalizePaymentMethod(sale.paymentMethod ?? "MPESA"),
         dateIso: sale.createdAt.toISOString().slice(0, 10),
         sortAt: sale.createdAt.toISOString(),
@@ -979,6 +998,7 @@ export async function GET(req: Request) {
         sortAt: value.sortAt,
         receiptNumber,
         amount: value.amount,
+        itemCount: value.items,
         profit: 0,
         paymentMethod: value.method,
         status: "SUBMITTED",
@@ -999,9 +1019,6 @@ export async function GET(req: Request) {
     if (!canonical) continue;
     applyProfitFallback(row, profitFallbacks.get(canonical) ?? 0);
   }
-
-  const isOnlineCategory =
-    user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
 
   const [commissionConfig, commissionPeriod, productCommissions, payrollRow, onlinePosSummary] = await Promise.all([
     getUserCommissionConfigLike(userId),
@@ -1048,6 +1065,7 @@ export async function GET(req: Request) {
       sortAt: productCommission.sortAt,
       receiptNumber: productCommission.receiptNumber,
       amount: productCommission.orderTotal,
+      itemCount: 0,
       profit: 0,
       paymentMethod: "MPESA",
       status: "PRODUCT COMMISSION",
@@ -1074,6 +1092,21 @@ export async function GET(req: Request) {
     salesCommissionMode: commissionConfig.salesCommissionMode,
     tiers,
   }).sort((a, b) => (a.sortAt < b.sortAt ? 1 : -1));
+  const printedPosSales = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.amount ?? 0)), 0);
+  const printedPosReceipts = rowsWithCommission.filter((row) => Math.max(0, Number(row.amount ?? 0)) > 0).length;
+  const printedPosItems = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.itemCount ?? 0)), 0);
+  const summaryLinesForRender =
+    isOnlineCategory && (Number(onlinePosSummary?.totalReceipts ?? 0) <= 0 || Number(onlinePosSummary?.totalItems ?? 0) <= 0)
+      ? summaryLines.map((line) =>
+          line.label === "POS direct sales"
+            ? {
+                ...line,
+                note: `${printedPosReceipts} POS receipts / ${printedPosItems} POS items`,
+              }
+            : line,
+        )
+      : summaryLines;
+  const onlineDirectSales = summaryLinesForRender.find((line) => line.label === "POS direct sales")?.sales ?? 0;
 
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
@@ -1086,13 +1119,13 @@ export async function GET(req: Request) {
     receiptsLabel: isOnlineCategory ? "POS receipts" : "Receipts",
     itemsLabel: isOnlineCategory ? "POS items" : "Items",
     totalSales: isOnlineCategory
-      ? Number(onlinePosSummary?.totalSales ?? 0)
+      ? Number(onlinePosSummary?.totalSales || onlineDirectSales || printedPosSales || 0)
       : Number(payrollRow?.totalSales ?? earnings.totalSales ?? 0),
     totalReceipts: isOnlineCategory
-      ? Number(onlinePosSummary?.totalReceipts ?? 0)
+      ? Number(onlinePosSummary?.totalReceipts || printedPosReceipts || 0)
       : Number(payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
     totalItems: isOnlineCategory
-      ? Number(onlinePosSummary?.totalItems ?? 0)
+      ? Number(onlinePosSummary?.totalItems || printedPosItems || 0)
       : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
     commission: Number(payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
@@ -1100,7 +1133,7 @@ export async function GET(req: Request) {
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
     walkInsServed: Number(reportAgg._sum.walkInServed ?? 0),
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
-    summaryLines,
+    summaryLines: summaryLinesForRender,
     rows: rowsWithCommission,
   });
 
