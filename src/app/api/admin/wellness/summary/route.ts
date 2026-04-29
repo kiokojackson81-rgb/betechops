@@ -9,7 +9,7 @@ export async function GET() {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
-  const [pendingLeaveRequests, pendingCashAdvances, outstandingAdvances, staff] = await Promise.all([
+  const [pendingLeaveRequests, pendingCashAdvances, pendingAdjustmentRequests, outstandingAdvances, staff] = await Promise.all([
     prisma.leaveRequest.findMany({
       where: { status: "PENDING" },
       include: {
@@ -25,6 +25,15 @@ export async function GET() {
       },
       orderBy: [{ createdAt: "asc" }],
       take: 30,
+    }),
+    (prisma as any).payrollAdjustmentRequest.findMany({
+      where: { status: "PENDING" },
+      include: {
+        attendant: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        requestedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+      },
+      orderBy: [{ createdAt: "asc" }],
+      take: 50,
     }),
     prisma.cashAdvance.findMany({
       where: { status: "APPROVED", remainingBalance: { gt: 0 } },
@@ -71,11 +80,13 @@ export async function GET() {
   return NextResponse.json({
     pendingLeaveRequests,
     pendingCashAdvances,
+    pendingAdjustmentRequests,
     outstandingAdvances,
     leaveBalances,
     totals: {
       pendingLeaveCount: pendingLeaveRequests.length,
       pendingCashAdvanceCount: pendingCashAdvances.length,
+      pendingAdjustmentRequestCount: pendingAdjustmentRequests.length,
       outstandingAdvanceBalance: outstandingAdvances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
     },
   });

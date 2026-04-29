@@ -45,8 +45,11 @@ type OverviewResponse = {
     id: string;
     name?: string | null;
     email: string;
+    role?: string | null;
     attendantCategory?: string | null;
   };
+  staff?: Array<{ id: string; name?: string | null; email: string; attendantCategory?: string | null }>;
+  payrollAdjustmentRequests?: PayrollAdjustmentRequestRow[];
   leaveBalance: {
     annual: { entitlement: number; used: number; remaining: number };
     sick: { entitlement: number; used: number; remaining: number };
@@ -73,6 +76,26 @@ type OverviewResponse = {
   };
 };
 
+type PayrollAdjustmentRequestRow = {
+  id: string;
+  periodLabel: string;
+  offenseType: string;
+  adjustmentType: string;
+  adjustmentKind: string;
+  label: string;
+  amount: number;
+  incidentDate?: string | null;
+  details: string;
+  evidenceUrl?: string | null;
+  status: string;
+  adminComment?: string | null;
+  createdAt: string;
+  decidedAt?: string | null;
+  attendant: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  requestedBy: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  decidedBy?: { id: string; name?: string | null; email: string; attendantCategory?: string | null } | null;
+};
+
 const currency = new Intl.NumberFormat("en-KE", {
   style: "currency",
   currency: "KES",
@@ -92,6 +115,18 @@ const statusClass: Record<string, string> = {
 };
 
 const leaveTypes = ["ANNUAL", "SICK", "EMERGENCY", "UNPAID", "OTHER"];
+const adjustmentOffenseTypes = [
+  "THEFT",
+  "LATENESS",
+  "ABSENT_WITHOUT_NOTICE",
+  "FAILURE_TO_REPORT_TO_WORK",
+  "INSUBORDINATION",
+  "MISCONDUCT",
+  "PROPERTY_DAMAGE",
+  "CUSTOMER_COMPLAINT",
+  "BONUS",
+  "OTHER",
+];
 const inputClass =
   "w-full rounded-2xl border border-slate-700 bg-slate-950/85 px-4 py-3 text-slate-100 outline-none placeholder:text-slate-500 focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/15 [color-scheme:dark]";
 const surfaceClass = "rounded-[28px] border border-slate-800/90 bg-slate-900/80 p-6 shadow-[0_20px_60px_rgba(2,6,23,.35)]";
@@ -133,6 +168,7 @@ export default function WellnessClient() {
   const [loading, setLoading] = useState(true);
   const [submittingLeave, setSubmittingLeave] = useState(false);
   const [submittingAdvance, setSubmittingAdvance] = useState(false);
+  const [submittingAdjustment, setSubmittingAdjustment] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [leaveForm, setLeaveForm] = useState({
@@ -147,6 +183,17 @@ export default function WellnessClient() {
     repaymentPeriod: String(MAX_CASH_ADVANCE_REPAYMENT_PERIOD),
     reason: "",
   });
+  const [adjustmentForm, setAdjustmentForm] = useState({
+    attendantId: "",
+    offenseType: "LATENESS",
+    adjustmentKind: "DEDUCTION",
+    amount: "",
+    incidentDate: toDateInput(new Date()),
+    label: "",
+    details: "",
+    evidenceUrl: "",
+  });
+  const canSubmitAdjustmentRequest = overview?.user?.role === "ADMIN" || overview?.user?.role === "SUPERVISOR";
   const requestedAdvanceAmount = Math.max(0, Math.trunc(Number(advanceForm.requestedAmount ?? 0)));
   const requestedRepaymentMonths = Math.min(
     MAX_CASH_ADVANCE_REPAYMENT_PERIOD,
@@ -222,6 +269,43 @@ export default function WellnessClient() {
       toast(error instanceof Error ? error.message : "Failed to submit cash advance", "error");
     } finally {
       setSubmittingAdvance(false);
+    }
+  };
+
+  const submitAdjustmentRequest = async () => {
+    setSubmittingAdjustment(true);
+    try {
+      const res = await fetch("/api/payroll-adjustment-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attendantId: adjustmentForm.attendantId,
+          offenseType: adjustmentForm.offenseType,
+          adjustmentKind: adjustmentForm.adjustmentKind,
+          amount: Number(adjustmentForm.amount),
+          incidentDate: adjustmentForm.incidentDate,
+          label: adjustmentForm.label,
+          details: adjustmentForm.details,
+          evidenceUrl: adjustmentForm.evidenceUrl,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to submit adjustment request"));
+      toast("Payroll adjustment request sent for admin approval", "success");
+      setAdjustmentForm((state) => ({
+        ...state,
+        attendantId: "",
+        amount: "",
+        label: "",
+        details: "",
+        evidenceUrl: "",
+        incidentDate: toDateInput(new Date()),
+      }));
+      await fetchOverview();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to submit adjustment request", "error");
+    } finally {
+      setSubmittingAdjustment(false);
     }
   };
 
@@ -447,9 +531,127 @@ export default function WellnessClient() {
               </div>
             </section>
 
+            {canSubmitAdjustmentRequest ? (
+              <section className={surfaceClass}>
+                <div className="mb-6 space-y-2">
+                  <p className={sectionEyebrow}>Payroll Discipline</p>
+                  <h2 className="text-2xl font-semibold text-white">Submit Adjustment Request</h2>
+                  <p className="text-sm leading-6 text-slate-400">
+                    Supervisor requests stay pending until admin approves them. Approved requests are then applied to the employee payroll.
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Employee</span>
+                    <select
+                      className={inputClass}
+                      value={adjustmentForm.attendantId}
+                      onChange={(e) => setAdjustmentForm((state) => ({ ...state, attendantId: e.target.value }))}
+                    >
+                      <option value="">Select employee</option>
+                      {(overview?.staff ?? []).map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name || staff.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Offence / reason</span>
+                    <select
+                      className={inputClass}
+                      value={adjustmentForm.offenseType}
+                      onChange={(e) => {
+                        const offenseType = e.target.value;
+                        setAdjustmentForm((state) => ({
+                          ...state,
+                          offenseType,
+                          adjustmentKind: offenseType === "BONUS" ? "ADDITION" : state.adjustmentKind,
+                        }));
+                      }}
+                    >
+                      {adjustmentOffenseTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {formatAdjustmentType(type)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Kind</span>
+                    <select
+                      className={inputClass}
+                      value={adjustmentForm.adjustmentKind}
+                      onChange={(e) => setAdjustmentForm((state) => ({ ...state, adjustmentKind: e.target.value }))}
+                    >
+                      <option value="DEDUCTION">Deduction</option>
+                      <option value="ADDITION">Addition</option>
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Amount (KES)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      className={inputClass}
+                      value={adjustmentForm.amount}
+                      onChange={(e) => setAdjustmentForm((state) => ({ ...state, amount: e.target.value }))}
+                      placeholder="Amount"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Incident date</span>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={adjustmentForm.incidentDate}
+                      onChange={(e) => setAdjustmentForm((state) => ({ ...state, incidentDate: e.target.value }))}
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Short label</span>
+                    <input
+                      className={inputClass}
+                      value={adjustmentForm.label}
+                      onChange={(e) => setAdjustmentForm((state) => ({ ...state, label: e.target.value }))}
+                      placeholder="Late clock-in time, theft case, bonus..."
+                    />
+                  </label>
+                </div>
+                <label className="mt-4 block space-y-2 text-sm">
+                  <span className="font-medium text-slate-300">Details</span>
+                  <textarea
+                    className={`${inputClass} min-h-32 resize-y`}
+                    value={adjustmentForm.details}
+                    onChange={(e) => setAdjustmentForm((state) => ({ ...state, details: e.target.value }))}
+                    placeholder="Explain what happened and why this amount should be deducted or added."
+                  />
+                </label>
+                <label className="mt-4 block space-y-2 text-sm">
+                  <span className="font-medium text-slate-300">Evidence URL</span>
+                  <input
+                    className={inputClass}
+                    value={adjustmentForm.evidenceUrl}
+                    onChange={(e) => setAdjustmentForm((state) => ({ ...state, evidenceUrl: e.target.value }))}
+                    placeholder="Optional evidence link"
+                  />
+                </label>
+                <div className="mt-5 flex justify-end">
+                  <Button
+                    onClick={() => void submitAdjustmentRequest()}
+                    disabled={submittingAdjustment || loading}
+                    className="min-w-[220px] w-full border border-amber-200/80 bg-amber-300 text-slate-950 shadow-[0_12px_30px_rgba(252,211,77,.22)] hover:bg-amber-200 sm:w-auto"
+                  >
+                    {submittingAdjustment ? "Submitting..." : "Send for admin approval"}
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+
             <HistorySection
               leaveRequests={overview?.leaveRequests ?? []}
               cashAdvances={overview?.cashAdvances ?? []}
+              payrollAdjustmentRequests={overview?.payrollAdjustmentRequests ?? []}
               loading={loading}
             />
           </div>
@@ -561,10 +763,12 @@ function BalanceRow({
 function HistorySection({
   leaveRequests,
   cashAdvances,
+  payrollAdjustmentRequests,
   loading,
 }: {
   leaveRequests: LeaveRow[];
   cashAdvances: CashAdvanceRow[];
+  payrollAdjustmentRequests: PayrollAdjustmentRequestRow[];
   loading: boolean;
 }) {
   return (
@@ -573,7 +777,7 @@ function HistorySection({
         <p className={sectionEyebrow}>History</p>
         <h2 className="mt-2 text-2xl font-semibold text-white">Requests & Decisions</h2>
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-3">
         <div>
           <h3 className="text-lg font-semibold text-white">Leave Requests</h3>
           <div className="mt-4 space-y-3">
@@ -619,9 +823,44 @@ function HistorySection({
             {!cashAdvances.length && !loading ? <EmptyCard label="No cash advances yet." /> : null}
           </div>
         </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-white">Payroll Adjustments</h3>
+          <div className="mt-4 space-y-3">
+            {payrollAdjustmentRequests.map((row) => (
+              <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-slate-100">{row.label}</div>
+                    <div className="text-xs text-slate-400">
+                      {row.attendant.name || row.attendant.email} · {formatAdjustmentType(row.offenseType)}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{row.periodLabel}</div>
+                  </div>
+                  <StatusBadge value={row.status} />
+                </div>
+                <div className={row.adjustmentKind === "ADDITION" ? "mt-3 font-semibold text-emerald-200" : "mt-3 font-semibold text-rose-200"}>
+                  {row.adjustmentKind === "ADDITION" ? "+" : "-"}
+                  {currency.format(row.amount)}
+                </div>
+                <p className="mt-2 text-sm text-slate-300">{row.details}</p>
+                {row.adminComment ? <p className="mt-2 text-xs text-amber-200">Admin: {row.adminComment}</p> : null}
+              </div>
+            ))}
+            {!payrollAdjustmentRequests.length && !loading ? <EmptyCard label="No payroll adjustment requests yet." /> : null}
+          </div>
+        </div>
       </div>
     </section>
   );
+}
+
+function formatAdjustmentType(value: string) {
+  return String(value || "OTHER")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function StatusBadge({ value }: { value: string }) {

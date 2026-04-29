@@ -19,6 +19,7 @@ export async function GET(req: Request) {
       id: true,
       name: true,
       email: true,
+      role: true,
       attendantCategory: true,
       isActive: true,
     },
@@ -27,12 +28,40 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const overview = await getEmployeeWellnessOverview(userId);
+  const [overview, payrollAdjustmentRequests, staff] = await Promise.all([
+    getEmployeeWellnessOverview(userId),
+    (prisma as any).payrollAdjustmentRequest.findMany({
+      where: {
+        OR: [{ attendantId: userId }, { requestedById: userId }],
+      },
+      include: {
+        attendant: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        requestedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        decidedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        payrollAdjustment: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 20,
+    }),
+    user.role === "ADMIN" || user.role === "SUPERVISOR"
+      ? prisma.user.findMany({
+          where: {
+            isActive: true,
+            role: { in: ["ATTENDANT", "SUPERVISOR"] },
+          },
+          select: { id: true, name: true, email: true, attendantCategory: true },
+          orderBy: [{ name: "asc" }, { email: "asc" }],
+          take: 150,
+        })
+      : Promise.resolve([]),
+  ]);
 
   return NextResponse.json(
     composeIdentityResponse(identity, {
       ...overview,
       user,
+      payrollAdjustmentRequests,
+      staff,
     }),
   );
 }

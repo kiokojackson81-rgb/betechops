@@ -29,6 +29,24 @@ type CashAdvance = {
   installments?: Array<{ id: string; dueDate: string; amount: number; isPaid: boolean }>;
 };
 
+type PayrollAdjustmentRequest = {
+  id: string;
+  periodLabel: string;
+  offenseType: string;
+  adjustmentType: string;
+  adjustmentKind: string;
+  label: string;
+  amount: number;
+  incidentDate?: string | null;
+  details: string;
+  evidenceUrl?: string | null;
+  status: string;
+  adminComment?: string | null;
+  createdAt: string;
+  attendant: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  requestedBy: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+};
+
 type LeaveBalance = {
   id: string;
   annualEntitlement: number;
@@ -43,11 +61,13 @@ type LeaveBalance = {
 type SummaryResponse = {
   pendingLeaveRequests: LeaveRequest[];
   pendingCashAdvances: CashAdvance[];
+  pendingAdjustmentRequests: PayrollAdjustmentRequest[];
   outstandingAdvances: CashAdvance[];
   leaveBalances: LeaveBalance[];
   totals: {
     pendingLeaveCount: number;
     pendingCashAdvanceCount: number;
+    pendingAdjustmentRequestCount: number;
     outstandingAdvanceBalance: number;
   };
 };
@@ -70,6 +90,7 @@ export default function AdminWellnessClient() {
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [leaveComments, setLeaveComments] = useState<Record<string, string>>({});
   const [advanceForms, setAdvanceForms] = useState<Record<string, { approvedAmount: string; repaymentPeriod: string; hrComment: string }>>({});
+  const [adjustmentForms, setAdjustmentForms] = useState<Record<string, { amount: string; adminComment: string }>>({});
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, { annualEntitlement: string; sickEntitlement: string; emergencyEntitlement: string }>>({});
 
   const fetchSummary = async () => {
@@ -102,6 +123,15 @@ export default function AdminWellnessClient() {
     }
     setAdvanceForms(nextAdvanceForms);
 
+    const nextAdjustmentForms: Record<string, { amount: string; adminComment: string }> = {};
+    for (const row of data.pendingAdjustmentRequests) {
+      nextAdjustmentForms[row.id] = {
+        amount: String(row.amount ?? ""),
+        adminComment: "",
+      };
+    }
+    setAdjustmentForms(nextAdjustmentForms);
+
     const nextBalanceDrafts: Record<string, { annualEntitlement: string; sickEntitlement: string; emergencyEntitlement: string }> = {};
     for (const balance of data.leaveBalances) {
       nextBalanceDrafts[balance.user.id] = {
@@ -114,7 +144,13 @@ export default function AdminWellnessClient() {
   }, [data]);
 
   const totals = useMemo(
-    () => data?.totals ?? { pendingLeaveCount: 0, pendingCashAdvanceCount: 0, outstandingAdvanceBalance: 0 },
+    () =>
+      data?.totals ?? {
+        pendingLeaveCount: 0,
+        pendingCashAdvanceCount: 0,
+        pendingAdjustmentRequestCount: 0,
+        outstandingAdvanceBalance: 0,
+      },
     [data],
   );
 
@@ -153,6 +189,27 @@ export default function AdminWellnessClient() {
       await fetchSummary();
     } catch (error) {
       toast(error instanceof Error ? error.message : "Failed to update cash advance", "error");
+    }
+  };
+
+  const decideAdjustment = async (id: string, decision: "APPROVED" | "REJECTED") => {
+    try {
+      const form = adjustmentForms[id];
+      const res = await fetch(`/api/payroll-adjustment-requests/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision,
+          amount: form?.amount,
+          adminComment: form?.adminComment ?? "",
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to update adjustment request"));
+      toast(`Payroll adjustment request ${decision.toLowerCase()}`, "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to update adjustment request", "error");
     }
   };
 
@@ -210,6 +267,7 @@ export default function AdminWellnessClient() {
           <div className="flex flex-wrap gap-3">
             <Stat label="Pending leave" value={String(totals.pendingLeaveCount)} />
             <Stat label="Pending advances" value={String(totals.pendingCashAdvanceCount)} />
+            <Stat label="Pending adjustments" value={String(totals.pendingAdjustmentRequestCount)} />
             <Stat label="Outstanding balance" value={currency.format(totals.outstandingAdvanceBalance)} />
             <Button onClick={() => void processDueInstallments()} disabled={processing || loading}>
               {processing ? "Processing..." : "Run due deductions"}
@@ -312,6 +370,64 @@ export default function AdminWellnessClient() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-lg font-semibold">Pending Payroll Adjustment Requests</h2>
+        <div className="mt-4 space-y-4">
+          {(data?.pendingAdjustmentRequests ?? []).map((row) => (
+            <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+              <div className="grid gap-4 lg:grid-cols-[1fr_.8fr]">
+                <div>
+                  <div className="font-medium text-slate-100">{row.label}</div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    {row.attendant.name || row.attendant.email} · {formatAdjustmentType(row.offenseType)} · {row.periodLabel}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Submitted by {row.requestedBy.name || row.requestedBy.email}
+                  </div>
+                  <p className="mt-3 text-sm text-slate-300">{row.details}</p>
+                  {row.evidenceUrl ? (
+                    <a className="mt-2 inline-block text-xs text-emerald-200 underline" href={row.evidenceUrl} target="_blank" rel="noreferrer">
+                      View evidence
+                    </a>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    label={row.adjustmentKind === "ADDITION" ? "Addition amount" : "Deduction amount"}
+                    value={adjustmentForms[row.id]?.amount ?? String(row.amount)}
+                    onChange={(value) =>
+                      setAdjustmentForms((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], amount: value },
+                      }))
+                    }
+                  />
+                  <Field
+                    label="Admin comment"
+                    value={adjustmentForms[row.id]?.adminComment ?? ""}
+                    onChange={(value) =>
+                      setAdjustmentForms((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], adminComment: value },
+                      }))
+                    }
+                  />
+                  <div className={row.adjustmentKind === "ADDITION" ? "text-emerald-200" : "text-rose-200"}>
+                    {row.adjustmentKind === "ADDITION" ? "+" : "-"}
+                    {currency.format(Number(adjustmentForms[row.id]?.amount || row.amount || 0))}
+                  </div>
+                  <div className="flex gap-3">
+                    <Button onClick={() => void decideAdjustment(row.id, "APPROVED")}>Approve</Button>
+                    <Button variant="secondary" onClick={() => void decideAdjustment(row.id, "REJECTED")}>Reject</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!data?.pendingAdjustmentRequests?.length && !loading ? <EmptyCard label="No pending payroll adjustment requests." /> : null}
+        </div>
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
         <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -433,4 +549,12 @@ function Field({
 
 function EmptyCard({ label }: { label: string }) {
   return <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">{label}</div>;
+}
+
+function formatAdjustmentType(value: string) {
+  return String(value || "OTHER")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

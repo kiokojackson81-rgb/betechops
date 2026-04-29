@@ -24,6 +24,9 @@ model User {
   attendantCommissions                 AttendantCommission[]
   attendantCompPlan                    AttendantCompPlan?
   attendantPayrollAdjustments          AttendantPayrollAdjustment[]
+  payrollAdjustmentRequests            PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestAttendant")
+  submittedPayrollAdjustmentRequests   PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestRequester")
+  decidedPayrollAdjustmentRequests     PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestDecider")
   leaveRequests                        LeaveRequest[]                 @relation("LeaveRequestUser")
   approvedLeaveRequests                LeaveRequest[]                 @relation("LeaveRequestApprover")
   leaveBalance                         LeaveBalance?
@@ -101,8 +104,40 @@ model AttendantPayrollAdjustment {
   createdAt      DateTime              @default(now())
   adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
   attendant      User                  @relation(fields: [attendantId], references: [id])
+  request        PayrollAdjustmentRequest?
 
   @@index([attendantId, periodKey])
+}
+
+model PayrollAdjustmentRequest {
+  id                  String                @id @default(cuid())
+  attendantId         String
+  requestedById       String
+  decidedById         String?
+  payrollAdjustmentId String?               @unique
+  periodKey           String
+  periodLabel         String
+  adjustmentType      PayrollAdjustmentType
+  adjustmentKind      PayrollAdjustmentKind @default(DEDUCTION)
+  offenseType         String
+  label               String
+  amount              Int
+  incidentDate        DateTime?
+  details             String
+  evidenceUrl         String?
+  status              WellnessRequestStatus @default(PENDING)
+  adminComment        String?
+  decidedAt           DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  attendant           User                  @relation("PayrollAdjustmentRequestAttendant", fields: [attendantId], references: [id])
+  requestedBy         User                  @relation("PayrollAdjustmentRequestRequester", fields: [requestedById], references: [id])
+  decidedBy           User?                 @relation("PayrollAdjustmentRequestDecider", fields: [decidedById], references: [id])
+  payrollAdjustment   AttendantPayrollAdjustment? @relation(fields: [payrollAdjustmentId], references: [id])
+
+  @@index([attendantId, periodKey])
+  @@index([requestedById, createdAt])
+  @@index([status, createdAt])
 }
 
 model LeaveBalance {
