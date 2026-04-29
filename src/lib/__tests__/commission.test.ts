@@ -1,4 +1,5 @@
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
+import { computeMarketplaceCommission, computeOnlinePeriodCommission } from "@/lib/onlineCommission";
 import { computeSalesCommissionFromTiers } from "../commission";
 
 describe("computeSalesCommissionFromTiers - basic cases", () => {
@@ -39,7 +40,7 @@ describe("computeSalesCommissionFromTiers - basic cases", () => {
     const totalSalesLicense = 1_500_000;
     const baseProfitShare = Math.min(totalSalesLicense, 500_000) / totalSalesLicense;
     const baseCommission = 0.05 * 60_000 * baseProfitShare;
-    const expectedProgress = 10_000 + 7_500; // full first band + half of 2nd band
+    const expectedProgress = 10_000; // full first band; next configured step is at 2M
     expect(res).toBeCloseTo(baseCommission + expectedProgress);
   });
 });
@@ -49,4 +50,30 @@ test("commission ladder basic checks", () => {
   expect(calculateCumulativeCommission(1_000_000).commission).toBe(10_000);
   expect(calculateCumulativeCommission(2_000_000).commission).toBe(25_000);
   expect(calculateCumulativeCommission(3_000_000).commission).toBe(45_000);
+});
+
+test("online marketplace commission starts at 1M", () => {
+  expect(computeMarketplaceCommission(686_502).amount).toBe(0);
+  expect(computeMarketplaceCommission(999_999).amount).toBe(0);
+  expect(computeMarketplaceCommission(1_000_000).amount).toBe(10_000);
+});
+
+test("profit-share online users keep POS and marketplace commission separate", () => {
+  const result = computeOnlinePeriodCommission(
+    {
+      attendantId: "benjamin",
+      periodStart: new Date("2026-04-25T00:00:00.000Z"),
+      periodEnd: new Date("2026-05-24T23:59:59.999Z"),
+      directSales: 31_500,
+      directProfit: 6_110,
+      jumiaSales: 686_502,
+      kilimallSales: 0,
+    },
+    { directCommissionMode: "PROFIT_10" },
+  );
+
+  expect(result.lines.find((line) => line.channel === "DIRECT")?.commission).toBe(611);
+  expect(result.lines.find((line) => line.channel === "JUMIA")?.commission).toBe(0);
+  expect(result.lines.find((line) => line.channel === "KILIMALL")?.commission).toBe(0);
+  expect(result.totalCommission).toBe(611);
 });

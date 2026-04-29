@@ -200,7 +200,7 @@ export function computeMarketplaceCommission(
   if (flags?.abandonedDuties || flags?.grossMisconduct || flags?.resignedOrTerminated) {
     return { amount: 0, mode: "withheld", reason: "Withheld per memo policy." };
   }
-  if (totalSales < 500_000) {
+  if (totalSales < 1_000_000) {
     return { amount: 0, mode: "none" };
   }
   return { amount: progressiveAmount(totalSales), mode: "marketplace_progressive" };

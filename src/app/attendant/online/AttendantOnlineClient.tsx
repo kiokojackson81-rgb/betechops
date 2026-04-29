@@ -111,23 +111,13 @@ type MarketplaceTierInfo = {
 function describeMarketplaceTier(sales: number): MarketplaceTierInfo {
   const normalized = Math.max(0, Math.round(sales));
 
-  if (normalized < 500_000) {
-    const remaining = 500_000 - normalized;
-    return {
-      target: 500_000,
-      remaining,
-      progress: clamp01(normalized / 500_000),
-      message: `${formatKES(remaining)} to enter the ladder`,
-    };
-  }
-
   if (normalized < 1_000_000) {
     const remaining = 1_000_000 - normalized;
     return {
       target: 1_000_000,
       remaining,
-      progress: clamp01((normalized - 500_000) / 500_000),
-      message: `${formatKES(remaining)} to finish the 500k-1M band`,
+      progress: clamp01(normalized / 1_000_000),
+      message: `${formatKES(remaining)} to reach the 1M commission tier`,
     };
   }
 
