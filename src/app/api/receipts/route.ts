@@ -129,17 +129,29 @@ export async function GET(req: NextRequest) {
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
-    const ownerOr: Prisma.ReceiptWhereInput[] = [];
-    ownerOr.push(
-      { issuedById: attendantId },
-      { order: { attendantId } },
-      { data: { path: ["attendantId"], equals: attendantId } },
-    );
-    // If issuerOnly requested, restrict to issuedById only
-    if (issuerOnly) {
-      and.push({ issuedById: attendantId });
+    // For attendants (non-admins), only show receipts they actually issued.
+    // This prevents other users creating receipts and attributing them to a staff
+    // (e.g., Stephen creating receipts credited to Benjamin) from appearing in
+    // the attendant's "mine" view. Admins and supervisors keep the broader
+    // owner OR logic.
+    if (role === "ATTENDANT" && !isImpersonating) {
+      if (issuerOnly) {
+        and.push({ issuedById: attendantId });
+      } else {
+        and.push({ issuedById: attendantId });
+      }
     } else {
-      and.push({ OR: ownerOr });
+      const ownerOr: Prisma.ReceiptWhereInput[] = [];
+      ownerOr.push(
+        { issuedById: attendantId },
+        { order: { attendantId } },
+        { data: { path: ["attendantId"], equals: attendantId } },
+      );
+      if (issuerOnly) {
+        and.push({ issuedById: attendantId });
+      } else {
+        and.push({ OR: ownerOr });
+      }
     }
   }
   if (scope === "global" && attendantFilterParam) {
