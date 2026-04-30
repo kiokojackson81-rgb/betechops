@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Wed, 29 Apr 2026 16:51:29 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+{"meta":{"actorId":null,"actorRole":null,"impersonateId":null,"resolvedUserId":null,"actorEmail":null,"scope":"mine"},"data":{"receipts":[],"paging":{"page":1,"size":50,"totalCount":0,"totalPages":1}},"receipts":[],"paging":{"page":1,"size":50,"totalCount":0,"totalPages":1}}

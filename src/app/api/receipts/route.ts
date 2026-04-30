@@ -542,6 +542,21 @@ export async function POST(req: NextRequest) {
   // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
   const issuedById = resolvedUserId;
 
+  // Diagnostic logging: capture incoming attribution candidates to help debug misattributed sales
+  try {
+    console.info('[receipts] incoming save attribution', {
+      serial: serial ?? null,
+      docType: docType ?? null,
+      payloadAttendantId: payload?.attendantId ?? null,
+      payloadServedBy: payload?.servedBy ?? null,
+      resolvedUserId,
+      computedAttendantId: attendantId ?? null,
+      computedIssuedById: issuedById ?? null,
+    });
+  } catch (e) {
+    // ignore logging errors
+  }
+
   // compute totals
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const subtotal = items.reduce((s: number, it: any) => s + (parseNumber(it.unitPrice || it.sellingPrice || 0) * Math.max(1, parseNumber(it.quantity || 1, 1))), 0);
@@ -1291,6 +1306,17 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+
+            try {
+              console.info('[receipts] created order/receipt', {
+                orderNumber: orderUpsert.orderNumber,
+                orderAttendantId: orderUpsert.attendantId ?? null,
+                receiptId: receipt?.id ?? null,
+                receiptDataAttendantId: (receipt && receipt.data && receipt.data.attendantId) ? receipt.data.attendantId : null,
+              });
+            } catch (e) {
+              // ignore
+            }
 
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });

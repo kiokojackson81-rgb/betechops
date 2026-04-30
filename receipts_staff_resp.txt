@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Wed, 29 Apr 2026 17:55:12 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+[{"id":"cmimxqfve0006v5mcewkm8waa","name":"Benjamin","email":"benjamin@placeholder"},{"id":"68c2f3c4-9d66-4e0c-ad7a-196a5559a83f","name":"Benjamin","email":"benjamin@betech.co.ke"},{"id":"77144fb2-e379-49be-a530-feeb8aa01e50","name":"Brendah","email":"brendah@betech.co.ke"},{"id":"72f7525e-78b5-49d2-91ff-29549f7a589d","name":"Catalog Uploader","email":"catalog@betech.co.ke"},{"id":"6826240b-344f-450f-bdcf-44691316fe2a","name":"Direct Sales Lead","email":"sales@betech.co.ke"},{"id":"e02dc263-9944-4b60-bb7b-dac382696d34","name":"Jeniffer","email":"jeniffer@betech.co.ke"},{"id":"ecb80572-8346-4516-917e-5599100056cd","name":"Jumia Ops Specialist","email":"jumia.ops@betech.co.ke"},{"id":"cmimxqfgo0004v5mc5pn1r486","name":"Kelvin","email":"kelvin@placeholder"},{"id":"630fdf49-9641-47c8-a3a2-e7422b3136bf","name":"Stephen","email":"stephen@betech.co.ke"},{"id":"acee347b-c736-4767-bc29-bc080a643778","name":"Support Specialist","email":"support@betech.co.ke"}]
