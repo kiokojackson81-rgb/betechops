@@ -1286,15 +1286,22 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     () => getCommissionSummaryForSales(combinedPeriodSales),
     [combinedPeriodSales],
   );
+  // Prefer server-provided canonical commission for accuracy; fall back to
+  // earnings summary (Jeniffer override) or local commission calculator.
+  const serverCommission =
+    Number(serverPeriodSummary?.aggregates?.commission?.commission ?? periodSummary?.aggregates?.commission?.commission ?? 0);
 
-  // Jeniffer's quick stats should mirror the earnings card's direct sales
-  // commission, while other attendants continue to use the total commission.
   const preferredEarningsCommission =
     currentUserEmail === "jeniffer@betech.co.ke"
       ? Number(earningsSummary?.salesCommission ?? 0)
       : Number(earningsSummary?.commission ?? 0);
+
   const commissionKes =
-    preferredEarningsCommission > 0 ? preferredEarningsCommission : commissionSummary.commission;
+    serverCommission > 0
+      ? serverCommission
+      : preferredEarningsCommission > 0
+      ? preferredEarningsCommission
+      : commissionSummary.commission;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
     periodSummary?.period.label ??

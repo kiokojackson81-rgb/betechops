@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
-import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,11 @@ export async function GET(req: Request) {
 
   await getOrCreateCommissionPeriod(basisDate);
   const period = getTradingPeriodFor(basisDate);
+
   const summary = await getSupportPeriodAggregates({ userId: auth.user.id, period });
   const aggregates = summary.aggregates;
 
-  const commission = getCommissionSummaryForSales(aggregates.totalSales);
+  const attendantSummary = await getAttendantCommissionSummary({ attendantId: auth.user.id, start: period.start, end: period.end });
 
   return NextResponse.json({
     period: {
@@ -40,8 +41,9 @@ export async function GET(req: Request) {
     aggregates: {
       ...aggregates,
       batteryEarnings: (aggregates.newBatteries + aggregates.changedBatteries) * 70,
-      commission: commission.commission,
-      nextTarget: commission.nextTarget,
+      commission: attendantSummary.totalCommission,
+      nextTarget: null,
+      commissionBreakdown: attendantSummary.breakdown ?? undefined,
     },
   });
 }

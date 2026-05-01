@@ -6,6 +6,7 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import type { Role } from "@prisma/client";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
     buildPayrollRow(targetUser, period),
     isBrendahTarget ? getBrendahCommissionForPeriod(userId, period) : Promise.resolve(null),
   ]);
+  const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
   // Merge per-receipt maps from marketing and support to expose canonical keys
   // for clients (dedupe helpers). POS totals and commission come from
   // `getEarningsSummaryForUser`, which now includes paid POS receipts.
@@ -75,16 +77,10 @@ export async function GET(req: Request) {
   let salesCommission = Number(summary.salesCommission ?? 0);
   const ledgerPersisted = Number((ledger as any)?.commissionTotal ?? (ledger as any)?.commission_total ?? 0);
   if (!usesSpecialComputedCommission) {
-    salesCommission = marketingCommission + supportCommission;
+    // Prefer canonical server-side computed commission for consistency.
+    salesCommission = Number(attendantCanonical.directSalesCommission ?? marketingCommission + supportCommission);
     if (ledgerPersisted > 0) {
       salesCommission = ledgerPersisted;
-    } else {
-      if (salesCommission === 0 && ledger) {
-        salesCommission = Number(ledger.grossCommission ?? 0);
-      }
-      if (salesCommission === 0) {
-        salesCommission = summary.salesCommission;
-      }
     }
   }
 
@@ -92,17 +88,15 @@ export async function GET(req: Request) {
     ? Number(summary.grossCommission ?? salesCommission)
     : ledgerPersisted > 0
       ? ledgerPersisted
-      : salesCommission + summary.newProductCommission + summary.copiedCommission + summary.editedCommission + summary.commissionTopUpTotal;
+      : Number(attendantCanonical.totalCommission ?? (salesCommission + summary.newProductCommission + summary.copiedCommission + summary.editedCommission + summary.commissionTopUpTotal));
 
   const totalEarnings = usesSpecialComputedCommission
     ? Number(summary.totalEarnings ?? 0)
-    : summary.baseSalary + summary.transportAllowance + grossCommission + summary.bonusTotal;
+    : payrollRow.baseSalary + payrollRow.transportAllowance + Number(attendantCanonical.totalCommission ?? grossCommission) + payrollRow.adjustmentBreakdown.bonus;
   const totalDeductions = usesSpecialComputedCommission
     ? Number(summary.totalDeductions ?? 0)
-    : summary.chamaTotal + summary.latenessTotal + summary.disciplineTotal + summary.otherDeductionsTotal;
-  const netPay = usesSpecialComputedCommission
-    ? Number(summary.netPay ?? 0)
-    : totalEarnings - totalDeductions;
+    : payrollRow.adjustmentBreakdown.chama + payrollRow.adjustmentBreakdown.lateness + payrollRow.adjustmentBreakdown.discipline + payrollRow.adjustmentBreakdown.other;
+  const netPay = usesSpecialComputedCommission ? Number(summary.netPay ?? 0) : totalEarnings - totalDeductions;
 
   const payload = {
     // expose canonical per-receipt keys for clients to dedupe local receipts
@@ -118,10 +112,10 @@ export async function GET(req: Request) {
     commissionDirect: payrollRow.commissionDirect,
     commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
     commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
-    grossCommission: payrollRow.commissionGross,
-    commission: payrollRow.commissionTotal,
+    grossCommission: Number(attendantCanonical.totalCommission ?? payrollRow.commissionGross),
+    commission: Number(attendantCanonical.totalCommission ?? payrollRow.commissionTotal),
     bonusTotal: payrollRow.adjustmentBreakdown.bonus,
-    commissionTopUpTotal: payrollRow.adjustmentBreakdown.commissionTopUp,
+    commissionTopUpTotal: attendantCanonical.commissionTopUpTotal ?? payrollRow.adjustmentBreakdown.commissionTopUp,
     chamaTotal: payrollRow.adjustmentBreakdown.chama,
     latenessTotal: payrollRow.adjustmentBreakdown.lateness,
     disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
@@ -136,6 +130,7 @@ export async function GET(req: Request) {
     totalEarnings: payrollRow.totalEarnings,
     totalDeductions: payrollRow.totalDeductions,
     netPay: payrollRow.netPay,
+    commissionBreakdown: attendantCanonical.breakdown ?? undefined,
     walkInsServed: marketingSummary.totals.walkInsServed,
     walkInsPurchased: marketingSummary.totals.walkInsPurchased,
     ledger: ledger

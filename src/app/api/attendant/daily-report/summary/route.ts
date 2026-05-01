@@ -5,6 +5,7 @@ import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTarge
 import type { Role } from "@prisma/client";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,21 @@ export async function GET(req: Request) {
         }
       : null,
   };
+
+  // Attach canonical commission summary to ensure UI uses authoritative totals.
+  try {
+    const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
+    basePayload.commission = Number(attendantCanonical.totalCommission ?? 0);
+    basePayload.commissionBreakdown = attendantCanonical.breakdown ?? undefined;
+    basePayload.directSalesCommission = Number(attendantCanonical.directSalesCommission ?? 0);
+    basePayload.posProductCommission = Number(attendantCanonical.posProductCommission ?? 0);
+    basePayload.newProductCommission = Number(attendantCanonical.newProductCommission ?? 0);
+    basePayload.copiedCommission = Number(attendantCanonical.copiedCommission ?? 0);
+    basePayload.editedCommission = Number(attendantCanonical.editedCommission ?? 0);
+    basePayload.commissionTopUpTotal = Number(attendantCanonical.commissionTopUpTotal ?? 0);
+  } catch (err) {
+    // best-effort: leave basePayload unchanged when canonical helper fails
+  }
 
   if (debug && usePosTotals) {
     const ownerOr = [

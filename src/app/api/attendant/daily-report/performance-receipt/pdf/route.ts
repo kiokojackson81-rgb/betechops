@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
 import {
@@ -777,26 +778,9 @@ export async function GET(req: Request) {
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
   ];
-  const broadOwnerOr: Prisma.ReceiptWhereInput[] = [
-    { issuedById: userId },
-    { order: { attendantId: userId } },
-    { data: { path: ["attendantId"], equals: userId } },
-    { data: { path: ["servedBy"], equals: userId } },
-    { data: { path: ["servedById"], equals: userId } },
-    { order: { metadata: { path: ["attendantId"], equals: userId } as any } },
-    { order: { metadata: { path: ["servedBy"], equals: userId } as any } },
-    { order: { metadata: { path: ["servedById"], equals: userId } as any } },
-    { data: { path: ["attendantName"], equals: attendantName } },
-    { data: { path: ["issuedByName"], equals: attendantName } },
-  ];
-  if (attendantEmail) {
-    broadOwnerOr.push(
-      { order: { attendant: { email: attendantEmail } } },
-      { data: { path: ["attendantEmail"], equals: attendantEmail } },
-      { data: { path: ["servedByEmail"], equals: attendantEmail } },
-    );
-  }
-  const ownerOr = isOnlineCategory && posOwnershipMode === "staffOnly" ? staffOwnerOr : broadOwnerOr;
+  // Enforce strict staff-only ownership for receipt selection to ensure
+  // commission attribution is scoped by `order.attendantId` or `data.attendantId`.
+  const ownerOr = staffOwnerOr;
 
   const receipts = (await prisma.receipt.findMany({
     where: {
@@ -1056,6 +1040,9 @@ export async function GET(req: Request) {
       : Promise.resolve(null),
   ]);
 
+  // Canonical commission summary for this attendant/period
+  const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
+
   for (const productCommission of productCommissions.values()) {
     const canonical = normalizeReceiptNumber(productCommission.receiptNumber);
     if (!canonical) continue;
@@ -1135,7 +1122,7 @@ export async function GET(req: Request) {
     totalItems: isOnlineCategory
       ? Number(onlinePosSummary?.totalItems || printedPosItems || 0)
       : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
-    commission: Number(payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
+    commission: Number(attendantCanonical.totalCommission ?? payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(payrollRow?.editedProducts ?? reportAgg._sum.productsEdited ?? 0),
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
@@ -1143,6 +1130,9 @@ export async function GET(req: Request) {
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
     summaryLines: summaryLinesForRender,
     rows: rowsWithCommission,
+    // Attach canonical breakdown for debugging/consistency
+    // (not displayed directly but available via PDF rendering if needed)
+    // commissionBreakdown: attendantCanonical.breakdown ?? undefined,
   });
 
   let browser: any = null;
