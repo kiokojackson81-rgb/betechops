@@ -1326,7 +1326,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   const displayedReceipts = combinedPeriodReceipts;
 
   const serverCommissionBreakdown =
-    serverPeriodSummary?.aggregates?.commissionBreakdown ?? periodSummary?.aggregates?.commissionBreakdown ?? null;
+    (serverPeriodSummary?.aggregates as any)?.commissionBreakdown ?? (periodSummary?.aggregates as any)?.commissionBreakdown ?? null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
