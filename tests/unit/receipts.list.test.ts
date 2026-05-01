@@ -26,7 +26,7 @@ describe('GET /api/receipts', () => {
     expect(body.receipts[0].orderRef).toBe('ORD1');
   });
 
-  it('uses explicit attendantId as an issuer filter for admin-style receipt links', async () => {
+  it('uses explicit attendantId as a staff-owner filter for admin-style receipt links', async () => {
     (prisma as any).receipt.findMany.mockResolvedValue([]);
     (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
     (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
@@ -36,6 +36,11 @@ describe('GET /api/receipts', () => {
 
     expect(res.status).toBe(200);
     const where = (prisma as any).receipt.findMany.mock.calls[0][0].where;
-    expect(where.AND).toContainEqual({ issuedById: 'benjamin-id' });
+    expect(where.AND).toContainEqual({
+      OR: [
+        { order: { attendantId: 'benjamin-id' } },
+        { data: { path: ["attendantId"], equals: 'benjamin-id' } },
+      ],
+    });
   });
 });

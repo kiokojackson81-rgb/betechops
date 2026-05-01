@@ -37,9 +37,9 @@ describe("onlineCommission helpers", () => {
     expect(computeMarketplaceCommission(2_000_000).amount).toBe(25_000);
   });
 
-  test("online POS ownership is issuer-only for Stephen and Benjamin", () => {
-    expect(resolveOnlinePosOwnershipMode("stephen@betech.co.ke")).toBe("issuerOnly");
-    expect(resolveOnlinePosOwnershipMode("benjamin@betech.co.ke")).toBe("issuerOnly");
+  test("online POS ownership is staff-only for Stephen and Benjamin", () => {
+    expect(resolveOnlinePosOwnershipMode("stephen@betech.co.ke")).toBe("staffOnly");
+    expect(resolveOnlinePosOwnershipMode("benjamin@betech.co.ke")).toBe("staffOnly");
   });
 
   test("withheld marketplace", () => {

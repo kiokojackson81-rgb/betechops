@@ -95,7 +95,7 @@ export function resolveDirectCommissionMode(email?: string | null): DirectCommis
 }
 
 export function resolveOnlinePosOwnershipMode(email?: string | null): OnlinePosOwnershipMode {
-  return "issuerOnly";
+  return "staffOnly";
 }
 
 export function progressiveAmount(totalSales: Money): Money {

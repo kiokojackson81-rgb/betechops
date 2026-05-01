@@ -162,7 +162,12 @@ async function computeProfit10DirectReceiptFallback(args: {
             { createdAt: { gte: args.start, lte: args.end } },
           ],
         },
-        { issuedById: args.userId },
+        {
+          OR: [
+            { order: { attendantId: args.userId } },
+            { data: { path: ["attendantId"], equals: args.userId } },
+          ],
+        },
       ],
     },
     select: {

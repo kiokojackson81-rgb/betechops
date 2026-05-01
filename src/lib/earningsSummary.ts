@@ -155,7 +155,12 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (usePosTotals) {
     const userIdForPos = commissionConfig.posTotalsMode === "GLOBAL" ? null : opts.userId;
-    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId: userIdForPos });
+    posSummary = await summarizePosReceiptsForPeriod({
+      start,
+      end,
+      userId: userIdForPos,
+      ownershipMode: userIdForPos ? "staffOnly" : undefined,
+    });
   }
   if (usePosTotals && posSummary) {
     totalSales = posSummary.totalSales;

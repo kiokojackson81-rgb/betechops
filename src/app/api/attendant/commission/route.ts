@@ -74,7 +74,7 @@ export async function GET() {
 
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (usePosTotals) {
-    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId });
+    posSummary = await summarizePosReceiptsForPeriod({ start, end, userId, ownershipMode: "staffOnly" });
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   }

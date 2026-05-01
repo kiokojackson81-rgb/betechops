@@ -773,18 +773,12 @@ export async function GET(req: Request) {
   const isOnlineCategory =
     user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
   const posOwnershipMode = resolveOnlinePosOwnershipMode(attendantEmail);
-  const strictIssuerOwnerOr: Prisma.ReceiptWhereInput[] = [
-    { issuedById: userId },
-    { data: { path: ["issuedById"], equals: userId } },
+  const staffOwnerOr: Prisma.ReceiptWhereInput[] = [
+    { order: { attendantId: userId } },
+    { data: { path: ["attendantId"], equals: userId } },
   ];
-  if (attendantEmail) {
-    strictIssuerOwnerOr.push(
-      { issuedBy: { email: attendantEmail } },
-      { data: { path: ["issuedByEmail"], equals: attendantEmail } },
-    );
-  }
   const broadOwnerOr: Prisma.ReceiptWhereInput[] = [
-    ...strictIssuerOwnerOr,
+    { issuedById: userId },
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
     { data: { path: ["servedBy"], equals: userId } },
@@ -802,7 +796,7 @@ export async function GET(req: Request) {
       { data: { path: ["servedByEmail"], equals: attendantEmail } },
     );
   }
-  const ownerOr = isOnlineCategory && posOwnershipMode === "issuerOnly" ? strictIssuerOwnerOr : broadOwnerOr;
+  const ownerOr = isOnlineCategory && posOwnershipMode === "staffOnly" ? staffOwnerOr : broadOwnerOr;
 
   const receipts = (await prisma.receipt.findMany({
     where: {

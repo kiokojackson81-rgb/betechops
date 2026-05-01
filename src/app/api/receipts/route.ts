@@ -45,7 +45,6 @@ export async function GET(req: NextRequest) {
   const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
-  const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const attendantFilterParam = (url.searchParams.get("attendantId") || "").trim() || undefined;
@@ -132,44 +131,20 @@ export async function GET(req: NextRequest) {
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
-    // For attendant-facing views, only show receipts the target user actually issued.
-    // This prevents other users creating receipts and attributing them to a staff
-    // (e.g., Stephen creating receipts credited to Benjamin) from appearing in
-    // the attendant's "mine" view.
-    if (role === "ATTENDANT" || isImpersonating || issuerOnly || explicitAttendant) {
-      and.push({ issuedById: attendantId });
-    } else {
-      const ownerOr: Prisma.ReceiptWhereInput[] = [];
-      ownerOr.push(
-        { issuedById: attendantId },
+    and.push({
+      OR: [
         { order: { attendantId } },
         { data: { path: ["attendantId"], equals: attendantId } },
-      );
-      if (issuerOnly) {
-        and.push({ issuedById: attendantId });
-      } else {
-        and.push({ OR: ownerOr });
-      }
-    }
+      ],
+    });
   }
   if (scope === "global" && attendantFilterParam) {
-    const ownerOr: Prisma.ReceiptWhereInput[] = [];
-    ownerOr.push(
-      { issuedById: attendantFilterParam },
-      { order: { attendantId: attendantFilterParam } },
-      { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
-      { data: { path: ["servedBy"], equals: attendantFilterParam } as any },
-      { data: { path: ["servedById"], equals: attendantFilterParam } as any },
-      { data: { path: ["issuedById"], equals: attendantFilterParam } as any },
-      { order: { metadata: { path: ["attendantId"], equals: attendantFilterParam } as any } },
-      { order: { metadata: { path: ["servedBy"], equals: attendantFilterParam } as any } },
-      { order: { metadata: { path: ["servedById"], equals: attendantFilterParam } as any } },
-    );
-    if (issuerOnly || attendantFilterParam) {
-      and.push({ issuedById: attendantFilterParam });
-    } else {
-      and.push({ OR: ownerOr });
-    }
+    and.push({
+      OR: [
+        { order: { attendantId: attendantFilterParam } },
+        { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
+      ],
+    });
   }
 
   // Optional filter: customerType=pod to show POD receipts only, with optional status filter
@@ -205,6 +180,7 @@ export async function GET(req: NextRequest) {
                 select: {
                   orderNumber: true,
                   customerName: true,
+                  attendantId: true,
                   attendant: { select: { id: true, name: true } },
                   status: true,
                   paymentStatus: true,
@@ -239,7 +215,11 @@ export async function GET(req: NextRequest) {
   };
   const issuerLockedPosReceipts =
     onlyPos && attendantFilterParam
-      ? posReceipts.filter((row: any) => row?.issuedById === attendantFilterParam || row?.issuedBy?.id === attendantFilterParam)
+      ? posReceipts.filter((row: any) => {
+          const dataAttendantId =
+            row?.data && typeof row.data === "object" ? String((row.data as any).attendantId ?? "").trim() : "";
+          return row?.order?.attendantId === attendantFilterParam || dataAttendantId === attendantFilterParam;
+        })
       : posReceipts;
   const filteredPosReceipts = paidOnly
     ? issuerLockedPosReceipts.filter((row: any) => {

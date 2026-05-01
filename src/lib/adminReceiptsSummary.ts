@@ -109,10 +109,9 @@ const buildSupportSearchOr = (q: string): Prisma.SupportReceiptWhereInput["OR"] 
 
 const jsonNullFilter: Prisma.JsonNullValueFilter = Prisma.JsonNull;
 
-const buildPosScopeCondition = (userId?: string | null): Prisma.ReceiptWhereInput[] => {
+const buildPosStaffOwnerCondition = (userId?: string | null): Prisma.ReceiptWhereInput[] => {
   if (!userId) return [];
   return [
-    { issuedById: userId },
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
   ];
@@ -190,23 +189,15 @@ async function computePosOnlyReceiptSummary({
   if (search) {
     (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: buildPosSearchOr(search) });
   }
-  if (scope === "mine") {
-    const ownerOr = buildPosScopeCondition(currentUserId);
-    if (ownerOr.length) {
-      (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
-    }
-  } else if (attendantId) {
-    const ownerOr = buildPosScopeCondition(attendantId);
-    if (ownerOr.length) {
-      (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
-    }
+  const ownerId = attendantId ?? (scope === "mine" ? currentUserId : null);
+  const ownerOr = buildPosStaffOwnerCondition(ownerId);
+  if (ownerOr.length) {
+    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
   }
 
   const supportDailyEntryWhere: Prisma.SupportDailyEntryWhereInput = {};
-  if (scope === "mine") {
-    supportDailyEntryWhere.submittedById = currentUserId ?? attendantId ?? undefined;
-  } else if (attendantId) {
-    supportDailyEntryWhere.submittedById = attendantId;
+  if (ownerId) {
+    supportDailyEntryWhere.submittedById = ownerId;
   }
 
   const [basePosReceipts, latePricedSupportReceipts] = await Promise.all([
@@ -601,16 +592,10 @@ export async function computeAdminReceiptSummary({
   if (search) {
     posWhere.OR = [...(posWhere.OR ?? []), ...buildPosSearchOr(search)];
   }
-  if (scope === "mine") {
-    const ownerOr = buildPosScopeCondition(currentUserId);
-    if (ownerOr.length) {
-      posWhere.AND = [...(posWhere.AND ?? []), { OR: ownerOr }];
-    }
-  } else if (attendantId) {
-    const ownerOr = buildPosScopeCondition(attendantId);
-    if (ownerOr.length) {
-      posWhere.AND = [...(posWhere.AND ?? []), { OR: ownerOr }];
-    }
+  const posOwnerId = attendantId ?? (scope === "mine" ? currentUserId : null);
+  const ownerOr = buildPosStaffOwnerCondition(posOwnerId);
+  if (ownerOr.length) {
+    posWhere.AND = [...(posWhere.AND ?? []), { OR: ownerOr }];
   }
   if (paymentMethod) {
     posWhere.data ??= {};
@@ -621,10 +606,8 @@ export async function computeAdminReceiptSummary({
   const dailyEntryWhere: any = {
     date: { gte: start, lte: end },
   };
-  if (scope === "mine") {
-    dailyEntryWhere.submittedById = currentUserId ?? attendantId ?? undefined;
-  } else if (attendantId) {
-    dailyEntryWhere.submittedById = attendantId;
+  if (posOwnerId) {
+    dailyEntryWhere.submittedById = posOwnerId;
   }
   if (paymentMethod) {
     dailyEntryWhere.paymentMethod = paymentMethod;
