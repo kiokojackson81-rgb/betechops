@@ -237,14 +237,18 @@ export async function GET(req: NextRequest) {
     if (podStatusOf(row) === "pending") return false;
     return isPodPaidReceipt(row) || isPosPaidReceipt(row);
   };
+  const issuerLockedPosReceipts =
+    onlyPos && attendantFilterParam
+      ? posReceipts.filter((row: any) => row?.issuedById === attendantFilterParam || row?.issuedBy?.id === attendantFilterParam)
+      : posReceipts;
   const filteredPosReceipts = paidOnly
-    ? posReceipts.filter((row: any) => {
+    ? issuerLockedPosReceipts.filter((row: any) => {
         if (isPodReceipt(row)) {
           return isPodSettledForSales(row);
         }
         return isPosPaidReceipt(row);
       })
-    : posReceipts;
+    : issuerLockedPosReceipts;
 
   const canonicalPosReceiptNumbers = Array.from(
     new Set(

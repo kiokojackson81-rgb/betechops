@@ -59,13 +59,7 @@ async function computeProfit10DirectProfitFallback(args: {
             { createdAt: { gte: args.start, lte: args.end } },
           ],
         },
-        {
-          OR: [
-            { issuedById: args.userId },
-            { order: { attendantId: args.userId } },
-            { data: { path: ["attendantId"], equals: args.userId } },
-          ],
-        },
+        { issuedById: args.userId },
       ],
     },
     select: {
