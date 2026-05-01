@@ -901,43 +901,48 @@ export async function GET(req: Request) {
 
   // Include marketing/support ledger receipts for attendants whose authoritative
   // totals are sourced from those ledgers (e.g. Brendah).
+  const includeLedgerRows = resolveDirectCommissionMode(attendantEmail) !== "PROFIT_10";
   const [marketingRows, supportRows] = await Promise.all([
-    prisma.marketingReceipt.findMany({
-      where: {
-        createdAt: { gte: period.start, lte: period.end },
-        dailyEntry: { submittedById: userId },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        receiptNumber: true,
-        receiptKey: true,
-        sellingTotal: true,
-        buyingTotal: true,
-        paymentMethod: true,
-        items: { select: { buyingPrice: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 1200,
-    }) as unknown as Promise<LedgerReceiptRow[]>,
-    prisma.supportReceipt.findMany({
-      where: {
-        createdAt: { gte: period.start, lte: period.end },
-        dailyEntry: { submittedById: userId },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        receiptNumber: true,
-        receiptKey: true,
-        sellingTotal: true,
-        buyingTotal: true,
-        paymentMethod: true,
-        items: { select: { buyingPrice: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 1200,
-    }) as unknown as Promise<LedgerReceiptRow[]>,
+    includeLedgerRows
+      ? (prisma.marketingReceipt.findMany({
+          where: {
+            createdAt: { gte: period.start, lte: period.end },
+            dailyEntry: { submittedById: userId },
+          },
+          select: {
+            id: true,
+            createdAt: true,
+            receiptNumber: true,
+            receiptKey: true,
+            sellingTotal: true,
+            buyingTotal: true,
+            paymentMethod: true,
+            items: { select: { buyingPrice: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1200,
+        }) as unknown as Promise<LedgerReceiptRow[]>)
+      : Promise.resolve([]),
+    includeLedgerRows
+      ? (prisma.supportReceipt.findMany({
+          where: {
+            createdAt: { gte: period.start, lte: period.end },
+            dailyEntry: { submittedById: userId },
+          },
+          select: {
+            id: true,
+            createdAt: true,
+            receiptNumber: true,
+            receiptKey: true,
+            sellingTotal: true,
+            buyingTotal: true,
+            paymentMethod: true,
+            items: { select: { buyingPrice: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1200,
+        }) as unknown as Promise<LedgerReceiptRow[]>)
+      : Promise.resolve([]),
   ]);
 
   const appendLedgerRows = (entries: LedgerReceiptRow[], status: string) => {
