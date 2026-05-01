@@ -16,6 +16,7 @@ import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { computeJenifferProratedCommission } from "@/lib/commission";
 import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 
 export const dynamic = "force-dynamic";
 
