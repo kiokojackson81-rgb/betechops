@@ -171,6 +171,13 @@ type StatsCardProps = {
   salesKes: number;
   items: number;
   commissionKes: number;
+  commissionBreakdown?: {
+    directSalesCommission?: number;
+    posProductCommission?: number;
+    productUploadCommission?: number;
+    otherCommission?: number;
+    totalCommission?: number;
+  } | null;
   currentSalesForTier: number;
   nextTarget: number | null;
 };
@@ -182,6 +189,7 @@ function StatsCard({
   salesKes,
   items,
   commissionKes,
+  commissionBreakdown = null,
   currentSalesForTier,
   nextTarget,
 }: StatsCardProps) {
@@ -230,9 +238,14 @@ function StatsCard({
           <p className="text-xs uppercase tracking-wide text-slate-400">
             Commission (KES)
           </p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-400">
-            {mask(commissionKes.toLocaleString())}
-          </p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(commissionKes.toLocaleString())}</p>
+          {commissionBreakdown ? (
+            <div className="mt-2 text-xs text-slate-300 space-y-1">
+              <div>POS Direct: KES {Number(commissionBreakdown.directSalesCommission ?? 0).toLocaleString()}</div>
+              <div>POS Product: KES {Number(commissionBreakdown.posProductCommission ?? 0).toLocaleString()}</div>
+              <div>Uploads: KES {Number(commissionBreakdown.productUploadCommission ?? 0).toLocaleString()}</div>
+            </div>
+          ) : null}
         </div>
 
         {/* Items */}
@@ -1312,6 +1325,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   const displayedItems = combinedPeriodItems;
   const displayedReceipts = combinedPeriodReceipts;
 
+  const serverCommissionBreakdown =
+    serverPeriodSummary?.aggregates?.commissionBreakdown ?? periodSummary?.aggregates?.commissionBreakdown ?? null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -1842,6 +1858,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               salesKes={displayedSalesKes}
               items={displayedItems}
               commissionKes={commissionKes}
+              commissionBreakdown={serverCommissionBreakdown}
               currentSalesForTier={combinedPeriodSales}
               nextTarget={nextTarget}
             />

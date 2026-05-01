@@ -195,78 +195,94 @@ export async function GET(req: Request) {
     mergedPaymentStats = mergedStats;
   }
 
+  // Use canonical attendant commission summary when available to ensure
+  // consistency across Quick Stats, PDF, daily report and earnings.
   let commission = 0;
-  if (usePosTotals && posSummary) {
-    if (isBrendah) {
-      commission = computeBrendahDirectCommission(posSummary.totalSales, posSummary.totalProfit).amount;
-    } else if (isJeniffer) {
-      const res = computeJenifferProratedCommission(
-        posSummary.totalSales,
-        tiers.map((t: any) => ({
-          minSales: Number(t.minSales),
-          maxSales: t.maxSales == null ? null : Number(t.maxSales),
-          payoutFlat: Number(t.payoutFlat),
-        })),
-      );
-      commission = Math.round(Number(res.commission ?? 0));
-    } else {
-      const fallbackPercent = posSummary.totalProfit > 0 ? 0.05 : 0;
-      commission = Math.round(computeSalesCommissionFromTiers(posSummary.totalSales, posSummary.totalProfit, tiers, fallbackPercent));
-    }
-  } else if (totalSales > 0) {
-    commission = isBrendah
-      ? computeBrendahDirectCommission(totalSales, totalProfit).amount
-      : computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
-  }
-
+  let canonicalCommission: any = null;
   try {
-    if (!usePosTotals && targetUserEmail && !isBrendah) {
-      const unpriced = await getUnpricedDailySalesForCurrentPeriod();
-      const hasUnpricedForUser = unpriced.some(
-        (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
-      );
-      if (hasUnpricedForUser) {
-        commission = 0;
-      }
-    }
-  } catch {
-    // ignore
+    canonicalCommission = await getAttendantCommissionSummary({ attendantId: targetUserId, start: argPeriod.start, end: argPeriod.end });
+  } catch (e) {
+    canonicalCommission = null;
   }
 
-  if (!usePosTotals && !isBrendah) {
+  if (canonicalCommission) {
+    commission = Number(canonicalCommission.totalCommission ?? 0);
+    totalSales = Number(canonicalCommission.totalSales ?? totalSales);
+    totalProfit = Number(canonicalCommission.totalProfit ?? totalProfit);
+    totalReceipts = Number(canonicalCommission.receiptsCount ?? totalReceipts);
+  } else {
+    if (usePosTotals && posSummary) {
+      if (isBrendah) {
+        commission = computeBrendahDirectCommission(posSummary.totalSales, posSummary.totalProfit).amount;
+      } else if (isJeniffer) {
+        const res = computeJenifferProratedCommission(
+          posSummary.totalSales,
+          tiers.map((t: any) => ({
+            minSales: Number(t.minSales),
+            maxSales: t.maxSales == null ? null : Number(t.maxSales),
+            payoutFlat: Number(t.payoutFlat),
+          })),
+        );
+        commission = Math.round(Number(res.commission ?? 0));
+      } else {
+        const fallbackPercent = posSummary.totalProfit > 0 ? 0.05 : 0;
+        commission = Math.round(computeSalesCommissionFromTiers(posSummary.totalSales, posSummary.totalProfit, tiers, fallbackPercent));
+      }
+    } else if (totalSales > 0) {
+      commission = isBrendah
+        ? computeBrendahDirectCommission(totalSales, totalProfit).amount
+        : computeSalesCommissionFromTiers(totalSales, totalProfit, tiers);
+    }
+
     try {
-      const ledger = await prisma.commissionLedger.findUnique({
-        where: {
-          userId_periodStart_periodEnd: {
-            userId: targetUserId,
-            periodStart: argPeriod.start,
-            periodEnd: argPeriod.end,
-          },
-        },
-      });
-
-      if (ledger) {
-        const persistedTotal = Number((ledger as any).commissionTotal ?? (ledger as any).commission_total ?? 0);
-        if (persistedTotal > 0) {
-          commission = persistedTotal;
-        } else {
-          const detail: any = ledger.detail ?? {};
-          const marketingCommission = Number(detail.marketing?.commission ?? 0);
-          const supportCommission = Number(detail.support?.commission ?? 0);
-          const combinedDetailCommission = marketingCommission + supportCommission;
-
-          if (combinedDetailCommission > 0) {
-            commission = combinedDetailCommission;
-          } else {
-            const ledgerNet = Number(
-              ledger.netCommission ?? ledger.grossCommission ?? commission,
-            );
-            commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
-          }
+      if (!usePosTotals && targetUserEmail && !isBrendah) {
+        const unpriced = await getUnpricedDailySalesForCurrentPeriod();
+        const hasUnpricedForUser = unpriced.some(
+          (s) => (s.attendantEmail ?? "").toLowerCase() === targetUserEmail,
+        );
+        if (hasUnpricedForUser) {
+          commission = 0;
         }
       }
     } catch {
       // ignore
+    }
+
+    if (!usePosTotals && !isBrendah) {
+      try {
+        const ledger = await prisma.commissionLedger.findUnique({
+          where: {
+            userId_periodStart_periodEnd: {
+              userId: targetUserId,
+              periodStart: argPeriod.start,
+              periodEnd: argPeriod.end,
+            },
+          },
+        });
+
+        if (ledger) {
+          const persistedTotal = Number((ledger as any).commissionTotal ?? (ledger as any).commission_total ?? 0);
+          if (persistedTotal > 0) {
+            commission = persistedTotal;
+          } else {
+            const detail: any = ledger.detail ?? {};
+            const marketingCommission = Number(detail.marketing?.commission ?? 0);
+            const supportCommission = Number(detail.support?.commission ?? 0);
+            const combinedDetailCommission = marketingCommission + supportCommission;
+
+            if (combinedDetailCommission > 0) {
+              commission = combinedDetailCommission;
+            } else {
+              const ledgerNet = Number(
+                ledger.netCommission ?? ledger.grossCommission ?? commission,
+              );
+              commission = Number.isFinite(ledgerNet) ? ledgerNet : commission;
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -297,6 +313,17 @@ export async function GET(req: Request) {
       totalReceiptRows: usePosTotals && posSummary ? posSummary.totalReceipts : marketingSummary?.rawRowCount ?? 0,
     },
   };
+
+  if (canonicalCommission) {
+    payload.aggregates.commissionBreakdown = {
+      directSalesCommission: Number(canonicalCommission.directSalesCommission ?? 0),
+      posProductCommission: Number(canonicalCommission.posProductCommission ?? 0),
+      productUploadCommission: Number((canonicalCommission.newProductCommission ?? 0) + (canonicalCommission.copiedCommission ?? 0) + (canonicalCommission.editedCommission ?? 0)),
+      otherCommission: Number(canonicalCommission.commissionTopUpTotal ?? 0),
+      totalCommission: Number(canonicalCommission.totalCommission ?? 0),
+      bands: canonicalCommission.breakdown ?? undefined,
+    };
+  }
 
   // When debug=1, attach identity proof and contribution audits
   if (debug) {
