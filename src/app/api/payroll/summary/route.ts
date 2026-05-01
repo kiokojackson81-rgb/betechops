@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
+import type { PayrollRow } from "@/app/admin/payroll/types";
+import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 // Compatibility route for older clients that call /api/payroll/summary
 // Behaviour:
@@ -17,6 +20,37 @@ function parsePeriod(url: URL) {
   return parseTradingPeriodKey(url.searchParams.get("periodKey") ?? undefined) ?? getTradingPeriodFor(new Date());
 }
 
+async function applyBrendahCanonicalCommission(row: PayrollRow, period: TradingPeriod): Promise<PayrollRow> {
+  if ((row.email ?? "").toLowerCase().trim() !== "brendah@betech.co.ke") return row;
+
+  const result = await getBrendahCommissionForPeriod(row.attendantId, period);
+  const totalEarnings =
+    Number(row.baseSalary ?? 0) +
+    Number(row.transportAllowance ?? 0) +
+    result.commission +
+    Number(row.bonusTotal ?? 0);
+
+  return {
+    ...row,
+    totalSales: result.totalSales,
+    totalProfit: result.totalProfit,
+    totalReceipts: result.totalReceipts,
+    commission: result.commission,
+    commissionGross: result.commission,
+    commissionDirect: result.commission,
+    commissionTotal: result.commission,
+    totalEarnings,
+    netPay: totalEarnings - Number(row.totalDeductions ?? 0),
+    commissionBreakdown: {
+      ...(row.commissionBreakdown && typeof row.commissionBreakdown === "object" ? row.commissionBreakdown : {}),
+      source: "brendah-canonical",
+      mode: result.commissionMode,
+      reason: result.commissionReason,
+      periodKey: result.periodKey,
+    },
+  };
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const session: any = await getServerSession(authOptions as any);
@@ -26,11 +60,12 @@ export async function GET(req: Request) {
   // allow query param `attendantId` for compatibility (admins may request others)
   const attendantIdParam = url.searchParams.get("attendantId");
 
-  let period;
+  let period: TradingPeriod;
   try {
     period = parsePeriod(url);
-  } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message ?? e) }, { status: 400 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   if (role === "ADMIN" || role === "SUPERVISOR") {
@@ -43,7 +78,7 @@ export async function GET(req: Request) {
       if (!attendant) {
         return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
       }
-      const row = await buildPayrollRow(attendant, period);
+      const row = await applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period);
       const payloadRow = { periodLabel: period.label, ...row };
       return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
     }
@@ -53,7 +88,11 @@ export async function GET(req: Request) {
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
     });
-    const builtRows = await Promise.all(attendants.map((attendant) => buildPayrollRow(attendant, period)));
+    const builtRows = await Promise.all(
+      attendants.map(async (attendant) =>
+        applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period),
+      ),
+    );
     const rows = builtRows.map((row) => ({ periodLabel: period.label, ...row }));
     return NextResponse.json({ periodLabel: period.label ?? "", rows });
   }
@@ -70,7 +109,7 @@ export async function GET(req: Request) {
   if (!attendant) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
-  const row = await buildPayrollRow(attendant, period);
+  const row = await applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period);
   const payloadRow = { periodLabel: period.label, ...row };
   return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
 }

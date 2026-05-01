@@ -15,7 +15,6 @@ import DailyReportReceiptsPanel from "./daily-report-receipts";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { withImpersonateId } from "@/lib/impersonation";
-import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import BrendahProductDesk from "@/components/BrendahProductDesk";
 
@@ -266,11 +265,10 @@ export default function DailyReportFinal() {
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
-  const [hasAuthoritativeCommission, setHasAuthoritativeCommission] = useState(false);
+  const [, setHasAuthoritativeCommission] = useState(false);
   const [downloadingPerformance, setDownloadingPerformance] = useState(false);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
-  const sessionStatus = sessionResponse?.status ?? "loading";
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
   const sessionEmail =
@@ -279,8 +277,6 @@ export default function DailyReportFinal() {
       : null;
   const effectiveAttendantEmail = resolvedAttendantEmail ?? (impersonateId ? null : sessionEmail);
   const isBrendahView = effectiveAttendantEmail === "brendah@betech.co.ke";
-  const canResolveCommissionOwner =
-    Boolean(resolvedAttendantEmail) || (!impersonateId && sessionStatus !== "loading");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -294,8 +290,6 @@ export default function DailyReportFinal() {
     if (impersonateId) params.set("impersonateId", impersonateId);
     return `/api/attendant/payslip?${params.toString()}`;
   }, [impersonateId, selectedPeriodKey]);
-  const summaryProfitForFallback = Number(earningsSummary?.totalProfit ?? 0);
-
   useEffect(() => {
     commissionSourceRef.current = "none";
     setHasAuthoritativeCommission(false);
@@ -532,10 +526,6 @@ export default function DailyReportFinal() {
           const summaryReceipts = Number(
             savedReceiptsSummary?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0,
           );
-          const fallbackBrendahCommission = computeBrendahDirectCommission(
-            summarySales,
-            summaryProfitForFallback,
-          ).amount;
           setServerQuickStats((prev) => ({
             totalSales: summarySales,
             totalItems: Number(data.aggregates?.totalItems ?? 0),
@@ -546,10 +536,7 @@ export default function DailyReportFinal() {
             walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
             totalReceipts: summaryReceipts,
           }));
-          if (fallbackBrendahCommission > 0 && commissionSourceRef.current !== "authoritative") {
-            commissionSourceRef.current = "fallback";
-            setCommissionForPeriod(Math.round(fallbackBrendahCommission));
-          }
+          return data;
         }
         const commission = data?.aggregates?.commission?.commission;
         if (
@@ -570,14 +557,11 @@ export default function DailyReportFinal() {
       }
     },
     [
-      canResolveCommissionOwner,
       date,
-      hasAuthoritativeCommission,
       impersonateId,
       impersonationReady,
       isBrendahView,
       selectedPeriodKey,
-      summaryProfitForFallback,
       fetchSavedReceiptsSummary,
     ],
   );

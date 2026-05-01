@@ -8,6 +8,7 @@ import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import type { Role } from "@prisma/client";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,9 @@ export async function GET(req: Request) {
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
   await getOrCreateCommissionPeriod(period.start);
 
-  const [summary, marketingSummary, supportSummary, ledger, payrollRow] = await Promise.all([
+  const isBrendahTarget = (targetUser.email ?? "").toLowerCase().trim() === "brendah@betech.co.ke";
+
+  const [summary, marketingSummary, supportSummary, ledger, payrollRow, brendahCommission] = await Promise.all([
     getEarningsSummaryForUser({ userId, asOf: period.start }),
     summarizeMarketingReportsForPeriod({ userId, userEmail: targetUser?.email ?? null, period }),
     getSupportPeriodAggregates({ userId, period }),
@@ -47,6 +50,7 @@ export async function GET(req: Request) {
       },
     }),
     buildPayrollRow(targetUser, period),
+    isBrendahTarget ? getBrendahCommissionForPeriod(userId, period) : Promise.resolve(null),
   ]);
   // Merge per-receipt maps from marketing and support to expose canonical keys
   // for clients (dedupe helpers). POS totals and commission come from
@@ -143,6 +147,30 @@ export async function GET(req: Request) {
         }
       : null,
   };
+
+  if (isBrendahTarget && brendahCommission) {
+    payload.totalSales = brendahCommission.totalSales;
+    payload.totalProfit = brendahCommission.totalProfit;
+    payload.totalReceipts = brendahCommission.totalReceipts;
+    payload.salesCommission = brendahCommission.commission;
+    payload.commissionDirect = brendahCommission.commission;
+    payload.grossCommission = brendahCommission.commission;
+    payload.commission = brendahCommission.commission;
+    payload.totalEarnings =
+      Number(payload.baseSalary ?? 0) +
+      Number(payload.transportAllowance ?? 0) +
+      brendahCommission.commission +
+      Number(payload.bonusTotal ?? 0) +
+      Number(payload.commissionTopUpTotal ?? 0);
+    payload.netPay = payload.totalEarnings - Number(payload.totalDeductions ?? 0);
+    Object.assign(payload, {
+      commissionTotal: brendahCommission.commission,
+      commissionMode: brendahCommission.commissionMode,
+      commissionReason: brendahCommission.commissionReason,
+      commissionPeriodKey: brendahCommission.periodKey,
+      commissionSource: "brendah-canonical",
+    });
+  }
 
   return NextResponse.json(composeIdentityResponse(meta, payload));
 }

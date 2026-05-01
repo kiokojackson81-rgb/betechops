@@ -5,8 +5,42 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
+import type { PayrollRow } from "@/app/admin/payroll/types";
+import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
+
+async function applyBrendahCanonicalCommission(row: PayrollRow, period: TradingPeriod): Promise<PayrollRow> {
+  if ((row.email ?? "").toLowerCase().trim() !== "brendah@betech.co.ke") return row;
+
+  const result = await getBrendahCommissionForPeriod(row.attendantId, period);
+  const totalEarnings =
+    Number(row.baseSalary ?? 0) +
+    Number(row.transportAllowance ?? 0) +
+    result.commission +
+    Number(row.bonusTotal ?? 0);
+
+  return {
+    ...row,
+    totalSales: result.totalSales,
+    totalProfit: result.totalProfit,
+    totalReceipts: result.totalReceipts,
+    commission: result.commission,
+    commissionGross: result.commission,
+    commissionDirect: result.commission,
+    commissionTotal: result.commission,
+    totalEarnings,
+    netPay: totalEarnings - Number(row.totalDeductions ?? 0),
+    commissionBreakdown: {
+      ...(row.commissionBreakdown && typeof row.commissionBreakdown === "object" ? row.commissionBreakdown : {}),
+      source: "brendah-canonical",
+      mode: result.commissionMode,
+      reason: result.commissionReason,
+      periodKey: result.periodKey,
+    },
+  };
+}
 
 export async function GET(req: Request) {
   const auth = await requireRole("ADMIN");
@@ -21,7 +55,7 @@ export async function GET(req: Request) {
   const periodKeyParam = url.searchParams.get("periodKey");
   const attendantIdParam = String(url.searchParams.get("attendantId") ?? "").trim();
 
-  let period;
+  let period: TradingPeriod;
   if (periodKeyParam) {
     period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   } else if (startParam && endParam) {
@@ -42,8 +76,12 @@ export async function GET(req: Request) {
     orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
     select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
   });
-  const rows = await Promise.all(attendants.map((attendant) => buildPayrollRow(attendant, period as any)));
+  const rows = await Promise.all(
+    attendants.map(async (attendant) =>
+      applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period),
+    ),
+  );
 
-  const data = { periodLabel: (period as any).label ?? "", rows };
+  const data = { periodLabel: period.label ?? "", rows };
   return NextResponse.json(composeIdentityResponse(meta, data));
 }
