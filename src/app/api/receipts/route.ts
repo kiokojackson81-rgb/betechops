@@ -57,9 +57,14 @@ export async function GET(req: NextRequest) {
   // Allow public callers to specify an attendantId via querystring so
   // the receipts listing can be viewed without a session (public page).
   // Prefer resolved session user id when present, otherwise use explicit param.
-  const explicitAttendant = url.searchParams.get("attendantId") || undefined;
+  const explicitAttendant = attendantFilterParam;
   let attendantId = identity.resolvedUserId ?? undefined;
-  if (!attendantId && explicitAttendant) {
+  const role = identity.actorRole;
+  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
+  if (explicitAttendant && attendantId && explicitAttendant !== attendantId && !canGlobal) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if ((!attendantId || canGlobal) && explicitAttendant) {
     attendantId = explicitAttendant;
   }
   if (!attendantId) {
@@ -118,28 +123,21 @@ export async function GET(req: NextRequest) {
   if (searchOr.length) and.push({ OR: searchOr });
 
   // Scope decision (strict)
-  const role = identity.actorRole;
   const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
-  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  const allowGlobalScope = wantsGlobal && canGlobal;
+  const allowGlobalScope = canGlobal && (wantsGlobal || Boolean(attendantFilterParam && attendantFilterParam !== identity.resolvedUserId));
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
-    // For attendants (non-admins), only show receipts they actually issued.
+    // For attendant-facing views, only show receipts the target user actually issued.
     // This prevents other users creating receipts and attributing them to a staff
     // (e.g., Stephen creating receipts credited to Benjamin) from appearing in
-    // the attendant's "mine" view. Admins and supervisors keep the broader
-    // owner OR logic.
-    if (role === "ATTENDANT" && !isImpersonating) {
-      if (issuerOnly) {
-        and.push({ issuedById: attendantId });
-      } else {
-        and.push({ issuedById: attendantId });
-      }
+    // the attendant's "mine" view.
+    if (role === "ATTENDANT" || isImpersonating || issuerOnly || explicitAttendant) {
+      and.push({ issuedById: attendantId });
     } else {
       const ownerOr: Prisma.ReceiptWhereInput[] = [];
       ownerOr.push(
@@ -167,7 +165,7 @@ export async function GET(req: NextRequest) {
       { order: { metadata: { path: ["servedBy"], equals: attendantFilterParam } as any } },
       { order: { metadata: { path: ["servedById"], equals: attendantFilterParam } as any } },
     );
-    if (issuerOnly) {
+    if (issuerOnly || attendantFilterParam) {
       and.push({ issuedById: attendantFilterParam });
     } else {
       and.push({ OR: ownerOr });

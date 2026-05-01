@@ -4,6 +4,7 @@ import {
   computeMarketplaceCommission,
   computeOnlinePeriodCommission,
   progressiveAmount,
+  resolveOnlinePosOwnershipMode,
 } from "@/lib/onlineCommission";
 
 describe("onlineCommission helpers", () => {
@@ -34,6 +35,11 @@ describe("onlineCommission helpers", () => {
     expect(computeMarketplaceCommission(400_000).amount).toBe(0);
     expect(computeMarketplaceCommission(1_000_000).amount).toBe(10_000);
     expect(computeMarketplaceCommission(2_000_000).amount).toBe(25_000);
+  });
+
+  test("online POS ownership is issuer-only for Stephen and Benjamin", () => {
+    expect(resolveOnlinePosOwnershipMode("stephen@betech.co.ke")).toBe("issuerOnly");
+    expect(resolveOnlinePosOwnershipMode("benjamin@betech.co.ke")).toBe("issuerOnly");
   });
 
   test("withheld marketplace", () => {

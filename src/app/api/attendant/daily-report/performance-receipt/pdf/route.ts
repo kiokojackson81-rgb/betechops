@@ -772,13 +772,23 @@ export async function GET(req: Request) {
   const attendantEmail = user?.email ?? null;
   const isOnlineCategory =
     user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
-  const ownerOr: Prisma.ReceiptWhereInput[] = [
+  const posOwnershipMode = resolveOnlinePosOwnershipMode(attendantEmail);
+  const strictIssuerOwnerOr: Prisma.ReceiptWhereInput[] = [
     { issuedById: userId },
+    { data: { path: ["issuedById"], equals: userId } },
+  ];
+  if (attendantEmail) {
+    strictIssuerOwnerOr.push(
+      { issuedBy: { email: attendantEmail } },
+      { data: { path: ["issuedByEmail"], equals: attendantEmail } },
+    );
+  }
+  const broadOwnerOr: Prisma.ReceiptWhereInput[] = [
+    ...strictIssuerOwnerOr,
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
     { data: { path: ["servedBy"], equals: userId } },
     { data: { path: ["servedById"], equals: userId } },
-    { data: { path: ["issuedById"], equals: userId } },
     { order: { metadata: { path: ["attendantId"], equals: userId } as any } },
     { order: { metadata: { path: ["servedBy"], equals: userId } as any } },
     { order: { metadata: { path: ["servedById"], equals: userId } as any } },
@@ -786,14 +796,13 @@ export async function GET(req: Request) {
     { data: { path: ["issuedByName"], equals: attendantName } },
   ];
   if (attendantEmail) {
-    ownerOr.push(
-      { issuedBy: { email: attendantEmail } },
+    broadOwnerOr.push(
       { order: { attendant: { email: attendantEmail } } },
       { data: { path: ["attendantEmail"], equals: attendantEmail } },
       { data: { path: ["servedByEmail"], equals: attendantEmail } },
-      { data: { path: ["issuedByEmail"], equals: attendantEmail } },
     );
   }
+  const ownerOr = isOnlineCategory && posOwnershipMode === "issuerOnly" ? strictIssuerOwnerOr : broadOwnerOr;
 
   const receipts = (await prisma.receipt.findMany({
     where: {
@@ -1041,7 +1050,7 @@ export async function GET(req: Request) {
           start: period.start,
           end: period.end,
           userId,
-          ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
+          ownershipMode: posOwnershipMode,
           supportPricingScope: "any",
           profitRecognitionMode: "salesDate",
         })
