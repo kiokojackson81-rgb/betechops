@@ -53,7 +53,16 @@ export async function GET(req: NextRequest) {
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
   const identity = await resolveTargetUserId(req);
   const meta = identity;
-  const attendantId = identity.resolvedUserId;
+  const explicitAttendant = attendantFilterParam;
+  let attendantId = identity.resolvedUserId ?? undefined;
+  const role = identity.actorRole;
+  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
+  if (explicitAttendant && attendantId && explicitAttendant !== attendantId && !canGlobal) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if ((!attendantId || canGlobal) && explicitAttendant) {
+    attendantId = explicitAttendant;
+  }
   if (!attendantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -110,27 +119,24 @@ export async function GET(req: NextRequest) {
   if (searchOr.length) and.push({ OR: searchOr });
 
   // Scope decision (strict)
-  const role = identity.actorRole;
   const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
-  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  const allowGlobalScope = wantsGlobal && canGlobal;
+  const allowGlobalScope = canGlobal && (wantsGlobal || Boolean(attendantFilterParam && attendantFilterParam !== identity.resolvedUserId));
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
-    const ownerOr: Prisma.ReceiptWhereInput[] = [];
-    ownerOr.push(
-      { issuedById: attendantId },
-      { order: { attendantId } },
-      { data: { path: ["attendantId"], equals: attendantId } },
-    );
-    // If issuerOnly requested, restrict to issuedById only
-    if (issuerOnly) {
+    if (role === "ATTENDANT" || isImpersonating || issuerOnly || explicitAttendant) {
       and.push({ issuedById: attendantId });
     } else {
+      const ownerOr: Prisma.ReceiptWhereInput[] = [];
+      ownerOr.push(
+        { issuedById: attendantId },
+        { order: { attendantId } },
+        { data: { path: ["attendantId"], equals: attendantId } },
+      );
       and.push({ OR: ownerOr });
     }
   }
@@ -147,7 +153,7 @@ export async function GET(req: NextRequest) {
       { order: { metadata: { path: ["servedBy"], equals: attendantFilterParam } as any } },
       { order: { metadata: { path: ["servedById"], equals: attendantFilterParam } as any } },
     );
-    if (issuerOnly) {
+    if (issuerOnly || attendantFilterParam) {
       and.push({ issuedById: attendantFilterParam });
     } else {
       and.push({ OR: ownerOr });

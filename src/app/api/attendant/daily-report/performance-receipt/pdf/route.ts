@@ -9,6 +9,7 @@ import { resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
+import { resolveDirectCommissionMode } from "@/lib/onlineCommission";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -258,11 +259,17 @@ export async function GET(req: Request) {
     resolveLetterheadDataUri(),
   ]);
 
-  const ownerOr = [
+  const attendantEmail = user?.email ?? null;
+  const ownerOr: Prisma.ReceiptWhereInput[] = [
     { issuedById: userId },
-    { order: { attendantId: userId } },
-    { data: { path: ["attendantId"], equals: userId } },
+    { data: { path: ["issuedById"], equals: userId } },
   ];
+  if (attendantEmail) {
+    ownerOr.push(
+      { issuedBy: { email: attendantEmail } },
+      { data: { path: ["issuedByEmail"], equals: attendantEmail } },
+    );
+  }
 
   const receipts = (await prisma.receipt.findMany({
     where: {
@@ -334,39 +341,44 @@ export async function GET(req: Request) {
 
   // Include marketing/support ledger receipts for attendants whose authoritative
   // totals are sourced from those ledgers (e.g. Brendah).
+  const includeLedgerRows = resolveDirectCommissionMode(attendantEmail) !== "PROFIT_10";
   const [marketingRows, supportRows] = await Promise.all([
-    prisma.marketingReceipt.findMany({
-      where: {
-        createdAt: { gte: period.start, lte: period.end },
-        dailyEntry: { submittedById: userId },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        receiptNumber: true,
-        receiptKey: true,
-        sellingTotal: true,
-        paymentMethod: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 1200,
-    }) as unknown as Promise<LedgerReceiptRow[]>,
-    prisma.supportReceipt.findMany({
-      where: {
-        createdAt: { gte: period.start, lte: period.end },
-        dailyEntry: { submittedById: userId },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        receiptNumber: true,
-        receiptKey: true,
-        sellingTotal: true,
-        paymentMethod: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 1200,
-    }) as unknown as Promise<LedgerReceiptRow[]>,
+    includeLedgerRows
+      ? (prisma.marketingReceipt.findMany({
+          where: {
+            createdAt: { gte: period.start, lte: period.end },
+            dailyEntry: { submittedById: userId },
+          },
+          select: {
+            id: true,
+            createdAt: true,
+            receiptNumber: true,
+            receiptKey: true,
+            sellingTotal: true,
+            paymentMethod: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1200,
+        }) as unknown as Promise<LedgerReceiptRow[]>)
+      : Promise.resolve([]),
+    includeLedgerRows
+      ? (prisma.supportReceipt.findMany({
+          where: {
+            createdAt: { gte: period.start, lte: period.end },
+            dailyEntry: { submittedById: userId },
+          },
+          select: {
+            id: true,
+            createdAt: true,
+            receiptNumber: true,
+            receiptKey: true,
+            sellingTotal: true,
+            paymentMethod: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1200,
+        }) as unknown as Promise<LedgerReceiptRow[]>)
+      : Promise.resolve([]),
   ]);
 
   const appendLedgerRows = (entries: LedgerReceiptRow[], status: string) => {
@@ -430,6 +442,9 @@ export async function GET(req: Request) {
     }
   }
 
+  const printedSales = rows.reduce((sum, row) => sum + Math.max(0, Number(row.amount ?? 0)), 0);
+  const printedReceipts = rows.filter((row) => Math.max(0, Number(row.amount ?? 0)) > 0).length;
+
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
     attendantEmail: user?.email ?? "",
@@ -437,9 +452,9 @@ export async function GET(req: Request) {
     periodLabel: period.label,
     periodStartIso: period.start.toISOString().slice(0, 10),
     periodEndIso: period.end.toISOString().slice(0, 10),
-    totalSales: Number(earnings.totalSales ?? 0),
-    totalReceipts: Number(earnings.totalReceipts ?? 0),
-    totalItems: Number(earnings.totalItems ?? 0),
+    totalSales: printedSales,
+    totalReceipts: printedReceipts,
+    totalItems: printedReceipts,
     commission: Number((earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(reportAgg._sum.productsEdited ?? 0),

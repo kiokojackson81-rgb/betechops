@@ -25,4 +25,17 @@ describe('GET /api/receipts', () => {
     expect(Array.isArray(body.receipts)).toBe(true);
     expect(body.receipts[0].orderRef).toBe('ORD1');
   });
+
+  it('uses explicit attendantId as an issuer filter for admin-style receipt links', async () => {
+    (prisma as any).receipt.findMany.mockResolvedValue([]);
+    (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
+
+    const req = new Request('http://localhost/api/receipts?attendantId=benjamin-id&start=2026-04-25&end=2026-05-24');
+    const res = await GET(req as any);
+
+    expect(res.status).toBe(200);
+    const where = (prisma as any).receipt.findMany.mock.calls[0][0].where;
+    expect(where.AND).toContainEqual({ issuedById: 'benjamin-id' });
+  });
 });
