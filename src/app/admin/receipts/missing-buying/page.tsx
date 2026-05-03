@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
+import AdminPricingPanel from "@/app/admin/marketing-report/AdminPricingPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,12 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
 
   if (!attendantId) {
     return (
-      <div className="p-6">
+      <div className="space-y-6 p-6">
         <h1 className="text-xl font-semibold">Missing buying prices</h1>
-        <p className="text-sm text-slate-500">Please provide an `attendantId` query param to filter results.</p>
+        <p className="text-sm text-slate-500">
+          Price variable-cost POS receipts and other pending support sales. Sales are counted immediately; profit and commissions are recognized after pricing.
+        </p>
+        <AdminPricingPanel />
       </div>
     );
   }

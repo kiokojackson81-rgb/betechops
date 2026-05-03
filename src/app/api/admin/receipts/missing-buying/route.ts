@@ -20,7 +20,6 @@ export async function GET(req: Request) {
   }
 
   const attendantId = url.searchParams.get("attendantId");
-  if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   // Use current trading period bounds to scope receipts
   const period = getTradingPeriodFor(new Date());
@@ -29,7 +28,7 @@ export async function GET(req: Request) {
 
   // Find receipts (order items) for attendant where buying price is missing or zero
   // and that fall within the trading period.
-  const receipts = await prisma.order.findMany({
+  const receipts = attendantId ? await prisma.order.findMany({
     where: {
       attendantId: attendantId,
       createdAt: { gte: start, lte: end },
@@ -50,6 +49,25 @@ export async function GET(req: Request) {
         },
       },
     },
+  }) : [];
+
+  const supportReceipts = await prisma.supportReceipt.findMany({
+    where: {
+      dailyEntry: {
+        ...(attendantId ? { submittedById: attendantId } : {}),
+        date: { gte: start, lte: end },
+      },
+      items: {
+        some: {
+          OR: [{ buyingPrice: null }, { buyingPrice: 0 }],
+        },
+      },
+    },
+    include: {
+      dailyEntry: { include: { submittedBy: { select: { id: true, name: true, email: true } } } },
+      items: true,
+    },
+    orderBy: { createdAt: "desc" },
   });
 
   // Filter receipts that have at least one orderItem lacking a buyingPrice
@@ -66,5 +84,16 @@ export async function GET(req: Request) {
     }))
     .filter((r) => (r.items?.length ?? 0) > 0);
 
-  return NextResponse.json({ period: period.label ?? "", attendantId, missing });
+  const supportMissing = supportReceipts.map((receipt) => ({
+    id: receipt.id,
+    source: "support",
+    receiptNumber: receipt.receiptNumber,
+    createdAt: receipt.createdAt,
+    sellingTotal: receipt.sellingTotal,
+    attendantId: receipt.dailyEntry?.submittedById ?? null,
+    attendantName: receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedBy?.email ?? null,
+    items: receipt.items.filter((item) => Number(item.buyingPrice ?? 0) <= 0),
+  }));
+
+  return NextResponse.json({ period: period.label ?? "", attendantId, missing, supportMissing });
 }

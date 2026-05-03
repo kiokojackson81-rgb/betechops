@@ -16,7 +16,7 @@ const POLL_INTERVAL_MS = 60_000;
 
 const sourceLabels: Record<UnpricedSale["source"], string> = {
   "daily-sale": "Daily report",
-  support: "Support entry",
+  support: "Support / POS variable cost",
 };
 
 const formatKES = (value: number) => `KES ${Math.round(value).toLocaleString("en-KE")}`;

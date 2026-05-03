@@ -18,6 +18,7 @@ type ItemRow = {
   productId?: string;
   sku?: string;
   buyingPrice?: number | "";
+  variableCost?: boolean;
   commissionEnabled?: boolean;
   commissionAmount?: number;
   commissionRequiresApproval?: boolean;
@@ -30,6 +31,7 @@ type CatalogProduct = {
   category?: string | null;
   sellingPrice: number;
   lastBuyingPrice?: number | null;
+  variableCost?: boolean;
   defaultWarranty?: string | null;
   isActive?: boolean;
   commissionEnabled?: boolean;
@@ -199,6 +201,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           productId: undefined,
           sku: undefined,
           buyingPrice: "",
+          variableCost: undefined,
           commissionEnabled: undefined,
           commissionAmount: undefined,
           commissionRequiresApproval: undefined,
@@ -244,8 +247,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       unitPrice: Number(product.sellingPrice || 0),
       productId: product.id,
       sku: product.sku,
+      variableCost: Boolean(product.variableCost),
       buyingPrice:
-        product.lastBuyingPrice == null || Number(product.lastBuyingPrice) <= 0
+        product.variableCost || product.lastBuyingPrice == null || Number(product.lastBuyingPrice) <= 0
           ? ""
           : Number(product.lastBuyingPrice),
       commissionEnabled: Boolean(product.commissionEnabled),
@@ -579,7 +583,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       warranty: showWarranty ? it.warranty || null : null,
       productId: it.productId || null,
       sku: it.sku || null,
-      buyingPrice: Number(it.buyingPrice || 0),
+      buyingPrice: it.variableCost ? null : Number(it.buyingPrice || 0),
+      variableCost: Boolean(it.variableCost),
       commissionEnabled: Boolean(it.commissionEnabled),
       commissionAmount: Number(it.commissionAmount || 0),
       commissionRequiresApproval: Boolean(it.commissionRequiresApproval),
@@ -840,6 +845,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                           Catalog
                         </span>
                         <span>{it.sku || "SKU"}</span>
+                        {it.variableCost ? (
+                          <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-100">
+                            Variable cost
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {it.variableCost ? (
+                      <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                        Profit and commission will be calculated after admin pricing.
                       </div>
                     ) : null}
                     {duplicateMatches.length ? (
@@ -1021,6 +1036,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         </div>
                         <div className="text-xs text-slate-400">
                           Selling: KES {Number(product.sellingPrice || 0).toLocaleString()}
+                          {product.variableCost ? " · Priced later" : ""}
                         </div>
                       </div>
                       {similarityScore >= 0.5 ? (

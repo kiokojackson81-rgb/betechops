@@ -40,6 +40,7 @@ export async function GET(req: Request) {
       sellingPrice: true,
       lastBuyingPrice: true,
       defaultWarranty: true,
+      variableCost: true,
       isActive: true,
       commissionEnabled: true,
       commissionAmount: true,

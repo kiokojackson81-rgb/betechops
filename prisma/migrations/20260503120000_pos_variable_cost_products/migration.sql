@@ -1,0 +1,5 @@
+ALTER TABLE "Product"
+  ADD COLUMN IF NOT EXISTS "variableCost" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "SupportReceiptItem"
+  ALTER COLUMN "buyingPrice" DROP NOT NULL;

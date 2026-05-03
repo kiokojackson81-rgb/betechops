@@ -88,7 +88,10 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         },
         items: {
           some: {
-            buyingPrice: 0,
+            OR: [
+              { buyingPrice: null },
+              { buyingPrice: 0 },
+            ],
           },
         },
       },

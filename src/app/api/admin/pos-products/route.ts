@@ -13,10 +13,19 @@ const productSchema = z.object({
   sellingPrice: z.coerce.number().min(0),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   defaultWarranty: z.string().trim().max(50).nullable().optional(),
+  variableCost: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
   commissionEnabled: z.boolean().optional().default(false),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional().default(false),
+}).superRefine((data, ctx) => {
+  if (!data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["lastBuyingPrice"],
+      message: "Buying price is required for fixed-cost products",
+    });
+  }
 });
 
 function slugifySku(input: string) {
@@ -90,8 +99,9 @@ export async function POST(req: Request) {
       name: data.name,
       category: data.category,
       sellingPrice: data.sellingPrice,
-      lastBuyingPrice: data.lastBuyingPrice ?? null,
+      lastBuyingPrice: data.variableCost ? null : data.lastBuyingPrice ?? null,
       defaultWarranty: data.defaultWarranty?.trim() || null,
+      variableCost: data.variableCost,
       isActive: data.isActive,
       commissionEnabled: data.commissionEnabled,
       commissionAmount: data.commissionEnabled ? data.commissionAmount ?? 0 : null,

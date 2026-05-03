@@ -636,7 +636,10 @@ export async function POST(req: NextRequest) {
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
         const itemSerial = typeof it.serial === "string" ? it.serial.trim() || null : null;
         const itemWarranty = typeof it.warranty === "string" ? it.warranty.trim() || null : null;
-        const unitBuyingPrice = parseNumber(it.costPrice ?? it.buyingPrice ?? product.lastBuyingPrice ?? 0);
+        const variableCost = Boolean((product as any).variableCost);
+        const unitBuyingPrice = variableCost
+          ? null
+          : parseNumber(it.costPrice ?? it.buyingPrice ?? product.lastBuyingPrice ?? 0);
         const commissionEnabled = Boolean((product as any).commissionEnabled);
         const commissionAmount = commissionEnabled ? parseNumber((product as any).commissionAmount ?? 0) : 0;
         const commissionRequiresApproval = Boolean((product as any).commissionRequiresApproval);
@@ -649,6 +652,7 @@ export async function POST(req: NextRequest) {
           warranty: itemWarranty,
           title,
           costPrice: unitBuyingPrice,
+          variableCost,
           commissionEnabled,
           commissionAmount,
           commissionRequiresApproval,
@@ -693,7 +697,9 @@ export async function POST(req: NextRequest) {
 
       const createdOrderItems: any[] = [];
       let totalBuying = 0;
+      let hasVariableCostItems = false;
       for (const it of createdItems) {
+        if (it.variableCost) hasVariableCostItems = true;
         // Ensure numeric and integer types are strictly coerced for Prisma
         const qty = Math.max(1, Math.trunc(Number(it.quantity ?? 1)));
         const rawUnitPriceInput = it.unitPrice ?? '';
@@ -776,7 +782,7 @@ export async function POST(req: NextRequest) {
           }
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
-          const unitCost = Number(it.costPrice || 0);
+          const unitCost = it.variableCost ? 0 : Number(it.costPrice || 0);
           totalBuying += unitCost * qty;
           if (unitCost > 0 && (tx as any).orderCost) {
             try {
@@ -854,25 +860,28 @@ export async function POST(req: NextRequest) {
           tax: taxAmount,
           total,
           balance,
-          buyingTotal: totalBuying,
-          profit: totalBuying > 0 ? total - totalBuying : 0,
+          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+          needsPricing: hasVariableCostItems,
         },
         data: {
           ...payload,
           orderRef: serial,
+          needsPricing: hasVariableCostItems,
           totals: {
             subtotal,
             tax: taxAmount,
             total,
             balance,
-            buyingTotal: totalBuying,
-            profit: totalBuying > 0 ? total - totalBuying : 0,
+            buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+            profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+            needsPricing: hasVariableCostItems,
           },
           attendantId,
           issuedById,
           items,
-          buyingTotal: totalBuying,
-          profit: totalBuying > 0 ? total - totalBuying : 0,
+          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
           ...(isPodDelivery
             ? {
                 podDelivery: {
@@ -980,9 +989,16 @@ export async function POST(req: NextRequest) {
 
             const supportReceiptItems = createdItems.map((it) => ({
               productName: String(it.title || "Item").trim(),
-              buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
+              buyingPrice: it.variableCost
+                ? null
+                : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
             }));
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
+            const supportHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
+            const supportReceiptFullyPriced =
+              !supportHasVariableCostItem ||
+              (supportReceiptItems.length > 0 &&
+                supportReceiptItems.every((item) => Number(item.buyingPrice ?? 0) > 0));
             const supportSellingTotal = Math.round(Number(total) || 0);
 
             const normalizedSerial = canonicalReceiptNumber(serial);
@@ -1005,7 +1021,7 @@ export async function POST(req: NextRequest) {
             ).id;
 
             let deltaSales = supportSellingTotal;
-            let deltaProfit = supportSellingTotal - supportReceiptBuyingTotal;
+            let deltaProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
 
             if (receiptKey) {
               const prev = await tx.supportReceipt.findUnique({
@@ -1017,7 +1033,9 @@ export async function POST(req: NextRequest) {
               const prevBuying = Number(prev?.buyingTotal ?? 0);
 
               deltaSales = supportSellingTotal - prevSelling;
-              deltaProfit = (supportSellingTotal - supportReceiptBuyingTotal) - (prevSelling - prevBuying);
+              const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
+              const nextProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
+              deltaProfit = nextProfit - prevProfit;
 
               await tx.supportReceipt.upsert({
                 where: { receiptKey },
@@ -1077,9 +1095,16 @@ export async function POST(req: NextRequest) {
           const receiptSellingTotal = Math.round(Number(total) || 0);
           const receiptItemsPayload = createdItems.map((it) => ({
             productName: String(it.title || "Item").trim(),
-            buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
+            buyingPrice: it.variableCost
+              ? 0
+              : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
           }));
           const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
+          const receiptHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
+          const receiptFullyPriced =
+            !receiptHasVariableCostItem ||
+            (receiptItemsPayload.length > 0 &&
+              receiptItemsPayload.every((item) => Number(item.buyingPrice ?? 0) > 0));
           const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
           const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
@@ -1105,7 +1130,7 @@ export async function POST(req: NextRequest) {
           }
 
           let deltaSales = receiptSellingTotal;
-          let deltaProfit = receiptSellingTotal - receiptBuyingTotal;
+          let deltaProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
 
           if (receiptKey) {
             const prev = await tx.marketingReceipt.findUnique({
@@ -1117,7 +1142,9 @@ export async function POST(req: NextRequest) {
             const prevBuying = Number(prev?.buyingTotal ?? 0);
 
             deltaSales = receiptSellingTotal - prevSelling;
-            deltaProfit = (receiptSellingTotal - receiptBuyingTotal) - (prevSelling - prevBuying);
+            const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
+            const nextProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
+            deltaProfit = nextProfit - prevProfit;
 
             await tx.marketingReceipt.upsert({
               where: { receiptKey },

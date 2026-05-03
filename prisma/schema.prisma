@@ -425,7 +425,7 @@ model SupportReceiptItem {
   id          String         @id @default(cuid())
   receiptId   String
   productName String
-  buyingPrice Int
+  buyingPrice Int?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   pricedAt    DateTime?      @db.Timestamptz(6)
@@ -653,6 +653,7 @@ model Product {
   sellingPrice    Float
   lastBuyingPrice Float?
   defaultWarranty String?
+  variableCost    Boolean     @default(false)
   commissionEnabled Boolean   @default(false)
   commissionAmount Decimal?   @db.Decimal(12, 2)
   commissionRequiresApproval Boolean @default(false)

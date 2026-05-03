@@ -12,6 +12,7 @@ type PosProduct = {
   sellingPrice: number;
   lastBuyingPrice?: number | null;
   defaultWarranty?: string | null;
+  variableCost?: boolean;
   isActive: boolean;
   commissionEnabled: boolean;
   commissionAmount?: number | string | null;
@@ -38,6 +39,7 @@ type ProductDraft = {
   sellingPrice: string;
   lastBuyingPrice: string;
   defaultWarranty: string;
+  variableCost: boolean;
   isActive: boolean;
   commissionEnabled: boolean;
   commissionAmount: string;
@@ -51,6 +53,7 @@ const emptyDraft: ProductDraft = {
   sellingPrice: "",
   lastBuyingPrice: "",
   defaultWarranty: "",
+  variableCost: false,
   isActive: true,
   commissionEnabled: false,
   commissionAmount: "",
@@ -185,6 +188,9 @@ export default function PosManagementClient() {
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
+    if (!draft.variableCost && !draft.lastBuyingPrice.trim()) {
+      return showToast("Buying price is required for fixed-cost products", "error");
+    }
     if (draft.commissionEnabled && !draft.commissionAmount.trim()) {
       return showToast("Commission amount is required when product commission is enabled", "error");
     }
@@ -195,8 +201,9 @@ export default function PosManagementClient() {
         name: draft.name,
         category: draft.category,
         sellingPrice: Number(draft.sellingPrice || 0),
-        lastBuyingPrice: draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+        lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
         defaultWarranty: draft.defaultWarranty.trim() || null,
+        variableCost: draft.variableCost,
         isActive: draft.isActive,
         commissionEnabled: draft.commissionEnabled,
         commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
@@ -231,6 +238,7 @@ export default function PosManagementClient() {
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
       defaultWarranty: product.defaultWarranty ?? "",
+      variableCost: Boolean(product.variableCost),
       isActive: Boolean(product.isActive),
       commissionEnabled: Boolean(product.commissionEnabled),
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
@@ -249,6 +257,7 @@ export default function PosManagementClient() {
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
       defaultWarranty: product.defaultWarranty ?? "",
+      variableCost: Boolean(product.variableCost),
       isActive: Boolean(product.isActive),
       commissionEnabled: true,
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
@@ -492,10 +501,32 @@ export default function PosManagementClient() {
                 Selling price
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
               </label>
-              <label className="text-sm text-slate-300">
-                Buying price
-                <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
-              </label>
+              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={draft.variableCost}
+                    onChange={(e) =>
+                      setDraft((s) => ({
+                        ...s,
+                        variableCost: e.target.checked,
+                        lastBuyingPrice: e.target.checked ? "" : s.lastBuyingPrice,
+                      }))
+                    }
+                  />
+                  Variable-cost project
+                </label>
+                {draft.variableCost ? (
+                  <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                    Buying price is set later by an admin after the POS sale is captured.
+                  </div>
+                ) : (
+                  <label className="block text-sm text-slate-300">
+                    Buying price
+                    <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                  </label>
+                )}
+              </div>
               <label className="text-sm text-slate-300">
                 Default receipt warranty
                 <select
@@ -580,6 +611,11 @@ export default function PosManagementClient() {
               <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
               <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
             </div>
+            <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
+              <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
+              <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
+              <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
+            </a>
           </div>
         </div>
       </section>
@@ -766,7 +802,9 @@ export default function PosManagementClient() {
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       <div>Selling: {formatMoney(product.sellingPrice)}</div>
-                      <div className="text-xs text-slate-400">Buying: {formatMoney(product.lastBuyingPrice)}</div>
+                      <div className="text-xs text-slate-400">
+                        {product.variableCost ? "Buying: priced later" : `Buying: ${formatMoney(product.lastBuyingPrice)}`}
+                      </div>
                       <div className="text-xs text-slate-400">
                         Warranty: {product.defaultWarranty || "None"}
                       </div>

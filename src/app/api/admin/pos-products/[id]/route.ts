@@ -15,6 +15,7 @@ const updateSchema = z.object({
   sellingPrice: z.coerce.number().min(0).optional(),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   defaultWarranty: z.string().trim().max(50).nullable().optional(),
+  variableCost: z.boolean().optional(),
   isActive: z.boolean().optional(),
   commissionEnabled: z.boolean().optional(),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
@@ -54,6 +55,17 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = parsed.data;
+  const nextVariableCost = data.variableCost ?? Boolean((existing as any).variableCost);
+  const nextLastBuyingPrice =
+    data.lastBuyingPrice !== undefined
+      ? data.lastBuyingPrice
+      : existing.lastBuyingPrice;
+  if (!nextVariableCost && !(Number(nextLastBuyingPrice ?? 0) > 0)) {
+    return noStoreJson(
+      { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
+      { status: 400 },
+    );
+  }
   const nextSku = data.sku ? normalizeSku(data.sku) : undefined;
   if (nextSku && nextSku !== existing.sku) {
     const duplicate = await prisma.product.findUnique({ where: { sku: nextSku }, select: { id: true } });
@@ -67,11 +79,12 @@ export async function PATCH(req: Request, context: ParamsContext) {
       name: data.name,
       category: data.category,
       sellingPrice: data.sellingPrice,
-      lastBuyingPrice: data.lastBuyingPrice,
+      lastBuyingPrice: nextVariableCost ? null : data.lastBuyingPrice,
       defaultWarranty:
         data.defaultWarranty === undefined
           ? undefined
           : data.defaultWarranty?.trim() || null,
+      variableCost: data.variableCost,
       isActive: data.isActive,
       commissionEnabled: data.commissionEnabled,
       commissionAmount:

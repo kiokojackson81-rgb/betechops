@@ -222,6 +222,31 @@ export async function POST(req: Request) {
         data: { totalProfit: 0 },
       });
     } else {
+      if (linkedReceipt) {
+        const existingTotals =
+          linkedReceipt.totals && typeof linkedReceipt.totals === "object"
+            ? (linkedReceipt.totals as Record<string, any>)
+            : {};
+        const total = Number(existingTotals.total ?? linkedReceipt.order?.totalAmount ?? refreshedReceipt.sellingTotal ?? 0);
+        const nextTotals = {
+          ...existingTotals,
+          buyingTotal: allItemsPriced ? receiptBuyingTotal : 0,
+          profit: allItemsPriced ? total - receiptBuyingTotal : null,
+          needsPricing: !allItemsPriced,
+        };
+        await tx.receipt.update({
+          where: { id: linkedReceipt.id },
+          data: {
+            totals: nextTotals as any,
+            data: {
+              ...linkedData,
+              totals: nextTotals,
+              needsPricing: !allItemsPriced,
+            } as any,
+          },
+        });
+      }
+
       const receipts = await tx.supportReceipt.findMany({
         where: { dailyEntryId: entryId },
         include: { items: true },
@@ -229,8 +254,11 @@ export async function POST(req: Request) {
 
       let recomputedTotalProfit = 0;
       for (const row of receipts) {
+        const items = row.items || [];
+        const allPriced = items.length > 0 && items.every((item) => Number(item.buyingPrice ?? 0) > 0);
+        if (!allPriced) continue;
         const sell = Number(row.sellingTotal ?? 0);
-        const cost = (row.items || []).reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+        const cost = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
         recomputedTotalProfit += sell - cost;
       }
 
