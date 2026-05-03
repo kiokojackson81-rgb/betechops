@@ -130,7 +130,7 @@ export default function ReceiptsSummary({
             )}
             {onProfitClick && (
               <p className="text-[11px] text-emerald-300">
-                {profitViewActive ? "Showing contributing POS receipts" : "Click to show contributing POS receipts"}
+                {profitViewActive ? "Showing contributing receipts" : "Click to show contributing receipts"}
               </p>
             )}
           </div>

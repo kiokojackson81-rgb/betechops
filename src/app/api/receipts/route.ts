@@ -15,6 +15,7 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -172,12 +173,30 @@ export async function GET(req: NextRequest) {
 
   let posReceipts: any[] = [];
   if (includePosReceipts) {
-    try {
-      posReceipts = await prisma.receipt.findMany({
-        where,
-        include: {
-          order: includeItems || isProfitSummaryView
-            ? {
+    if (isProfitSummaryView) {
+      // Use the admin summary helper to get the exact set of receipt ids
+      // that the summary recognized as contributing to profit. This keeps
+      // the drilldown consistent with the summary logic.
+      try {
+        const profitIds = await getPosProfitReceiptIdsForAdminFilters({
+          start: startDate,
+          end: endDate,
+          attendantId,
+          paymentMethod: paymentMethodParam,
+          search: q,
+          docType: normalizedDocType,
+          includeLedger,
+          scope,
+          currentUserId: identity.resolvedUserId ?? null,
+          customerType,
+          podStatus,
+          onlyPos: onlyPos,
+        });
+        if (Array.isArray(profitIds) && profitIds.length) {
+          posReceipts = await prisma.receipt.findMany({
+            where: { id: { in: profitIds } },
+            include: {
+              order: {
                 include: {
                   items: {
                     include: {
@@ -192,30 +211,65 @@ export async function GET(req: NextRequest) {
                   },
                   attendant: { select: { id: true, name: true } },
                 },
-              }
-            : {
-                select: {
-                  orderNumber: true,
-                  customerName: true,
-                  attendantId: true,
-                  attendant: { select: { id: true, name: true } },
-                  status: true,
-                  paymentStatus: true,
-                  totalAmount: true,
-                },
               },
-          issuedBy: { select: { id: true, name: true } },
-        },
-        orderBy: { generatedAt: "desc" },
-      });
-    } catch (err: any) {
-      const msg = String(err?.message ?? err);
-      // eslint-disable-next-line no-console
-      console.warn("/api/receipts: failed to query receipts table:", msg);
-      if (msg.includes("does not exist")) {
+              issuedBy: { select: { id: true, name: true } },
+            },
+            orderBy: { generatedAt: "desc" },
+          });
+        } else {
+          posReceipts = [];
+        }
+      } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.warn("/api/receipts: failed to compute profit receipt ids:", err?.message ?? err);
         posReceipts = [];
-      } else {
-        throw err;
+      }
+    } else {
+      try {
+        posReceipts = await prisma.receipt.findMany({
+          where,
+          include: {
+            order: includeItems || isProfitSummaryView
+              ? {
+                  include: {
+                    items: {
+                      include: {
+                        orderCosts: { select: { unitCost: true } },
+                        profitSnapshots: {
+                          orderBy: { computedAt: "desc" },
+                          take: 1,
+                          select: { unitCost: true, profit: true, qty: true },
+                        },
+                        product: { select: { lastBuyingPrice: true } },
+                      },
+                    },
+                    attendant: { select: { id: true, name: true } },
+                  },
+                }
+              : {
+                  select: {
+                    orderNumber: true,
+                    customerName: true,
+                    attendantId: true,
+                    attendant: { select: { id: true, name: true } },
+                    status: true,
+                    paymentStatus: true,
+                    totalAmount: true,
+                  },
+                },
+            issuedBy: { select: { id: true, name: true } },
+          },
+          orderBy: { generatedAt: "desc" },
+        });
+      } catch (err: any) {
+        const msg = String(err?.message ?? err);
+        // eslint-disable-next-line no-console
+        console.warn("/api/receipts: failed to query receipts table:", msg);
+        if (msg.includes("does not exist")) {
+          posReceipts = [];
+        } else {
+          throw err;
+        }
       }
     }
   }
@@ -513,11 +567,32 @@ export async function GET(req: NextRequest) {
 
   const deduped = Array.from(uniqueReceipts.values()).filter((row) => {
     if (!isProfitSummaryView) return true;
-    if (row.source !== "pos") return false;
+    // For profit drilldown include both POS and support receipts
+    // and any receipt that either has an explicit stored profit or a buyingTotal > 0.
+    if (row.source !== "pos" && row.source !== "support") return false;
+    const explicitProfit = (row as any).profit;
     const buyingTotal = Number((row as any).buyingTotal ?? 0);
-    const profit = Number((row as any).profit ?? NaN);
-    return buyingTotal > 0 && Number.isFinite(profit);
+    return (
+      (typeof explicitProfit === 'number' && Number.isFinite(explicitProfit)) ||
+      buyingTotal > 0
+    );
   });
+
+  // Ensure each returned row has a computed `profit` where possible so the
+  // UI can always sum and display a meaningful value.
+  for (const row of deduped) {
+    const total = Number(row.total ?? 0);
+    const buying = Number((row as any).buyingTotal ?? 0);
+    const explicit = typeof (row as any).profit === 'number' ? (row as any).profit : undefined;
+    if (explicit !== undefined) {
+      row.profit = explicit;
+    } else if (buying > 0) {
+      row.profit = total - buying;
+    } else {
+      row.profit = undefined;
+    }
+  }
+
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);

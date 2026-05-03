@@ -756,7 +756,6 @@ export default function ReceiptsAdminClient({
     void loadRows(1, {
       summaryViewOverride: "profit",
       filtersOverride: profitFilters,
-      forceOnlyPos: true,
       captureProfitReceipts: true,
     });
   };
@@ -1457,7 +1456,13 @@ export default function ReceiptsAdminClient({
   const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
   const profitViewActive = summaryView === "profit" && onlyPos;
   const displayRows = profitViewActive ? profitReceipts : rows;
-  const profitReceiptTotal = profitReceipts.reduce((sum, row) => sum + Number(row.profit ?? 0), 0);
+  const profitReceiptTotal = profitReceipts.reduce((sum, row) => {
+    const explicit = typeof (row as any).profit === "number" ? (row as any).profit : undefined;
+    const buying = Number((row as any).buyingTotal ?? 0);
+    const selling = Number(row.total ?? 0);
+    const computed = explicit !== undefined ? explicit : buying > 0 ? selling - buying : 0;
+    return sum + computed;
+  }, 0);
   const summarySalesLabel = summaryLoading
     ? "Loading..."
     : formatCurrency(summaryForDisplay?.totalSales ?? 0);
@@ -1774,10 +1779,10 @@ export default function ReceiptsAdminClient({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-emerald-100">
-                  Contributing POS receipts ({profitReceipts.length})
+                  Contributing receipts ({profitReceipts.length})
                 </h3>
                 <p className="text-xs text-emerald-100/80">
-                  These are priced POS receipts included in the POS profit total. Pending variable-cost receipts appear here after admin pricing.
+                  These are priced receipts included in the profit total. Pending variable-cost receipts appear here after admin pricing.
                 </p>
               </div>
               <div className="text-right text-xs text-emerald-100/80">
