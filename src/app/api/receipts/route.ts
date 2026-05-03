@@ -15,7 +15,10 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
+import {
+  getProfitReceiptContributorsForAdminFilters,
+  type ProfitReceiptContributor,
+} from "@/lib/adminReceiptsSummary";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -73,6 +76,45 @@ export async function GET(req: NextRequest) {
   const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
   const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
+  const profitContributorBySourceId = new Map<string, ProfitReceiptContributor>();
+  const profitContributorBySourceKey = new Map<string, ProfitReceiptContributor>();
+  let profitContributors: ProfitReceiptContributor[] = [];
+
+  const registerProfitContributor = (contributor: ProfitReceiptContributor) => {
+    if (contributor.id) {
+      profitContributorBySourceId.set(`${contributor.source}:${contributor.id}`, contributor);
+    }
+    profitContributorBySourceKey.set(`${contributor.source}:${contributor.key}`, contributor);
+    if (contributor.receiptNumber) {
+      const canonical = canonicalReceiptNumber(contributor.receiptNumber);
+      if (canonical) profitContributorBySourceKey.set(`${contributor.source}:${canonical}`, contributor);
+    }
+  };
+
+  const getProfitContributorForRow = (row: {
+    id?: string | null;
+    source?: "pos" | "marketing" | "support";
+    orderRef?: string | null;
+    receiptNumber?: string | null;
+  }) => {
+    const source = row.source ?? "pos";
+    const rawId = row.id ? String(row.id).replace(/^(marketing|support)-/, "") : "";
+    if (rawId) {
+      const byId = profitContributorBySourceId.get(`${source}:${rawId}`);
+      if (byId) return byId;
+    }
+    const keys = [
+      row.orderRef,
+      row.receiptNumber,
+      row.orderRef ? canonicalReceiptNumber(row.orderRef) : null,
+      row.receiptNumber ? canonicalReceiptNumber(row.receiptNumber) : null,
+    ].filter((value): value is string => Boolean(value));
+    for (const key of keys) {
+      const contributor = profitContributorBySourceKey.get(`${source}:${key}`);
+      if (contributor) return contributor;
+    }
+    return null;
+  };
 
   const and: Prisma.ReceiptWhereInput[] = [];
   and.push({ generatedAt: { gte: startDate, lte: endDate } });
@@ -155,25 +197,34 @@ export async function GET(req: NextRequest) {
     // the earlier branch above will apply the appropriate filter.
   }
 
+  if (summaryView === "profit") {
+    profitContributors = await getProfitReceiptContributorsForAdminFilters({
+      start: startDate,
+      end: endDate,
+      attendantId: scope === "mine" ? undefined : requestedAttendantId,
+      paymentMethod: paymentMethodParam,
+      search: q,
+      docType: normalizedDocType,
+      scope: scope as "mine" | "global",
+      currentUserId: scope === "mine" ? resolvedUserId : null,
+      customerType,
+      podStatus,
+      onlyPos,
+    });
+    for (const contributor of profitContributors) {
+      registerProfitContributor(contributor);
+    }
+  }
+
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
   const posReceipts = includePosReceipts
     ? await (async () => {
         const receiptIds =
-          onlyPos && summaryView === "profit"
-            ? await getPosProfitReceiptIdsForAdminFilters({
-                start: startDate,
-                end: endDate,
-                attendantId: scope === "mine" ? undefined : requestedAttendantId,
-                paymentMethod: paymentMethodParam,
-                search: q,
-                docType: normalizedDocType,
-                scope: scope as "mine" | "global",
-                currentUserId: scope === "mine" ? resolvedUserId : null,
-                customerType,
-                podStatus,
-                onlyPos: true,
-              })
+          summaryView === "profit"
+            ? profitContributors
+                .filter((contributor) => contributor.source === "pos" && contributor.id)
+                .map((contributor) => contributor.id as string)
             : null;
 
         if (receiptIds && receiptIds.length === 0) {
@@ -214,15 +265,27 @@ export async function GET(req: NextRequest) {
 
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
+    const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
+    const contributor = getProfitContributorForRow({
+      id: r.id,
+      source: "pos",
+      orderRef: (r.order as any)?.orderNumber ?? null,
+      receiptNumber: r.receiptNumber ?? null,
+    });
+    const buyingTotal = Number(contributor?.buyingTotal ?? 0);
+    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: r.id,
       source: "pos" as const,
       orderRef: r.order?.orderNumber,
+      receiptNumber: r.receiptNumber ?? null,
       docType: r.docType,
       createdAt: r.generatedAt,
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
-      total: (r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? null,
+      total,
+      buyingTotal: buyingTotal > 0 ? buyingTotal : null,
+      profit,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       status: r.order?.status ?? r.order?.paymentStatus ?? null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
@@ -235,53 +298,79 @@ export async function GET(req: NextRequest) {
     };
   };
 
-  const mapMarketingRow = (receipt: any) => ({
-    id: `marketing-${receipt.id}`,
-    source: "marketing" as const,
-    orderRef: receipt.receiptNumber || undefined,
-    docType: "MARKETING",
-    createdAt: receipt.createdAt,
-    customerName: null,
-    customerPhone: null,
-    total: Number(receipt.sellingTotal ?? 0),
-    attendantName:
-      receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
-    status: "COMPLETED",
-    items: includeItems
-      ? (receipt.items || []).map((item: any) => ({
-          id: item.id,
-          productName: item.productName,
-          buyingPrice: Number(item.buyingPrice ?? 0),
-        }))
-      : undefined,
-    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
-    paymentStatus: "PAID",
-    detailUrl: null,
-  });
+  const mapMarketingRow = (receipt: any) => {
+    const total = Number(receipt.sellingTotal ?? 0);
+    const contributor = getProfitContributorForRow({
+      id: receipt.id,
+      source: "marketing",
+      orderRef: receipt.receiptNumber ?? null,
+      receiptNumber: receipt.receiptNumber ?? null,
+    });
+    const buyingTotal = Number(contributor?.buyingTotal ?? receipt.buyingTotal ?? 0);
+    return {
+      id: `marketing-${receipt.id}`,
+      source: "marketing" as const,
+      orderRef: receipt.receiptNumber || undefined,
+      receiptNumber: receipt.receiptNumber ?? null,
+      docType: "MARKETING",
+      createdAt: receipt.createdAt,
+      customerName: null,
+      customerPhone: null,
+      total,
+      buyingTotal: buyingTotal > 0 ? buyingTotal : null,
+      profit: contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null),
+      attendantName:
+        receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
+      status: "COMPLETED",
+      items: includeItems
+        ? (receipt.items || []).map((item: any) => ({
+            id: item.id,
+            productName: item.productName,
+            buyingPrice: Number(item.buyingPrice ?? 0),
+          }))
+        : undefined,
+      paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+      paymentStatus: "PAID",
+      detailUrl: null,
+    };
+  };
 
-  const mapSupportRow = (receipt: any) => ({
-    id: `support-${receipt.id}`,
-    source: "support" as const,
-    orderRef: receipt.receiptNumber || undefined,
-    docType: "SUPPORT",
-    createdAt: receipt.createdAt,
-    customerName: null,
-    customerPhone: null,
-    total: Number(receipt.sellingTotal ?? 0),
-    attendantName:
-      receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
-    status: "COMPLETED",
-    items: includeItems
-      ? (receipt.items || []).map((item: any) => ({
-          id: item.id,
-          productName: item.productName,
-          buyingPrice: Number(item.buyingPrice ?? 0),
-        }))
-      : undefined,
-    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
-    paymentStatus: "PAID",
-    detailUrl: null,
-  });
+  const mapSupportRow = (receipt: any) => {
+    const total = Number(receipt.sellingTotal ?? 0);
+    const contributor = getProfitContributorForRow({
+      id: receipt.id,
+      source: "support",
+      orderRef: receipt.receiptNumber ?? null,
+      receiptNumber: receipt.receiptNumber ?? null,
+    });
+    const buyingTotal = Number(contributor?.buyingTotal ?? receipt.buyingTotal ?? 0);
+    return {
+      id: `support-${receipt.id}`,
+      source: "support" as const,
+      orderRef: receipt.receiptNumber || undefined,
+      receiptNumber: receipt.receiptNumber ?? null,
+      docType: "SUPPORT",
+      createdAt: receipt.createdAt,
+      customerName: null,
+      customerPhone: null,
+      total,
+      buyingTotal: buyingTotal > 0 ? buyingTotal : null,
+      profit: contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null),
+      attendantName:
+        receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
+      status: "COMPLETED",
+      items: includeItems
+        ? (receipt.items || []).map((item: any) => ({
+            id: item.id,
+            productName: item.productName,
+            buyingPrice: Number(item.buyingPrice ?? 0),
+          }))
+        : undefined,
+      paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+      paymentStatus: "PAID",
+      detailUrl: null,
+    };
+  };
 
   const marketingFilter: any = {
     dailyEntry: {
@@ -319,9 +408,15 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const marketingReceipts = includeMarketingReceipts
+  const profitMarketingIds =
+    summaryView === "profit"
+      ? profitContributors
+          .filter((contributor) => contributor.source === "marketing" && contributor.id)
+          .map((contributor) => contributor.id as string)
+      : [];
+  const marketingReceipts = includeMarketingReceipts || profitMarketingIds.length
     ? await prisma.marketingReceipt.findMany({
-        where: marketingFilter,
+        where: profitMarketingIds.length ? { id: { in: profitMarketingIds } } : marketingFilter,
         include: {
           items: true,
           dailyEntry: {
@@ -333,9 +428,15 @@ export async function GET(req: NextRequest) {
       })
     : [];
 
-  const supportReceipts = includeSupportReceipts
+  const profitSupportIds =
+    summaryView === "profit"
+      ? profitContributors
+          .filter((contributor) => contributor.source === "support" && contributor.id)
+          .map((contributor) => contributor.id as string)
+      : [];
+  const supportReceipts = includeSupportReceipts || profitSupportIds.length
     ? await prisma.supportReceipt.findMany({
-        where: supportFilter,
+        where: profitSupportIds.length ? { id: { in: profitSupportIds } } : supportFilter,
         include: {
           items: true,
           dailyEntry: {
@@ -366,12 +467,20 @@ export async function GET(req: NextRequest) {
     const existing = uniqueReceipts.get(key);
     const priority = sourcePriority[row.source ?? "pos"];
     const existingPriority = existing ? sourcePriority[existing.source ?? "pos"] : 0;
-    if (!existing || priority > existingPriority) {
+    const hasContribution = Boolean(getProfitContributorForRow(row));
+    const existingHasContribution = existing ? Boolean(getProfitContributorForRow(existing)) : false;
+    if (!existing || (hasContribution && !existingHasContribution) || (hasContribution === existingHasContribution && priority > existingPriority)) {
       uniqueReceipts.set(key, row);
     }
   }
 
-  const deduped = Array.from(uniqueReceipts.values());
+  const deduped = Array.from(uniqueReceipts.values()).filter((row) => {
+    if (summaryView !== "profit") return true;
+    if (getProfitContributorForRow(row)) return true;
+    const explicitProfit = (row as any).profit;
+    const buyingTotal = Number((row as any).buyingTotal ?? 0);
+    return (typeof explicitProfit === "number" && Number.isFinite(explicitProfit)) || buyingTotal > 0;
+  });
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);

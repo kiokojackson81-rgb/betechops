@@ -5,17 +5,29 @@ import { Prisma } from "@prisma/client";
 
 type PaymentBucket = { totalSales: number; count: number };
 
-type Source = "pos" | "marketing" | "support";
+export type Source = "pos" | "marketing" | "support";
 
 type ReceiptSummaryRecord = {
   source: Source;
+  id?: string;
   key: string;
+  receiptNumber?: string | null;
   paymentMethod: string | null;
   sellingTotal: number;
   items: Array<{ quantity?: number; buyingPrice?: number | null } | null>;
   buyingTotal?: number;
   supportBuyingTotal?: number;
   profit?: number;
+};
+
+export type ProfitReceiptContributor = {
+  source: Source;
+  id?: string;
+  key: string;
+  receiptNumber?: string | null;
+  sellingTotal: number;
+  buyingTotal: number;
+  profit: number;
 };
 
 export type PaymentTotals = {
@@ -36,6 +48,7 @@ export type AdminReceiptSummary = {
   hasCompleteCosts: boolean;
   awaitingPricingCount: number;
   paymentTotals: PaymentTotals;
+  profitContributors?: ProfitReceiptContributor[];
 };
 
 export const normalizePaymentMethod = (value: string | null | undefined): "MPESA" | "CASH" | null => {
@@ -64,6 +77,7 @@ type SummaryOptions = {
 
 type PosOnlySummaryResult = AdminReceiptSummary & {
   profitReceiptIds: string[];
+  profitContributors: ProfitReceiptContributor[];
 };
 
 const buildPosSearchOr = (q: string): Prisma.ReceiptWhereInput[] => [
@@ -404,6 +418,7 @@ async function computePosOnlyReceiptSummary({
   let awaitingPricingCount = 0;
   let hasIncompleteCosts = false;
   const profitReceiptIds = new Set<string>();
+  const profitContributors = new Map<string, ProfitReceiptContributor>();
 
   for (const receipt of posReceiptsFinal as any[]) {
     const salesDate = receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt;
@@ -443,6 +458,7 @@ async function computePosOnlyReceiptSummary({
     );
     const allItemsPriced = items.length > 0 && items.every((item: any) => Number(item?.buyingPrice ?? 0) > 0);
     const hasAggregateCost = resolvedBuyingTotal > 0;
+    const buyingTotalForContributor = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
     const explicitProfitRaw = (receipt as any)?.profit ?? (receipt.data as any)?.profit;
     const explicitProfit =
       typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw)
@@ -477,6 +493,15 @@ async function computePosOnlyReceiptSummary({
     if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
       totalProfitInclusive += receiptProfit;
       profitReceiptIds.add(receipt.id);
+      profitContributors.set(`pos:${receipt.id}`, {
+        source: "pos",
+        id: receipt.id,
+        key: buildReceiptKey(canonicalOrderNumber ?? receipt.receiptNumber ?? null, receipt.id),
+        receiptNumber: receipt.receiptNumber ?? receipt.order?.orderNumber ?? null,
+        sellingTotal: salesValue,
+        buyingTotal: Number.isFinite(buyingTotalForContributor) ? buyingTotalForContributor : 0,
+        profit: receiptProfit,
+      });
     }
 
     if (!salesIncluded) {
@@ -513,12 +538,20 @@ async function computePosOnlyReceiptSummary({
     awaitingPricingCount,
     paymentTotals,
     profitReceiptIds: Array.from(profitReceiptIds),
+    profitContributors: Array.from(profitContributors.values()),
   };
 }
 
 export async function getPosProfitReceiptIdsForAdminFilters(options: SummaryOptions): Promise<string[]> {
   const result = await computePosOnlyReceiptSummary(options);
   return result.profitReceiptIds;
+}
+
+export async function getProfitReceiptContributorsForAdminFilters(
+  options: SummaryOptions,
+): Promise<ProfitReceiptContributor[]> {
+  const result = await computeAdminReceiptSummary(options);
+  return result.profitContributors ?? [];
 }
 
 export async function computeAdminReceiptSummary({
@@ -561,6 +594,7 @@ export async function computeAdminReceiptSummary({
       hasCompleteCosts: posOnly.hasCompleteCosts,
       awaitingPricingCount: posOnly.awaitingPricingCount,
       paymentTotals: posOnly.paymentTotals,
+      profitContributors: posOnly.profitContributors,
     };
   }
 
@@ -772,8 +806,10 @@ export async function computeAdminReceiptSummary({
 
   const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
     source: "marketing" as const,
+    id: receipt.id,
     // Prefer receiptNumber, fall back to receiptKey (if present) before id.
     key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
+    receiptNumber: (receipt as any).receiptNumber ?? null,
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -788,8 +824,10 @@ export async function computeAdminReceiptSummary({
 
   const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
     source: "support" as const,
+    id: receipt.id,
     // Prefer receiptNumber, fall back to receiptKey (if present) before id.
     key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
+    receiptNumber: (receipt as any).receiptNumber ?? null,
     paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
     sellingTotal: Number(receipt.sellingTotal ?? 0),
     items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
@@ -820,7 +858,9 @@ export async function computeAdminReceiptSummary({
     }
     return {
       source: "pos" as const,
+      id: receipt.id,
       key: buildReceiptKey(orderRef, receipt.id),
+      receiptNumber: receipt.receiptNumber ?? orderRef ?? null,
       paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
       sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
       // Prefer an explicit aggregate buying total stored on the receipt (if present),
@@ -950,6 +990,18 @@ export async function computeAdminReceiptSummary({
   let totalProfitInclusive = 0;
   let awaitingPricingCount = 0;
   let hasIncompleteCosts = false;
+  const profitContributors = new Map<string, ProfitReceiptContributor>();
+  const addProfitContributor = (receipt: ReceiptSummaryRecord, buyingTotal: number, profit: number) => {
+    profitContributors.set(`${receipt.source}:${receipt.id ?? receipt.key}`, {
+      source: receipt.source,
+      id: receipt.id,
+      key: receipt.key,
+      receiptNumber: receipt.receiptNumber ?? null,
+      sellingTotal: Number(receipt.sellingTotal ?? 0),
+      buyingTotal: Number.isFinite(buyingTotal) ? buyingTotal : 0,
+      profit,
+    });
+  };
   for (const receipt of filteredRecords) {
     const items = Array.isArray(receipt.items) ? receipt.items : [];
     const supportBuying = Number(receipt.supportBuyingTotal ?? 0);
@@ -976,10 +1028,12 @@ export async function computeAdminReceiptSummary({
       totalCost += buyingSum;
       receiptProfit = sell - buyingSum;
       totalProfitPriced += receiptProfit;
+      addProfitContributor(receipt, buyingSum, receiptProfit);
     } else if (explicitProfit !== undefined) {
       // Use explicit profit; do not mark as awaitingPricing.
       receiptProfit = explicitProfit;
       totalProfitPriced += receiptProfit;
+      addProfitContributor(receipt, aggregateCost > 0 ? aggregateCost : costFromItems, receiptProfit);
     } else {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
@@ -1003,5 +1057,6 @@ export async function computeAdminReceiptSummary({
     hasCompleteCosts,
     awaitingPricingCount,
     paymentTotals,
+    profitContributors: Array.from(profitContributors.values()),
   };
 }
