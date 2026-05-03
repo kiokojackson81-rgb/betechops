@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
+import { calculateCumulativeCommission } from "./commissionCommon";
 import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
@@ -276,6 +277,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
         LIMIT 10
       `;
 
+      // ledger candidates fetched (debug removed in final)
+
       if (Array.isArray(candidates) && candidates.length > 0) {
         // Prefer first candidate that has a positive commissionTotal
         let chosen = candidates.find((c) => Number(c.commissionTotal ?? 0) > 0) || candidates[0];
@@ -301,9 +304,15 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   let jenifferProgress: any = null;
 
   if (isJeniffer) {
-    const res = computeJenifferProratedCommission(totalSales, tiers.map((t) => ({ minSales: Number(t.minSales), maxSales: t.maxSales == null ? null : Number(t.maxSales), payoutFlat: Number(t.payoutFlat) })));
+    const res = calculateCumulativeCommission(totalSales);
     salesCommission = Number(res.commission ?? 0);
-    jenifferProgress = res;
+    jenifferProgress = {
+      commission: salesCommission,
+      baseCommission: salesCommission,
+      prorated: 0,
+      nextTarget: res.nextTarget ?? null,
+      progressPercent: res.nextTarget ? Math.max(0, Math.min(1, totalSales / res.nextTarget)) : 1,
+    };
   } else {
     const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
     salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);

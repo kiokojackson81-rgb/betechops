@@ -1358,7 +1358,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       : Number(earningsSummary?.commission ?? 0);
 
   const commissionKes =
-    serverCommission > 0
+    isJeniffer && preferredEarningsCommission >= 0
+      ? preferredEarningsCommission
+      : serverCommission > 0
       ? serverCommission
       : preferredEarningsCommission > 0
       ? preferredEarningsCommission
