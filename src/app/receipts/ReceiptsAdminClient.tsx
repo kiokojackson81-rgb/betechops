@@ -758,7 +758,6 @@ export default function ReceiptsAdminClient({
     void loadRows(1, {
       summaryViewOverride: "profit",
       filtersOverride: profitFilters,
-      forceOnlyPos: false,
       includeLedgerOverride: true,
       captureProfitReceipts: true,
     });
@@ -1818,7 +1817,7 @@ export default function ReceiptsAdminClient({
                     {loading
                       ? "Loading receipts..."
                       : profitViewActive
-                        ? "No priced receipts contribute to profit for this range."
+                        ? "No priced receipts contribute to this profit total."
                         : "No receipts match this filter."}
                   </td>
                 </tr>
