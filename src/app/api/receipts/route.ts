@@ -585,11 +585,11 @@ export async function GET(req: NextRequest) {
     const buying = Number((row as any).buyingTotal ?? 0);
     const explicit = typeof (row as any).profit === 'number' ? (row as any).profit : undefined;
     if (explicit !== undefined) {
-      row.profit = explicit;
+      (row as any).profit = explicit;
     } else if (buying > 0) {
-      row.profit = total - buying;
+      (row as any).profit = total - buying;
     } else {
-      row.profit = undefined;
+      (row as any).profit = undefined;
     }
   }
 
