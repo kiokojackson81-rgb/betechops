@@ -373,6 +373,7 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
   });
   const [rangeKey, setRangeKey] = useState<ReceiptRangeKey>("today");
   const [receipts, setReceipts] = useState<MarketingReceiptRow[]>([]);
+  const [attendantId, setAttendantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -383,6 +384,37 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const loadAttendant = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (typeof window !== "undefined") {
+          const impersonateId = new URLSearchParams(window.location.search).get("impersonateId");
+          if (impersonateId) params.set("impersonateId", impersonateId);
+        }
+        const res = await fetch(
+          `/api/attendants/me${params.toString() ? `?${params.toString()}` : ""}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const payload = await res.json().catch(() => null);
+        const resolved =
+          payload?.data?.user?.id ??
+          payload?.user?.id ??
+          null;
+        if (!cancelled && resolved) setAttendantId(String(resolved));
+      } catch {
+        // no-op: receipts call below will surface auth errors
+      }
+    };
+    void loadAttendant();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!attendantId) return;
+    let cancelled = false;
     const controller = new AbortController();
     const fetchReceipts = async () => {
       setLoading(true);
@@ -391,8 +423,8 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "40");
-        params.set("scope", "mine");
         params.set("onlyPos", "1");
+        params.set("attendantId", attendantId);
         params.set("start", filters.start);
         params.set("end", filters.end);
         if (filters.query.trim()) params.set("q", filters.query.trim());
@@ -419,7 +451,7 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
       cancelled = true;
       controller.abort();
     };
-  }, [filters]);
+  }, [attendantId, filters]);
 
   const applyRange = (key: ReceiptRangeKey) => {
     const { start, end } = (() => {

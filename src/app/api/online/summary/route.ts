@@ -191,7 +191,7 @@ export async function GET(req: Request) {
     userId: targetUserId,
     ownershipMode: resolveOnlinePosOwnershipMode(targetUser?.email),
     supportPricingScope: "any",
-    profitRecognitionMode: "salesDate",
+    profitRecognitionMode: directCommissionMode === "PROFIT_10" ? "recognizedDate" : "salesDate",
   });
 
   const [{ assignments, accountIds }, marketplaceSalesSummary] = await Promise.all([
