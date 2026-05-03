@@ -725,17 +725,16 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const directCommissionMode = resolveDirectCommissionMode(user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
   const fallbackDirectReceiptSummary =
-    directCommissionMode === "PROFIT_10" &&
-    (Number(directStats.sales ?? 0) <= 0 || Number(directStats.profit ?? 0) <= 0)
+    directCommissionMode === "PROFIT_10"
       ? await computeProfit10DirectReceiptFallback({ userId: attendantId, start: period.start, end: period.end })
       : { sales: 0, profit: 0 };
   const effectiveDirectSales =
-    directCommissionMode === "PROFIT_10" && Number(directStats.sales ?? 0) <= 0 && fallbackDirectReceiptSummary.sales > 0
-      ? fallbackDirectReceiptSummary.sales
+    directCommissionMode === "PROFIT_10"
+      ? Math.max(Number(directStats.sales ?? 0), Number(fallbackDirectReceiptSummary.sales ?? 0))
       : directStats.sales;
   const effectiveDirectProfit =
-    directCommissionMode === "PROFIT_10" && Number(directStats.profit ?? 0) <= 0 && fallbackDirectReceiptSummary.profit > 0
-      ? fallbackDirectReceiptSummary.profit
+    directCommissionMode === "PROFIT_10"
+      ? Math.max(Number(directStats.profit ?? 0), Number(fallbackDirectReceiptSummary.profit ?? 0))
       : directStats.profit;
   const profit10Commission =
     directCommissionMode === "PROFIT_10"
@@ -888,13 +887,14 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
 
 async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+  const directCommissionMode = resolveDirectCommissionMode(user?.email);
   const posSummary = await summarizePosReceiptsForPeriod({
     start: period.start,
     end: period.end,
     userId: attendantId,
     ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
     supportPricingScope: "any",
-    profitRecognitionMode: "salesDate",
+    profitRecognitionMode: directCommissionMode === "PROFIT_10" ? "recognizedDate" : "salesDate",
   });
 
   return {
