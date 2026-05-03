@@ -10,7 +10,10 @@ type ReceiptDetail = {
   customerName?: string | null;
   attendantName?: string | null;
   total?: number | null;
+  // support older responses that returned items at root
   items?: { id: string; title?: string; quantity?: number; sellingPrice?: number }[];
+  // newer shape: receipt object with order and items
+  receipt?: any;
 };
 
 export default function ReceiptDetailsDrawer({ id, open, onClose }: { id: string | null; open: boolean; onClose: () => void; }) {
@@ -32,7 +35,8 @@ export default function ReceiptDetailsDrawer({ id, open, onClose }: { id: string
           throw new Error(body?.error || `Failed to load receipt ${id}`);
         }
         const data = await res.json();
-        if (!cancelled) setDetail(data.receipt ?? data);
+        // store full response so we can access supportItems and posCommission data
+        if (!cancelled) setDetail(data);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -83,19 +87,58 @@ export default function ReceiptDetailsDrawer({ id, open, onClose }: { id: string
               <div>
                 <h4 className="text-sm font-semibold">Items</h4>
                 <div className="mt-2 space-y-2">
-                  {Array.isArray(detail.items) && detail.items.length ? (
-                    detail.items.map((it) => (
-                      <div key={it.id} className="flex items-center justify-between text-sm text-slate-200">
-                        <div>
-                          <div className="font-medium">{it.title}</div>
-                          <div className="text-xs text-slate-400">Qty: {it.quantity ?? 1}</div>
+                  {(() => {
+                    const items = Array.isArray(detail?.items) && detail.items.length ? detail.items : detail?.receipt?.order?.items ?? [];
+                    if (!items || !items.length) return <div className="text-sm text-slate-400">No items available.</div>;
+                    return items.map((it: any) => {
+                      const title = it.title || it.product?.name || "Item";
+                      const qty = it.quantity ?? 1;
+                      const selling = Number(it.sellingPrice ?? it.price ?? 0);
+                      const buying = (it.orderCosts && it.orderCosts[0] && Number(it.orderCosts[0].unitCost)) || null;
+                      const isVariable = it.product?.buyingPriceType === "VARIABLE";
+                      return (
+                        <div key={it.id} className="flex items-center justify-between text-sm text-slate-200">
+                          <div>
+                            <div className="font-medium">{title}</div>
+                            <div className="text-xs text-slate-400">Qty: {qty}</div>
+                            {isVariable && !buying && <div className="text-xs text-amber-300">Variable item — needs pricing</div>}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-emerald-300">KES {selling.toLocaleString("en-KE")}</div>
+                            {!buying && isVariable ? (
+                              <button
+                                onClick={async () => {
+                                  const raw = window.prompt(`Enter buying price for ${title} (KES)`);
+                                  if (!raw) return;
+                                  const v = Number(raw.replace(/[^0-9.\-]/g, ""));
+                                  if (!Number.isFinite(v) || v <= 0) { window.dispatchEvent(new CustomEvent('betechops:toast', { detail: { message: 'Enter a valid buying price', type: 'error' } })); return; }
+                                  try {
+                                    const res = await fetch(`/api/receipts/price-item`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ orderItemId: it.id, buyingPrice: Math.round(v) }) });
+                                    const data = await res.json().catch(() => ({}));
+                                    if (!res.ok) {
+                                      throw new Error(data?.error || 'Failed to price item');
+                                    }
+                                    window.dispatchEvent(new CustomEvent('betechops:toast', { detail: { message: 'Buying price saved', type: 'success' } }));
+                                    // refresh
+                                    const refreshed = await fetch(`/api/receipts/${id}`, { cache: 'no-store' });
+                                    const rd = await refreshed.json();
+                                    setDetail(rd);
+                                  } catch (err) {
+                                    window.dispatchEvent(new CustomEvent('betechops:toast', { detail: { message: err instanceof Error ? err.message : 'Failed to save buying price', type: 'error' } }));
+                                  }
+                                }}
+                                className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-500"
+                              >
+                                Price item
+                              </button>
+                            ) : (
+                              buying ? <div className="text-slate-400 text-xs">Bought: KES {Number(buying).toLocaleString('en-KE')}</div> : null
+                            )}
+                          </div>
                         </div>
-                        <div className="text-emerald-300">KES {Number(it.sellingPrice ?? 0).toLocaleString("en-KE")}</div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-sm text-slate-400">No items available.</div>
-                  )}
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>

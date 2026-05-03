@@ -43,6 +43,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
                 select: {
                   id: true,
                   name: true,
+                  buyingPriceType: true,
                 },
               },
             },
