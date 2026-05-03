@@ -109,6 +109,11 @@ export default function ReceiptsSummary({
         <button
           type="button"
           onClick={onProfitClick}
+          title={
+            onProfitClick
+              ? "Display the POS receipts whose priced buying costs contribute to this profit total."
+              : undefined
+          }
           className={`rounded-xl border bg-slate-950/40 px-3 py-2 text-left transition ${
             profitViewActive
               ? "border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.3)]"

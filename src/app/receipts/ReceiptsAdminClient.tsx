@@ -17,6 +17,8 @@ type ReceiptRow = {
   customerName?: string | null;
   attendantName?: string | null;
   total?: number | string | null;
+  buyingTotal?: number | string | null;
+  profit?: number | string | null;
   status?: string | null;
   items?: Array<{ id: string }> | null;
   paymentMethod?: "MPESA" | "CASH" | null;
@@ -369,6 +371,8 @@ export default function ReceiptsAdminClient({
   } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryView, setSummaryView] = useState<SummaryViewMode>("all");
+  const [profitReceipts, setProfitReceipts] = useState<ReceiptRow[]>([]);
+  const filtersBeforeProfitRef = useRef<FilterState | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -472,27 +476,39 @@ export default function ReceiptsAdminClient({
     };
   }, []);
   const loadRows = useCallback(
-    async (targetPage: number, opts?: { silent?: boolean }) => {
+    async (
+      targetPage: number,
+      opts?: {
+        silent?: boolean;
+        summaryViewOverride?: SummaryViewMode;
+        filtersOverride?: FilterState;
+        forceOnlyPos?: boolean;
+        captureProfitReceipts?: boolean;
+      },
+    ) => {
       setError(null);
       if (!opts?.silent) setLoading(true);
       try {
+        const activeFilters = opts?.filtersOverride ?? appliedFilters;
+        const activeSummaryView = opts?.summaryViewOverride ?? summaryView;
+        const activeOnlyPos = opts?.forceOnlyPos ?? onlyPos;
         const params = new URLSearchParams();
         params.set("page", String(targetPage));
         params.set("size", String(PAGE_SIZE));
         params.set("includeItems", "false");
-        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
-        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
-        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
-        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
-        if (appliedFilters.customerType) params.set("customerType", appliedFilters.customerType);
-        if (appliedFilters.podStatus) params.set("status", appliedFilters.podStatus);
-        const startParam = buildDateParam(appliedFilters.start, false);
-        const endParam = buildDateParam(appliedFilters.end, true);
+        if (activeFilters.q.trim()) params.set("q", activeFilters.q.trim());
+        if (activeFilters.docType) params.set("docType", activeFilters.docType);
+        if (activeFilters.attendantId) params.set("attendantId", activeFilters.attendantId);
+        if (activeFilters.paymentMethod) params.set("paymentMethod", activeFilters.paymentMethod);
+        if (activeFilters.customerType) params.set("customerType", activeFilters.customerType);
+        if (activeFilters.podStatus) params.set("status", activeFilters.podStatus);
+        const startParam = buildDateParam(activeFilters.start, false);
+        const endParam = buildDateParam(activeFilters.end, true);
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
         params.set("scope", scopeMode);
-        if (onlyPos) params.set("onlyPos", "1");
-        if (summaryView === "profit") params.set("summaryView", "profit");
+        if (activeOnlyPos) params.set("onlyPos", "1");
+        if (activeSummaryView === "profit") params.set("summaryView", "profit");
         if (!ledgerEnabled) params.set("includeLedger", "false");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
@@ -500,6 +516,9 @@ export default function ReceiptsAdminClient({
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         const nextRows = Array.isArray(data?.receipts) ? data.receipts : [];
         setRows(nextRows);
+        if (activeSummaryView === "profit" || opts?.captureProfitReceipts) {
+          setProfitReceipts(nextRows);
+        }
         setHasMore(nextRows.length === PAGE_SIZE);
         setPage(targetPage);
       } catch (err) {
@@ -711,7 +730,35 @@ export default function ReceiptsAdminClient({
     void loadRows(page);
   };
   const handleProfitSummaryClick = () => {
-    setSummaryView((prev) => (prev === "profit" ? "all" : "profit"));
+    if (summaryView === "profit") {
+      const restoredFilters = filtersBeforeProfitRef.current ?? appliedFilters;
+      filtersBeforeProfitRef.current = null;
+      setSummaryView("all");
+      setProfitReceipts([]);
+      setFilters(restoredFilters);
+      setAppliedFilters(restoredFilters);
+      void loadRows(1, { summaryViewOverride: "all", filtersOverride: restoredFilters });
+      return;
+    }
+
+    filtersBeforeProfitRef.current = appliedFilters;
+    const profitFilters = {
+      ...appliedFilters,
+      q: "",
+      docType: "",
+      customerType: undefined,
+      podStatus: undefined,
+    };
+    setSummaryView("profit");
+    setFilters(profitFilters);
+    setAppliedFilters(profitFilters);
+    setProfitReceipts([]);
+    void loadRows(1, {
+      summaryViewOverride: "profit",
+      filtersOverride: profitFilters,
+      forceOnlyPos: true,
+      captureProfitReceipts: true,
+    });
   };
   const fetchReceiptDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -1408,6 +1455,9 @@ export default function ReceiptsAdminClient({
   }, [rows]);
   const shouldUseDerivedSummary = rows.length > 0 && !summaryTotals;
   const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
+  const profitViewActive = summaryView === "profit" && onlyPos;
+  const displayRows = profitViewActive ? profitReceipts : rows;
+  const profitReceiptTotal = profitReceipts.reduce((sum, row) => sum + Number(row.profit ?? 0), 0);
   const summarySalesLabel = summaryLoading
     ? "Loading..."
     : formatCurrency(summaryForDisplay?.totalSales ?? 0);
@@ -1466,7 +1516,7 @@ export default function ReceiptsAdminClient({
               quickRange={quickRange}
               onApplyQuickRange={applyQuickRange}
               rangeLabel={rangeDisplay}
-              profitViewActive={summaryView === "profit"}
+              profitViewActive={profitViewActive}
               onProfitClick={onlyPos ? handleProfitSummaryClick : undefined}
             />
             <PaymentMethodFilterCard
@@ -1704,20 +1754,39 @@ export default function ReceiptsAdminClient({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Receipt list</p>
           <div className="flex items-center gap-3">
-            {summaryView === "profit" && onlyPos ? (
+            {profitViewActive ? (
               <button
                 type="button"
-                onClick={() => setSummaryView("all")}
+                onClick={handleProfitSummaryClick}
                 className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-200"
+                title="Return to the normal receipt list and restore the previous filters."
               >
-                Profit receipts mode
+                Back to all receipts
               </button>
             ) : null}
             <span className="text-xs text-slate-400">
-              Showing {rows.length} receipts · page {page}
+              Showing {displayRows.length} receipts · page {page}
             </span>
           </div>
         </div>
+        {profitViewActive ? (
+          <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-100">
+                  Contributing POS receipts ({profitReceipts.length})
+                </h3>
+                <p className="text-xs text-emerald-100/80">
+                  These are priced POS receipts included in the POS profit total. Pending variable-cost receipts appear here after admin pricing.
+                </p>
+              </div>
+              <div className="text-right text-xs text-emerald-100/80">
+                <div>Listed profit</div>
+                <div className="text-sm font-semibold text-white">{formatCurrency(profitReceiptTotal)}</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">
           <table className="min-w-[900px] text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">
@@ -1734,14 +1803,18 @@ export default function ReceiptsAdminClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 whitespace-nowrap">
-              {rows.length === 0 && (
+              {displayRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
-                    {loading ? "Loading receipts..." : "No receipts match this filter."}
+                    {loading
+                      ? "Loading receipts..."
+                      : profitViewActive
+                        ? "No priced POS receipts contribute to profit for this range."
+                        : "No receipts match this filter."}
                   </td>
                 </tr>
               )}
-              {rows.map((row) => {
+              {displayRows.map((row) => {
                 const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "pending";
                 const isSelected = row.id === selected?.id && drawerOpen;
                 return (
@@ -1819,10 +1892,10 @@ export default function ReceiptsAdminClient({
             </tbody>
           </table>
           {error && <p className="px-3 py-2 text-sm text-rose-300">{error}</p>}
-          {rows.length > 0 && (
+          {displayRows.length > 0 && (
             <div className="flex items-center justify-between border-t border-white/5 px-3 py-3 text-sm text-slate-300">
               <span>
-                Page {page}, showing {rows.length} receipts
+                Page {page}, showing {displayRows.length} receipts
               </span>
               <div className="flex gap-2">
                 <button

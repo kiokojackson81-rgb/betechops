@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
   const includeItems = url.searchParams.get("includeItems") === "true";
   const attendantFilterParam = (url.searchParams.get("attendantId") || "").trim() || undefined;
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
+  const summaryView = (url.searchParams.get("summaryView") || "all").toLowerCase();
+  const isProfitSummaryView = summaryView === "profit";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
   const identity = await resolveTargetUserId(req);
@@ -174,8 +176,23 @@ export async function GET(req: NextRequest) {
       posReceipts = await prisma.receipt.findMany({
         where,
         include: {
-          order: includeItems
-            ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+          order: includeItems || isProfitSummaryView
+            ? {
+                include: {
+                  items: {
+                    include: {
+                      orderCosts: { select: { unitCost: true } },
+                      profitSnapshots: {
+                        orderBy: { computedAt: "desc" },
+                        take: 1,
+                        select: { unitCost: true, profit: true, qty: true },
+                      },
+                      product: { select: { lastBuyingPrice: true } },
+                    },
+                  },
+                  attendant: { select: { id: true, name: true } },
+                },
+              }
             : {
                 select: {
                   orderNumber: true,
@@ -307,7 +324,20 @@ export async function GET(req: NextRequest) {
     const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
     const canonicalReceipt =
       canonicalReceiptNumber((r.order as any)?.orderNumber ?? "") || canonicalReceiptNumber(r.receiptNumber ?? "");
-    const buyingTotal = canonicalReceipt ? Number(supportBuyingTotalsByReceipt.get(canonicalReceipt) ?? 0) : 0;
+    const supportBuyingTotal = canonicalReceipt ? Number(supportBuyingTotalsByReceipt.get(canonicalReceipt) ?? 0) : 0;
+    const itemBuyingTotal = Array.isArray((r.order as any)?.items)
+      ? (r.order as any).items.reduce((sum: number, item: any) => {
+          const qty = Math.max(1, Math.trunc(Number(item?.quantity ?? 1)));
+          const costRows = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+          const orderCost = costRows.reduce((inner: number, cost: any) => inner + Number(cost?.unitCost ?? 0), 0);
+          const snapshot = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+          const snapshotCost = Number(snapshot?.unitCost ?? 0);
+          const productCost = Number(item?.product?.lastBuyingPrice ?? 0);
+          const unitCost = orderCost > 0 ? orderCost : snapshotCost > 0 ? snapshotCost : productCost > 0 ? productCost : 0;
+          return sum + unitCost * qty;
+        }, 0)
+      : 0;
+    const buyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : itemBuyingTotal;
     const profit = buyingTotal > 0 ? total - buyingTotal : null;
     return {
       id: r.id,
@@ -481,7 +511,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const deduped = Array.from(uniqueReceipts.values());
+  const deduped = Array.from(uniqueReceipts.values()).filter((row) => {
+    if (!isProfitSummaryView) return true;
+    if (row.source !== "pos") return false;
+    const buyingTotal = Number((row as any).buyingTotal ?? 0);
+    const profit = Number((row as any).profit ?? NaN);
+    return buyingTotal > 0 && Number.isFinite(profit);
+  });
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);
