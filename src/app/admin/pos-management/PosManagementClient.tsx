@@ -11,6 +11,7 @@ type PosProduct = {
   category: string;
   sellingPrice: number;
   lastBuyingPrice?: number | null;
+  buyingPriceType?: "FIXED" | "VARIABLE";
   defaultWarranty?: string | null;
   isActive: boolean;
   commissionEnabled: boolean;
@@ -37,6 +38,7 @@ type ProductDraft = {
   category: string;
   sellingPrice: string;
   lastBuyingPrice: string;
+  buyingPriceType: "FIXED" | "VARIABLE";
   defaultWarranty: string;
   isActive: boolean;
   commissionEnabled: boolean;
@@ -50,6 +52,7 @@ const emptyDraft: ProductDraft = {
   category: "pos",
   sellingPrice: "",
   lastBuyingPrice: "",
+  buyingPriceType: "FIXED",
   defaultWarranty: "",
   isActive: true,
   commissionEnabled: false,
@@ -188,6 +191,9 @@ export default function PosManagementClient() {
     if (draft.commissionEnabled && !draft.commissionAmount.trim()) {
       return showToast("Commission amount is required when product commission is enabled", "error");
     }
+      if (draft.buyingPriceType === "FIXED" && !draft.lastBuyingPrice.trim()) {
+        return showToast("Buying price is required for fixed-cost products", "error");
+      }
     setSaving(true);
     try {
       const payload = {
@@ -195,7 +201,8 @@ export default function PosManagementClient() {
         name: draft.name,
         category: draft.category,
         sellingPrice: Number(draft.sellingPrice || 0),
-        lastBuyingPrice: draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+        lastBuyingPrice: draft.buyingPriceType === "FIXED" && draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+        buyingPriceType: draft.buyingPriceType,
         defaultWarranty: draft.defaultWarranty.trim() || null,
         isActive: draft.isActive,
         commissionEnabled: draft.commissionEnabled,
@@ -493,8 +500,19 @@ export default function PosManagementClient() {
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
               </label>
               <label className="text-sm text-slate-300">
-                Buying price
-                <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                Buying price type
+                <select className={`${fieldClass} mt-1`} value={draft.buyingPriceType} onChange={(e) => setDraft((s) => ({ ...s, buyingPriceType: e.target.value as any }))}>
+                  <option value="FIXED">Fixed (set buying price now)</option>
+                  <option value="VARIABLE">Variable (price later by admin)</option>
+                </select>
+                {draft.buyingPriceType === "FIXED" ? (
+                  <>
+                    <div className="mt-2 text-xs text-slate-400">Buying price</div>
+                    <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                  </>
+                ) : (
+                  <div className="mt-2 text-xs text-amber-100/80">Variable-cost product: buying price will be set later by an admin.</div>
+                )}
               </label>
               <label className="text-sm text-slate-300">
                 Default receipt warranty

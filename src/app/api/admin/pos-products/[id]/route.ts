@@ -14,6 +14,7 @@ const updateSchema = z.object({
   category: z.string().trim().min(1).max(120).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
+  buyingPriceType: z.enum(["FIXED", "VARIABLE"]).optional(),
   defaultWarranty: z.string().trim().max(50).nullable().optional(),
   isActive: z.boolean().optional(),
   commissionEnabled: z.boolean().optional(),
@@ -68,6 +69,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
       category: data.category,
       sellingPrice: data.sellingPrice,
       lastBuyingPrice: data.lastBuyingPrice,
+      buyingPriceType: data.buyingPriceType,
       defaultWarranty:
         data.defaultWarranty === undefined
           ? undefined
@@ -90,7 +92,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
   const nextBuyingPrice = Number(updated.lastBuyingPrice ?? 0);
   let backfilledItems = 0;
   let recomputedOrders = 0;
-  if (Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
+  if (updated.buyingPriceType === "FIXED" && Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
     const itemsMissingCosts = await prisma.orderItem.findMany({
       where: {
         productId: id,
