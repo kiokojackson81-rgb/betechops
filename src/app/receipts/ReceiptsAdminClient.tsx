@@ -372,6 +372,7 @@ export default function ReceiptsAdminClient({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryView, setSummaryView] = useState<SummaryViewMode>("all");
   const [profitReceipts, setProfitReceipts] = useState<ReceiptRow[]>([]);
+  const [showProfitReceipts, setShowProfitReceipts] = useState(false);
   const filtersBeforeProfitRef = useRef<FilterState | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
   const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
@@ -736,6 +737,7 @@ export default function ReceiptsAdminClient({
       const restoredFilters = filtersBeforeProfitRef.current ?? appliedFilters;
       filtersBeforeProfitRef.current = null;
       setSummaryView("all");
+      setShowProfitReceipts(false);
       setProfitReceipts([]);
       setFilters(restoredFilters);
       setAppliedFilters(restoredFilters);
@@ -752,6 +754,7 @@ export default function ReceiptsAdminClient({
       podStatus: undefined,
     };
     setSummaryView("profit");
+    setShowProfitReceipts(true);
     setFilters(profitFilters);
     setAppliedFilters(profitFilters);
     setProfitReceipts([]);
@@ -1457,7 +1460,7 @@ export default function ReceiptsAdminClient({
   }, [rows]);
   const shouldUseDerivedSummary = rows.length > 0 && !summaryTotals;
   const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
-  const profitViewActive = summaryView === "profit";
+  const profitViewActive = summaryView === "profit" && showProfitReceipts;
   const displayRows = profitViewActive ? profitReceipts : rows;
   const profitReceiptTotal = profitReceipts.reduce((sum, row) => {
     const explicit = typeof (row as any).profit === "number" ? (row as any).profit : undefined;
@@ -1793,6 +1796,54 @@ export default function ReceiptsAdminClient({
                 <div className="text-sm font-semibold text-white">{formatCurrency(profitReceiptTotal)}</div>
               </div>
             </div>
+          </div>
+        ) : null}
+        {showProfitReceipts ? (
+          <div className="mb-4 overflow-x-auto rounded-[20px] border border-white/10 bg-slate-950/50">
+            <table className="min-w-[860px] text-sm">
+              <thead className="text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left">Order</th>
+                  <th className="px-3 py-2 text-left">Staff</th>
+                  <th className="px-3 py-2 text-left">Customer</th>
+                  <th className="px-3 py-2 text-left">Total</th>
+                  <th className="px-3 py-2 text-left">Buying total</th>
+                  <th className="px-3 py-2 text-left">Profit</th>
+                  <th className="px-3 py-2 text-left">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {profitReceipts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-4 text-center text-slate-400">
+                      No priced receipts contribute to this profit total.
+                    </td>
+                  </tr>
+                ) : (
+                  profitReceipts.map((row) => {
+                    const selling = Number(row.total ?? 0);
+                    const buying = Number((row as any).buyingTotal ?? 0);
+                    const explicitProfit = typeof (row as any).profit === "number" ? Number((row as any).profit) : NaN;
+                    const computedProfit = Number.isFinite(explicitProfit)
+                      ? explicitProfit
+                      : buying > 0
+                        ? selling - buying
+                        : 0;
+                    return (
+                      <tr key={`profit-${row.id}`}>
+                        <td className="px-3 py-2 text-white">{row.orderRef || row.id}</td>
+                        <td className="px-3 py-2 text-slate-300">{row.attendantName || "-"}</td>
+                        <td className="px-3 py-2 text-slate-300">{row.customerName || "Walk-in"}</td>
+                        <td className="px-3 py-2 text-emerald-300">{formatCurrency(selling)}</td>
+                        <td className="px-3 py-2 text-slate-300">{formatCurrency(buying)}</td>
+                        <td className="px-3 py-2 text-white">{formatCurrency(computedProfit)}</td>
+                        <td className="px-3 py-2 text-slate-300">{formatDateTime(row.createdAt)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         ) : null}
         <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">

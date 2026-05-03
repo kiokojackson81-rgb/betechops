@@ -15,10 +15,17 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import {
-  getProfitReceiptContributorsForAdminFilters,
-  type ProfitReceiptContributor,
-} from "@/lib/adminReceiptsSummary";
+import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
+
+type ProfitReceiptContributor = {
+  source: "pos" | "marketing" | "support";
+  id?: string;
+  key: string;
+  receiptNumber?: string | null;
+  sellingTotal: number;
+  buyingTotal: number;
+  profit: number | null;
+};
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -213,20 +220,27 @@ export async function GET(req: NextRequest) {
 
   if (isProfitSummaryView) {
     try {
-      profitContributors = await getProfitReceiptContributorsForAdminFilters({
+      const profitIds = await getPosProfitReceiptIdsForAdminFilters({
         start: startDate,
         end: endDate,
-        attendantId,
+        attendantId: scope === "mine" ? undefined : attendantFilterParam,
         paymentMethod: paymentMethodParam,
         search: q,
         docType: normalizedDocType,
-        includeLedger: true,
         scope,
-        currentUserId: identity.resolvedUserId ?? null,
+        currentUserId: scope === "mine" ? identity.resolvedUserId ?? null : null,
         customerType,
         podStatus,
         onlyPos,
       });
+      profitContributors = profitIds.map((id) => ({
+        source: "pos" as const,
+        id,
+        key: id,
+        sellingTotal: 0,
+        buyingTotal: 0,
+        profit: null,
+      }));
       for (const contributor of profitContributors) {
         registerProfitContributor(contributor);
       }
@@ -393,6 +407,7 @@ export async function GET(req: NextRequest) {
           ],
         },
         select: {
+          id: true,
           receiptNumber: true,
           receiptKey: true,
           buyingTotal: true,
@@ -424,6 +439,19 @@ export async function GET(req: NextRequest) {
     ].filter((value): value is string => Boolean(value));
     for (const key of keys) {
       if (!supportBuyingTotalsByReceipt.has(key)) supportBuyingTotalsByReceipt.set(key, buyingTotal);
+    }
+
+    if (isProfitSummaryView && row?.id) {
+      const canonical = canonicalReceiptNumber(row.receiptNumber ?? "") ?? canonicalReceiptNumber(String(row.receiptKey ?? "").split(":").pop() ?? "");
+      registerProfitContributor({
+        source: "support",
+        id: String(row.id),
+        key: canonical ?? String(row.id),
+        receiptNumber: canonical ?? null,
+        sellingTotal: 0,
+        buyingTotal,
+        profit: null,
+      });
     }
   }
 
@@ -459,8 +487,12 @@ export async function GET(req: NextRequest) {
         : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
           ? Number(explicitProfitRaw)
           : null;
-    const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
-    const profit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
+    const contributorBuyingTotal = Number(contributor?.buyingTotal ?? 0);
+    const resolvedBuyingTotal = contributorBuyingTotal > 0 ? contributorBuyingTotal : buyingTotal;
+    const contributorProfit = typeof contributor?.profit === "number" && Number.isFinite(contributor.profit)
+      ? Number(contributor.profit)
+      : null;
+    const profit = contributorProfit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
     return {
       id: r.id,
       source: "pos" as const,
@@ -497,8 +529,12 @@ export async function GET(req: NextRequest) {
       ? receipt.items.reduce((sum: number, item: any) => sum + Number(item.buyingPrice ?? 0) * (Number(item.quantity ?? 1) || 1), 0)
       : 0;
     const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
-    const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
-    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const contributorBuyingTotal = Number(contributor?.buyingTotal ?? 0);
+    const buyingTotal = contributorBuyingTotal > 0 ? contributorBuyingTotal : (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
+    const contributorProfit = typeof contributor?.profit === "number" && Number.isFinite(contributor.profit)
+      ? Number(contributor.profit)
+      : null;
+    const profit = contributorProfit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: `marketing-${receipt.id}`,
       source: "marketing" as const,
@@ -539,8 +575,12 @@ export async function GET(req: NextRequest) {
       ? receipt.items.reduce((sum: number, item: any) => sum + Number(item.buyingPrice ?? 0) * (Number(item.quantity ?? 1) || 1), 0)
       : 0;
     const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
-    const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
-    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const contributorBuyingTotal = Number(contributor?.buyingTotal ?? 0);
+    const buyingTotal = contributorBuyingTotal > 0 ? contributorBuyingTotal : (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
+    const contributorProfit = typeof contributor?.profit === "number" && Number.isFinite(contributor.profit)
+      ? Number(contributor.profit)
+      : null;
+    const profit = contributorProfit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: `support-${receipt.id}`,
       source: "support" as const,
@@ -637,9 +677,13 @@ export async function GET(req: NextRequest) {
   }
 
   const profitSupportIds = isProfitSummaryView
-    ? profitContributors
-        .filter((contributor) => contributor.source === "support" && contributor.id)
-        .map((contributor) => contributor.id as string)
+    ? Array.from(
+        new Set(
+          supportReceiptProfitRows
+            .map((row: any) => (row?.id ? String(row.id) : ""))
+            .filter((value: string) => value.length > 0),
+        ),
+      )
     : [];
   const supportReceipts = includeSupportReceipts || profitSupportIds.length
     ? await prisma.supportReceipt.findMany({
