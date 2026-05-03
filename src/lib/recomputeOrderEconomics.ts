@@ -64,6 +64,12 @@ export async function recomputeOrderEconomics(orderId: string) {
       const { recomputeSupportCommissionLedger } = await import('@/lib/supportCommission');
       const period = getTradingPeriodFor(new Date());
       await recomputeSupportCommissionLedger({ userId: attendantId, period });
+      try {
+        const { recomputeDirectSalesLedger } = await import('@/lib/directSalesLedger');
+        await recomputeDirectSalesLedger({ userId: attendantId, period });
+      } catch (e) {
+        // best-effort: update direct sales ledger when available
+      }
     }
   } catch (e) {
     // best-effort
