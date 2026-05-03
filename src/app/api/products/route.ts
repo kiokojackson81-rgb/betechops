@@ -5,9 +5,13 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("search") || "").trim();
-  const activeOnly = ["1", "true", "yes"].includes((searchParams.get("activeOnly") || "").toLowerCase());
-  const limit = Math.min(2000, Math.max(1, Number(searchParams.get("limit") || "10")));
-  if (!q && !activeOnly) return NextResponse.json([]);
+  const rawActiveOnly = searchParams.get("activeOnly");
+  const activeOnly =
+    rawActiveOnly === null
+      ? true
+      : ["1", "true", "yes"].includes(rawActiveOnly.toLowerCase());
+  const limitDefault = q ? "10" : "2000";
+  const limit = Math.min(2000, Math.max(1, Number(searchParams.get("limit") || limitDefault)));
   const searchTokens = q
     .split(/\s+/)
     .map((token) => token.trim())

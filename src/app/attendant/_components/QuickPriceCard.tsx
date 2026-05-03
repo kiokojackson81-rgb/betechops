@@ -23,7 +23,7 @@ export default function QuickPriceCard() {
 
   const search = async () => {
     if (!query.trim()) return;
-    const r = await fetch(`/api/products?search=${encodeURIComponent(query)}`, { cache: "no-store" });
+    const r = await fetch(`/api/products?search=${encodeURIComponent(query)}&activeOnly=1`, { cache: "no-store" });
     if (r.ok) {
       const arr = (await r.json()) as Product[];
       setSelected(arr[0] || null);
