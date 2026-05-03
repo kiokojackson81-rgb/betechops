@@ -483,6 +483,7 @@ export default function ReceiptsAdminClient({
         summaryViewOverride?: SummaryViewMode;
         filtersOverride?: FilterState;
         forceOnlyPos?: boolean;
+        includeLedgerOverride?: boolean;
         captureProfitReceipts?: boolean;
       },
     ) => {
@@ -492,6 +493,7 @@ export default function ReceiptsAdminClient({
         const activeFilters = opts?.filtersOverride ?? appliedFilters;
         const activeSummaryView = opts?.summaryViewOverride ?? summaryView;
         const activeOnlyPos = opts?.forceOnlyPos ?? onlyPos;
+        const activeLedgerEnabled = opts?.includeLedgerOverride ?? ledgerEnabled;
         const params = new URLSearchParams();
         params.set("page", String(targetPage));
         params.set("size", String(PAGE_SIZE));
@@ -509,7 +511,7 @@ export default function ReceiptsAdminClient({
         params.set("scope", scopeMode);
         if (activeOnlyPos) params.set("onlyPos", "1");
         if (activeSummaryView === "profit") params.set("summaryView", "profit");
-        if (!ledgerEnabled) params.set("includeLedger", "false");
+        if (!activeLedgerEnabled) params.set("includeLedger", "false");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
@@ -756,6 +758,8 @@ export default function ReceiptsAdminClient({
     void loadRows(1, {
       summaryViewOverride: "profit",
       filtersOverride: profitFilters,
+      forceOnlyPos: false,
+      includeLedgerOverride: true,
       captureProfitReceipts: true,
     });
   };
@@ -1454,7 +1458,7 @@ export default function ReceiptsAdminClient({
   }, [rows]);
   const shouldUseDerivedSummary = rows.length > 0 && !summaryTotals;
   const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
-  const profitViewActive = summaryView === "profit" && onlyPos;
+  const profitViewActive = summaryView === "profit";
   const displayRows = profitViewActive ? profitReceipts : rows;
   const profitReceiptTotal = profitReceipts.reduce((sum, row) => {
     const explicit = typeof (row as any).profit === "number" ? (row as any).profit : undefined;
@@ -1522,7 +1526,7 @@ export default function ReceiptsAdminClient({
               onApplyQuickRange={applyQuickRange}
               rangeLabel={rangeDisplay}
               profitViewActive={profitViewActive}
-              onProfitClick={onlyPos ? handleProfitSummaryClick : undefined}
+              onProfitClick={handleProfitSummaryClick}
             />
             <PaymentMethodFilterCard
               totals={summaryForDisplay?.paymentTotals ?? null}
@@ -1814,7 +1818,7 @@ export default function ReceiptsAdminClient({
                     {loading
                       ? "Loading receipts..."
                       : profitViewActive
-                        ? "No priced POS receipts contribute to profit for this range."
+                        ? "No priced receipts contribute to profit for this range."
                         : "No receipts match this filter."}
                   </td>
                 </tr>

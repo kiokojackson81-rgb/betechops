@@ -111,7 +111,7 @@ export default function ReceiptsSummary({
           onClick={onProfitClick}
           title={
             onProfitClick
-              ? "Display the POS receipts whose priced buying costs contribute to this profit total."
+              ? "Display all priced POS and support receipts that contribute to this profit total."
               : undefined
           }
           className={`rounded-xl border bg-slate-950/40 px-3 py-2 text-left transition ${
