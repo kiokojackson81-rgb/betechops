@@ -15,10 +15,17 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import {
-  getProfitReceiptContributorsForAdminFilters,
-  type ProfitReceiptContributor,
-} from "@/lib/adminReceiptsSummary";
+import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
+
+type ProfitReceiptContributor = {
+  source: "pos" | "marketing" | "support";
+  id?: string;
+  key: string;
+  receiptNumber?: string | null;
+  sellingTotal: number;
+  buyingTotal: number;
+  profit: number | null;
+};
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -116,6 +123,25 @@ export async function GET(req: NextRequest) {
     return null;
   };
 
+  const collectReceiptVariants = (...values: Array<string | null | undefined>) =>
+    Array.from(
+      new Set(
+        values.flatMap((value) => {
+          const raw = typeof value === "string" ? value.trim() : "";
+          const canonical = canonicalReceiptNumber(raw);
+          return [raw, canonical].filter((entry): entry is string => Boolean(entry));
+        }),
+      ),
+    );
+
+  const extractReceiptKeyTailVariants = (value?: string | null) => {
+    if (!value) return [] as string[];
+    const raw = String(value).trim();
+    if (!raw) return [] as string[];
+    const tail = raw.includes(":") ? raw.split(":").pop() : raw;
+    return collectReceiptVariants(raw, tail ?? undefined);
+  };
+
   const and: Prisma.ReceiptWhereInput[] = [];
   and.push({ generatedAt: { gte: startDate, lte: endDate } });
 
@@ -198,7 +224,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (summaryView === "profit") {
-    profitContributors = await getProfitReceiptContributorsForAdminFilters({
+    const helperReceiptIds = await getPosProfitReceiptIdsForAdminFilters({
       start: startDate,
       end: endDate,
       attendantId: scope === "mine" ? undefined : requestedAttendantId,
@@ -211,6 +237,70 @@ export async function GET(req: NextRequest) {
       podStatus,
       onlyPos,
     });
+
+    const supportPricingWhere: any = {
+      items: { some: { pricedAt: { gte: startDate, lte: endDate } } },
+    };
+    if (scope === "mine" && resolvedUserId) {
+      supportPricingWhere.dailyEntry = { submittedById: resolvedUserId };
+    } else if (scope === "global" && requestedAttendantId) {
+      supportPricingWhere.dailyEntry = { submittedById: requestedAttendantId };
+    }
+    if (q) supportPricingWhere.OR = [
+      { receiptNumber: { contains: q, mode: "insensitive" } },
+      { receiptKey: { contains: q, mode: "insensitive" } },
+    ];
+
+    const latePricedSupportReceipts = await prisma.supportReceipt.findMany({
+      where: supportPricingWhere,
+      select: {
+        receiptNumber: true,
+        receiptKey: true,
+      },
+    });
+
+    const lateReceiptNumbers = Array.from(
+      new Set(
+        latePricedSupportReceipts.flatMap((row) => [
+          ...collectReceiptVariants(row.receiptNumber ?? undefined),
+          ...extractReceiptKeyTailVariants(row.receiptKey),
+        ]),
+      ),
+    );
+
+    const latePosIds =
+      lateReceiptNumbers.length > 0
+        ? await prisma.receipt.findMany({
+            where: {
+              AND: [
+                ...and.filter((clause) => !("generatedAt" in clause)),
+                {
+                  OR: [
+                    { order: { orderNumber: { in: lateReceiptNumbers } } },
+                    { receiptNumber: { in: lateReceiptNumbers } },
+                  ],
+                },
+              ],
+            },
+            select: { id: true },
+          })
+        : [];
+
+    const receiptIds = Array.from(
+      new Set([
+        ...helperReceiptIds,
+        ...latePosIds.map((receipt) => receipt.id),
+      ].filter(Boolean)),
+    );
+
+    profitContributors = receiptIds.map((id) => ({
+      source: "pos" as const,
+      id,
+      key: id,
+      sellingTotal: 0,
+      buyingTotal: 0,
+      profit: null,
+    }));
     for (const contributor of profitContributors) {
       registerProfitContributor(contributor);
     }
@@ -244,8 +334,23 @@ export async function GET(req: NextRequest) {
         return prisma.receipt.findMany({
           where: effectiveWhere,
           include: {
-            order: includeItems
-              ? { include: { items: true, attendant: { select: { id: true, name: true } } } }
+            order: includeItems || summaryView === "profit"
+              ? {
+                  include: {
+                    items: {
+                      include: {
+                        orderCosts: { select: { unitCost: true } },
+                        profitSnapshots: {
+                          orderBy: { computedAt: "desc" },
+                          take: 1,
+                          select: { unitCost: true, profit: true, qty: true },
+                        },
+                        product: { select: { lastBuyingPrice: true } },
+                      },
+                    },
+                    attendant: { select: { id: true, name: true } },
+                  },
+                }
               : {
                   select: {
                     orderNumber: true,
@@ -263,17 +368,83 @@ export async function GET(req: NextRequest) {
       })()
     : [];
 
+  const canonicalPosReceiptNumbers = Array.from(
+    new Set(
+      posReceipts.flatMap((row: any) => {
+        const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
+        const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
+        return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+      }),
+    ),
+  );
+  const supportReceiptProfitRows =
+    canonicalPosReceiptNumbers.length > 0
+      ? await prisma.supportReceipt.findMany({
+          where: {
+            OR: [
+              { receiptNumber: { in: canonicalPosReceiptNumbers } },
+              { receiptKey: { in: canonicalPosReceiptNumbers } },
+              ...canonicalPosReceiptNumbers.map((value) => ({ receiptKey: { endsWith: `:${value}` } })),
+            ],
+          },
+          select: {
+            receiptNumber: true,
+            receiptKey: true,
+            buyingTotal: true,
+            items: { select: { buyingPrice: true } },
+          },
+        })
+      : [];
+  const supportBuyingTotalsByReceipt = new Map<string, number>();
+  for (const row of supportReceiptProfitRows) {
+    const itemsBuyingTotal = Array.isArray(row.items)
+      ? row.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0)
+      : 0;
+    const buyingTotal = Math.max(Number(row.buyingTotal ?? 0), itemsBuyingTotal);
+    if (!(buyingTotal > 0)) continue;
+    const keys = [
+      canonicalReceiptNumber(row.receiptNumber ?? ""),
+      canonicalReceiptNumber(row.receiptKey ?? ""),
+      canonicalReceiptNumber(String(row.receiptKey ?? "").split(":").pop() ?? ""),
+    ].filter((value): value is string => Boolean(value));
+    for (const key of keys) {
+      if (!supportBuyingTotalsByReceipt.has(key)) supportBuyingTotalsByReceipt.set(key, buyingTotal);
+    }
+  }
+
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
     const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
+    const canonicalReceipt =
+      canonicalReceiptNumber((r.order as any)?.orderNumber ?? "") || canonicalReceiptNumber(r.receiptNumber ?? "");
+    const supportBuyingTotal = canonicalReceipt ? Number(supportBuyingTotalsByReceipt.get(canonicalReceipt) ?? 0) : 0;
+    const itemBuyingTotal = Array.isArray((r.order as any)?.items)
+      ? (r.order as any).items.reduce((sum: number, item: any) => {
+          const qty = Math.max(1, Math.trunc(Number(item?.quantity ?? 1)));
+          const costRows = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+          const orderCost = costRows.reduce((inner: number, cost: any) => inner + Number(cost?.unitCost ?? 0), 0);
+          const snapshot = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+          const snapshotCost = Number(snapshot?.unitCost ?? 0);
+          const productCost = Number(item?.product?.lastBuyingPrice ?? 0);
+          const unitCost = orderCost > 0 ? orderCost : snapshotCost > 0 ? snapshotCost : productCost > 0 ? productCost : 0;
+          return sum + unitCost * qty;
+        }, 0)
+      : 0;
     const contributor = getProfitContributorForRow({
       id: r.id,
       source: "pos",
       orderRef: (r.order as any)?.orderNumber ?? null,
       receiptNumber: r.receiptNumber ?? null,
     });
-    const buyingTotal = Number(contributor?.buyingTotal ?? 0);
-    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const explicitProfitRaw = (r as any)?.profit ?? (r.data as any)?.profit ?? (r.totals as any)?.profit;
+    const explicitProfit =
+      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw)
+        ? Number(explicitProfitRaw)
+        : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
+          ? Number(explicitProfitRaw)
+          : null;
+    const buyingTotal = Number(contributor?.buyingTotal ?? 0) || supportBuyingTotal || itemBuyingTotal;
+    const profit = contributor?.profit ?? explicitProfit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: r.id,
       source: "pos" as const,
