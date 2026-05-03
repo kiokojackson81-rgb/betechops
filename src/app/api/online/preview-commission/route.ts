@@ -50,7 +50,10 @@ export async function GET(req: Request) {
       userId: attendantId,
       ownershipMode: resolveOnlinePosOwnershipMode(user?.email),
       supportPricingScope: "any",
-      profitRecognitionMode: "salesDate",
+      profitRecognitionMode:
+        resolveDirectCommissionMode(user?.email) === "PROFIT_10"
+          ? "recognizedDate"
+          : "salesDate",
     }),
     getAssignedMarketplaceSalesForPeriod(attendantId, {
       key: "custom",

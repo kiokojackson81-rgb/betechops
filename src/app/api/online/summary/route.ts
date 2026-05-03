@@ -85,8 +85,15 @@ async function computeProfit10DirectProfitFallback(args: {
   });
 
   const paidReceipts = receipts.filter((receipt) => {
+    const podDelivery = (receipt.data as Record<string, unknown> | null)?.podDelivery as
+      | { status?: string; paidAt?: string | null }
+      | undefined;
     const paymentStatus = String(receipt.order?.paymentStatus ?? "").trim().toUpperCase();
-    return paymentStatus === "PAID";
+    const isPaid = paymentStatus === "PAID";
+    const podStatus = String(podDelivery?.status ?? "").trim().toLowerCase();
+    const podSettled = podStatus !== "pending" && (Boolean(podDelivery?.paidAt) || isPaid);
+    if (podDelivery) return podSettled;
+    return isPaid;
   });
 
   const receiptMeta = paidReceipts.map((receipt) => {
@@ -260,14 +267,13 @@ export async function GET(req: Request) {
   const weeklyManualSales = marketplaceSalesSummary.rows.reduce((sum, row) => sum + Number(row.manualSales ?? 0), 0);
   const marketplaceSalesOnly = marketplaceSalesSummary.totals.sales;
   const fallbackDirectProfit =
-    directCommissionMode === "PROFIT_10" &&
-    Number(directPosSummary.totalSales ?? 0) > 0 &&
-    Number(directPosSummary.totalProfit ?? 0) <= 0
+    directCommissionMode === "PROFIT_10"
       ? await computeProfit10DirectProfitFallback({ userId: targetUserId, start, end })
       : 0;
+  const effectiveDirectSales = Number(directPosSummary.totalSales ?? 0);
   const effectiveDirectProfit =
-    directCommissionMode === "PROFIT_10" && fallbackDirectProfit > 0
-      ? fallbackDirectProfit
+    directCommissionMode === "PROFIT_10"
+      ? Math.max(Number(directPosSummary.totalProfit ?? 0), Number(fallbackDirectProfit ?? 0))
       : Number(directPosSummary.totalProfit ?? 0);
 
   const commissionBreakdown = computeOnlinePeriodCommission(
@@ -275,7 +281,7 @@ export async function GET(req: Request) {
       attendantId: targetUserId,
       periodStart: start,
       periodEnd: end,
-      directSales: Number(directPosSummary.totalSales ?? 0),
+      directSales: effectiveDirectSales,
       directProfit: effectiveDirectProfit,
       jumiaSales: marketplaceSalesSummary.totals.jumiaSales,
       kilimallSales: marketplaceSalesSummary.totals.kilimallSales,

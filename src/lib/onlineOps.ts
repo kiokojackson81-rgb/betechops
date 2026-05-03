@@ -188,8 +188,15 @@ async function computeProfit10DirectReceiptFallback(args: {
   });
 
   const paidReceipts = receipts.filter((receipt) => {
+    const podDelivery = (receipt.data as Record<string, unknown> | null)?.podDelivery as
+      | { status?: string; paidAt?: string | null }
+      | undefined;
     const paymentStatus = String(receipt.order?.paymentStatus ?? "").trim().toUpperCase();
-    return paymentStatus === "PAID";
+    const isPaid = paymentStatus === "PAID";
+    const podStatus = String(podDelivery?.status ?? "").trim().toLowerCase();
+    const podSettled = podStatus !== "pending" && (Boolean(podDelivery?.paidAt) || isPaid);
+    if (podDelivery) return podSettled;
+    return isPaid;
   });
 
   const receiptMeta = paidReceipts.map((receipt) => {
