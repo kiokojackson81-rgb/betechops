@@ -63,6 +63,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   const updated = await prisma.product.update({
     where: { id },
+    // cast to any because local Prisma client may not have the new enum field in types
     data: {
       sku: nextSku,
       name: data.name,
@@ -86,13 +87,13 @@ export async function PATCH(req: Request, context: ParamsContext) {
         data.commissionEnabled === false
           ? false
           : data.commissionRequiresApproval,
-    },
+    } as any,
   });
 
   const nextBuyingPrice = Number(updated.lastBuyingPrice ?? 0);
   let backfilledItems = 0;
   let recomputedOrders = 0;
-  if (updated.buyingPriceType === "FIXED" && Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
+  if ((updated as any).buyingPriceType === "FIXED" && Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
     const itemsMissingCosts = await prisma.orderItem.findMany({
       where: {
         productId: id,

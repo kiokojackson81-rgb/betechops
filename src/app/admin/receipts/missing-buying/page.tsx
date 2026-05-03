@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
+import MissingBuyingTableClient from "./MissingBuyingTableClient";
 
 export const dynamic = "force-dynamic";
 
@@ -71,43 +72,8 @@ export default async function Page({ searchParams }: { searchParams?: Record<str
       {missing.length === 0 ? (
         <div className="text-slate-400">No receipts with missing buying prices for this attendant/period.</div>
       ) : (
-        <table className="min-w-full text-sm border-collapse">
-          <thead>
-            <tr className="text-left text-slate-500 text-xs">
-              <th className="pb-2">Receipt</th>
-              <th className="pb-2">Created</th>
-              <th className="pb-2">Selling</th>
-              <th className="pb-2">Missing items</th>
-              <th className="pb-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {missing.map((r) => (
-              <tr key={r.id} className="border-t border-slate-800">
-                <td className="py-2">
-                  <Link href={`/receipts/${r.id}`} className="underline text-slate-100">
-                    {r.orderNumber ?? r.id}
-                  </Link>
-                </td>
-                <td className="py-2 text-slate-400">{new Date(r.createdAt).toLocaleString()}</td>
-                <td className="py-2">KES {Number(r.sellingTotal ?? 0).toLocaleString()}</td>
-                <td className="py-2 text-sm text-slate-200">
-                  {r.items.map((it) => (
-                    <div key={it.id} className="flex items-center gap-3">
-                      <div>{it.productId ?? it.id}</div>
-                      <div className="text-xs text-slate-400">qty {it.quantity ?? 1}</div>
-                    </div>
-                  ))}
-                </td>
-                <td className="py-2">
-                  <Link href={`/receipts/${r.id}`} className="rounded border px-2 py-1 text-xs">
-                    Edit prices
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        // Render client-side table for interactive batch pricing
+        <MissingBuyingTableClient missing={missing.map((r) => ({ id: r.id, orderNumber: r.orderNumber, createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt), sellingTotal: r.sellingTotal, items: r.items.map((it) => ({ receiptId: r.id, id: it.id, productId: it.productId, quantity: it.quantity, sellingPrice: it.sellingPrice })) }))} />
       )}
     </div>
   );

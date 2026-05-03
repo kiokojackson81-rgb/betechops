@@ -40,11 +40,8 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
             include: {
               orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, costSource: true, createdAt: true } },
               product: {
-                select: {
-                  id: true,
-                  name: true,
-                  buyingPriceType: true,
-                },
+                // cast select to any because Prisma client types may not include the new field locally
+                select: ({ id: true, name: true, buyingPriceType: true } as any),
               },
             },
           },

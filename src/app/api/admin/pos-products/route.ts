@@ -86,6 +86,7 @@ export async function POST(req: Request) {
   }
 
   const created = await prisma.product.create({
+    // cast to any because local Prisma client types may be out-of-sync with schema
     data: {
       sku,
       name: data.name,
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
       commissionEnabled: data.commissionEnabled,
       commissionAmount: data.commissionEnabled ? data.commissionAmount ?? 0 : null,
       commissionRequiresApproval: data.commissionEnabled ? data.commissionRequiresApproval : false,
-    },
+    } as any,
   });
 
   if (actorId) {
