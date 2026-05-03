@@ -930,36 +930,41 @@ export async function POST(req: NextRequest) {
       }
 
       // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
+      // Skip seeding commission for VARIABLE-buyingPriceType products until admin prices them.
+      const needsPricing = createdItems.some((ci) => (ci.product as any)?.buyingPriceType === 'VARIABLE' && !(ci.costPrice > 0));
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          if (!isPodDelivery) {
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
-                calcDetail: { reason: "receipt_seed", total },
-              })),
-            });
-          } else {
-            // For POD receipts, seed earnings as PENDING so no immediate releases occur
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: "PENDING",
-                calcDetail: { reason: "receipt_seed_pod", total },
-              })),
+          const seedRows: any[] = [];
+          for (let i = 0; i < createdOrderItems.length; i++) {
+            const it = createdOrderItems[i];
+            const meta = createdItems[i];
+            const isVariable = (meta?.product as any)?.buyingPriceType === 'VARIABLE';
+            if (isVariable && !(meta?.costPrice > 0)) {
+              // skip seeding commission for unpriced variable items
+              continue;
+            }
+            seedRows.push({
+              staffId: attendantId,
+              orderItemId: it.id,
+              basis: "gross",
+              qty: it.quantity,
+              amount: 0,
+              status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
+              calcDetail: { reason: isPodDelivery ? "receipt_seed_pod" : "receipt_seed", total },
             });
           }
+          if (seedRows.length) await tx.commissionEarning.createMany({ data: seedRows });
         } catch (e) {
           // ignore if tx mock doesn't implement commissionEarning
+        }
+      }
+
+      // mark receipt as needing pricing if any variable items were sold without a buying price
+      if (needsPricing) {
+        try {
+          await tx.receipt.update({ where: { id: receipt.id }, data: { data: { ...(receipt.data as any), needsPricing: true } } });
+        } catch {
+          // best-effort
         }
       }
 
