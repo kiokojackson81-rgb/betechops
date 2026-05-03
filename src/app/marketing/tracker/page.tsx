@@ -1316,14 +1316,30 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   // Use `serverPeriodSummary` (authoritative) for calculations so the visible
   // panel (`periodSummary`) can remain hidden while Quick stats stay accurate.
   const serverPeriodTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
-  const combinedPeriodSales = serverPeriodTotalSales + totalSales;
+  const isJeniffer = currentUserEmail === "jeniffer@betech.co.ke";
+  const earningsSales = Number((earningsSummary as any)?.totalSales ?? 0);
+  const combinedPeriodSalesRaw = serverPeriodTotalSales + totalSales;
+  const combinedPeriodSales =
+    isJeniffer && combinedPeriodSalesRaw <= 0 && earningsSales > 0
+      ? earningsSales
+      : combinedPeriodSalesRaw;
   const serverPeriodTotalItems = serverPeriodSummary?.aggregates?.totalItems ?? 0;
-  const combinedPeriodItems = serverPeriodTotalItems + totalItems;
+  const earningsItems = Number((earningsSummary as any)?.totalItems ?? 0);
+  const combinedPeriodItemsRaw = serverPeriodTotalItems + totalItems;
+  const combinedPeriodItems =
+    isJeniffer && combinedPeriodItemsRaw <= 0 && earningsItems > 0
+      ? earningsItems
+      : combinedPeriodItemsRaw;
   // receipts: server may provide counts per payment method in paymentStats
   const serverPeriodReceipts =
     (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
     (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
-  const combinedPeriodReceipts = serverPeriodReceipts + totalReceipts;
+  const earningsReceipts = Number((earningsSummary as any)?.totalReceipts ?? 0);
+  const combinedPeriodReceiptsRaw = serverPeriodReceipts + totalReceipts;
+  const combinedPeriodReceipts =
+    isJeniffer && combinedPeriodReceiptsRaw <= 0 && earningsReceipts > 0
+      ? earningsReceipts
+      : combinedPeriodReceiptsRaw;
   const serverPeriodReceiptRows = (serverPeriodSummary?.aggregates as any)?.totalReceiptRows ?? 0;
   const combinedPeriodReceiptRows = serverPeriodReceiptRows + totalReceiptRows;
 
@@ -1337,7 +1353,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     Number(serverPeriodSummary?.aggregates?.commission?.commission ?? periodSummary?.aggregates?.commission?.commission ?? 0);
 
   const preferredEarningsCommission =
-    currentUserEmail === "jeniffer@betech.co.ke"
+    isJeniffer
       ? Number(earningsSummary?.salesCommission ?? 0)
       : Number(earningsSummary?.commission ?? 0);
 
