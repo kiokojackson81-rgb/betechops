@@ -14,12 +14,15 @@ jest.mock('@/lib/resolveTargetUser', () => ({
 }));
 
 jest.mock('@/lib/adminReceiptsSummary', () => ({
-  getPosProfitReceiptIdsForAdminFilters: jest.fn(async () => ['r1', 'r2']),
+  getProfitReceiptContributorsForAdminFilters: jest.fn(async () => [
+    { source: 'pos', id: 'r1', key: 'OR-1', receiptNumber: 'OR-1', sellingTotal: 200, buyingTotal: 50, profit: 150 },
+    { source: 'pos', id: 'r2', key: 'OR-2', receiptNumber: 'OR-2', sellingTotal: 100, buyingTotal: 20, profit: 80 },
+  ]),
 }));
 
 import { GET } from '../../src/app/api/receipts/route';
 import { prisma } from '@/lib/prisma';
-import { getPosProfitReceiptIdsForAdminFilters } from '@/lib/adminReceiptsSummary';
+import { getProfitReceiptContributorsForAdminFilters } from '@/lib/adminReceiptsSummary';
 
 describe('receipts profit drilldown', () => {
   afterEach(() => jest.resetAllMocks());
@@ -78,6 +81,6 @@ describe('receipts profit drilldown', () => {
     expect(sum).toBe(230);
 
     // Ensure helper was called with expected args
-    expect(getPosProfitReceiptIdsForAdminFilters).toHaveBeenCalled();
+    expect(getProfitReceiptContributorsForAdminFilters).toHaveBeenCalled();
   });
 });

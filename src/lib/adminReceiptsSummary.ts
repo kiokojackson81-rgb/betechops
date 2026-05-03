@@ -244,6 +244,13 @@ async function computePosOnlyReceiptSummary({
       select: {
         receiptNumber: true,
         receiptKey: true,
+        buyingTotal: true,
+        items: {
+          select: {
+            buyingPrice: true,
+            pricedAt: true,
+          },
+        },
       },
     }),
   ]);
@@ -373,7 +380,8 @@ async function computePosOnlyReceiptSummary({
       },
     });
 
-    for (const row of supportRows) {
+    const supportRowsWithLatePricing = [...supportRows, ...latePricedSupportReceipts];
+    for (const row of supportRowsWithLatePricing) {
       const items = Array.isArray(row.items) ? row.items : [];
       const itemsBuyingTotal = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
       const aggregateBuyingTotal = Number(row.buyingTotal ?? 0);

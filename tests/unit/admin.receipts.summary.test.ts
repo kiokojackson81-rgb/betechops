@@ -12,6 +12,7 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 import { GET } from '../../src/app/api/admin/receipts/summary/route';
+import { computeAdminReceiptSummary } from '../../src/lib/adminReceiptsSummary';
 import { prisma } from '@/lib/prisma';
 import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 import { buildReceiptKey } from '@/lib/receiptKey';
@@ -88,5 +89,59 @@ describe('admin receipts summary', () => {
     expect(body.totalSales).toBe(5000);
     expect(body.totalProfit).toBe(2500);
     expect(body.receiptsCount).toBe(1);
+  });
+
+  it('returns POS profit contributors for receipts created before the pricing date', async () => {
+    const start = new Date('2026-05-03T00:00:00+03:00');
+    const end = new Date('2026-05-03T23:59:59.999+03:00');
+    const orderNumber = 'Betech-20260430-77777';
+    const pricedAt = new Date('2026-05-03T12:00:00+03:00');
+
+    (prisma as any).receipt.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'old-pos-1',
+          generatedAt: new Date('2026-04-30T10:00:00+03:00'),
+          receiptNumber: null,
+          totals: { total: 100000 },
+          order: {
+            orderNumber,
+            totalAmount: 100000,
+            paymentStatus: 'PAID',
+            items: [],
+          },
+        },
+      ]);
+    (prisma as any).supportReceipt.findMany
+      .mockResolvedValueOnce([
+        {
+          receiptNumber: null,
+          receiptKey: `2026-05-03:${canonicalReceiptNumber(orderNumber)}`,
+          buyingTotal: 45270,
+          items: [{ buyingPrice: 45270, pricedAt }],
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    (prisma as any).productCost.findMany.mockResolvedValue([]);
+
+    const summary = await computeAdminReceiptSummary({
+      start,
+      end,
+      onlyPos: true,
+      scope: 'global',
+    });
+
+    expect(summary.totalSales).toBe(0);
+    expect(summary.totalProfit).toBe(54730);
+    expect(summary.profitContributors).toEqual([
+      expect.objectContaining({
+        id: 'old-pos-1',
+        source: 'pos',
+        sellingTotal: 100000,
+        buyingTotal: 45270,
+        profit: 54730,
+      }),
+    ]);
   });
 });
