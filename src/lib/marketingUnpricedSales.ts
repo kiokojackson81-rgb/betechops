@@ -153,8 +153,57 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
           },
         })
       : [];
+  const linkedReceipts =
+    receiptNumberCandidates.length > 0
+      ? await prisma.receipt.findMany({
+          where: {
+            OR: [
+              { receiptNumber: { in: receiptNumberCandidates } },
+              { order: { orderNumber: { in: receiptNumberCandidates } } },
+            ],
+          },
+          select: {
+            receiptNumber: true,
+            data: true,
+            order: { select: { orderNumber: true } },
+          },
+        })
+      : [];
 
   const orderItemsByReceiptNumber = new Map<string, LinkedReceiptContext>();
+  const payloadItemNamesByReceiptNumber = new Map<string, string[]>();
+
+  const registerPayloadNames = (key: string | null | undefined, names: string[]) => {
+    const normalizedKey = String(key ?? "").trim();
+    if (!normalizedKey || !names.length) return;
+    const canonical = canonicalReceiptNumber(normalizedKey) ?? "";
+    if (!payloadItemNamesByReceiptNumber.has(normalizedKey)) {
+      payloadItemNamesByReceiptNumber.set(normalizedKey, names);
+    }
+    if (canonical && !payloadItemNamesByReceiptNumber.has(canonical)) {
+      payloadItemNamesByReceiptNumber.set(canonical, names);
+    }
+  };
+
+  for (const receipt of linkedReceipts) {
+    const rawItems = (receipt.data as any)?.items;
+    if (!Array.isArray(rawItems)) continue;
+    const names = rawItems
+      .map((item: any) =>
+        String(
+          item?.title ??
+            item?.productName ??
+            item?.name ??
+            item?.product?.name ??
+            "",
+        ).trim(),
+      )
+      .filter(isMeaningfulProductName);
+    if (!names.length) continue;
+    registerPayloadNames(receipt.receiptNumber, names);
+    registerPayloadNames(receipt.order?.orderNumber, names);
+  }
+
   for (const order of receiptOrderItems) {
     const linkedItems = order.items
       .map((item) => ({
@@ -184,6 +233,10 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         orderItemsByReceiptNumber.get(receiptNumber) ??
         orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         null;
+      const payloadItemNames =
+        payloadItemNamesByReceiptNumber.get(receiptNumber) ??
+        payloadItemNamesByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
+        [];
       if (Number(receipt.buyingTotal ?? 0) > 0 || Number(linkedReceiptContext?.aggregateBuyingTotal ?? 0) > 0) {
         return null;
       }
@@ -198,7 +251,10 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         return !matchedLinkedItem?.hasCost;
       });
       if (!pendingItems.length) return null;
-      const fallbackItemNames = linkedReceiptItems.map((item) => item.name);
+      const fallbackItemNames = [
+        ...payloadItemNames,
+        ...linkedReceiptItems.map((item) => item.name),
+      ];
       const resolvedReceiptItems = pendingItems.map((item, index) => {
         const resolvedName = isMeaningfulProductName(item.productName) ? item.productName.trim() : fallbackItemNames[index] || fallbackItemNames[0] || "Item";
         return {
