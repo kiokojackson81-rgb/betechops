@@ -1320,8 +1320,10 @@ export async function POST(req: NextRequest) {
 
             const supportReceiptItems = createdItems.map((it) => ({
               productName: String(it.title || "Item").trim(),
+              // SupportReceiptItem.buyingPrice is non-nullable on branch-3.
+              // Keep variable-cost placeholders at 0 until admin pricing updates them.
               buyingPrice: it.variableCost
-                ? null
+                ? 0
                 : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
             }));
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
