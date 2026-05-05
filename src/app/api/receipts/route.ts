@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
 
   if (isProfitSummaryView) {
     try {
-      profitContributors = await getProfitReceiptContributorsForAdminFilters({
+      const summaryOptions = {
         start: startDate,
         end: endDate,
         attendantId,
@@ -226,7 +226,10 @@ export async function GET(req: NextRequest) {
         customerType,
         podStatus,
         onlyPos,
-      });
+      } as const;
+
+      profitContributors = await getProfitReceiptContributorsForAdminFilters(summaryOptions);
+
       for (const contributor of profitContributors) {
         registerProfitContributor(contributor);
       }
