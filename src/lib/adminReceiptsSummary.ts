@@ -559,8 +559,33 @@ export async function getPosProfitReceiptIdsForAdminFilters(options: SummaryOpti
 export async function getProfitReceiptContributorsForAdminFilters(
   options: SummaryOptions,
 ): Promise<ProfitReceiptContributor[]> {
-  const result = await computeAdminReceiptSummary(options);
-  return result.profitContributors ?? [];
+  const [summaryResult, posOnlyResult] = await Promise.all([
+    computeAdminReceiptSummary(options),
+    computePosOnlyReceiptSummary(options),
+  ]);
+
+  const merged = new Map<string, ProfitReceiptContributor>();
+  const register = (row: ProfitReceiptContributor) => {
+    const key = `${row.source}:${row.id ?? row.key}`;
+    if (!merged.has(key)) {
+      merged.set(key, row);
+      return;
+    }
+    const existing = merged.get(key)!;
+    // Prefer the row that has a positive computed profit / buying total.
+    const existingScore =
+      (Number(existing.profit ?? 0) > 0 ? 2 : 0) + (Number(existing.buyingTotal ?? 0) > 0 ? 1 : 0);
+    const nextScore =
+      (Number(row.profit ?? 0) > 0 ? 2 : 0) + (Number(row.buyingTotal ?? 0) > 0 ? 1 : 0);
+    if (nextScore > existingScore) {
+      merged.set(key, row);
+    }
+  };
+
+  for (const row of summaryResult.profitContributors ?? []) register(row);
+  for (const row of posOnlyResult.profitContributors ?? []) register(row);
+
+  return Array.from(merged.values());
 }
 
 export async function computeAdminReceiptSummary({
