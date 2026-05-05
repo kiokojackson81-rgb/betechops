@@ -101,6 +101,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
 export default function PosManagementClient() {
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
+  const [releasedApprovals, setReleasedApprovals] = useState<CommissionApproval[]>([]);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,15 +121,18 @@ export default function PosManagementClient() {
   const loadData = useCallback(async (productQuery = query) => {
     setLoading(true);
     try {
-      const [productsRes, approvalsRes] = await Promise.all([
+      const [productsRes, approvalsRes, releasedRes] = await Promise.all([
         fetch(`/api/admin/pos-products?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" }),
         fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
+        fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
       ]);
 
       const productsJson = await productsRes.json().catch(() => ({ items: [] }));
       const approvalsJson = await approvalsRes.json().catch(() => ({ items: [] }));
+      const releasedJson = await releasedRes.json().catch(() => ({ items: [] }));
       setProducts(Array.isArray(productsJson.items) ? productsJson.items : []);
       setApprovals(Array.isArray(approvalsJson.items) ? approvalsJson.items : []);
+      setReleasedApprovals(Array.isArray(releasedJson?.items) ? releasedJson.items : []);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to load POS management data", "error");
     } finally {
@@ -319,13 +323,13 @@ export default function PosManagementClient() {
     }
   };
 
-  const updateApproval = async (id: string, action: "approve" | "reject") => {
+  const updateApproval = async (id: string, action: "approve" | "reject" | "revoke") => {
     setApprovalBusyId(id);
     try {
       const res = await fetch(`/api/admin/pos-commissions/${id}/${action}`, { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(getApiErrorMessage(json, `Failed to ${action} commission`));
-      showToast(`Commission ${action}d`, "success");
+      showToast(action === "revoke" ? "Commission approval revoked" : `Commission ${action}d`, "success");
       await loadData(query);
     } catch (err) {
       showToast(err instanceof Error ? err.message : `Failed to ${action} commission`, "error");
@@ -674,6 +678,51 @@ export default function PosManagementClient() {
                 No commission approvals are waiting right now.
               </div>
             )}
+          </div>
+
+          <div className="mt-6 border-t border-slate-800 pt-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Recently released</h3>
+                <p className="text-xs text-slate-400">Revoke approvals that were released by mistake.</p>
+              </div>
+              <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                {releasedApprovals.length} released
+              </div>
+            </div>
+            <div className="space-y-3">
+              {releasedApprovals.length ? (
+                releasedApprovals.map((approval) => (
+                  <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-white">
+                          {approval.orderItem?.product?.name || "Product"} · {formatMoney(approval.amount)}
+                        </div>
+                        <div className="text-sm text-slate-300">
+                          Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void updateApproval(approval.id, "revoke")}
+                        disabled={approvalBusyId === approval.id}
+                      >
+                        {approvalBusyId === approval.id ? "Working..." : "Revoke"}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
+                  No released POS commissions found.
+                </div>
+              )}
+            </div>
           </div>
         </section>
       </div>
