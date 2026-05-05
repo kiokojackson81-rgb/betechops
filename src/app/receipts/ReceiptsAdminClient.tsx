@@ -508,9 +508,13 @@ export default function ReceiptsAdminClient({
         const endParam = buildDateParam(activeFilters.end, true);
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
-        params.set("scope", scopeMode);
-        if (activeOnlyPos) params.set("onlyPos", "1");
-        if (activeSummaryView === "profit") params.set("summaryView", "profit");
+        const isProfitDrilldown = activeSummaryView === "profit";
+        if (!isProfitDrilldown) {
+          params.set("scope", scopeMode);
+          if (activeOnlyPos) params.set("onlyPos", "1");
+        } else {
+          params.set("summaryView", "profit");
+        }
         if (!activeLedgerEnabled) params.set("includeLedger", "false");
 
         const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
