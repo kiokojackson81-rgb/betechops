@@ -308,17 +308,90 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.ReceiptWhereInput = { AND: and };
 
-  const posReceipts = includePosReceipts
-    ? await (async () => {
-        const receiptIds =
-          summaryView === "profit"
-            ? profitContributors
-                .filter((contributor) => contributor.source === "pos" && contributor.id)
-                .map((contributor) => contributor.id as string)
-            : null;
-
-        if (receiptIds && receiptIds.length === 0) {
-          return [];
+  let posReceipts: any[] = [];
+  if (includePosReceipts) {
+    if (isProfitSummaryView) {
+      try {
+        const profitIds = profitContributors
+          .filter((contributor) => contributor.source === "pos" && contributor.id)
+          .map((contributor) => contributor.id as string);
+        const profitReceiptNumbers = Array.from(
+          new Set(
+            profitContributors
+              .filter((contributor) => contributor.source === "pos")
+              .flatMap((contributor) => [
+                canonicalReceiptNumber(contributor.receiptNumber ?? ""),
+                canonicalReceiptNumber(contributor.key ?? ""),
+                canonicalReceiptNumber(String(contributor.key ?? "").split(":").pop() ?? ""),
+              ])
+              .filter((value): value is string => Boolean(value)),
+          ),
+        );
+        if (profitIds.length) {
+          posReceipts = await prisma.receipt.findMany({
+            where: {
+              OR: [
+                { id: { in: profitIds } },
+                ...(profitReceiptNumbers.length
+                  ? [
+                      { order: { orderNumber: { in: profitReceiptNumbers } } },
+                      { receiptNumber: { in: profitReceiptNumbers } },
+                    ]
+                  : []),
+              ],
+            },
+            include: {
+              order: {
+                include: {
+                  items: {
+                    include: {
+                      orderCosts: { select: { unitCost: true } },
+                      profitSnapshots: {
+                        orderBy: { computedAt: "desc" },
+                        take: 1,
+                        select: { unitCost: true, profit: true, qty: true },
+                      },
+                      product: { select: { lastBuyingPrice: true } },
+                    },
+                  },
+                  attendant: { select: { id: true, name: true } },
+                },
+              },
+              issuedBy: { select: { id: true, name: true } },
+            },
+            orderBy: { generatedAt: "desc" },
+          });
+        } else if (profitReceiptNumbers.length) {
+          posReceipts = await prisma.receipt.findMany({
+            where: {
+              OR: [
+                { order: { orderNumber: { in: profitReceiptNumbers } } },
+                { receiptNumber: { in: profitReceiptNumbers } },
+              ],
+            },
+            include: {
+              order: {
+                include: {
+                  items: {
+                    include: {
+                      orderCosts: { select: { unitCost: true } },
+                      profitSnapshots: {
+                        orderBy: { computedAt: "desc" },
+                        take: 1,
+                        select: { unitCost: true, profit: true, qty: true },
+                      },
+                      product: { select: { lastBuyingPrice: true } },
+                    },
+                  },
+                  attendant: { select: { id: true, name: true } },
+                },
+              },
+              issuedBy: { select: { id: true, name: true } },
+            },
+            orderBy: { generatedAt: "desc" },
+          });
+        } else {
+          posReceipts = [];
         }
 
         const effectiveWhere =
@@ -579,15 +652,40 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const profitMarketingIds =
-    summaryView === "profit"
-      ? profitContributors
-          .filter((contributor) => contributor.source === "marketing" && contributor.id)
-          .map((contributor) => contributor.id as string)
-      : [];
-  const marketingReceipts = includeMarketingReceipts || profitMarketingIds.length
-    ? await prisma.marketingReceipt.findMany({
-        where: profitMarketingIds.length ? { id: { in: profitMarketingIds } } : marketingFilter,
+  let marketingReceipts: any[] = [];
+  const profitMarketingIds = isProfitSummaryView
+    ? profitContributors
+        .filter((contributor) => contributor.source === "marketing" && contributor.id)
+        .map((contributor) => contributor.id as string)
+    : [];
+  const profitMarketingReceiptNumbers = isProfitSummaryView
+    ? Array.from(
+        new Set(
+          profitContributors
+            .filter((contributor) => contributor.source === "marketing")
+            .flatMap((contributor) => [
+              canonicalReceiptNumber(contributor.receiptNumber ?? ""),
+              canonicalReceiptNumber(contributor.key ?? ""),
+              canonicalReceiptNumber(String(contributor.key ?? "").split(":").pop() ?? ""),
+            ])
+            .filter((value): value is string => Boolean(value)),
+        ),
+      )
+    : [];
+  if (includeMarketingReceipts || profitMarketingIds.length || profitMarketingReceiptNumbers.length) {
+    try {
+      marketingReceipts = await prisma.marketingReceipt.findMany({
+        where:
+          profitMarketingIds.length || profitMarketingReceiptNumbers.length
+            ? {
+                OR: [
+                  ...(profitMarketingIds.length ? [{ id: { in: profitMarketingIds } }] : []),
+                  ...(profitMarketingReceiptNumbers.length
+                    ? [{ receiptNumber: { in: profitMarketingReceiptNumbers } }]
+                    : []),
+                ],
+              }
+            : marketingFilter,
         include: {
           items: true,
           dailyEntry: {
@@ -598,16 +696,36 @@ export async function GET(req: NextRequest) {
         },
       })
     : [];
-
-  const profitSupportIds =
-    summaryView === "profit"
-      ? profitContributors
-          .filter((contributor) => contributor.source === "support" && contributor.id)
-          .map((contributor) => contributor.id as string)
-      : [];
-  const supportReceipts = includeSupportReceipts || profitSupportIds.length
+  const profitSupportReceiptNumbers = isProfitSummaryView
+    ? Array.from(
+        new Set(
+          profitContributors
+            .filter((contributor) => contributor.source === "support")
+            .flatMap((contributor) => [
+              canonicalReceiptNumber(contributor.receiptNumber ?? ""),
+              canonicalReceiptNumber(contributor.key ?? ""),
+              canonicalReceiptNumber(String(contributor.key ?? "").split(":").pop() ?? ""),
+            ])
+            .filter((value): value is string => Boolean(value)),
+        ),
+      )
+    : [];
+  const supportReceipts = includeSupportReceipts || profitSupportIds.length || profitSupportReceiptNumbers.length
     ? await prisma.supportReceipt.findMany({
-        where: profitSupportIds.length ? { id: { in: profitSupportIds } } : supportFilter,
+        where:
+          profitSupportIds.length || profitSupportReceiptNumbers.length
+            ? {
+                OR: [
+                  ...(profitSupportIds.length ? [{ id: { in: profitSupportIds } }] : []),
+                  ...(profitSupportReceiptNumbers.length
+                    ? [
+                        { receiptNumber: { in: profitSupportReceiptNumbers } },
+                        { receiptKey: { in: profitSupportReceiptNumbers } },
+                      ]
+                    : []),
+                ],
+              }
+            : supportFilter,
         include: {
           items: true,
           dailyEntry: {
